@@ -36,10 +36,11 @@ from bridge.config import Settings
 from bridge.crypto.envelope import KeyWrapper
 from bridge.errors import ApiError, not_found
 from bridge.ids import uuid7
+from bridge.llm.embeddings import Embedder
 from bridge.matching.tasks import defer_on_new
 from bridge.models.enums import ModerationState, ProposalStatus, ProvenanceStatus, VersionStatus
 from bridge.problems import service as problems
-from bridge.proposals import attestations, editor, tier2
+from bridge.proposals import attestations, editor, originality, tier2
 from bridge.proposals.prescreen import PreScreen, ScreenInput, listed_org_names
 from bridge.proposals.schemas import (
     AttachmentOut,
@@ -296,6 +297,7 @@ async def publish(
     settings: Settings,
     wrapper: KeyWrapper,
     prescreen: PreScreen,
+    embedder: Embedder,
     *,
     user_id: UUID,
     proposal_id: UUID,
@@ -348,6 +350,7 @@ async def publish(
     teaser = {name: values[name] for name in TEASER_COLUMNS}
     maturity_ask = {"maturity": str(row.maturity), "ask": str(row.ask)}
     await db.execute(_PUBLISH, {"id": proposal_id, "version": version_id, **teaser, **maturity_ask})
+    await originality.index_teaser(db, embedder, proposal_id=proposal_id, fields=teaser)  # REQ-PROP-04: Tier 1 only
     state = locked.moderation_state
     if teaser_screen.hold:
         await db.execute(_HOLD, {"id": proposal_id})

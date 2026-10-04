@@ -227,12 +227,16 @@ class InFlight:
 _CALLS_TODAY = text("SELECT count(*) FROM llm_calls WHERE user_id = :user AND task = :task AND created_at >= :since")
 
 
-async def check_daily_limit(db: AsyncSession, user_id: UUID, policy: AssistantPolicy) -> None:
-    """429 ``assistant_rate_limited`` once the user's ``submission_assistant`` rows today (UTC, every status: a
-    refused attempt counts too) reach the policy's limit. The user's own ledger rows are readable under RLS."""
+async def calls_today(db: AsyncSession, user_id: UUID, task: str) -> int:
+    """The user's ``task`` rows in ``llm_calls`` today (UTC, every status: a refused attempt counts too). The user's
+    own ledger rows are readable under RLS."""
     since = day_start(clock.utcnow())
-    count = (await db.execute(_CALLS_TODAY, {"user": user_id, "task": TASK, "since": since})).scalar_one()
-    if count >= policy.max_calls_per_user_day:
+    return int((await db.execute(_CALLS_TODAY, {"user": user_id, "task": task, "since": since})).scalar_one())
+
+
+async def check_daily_limit(db: AsyncSession, user_id: UUID, policy: AssistantPolicy) -> None:
+    """429 ``assistant_rate_limited`` once the user's ``submission_assistant`` rows today reach the policy's limit."""
+    if await calls_today(db, user_id, TASK) >= policy.max_calls_per_user_day:
         raise ApiError(429, "assistant_rate_limited", RATE_LIMITED)
 
 

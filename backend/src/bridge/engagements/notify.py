@@ -10,6 +10,12 @@ per engagement (dedupe key ``em2:<engagement>``, AC-MAIL-1), through the configu
 An organisation's interest (stage 0, REQ-ENG-04) is told by its engagement's genesis event: the developer gets N17
 in-app and by email (``bridge.notifications.n17``: mutable, default on, once per engagement).
 
+Side states and the system's events (REQ-ENG-10 part): a question and its answer (N03), a hold and an early resume
+(N20) tell the other party; the expiry job's events tell both parties (``compose_system``: an expiry under the
+matrix row of the stage it ended, N01, N03, N05 or N17, with the reason in words; a hold resumed on its date, N20).
+Each of these also goes by email in the fixed status layout (``bridge.notifications.status``: one sentence, one link
+to the tracker; mutable per kind; once per event and recipient). A note's text never leaves the tracker.
+
 Recipients: when the organisation acts, the developer; when the developer acts, the organisation's people on this
 engagement (its named contact and the members who acted on it, each still an active member). The developer cannot
 read the organisation's roster, so an engagement nobody at the organisation has touched yet notifies nobody there;
@@ -22,7 +28,7 @@ in the job's arguments to the developer's notification (it never enters the hash
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Final
 from uuid import UUID
 
@@ -47,7 +53,7 @@ from bridge.models.enums import (
     GrantStatus,
     NotificationChannel,
 )
-from bridge.notifications import em2, n17
+from bridge.notifications import em2, n17, status
 from bridge.notifications.deliveries import send_email
 from bridge.notifications.email import EmailMessage, EmailProvider
 from bridge.notifications.models import InAppNotification, NotificationDelivery
@@ -106,6 +112,38 @@ SENTENCES: Final[dict[tuple[sm.Command, EngagementParty], str]] = {
     (C.SIGN_CERTIFICATE, ORG): '{org} signed the acceptance certificate for "{title}". Countersign it on your tracker.',
     (C.RECORD_PAYMENT, ORG): '{org} recorded the final payment for "{title}". Confirm the amount you received.',
     (C.CONFIRM_PAYMENT, DEV): 'The developer confirmed the final payment for "{title}". The project is closed.',
+    (C.REQUEST_INFO, ORG): '{org} asked you a question about "{title}". The review waits for your answer.',
+    (C.ANSWER_INFO, DEV): 'The developer answered your question about "{title}". The review clock runs again.',
+    (C.CANCEL_REQUEST, ORG): '{org} withdrew its question about "{title}". The review clock runs again.',
+    (C.PAUSE, DEV): 'The developer put "{title}" on hold until {until}. Due dates move by the time on hold.',
+    (C.PAUSE, ORG): '{org} put "{title}" on hold until {until}. Due dates move by the time on hold.',
+    (C.RESUME, DEV): 'The developer resumed "{title}" before its hold ended. Due dates moved by the time on hold.',
+    (C.RESUME, ORG): '{org} resumed "{title}" before its hold ended. Due dates moved by the time on hold.',
+}
+# [[COPY-REVIEW]] why an engagement expired (docs/spec/06 6.9 Codes), in words both parties read.
+EXPIRY_LABELS: Final = {
+    EngagementEndReason.NO_REVIEW: "nobody started the review in time",
+    EngagementEndReason.NO_DECISION: "no decision was made in time",
+    EngagementEndReason.CONTACT_NOT_MADE: "first contact was not made in time",
+    EngagementEndReason.NO_DEV_RESPONSE: "the interest was not answered in time",
+}
+# [[COPY-REVIEW]] the system's events, as each party reads them.
+EXPIRED_SENTENCES: Final = {
+    DEV: 'Your engagement with {org} on "{title}" expired: {reason}.',
+    ORG: 'The engagement on "{title}" expired: {reason}.',
+}
+RESUMED_SENTENCE: Final = '"{title}" is no longer on hold: it resumed on its date. Due dates moved by the time on hold.'
+# Party events that also go by email in the status layout (the system's always do).
+EMAILED: Final = frozenset({C.REQUEST_INFO, C.ANSWER_INFO, C.CANCEL_REQUEST, C.PAUSE, C.RESUME})
+# An expiry's words when the stage it ended reads better than its reason code (an unanswered question).
+EXPIRY_LABELS_BY_STATE: Final = {EngagementState.INFO_REQUESTED: "the organisation's question was not answered in time"}
+# [[COPY-REVIEW]] the title of a notice about an event that returns to the stage it left, named by what happened
+# (the stage's own label, "Under review", would say nothing new); every other notice is titled by the state entered
+# ("Information requested", "On hold", "Expired"). The status email's subject begins with the same title.
+EVENT_TITLES: Final[dict[sm.Command, str]] = {
+    C.ANSWER_INFO: "Question answered",
+    C.CANCEL_REQUEST: "Question withdrawn",
+    C.RESUME: "Resumed",
 }
 # [[COPY-REVIEW]] the developer's in-app N17, when an organisation expresses interest (stage 0).
 INTEREST_SENTENCE: Final = '{org} is interested in "{title}". Accept or decline on your tracker.'
@@ -167,15 +205,95 @@ def compose(
     if notice is None or sentence is None:
         return None
     reason = DECLINE_LABELS.get(event.end_reason, "") if event.end_reason else ""
-    body = sentence.format(org=em2.one_line(company), title=em2.one_line(title), reason=reason)
     payload = dict(event.payload)
+    body = sentence.format(
+        org=em2.one_line(company), title=em2.one_line(title), reason=reason, until=_until(payload.get("resume_at"))
+    )
     if event.end_reason is EngagementEndReason.ALREADY_IN_PROGRESS_INTERNALLY and "internal_start_date" in payload:
         body += f" They attest the same work was already in progress internally since {payload['internal_start_date']}."
     if reason_text:
         body += f" Their reason: {reason_text}"
-    label = sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
+    label = EVENT_TITLES.get(command) or sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
     told = sm.other(acted)
     return told, Notice(f"engagement.{notice.lower()}", label, body, engagement_path(told, event.engagement_id))
+
+
+def _until(resume_at: object) -> str:
+    """A hold's resume date as people read it ("20 Oct 2026"), from the pausing event's payload."""
+    try:
+        return em2.eat_date(date.fromisoformat(str(resume_at)))
+    except ValueError:
+        return "its resume date"
+
+
+def compose_system(event: EngagementEvent, company: str, title: str) -> list[tuple[EngagementParty, Notice]]:
+    """Both parties' notices of a system event (the expiry job's): an expiry, under the matrix row of the stage it
+    ended (``state_machine.EXPIRY_NOTICE``), or a hold resumed on its date (N20). Nothing for anything else."""
+    if event.actor_role is not EngagementActorRole.SYSTEM or event.from_state is None:
+        return []
+    org, name = em2.one_line(company), em2.one_line(title)
+    if event.command == sm.EXPIRE and event.end_reason in EXPIRY_LABELS and event.from_state in sm.EXPIRY_NOTICE:
+        kind = f"engagement.{sm.EXPIRY_NOTICE[event.from_state].lower()}"
+        reason = EXPIRY_LABELS_BY_STATE.get(event.from_state) or EXPIRY_LABELS[event.end_reason]
+        label = sm.STAGE_LABELS[EngagementState.EXPIRED]
+        notices = []
+        for party, sentence in EXPIRED_SENTENCES.items():
+            body = sentence.format(org=org, title=name, reason=reason)
+            notices.append((party, Notice(kind, label, body, engagement_path(party, event.engagement_id))))
+        return notices
+    if event.command == C.RESUME.value and event.from_state is EngagementState.ON_HOLD:
+        kind, label = f"engagement.{sm.RESUME_NOTICE.lower()}", EVENT_TITLES[C.RESUME]
+        body = RESUMED_SENTENCE.format(title=name)
+        return [(party, Notice(kind, label, body, engagement_path(party, event.engagement_id))) for party in (DEV, ORG)]
+    return []
+
+
+def emailed(event: EngagementEvent) -> bool:
+    """Whether the event's notices also go by email in the status layout."""
+    return event.actor_role is EngagementActorRole.SYSTEM or event.command in EMAILED
+
+
+async def _send_status(
+    db: AsyncSession,
+    provider: EmailProvider,
+    settings: Settings,
+    *,
+    user_id: UUID,
+    notice: Notice,
+    event: EngagementEvent,
+    title: str,
+) -> bool:
+    """The status email of ``notice`` to ``user_id`` (the session is bound to them), once per event, when their
+    preference for the kind allows it; False while the send is still queued after transient errors."""
+    user = await db.get(User, user_id)
+    if user is None or user.email_verified_at is None:
+        get_logger(__name__).warning("status_email.skipped", event_id=str(event.id), user_id=str(user_id))
+        return True
+    if not await channel_enabled(db, user.id, notice.kind, NotificationChannel.EMAIL):
+        return True
+    rendered = status.render(
+        status.StatusFacts(
+            engagement_id=event.engagement_id,
+            label=notice.title,
+            title=title,
+            sentence=notice.body,
+            path=notice.link,
+            base_url=settings.public_base_url,
+            product=settings.product_name,
+        )
+    )
+    message = EmailMessage(
+        to=user.email, subject=rendered.subject, text=rendered.text, html=rendered.html, tag=notice.kind
+    )
+    delivery = await send_email(
+        db,
+        provider,
+        message=message,
+        kind=notice.kind,
+        user_id=user.id,
+        dedupe_key=status.dedupe_key(event.id, user.id),
+    )
+    return delivery.status is not DeliveryStatus.QUEUED
 
 
 async def _in_app(db: AsyncSession, user_id: UUID, org_id: UUID | None, notice: Notice, event_id: UUID) -> bool:
@@ -355,28 +473,37 @@ async def deliver(
         version = await db.get(ProposalVersion, engagement.version_id)
         company = org.legal_name if org is not None else "The organisation"
         title = (version.title if version is not None else None) or "your proposal"
-        composed = compose(event, company, title, reason_text=reason_text)
-        people: list[UUID] = []
-        if composed is not None:
-            party, notice = composed
-            if party is ORG:
-                people = await org_people(db, engagement)
-            else:
-                await _in_app(db, developer_id, None, notice, event.id)
+        if event.actor_role is EngagementActorRole.SYSTEM:
+            notices = dict(compose_system(event, company, title))
+        else:
+            composed = compose(event, company, title, reason_text=reason_text)
+            notices = dict([composed]) if composed is not None else {}
+        by_email = emailed(event)
+        if DEV in notices:
+            await _in_app(db, developer_id, None, notices[DEV], event.id)
+            if by_email:
+                sent = await _send_status(
+                    db, provider, settings, user_id=developer_id, notice=notices[DEV], event=event, title=title
+                )
+                done = done and sent
             if is_interest(event):
                 done = await _send_n17(db, provider, settings, engagement, company, title)
+        people = await org_people(db, engagement) if ORG in notices else []
         if event.to_state is EngagementState.INTEREST_CONFIRMED and event.from_state is not event.to_state:
             # EM2 goes to the developer whoever moved the engagement there (the signatory's approval, or the
             # developer's own acceptance of an organisation's interest at stage 0).
-            done = await _send_em2(db, provider, settings, engagement)
+            done = await _send_em2(db, provider, settings, engagement) and done
         await db.commit()
-    if composed is None:
-        return done
     for user_id in people:
         async with factory() as db:
             await bind_tenant(db, user_id=user_id, org_id=engagement.org_id)
             if await membership_of(db, engagement.org_id, user_id) is None:
                 continue  # no longer a member: nothing to tell them
-            await _in_app(db, user_id, engagement.org_id, notice, event.id)
+            await _in_app(db, user_id, engagement.org_id, notices[ORG], event.id)
+            if by_email:
+                sent = await _send_status(
+                    db, provider, settings, user_id=user_id, notice=notices[ORG], event=event, title=title
+                )
+                done = done and sent
             await db.commit()
     return done

@@ -25,7 +25,7 @@ type Phase =
 
 /** What the status line says: a key under adminModeration and its tone (a mark and words, never colour alone). */
 type Notice =
-  | { tone: "ok"; key: "decision.approvedProposal" | "decision.approvedProblem" | "decision.rejected" }
+  | { tone: "ok"; key: "decision.approvedProposal" | "decision.approvedProblem" | "decision.approvedBrief" | "decision.rejected" }
   | { tone: "info"; key: "decision.changed" }
   | { tone: "error"; key: `refusal.${RefusalCode}` };
 
@@ -33,7 +33,8 @@ export interface CaseDecisionProps {
   caseId: string;
   /** The proposal version the page shows (sent back with the decision); null for problems. */
   versionId: string | null;
-  kind: "proposal" | "problem" | "other";
+  /** "brief": a problem an organisation posted as a Problem Brief (approving publishes it to developers). */
+  kind: "proposal" | "problem" | "brief" | "other";
   /** The decisions the API accepts from this moderator now. */
   actions: readonly Choice[];
   blocked: Blocked | null;
@@ -123,7 +124,9 @@ export function CaseDecision({
         key:
           choice === "reject"
             ? "decision.rejected"
-            : kind === "problem"
+            : kind === "brief"
+              ? "decision.approvedBrief"
+              : kind === "problem"
               ? "decision.approvedProblem"
               : "decision.approvedProposal",
       });
@@ -238,7 +241,11 @@ export function CaseDecision({
             className="focus:outline-none"
           >
             <p id={QUESTION_ID} className="max-w-[60ch] text-ink">
-              {kind === "problem" ? t("decision.rejectConfirmProblem") : t("decision.rejectConfirmProposal")}
+              {kind === "brief"
+                ? t("decision.rejectConfirmBrief")
+                : kind === "problem"
+                  ? t("decision.rejectConfirmProblem")
+                  : t("decision.rejectConfirmProposal")}
             </p>
             <div className="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
               <Button variant={canApprove ? "danger" : "primary"} onClick={() => void run("reject")}>

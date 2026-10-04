@@ -35,6 +35,9 @@ NO_NUL = r"^[^\x00]*$"  # PostgreSQL text cannot hold NUL
 # One line of text: no C0 control (line breaks included) and no DEL, so a party's words cannot forge a line of a
 # signed text or a record (security review P5, MINOR 1).
 ONE_LINE = r"^[^\x00-\x1f\x7f]*$"
+# Several lines: line feeds and tabs are the only control characters (no carriage return, escape or DEL), so a
+# party's text renders as typed and cannot steer a terminal or a log viewer.
+LINES = r"^[^\x00-\x08\x0b-\x1f\x7f]*$"
 MAX_KES_MINOR = 10**13  # KES 100 billion: a typo guard, far above any engagement
 
 
@@ -84,6 +87,35 @@ class ConfirmPaymentBody(CommandBody):
     amount_received_kes_minor: int = Field(ge=0, le=MAX_KES_MINOR)
 
 
+# Side states (REQ-ENG-10 part; docs/spec/06 6.9 side branches). Each text becomes the event's note
+# (engagement_notes): read by both parties on the tracker, never in the hash chain. Blank text is 422 invalid_note.
+class RequestInfoBody(CommandBody):
+    """The organisation's question (stages 1-2): the review clock pauses until the developer answers."""
+
+    question: str = Field(min_length=1, max_length=2000, pattern=LINES)
+
+
+class AnswerInfoBody(CommandBody):
+    """The developer's answer: the engagement returns to the stage it was in, its deadline moved by the pause."""
+
+    answer: str = Field(min_length=1, max_length=2000, pattern=LINES)
+
+
+class PauseBody(CommandBody):
+    """Put the engagement on hold before the agreement, with a reason and the date it resumes."""
+
+    reason: str = Field(min_length=1, max_length=500, pattern=ONE_LINE)
+    resume_at: date = Field(
+        description="The Africa/Nairobi date it resumes: after today, at most policy.yaml's on_hold.max_days (60) ahead"
+    )
+
+
+class ResumeBody(CommandBody):
+    """Resume a hold before its date, with a reason; due dates move by the business days on hold."""
+
+    reason: str = Field(min_length=1, max_length=500, pattern=ONE_LINE)
+
+
 class DueOut(BaseModel):
     due_on: date
     business_days_left: int
@@ -122,6 +154,9 @@ class EngagementSummary(BaseModel):
     lock_version: int
     whose_turn: list[EngagementParty]
     updated_at: datetime
+    paused_from: EngagementState | None = Field(
+        description="In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
+    )
 
 
 class EngagementList(BaseModel):
@@ -201,6 +236,30 @@ class PaymentOut(BaseModel):
     confirmed_amount_kes_minor: int | None
 
 
+class NoteOut(BaseModel):
+    """The text a side-state command carried, in event order: the organisation's question (``info_request``), the
+    developer's answer (``info_answer``), a hold's reason with its resume date (``hold``), an early resume's reason
+    (``resume``). ``by`` is the party that wrote it."""
+
+    kind: Literal["info_request", "info_answer", "hold", "resume"]
+    body: str
+    resume_at: date | None
+    by: EngagementParty
+    at: datetime
+    seq: int | None = Field(
+        default=None, description="The seq of the event the note explains (History pairs them); always set by the API"
+    )
+
+
+class SideLimitsOut(BaseModel):
+    """What the policy's caps leave the engagement's current stage (the stage a side state returns to), each null
+    where it does not apply."""
+
+    questions_left: int | None = Field(description="Questions the organisation may still ask (stages 1-2 only)")
+    holds_left: int | None = Field(description="Holds this stage may still have (before the agreement, from stage 2)")
+    hold_days_left: int | None = Field(description="Calendar days on hold the engagement has left over all its holds")
+
+
 class DocumentRefOut(BaseModel):
     kind: SignatureDocumentKind
     ref: UUID
@@ -218,6 +277,17 @@ class EngagementDetail(EngagementSummary):
     signatures: list[SignatureOut]
     payments: list[PaymentOut]
     documents: list[DocumentRefOut]
+    notes: list[NoteOut] = Field(description="The side states' questions, answers and reasons, in event order")
+    side_limits: SideLimitsOut | None = Field(
+        default=None, description="The caps left for the current stage's side states; null once ended or none apply"
+    )
+    # Always sent; optional in the generated web types (no non-null default), so a client reads an older API as "no
+    # day sent".
+    today: date | None = Field(
+        default=None,
+        description="Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the"
+        " side-state rules count from",
+    )
 
 
 class HistoryEventOut(BaseModel):

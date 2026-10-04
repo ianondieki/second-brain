@@ -4,25 +4,36 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Lattice } from "@/components/ui/Lattice";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
-import { InfoIcon, PencilIcon } from "@/components/ui/icons";
+import { CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 
 import { Citations } from "./Citations";
-import { confidenceWords, problemLabel, type ProblemDetail } from "./problem";
+import { confidenceWords, formatDate, problemLabel, type ProblemDetail } from "./problem";
 
 /**
  * A published problem card (REQ-RES-02; docs/spec/06 6.5 ProblemCard): its label ("AI-drafted, human-reviewed on
- * <date>", a seeded example, or "Developer-reported"), title, statement, who is affected, niche, region, confidence,
+ * <date>", a seeded example, "Developer-reported" or "Posted by <organisation>"), title, statement, who is affected,
+ * niche, region, a Problem Brief's budget band and deadline (REQ-DIR-05), confidence,
  * the organisations it names, and every cited source with its verbatim quote. The page supplies the heading level's
  * context: the title is the page's h1. P12-F's Discover links here (components/problem/problem.ts problemHref).
  */
-export async function ProblemCard({ problem, action }: { problem: ProblemDetail; action?: ReactNode }) {
+export async function ProblemCard({
+  problem,
+  action,
+  countyName,
+}: {
+  problem: ProblemDetail;
+  action?: ReactNode;
+  /** The county's name for the problem's county code (the code is shown when it is not given). */
+  countyName?: string | null;
+}) {
   const t = await getTranslations("problem");
   const locale = await getLocale();
   const label = problemLabel(problem, locale);
   const confidence = confidenceWords(locale, problem.confidence);
   const country = t("country", { country: problem.country });
-  const LabelIcon = label?.key === "aiDrafted" ? PencilIcon : InfoIcon;
+  const LabelIcon = label?.key === "aiDrafted" ? PencilIcon : label?.key === "org_brief" ? CompaniesIcon : InfoIcon;
+  const brief = problem.brief ?? null;
 
   return (
     <article aria-labelledby="problem-title" data-problem={problem.id} className="flex flex-col gap-10">
@@ -38,7 +49,11 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
         {label ? (
           <p>
             <Badge data-label={label.key} tone="neutral" icon={<LabelIcon />}>
-              {label.key === "developer" ? t("label.developer") : t(`label.${label.key}`, { date: label.date })}
+              {label.key === "developer"
+                ? t("label.developer")
+                : label.key === "org_brief"
+                  ? t("label.org_brief", { org: label.org })
+                  : t(`label.${label.key}`, { date: label.date })}
             </Badge>
           </p>
         ) : null}
@@ -49,8 +64,19 @@ export async function ProblemCard({ problem, action }: { problem: ProblemDetail;
           {problem.affected_group ? <Description label={t("affected")}>{problem.affected_group}</Description> : null}
           {problem.niche ? <Description label={t("niche")}>{problem.niche.label}</Description> : null}
           <Description label={t("region")}>
-            {problem.county_code ? t("regionCounty", { county: problem.county_code, country }) : country}
+            {problem.county_code ? t("regionCounty", { county: countyName ?? problem.county_code, country }) : country}
           </Description>
+          {/* A Problem Brief's terms (REQ-DIR-05): the band the organisation gave and the day it wants proposals by. */}
+          {brief ? (
+            <>
+              <Description label={t("budget")}>
+                {brief.budget_band ? brief.budget_band.label : <span className="text-ink-soft">{t("budgetOpen")}</span>}
+              </Description>
+              <Description label={t("deadline")}>
+                {brief.deadline ? formatDate(locale, brief.deadline) : <span className="text-ink-soft">{t("noDeadline")}</span>}
+              </Description>
+            </>
+          ) : null}
           {confidence ? (
             <Description label={t("confidence")}>
               {t("confidenceValue", { band: t(`confidenceBand.${confidence.band}`), value: confidence.percent })}

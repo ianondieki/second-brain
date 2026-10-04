@@ -12,17 +12,20 @@ import {
   MAX_ITEMS,
   projectsById,
   type CountyRef,
+  type DiscoverBriefsOut,
   type DiscoverQuery,
   type OpportunityGapOut,
   type TrendingOut,
   type TrendingProject,
 } from "./discover";
+import { BriefRow } from "./BriefRow";
 import { ProblemRow } from "./ProblemRow";
 import { ProjectRow } from "./ProjectRow";
 
 export type DiscoverListProps = { query: DiscoverQuery; counties: readonly CountyRef[] } & (
   | { kind: "board"; board: TrendingOut }
   | { kind: "gap"; gap: OpportunityGapOut }
+  | { kind: "briefs"; briefs: DiscoverBriefsOut }
 );
 
 /**
@@ -36,6 +39,25 @@ export function DiscoverList(props: DiscoverListProps) {
   const { query, counties } = props;
   const narrowed = isNarrowed(query);
   const clear = { sentence: t("filteredEmpty"), action: t("clear"), href: discoverHref({ view: query.view }) };
+
+  if (props.kind === "briefs") {
+    const items = props.briefs.items.slice(0, MAX_ITEMS);
+    return (
+      <List id="discover-briefs" title={t("briefsTitle")} lead={t("briefsLead")}>
+        {items.length === 0 ? (
+          <EmptyState
+            {...(narrowed ? clear : { sentence: t("briefsEmpty"), action: t("toProblems"), href: discoverHref({}) })}
+          />
+        ) : (
+          <RowList ordered cards>
+            {items.map((item) => (
+              <BriefRow key={item.problem.id} item={item} counties={counties} />
+            ))}
+          </RowList>
+        )}
+      </List>
+    );
+  }
 
   if (props.kind === "gap") {
     const items = props.gap.items.slice(0, MAX_ITEMS);

@@ -15,7 +15,7 @@ import bridge.reminders.org_digest as org_digest
 from bridge.reminders.health import Health
 from bridge.reminders.nudge import DeveloperFacts, compose_nudge
 from bridge.reminders.org_digest import OrgFacts, compose_digest, period_start, render_digest
-from tests.unit.reminders.builders import BASE_URL, MONDAY, NO_HOLIDAYS, ORG, M, S, days, engagement, milestone
+from tests.unit.reminders.builders import BASE_URL, DEV, MONDAY, NO_HOLIDAYS, ORG, M, S, days, engagement, milestone
 
 ORG_ID = uuid4()
 
@@ -209,3 +209,26 @@ def test_the_footer_names_the_cadence(cadence: str) -> None:
         f"You get this {cadence} digest for Telco A (fixture)"
         in render_digest(digest, to="o@example.com", base_url=BASE_URL).text
     )
+
+
+def test_a_paused_engagement_reads_as_paused_and_never_overdue() -> None:
+    """REQ-ENG-10 (part): a hold reads its resume date, an open question the developer's answer; neither is assessed,
+    awaited or overdue, and a digest with only paused engagements still says so."""
+    held = engagement(S.ON_HOLD, awaiting=frozenset(), stage_deadline_on=days(10), last_developer_update_on=MONDAY)
+    asked = engagement(S.INFO_REQUESTED, title="Water meters", awaiting=frozenset({DEV}), entered_on=days(-30))
+    digest = compose_digest(facts(held, asked), NO_HOLIDAYS)
+    assert not digest.empty
+    assert (digest.entries, digest.needs_us, digest.overdue) == ((), (), ())
+    assert digest.paused == (
+        "“Solar cold rooms” by Wanjiru (On hold): paused until 15 Oct 2026.",
+        "“Water meters” by Wanjiru (Information requested): paused until Wanjiru answers your question.",
+    )
+    assert digest.summary == "0 active engagements, 2 paused"
+    message = render_digest(digest, to="org@example.com", base_url=BASE_URL)
+    assert "PAUSED\n- “Solar cold rooms” by Wanjiru (On hold): paused until 15 Oct 2026." in message.text
+    assert message.html is not None
+    assert "paused until 15 Oct 2026" in message.html
+    active = compose_digest(facts(held, engagement(last_developer_update_on=MONDAY)), NO_HOLIDAYS)
+    assert active.summary == "1 active engagement, 1 on track, 1 paused"
+    undated = compose_digest(facts(engagement(S.ON_HOLD, awaiting=frozenset())), NO_HOLIDAYS)
+    assert undated.paused == ("“Solar cold rooms” by Wanjiru (On hold): paused until it resumes.",)

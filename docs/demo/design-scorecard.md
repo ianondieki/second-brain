@@ -50,6 +50,15 @@ Screenshots: `docs/demo/screenshots/p18/<name>-<theme>-<width>.jpg`; the strict 
 | Confirm dialogs (bottom sheets) | `dialog-sheet` | 4 | 4 | 4 | 4 | 5 | 4 | 0 | delete idea, withdraw pitch, assistant consent (every ConfirmDialog) | focus on Cancel; Escape closes; rises once, still under reduced motion | ux-reviewer PASS (round 5, the whole branch on the final build) | a bottom sheet with a grab mark under 640 px, centred above |
 | Haptics | (lib/haptics.ts; unit) | n/a | n/a | n/a | n/a | n/a | 4 | n/a | success (payment confirmed, idea published, NDA accepted, interest sent, engagement closed), warn (payment failed or cancelled), tap (dialog confirm); silent without the Vibration API or under reduced motion | | ux-reviewer PASS (round 5, the whole branch on the final build) | words and colour carry the meaning; the buzz only confirms |
 | Emails (EM1 registered, EM2 approval, EM3 scout digest, EM7 daily digest, N17 interest, auth: confirm, sign-in link, account exists, security notice) | `email-em1`, `email-em2`, `email-em3`, `email-em7`, `email-n17`, `email-auth-login`, `email-auth-security` (rendered samples at 640 px) | 4 | 4 | 4 | 4 | 5 | 4 | n/a | every kind through one frame (`_brand.html.j2`); the plain-text parts unchanged; the companion's daily check-in (REQ-REM-00) keeps its parity markup on purpose | one button per email; the link's address under it in the auth emails | ux-reviewer PASS (round 5, the whole branch on the final build) | paper, accent band over an ochre hairline, serif wordmark, white sheet, quiet footer; no images or gradients, so every client draws the same |
+| Teaser checks (editor step 1, P19) | `editor-checks` (`docs/demo/screenshots/p19/`) | 4 | 4 | 4 | 4 | 4 | 4 | 0 | overlap none "compared with N", over-disclosure named by the rules (warn only), demo fallback chip, today's last overlap from the server, the daily limit in words (seen on the stack when the shots ran Amina out of checks; unit + e2e), not saved, every refusal (unit) | two secondary buttons, Enter and Space, each answer in its own polite live region, focus stays on the button, Continue the one primary, the card's chunk loads on the first press | pending (P19 round) | quiet card between the teaser and the assistant; the field list reads "how, not what: summary" (the card's wording, the field lower-cased through Intl.ListFormat) |
+| Organisation: Problems (P19) | `org-problems`; `org-problems-empty` skipped (SACCO B holds the e2e's Briefs; the empty state is one sentence and Post a brief in `problems-pages.test.tsx`) | 4 | 4 | 4 | 4 | 5 | 4 | 0 (was heading-order on all four variants: fixed) | published, closed, in review, posted note, member who cannot post, stale cursor, refused (unit) | Post a brief the one primary (full width on phones); the card's title is its link | pending (P19 round) | fixed: the list is named by a hidden h2 so the h3 titles follow the h1 (an h2 title took the display serif and the underline: caught on the re-shot and reverted to h3) |
+| Organisation: Post a brief (P19) | `org-brief-new`, `org-brief-new-refused` | 4 | 4 | 4 | 4 | 4 | 4 | 0 | blank, plan full (the notice above the form and the 402 naming Starter after a press), field checks (title first focused), 403 and 422 refusals, word meter at 120 (unit) | three flat cards as the scout form; radio cards 44 px; a refused band focuses its radio; Post the brief the one primary | pending (P19 round) | with the plan full the page says so three times (cap line, notice, then the 402): left as built, see below |
+| Organisation: one Brief (P19) | `org-brief` | 4 | 4 | 4 | 4 | 5 | 4 | 0 | published (See it as developers do), in review, not approved, closed, not found (unit) | Close this brief a secondary, confirmed step (no primary) | pending (P19 round) | the state note as a callout, the statement large over the facts |
+| Discover: Briefs (P19) | `discover-briefs` | 4 | 4 | 4 | 4 | 5 | 4 | 0 | one Brief, none (unit), filtered | four tabs fit 360 px with "Gap" (measured: the P19-F card); card title the link; Start a proposal from this brief | pending (P19 round) | the card as Discover's problem cards; one badge "Posted by <organisation>"; budget and deadline on their own line |
+| Problem page of a Brief (P19) | `problem-brief` | 5 | 4 | 4 | 4 | 5 | 4 | 0 | open Brief (its own start action), closed Brief (plain start and a quiet line, unit) | Start a proposal from this brief the one primary | pending (P19 round) | fixed: Region read "KE-30, Kenya"; it says "Nairobi City, Kenya" (every problem with a county) |
+| Staff: Brief by in the queue (P19) | `admin-moderation-brief` (viewport at the row: the queue holds e2e cases) | 4 | 4 | 4 | 4 | 5 | 4 | 0 (first full run on this build; skipped in the last, the scene's Brief then published) | Brief by <organisation>, Problem Brief when the organisation is not listed (unit) | as the queue | pending (P19 round) | |
+| Notifications page (P19) | `notifications`, `notifications-empty` (replace the mock-API shots) | 4 | 4 | 4 | 4 | 5 | 4 | 0 | unread and read rows in Nairobi day groups, empty (one sentence, one action), stale cursor, mark all read (done, failed), slow count (unit, e2e) | the row is the link and marks read (middle click too); Mark all as read the one secondary; no primary | pending (P19 round) | real rows from the tracker: a pitch's receipt, Under review, Approved to proceed (non-binding) |
+| Bell (P19) | `bell` (top bar at 375) | 4 | 4 | 4 | 4 | 5 | 4 | 0 | none, a count, 99+ (unit) | 44 px link; the count in its name ("Notifications, 3 unread") | pending (P19 round) | badge in the accent over the bell, ringed in the paper colour |
 
 ## Round 2 (2026-10-01): the gate's measurements on the final build
 
@@ -115,3 +124,67 @@ D-53; all four fixed in their own commits, and round 5 verified each on the runn
 CLS 0 on the storage-only path, light and dark; focus on the status line; the lead at 60ch; D-53 updated) and
 passed the whole branch. Final JS budget: the tracker 149,321 bytes, `/settings/security` 147,332, `/help` 142,500.
 
+## P19 measurements (2026-10-02)
+
+Shots: `frontend/demo/design-shots.spec.ts` (the P19 entries; `SHOT_FILTER` as in its config), 1440 and 375 px, light
+and dark, against the compose stack's API and data with the web app built from this branch (the fixes above; the
+editor, Discover and notification code as on the stack). Strict axe: 38 shots, 0 violations, at most one
+`[data-primary]`, no sideways scroll (`docs/demo/axe-p19.json`; the moderation row's four shots were 0 on the first full
+run of the same build). The runner makes its own Brief (Telco A's reviewer, approved in the queue), a draft of
+Brian's and two test accounts for the bell, and closes or deletes them at the end.
+
+JS budget (`scripts/js-budget.mjs`, gzipped script bodies until idle, 360 px, limit 150,000; production build of
+`7d254d2` on the compose stack, signed in as the demo accounts; the gate's final build):
+
+| Route | Bytes | |
+|---|---|---|
+| `/dev/engagements/<id>` and `?tab=history` (the tracker with the side states, both sides' chunks the same) | 149,979 | ok (21 B left) |
+| `/org/engagements/<id>` | 149,979 | ok (21 B left) |
+| `/dev/ideas/<draft>/edit` (page load) | 149,819 | ok (181 B left; 149,774 on `aaae794`, the magnifier icon since) |
+| … after pressing "Check overlap" | 154,340 | on demand, reported apart (D-28 addendum); the assistant's press read 155,801 on `aaae794` |
+| `/dev/ideas/<published, with a chosen problem>/edit` | 152,306 | over since P18: see below |
+| `/dev/discover?view=briefs` | 142,335 | ok |
+| `/problems/<brief>` | 141,925 | ok |
+| `/dev` (the bell) | 144,088 | ok |
+| `/notifications` | 143,187 | ok |
+| `/org` | 143,684 | ok |
+| `/org/problems` | 142,462 | ok |
+| `/org/problems/new` | 147,135 | ok |
+| `/org/engagements`, `/org/inbox`, `/dev/engagements` | 141,925 | ok |
+
+The tracker went from 149,321 B (P18) to 149,979 B with the side states' banner, stepper chips, rows, the lazily loaded
+sheets and the busy announcement: the four sheets and their forms load on the first press; everything else on that
+route now needs an offset or `next/dynamic`.
+
+The editor's page load grew from 146,247 B (P13-F) to 149,774 B: the next import on that route must be weighed first.
+
+Found while re-measuring after the ux round (build `bf64671`, 152,260 B; 152,306 B on the final build `7d254d2`): the
+editor of an idea that already has a chosen problem (the usual case once an idea is published) also loads the problem
+picker's panels chunk at page load (2,470 B, the linked list and its search), and reads **over the budget by about
+2,300 B**. The chunk and its loading rule are
+P16's (`editor/ProblemPicker.tsx`), and the shared chunks grew in P18, so this variant has been over since P18
+(about 151.9 KB then); P19's checks card added 328 B to the editor's own chunk (6,068 → 6,396 B) and the draft editor
+(the measured route) stays under. Deferring the panels alone is not enough (it leaves about 150.3 KB). The fix is a
+task of its own for the next phase: split the picker so an idea with chosen problems renders its linked list
+statically and loads the search and the new-problem fields on "Link another problem" (about 2 KB), and move the
+editor's attachments step behind its own import (the rest). Recorded in PROGRESS.md's P19 report as an open item.
+
+Lighthouse 12 (mobile default, simulated Slow 4G; `--force-dark-mode` for dark), one run per cell on the compose stack
+(`aaae794`) unless noted:
+
+| Page | Light perf / a11y / LCP | Dark perf / a11y / LCP |
+|---|---|---|
+| `/org/problems` | 99 / 98 / 1.9 s (heading-order; 100 / 100 / 1.9 s on the fixed build) | 99 / 98 / 1.9 s (99 / 100 / 1.9 s fixed) |
+| `/dev/discover?view=briefs` | 99 / 100 / 1.8 s | 93 / 100 / 2.8 s once, then 99 / 100 / 2.0 and 2.1 s |
+| `/notifications` | 99 / 100 / 2.1 s | 99 / 100 / 1.9 s |
+| `/dev/engagements/<id>` with a side state (final build `7d254d2`) | 99 / 100 / 2.2 s | 99 / 100 / 2.2 s |
+| `/org/engagements/<id>` with a side state (final build) | 99 / 100 / 2.2 s | 97 / 100 / 2.5 s (2.53) |
+| `/notifications` (final build) | 99 / 100 / 1.9 s | 98 / 100 / 2.5 s (2.50) |
+| `/org/problems` (final build) | 97 / 100 / 2.5 s (2.54) | 100 / 100 / 1.9 s |
+
+CLS 0 everywhere.
+
+Left as built, for the ux-reviewer: with the plan's open Briefs in use, "Post a brief" still shows the whole form under
+the plan line and the full-plan notice, and a press adds the 402 below it (the same fact three times); the form is
+not disabled because closing a Brief in another tab frees the slot. A single notice (the plan line folded into it)
+would read better.

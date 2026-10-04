@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, useTransition } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
+import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { confirmStepUp, runCommand, type Refusal } from "./calls";
 import type { Member } from "./CommandForm";
@@ -13,16 +14,20 @@ import {
   commandRequest,
   isEndingCommand,
   isFormCommand,
+  isSheetCommand,
   type ActionItem,
   type CommandRequest,
   type FormCommand,
   type FormInput,
+  type SheetCommand,
+  type SideLimits,
 } from "./model";
 import { StepUp } from "./StepUp";
 
 // The forms load when one opens (docs/spec/07 item 5: the tracker stays within the JS budget); they never render on
 // the server, so React.lazy adds no layout shift.
 const CommandForm = lazy(() => import("./CommandForm").then((m) => ({ default: m.CommandForm })));
+const SideSheet = lazy(() => import("./SideSheet").then((m) => ({ default: m.SideSheet })));
 
 export interface ActionsProps {
   engagementId: string;
@@ -38,6 +43,19 @@ export interface ActionsProps {
   myUserId?: string;
   /** The recorded final payment ("250,000"), for the developer's confirmation hint. */
   recorded?: string | null;
+  /** answer_info: the organisation's open question and the day it was asked. */
+  question?: { body: string; date: string } | null;
+  /** resume: the day the hold was due to end. */
+  resumeOn?: string | null;
+  /** The page's language, for the dates and counts the sheets write. */
+  locale?: string;
+  /**
+   * Today in Nairobi on the platform's clock (the API's `today`): the forms' default and earliest dates (a contact-by
+   * date) and a hold's date range; null: the browser's day for the forms, and the API decides a hold's date.
+   */
+  today?: string | null;
+  /** What the policy's caps leave this stage (the API's `side_limits`). */
+  limits?: SideLimits | null;
   runImpl?: typeof runCommand;
   confirmImpl?: typeof confirmStepUp;
 }
@@ -45,6 +63,7 @@ export interface ActionsProps {
 type Mode =
   | { kind: "list" }
   | { kind: "form"; item: ActionItem & { command: FormCommand } }
+  | { kind: "sheet"; item: ActionItem & { command: SheetCommand } }
   | { kind: "confirm"; item: ActionItem }
   | { kind: "stepUp"; item: ActionItem; request: CommandRequest };
 
@@ -62,8 +81,21 @@ export function Actions(props: ActionsProps) {
   const router = useRouter();
   const { runImpl = runCommand } = props;
   const [mode, setMode] = useState<Mode>({ kind: "list" });
-  const [busy, setBusy] = useState(false);
+  const [running, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  // A step that ran stays busy until the refreshed tracker is on screen; only then does "Done" say it is up to date
+  // (and a press can no longer land on a button the refresh is about to replace).
+  const [refreshing, startRefresh] = useTransition();
+  const [okPending, setOkPending] = useState(false);
+  const [pressed, setPressed] = useState<string | null>(null);
+  const busy = running || refreshing;
+  if (okPending && !refreshing) {
+    setOkPending(false);
+    setMode({ kind: "list" });
+    setNotice({ tone: "ok" });
+  }
+  // Tests wait for this before pressing a button: the server's HTML shows the buttons before they work.
+  const hydrated = useHydrated();
   const noticeRef = useRef<HTMLDivElement>(null);
   // The step-up retries its step once, and only while its form is still open (not after Cancel or a refresh).
   const stepUpOpen = useRef(false);
@@ -113,9 +145,8 @@ export function Actions(props: ActionsProps) {
     const outcome = await runImpl(request);
     setBusy(false);
     if (outcome.ok) {
-      setMode({ kind: "list" });
-      setNotice({ tone: "ok" });
-      router.refresh();
+      setOkPending(true);
+      startRefresh(() => router.refresh());
       return;
     }
     if (outcome.refusal === "stepUp" && !retried) {
@@ -123,8 +154,15 @@ export function Actions(props: ActionsProps) {
       setMode({ kind: "stepUp", item, request });
       return;
     }
-    // A form stays open with its refusal when the input was refused; everything else goes back to the buttons.
-    const keepForm = mode.kind === "form" && (outcome.status === 422 || outcome.refusal === "paymentMismatch");
+    // A form or sheet stays open with its refusal, and what was typed, unless the engagement moved on (409 other than
+    // a hold's date past the days left, 404: back to the buttons, refreshed) or the step is not the caller's (403):
+    // a refused input (422), the steps per hour spent (429), no connection (0) or a server failure (5xx) say "try
+    // again" in place.
+    const keepForm =
+      (mode.kind === "form" || mode.kind === "sheet") &&
+      ((outcome.status !== 409 && outcome.status !== 404 && outcome.status !== 403) ||
+        outcome.refusal === "paymentMismatch" ||
+        outcome.refusal === "holdLimit");
     if (!keepForm) setMode({ kind: "list" });
     setNotice({ tone: "error", refusal: outcome.refusal === "stepUp" ? "generic" : outcome.refusal });
     if (outcome.status === 409 || outcome.status === 404) router.refresh();
@@ -132,8 +170,10 @@ export function Actions(props: ActionsProps) {
 
   function press(item: ActionItem) {
     setNotice(null);
+    setPressed(keyOf(item));
     opener.current = keyOf(item);
     if (isFormCommand(item.command)) setMode({ kind: "form", item: item as ActionItem & { command: FormCommand } });
+    else if (isSheetCommand(item.command)) setMode({ kind: "sheet", item: item as ActionItem & { command: SheetCommand } });
     else if (isEndingCommand(item.command)) setMode({ kind: "confirm", item });
     else void run(item, requestFor(item));
   }
@@ -144,18 +184,27 @@ export function Actions(props: ActionsProps) {
     </Alert>
   ) : null;
 
-  // The list's notice sits outside the section, so "Done" stays (with focus) when the step leaves no buttons.
+  // The list's notice sits outside the section, so "Done" stays (with focus) when the step leaves no buttons. A sheet
+  // stays over the list (the page behind it inert) and shows its own refusals.
   const listNotice = mode.kind === "list" ? message : null;
+  const listed = mode.kind === "list" || mode.kind === "sheet";
   return (
     <div ref={root} className="flex flex-col gap-4">
+      {/* "Working…" said politely while a step runs (the button's label alone is not announced); a sheet, which makes
+          this inert, says it inside itself. Left out with no buttons, so the region stays empty for the card's :empty. */}
+      {props.items.length > 0 || busy ? (
+        <span aria-live="polite" data-working="" className="sr-only">
+          {busy ? t("busy") : ""}
+        </span>
+      ) : null}
       {listNotice}
-      {props.items.length === 0 && mode.kind === "list" ? null : (
-    <section aria-labelledby="actions-heading" data-actions="" className="flex flex-col gap-4">
+      {props.items.length === 0 && listed ? null : (
+    <section aria-labelledby="actions-heading" aria-busy={busy} data-actions="" data-hydrated={hydrated ? "true" : "false"} className="flex flex-col gap-4">
       <h2 id="actions-heading" ref={heading} tabIndex={-1} className="text-lg text-ink">
-        {mode.kind === "list" ? t("title") : label(mode.item)}
+        {listed ? t("title") : label(mode.item)}
       </h2>
 
-      {mode.kind === "list" ? (
+      {listed ? (
         <>
           <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {props.items.map((item) => (
@@ -182,7 +231,7 @@ export function Actions(props: ActionsProps) {
                     data-action-key={keyOf(item)}
                     data-milestone={item.milestone?.seq}
                   >
-                    {busy && item.primary ? t("busy") : label(item)}
+                    {busy && keyOf(item) === pressed ? t("busy") : label(item)}
                   </Button>
                 )}
               </li>
@@ -213,15 +262,29 @@ export function Actions(props: ActionsProps) {
 
       {mode.kind === "form" ? (
         <Suspense fallback={<p className="text-ink-soft">{t("busy")}</p>}>
+          {/* members, myUserId, recorded and today come from the props of the same names. */}
           <CommandForm
+            {...props}
             command={mode.item.command}
             busy={busy}
             notice={message}
-            members={props.members}
-            myUserId={props.myUserId}
-            recorded={props.recorded}
             onCancel={cancel}
             onSubmit={(input) => void run(mode.item, requestFor(mode.item, input))}
+          />
+        </Suspense>
+      ) : null}
+
+      {mode.kind === "sheet" ? (
+        <Suspense fallback={null}>
+          {/* counterpart, question, resumeOn, locale, today and limits come from the props of the same names. */}
+          <SideSheet
+            {...props}
+            command={mode.item.command}
+            busy={busy}
+            problem={message}
+            notice={notice}
+            onClose={cancel}
+            onSubmit={(input) => void run(mode.item, requestFor(mode.item, input as FormInput))}
           />
         </Suspense>
       ) : null}

@@ -2,11 +2,12 @@ import { cleanup, screen, within } from "@testing-library/react";
 import { documentLinkClass } from "./document-link";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { detail, history, inImplementation } from "@/test/engagement";
+import { detail, history, inImplementation, summary } from "@/test/engagement";
 import { renderWithIntl } from "@/test/intl";
 
 import { Chip } from "./Chip";
 import { Agreements, Payments, Signatures } from "./Deal";
+import { EngagementCard } from "./EngagementCard";
 import { EngagementRow } from "./EngagementRow";
 import { Endorsements } from "./Endorsements";
 import { HistoryList } from "./HistoryList";
@@ -304,5 +305,249 @@ describe("the Documents tab's links (fix round 1)", () => {
     const other = documentLinkClass(false).split(" ");
     expect(other).toEqual(expect.arrayContaining(["text-accent", "underline", "min-h-11"]));
     expect(other).not.toContain("text-ink");
+  });
+});
+
+// REQ-ENG-10 part (docs/spec/06 6.9 side branches): the side states are said in the pinned whose-turn banner, on the
+// stage where they occurred (never as extra steps), and their texts appear on the History tab in order.
+describe("the side states in the whose-turn banner", () => {
+  const asked = {
+    kind: "info_request" as const,
+    body: "Which co-ops ran the pilot? <b>details</b> https://example.com/x",
+    by: "org" as const,
+    at: "2026-10-01T07:00:00Z",
+    resume_at: null,
+  };
+  const questionOpen = (party: "developer" | "org") =>
+    detail({
+      my_party: party,
+      state: "INFO_REQUESTED",
+      stage_label: "Information requested",
+      stage_group: null,
+      paused_from: "UNDER_REVIEW",
+      whose_turn: ["developer"],
+      awaiting: [{ command: "answer_info", party: "developer" }],
+      due: { due_on: "2026-10-15", business_days_left: 10, overdue: false },
+      notes: [asked],
+    });
+
+  it("shows the developer the question, their next step and the answer-by date, the text as plain text", () => {
+    renderWithIntl(<WhoseTurn detail={questionOpen("developer")} />);
+    const banner = document.querySelector("[data-whose-turn]")!;
+    expect(banner.getAttribute("data-whose-turn")).toBe("you");
+    expect(screen.getByText("Awaiting: you")).toBeTruthy();
+    const side = banner.querySelector("[data-side='info']")!;
+    expect(side.textContent).toBe(`Information requested on 1 Oct 2026: ${asked.body}`);
+    // Escaped, never markup or a link.
+    expect(side.querySelector("b, a")).toBeNull();
+    expect(banner.textContent).toContain("Your next step: Answer the question");
+    expect(banner.querySelector("[data-info-clock]")?.textContent).toBe(
+      "The stage's deadline waits while you answer. Unanswered by 15 Oct 2026, the engagement expires.",
+    );
+    expect(banner.querySelector("[data-due]")).toBeNull(); // the date is said once, in the sentence
+  });
+
+  it("shows the organisation it waits on the developer's answer", () => {
+    renderWithIntl(<WhoseTurn detail={questionOpen("org")} />);
+    const banner = document.querySelector("[data-whose-turn]")!;
+    expect(banner.textContent).toContain("Awaiting: Achieng Otieno");
+    expect(banner.textContent).toContain("Next step for Achieng Otieno: Answer the question");
+    expect(banner.querySelector("[data-info-clock]")?.textContent).toContain("waits until Achieng Otieno answers");
+  });
+
+  it("says a question past its answer-by date is overdue, in words", () => {
+    const late = { ...questionOpen("developer"), due: { due_on: "2026-10-15", business_days_left: -1, overdue: true } };
+    renderWithIntl(<WhoseTurn detail={late} />);
+    expect(document.querySelector("[data-due='overdue']")?.textContent).toBe("Overdue by 1 business day, was due 15 Oct 2026");
+    expect(document.querySelector("[data-info-clock]")).toBeNull();
+  });
+
+  it("says who paused, until when and why, with the On hold mark", () => {
+    const held = detail({
+      my_party: "developer",
+      state: "ON_HOLD",
+      stage_group: null,
+      paused_from: "NEGOTIATION",
+      whose_turn: [],
+      awaiting: [],
+      due: { due_on: "2026-10-21", business_days_left: 13, overdue: false },
+      notes: [{ kind: "hold", body: "Budget committee meets on the 20th.", by: "org", at: "2026-10-02T08:00:00Z", resume_at: "2026-10-21" }],
+    });
+    renderWithIntl(<WhoseTurn detail={held} />);
+    const banner = document.querySelector("[data-whose-turn]")!;
+    expect(screen.getByText("This engagement is on hold.")).toBeTruthy();
+    expect(banner.querySelector("[data-mark='onHold']")).not.toBeNull();
+    expect(banner.querySelector("[data-side='hold']")?.textContent).toBe(
+      "Paused by Telco A (fixture) until 21 Oct 2026: Budget committee meets on the 20th.",
+    );
+    expect(banner.textContent).toContain("It resumes by itself that day");
+    expect(banner.querySelector("[data-due]")).toBeNull();
+  });
+
+  it("tells the party who paused that they did", () => {
+    const held = detail({
+      state: "ON_HOLD",
+      stage_group: null,
+      paused_from: "NEGOTIATION",
+      whose_turn: [],
+      awaiting: [],
+      notes: [{ kind: "hold", body: "Exams week", by: "developer", at: "2026-10-02T08:00:00Z", resume_at: "2026-10-09" }],
+    });
+    renderWithIntl(<WhoseTurn detail={held} />);
+    expect(document.querySelector("[data-side='hold']")?.textContent).toBe("You paused this engagement until 9 Oct 2026: Exams week");
+  });
+
+  it.each([
+    ["NO_REVIEW", "Expired: the organisation did not start a review in time."],
+    ["NO_DECISION", "Expired: the organisation did not decide in time."],
+    ["CONTACT_NOT_MADE", "Expired: first contact was not made in time."],
+    ["NO_DEV_RESPONSE", "Expired: the developer did not answer in time."],
+  ] as const)("says an expiry (%s) in words, in the ended tone", (reason, words) => {
+    renderWithIntl(<WhoseTurn detail={detail({ state: "EXPIRED", end_reason: reason, whose_turn: [], awaiting: [], due: null })} />);
+    const banner = document.querySelector("[data-whose-turn]")!;
+    expect(banner.getAttribute("data-whose-turn")).toBe("ended");
+    expect(banner.getAttribute("data-callout")).toBe("neutral");
+    expect(banner.querySelector("[data-mark='ended']")).not.toBeNull();
+    expect(screen.getByText("This engagement has ended.")).toBeTruthy();
+    expect(banner.querySelector("[data-side='expired']")?.textContent).toBe(words);
+    expect(screen.queryByText(/^Reason:/)).toBeNull();
+  });
+
+  it("says the question was answered, with the answer, once the stage resumed with its moved deadline", () => {
+    const answer = { kind: "info_answer" as const, body: "Kipkelion and Olenguruone.", by: "developer" as const, at: "2026-10-05T09:00:00Z", resume_at: null };
+    renderWithIntl(
+      <WhoseTurn
+        detail={detail({
+          my_party: "org",
+          state: "UNDER_REVIEW",
+          stage_entered_at: answer.at,
+          whose_turn: ["org"],
+          awaiting: [{ command: "approve", party: "org" }],
+          due: { due_on: "2026-10-20", business_days_left: 11, overdue: false },
+          notes: [asked, answer],
+        })}
+      />,
+    );
+    const banner = document.querySelector("[data-whose-turn]")!;
+    expect(banner.querySelector("[data-side='answered']")?.textContent).toBe("Question answered on 5 Oct 2026: Kipkelion and Olenguruone.");
+    expect(banner.querySelector("[data-due]")?.textContent).toBe("11 business days left, due 20 Oct 2026");
+  });
+});
+
+describe("the stepper through a side state", () => {
+  it("keeps the stage it paused from as the current step, on hold, never an extra step", () => {
+    const steps = stepperSteps({ state: "INFO_REQUESTED", stage_group: null, due: null, paused_from: "SUBMITTED" });
+    renderWithIntl(<Stepper steps={steps} detail={<span>Now: Information requested</span>} />);
+    const items = within(screen.getByRole("list", { name: "Stages" })).getAllByRole("listitem");
+    expect(items).toHaveLength(5);
+    expect(items[0].getAttribute("aria-current")).toBe("step");
+    expect(items[0].getAttribute("data-state")).toBe("onHold");
+    // Its own word: an open question is the developer's turn, not a hold (the mark says the clock is paused).
+    expect(items[0].textContent).toContain("Waiting for an answer");
+    expect(items[0].textContent).not.toContain("On hold");
+    expect(items[0].textContent).toContain("Now: Information requested");
+  });
+
+  it("says On hold for a hold, once", () => {
+    const steps = stepperSteps({ state: "ON_HOLD", stage_group: null, due: null, paused_from: "NEGOTIATION" });
+    renderWithIntl(<Stepper steps={steps} />);
+    const current = screen.getByRole("list", { name: "Stages" }).querySelector("[aria-current='step']")!;
+    expect(current.textContent).toBe("AgreementOn hold");
+  });
+});
+
+describe("the side states' texts on the History tab", () => {
+  it("shows each note under its event, in order, as plain text", () => {
+    const base = history().events[1];
+    const h = history({
+      events: [
+        ...history().events,
+        { ...base, id: "q", seq: 3, command: "request_info", from_state: "UNDER_REVIEW", to_state: "INFO_REQUESTED" },
+        { ...base, id: "a", seq: 4, command: "answer_info", actor_role: "developer", actor_name: "Achieng Otieno", from_state: "INFO_REQUESTED", to_state: "UNDER_REVIEW" },
+        { ...base, id: "p", seq: 5, command: "pause", from_state: "UNDER_REVIEW", to_state: "ON_HOLD" },
+        { ...base, id: "r", seq: 6, command: "resume", actor_role: "system", actor_name: null, actor_user_id: null, from_state: "ON_HOLD", to_state: "UNDER_REVIEW" },
+        { ...base, id: "x", seq: 7, command: "expire", actor_role: "system", actor_name: null, actor_user_id: null, from_state: "UNDER_REVIEW", to_state: "EXPIRED" },
+      ],
+    });
+    const notes = [
+      { kind: "info_request" as const, body: "Which co-ops?\n<i>Two</i> or more?", by: "org" as const, at: "2026-10-01T07:00:00Z", resume_at: null },
+      { kind: "info_answer" as const, body: "Kipkelion and Olenguruone.", by: "developer" as const, at: "2026-10-05T09:00:00Z", resume_at: null },
+      { kind: "hold" as const, body: "Budget committee", by: "org" as const, at: "2026-10-06T08:00:00Z", resume_at: "2026-10-21" },
+    ];
+    renderWithIntl(<HistoryList history={h} notes={notes} />);
+    const rows = [...document.querySelectorAll("[data-event]")];
+    expect(rows.map((r) => r.getAttribute("data-event"))).toEqual([
+      "expire",
+      "resume",
+      "pause",
+      "answer_info",
+      "request_info",
+      "start_review",
+      "create",
+    ]);
+    expect(rows[0].textContent).toContain("Expired");
+    expect(rows[0].textContent).toContain("Platform");
+    expect(rows[1].textContent).toContain("Resumed");
+    expect(rows[1].querySelector("[data-note]")).toBeNull(); // the system's resume writes none
+    expect(rows[2].querySelector("[data-note='hold']")?.textContent).toBe("Reason, until 21 Oct 2026Budget committee");
+    expect(rows[3].querySelector("[data-note='info_answer']")?.textContent).toBe("AnswerKipkelion and Olenguruone.");
+    const question = rows[4].querySelector("[data-note='info_request']")!;
+    expect(rows[4].textContent).toContain("Information requested");
+    expect(question.textContent).toBe("QuestionWhich co-ops?\n<i>Two</i> or more?");
+    expect(question.querySelector("i, a")).toBeNull();
+  });
+});
+
+// ux round: a list row never states a deadline nobody has. A hold says when it resumes; an open question, on the
+// organisation's side, is the developer's answer-by date.
+describe("the deadline line of list rows in a side state", () => {
+  const held = summary({
+    state: "ON_HOLD",
+    stage_label: "On hold",
+    stage_group: null,
+    paused_from: "NEGOTIATION",
+    whose_turn: [],
+    due: { due_on: "2026-10-09", business_days_left: 5, overdue: false },
+  });
+  const asked = summary({
+    state: "INFO_REQUESTED",
+    stage_label: "Information requested",
+    stage_group: null,
+    paused_from: "UNDER_REVIEW",
+    whose_turn: ["developer"],
+    due: { due_on: "2026-10-16", business_days_left: 10, overdue: false },
+  });
+
+  it.each(["developer", "org"] as const)("says when a hold resumes, never a countdown (%s)", (mine) => {
+    const { container } = renderWithIntl(<EngagementRow item={held} mine={mine} href="/x" />);
+    expect(container.querySelector("[data-due]")?.textContent).toBe("Resumes 9 Oct 2026");
+    expect(container.textContent).not.toContain("business days left");
+    cleanup();
+    const card = renderWithIntl(<EngagementCard item={held} mine={mine} href="/x" />);
+    expect(card.container.querySelector("[data-due]")?.textContent).toBe("Resumes 9 Oct 2026");
+  });
+
+  it("names the developer as the one who owes an open question's answer, for the organisation", () => {
+    const { container } = renderWithIntl(<EngagementRow item={asked} mine="org" href="/x" />);
+    expect(container.querySelector("[data-due]")?.textContent).toBe("Answer from Achieng Otieno due by 16 Oct 2026");
+    cleanup();
+    const late = renderWithIntl(
+      <EngagementRow item={{ ...asked, due: { due_on: "2026-10-16", business_days_left: -1, overdue: true } }} mine="org" href="/x" />,
+    );
+    expect(late.container.querySelector("[data-due='overdue']")?.textContent).toBe("Answer from Achieng Otieno was due 16 Oct 2026");
+  });
+
+  it("keeps the countdown for the developer, whose answer it is", () => {
+    const { container } = renderWithIntl(<EngagementRow item={asked} mine="developer" href="/x" />);
+    expect(container.querySelector("[data-due]")?.textContent).toBe("10 business days left, due 16 Oct 2026");
+  });
+
+  it("keeps the banner's dates whole on one line", () => {
+    const hold = { kind: "hold" as const, body: "Budget", by: "org" as const, at: "2026-10-02T08:00:00Z", resume_at: "2026-10-09", seq: 4 };
+    renderWithIntl(
+      <WhoseTurn detail={detail({ ...held, notes: [hold], awaiting: [], my_party: "developer" })} />,
+    );
+    const side = document.querySelector("[data-side='hold']")!;
+    expect([...side.querySelectorAll(".whitespace-nowrap")].map((n) => n.textContent)).toEqual(["9 Oct 2026"]);
   });
 });

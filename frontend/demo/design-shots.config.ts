@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
 // The design-roll-out screenshots (P18; docs/platform/design/p18-design-system.md): every product screen on the running
-// demo stack at 1440 and 375 px, light and dark, with a strict axe pass per shot, into docs/demo/screenshots/p18/.
+// demo stack at 1440 and 375 px, light and dark, with a strict axe pass per shot, into docs/demo/screenshots/p18/ (the
+// P19 screens into p19/: SHOT_FILTER="^(editor-checks|org-problems|…)$" runs them alone; SHOT_KEEP=1 leaves the Brief
+// and the draft they make, for the JS budget and Lighthouse on the same pages).
 // Run after `make demo` (or make demo-reset) and `python infra/demo/demo.py e2e-env`:
 //   cd frontend && npx playwright test -c demo/design-shots.config.ts
 //   SHOT_FILTER="login|signup" … one group of pages; SHOT_THEMES=light SHOT_WIDTHS=1440 … fewer variants.

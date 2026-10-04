@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { cn } from "./ui/cn";
 import { AccountMenu } from "./AccountMenu";
+import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
 import { TopBar } from "./TopBar";
 
 export interface SignedInShellProps {
@@ -11,17 +12,26 @@ export interface SignedInShellProps {
   nav?: ReactNode;
   /** Lists and directories use the full content width; forms and summaries keep a 36 rem column. */
   wide?: boolean;
+  /** The page is the bell's own (/notifications): the bell carries aria-current="page". */
+  bellCurrent?: boolean;
 }
 
 /**
- * Signed-in screens: top bar with the account menu (Plan & billing, Notifications, Help, Sign out), the portal
- * navigation when given, and one column of content.
+ * Signed-in screens: top bar with the notification bell and the account menu (Plan & billing, Notification settings,
+ * Help, Sign out), the portal navigation when given, and one column of content.
  */
-export function SignedInShell({ homeHref, children, nav, wide = false }: SignedInShellProps) {
+export function SignedInShell({ homeHref, children, nav, wide = false, bellCurrent = false }: SignedInShellProps) {
   return (
     <>
       <TopBar homeHref={homeHref}>
-        <AccountMenu />
+        {/* docs/spec/07 item 1: the bell, then the avatar menu, on the right of the bar. */}
+        <div className="flex items-center gap-1" data-top-bar-controls="">
+          {/* A slow count never holds the page: until it answers, the bell is there without one. */}
+          <Suspense fallback={<NotificationBell count={null} current={bellCurrent} />}>
+            <UnreadNotificationBell current={bellCurrent} />
+          </Suspense>
+          <AccountMenu />
+        </div>
       </TopBar>
       <div className="mx-auto flex w-full max-w-6xl flex-1 lg:gap-10 lg:px-6">
         {nav}

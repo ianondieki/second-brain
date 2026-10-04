@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +27,7 @@ from bridge.admin.models import Holiday
 from bridge.auth.sessions import LiveSession
 from bridge.db import bind_tenant
 from bridge.engagements import state_machine as sm
+from bridge.engagements.calendar import local_date
 from bridge.engagements.models import (
     Agreement,
     Engagement,
@@ -36,6 +37,7 @@ from bridge.engagements.models import (
     PaymentRecord,
     Signature,
 )
+from bridge.engagements.policy import get_policy
 from bridge.errors import ApiError, forbidden, not_found
 from bridge.models.enums import (
     MFA_REQUIRED_ORG_ROLES,
@@ -130,14 +132,34 @@ async def app_now(db: AsyncSession) -> datetime:
     return now
 
 
-async def load_holidays(db: AsyncSession, today: date) -> frozenset[date]:
-    """Observed Kenyan public holidays from ``today`` over the window any deadline needs (REQ-BD-01)."""
+async def load_holidays(db: AsyncSession, today: date, *, since: date | None = None) -> frozenset[date]:
+    """Observed Kenyan public holidays from ``today`` (or from ``since``, a past date a count starts at: the day a
+    stage was paused or entered) over the window any deadline needs (REQ-BD-01)."""
+    start = min(today, since) if since is not None else today
     rows = await db.execute(
         select(Holiday.observed_on).where(
-            Holiday.country == "KE", Holiday.observed_on >= today, Holiday.observed_on <= today + HOLIDAY_WINDOW
+            Holiday.country == "KE", Holiday.observed_on >= start, Holiday.observed_on <= today + HOLIDAY_WINDOW
         )
     )
     return frozenset(rows.scalars().all())
+
+
+async def entering_event(
+    db: AsyncSession, engagement_id: UUID, state: EngagementState, *, from_main_path: bool = False
+) -> EngagementEvent | None:
+    """The latest event that entered ``state`` (a state change; the genesis too). ``from_main_path``: not a return
+    from a side state, so the stage's own start (its count and deadline began there)."""
+    query = select(EngagementEvent).where(
+        EngagementEvent.engagement_id == engagement_id,
+        EngagementEvent.to_state == state,
+        EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state),
+    )
+    if from_main_path:
+        query = query.where(
+            or_(EngagementEvent.from_state.is_(None), EngagementEvent.from_state.not_in(list(sm.RETURNING)))
+        )
+    found: EngagementEvent | None = await db.scalar(query.order_by(EngagementEvent.seq.desc()).limit(1))
+    return found
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,7 +175,8 @@ class Loaded:
     """Everything a command or the detail view reads about one engagement (under the caller's RLS)."""
 
     facts: sm.Facts
-    stage_round: int
+    stage_round: int  # how many times the engagement entered its state (the database's stage_round of endorsements)
+    first_round: int = 1  # the round its latest entry from the main path began: a return from a side state continues it
     nda: DocumentRef | None = None
     certificate: DocumentRef | None = None
     latest_agreement: Agreement | None = None
@@ -193,16 +216,27 @@ async def load_many(
     if not engagements:
         return {}
     ids = [e.id for e in engagements]
-    # How many times each engagement entered each state (the database's stage_round for endorsements).
+    # Every state change in chain order: how many times each engagement entered its state (the database's
+    # stage_round for endorsements), which round its latest entry from the main path began, and, in a side state,
+    # the state it was entered from.
     entered = await db.execute(
-        select(EngagementEvent.engagement_id, EngagementEvent.to_state, func.count())
+        select(
+            EngagementEvent.engagement_id,
+            EngagementEvent.from_state,
+            EngagementEvent.to_state,
+            EngagementEvent.created_at,
+        )
         .where(
             EngagementEvent.engagement_id.in_(ids),
             EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state),
         )
-        .group_by(EngagementEvent.engagement_id, EngagementEvent.to_state)
+        .order_by(EngagementEvent.engagement_id, EngagementEvent.seq)
     )
-    rounds = {(eid, state): int(count) for eid, state, count in entered.tuples()}
+    changes: dict[UUID, list[Change]] = defaultdict(list)
+    for eid, from_state, to_state, at in entered.tuples():
+        changes[eid].append((from_state, to_state, at))
+    rounds = {e.id: _rounds(changes[e.id], e.state) for e in engagements}
+    side_use = {e.id: _side_use(changes[e.id], e.state, rounds[e.id][2], e.stage_deadline_at) for e in engagements}
     endorsements = await db.execute(
         select(
             EngagementEndorsement.engagement_id,
@@ -215,9 +249,12 @@ async def load_many(
             EngagementEndorsement.milestone_id.is_(None),
         )
     )
-    endorsed: dict[tuple[UUID, EngagementState, int], set[EngagementParty]] = defaultdict(set)
+    endorsed: dict[UUID, set[EngagementParty]] = defaultdict(set)
+    states = {e.id: e.state for e in engagements}
     for eid, stage, stage_round, party in endorsements.tuples():
-        endorsed[(eid, stage, stage_round)].add(party)
+        first, current, _ = rounds[eid]
+        if stage is states[eid] and first <= stage_round <= current:  # this entry's, a pause in between included
+            endorsed[eid].add(party)
     agreements: dict[UUID, list[Agreement]] = defaultdict(list)
     for agreement in (
         await db.execute(
@@ -286,8 +323,8 @@ async def load_many(
     return {
         e.id: _loaded(
             e,
-            round_=rounds.get((e.id, e.state), 0),
-            endorsed=frozenset(endorsed.get((e.id, e.state, rounds.get((e.id, e.state), 0)), ())),
+            rounds=rounds[e.id],
+            endorsed=frozenset(endorsed.get(e.id, ())),
             agreements=agreements.get(e.id, []),
             milestones=milestones,
             payment=payments.get(e.id),
@@ -295,15 +332,62 @@ async def load_many(
             signed=frozenset(signatures.get((e.id, *signing[e.id]), ())) if e.id in signing else frozenset(),
             developer_d2=developer_caller and levels.get(e.developer_id) in _D2_OR_ABOVE,
             deals_enabled=deals_enabled,
+            side_use=side_use[e.id],
         )
         for e in engagements
     }
 
 
+Change = tuple[EngagementState | None, EngagementState, datetime]  # a state change: from, to, when
+
+
+def _side_use(
+    changes: Sequence[Change], state: EngagementState, paused_from: EngagementState | None, deadline: datetime | None
+) -> tuple[int, int, int]:
+    """(questions and holds in the current stage since it was entered from the main path, calendar days on hold over
+    the engagement) from its state changes in chain order. A hold counts from its Nairobi date to the day it resumed,
+    at least one day (a pause resumed the same day is not free); the current one to its resume date (its deadline).
+    The policy's caps are read against these (``_loaded``)."""
+    stage = paused_from if state in sm.RETURNING else state
+    questions = holds = held = 0
+    hold_from: date | None = None
+    for from_state, to_state, at in changes:
+        if to_state is stage and from_state not in sm.RETURNING:
+            questions = holds = 0  # a new entry into the stage from the main path
+        if to_state is EngagementState.INFO_REQUESTED and from_state is stage:
+            questions += 1
+        if to_state is EngagementState.ON_HOLD:
+            hold_from = local_date(at)
+            if from_state is stage:
+                holds += 1
+        elif from_state is EngagementState.ON_HOLD and hold_from is not None:
+            held += max(1, (local_date(at) - hold_from).days)
+            hold_from = None
+    if hold_from is not None and deadline is not None:
+        held += max(1, (local_date(deadline) - hold_from).days)
+    return questions, holds, held
+
+
+def _rounds(changes: Sequence[Change], state: EngagementState) -> tuple[int, int, EngagementState | None]:
+    """(first round, current round, paused from) of an engagement in ``state`` from its state changes in chain order:
+    a return from a side state (docs/spec/06 6.9: ON_HOLD, INFO_REQUESTED) enters the stage again in the database's
+    count but continues it, so what was endorsed before the pause still counts."""
+    first = current = 0
+    for from_state, to_state, _ in changes:
+        if to_state is state:
+            current += 1
+            if from_state not in sm.RETURNING:
+                first = current
+    paused_from = None
+    if state in sm.RETURNING and changes and changes[-1][1] is state:
+        paused_from = changes[-1][0]
+    return first, current, paused_from
+
+
 def _loaded(
     engagement: Engagement,
     *,
-    round_: int,
+    rounds: tuple[int, int, EngagementState | None],
     endorsed: frozenset[EngagementParty],
     agreements: Sequence[Agreement],
     milestones: Mapping[UUID, Sequence[Milestone]],
@@ -312,13 +396,17 @@ def _loaded(
     signed: frozenset[EngagementParty],
     developer_d2: bool,
     deals_enabled: bool,
+    side_use: tuple[int, int, int] = (0, 0, 0),
 ) -> Loaded:
     """One engagement's ``Loaded`` from the rows ``load_many`` read (agreements newest version first)."""
     latest = agreements[0] if agreements else None
     final = next((a for a in agreements if a.status is AgreementStatus.FINAL), None)
     signed_agreement = next((a for a in agreements if a.status is AgreementStatus.SIGNED), None)
     own_milestones = list(milestones.get(signed_agreement.id, ())) if signed_agreement is not None else []
-    loaded = Loaded(sm.Facts(), round_, latest_agreement=latest, final_agreement=final)
+    first_round, stage_round, paused_from = rounds
+    questions, holds, held = side_use
+    policy = get_policy()
+    loaded = Loaded(sm.Facts(), stage_round, first_round, latest_agreement=latest, final_agreement=final)
     loaded.signed_agreement, loaded.milestones, loaded.final_payment = signed_agreement, own_milestones, payment
     if engagement.state is EngagementState.NDA_PENDING:
         loaded.nda = document
@@ -339,6 +427,10 @@ def _loaded(
         developer_d2=developer_d2,
         payment_recorded=payment is not None,
         deals_enabled=deals_enabled,
+        paused_from=paused_from,
+        questions_left=policy.info_requests_per_stage - questions,
+        holds_left=policy.holds_per_stage - holds,
+        hold_days_left=policy.hold_days_total - held,
     )
     return loaded
 

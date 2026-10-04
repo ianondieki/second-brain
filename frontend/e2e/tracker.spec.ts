@@ -3,8 +3,9 @@ import { join } from "node:path";
 
 import { expect, test, type Browser, type Page, type TestInfo } from "@playwright/test";
 
+import { appToday, plusDays } from "./support/clock";
 import { checkScreen } from "./support/screen";
-import { OWNER_DATABASE_URL, pitchFromDeveloper, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
+import { actionsReady, OWNER_DATABASE_URL, pitchFromDeveloper, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
 import { loginReturningTo } from "./support/login";
 
 // REQ-ENG-03 (AC-TRACK-3, AC-TRACK-4 prototype part), REQ-UX-01: the engagement tracker walked by both parties in
@@ -37,6 +38,7 @@ async function shot(page: Page, info: TestInfo, name: string) {
 /** Presses one of the caller's buttons and waits until the step ran and the tracker refreshed without it. */
 async function step(page: Page, name: string) {
   const actions = page.locator("[data-actions]");
+  await actionsReady(page);
   await actions.getByRole("button", { name, exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: DONE })).toBeVisible(SERVER_STEP);
   await expect(actions.getByRole("button", { name, exact: true })).toHaveCount(0, SERVER_STEP);
@@ -45,6 +47,7 @@ async function step(page: Page, name: string) {
 /** Opens a form step, lets `fill` complete it, submits it, and waits for the refreshed tracker. */
 async function formStep(page: Page, name: string, fill: () => Promise<void>) {
   const actions = page.locator("[data-actions]");
+  await actionsReady(page);
   await actions.getByRole("button", { name, exact: true }).click();
   await expect(actions.locator("[data-command-form]")).toBeVisible();
   await fill();
@@ -58,9 +61,6 @@ async function banner(page: Page) {
   return page.locator("[data-whose-turn]");
 }
 
-function isoDaysAhead(days: number): string {
-  return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-}
 
 interface Scene {
   dev: DevSide;
@@ -160,6 +160,8 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await formStep(orgPage, "Approve to proceed (non-binding)", async () => {
       await expect(orgPage.getByLabel("Contact person")).toHaveValue(/.+/);
       await orgPage.getByLabel("How they will make contact").selectOption("email");
+      // The platform's day, which the API checks the contact-by date against (the test clock may run ahead).
+      await orgPage.getByLabel("Contact by").fill(await appToday(orgPage.request));
     });
     await expect(orgPage.getByRole("list", { name: "Stages" }).locator("[aria-current='step']")).toContainText(
       "Contact and NDA",
@@ -170,6 +172,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     // An old second factor: the endorsement asks for a fresh code inline, then runs once more (ADR-002).
     org.person.staleSecondFactor();
     await orgPage.reload();
+    await actionsReady(orgPage);
     await orgPage.locator("[data-actions]").getByRole("button", { name: "Mark first contact made" }).click();
     await expect(orgPage.getByLabel("Authenticator code")).toBeVisible(SERVER_STEP);
     await checkScreen(orgPage, { strict: true });
@@ -204,7 +207,7 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
       await orgPage.getByLabel("Intellectual property").selectOption("non_exclusive_licence");
       await orgPage.getByLabel("Deliverable").fill("Pilot at two co-ops");
       await orgPage.getByLabel("Amount (KES)").fill("250000");
-      await orgPage.getByLabel("Due date").fill(isoDaysAhead(60));
+      await orgPage.getByLabel("Due date").fill(plusDays(await appToday(orgPage.request), 60));
     });
     await devPage.reload();
     await expect(devPage.locator("[data-agreement='draft']")).toContainText("Non-exclusive licence");
@@ -292,6 +295,7 @@ test("the developer withdraws after confirming, and the organisation's buttons g
   const { dev, orgPage, devPage, close } = await scene(page, browser, info);
   try {
     await devPage.goto(`/dev/engagements/${dev.engagementId}`);
+    await actionsReady(devPage);
     await devPage.locator("[data-actions]").getByRole("button", { name: "Withdraw" }).click();
     await expect(devPage.getByText(/Withdraw this proposal from/)).toBeVisible();
     await checkScreen(devPage, { strict: true });

@@ -54,6 +54,7 @@ export function summary(overrides: Partial<Summary> = {}): Summary {
     ended_at: null,
     lock_version: 7,
     whose_turn: ["developer", "org"],
+    paused_from: null,
     updated_at: "2026-09-30T11:05:00Z",
     ...overrides,
   };
@@ -75,6 +76,7 @@ export const DETAIL: Detail = {
   signatures: [],
   payments: [],
   documents: [],
+  notes: [],
 };
 
 export const HOME_ENGAGEMENTS: Summary[] = [

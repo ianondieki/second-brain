@@ -110,6 +110,26 @@ describe("the case page", () => {
     expect(screen.getByRole("button", { name: "Approve" }).hasAttribute("data-primary")).toBe(true);
   });
 
+  // REQ-DIR-05 (ux-review MAJOR 2): a Brief is never public before approval, so its case never says it is.
+  it("says a Brief is hidden until approved and that approving publishes it to developers", async () => {
+    const brief = held({
+      subject_type: "problem",
+      subject_state: "clear",
+      subject_version_id: null,
+      reasons: ["new_org_brief"],
+      flagged_fields: [],
+      brief_org: { id: "01a0ee62-0000-7000-8000-00000000000a", slug: "telco-a-fixture", name: "Telco A (fixture)" },
+      fields: [{ name: "title", text: "Tower sites go dark" }],
+    });
+    data.view = { kind: "ok", data: { item: brief, nextId: null } };
+    await page();
+    expect(screen.getByText("Brief by Telco A (fixture)")).toBeTruthy();
+    expect(screen.getByText("Hidden until approved")).toBeTruthy();
+    expect(screen.queryByText("Public while checked")).toBeNull();
+    expect(screen.getByText(en.adminModeration.case.leadBrief)).toBeTruthy();
+    expect(screen.queryByText(en.adminModeration.case.leadPublic)).toBeNull();
+  });
+
   it("gives an unknown reason a fixed sentence, never the code", async () => {
     data.view = { kind: "ok", data: { item: held({ reasons: ["brand_new_reason"] }), nextId: null } };
     await page();

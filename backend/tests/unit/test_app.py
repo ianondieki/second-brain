@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 from pydantic import SecretStr
 
-from bridge.config import Settings
+from bridge.config import Settings, get_settings
+from bridge.llm.embeddings import EmbedderUnavailable, FakeEmbedder
 from bridge.main import create_app
 from bridge.openapi import OPENAPI_PATH, render
 
@@ -75,3 +77,18 @@ async def test_production_start_up_fails_closed_without_a_live_sms_provider(
             pytest.fail("the app started")
     assert not hasattr(app.state, "sms_provider")
     assert not hasattr(app.state, "engine")  # refused before anything was opened
+
+
+async def test_start_up_fails_closed_when_bge_m3_cannot_load(tmp_path: Path) -> None:
+    """P19-D: the teaser embedder runs in the API; EMBEDDER=bge-m3 without its library or weights stops the start."""
+    settings = get_settings().model_copy(update={"embedder": "bge-m3", "embedder_model_path": tmp_path / "none"})
+    app = create_app(settings)
+    with pytest.raises(EmbedderUnavailable):
+        async with app.router.lifespan_context(app):
+            pytest.fail("the app started")
+
+
+async def test_start_up_keeps_the_fake_embedder_in_dev_and_test() -> None:
+    app = create_app(get_settings())
+    async with app.router.lifespan_context(app):
+        assert isinstance(app.state.embedder, FakeEmbedder)

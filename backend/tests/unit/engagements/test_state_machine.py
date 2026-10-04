@@ -5,18 +5,20 @@ command gets 403, a state the command does not start from gets 409, and the rest
 written from docs/spec/06 6.9 independently of the module, and every transition is checked against the database's
 backstop (revision 0003's ``engagement_main_path_predecessors``). Guards, "whose turn", the caller's actions, the
 business-day deadlines and the input checks are covered branch by branch (100% branch coverage of the module).
+REQ-ENG-10 (part): the side states INFO_REQUESTED and ON_HOLD (before the agreement), each left for the state it was
+entered from, and the expiry of the four stages that expire.
 """
 
 from __future__ import annotations
 
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from bridge.engagements import state_machine as sm
-from bridge.engagements.calendar import NAIROBI
+from bridge.engagements.calendar import NAIROBI, add_business_days
 from bridge.engagements.policy import load_policy
 from bridge.models.enums import (
     AgreementStatus,
@@ -48,6 +50,11 @@ BEFORE_AGREEMENT = {
     S.NEGOTIATION,
     S.AGREEMENT_SIGNING,
 }
+PAUSED = {S.INFO_REQUESTED, S.ON_HOLD}
+# docs/spec/06 6.9 side branches: either party pauses before the agreement, except while the proposal is only submitted.
+PAUSABLE = BEFORE_AGREEMENT - {S.SUBMITTED}
+# The rows that leave a side state for the state it was entered from (their target is that state).
+RESUMING = {sm.Command.ANSWER_INFO, sm.Command.CANCEL_REQUEST, sm.Command.RESUME}
 # command: (developer may run it, organisation roles that may, source states, target, completes, deals gate)
 EXPECTED: dict[sm.Command, tuple[bool, set[R], set[S], S | None, S | None, bool]] = {
     C.ACCEPT_INTEREST: (True, set(), {S.ORG_INTEREST}, S.INTEREST_CONFIRMED, None, False),
@@ -55,7 +62,7 @@ EXPECTED: dict[sm.Command, tuple[bool, set[R], set[S], S | None, S | None, bool]
     C.START_REVIEW: (False, DECIDERS, {S.SUBMITTED}, S.UNDER_REVIEW, None, False),
     C.DECLINE: (False, DECIDERS, {S.SUBMITTED, S.UNDER_REVIEW}, S.DECLINED, None, False),
     C.APPROVE: (False, {R.SIGNATORY}, {S.UNDER_REVIEW}, S.INTEREST_CONFIRMED, None, False),
-    C.WITHDRAW: (True, set(), BEFORE_AGREEMENT, S.WITHDRAWN, None, False),
+    C.WITHDRAW: (True, set(), BEFORE_AGREEMENT | PAUSED, S.WITHDRAWN, None, False),
     C.MARK_CONTACTED: (False, DECIDERS, {S.INTEREST_CONFIRMED}, S.CONTACT_MADE, None, False),
     C.CONFIRM_CONTACT: (True, set(), {S.CONTACT_MADE}, None, None, False),
     C.SEND_NDA: (True, EDITORS, {S.CONTACT_MADE}, S.NDA_PENDING, None, True),
@@ -73,6 +80,11 @@ EXPECTED: dict[sm.Command, tuple[bool, set[R], set[S], S | None, S | None, bool]
     C.SIGN_CERTIFICATE: (True, {R.SIGNATORY}, {S.SIGN_OFF}, None, S.PAYMENT_FINAL, True),
     C.RECORD_PAYMENT: (False, PAYERS, {S.PAYMENT_FINAL}, None, None, True),
     C.CONFIRM_PAYMENT: (True, set(), {S.PAYMENT_FINAL}, S.CLOSED, None, True),
+    C.REQUEST_INFO: (False, DECIDERS, {S.SUBMITTED, S.UNDER_REVIEW}, S.INFO_REQUESTED, None, False),
+    C.ANSWER_INFO: (True, set(), {S.INFO_REQUESTED}, None, None, False),
+    C.CANCEL_REQUEST: (False, DECIDERS, {S.INFO_REQUESTED}, None, None, False),
+    C.PAUSE: (True, DECIDERS, PAUSABLE, S.ON_HOLD, None, False),
+    C.RESUME: (True, DECIDERS, {S.ON_HOLD}, None, None, False),
 }
 ORG_ROLES = (R.OWNER, R.ADMIN, R.SIGNATORY, R.REVIEWER, R.FINANCE)
 ACTORS = (
@@ -101,6 +113,7 @@ def permissive(command: sm.Command, party: EngagementParty) -> sm.Facts:
         milestones=(MilestoneState.ACCEPTED,),
         developer_d2=True,
         payment_recorded=command is C.CONFIRM_PAYMENT,
+        paused_from=S.UNDER_REVIEW,  # where a side state returns to
     )
 
 
@@ -124,6 +137,7 @@ def test_the_table_is_the_spec_table() -> None:
         assert set(row.actors.get(ORG, set())) == roles, command
         assert row.sources == sources, command
         assert (row.target, row.completes, row.deals) == (target, completes, deals), command
+        assert row.resumes is (command in RESUMING), command
         if row.target is None and row.completes is None:
             assert not row.sources & sm.TERMINAL  # a same-state event never follows a terminal state
 
@@ -148,6 +162,8 @@ def test_every_actor_and_state_gets_403_409_or_passes(command: sm.Command) -> No
                 assert decision.party is actor.party
                 assert decision.role in actor.roles
                 assert decision.from_state is state
+                if command in RESUMING:  # back to the state the side state was entered from
+                    assert (decision.to_state, decision.resumes) == (S.UNDER_REVIEW, True)
 
 
 def test_an_organisation_member_acts_in_their_strongest_allowed_role() -> None:
@@ -194,7 +210,14 @@ def test_every_transition_stays_inside_the_database_backstop() -> None:
                 if target.value in predecessors:
                     assert source.value in predecessors[target.value], (row.command, source, target)
                 else:
-                    assert target in {S.DECLINED, S.WITHDRAWN}, (row.command, target)
+                    assert target in {S.DECLINED, S.WITHDRAWN, *PAUSED}, (row.command, target)
+            if target in PAUSED:  # entered from the main path only, so the database's resume lands back on it
+                assert row.sources <= set(sm.MAIN_PATH) - sm.TERMINAL, row.command
+        if row.resumes:  # revision 0003: a move out of ON_HOLD, DISPUTED or INFO_REQUESTED returns where it came from
+            assert row.target is None, row.command
+            assert row.completes is None, row.command
+            assert row.sources <= sm.RETURNING, row.command
+    assert sm.PAUSED <= sm.RETURNING
 
 
 def test_a_signing_command_completes_only_with_the_second_signature() -> None:
@@ -310,6 +333,10 @@ def test_whose_turn_and_the_pending_actions_follow_the_stage() -> None:
     assert turn(S.PAYMENT_FINAL, sm.Facts(payment_recorded=True)) == (DEV,)
     for state in sm.TERMINAL:
         assert turn(state) == ()
+    # A request for information waits for the developer's answer; a hold waits for its date (or either party).
+    assert turn(S.INFO_REQUESTED, sm.Facts(paused_from=S.UNDER_REVIEW)) == (DEV,)
+    assert sm.pending(S.INFO_REQUESTED, sm.Facts()) == (sm.Pending(C.ANSWER_INFO, DEV),)
+    assert turn(S.ON_HOLD, sm.Facts(paused_from=S.NEGOTIATION)) == ()
 
 
 def test_the_callers_actions_are_what_decide_accepts() -> None:
@@ -317,7 +344,7 @@ def test_the_callers_actions_are_what_decide_accepts() -> None:
     owner = sm.Actor(ORG, frozenset({R.OWNER, R.ADMIN}))
     viewer = sm.Actor(ORG, frozenset())
     assert sm.available(developer, S.SUBMITTED, sm.Facts()) == (C.WITHDRAW,)
-    assert sm.available(owner, S.SUBMITTED, sm.Facts()) == (C.START_REVIEW, C.DECLINE)
+    assert sm.available(owner, S.SUBMITTED, sm.Facts()) == (C.START_REVIEW, C.DECLINE, C.REQUEST_INFO)
     assert sm.available(viewer, S.SUBMITTED, sm.Facts()) == ()
     implementation = sm.Facts(milestones=(MilestoneState.PLANNED, MilestoneState.SUBMITTED_FOR_REVIEW))
     assert sm.available(developer, S.IN_IMPLEMENTATION, implementation) == (C.START_MILESTONE,)
@@ -330,7 +357,8 @@ def test_contact_details_are_revealed_from_interest_confirmed_on_the_main_path()
     assert S.CLOSED in sm.CONTACT_REVEALED
     assert not {S.ORG_INTEREST, S.SUBMITTED, S.UNDER_REVIEW, S.DECLINED, S.WITHDRAWN} & sm.CONTACT_REVEALED
     assert set(sm.STAGE_GROUPS) == set(sm.MAIN_PATH)
-    assert set(sm.MAIN_PATH) <= set(sm.STAGE_LABELS)
+    assert set(sm.MAIN_PATH) | sm.PAUSED | {S.EXPIRED} <= set(sm.STAGE_LABELS)
+    assert not sm.PAUSED & sm.CONTACT_REVEALED  # a side state reveals nothing by itself (its stage left does)
 
 
 # ------------------------------------------------------------------------------------------------ deadlines (BD)
@@ -458,6 +486,185 @@ def test_after_a_reopen_either_party_proposes_new_terms() -> None:
     ]
     assert sm.whose_turn(S.NEGOTIATION, reopened) == (DEV, ORG)
     owner = sm.Actor(ORG, frozenset({R.OWNER}))
-    assert sm.available(owner, S.NEGOTIATION, reopened) == (C.PROPOSE_TERMS,)
+    assert sm.available(owner, S.NEGOTIATION, reopened) == (C.PROPOSE_TERMS, C.PAUSE)
     drafted = sm.Facts(draft_by=DEV, draft_status=AgreementStatus.DRAFT)
     assert [(p.command, p.party) for p in sm.pending(S.NEGOTIATION, drafted)] == [(C.MARK_FINAL, ORG)]
+
+
+# ------------------------------------------------------------------------------------------------ side states
+
+
+def test_side_states_are_refused_outside_their_rows() -> None:
+    """REQ-ENG-10: information is requested from stages 1-2 only, answered by the developer only; a hold starts
+    before the agreement but never while the proposal is only submitted, and never after the agreement (the
+    acknowledgement-or-dispute branch comes later)."""
+    developer = ACTORS[0]
+    reviewer = sm.Actor(ORG, frozenset({R.REVIEWER}))
+    asked = sm.Facts(paused_from=S.UNDER_REVIEW)
+
+    def refused(command: sm.Command, actor: sm.Actor, state: S, facts: sm.Facts = asked) -> tuple[int, str]:
+        with pytest.raises(sm.TrackerError) as error:
+            sm.decide(command, actor, state, facts)
+        return error.value.status, error.value.code
+
+    assert refused(C.REQUEST_INFO, reviewer, S.INTEREST_CONFIRMED) == (409, "illegal_transition")
+    assert refused(C.REQUEST_INFO, developer, S.UNDER_REVIEW) == (403, "not_your_action")
+    assert refused(C.ANSWER_INFO, reviewer, S.INFO_REQUESTED) == (403, "not_your_action")
+    assert refused(C.PAUSE, developer, S.SUBMITTED) == (409, "illegal_transition")
+    for after in (S.IN_IMPLEMENTATION, S.DELIVERED, S.SIGN_OFF, S.PAYMENT_FINAL, S.CLOSED):
+        assert refused(C.PAUSE, developer, after) == (409, "illegal_transition")
+        assert refused(C.PAUSE, reviewer, after) == (409, "illegal_transition")
+    assert refused(C.PAUSE, sm.Actor(ORG, frozenset({R.FINANCE})), S.NEGOTIATION) == (403, "role_required")
+    assert refused(C.PAUSE, developer, S.ON_HOLD) == (409, "illegal_transition")  # no hold of a hold
+    assert refused(C.REQUEST_INFO, reviewer, S.INFO_REQUESTED) == (409, "illegal_transition")
+    # Loaded facts always name the state left; without it nothing can return.
+    assert refused(C.ANSWER_INFO, developer, S.INFO_REQUESTED, sm.Facts()) == (409, "no_return_state")
+    back = sm.decide(C.RESUME, reviewer, S.ON_HOLD, sm.Facts(paused_from=S.CONTACT_MADE))
+    assert (back.from_state, back.to_state, back.changes_state, back.resumes) == (S.ON_HOLD, S.CONTACT_MADE, True, True)
+    asking = sm.decide(C.REQUEST_INFO, reviewer, S.SUBMITTED, sm.Facts())
+    assert (asking.to_state, asking.resumes, asking.notice) == (S.INFO_REQUESTED, False, "N03")
+
+
+@pytest.mark.parametrize(
+    ("state", "developer_actions", "organisation_actions"),
+    [
+        # While the organisation's question is open it waits for the answer (no approval, no decline) or withdraws
+        # its question.
+        (S.INFO_REQUESTED, (C.WITHDRAW, C.ANSWER_INFO), (C.CANCEL_REQUEST,)),
+        # On hold: either party resumes early (or the date does); the developer may still withdraw.
+        (S.ON_HOLD, (C.WITHDRAW, C.RESUME), (C.RESUME,)),
+    ],
+)
+def test_the_actions_in_each_side_state(
+    state: S, developer_actions: tuple[sm.Command, ...], organisation_actions: tuple[sm.Command, ...]
+) -> None:
+    facts = sm.Facts(paused_from=S.UNDER_REVIEW)
+    assert sm.available(ACTORS[0], state, facts) == developer_actions
+    for roles in ({R.OWNER, R.ADMIN}, {R.SIGNATORY}, {R.REVIEWER}):
+        assert sm.available(sm.Actor(ORG, frozenset(roles)), state, facts) == organisation_actions
+    for nobody in (sm.Actor(ORG, frozenset({R.FINANCE})), sm.Actor(ORG, frozenset())):
+        assert sm.available(nobody, state, facts) == ()
+
+
+def test_a_hold_resumes_from_tomorrow_to_max_days_ahead() -> None:
+    """policy.yaml on_hold.max_days (60): the resume date is after today and at most 60 days later (61 is 422)."""
+    now = at(date(2026, 10, 5))
+    sm.check_resume_at(date(2026, 10, 6), now, POLICY)
+    sm.check_resume_at(date(2026, 10, 5) + timedelta(days=60), now, POLICY)
+    for wrong in (date(2026, 10, 5), date(2026, 10, 4), date(2026, 10, 5) + timedelta(days=61)):
+        with pytest.raises(sm.Invalid) as refused:
+            sm.check_resume_at(wrong, now, POLICY)
+        assert (refused.value.status, refused.value.code) == (422, "invalid_resume_at")
+
+
+def test_a_note_is_one_to_its_limit_of_characters_once_trimmed() -> None:
+    assert sm.check_note("  What is the pilot budget?  ", sm.QUESTION_MAX_CHARS) == "What is the pilot budget?"
+    assert sm.check_note("x" * sm.REASON_MAX_CHARS, sm.REASON_MAX_CHARS) == "x" * sm.REASON_MAX_CHARS
+    for wrong in (None, "", "   \n ", "x" * (sm.REASON_MAX_CHARS + 1)):
+        with pytest.raises(sm.Invalid) as refused:
+            sm.check_note(wrong, sm.REASON_MAX_CHARS)
+        assert (refused.value.status, refused.value.code) == (422, "invalid_note")
+    assert sm.QUESTION_MAX_CHARS == 2000  # engagement_notes' body CHECK (revision 0006)
+    # Format and control characters are dropped (a right-to-left override, a zero-width space), line feeds and tabs
+    # kept; a text of nothing else is empty.
+    assert sm.check_note("Budget\u202e cycle\u200b\n\tnext month\x07", 500) == "Budget cycle\n\tnext month"
+    with pytest.raises(sm.Invalid):
+        sm.check_note("\u200b\u202e\u2060", 500)
+
+
+def test_a_resumed_stage_keeps_its_deadline_moved_by_the_business_days_paused() -> None:
+    """The deadline the stage had when it was paused, moved by the business days from the day it was paused to the
+    day it resumes (weekends and holidays do not count)."""
+    holidays = {date(2026, 10, 20)}  # Mashujaa Day (a Tuesday)
+    due_on = date(2026, 10, 23)  # a Friday
+    paused_on = date(2026, 10, 15)  # Thursday
+    resumed = sm.resumed_deadline(due_on, paused_on, date(2026, 10, 21), holidays)  # Fri, Mon, Wed: 3 BD
+    assert resumed == sm.end_of_day(date(2026, 10, 28))  # Fri 23 + 3 BD = Wed 28
+    assert sm.resumed_deadline(due_on, paused_on, paused_on, holidays) == sm.end_of_day(due_on)  # same day: as was
+    weekend = sm.resumed_deadline(due_on, date(2026, 10, 16), date(2026, 10, 18), holidays)  # Fri to Sun: 0 BD
+    assert weekend == sm.end_of_day(due_on)
+    assert sm.resumed_deadline(None, paused_on, date(2026, 10, 21), holidays) is None
+
+
+def test_the_four_stages_expire_after_expire_bd_paused_days_added() -> None:
+    """docs/spec/06 6.9: ORG_INTEREST 5 BD (NO_DEV_RESPONSE), SUBMITTED 20 BD (NO_REVIEW), UNDER_REVIEW 30 BD
+    (NO_DECISION), INTEREST_CONFIRMED 10 BD from entering the stage (CONTACT_NOT_MADE, whatever contact-by date was
+    named); the business days a deadline was moved by pauses since are added. No other state expires."""
+    monday = date(2026, 10, 5)
+    assert sm.EXPIRY == {
+        S.ORG_INTEREST: EngagementEndReason.NO_DEV_RESPONSE,
+        S.SUBMITTED: EngagementEndReason.NO_REVIEW,
+        S.UNDER_REVIEW: EngagementEndReason.NO_DECISION,
+        S.INTEREST_CONFIRMED: EngagementEndReason.CONTACT_NOT_MADE,
+    }
+    assert sm.EXPIRY_NOTICE == {
+        S.ORG_INTEREST: "N17",
+        S.SUBMITTED: "N01",
+        S.UNDER_REVIEW: "N03",
+        S.INTEREST_CONFIRMED: "N05",
+        S.INFO_REQUESTED: "N03",  # an unanswered question
+    }
+    for state, days in ((S.ORG_INTEREST, 5), (S.SUBMITTED, 20), (S.UNDER_REVIEW, 30), (S.INTEREST_CONFIRMED, 10)):
+        due_on = add_business_days(monday, POLICY.stage(state).due_bd or 0, set())
+        assert sm.expires_at(state, monday, due_on, due_on, set(), POLICY) == sm.end_of_day(
+            add_business_days(monday, days, set())
+        ), state
+        moved = add_business_days(due_on, 3, set())  # three business days paused
+        assert sm.expires_at(state, monday, due_on, moved, set(), POLICY) == sm.end_of_day(
+            add_business_days(monday, days + 3, set())
+        ), state
+    # A contact-by date named today still expires 10 BD after entering stage 3.
+    assert sm.expires_at(S.INTEREST_CONFIRMED, monday, monday, monday, set(), POLICY) == sm.end_of_day(
+        date(2026, 10, 19)
+    )
+    assert sm.expires_at(S.SUBMITTED, monday, None, None, set(), POLICY) == sm.end_of_day(date(2026, 11, 2))
+    for state in (S.NEGOTIATION, S.ON_HOLD, S.INFO_REQUESTED, S.CLOSED):
+        assert sm.expires_at(state, monday, monday, monday, set(), POLICY) is None
+
+
+def test_the_caps_on_questions_and_holds_are_409_with_their_codes() -> None:
+    """policy.yaml: at most info_requests_per_stage questions each time in stage 1 or 2, and hold_days_total days on
+    hold over the engagement; the facts carry what is left (None: not limited by these facts)."""
+    reviewer = sm.Actor(ORG, frozenset({R.REVIEWER}))
+    developer = ACTORS[0]
+    with pytest.raises(sm.Conflict) as asked:
+        sm.decide(C.REQUEST_INFO, reviewer, S.UNDER_REVIEW, sm.Facts(questions_left=0))
+    assert (asked.value.status, asked.value.code) == (409, "info_request_limit")
+    assert sm.decide(C.REQUEST_INFO, reviewer, S.UNDER_REVIEW, sm.Facts(questions_left=1)).to_state is S.INFO_REQUESTED
+    with pytest.raises(sm.Conflict) as held:
+        sm.decide(C.PAUSE, developer, S.NEGOTIATION, sm.Facts(hold_days_left=0))
+    assert (held.value.status, held.value.code) == (409, "hold_limit")
+    with pytest.raises(sm.Conflict) as twice:  # holds_per_stage spent
+        sm.decide(C.PAUSE, developer, S.NEGOTIATION, sm.Facts(holds_left=0, hold_days_left=50))
+    assert (twice.value.status, twice.value.code) == (409, "hold_limit")
+    assert C.PAUSE not in sm.available(reviewer, S.NEGOTIATION, sm.Facts(holds_left=0))
+    assert C.PAUSE not in sm.available(developer, S.NEGOTIATION, sm.Facts(hold_days_left=0))
+    assert C.REQUEST_INFO not in sm.available(reviewer, S.SUBMITTED, sm.Facts(questions_left=0))
+    now = at(date(2026, 10, 5))
+    sm.check_resume_at(date(2026, 10, 15), now, POLICY, days_left=10)
+    with pytest.raises(sm.Conflict) as longer:
+        sm.check_resume_at(date(2026, 10, 16), now, POLICY, days_left=10)
+    assert (longer.value.status, longer.value.code) == (409, "hold_limit")
+    with pytest.raises(sm.Invalid):  # the range check comes first (422)
+        sm.check_resume_at(date(2026, 10, 5), now, POLICY, days_left=10)
+
+
+def test_withdrawing_from_a_side_state_needs_its_stage_before_the_agreement() -> None:
+    developer = ACTORS[0]
+    for paused in (S.IN_IMPLEMENTATION, S.DELIVERED, None):
+        with pytest.raises(sm.Conflict) as refused:
+            sm.decide(C.WITHDRAW, developer, S.ON_HOLD, sm.Facts(paused_from=paused))
+        assert refused.value.code == "illegal_transition"
+    assert sm.decide(C.WITHDRAW, developer, S.INFO_REQUESTED, sm.Facts(paused_from=S.SUBMITTED)).to_state is (
+        S.WITHDRAWN
+    )
+
+
+def test_an_unanswered_question_expires_after_its_answer_by_date() -> None:
+    """policy.yaml info_requested.expire_bd (10 BD): the question's deadline is the answer-by date; past it the
+    engagement expires with NO_DEV_RESPONSE (the developer did not answer)."""
+    friday = date(2026, 10, 16)
+    assert sm.question_deadline(at(friday), {date(2026, 10, 20)}, POLICY) == sm.end_of_day(date(2026, 11, 2))
+    assert sm.expiry_reason(S.INFO_REQUESTED) is EngagementEndReason.NO_DEV_RESPONSE
+    assert sm.expiry_reason(S.SUBMITTED) is EngagementEndReason.NO_REVIEW
+    assert sm.expiry_reason(S.NEGOTIATION) is None

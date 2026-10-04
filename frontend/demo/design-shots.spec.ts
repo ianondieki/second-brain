@@ -1,33 +1,53 @@
 /**
  * Screenshots of the real screens on the demo stack, light and dark, 1440 and 375 px, each with a strict axe pass
  * (every impact), the one-primary-action rule and the no-sideways-scroll rule (e2e/support/screen.ts), for the P18
- * quality loop. One sign-in per demo person; the session is reused across the shots. Writes
- * docs/demo/screenshots/p18/<name>-<theme>-<width>.jpg and test-results/design-shots/axe.json.
+ * and P19 quality loops. One sign-in per demo person; the session is reused across the shots. Writes
+ * docs/demo/screenshots/<set>/<name>-<theme>-<width>.jpg (the set is p18 unless the shot names its own) and
+ * test-results/design-shots/axe.json.
+ *
+ * The P19 shots make what the seed lacks and tidy up after themselves (SHOT_KEEP=1 keeps it, for the JS budget and
+ * Lighthouse runs on the same pages): one Problem Brief from Telco A's reviewer, approved by the staff moderator and
+ * closed at the end; one draft idea of Brian's for the teaser checks, deleted at the end; and two new test accounts
+ * (an organisation and a developer who pitched to it, reviewed and approved to proceed) whose notifications the bell
+ * and the Notifications page show. The test accounts need E2E_DATABASE_OWNER_URL (frontend/.env.e2e), as the e2e does.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 import { DEMO_PASSWORD, DemoStaff } from "../e2e/support/moderation-scene";
 import { settled } from "../e2e/support/screen";
 import { demoTotpSecret, totp } from "../e2e/support/totp";
+import { appToday, plusDays } from "../e2e/support/clock";
+import { actionsReady, pitchFromDeveloper, post, signUpOrg } from "../e2e/support/tracker-scene";
 
 const REPO = join(__dirname, "..", "..");
-const OUT = process.env.SHOTS_DIR ?? join(REPO, "docs", "demo", "screenshots", "p18");
+const SHOTS_ROOT = join(REPO, "docs", "demo", "screenshots");
+/** Where a shot goes: SHOTS_DIR for every shot, else its set's folder (p18 by default). */
+const outDir = (set = "p18") => process.env.SHOTS_DIR ?? join(SHOTS_ROOT, set);
+const KEEP = process.env.SHOT_KEEP === "1";
 const REPORT = join(__dirname, "..", "test-results", "design-shots", "axe.json");
 const THEMES = (process.env.SHOT_THEMES ?? "light,dark").split(",") as Array<"light" | "dark">;
 const WIDTHS = (process.env.SHOT_WIDTHS ?? "1440,375").split(",").map(Number);
 const FILTER = process.env.SHOT_FILTER ? new RegExp(process.env.SHOT_FILTER) : null;
 
-type Who = "none" | "pendingMfa" | "dev" | "devBrian" | "org" | "orgOwner" | "staff" | "moderator";
+type Demo = "dev" | "devBrian" | "org" | "orgOwner" | "orgSacco" | "staff" | "moderator";
+/** A demo person, a session that owes its second factor, or a new test account of the bell's or the side states' scene. */
+type Who = "none" | "pendingMfa" | Demo | "freshDev" | "freshOrg" | "sideDev" | "sideOrg";
 interface Shot {
   name: string;
   path: string;
   who: Who;
+  /** The screenshots folder under docs/demo/screenshots/ (default p18). */
+  set?: "p19";
+  /** Only these widths (default SHOT_WIDTHS). */
+  widths?: number[];
+  /** Shoot this element only (the top bar), not the page. */
+  element?: string;
   /** Steps after the page loaded (open a tab, a dialog, type into a field); `false` skips the shot (its state cannot be reached on this stack). */
-  prepare?: (page: Page) => Promise<void | false>;
+  prepare?: (page: Page, browser: Browser) => Promise<void | false>;
   /** Selectors axe leaves out (a sandboxed frame it cannot run inside). */
   exclude?: string[];
   /** Let the first-login tour show (every other shot remembers it as done). */
@@ -38,11 +58,12 @@ interface Shot {
   frame?: string;
 }
 
-const PEOPLE: Record<Exclude<Who, "none" | "pendingMfa">, { email: string; name: string }> = {
+const PEOPLE: Record<Demo, { email: string; name: string }> = {
   dev: { email: "amina@developers.example", name: "Amina Wanjiru" },
   devBrian: { email: "brian@developers.example", name: "Brian Otieno" },
   org: { email: "reviewer@telco-a.example", name: "Telco A reviewer" },
   orgOwner: { email: "owner@telco-a.example", name: "Telco A owner" },
+  orgSacco: { email: "owner@sacco-b.example", name: "SACCO B owner" },
   staff: { email: "admin@staff.example", name: "Staff Admin (demo)" },
   moderator: { email: "moderator@staff.example", name: "Staff Moderator (demo)" },
 };
@@ -56,6 +77,325 @@ async function askAssistant(page: Page) {
     page.getByRole("dialog").waitFor({ timeout: 60_000 }),
     page.locator("#assistant-panel").getByRole("button", { name: "Ask again" }).waitFor({ timeout: 60_000 }),
   ]);
+}
+
+// --- The P19 scenes: what the seed lacks, made once per run and tidied up at its end (unless SHOT_KEEP=1) ----------
+
+const baseUrl = () => test.info().project.use.baseURL as string;
+const states = new Map<Exclude<Who, "none">, Promise<string>>();
+
+/** A person's saved session, signed in (or, for the bell's scene, signed up) once per run. */
+function stateOf(browser: Browser, who: Exclude<Who, "none">): Promise<string> {
+  let state = states.get(who);
+  if (!state) {
+    state =
+      who === "freshDev" || who === "freshOrg"
+        ? bellScene(browser).then((scene) => scene[who])
+        : who === "sideDev" || who === "sideOrg"
+          ? sideScene(browser).then((scene) => scene[who])
+          : signIn(browser, who);
+    states.set(who, state);
+  }
+  return state;
+}
+
+/** Runs `act` in a new context signed in as `who`. */
+async function asPerson<T>(browser: Browser, who: Exclude<Who, "none">, act: (context: BrowserContext) => Promise<T>): Promise<T> {
+  const context = await browser.newContext({ baseURL: baseUrl(), storageState: await stateOf(browser, who) });
+  try {
+    return await act(context);
+  } finally {
+    await context.close();
+  }
+}
+
+async function getJson<T>(request: APIRequestContext, path: string): Promise<T> {
+  const response = await request.get(path);
+  expect(response.ok(), `${path}: ${response.status()}`).toBeTruthy();
+  return (await response.json()) as T;
+}
+
+/** "YYYY-MM-DD" in Nairobi, `days` from today. */
+function nairobiDay(days: number): string {
+  const at = new Date(Date.now() + days * 86_400_000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+}
+
+const TELCO_A = "Telco A (fixture)";
+// [[COPY-REVIEW]] demo content: Telco A's Brief, the problem Amina's seeded "Fuel-level alerts" idea answers.
+const BRIEF = {
+  title: "Tower-site generators run dry before anyone knows",
+  statement:
+    "Our field teams learn that a generator tank at an off-grid tower site is empty only after the site stops serving" +
+    " calls, often at night. We want a warning early enough to plan the refuelling trip, one that fits the network" +
+    " operations centre we already run.",
+  affected_group: "Subscribers served by off-grid tower sites in rural counties",
+  county_code: "KE-30",
+};
+
+interface BriefScene {
+  orgId: string;
+  id: string;
+  title: string;
+  /** The scene's own Brief (this run's or a failed run's): closed at the end. */
+  ours: boolean;
+  published: boolean;
+}
+let briefPosted: Promise<BriefScene> | null = null;
+let briefPublished: Promise<BriefScene> | null = null;
+
+/** Approves the Brief of this title in the moderation queue, through its screens, as the staff moderator. */
+async function approveInQueue(browser: Browser, title: string) {
+  await asPerson(browser, "moderator", async (context) => {
+    const page = await context.newPage();
+    await page.goto("/admin/moderation");
+    await page.locator("[data-case]").filter({ hasText: title }).getByRole("link", { name: title }).click();
+    await page.waitForURL(/\/admin\/moderation\/cases\//);
+    await page.locator('main [data-hydrated="true"]').first().waitFor();
+    await page.getByRole("button", { name: "Approve" }).click();
+    await page.getByRole("status").filter({ hasText: "Approved. The problem is published." }).waitFor();
+  });
+}
+
+/**
+ * Telco A's Brief for the shots: this scene's own when it is open (published or in review), else a new one from its
+ * reviewer. Briefs an e2e run left open (titles with a run tag) are closed first, as the e2e's own set-up does, so
+ * the claimed plan has room and the shots show the scene's words.
+ */
+function postedBrief(browser: Browser): Promise<BriefScene> {
+  briefPosted ??= asPerson(browser, "org", async ({ request }) => {
+    const me = await getJson<{ memberships: Array<{ org_id: string; org_name: string }> }>(request, "/api/auth/me");
+    const orgId = me.memberships.find((m) => m.org_name === TELCO_A)?.org_id;
+    expect(orgId, `${TELCO_A} from the demo seed`).toBeTruthy();
+    type Listed = { id: string; title: string; state: string };
+    const read = () =>
+      getJson<{ items: Listed[]; budget_bands: Array<{ code: string }> }>(request, `/api/orgs/${orgId}/briefs`);
+    let list = await read();
+    const isOpen = (b: Listed) => b.state === "published" || b.state === "in_review";
+    for (const leftover of list.items.filter((b) => isOpen(b) && b.title !== BRIEF.title)) {
+      if (leftover.state === "in_review") await approveInQueue(browser, leftover.title); // only a published Brief closes
+      await post(request, `/api/orgs/${orgId}/briefs/${leftover.id}/close`, {});
+    }
+    list = await read();
+    const open = list.items.find((b) => isOpen(b) && b.title === BRIEF.title);
+    if (open) return { orgId: orgId!, id: open.id, title: open.title, ours: true, published: open.state === "published" };
+    const niches = await getJson<Array<{ id: string; slug: string; children: Array<{ id: string; slug: string }> }>>(
+      request,
+      "/api/directory/niches",
+    );
+    const all = niches.flatMap((n) => [n, ...n.children]);
+    const niche = all.find((n) => n.slug === "networks-telecommunications") ?? all[0];
+    const brief = await post<{ id: string; title: string }>(
+      request,
+      `/api/orgs/${orgId}/briefs`,
+      { ...BRIEF, niche_id: niche.id, budget_band: list.budget_bands[1]?.code ?? null, deadline: nairobiDay(30), visibility: "public" },
+      201,
+    );
+    return { orgId: orgId!, id: brief.id, title: brief.title, ours: true, published: false };
+  });
+  return briefPosted;
+}
+
+/** Telco A's Brief, approved by the staff moderator through the queue's screens when it is still in review. */
+function publishedBrief(browser: Browser): Promise<BriefScene> {
+  briefPublished ??= postedBrief(browser).then(async (scene) => {
+    if (scene.published) return scene;
+    await approveInQueue(browser, scene.title);
+    return { ...scene, published: true };
+  });
+  return briefPublished;
+}
+
+// [[COPY-REVIEW]] demo content: a teaser whose summary says how it works, so the second check has something to name.
+const TEASER = {
+  title: "Shared solar chillers for dairy co-ops",
+  summary:
+    "Co-ops book a shared solar chiller by SMS and pay per litre cooled. We use a gradient-boosted model over M-Pesa" +
+    " statements to set each co-op's booking quota.",
+};
+let teaserDraft: string | null = null;
+/** Whose draft it is: Brian, so Amina's demo ideas stay as seeded and her daily overlap checks stay unused. */
+const TEASER_WHO = "devBrian" as const;
+
+/**
+ * The teaser checks' draft: one a kept run left (SHOT_KEEP=1), else made on the first visit (title and
+ * summary, saved); opened on the others.
+ */
+async function openTeaserDraft(page: Page) {
+  if (!teaserDraft) {
+    const { items } = await getJson<{ items: Array<{ id: string; title: string | null; status: string }> }>(page.request, "/api/me/proposals");
+    const kept = items.find((item) => item.status === "draft" && item.title === TEASER.title);
+    if (kept) teaserDraft = `/dev/ideas/${kept.id}/edit`;
+  }
+  if (teaserDraft) {
+    await page.goto(teaserDraft, { waitUntil: "networkidle" });
+    return;
+  }
+  await page.goto("/dev/ideas/new");
+  await page.getByLabel("Title", { exact: true }).fill(TEASER.title);
+  await page.waitForURL(/\/dev\/ideas\/[0-9a-f-]{36}\/edit/);
+  await page.getByLabel("Summary").fill(TEASER.summary);
+  await page.getByRole("status").filter({ hasText: /^Saved$/ }).waitFor();
+  teaserDraft = new URL(page.url()).pathname;
+}
+
+/** Presses one teaser check and waits for its answer from the API (the fake LLM on the demo stack). */
+async function runCheck(page: Page, name: string, endpoint: string) {
+  const card = page.getByRole("region", { name: "Teaser checks" });
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith(endpoint), { timeout: 30_000 }),
+    card.getByRole("button", { name }).click(),
+  ]);
+  await expect(card.getByRole("button", { name })).not.toHaveAttribute("aria-disabled", "true");
+  await page.mouse.move(0, 0); // no hover left on the button in the shot
+}
+
+interface BellScene {
+  freshDev: string;
+  freshOrg: string;
+}
+let bell: Promise<BellScene> | null = null;
+
+/**
+ * Two new test accounts for the bell (the demo seed writes no in-app rows): an organisation, and a developer who
+ * pitched to it; the organisation starts the review and approves to proceed, so the developer has three notifications
+ * (the pitch's receipt and the two tracker notices the worker writes) and the organisation none.
+ */
+function bellScene(browser: Browser): Promise<BellScene> {
+  bell ??= (async () => {
+    const orgContext = await browser.newContext({ baseURL: baseUrl() });
+    const devContext = await browser.newContext({ baseURL: baseUrl() });
+    try {
+      const org = await signUpOrg(orgContext.request, { orgName: "Kilimo Fresh Dairies Limited" });
+      const dev = await pitchFromDeveloper(devContext.request, org.orgId, { title: TEASER.title });
+      const step = async (command: string, body: Record<string, unknown> = {}) => {
+        const detail = await getJson<{ lock_version: number }>(orgContext.request, `/api/engagements/${dev.engagementId}`);
+        await post(orgContext.request, `/api/engagements/${dev.engagementId}/${command}`, { lock_version: detail.lock_version, ...body });
+      };
+      await step("start-review");
+      const me = await getJson<{ user: { id: string } }>(orgContext.request, "/api/auth/me");
+      await step("approve", { contact_user_id: me.user.id, contact_channel: "email", contact_by: nairobiDay(7) });
+      const unread = async () => (await getJson<{ count: number }>(devContext.request, "/api/me/notifications/unread-count")).count;
+      await expect.poll(unread, { timeout: 60_000, intervals: [500, 1_000, 2_000] }).toBe(3);
+      const dir = join(__dirname, "..", "test-results", "design-shots");
+      mkdirSync(dir, { recursive: true });
+      const scene = { freshDev: join(dir, "state-freshDev.json"), freshOrg: join(dir, "state-freshOrg.json") };
+      await devContext.storageState({ path: scene.freshDev });
+      await orgContext.storageState({ path: scene.freshOrg });
+      return scene;
+    } finally {
+      await orgContext.close();
+      await devContext.close();
+    }
+  })();
+  return bell;
+}
+
+/** Closes the Brief and deletes the draft this run made (the new test accounts stay, as the e2e's do). */
+async function tidyUp(browser: Browser) {
+  if (KEEP) return;
+  const brief = briefPublished ? await briefPublished.catch(() => null) : null;
+  if (brief?.ours) {
+    await asPerson(browser, "org", ({ request }) => post(request, `/api/orgs/${brief.orgId}/briefs/${brief.id}/close`, {}));
+  }
+  const id = teaserDraft?.split("/")[3];
+  if (id) {
+    await asPerson(browser, TEASER_WHO, async ({ request }) => {
+      const { csrf_token } = await getJson<{ csrf_token: string }>(request, "/api/auth/csrf");
+      const response = await request.delete(`/api/me/proposals/${id}`, { headers: { "X-CSRF-Token": csrf_token } });
+      expect(response.ok(), `delete the teaser draft: ${response.status()}`).toBeTruthy();
+    });
+  }
+}
+
+/** One step on an engagement through the API, on the lock version it last read. */
+async function engagementCommand(request: APIRequestContext, id: string, command: string, body: Record<string, unknown> = {}) {
+  const detail = await getJson<{ lock_version: number }>(request, `/api/engagements/${id}`);
+  await post(request, `/api/engagements/${id}/${command}`, { lock_version: detail.lock_version, ...body });
+}
+
+// [[COPY-REVIEW]] demo content: the side states' question, answer, hold and resume.
+const SIDE = {
+  orgName: "Maziwa Bora Dairies Limited",
+  question: "Which co-ops ran the pilot, and roughly how many litres a day did the chillers keep cold?",
+  answer: "Kipkelion and Olenguruone dairy co-ops, about 1,200 litres a day over six weeks.",
+  nextQuestion: "Did the co-ops pay per litre during the pilot, or was it free?",
+  holdReason: "Our budget committee meets next week; we pick this up after it.",
+  resumeReason: "The committee met early and approved the review.",
+};
+
+interface SideScene {
+  sideDev: string;
+  sideOrg: string;
+  id: string;
+}
+let side: Promise<SideScene> | null = null;
+let sideAnswered: Promise<SideScene> | null = null;
+let sidePaused: Promise<SideScene> | null = null;
+let sideResumed: Promise<SideScene> | null = null;
+
+/**
+ * The tracker's side states (REQ-ENG-10) on one engagement of two new test accounts, as e2e/tracker-branches.spec.ts
+ * builds them: a developer pitches to a new organisation, which starts the review and asks a question. The later
+ * states follow on demand, in the shots' order: the developer answers; the organisation pauses for 7 days on the app's
+ * clock; the developer resumes early.
+ */
+function sideScene(browser: Browser): Promise<SideScene> {
+  side ??= (async () => {
+    const orgContext = await browser.newContext({ baseURL: baseUrl() });
+    const devContext = await browser.newContext({ baseURL: baseUrl() });
+    try {
+      const org = await signUpOrg(orgContext.request, { orgName: SIDE.orgName });
+      const dev = await pitchFromDeveloper(devContext.request, org.orgId, { title: TEASER.title });
+      await engagementCommand(orgContext.request, dev.engagementId, "start-review");
+      await engagementCommand(orgContext.request, dev.engagementId, "request-info", { question: SIDE.question });
+      const dir = join(__dirname, "..", "test-results", "design-shots");
+      mkdirSync(dir, { recursive: true });
+      const scene = { sideDev: join(dir, "state-sideDev.json"), sideOrg: join(dir, "state-sideOrg.json"), id: dev.engagementId };
+      await devContext.storageState({ path: scene.sideDev });
+      await orgContext.storageState({ path: scene.sideOrg });
+      return scene;
+    } finally {
+      await orgContext.close();
+      await devContext.close();
+    }
+  })();
+  return side;
+}
+
+function answeredSide(browser: Browser): Promise<SideScene> {
+  sideAnswered ??= sideScene(browser).then(async (scene) => {
+    await asPerson(browser, "sideDev", ({ request }) => engagementCommand(request, scene.id, "answer-info", { answer: SIDE.answer }));
+    return scene;
+  });
+  return sideAnswered;
+}
+
+function pausedSide(browser: Browser): Promise<SideScene> {
+  sidePaused ??= answeredSide(browser).then(async (scene) => {
+    await asPerson(browser, "sideOrg", async ({ request }) =>
+      engagementCommand(request, scene.id, "pause", { reason: SIDE.holdReason, resume_at: plusDays(await appToday(request), 7) }),
+    );
+    return scene;
+  });
+  return sidePaused;
+}
+
+function resumedSide(browser: Browser): Promise<SideScene> {
+  sideResumed ??= pausedSide(browser).then(async (scene) => {
+    await asPerson(browser, "sideDev", ({ request }) => engagementCommand(request, scene.id, "resume", { reason: SIDE.resumeReason }));
+    return scene;
+  });
+  return sideResumed;
+}
+
+/** Opens a tracker's side-state sheet through its button, once the actions have hydrated. */
+async function openSideSheet(page: Page, name: string) {
+  await actionsReady(page);
+  await page.locator("[data-actions]").getByRole("button", { name, exact: true }).click();
+  const sheet = page.locator("dialog[open][data-side-sheet]");
+  await sheet.waitFor();
+  return sheet;
 }
 
 const SHOTS: Shot[] = [
@@ -263,6 +603,116 @@ const SHOTS: Shot[] = [
       await page.locator('form[data-hydrated="true"]').first().waitFor();
       await page.getByRole("button", { name: "Use a recovery code" }).click();
     } },
+
+  // --- P19 (docs/platform/tasks/P19-F.md), into docs/demo/screenshots/p19/ ------------------------------------------
+  // The editor's step 1 with both teaser checks answered on the fake LLM (the second names the summary).
+  { name: "editor-checks", set: "p19", path: "/dev/ideas", who: TEASER_WHO, prepare: async (page) => {
+      await openTeaserDraft(page);
+      await runCheck(page, "Check overlap", "/originality");
+      await runCheck(page, "Check what it gives away", "/disclosure-check");
+    } },
+  // An organisation with no Brief yet; SACCO B has some once the e2e has posted for it.
+  { name: "org-problems-empty", set: "p19", path: "/org/problems", who: "orgSacco", prepare: async (page) => {
+      if (!(await page.locator("[data-empty='briefs']").isVisible())) return false;
+    } },
+  { name: "org-brief-new", set: "p19", path: "/org/problems/new", who: "org", prepare: async (page) => {
+      await page.locator("form[data-brief-form][data-hydrated='true']").waitFor();
+    } },
+  // The queue while the Brief waits, scrolled to its row: "Brief by Telco A (fixture)" (none once it is published).
+  { name: "admin-moderation-brief", set: "p19", path: "/admin/moderation", who: "moderator", viewportOnly: true, prepare: async (page, browser) => {
+      const brief = await postedBrief(browser);
+      if (brief.published) return false;
+      await page.reload({ waitUntil: "networkidle" });
+      const row = page.locator("[data-case]").filter({ hasText: brief.title });
+      await row.waitFor();
+      await row.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    } },
+  { name: "org-problems", set: "p19", path: "/org/problems", who: "org", prepare: async (page, browser) => {
+      await publishedBrief(browser);
+      await page.reload({ waitUntil: "networkidle" });
+      await page.locator("[data-brief][data-state='published']").first().waitFor();
+    } },
+  { name: "org-brief", set: "p19", path: "/org/problems", who: "org", prepare: async (page, browser) => {
+      const brief = await publishedBrief(browser);
+      await page.goto(`/org/problems/${brief.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-state-note='published']").waitFor();
+    } },
+  // A refusal: the plan's open Briefs are in use (402, with the next plan), else the form's own check of an empty form.
+  { name: "org-brief-new-refused", set: "p19", path: "/org/problems/new", who: "org", prepare: async (page, browser) => {
+      const brief = await publishedBrief(browser);
+      await page.locator("form[data-brief-form][data-hydrated='true']").waitFor();
+      const { plan } = await getJson<{ plan: { problem_briefs: number | null; used: number } }>(page.request, `/api/orgs/${brief.orgId}/briefs`);
+      if (plan.problem_briefs !== null && plan.used >= plan.problem_briefs) {
+        await page.getByLabel("Title").fill("Refuelling trips are planned from guesswork");
+        await page.getByLabel("Problem statement").fill("Trucks visit sites with full tanks and miss the ones about to run dry.");
+        await page.getByLabel("Niche").selectOption({ index: 1 });
+        await page.getByRole("group", { name: "Budget band" }).getByRole("radio").first().check();
+        await page.getByRole("button", { name: "Post the brief" }).click();
+        await page.locator("[data-refusal='planLimit']").waitFor();
+      } else {
+        await page.getByRole("button", { name: "Post the brief" }).click();
+        await page.getByText("Write a title.").waitFor();
+      }
+    } },
+  { name: "discover-briefs", set: "p19", path: "/dev/discover?view=briefs", who: "dev", prepare: async (page, browser) => {
+      const brief = await publishedBrief(browser);
+      await page.reload({ waitUntil: "networkidle" });
+      await page.locator(`[data-brief="${brief.id}"]`).waitFor();
+    } },
+  { name: "problem-brief", set: "p19", path: "/dev/discover?view=briefs", who: "dev", prepare: async (page, browser) => {
+      const brief = await publishedBrief(browser);
+      await page.goto(`/problems/${brief.id}`, { waitUntil: "networkidle" });
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  { name: "notifications", set: "p19", path: "/notifications", who: "freshDev" },
+  { name: "notifications-empty", set: "p19", path: "/notifications", who: "freshOrg" },
+  // The top bar with the unread count, on a phone.
+  { name: "bell", set: "p19", path: "/dev", who: "freshDev", widths: [375], element: "header" },
+
+  // The tracker's side states (REQ-ENG-10), in the order the scene moves: asked, answered, a sheet of each kind, on
+  // hold, then the History after an early resume. EXPIRED is left out: only moving the shared test clock reaches it.
+  { name: "tracker-info-requested-org", set: "p19", path: "/org/engagements", who: "sideOrg", prepare: async (page, browser) => {
+      const scene = await sideScene(browser);
+      await page.goto(`/org/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-whose-turn] [data-side='info']").waitFor();
+      await actionsReady(page);
+    } },
+  { name: "tracker-info-requested-dev", set: "p19", path: "/dev/engagements", who: "sideDev", prepare: async (page, browser) => {
+      const scene = await sideScene(browser);
+      await page.goto(`/dev/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-whose-turn] [data-info-clock]").waitFor();
+      await actionsReady(page);
+    } },
+  { name: "tracker-answered", set: "p19", path: "/dev/engagements", who: "sideDev", prepare: async (page, browser) => {
+      const scene = await answeredSide(browser);
+      await page.goto(`/dev/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-whose-turn] [data-side='answered']").waitFor();
+    } },
+  { name: "sheet-request-information", set: "p19", path: "/org/engagements", who: "sideOrg", viewportOnly: true, prepare: async (page, browser) => {
+      const scene = await answeredSide(browser);
+      await page.goto(`/org/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      const sheet = await openSideSheet(page, "Request information");
+      await sheet.getByLabel("Your question").fill(SIDE.nextQuestion);
+      await sheet.getByText(`${SIDE.nextQuestion.length} of 2,000 characters`).waitFor();
+    } },
+  { name: "sheet-pause", set: "p19", path: "/org/engagements", who: "sideOrg", viewportOnly: true, prepare: async (page, browser) => {
+      const scene = await answeredSide(browser);
+      await page.goto(`/org/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      const sheet = await openSideSheet(page, "Pause this engagement");
+      await sheet.getByLabel("Reason").fill(SIDE.holdReason);
+      await sheet.getByLabel("Resumes on").fill(plusDays(await appToday(page.request), 7));
+      await sheet.locator("[data-resumes]").filter({ hasText: "It resumes by itself on" }).waitFor();
+    } },
+  { name: "tracker-on-hold", set: "p19", path: "/dev/engagements", who: "sideDev", prepare: async (page, browser) => {
+      const scene = await pausedSide(browser);
+      await page.goto(`/dev/engagements/${scene.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-whose-turn] [data-side='hold']").waitFor();
+    } },
+  { name: "history-side-states", set: "p19", path: "/dev/engagements", who: "sideDev", prepare: async (page, browser) => {
+      const scene = await resumedSide(browser);
+      await page.goto(`/dev/engagements/${scene.id}?tab=history`, { waitUntil: "networkidle" });
+      await page.locator("[data-event='resume'] [data-note='resume']").waitFor();
+    } },
 ];
 
 function wanted(shot: Shot) {
@@ -270,7 +720,7 @@ function wanted(shot: Shot) {
 }
 
 /** Signs a demo person in through the real screens; a code already used in this window waits for the next one. */
-async function signIn(browser: Browser, who: Exclude<Who, "none">): Promise<string> {
+async function signIn(browser: Browser, who: "pendingMfa" | Demo): Promise<string> {
   const login = who === "pendingMfa" ? PEOPLE.dev : PEOPLE[who];
   const person = new DemoStaff(login.email, login.name, demoTotpSecret(login.email));
   const context = await browser.newContext({ baseURL: test.info().project.use.baseURL });
@@ -302,74 +752,75 @@ async function signIn(browser: Browser, who: Exclude<Who, "none">): Promise<stri
 }
 
 test("design screenshots with a strict axe pass", async ({ browser }) => {
-  mkdirSync(OUT, { recursive: true });
-  const states = new Map<Who, string>();
   const report: Array<{ shot: string; theme: string; width: number; violations: unknown[]; primaries: number; overflow: number }> = [];
-  for (const shot of SHOTS.filter(wanted)) {
-    for (const theme of THEMES) {
-      for (const width of WIDTHS) {
-        let state: string | undefined;
-        if (shot.who !== "none") {
-          if (!states.has(shot.who)) states.set(shot.who, await signIn(browser, shot.who));
-          state = states.get(shot.who);
-        }
-        const context: BrowserContext = await browser.newContext({
-          baseURL: test.info().project.use.baseURL,
-          viewport: { width, height: width < 600 ? 812 : 900 },
-          isMobile: width < 600,
-          hasTouch: width < 600,
-          colorScheme: theme,
-          storageState: state,
-        });
-        // The tour is remembered as done (the storage key the client reads, the cookie the server reads) unless the
-        // shot is the tour's own.
-        if (!shot.tour) {
-          const url = test.info().project.use.baseURL as string;
-          await context.addCookies(["developer", "org"].map((side) => ({ name: `wazo-tour-${side}`, value: "done", url })));
-        }
-        await context.addInitScript(
-          ({ choice, tour }) => {
-            window.localStorage.setItem("wazo-theme", choice);
-            for (const side of ["developer", "org"]) {
-              if (tour) window.localStorage.removeItem(`wazo-tour:v1:${side}`);
-              else window.localStorage.setItem(`wazo-tour:v1:${side}`, "done");
-            }
-          },
-          { choice: theme, tour: shot.tour === true },
-        );
-        const page = await context.newPage();
-        await page.goto(shot.path, { waitUntil: "networkidle" });
-        if (shot.prepare && (await shot.prepare(page)) === false) {
-          console.log(`${shot.name} ${theme} ${width}: skipped (state not reachable on this stack)`);
+  try {
+    for (const shot of SHOTS.filter(wanted)) {
+      const out = outDir(shot.set);
+      mkdirSync(out, { recursive: true });
+      for (const theme of THEMES) {
+        for (const width of shot.widths ?? WIDTHS) {
+          const state = shot.who === "none" ? undefined : await stateOf(browser, shot.who);
+          const context: BrowserContext = await browser.newContext({
+            baseURL: test.info().project.use.baseURL,
+            viewport: { width, height: width < 600 ? 812 : 900 },
+            isMobile: width < 600,
+            hasTouch: width < 600,
+            colorScheme: theme,
+            storageState: state,
+          });
+          // The tour is remembered as done (the storage key the client reads, the cookie the server reads) unless the
+          // shot is the tour's own.
+          if (!shot.tour) {
+            const url = test.info().project.use.baseURL as string;
+            await context.addCookies(["developer", "org"].map((side) => ({ name: `wazo-tour-${side}`, value: "done", url })));
+          }
+          await context.addInitScript(
+            ({ choice, tour }) => {
+              window.localStorage.setItem("wazo-theme", choice);
+              for (const side of ["developer", "org"]) {
+                if (tour) window.localStorage.removeItem(`wazo-tour:v1:${side}`);
+                else window.localStorage.setItem(`wazo-tour:v1:${side}`, "done");
+              }
+            },
+            { choice: theme, tour: shot.tour === true },
+          );
+          const page = await context.newPage();
+          await page.goto(shot.path, { waitUntil: "networkidle" });
+          if (shot.prepare && (await shot.prepare(page, browser)) === false) {
+            console.log(`${shot.name} ${theme} ${width}: skipped (state not reachable on this stack)`);
+            await context.close();
+            continue;
+          }
+          await settled(page);
+          await page.evaluate(() => document.fonts.ready);
+          // The fixed phone tab bar sits at the page's end in a full-page shot.
+          await page.addStyleTag({ content: "@media (width < 64rem){[data-tab-bar]{position:absolute!important}} body{position:relative} nextjs-portal{display:none!important}" });
+          await page.waitForTimeout(300);
+          const file = join(out, `${shot.name}-${theme}-${width}.jpg`);
+          if (shot.element) await page.locator(shot.element).first().screenshot({ path: file, type: "jpeg", quality: 78 });
+          else await page.screenshot({ path: file, fullPage: shot.viewportOnly !== true, type: "jpeg", quality: 78 });
+          if (shot.frame) {
+            // A full-page shot leaves a frame's document blank; its own shot shows the page inside it.
+            await page.locator(shot.frame).scrollIntoViewIfNeeded();
+            await page.locator(shot.frame).screenshot({ path: join(out, `${shot.name}-frame-${theme}-${width}.jpg`), type: "jpeg", quality: 78 });
+          }
+          let axe = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"]);
+          for (const selector of shot.exclude ?? []) axe = axe.exclude(selector);
+          const results = await axe.analyze();
+          const violations = results.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, targets: v.nodes.slice(0, 5).map((n) => n.target) }));
+          const primaries = await page.locator("[data-primary]").count();
+          const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+          report.push({ shot: shot.name, theme, width, violations, primaries, overflow });
+          console.log(`${shot.name} ${theme} ${width}: axe ${violations.length}, primaries ${primaries}, overflow ${overflow}`);
+          expect.soft(violations, `${shot.name} ${theme} ${width} axe`).toEqual([]);
+          expect.soft(primaries, `${shot.name} ${theme} ${width} primaries`).toBeLessThanOrEqual(1);
+          expect.soft(overflow, `${shot.name} ${theme} ${width} overflow`).toBeLessThanOrEqual(0);
           await context.close();
-          continue;
         }
-        await settled(page);
-        await page.evaluate(() => document.fonts.ready);
-        // The fixed phone tab bar sits at the page's end in a full-page shot.
-        await page.addStyleTag({ content: "@media (width < 64rem){[data-tab-bar]{position:absolute!important}} body{position:relative} nextjs-portal{display:none!important}" });
-        await page.waitForTimeout(300);
-        const file = join(OUT, `${shot.name}-${theme}-${width}.jpg`);
-        await page.screenshot({ path: file, fullPage: shot.viewportOnly !== true, type: "jpeg", quality: 78 });
-        if (shot.frame) {
-          // A full-page shot leaves a frame's document blank; its own shot shows the page inside it.
-          await page.locator(shot.frame).scrollIntoViewIfNeeded();
-          await page.locator(shot.frame).screenshot({ path: join(OUT, `${shot.name}-frame-${theme}-${width}.jpg`), type: "jpeg", quality: 78 });
-        }
-        let axe = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"]);
-        for (const selector of shot.exclude ?? []) axe = axe.exclude(selector);
-        const results = await axe.analyze();
-        const violations = results.violations.map((v) => ({ id: v.id, impact: v.impact, help: v.help, targets: v.nodes.slice(0, 5).map((n) => n.target) }));
-        const primaries = await page.locator("[data-primary]").count();
-        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-        report.push({ shot: shot.name, theme, width, violations, primaries, overflow });
-        console.log(`${shot.name} ${theme} ${width}: axe ${violations.length}, primaries ${primaries}, overflow ${overflow}`);
-        expect.soft(violations, `${shot.name} ${theme} ${width} axe`).toEqual([]);
-        expect.soft(primaries, `${shot.name} ${theme} ${width} primaries`).toBeLessThanOrEqual(1);
-        expect.soft(overflow, `${shot.name} ${theme} ${width} overflow`).toBeLessThanOrEqual(0);
-        await context.close();
       }
     }
+  } finally {
+    await tidyUp(browser);
   }
   mkdirSync(join(REPORT, ".."), { recursive: true });
   writeFileSync(REPORT, JSON.stringify(report, null, 2));

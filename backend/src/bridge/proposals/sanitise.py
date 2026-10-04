@@ -216,12 +216,19 @@ def contact_findings(text: str) -> list[str]:
     return [code for code in CODES if code in found]
 
 
+def contact_codes(value: str) -> list[str]:
+    """The contact codes (``CODES``, in order) found in one value, checked raw and as plain text (a link hidden in
+    HTML is still a link). Problem Briefs apply the same rule (``bridge.problems.briefs``)."""
+    plain = plain_text(value)
+    raw = unicodedata.normalize("NFKC", value)
+    found = set(contact_findings(detection_skeleton(raw))) | set(contact_findings(detection_skeleton(plain)))
+    return [code for code in CODES if code in found]
+
+
 def check_field(field: str, value: str) -> list[FieldError]:
     """The errors of one Tier-1 value (checked raw and as plain text)."""
     plain = plain_text(value)
-    raw = unicodedata.normalize("NFKC", value)
-    codes = set(contact_findings(detection_skeleton(raw))) | set(contact_findings(detection_skeleton(plain)))
-    errors = [FieldError(field, code, MESSAGES[code]) for code in CODES if code in codes]
+    errors = [FieldError(field, code, MESSAGES[code]) for code in contact_codes(value)]
     if (limit := MAX_LENGTHS.get(field)) is not None and len(plain) > limit:
         errors.append(FieldError(field, "too_long", f"Keep this to {limit} characters or fewer."))
     if field == "summary" and (words := word_count(plain)) > MAX_SUMMARY_WORDS:

@@ -24,6 +24,7 @@ import { BASE_PATH, ideaHref } from "../../ideas";
 import { isProposalId } from "../../routes";
 import { ideaStatus } from "../../status";
 import { chosenOptions, nicheTree, pickerPage } from "./data";
+import { leadWith } from "./order";
 import { PitchForm, type PickerGroup, type PickerRow } from "./PitchForm";
 import {
   orgKey,
@@ -99,12 +100,18 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
   if (pitchesLeft(picker.cap) === 0) {
     return header(<EmptyState className="mt-8" sentence={t("capUsed", { limit: picker.cap.limit ?? 0 })} action={t("back")} href={back} />);
   }
-  const groups = await pickerGroups(picker);
+  // Started from a Brief: its organisation is listed first, beside the note that names it (REQ-DIR-05).
+  const groups = leadWith(await pickerGroups(picker), query.org);
   // Choices made on another page or search, resolved by id so each is shown by name with its outcome (else dropped).
   const onPage = new Set(groups.flatMap((group) => group.rows.map((row) => row.id)));
   const offPage = query.selected.filter((id) => !onPage.has(orgKey(id)));
   const chosen = await Promise.all((await chosenOptions(idea.id, offPage)).map(pickerRow));
   const narrowed = Boolean(query.q || query.niche);
+  // Started from an organisation's Problem Brief (REQ-DIR-05): that organisation is chosen first, and the page says so
+  // while it is one the idea can be pitched to (otherwise its row says why not, as any other).
+  const preselected = query.org
+    ? [...chosen, ...groups.flatMap((group) => group.rows)].find((row) => row.available && orgKey(row.id) === query.org)
+    : undefined;
   if (groups.length === 0 && !query.cursor) {
     return header(
       narrowed ? (
@@ -132,6 +139,7 @@ export default async function PitchPage({ params, searchParams }: PageProps<"/de
           groups={groups}
           chosen={chosen}
           initialSelected={query.selected}
+          preselected={preselected ? { id: preselected.id, name: preselected.name } : undefined}
           filters={<Filters query={query} niches={niches} />}
           narrowed={narrowed}
           cursor={query.cursor}

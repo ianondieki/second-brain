@@ -44,11 +44,11 @@ async function menuItems() {
 
 describe("AdminShell's account menu", () => {
   it("leaves out Plan & billing for a staff account with no organisation", async () => {
-    expect(await menuItems()).toEqual(["Sign-in security", "Notifications", "Help"]);
+    expect(await menuItems()).toEqual(["Sign-in security", "Notification settings", "Help"]);
   });
 
   it("keeps Plan & billing for a staff account that belongs to an organisation", async () => {
     staff.memberships = [{ org_id: "01a0f149-d75d-7317-979d-2d98f1c8a802", org_name: "Telco A", roles: ["owner"] }];
-    expect(await menuItems()).toEqual(["Plan & billing", "Sign-in security", "Notifications", "Help"]);
+    expect(await menuItems()).toEqual(["Plan & billing", "Sign-in security", "Notification settings", "Help"]);
   });
 });

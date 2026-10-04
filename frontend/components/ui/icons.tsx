@@ -25,6 +25,16 @@ export function EyeOffIcon(props: IconProps) {
   );
 }
 
+/** A magnifier: a look at something, with no verdict (the editor's "Teaser checks" heading). */
+export function LookIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="8.75" cy="8.75" r="5.25" />
+      <path d="m12.6 12.6 4.65 4.65" />
+    </Icon>
+  );
+}
+
 export function HomeIcon(props: IconProps) {
   return (
     <Icon {...props}>

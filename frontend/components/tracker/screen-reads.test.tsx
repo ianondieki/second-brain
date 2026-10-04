@@ -57,4 +57,25 @@ describe("the tracker's reads", () => {
     reads.release();
     await screen;
   });
+
+  it("reads no history for a paused engagement on the Tracker tab: paused_from names its stage (REQ-ENG-10)", async () => {
+    reads.release();
+    const before = reads.order.length;
+    await EngagementScreen({
+      detail: detail({ state: "ON_HOLD", stage_group: null, paused_from: "NEGOTIATION", whose_turn: [], awaiting: [] }),
+      me: ME,
+      tab: "tracker",
+      doc: null,
+      basePath: "/dev/engagements",
+    });
+    expect(reads.order.slice(before)).toEqual([]);
+    await EngagementScreen({
+      detail: detail({ state: "EXPIRED", stage_group: null, end_reason: "NO_REVIEW", whose_turn: [], awaiting: [], due: null }),
+      me: ME,
+      tab: "tracker",
+      doc: null,
+      basePath: "/dev/engagements",
+    });
+    expect(reads.order.slice(before)).toEqual(["history"]);
+  });
 });

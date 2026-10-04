@@ -11,7 +11,7 @@ DEMO_PY ?= $(LEGACY_PY)
 DEMO = $(DEMO_PY) infra/demo/demo.py
 
 .PHONY: help dev dev-full down logs migrate seed openapi api-types check check-backend check-frontend \
-        check-backend-coverage check-legacy check-copy check-e2e test-integration e2e budget \
+        check-backend-coverage check-legacy check-copy check-e2e check-e2e-clock test-integration e2e budget \
         demo demo-down demo-reset demo-totp demo-logins demo-logs demo-stats demo-clock \
         demo-reminders demo-scouts demo-walkthrough
 
@@ -26,6 +26,7 @@ help:
 	@echo "check-legacy    the unchanged local-companion suite (scripts/run_legacy_tests.py)"
 	@echo "check-copy      banned-claims copy-lint (copy/banned_claims.txt, AC-IP-4)"
 	@echo "check-e2e       Playwright smoke against the running stack (make dev first)"
+	@echo "check-e2e-clock Playwright test-clock scenarios, alone after check-e2e (they move the stack's clock)"
 	@echo "budget          gzipped JS per route against a running production web app (make dev first; not in check)"
 	@echo "openapi         regenerate backend/openapi.json;  api-types  regenerate frontend/lib/api/schema.d.ts"
 	@echo "demo            the local demo: seeded stack without ClamAV, fits Docker Desktop's 4 GB (README: Run the demo)"
@@ -83,6 +84,11 @@ check-copy:
 
 check-e2e:
 	cd frontend && npm run e2e
+
+# The tracker's test-clock scenarios (expiry, a moved deadline) run after the suite and alone: moving the clock
+# changes every deadline on the stack (frontend/e2e/tracker-branches.spec.ts; REQ-ENG-10, AC-TRACK-4).
+check-e2e-clock:
+	cd frontend && E2E_TEST_CLOCK=1 npx playwright test tracker-branches -g "test clock" --workers=1
 
 # The local demo (P9; REQ-FND-02): infra/docker-compose.demo.yml over the dev stack, as its own project (bridge-demo).
 # demo-reset is the only target that wipes the demo's volumes, and nothing depends on it.

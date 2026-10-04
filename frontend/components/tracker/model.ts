@@ -21,6 +21,8 @@ export type HistoryEvent = Schemas["HistoryEventOut"];
 export type History = Schemas["HistoryOut"];
 export type DocumentKind = Schemas["SignatureDocumentKind"];
 export type Due = Schemas["DueOut"];
+export type Note = Schemas["NoteOut"];
+export type SideLimits = Schemas["SideLimitsOut"];
 
 /** The 5-group stepper, in order (Review · Contact and NDA · Agreement · Implementation · Close). */
 export const GROUPS = ["review", "contact_nda", "agreement", "implementation", "close"] as const;
@@ -30,7 +32,12 @@ export type Group = (typeof GROUPS)[number];
 export type ChipKind = "completed" | "current" | "pending" | "onHold" | "overdue" | "ended";
 
 export const ENDED_STATES: ReadonlySet<State> = new Set(["DECLINED", "WITHDRAWN", "EXPIRED", "TERMINATED"]);
-const PAUSED_STATES: ReadonlySet<State> = new Set(["ON_HOLD", "DISPUTED"]);
+/**
+ * Side states an engagement leaves only for the stage it entered them from (state_machine.RETURNING, pinned by
+ * state-machine-parity.test.ts): the stepper keeps that stage marked, with the On hold chip (docs/spec/06 6.9 "banner
+ * on the stage where they occurred, never extra steps").
+ */
+export const PAUSED_STATES: ReadonlySet<State> = new Set(["ON_HOLD", "DISPUTED", "INFO_REQUESTED"]);
 
 /** Terminal: nothing more happens (CLOSED is the successful end). */
 export function isFinished(state: State): boolean {
@@ -64,11 +71,16 @@ export function asGroup(value: string | null | undefined): Group | null {
   return (GROUPS as readonly string[]).includes(value ?? "") ? (value as Group) : null;
 }
 
-/** The stage an ended or paused engagement left: the `from_state` of the event that entered its current state. */
+/**
+ * The stage an ended or paused engagement left: the `from_state` of the event that entered its current state, and
+ * through a side state to the stage before it (a question left unanswered expires from INFO_REQUESTED).
+ */
 export function stageLeft(state: State, events: readonly HistoryEvent[] | null | undefined): State | null {
   if (!events) return null;
   for (let i = events.length - 1; i >= 0; i--) {
-    if (events[i].to_state === state && events[i].from_state) return events[i].from_state;
+    const from = events[i].from_state;
+    if (events[i].to_state !== state || !from) continue;
+    return PAUSED_STATES.has(from) ? (stageLeft(from, events.slice(0, i)) ?? from) : from;
   }
   return null;
 }
@@ -76,6 +88,8 @@ export function stageLeft(state: State, events: readonly HistoryEvent[] | null |
 export interface Step {
   group: Group;
   chip: ChipKind;
+  /** The chip's own word where the mark's would mislead: an open question is a turn, not a hold. */
+  word?: "awaitingAnswer";
 }
 
 /**
@@ -87,28 +101,31 @@ export function stepperSteps(input: {
   state: State;
   stage_group: string | null;
   due: Due | null;
-  /** For an ended or paused engagement: the stage it left (stageLeft). */
+  /** A paused engagement: the stage it returns to (the API's `paused_from`), which stays marked. */
+  paused_from?: State | null;
+  /** For an ended engagement (or a paused one the API sent no `paused_from` for): the stage it left (stageLeft). */
   left?: State | null;
 }): Step[] {
-  const { state } = input;
-  if (state === "CLOSED") return GROUPS.map((group) => ({ group, chip: "completed" }));
-  const at =
-    asGroup(input.stage_group) ?? (input.left ? MAIN_PATH_GROUP[input.left] : undefined) ?? GROUPS[0];
+  if (input.state === "CLOSED") return GROUPS.map((group) => ({ group, chip: "completed" }));
+  const stage = input.paused_from ?? input.left;
+  const at = asGroup(input.stage_group) ?? (stage ? MAIN_PATH_GROUP[stage] : undefined) ?? GROUPS[0];
   const index = GROUPS.indexOf(at);
-  const here: ChipKind = ENDED_STATES.has(state)
-    ? "ended"
-    : PAUSED_STATES.has(state)
-      ? "onHold"
-      : input.due?.overdue
-        ? "overdue"
-        : "current";
-  return GROUPS.map((group, i) => ({ group, chip: i < index ? "completed" : i === index ? here : "pending" }));
+  const here = stageChip(input);
+  const word = input.state === "INFO_REQUESTED" && here === "onHold" ? "awaitingAnswer" : undefined;
+  return GROUPS.map((group, i) =>
+    i === index ? { group, chip: here, ...(word ? { word } : {}) } : { group, chip: i < index ? "completed" : "pending" },
+  );
 }
 
-/** The one chip a list row shows for where an engagement stands. */
+/**
+ * The chip for where an engagement stands (a list row's, and the stepper's current group): ✕ once ended (an expiry
+ * too), ⏸ while paused, except ⚠ for a question left past its answer-by date (the engagement expires at the clock's
+ * next pass), ⚠ past the stage's deadline, else ●. A hold's date is when it resumes, never overdue.
+ */
 export function stageChip(item: Pick<Summary, "state" | "due">): ChipKind {
   if (item.state === "CLOSED") return "completed";
   if (ENDED_STATES.has(item.state)) return "ended";
+  if (item.state === "INFO_REQUESTED" && item.due?.overdue) return "overdue";
   if (PAUSED_STATES.has(item.state)) return "onHold";
   return item.due?.overdue ? "overdue" : "current";
 }
@@ -214,11 +231,95 @@ export function documentKinds(detail: Pick<Detail, "documents" | "signatures" | 
   return DOCUMENT_KINDS.filter((kind) => kind !== "milestone_confirmation" && found.has(kind));
 }
 
+// --------------------------------------------------------------------------------------------- side states
+
+/**
+ * What the whose-turn banner says about a side state (docs/spec/06 6.9: a banner on the stage where it occurred,
+ * never an extra step), from the API's state and `notes` (in event order):
+ * - `info`: the organisation's open question (its latest `info_request` note);
+ * - `hold`: the reason and resume date of the latest `hold` note;
+ * - `expired`: the system ended it (the end reason says why);
+ * - `answered`: the stage resumed with the developer's answer (the latest note is the `info_answer` written when
+ *   the engagement entered its current stage).
+ */
+export type SideBanner =
+  | { kind: "info"; question: Note | null }
+  | { kind: "hold"; hold: Note | null }
+  | { kind: "expired"; reason: Detail["end_reason"] }
+  | { kind: "answered"; answer: Note };
+
+/** Note and event times come from the same transaction; allow for rounding between the two. */
+const SAME_EVENT_MS = 2_000;
+
+function latest(notes: readonly Note[], kind: Note["kind"]): Note | null {
+  for (let i = notes.length - 1; i >= 0; i--) if (notes[i].kind === kind) return notes[i];
+  return null;
+}
+
+export function sideBanner(detail: Pick<Detail, "state" | "notes" | "end_reason" | "stage_entered_at">): SideBanner | null {
+  const notes = detail.notes ?? [];
+  if (detail.state === "INFO_REQUESTED") return { kind: "info", question: latest(notes, "info_request") };
+  if (detail.state === "ON_HOLD") return { kind: "hold", hold: latest(notes, "hold") };
+  if (detail.state === "EXPIRED") return { kind: "expired", reason: detail.end_reason };
+  const last = notes.at(-1);
+  if (
+    last?.kind === "info_answer" &&
+    !isFinished(detail.state) &&
+    Date.parse(last.at) >= Date.parse(detail.stage_entered_at) - SAME_EVENT_MS
+  ) {
+    return { kind: "answered", answer: last };
+  }
+  return null;
+}
+
+/** The note kind each side-state command writes (a hold resumed by the system at its date writes none). */
+const NOTE_OF: Partial<Record<string, Note["kind"]>> = {
+  request_info: "info_request",
+  answer_info: "info_answer",
+  pause: "hold",
+  resume: "resume",
+};
+
+/**
+ * Each history event's note, by event id: on the note's `seq` (the event it explains) when the API sends it; a note
+ * without one falls back to order within its kind (the n-th event of a command that writes a note of that kind, not
+ * already paired, gets the n-th such note; the system's resume writes none and is left out).
+ */
+export function notesByEvent(events: readonly HistoryEvent[], notes: readonly Note[]): Map<string, Note> {
+  const found = new Map<string, Note>();
+  const bySeq = new Map(events.map((event) => [event.seq, event]));
+  const queues = new Map<Note["kind"], Note[]>();
+  for (const note of notes) {
+    if (note.seq != null) {
+      const event = bySeq.get(note.seq);
+      if (event) found.set(event.id, note);
+    } else {
+      queues.set(note.kind, [...(queues.get(note.kind) ?? []), note]);
+    }
+  }
+  if (queues.size === 0) return found;
+  for (const event of [...events].sort((a, b) => a.seq - b.seq)) {
+    const kind = NOTE_OF[event.command];
+    if (!kind || event.actor_role === "system" || found.has(event.id)) continue;
+    const note = queues.get(kind)?.shift();
+    if (note) found.set(event.id, note);
+  }
+  return found;
+}
+
 // --------------------------------------------------------------------------------------------- actions → requests
 
 /** Commands whose request carries more than `lock_version`: each opens a small form first. */
 export const FORM_COMMANDS = ["approve", "decline", "propose_terms", "record_payment", "confirm_payment"] as const;
 export type FormCommand = (typeof FORM_COMMANDS)[number];
+
+/**
+ * The side states' commands (REQ-ENG-10 part): each opens a sheet over the tracker (a bottom sheet on phones), four
+ * with a text the other party reads (a question, an answer, a reason) and the organisation's withdrawal of its
+ * question as a confirmation.
+ */
+export const SHEET_COMMANDS = ["request_info", "answer_info", "pause", "resume", "cancel_request"] as const satisfies readonly Command[];
+export type SheetCommand = (typeof SHEET_COMMANDS)[number];
 
 /** Commands that end the engagement: a confirmation first, never the primary button. */
 export const ENDING_COMMANDS = ["withdraw", "decline_interest", "decline"] as const satisfies readonly Command[];
@@ -237,6 +338,10 @@ export type MilestoneCommand = keyof typeof MILESTONE_STEPS;
 
 export function isFormCommand(command: Command): command is FormCommand {
   return (FORM_COMMANDS as readonly string[]).includes(command);
+}
+
+export function isSheetCommand(command: Command): command is SheetCommand {
+  return (SHEET_COMMANDS as readonly string[]).includes(command);
 }
 
 export function isMilestoneCommand(command: Command): command is MilestoneCommand {
@@ -308,6 +413,11 @@ export const COMMAND_SEGMENT = {
   sign_certificate: "sign-certificate",
   record_payment: "record-payment",
   confirm_payment: "confirm-payment",
+  request_info: "request-info",
+  answer_info: "answer-info",
+  cancel_request: "cancel-request",
+  pause: "pause",
+  resume: "resume",
 } as const satisfies Record<Exclude<Command, MilestoneCommand>, string>;
 
 export const MILESTONE_SEGMENT = {
@@ -328,7 +438,22 @@ export type DeclineInput = Omit<Schemas["DeclineBody"], "lock_version">;
 export type TermsInput = Omit<Schemas["TermsBody"], "lock_version">;
 export type PaymentInput = Omit<Schemas["PaymentBody"], "lock_version">;
 export type ConfirmPaymentInput = Omit<Schemas["ConfirmPaymentBody"], "lock_version">;
-export type FormInput = ApproveInput | DeclineInput | TermsInput | PaymentInput | ConfirmPaymentInput;
+export type RequestInfoInput = Omit<Schemas["RequestInfoBody"], "lock_version">;
+export type AnswerInfoInput = Omit<Schemas["AnswerInfoBody"], "lock_version">;
+export type PauseInput = Omit<Schemas["PauseBody"], "lock_version">;
+export type ResumeInput = Omit<Schemas["ResumeBody"], "lock_version">;
+/** What a sheet sends: its text (and a hold's date); the withdrawal of a question sends nothing more. */
+export type SheetInput = RequestInfoInput | AnswerInfoInput | PauseInput | ResumeInput | Record<string, never>;
+export type FormInput =
+  | ApproveInput
+  | DeclineInput
+  | TermsInput
+  | PaymentInput
+  | ConfirmPaymentInput
+  | RequestInfoInput
+  | AnswerInfoInput
+  | PauseInput
+  | ResumeInput;
 
 /** One command request: the path template, its parameters and the JSON body (always with `lock_version`). */
 export interface CommandRequest {

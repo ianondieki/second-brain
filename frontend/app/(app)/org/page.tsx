@@ -23,6 +23,8 @@ import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
 import { needsMfaSetup } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
+import { getBriefs } from "./brief-data";
+import { briefStats, problemsHref } from "./briefs";
 import { getInbox, orgContext, type InboxPage } from "./data";
 import { formatDay } from "./format";
 import { orgHomeStats, weeklySeries } from "./home";
@@ -40,8 +42,8 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Organisation home (docs/spec/07 item 1; D-52): the greeting, four stat tiles from the Inbox, the scout's matches and
- * the engagements the page reads anyway (with a sparkline where a series exists), two-step sign-in as a notice only
+ * Organisation home (docs/spec/07 item 1; D-52): the greeting, four stat tiles from the Inbox, the scout's matches,
+ * the engagements and the Problem Briefs (with a sparkline where a series exists), two-step sign-in as a notice only
  * while it is off, what needs the organisation as prominent cards, then the newest Inbox proposals as compact cards.
  * "Open the Inbox" is the screen's one primary action; an owner without two-step sign-in gets "Turn on" instead,
  * since the Inbox is refused until then.
@@ -121,15 +123,17 @@ async function quietly<T>(read: () => Promise<T>): Promise<T | null> {
 
 async function HomeBody({ memberships, org }: { memberships: Membership[]; org: Membership }) {
   const [t, ti, tt, locale] = await Promise.all([getTranslations("orgHome"), getTranslations("inbox"), getTranslations("tracker"), getLocale()]);
-  const [inboxRead, matchesRead, engagementsRead] = await Promise.all([
+  const [inboxRead, matchesRead, engagementsRead, briefsRead] = await Promise.all([
     quietly(() => getInbox(org.org_id)),
     quietly(() => getMatches(org.org_id)),
     quietly(() => orgEngagements(org.org_id)),
+    quietly(() => getBriefs(org.org_id)),
   ]);
   const inbox: InboxPage | null = inboxRead?.kind === "page" ? inboxRead.page : null;
   const matches: Match[] | null = matchesRead?.kind === "ok" ? matchesRead.value : null;
   const engagements = engagementsRead?.ok ? engagementsRead.value : null;
   const stats = orgHomeStats(inbox, matches, engagements);
+  const briefs = briefsRead?.kind === "ok" ? briefStats(briefsRead.value) : null;
   const now = new Date();
   const inboxLink = inboxHref(memberships, org.org_id);
   const engagementsLink = engagementsHref(memberships, org.org_id);
@@ -179,12 +183,23 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
               href={engagementsLink}
             />
           </li>
+          {/* The fourth tile is the Problem Briefs (REQ-DIR-05), in place of "Need us": the engagements waiting on the
+              organisation are the cards right below, so that tile only repeated them, and it led nowhere. */}
           <li>
             <StatTile
-              data-stat="needs-us"
-              label={t("stats.needsUs")}
-              value={stats.engagements === null ? unknown.value : stats.waiting.length}
-              meta={stats.engagements === null ? unknown.meta : stats.waiting.length > 0 ? t("stats.needsUsMeta") : undefined}
+              data-stat="briefs"
+              label={t("stats.briefs")}
+              value={briefs === null ? unknown.value : t("stats.briefsValue", { count: briefs.open })}
+              meta={
+                briefs === null
+                  ? unknown.meta
+                  : briefs.inReview > 0
+                    ? t("stats.briefsMetaReview", { count: briefs.inReview })
+                    : briefs.open > 0
+                      ? t("stats.briefsMetaProposals", { count: briefs.proposals })
+                      : undefined
+              }
+              href={problemsHref(memberships, org.org_id)}
             />
           </li>
         </ul>

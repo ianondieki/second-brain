@@ -116,12 +116,20 @@ export async function getVerification(orgId: string): Promise<OrgVerification | 
   return data?.verification ?? null;
 }
 
-/** The organisation plans (limits, upgrade ladder), or an empty list when they could not be read. */
-export async function getOrgPlans(): Promise<components["schemas"]["PlanOut"][]> {
+/**
+ * The organisation plans (limits, upgrade ladder), or null when they could not be read: never taken as "no plan to
+ * move to" (the Problems section's full-plan notice says the choices could not be loaded instead).
+ */
+export async function readOrgPlans(): Promise<components["schemas"]["PlanOut"][] | null> {
   const { data, response } = await serverApi().GET("/api/plans", {
     params: { query: { side: "org" } },
     ...(await options()),
   });
   if (response.status === 401) redirect("/login");
-  return data?.plans ?? [];
+  return data?.plans ?? null;
+}
+
+/** The organisation plans, or an empty list when they could not be read (the scout form offers no upgrade then). */
+export async function getOrgPlans(): Promise<components["schemas"]["PlanOut"][]> {
+  return (await readOrgPlans()) ?? [];
 }

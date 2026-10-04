@@ -67,7 +67,7 @@ async def test_the_main_path_runs_submitted_to_closed_with_both_parties(
         assert first["actions"] == ["withdraw"]
         assert first["stage_deadline_at"] is not None
         assert first["due"]["business_days_left"] == 10
-        assert (await t.detail(reviewer))["actions"] == ["start_review", "decline"]
+        assert (await t.detail(reviewer))["actions"] == ["start_review", "decline", "request_info"]
 
         assert (await t.ok(reviewer, "start-review"))["state"] == "UNDER_REVIEW"
         approve = {"contact_user_id": str(world.owner), "contact_channel": "email", "contact_by": str(today)}

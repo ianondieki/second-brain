@@ -72,6 +72,12 @@ ROUTES: dict[sm.Command, str] = {
     sm.Command.SUBMIT_MILESTONE: f"milestones/{MILESTONE}/submit",
     sm.Command.ACCEPT_MILESTONE: f"milestones/{MILESTONE}/accept",
     sm.Command.REQUEST_CHANGES: f"milestones/{MILESTONE}/request-changes",
+    # Side states (REQ-ENG-10 part): each carries its text.
+    sm.Command.REQUEST_INFO: "request-info",
+    sm.Command.ANSWER_INFO: "answer-info",
+    sm.Command.CANCEL_REQUEST: "cancel-request",
+    sm.Command.PAUSE: "pause",
+    sm.Command.RESUME: "resume",
 }
 
 
@@ -86,6 +92,14 @@ def body_for(command: sm.Command, world: Any, today: Any) -> dict[str, Any]:
         return {"amount_kes_minor": 100, "method": "mpesa", "paid_on": str(today)}
     if command is sm.Command.CONFIRM_PAYMENT:
         return {"amount_received_kes_minor": 100}
+    if command is sm.Command.REQUEST_INFO:
+        return {"question": "What does the pilot cost?"}
+    if command is sm.Command.ANSWER_INFO:
+        return {"answer": "KES 250,000."}
+    if command is sm.Command.PAUSE:
+        return {"reason": "Budget cycle", "resume_at": str(today + timedelta(days=10))}
+    if command is sm.Command.RESUME:
+        return {"reason": "Budget approved"}
     return {}
 
 

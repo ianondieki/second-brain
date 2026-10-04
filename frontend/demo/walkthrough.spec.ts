@@ -3,8 +3,10 @@
  * through the real login and two-step screens and walks the seeded story at a watchable pace, while Playwright
  * records a 1280 x 720 video of the desktop part and saves the screenshots the README links to.
  *
- * RUN IT ON A FRESH DEMO: it changes the demo's data (Amina upgrades to Pro, a draft idea is started, Telco A accepts
- * an Evaluation NDA and starts a review, a moderation case is decided, the clock moves a day). Reset between runs.
+ * RUN IT ON A FRESH DEMO: it changes the demo's data (Amina upgrades to Pro, a draft idea is started and checked,
+ * Telco A accepts an Evaluation NDA, posts a Problem Brief, starts a review and asks a question, a moderation case
+ * and the Brief are decided, Brian answers and pauses his engagement and starts a proposal from the Brief, the clock
+ * moves a day). Reset between runs.
  *
  *   make demo-reset
  *   make demo-walkthrough              (runs `python infra/demo/demo.py e2e-env` first; DEMO_PY=python3 on Linux/macOS)
@@ -39,7 +41,7 @@ import { expect, test, type Browser, type BrowserContext, type Locator, type Pag
 
 import { DEMO_PASSWORD, DemoStaff, signInThroughScreens } from "../e2e/support/moderation-scene";
 import { demoTotpSecret } from "../e2e/support/totp";
-import { ownerSql } from "../e2e/support/tracker-scene";
+import { actionsReady, ownerSql } from "../e2e/support/tracker-scene";
 
 const REPO = join(__dirname, "..", "..");
 // The config sets it: docs/demo/screenshots/ (committed) locally, test-results/walkthrough/screenshots/ in CI.
@@ -59,6 +61,10 @@ const PHONE = { width: 375, height: 812 };
 const IDEA = "Repayment nudges for SACCO members";
 const SACCO_B = "SACCO B (fixture)";
 const BRIAN_IDEA = "Cashless market-fee collection for counties";
+const TELCO_A = "Telco A (fixture)";
+// Telco A's Problem Brief (REQ-DIR-05), posted in the story and approved by the moderator.
+const BRIEF_TITLE = "Tower sites go dark when the diesel runs out";
+const QUESTION = "Which counties ran the pilot, and for how long?";
 
 /** A demo login: the public demo password and a TOTP key derived from the address (dev and test only). */
 function demoLogin(email: string, name: string): DemoStaff {
@@ -66,6 +72,7 @@ function demoLogin(email: string, name: string): DemoStaff {
 }
 
 const AMINA = demoLogin("amina@developers.example", "Amina Wanjiru");
+const BRIAN = demoLogin("brian@developers.example", "Brian Otieno");
 const TELCO_REVIEWER = demoLogin("reviewer@telco-a.example", "Telco A reviewer");
 const TELCO_OWNER = demoLogin("owner@telco-a.example", "Telco A owner");
 const STAFF_ADMIN = demoLogin("admin@staff.example", "Staff Admin (demo)");
@@ -166,6 +173,29 @@ async function nudgesTo(page: Page, to: string): Promise<number> {
   ).length;
 }
 
+/** A calendar day `days` from now in Nairobi ("2026-10-31"), as the date inputs take it. */
+function nairobiDay(days: number): string {
+  const at = new Date(Date.now() + days * 86_400_000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi", year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+}
+
+/** Opens one of the tracker's side-state sheets (REQ-ENG-10) by its button and waits for it. */
+async function openSheet(page: Page, name: string): Promise<Locator> {
+  await page.locator("[data-actions]").getByRole("button", { name, exact: true }).click();
+  const sheet = page.locator("dialog[open][data-side-sheet]");
+  await expect(sheet).toBeVisible(SLOW);
+  await expect(sheet.getByRole("heading", { level: 2 })).toHaveText(name);
+  await pause(page);
+  return sheet;
+}
+
+/** Sends a sheet and waits for the tracker to say it is up to date (the sheet closes). */
+async function sendSheet(page: Page, submit: string) {
+  await page.locator("dialog[open][data-side-sheet]").getByRole("button", { name: submit, exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Done. The tracker is up to date." })).toBeVisible(SLOW);
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+}
+
 async function phoneContext(browser: Browser): Promise<BrowserContext> {
   return browser.newContext({ baseURL: BASE_URL, viewport: PHONE, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
 }
@@ -221,7 +251,7 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await nav(page, "Lists").getByRole("link", { name: "Projects" }).click();
     await expect(page.getByRole("region", { name: "Trending projects" }).locator("article").first()).toBeVisible(SLOW);
     await pause(page, 1.5);
-    await nav(page, "Lists").getByRole("link", { name: "Opportunity gap" }).click();
+    await nav(page, "Lists").getByRole("link", { name: "Gap" }).click();
     await expect(page.getByRole("region", { name: "Opportunity gap" }).locator("article").first()).toBeVisible(SLOW);
     await pause(page, 1.5);
 
@@ -290,6 +320,18 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await expect(panel.locator("[data-chip]").first()).toBeVisible(SLOW);
     await show(page, panel, 1.5);
     await shot(page, "05-editor-assistant-1440");
+
+    // The teaser checks (REQ-PROP-04, REQ-REPO-01): overlap with other published ideas, in words, never a score; and
+    // what the teaser gives away. Without an AI provider the second is the quick check, labelled "Demo fallback".
+    const checks = page.getByRole("region", { name: "Teaser checks" });
+    await show(page, checks);
+    await checks.getByRole("button", { name: "Check overlap" }).click();
+    await expect(page.locator("[data-check='overlap']")).toHaveText(/^No (overlap|other published ideas)/, SLOW);
+    await pause(page, 1.5);
+    await checks.getByRole("button", { name: "Check what it gives away" }).click();
+    await expect(page.locator("[data-check='disclosure']")).toContainText(/\S/, SLOW);
+    await show(page, checks, 1.5);
+    await shot(page, "05b-editor-checks-1440");
   });
 
   await test.step("Developer: the SACCO B tracker", async () => {
@@ -353,6 +395,35 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await expect(frame.getByRole("heading", { level: 1 })).toHaveText(BRIAN_IDEA, SLOW);
     await show(page, page.locator("[data-tier2-frame]"), 2);
     await shot(page, "09-org-full-proposal-1440");
+
+    // Problems (REQ-DIR-05): the reviewer posts a Problem Brief; staff read it before developers see it.
+    await toTop(page);
+    await nav(page, "Organisation").getByRole("link", { name: "Problems" }).click();
+    await expect(page).toHaveURL(/\/org\/problems$/, SLOW);
+    await expect(page.locator("[data-primary]")).toHaveText("Post a Brief");
+    await pause(page);
+    await page.locator("[data-primary]").click();
+    await expect(page).toHaveURL(/\/org\/problems\/new$/, SLOW);
+    await page.locator('main [data-hydrated="true"]').first().waitFor(SLOW);
+    await page.getByLabel("Title").fill(BRIEF_TITLE);
+    await page
+      .getByLabel("Problem statement")
+      .fill(
+        "Off-grid tower sites run on diesel generators that are refilled on a fixed schedule. When a delivery is late the" +
+          " site goes dark for hours and nobody knows until subscribers complain. We want to know before the tank is empty.",
+      );
+    await page.getByLabel("Who is affected (optional)").fill("Subscribers served by off-grid tower sites");
+    await page.getByLabel("Niche").selectOption({ label: "Networks & Telecommunications" });
+    await page.getByLabel("County").selectOption("KE-30");
+    await page.getByRole("group", { name: "Budget band" }).getByRole("radio").first().check();
+    await page.getByLabel(/Proposals wanted by/).fill(nairobiDay(30));
+    await pause(page, 1.5);
+    await page.getByRole("button", { name: "Post the Brief" }).click();
+    await expect(page).toHaveURL(/\/org\/problems(\?posted=1)?$/, SLOW); // the note takes focus, then the flag leaves the URL
+    await expect(page.locator("[data-brief]").first()).toContainText(BRIEF_TITLE);
+    await expect(page.locator("[data-brief]").first().locator("[data-chip]")).toHaveText("In review");
+    await pause(page);
+    await shot(page, "09b-org-brief-posted-1440");
     await signOut(page);
   });
 
@@ -391,11 +462,22 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await expect(page.locator("[data-whose-turn]")).toContainText("Awaiting: you");
     await expect(page.locator("[data-primary]")).toHaveText("Start the review");
     await pause(page, 1.5);
+    await actionsReady(page);
     await page.locator("[data-actions]").getByRole("button", { name: "Start the review", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Done. The tracker is up to date." })).toBeVisible(SLOW);
     await expect(page.getByRole("list", { name: "Stages" })).toContainText("Now: Under review");
     await pause(page);
     await shot(page, "11-org-tracker-step-1440");
+
+    // A question for Brian (REQ-ENG-10): the review waits for his answer, and the clock on it is his.
+    const ask = await openSheet(page, "Request information");
+    await ask.getByLabel("Your question").fill(QUESTION);
+    await pause(page);
+    await sendSheet(page, "Send the question");
+    await expect(page.locator("[data-whose-turn]")).toContainText("Answer the question");
+    await expect(page.locator("[data-whose-turn] [data-side='info']")).toContainText(QUESTION);
+    await pause(page);
+    await shot(page, "11b-org-tracker-question-1440");
     await signOut(page);
   });
 
@@ -449,6 +531,81 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await page.getByRole("button", { name: "Approve", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: /^Approved\./ })).toBeVisible(SLOW);
     await pause(page, 1.5);
+
+    // Telco A's Brief waits in the same queue, hidden until approved; approving publishes it to developers.
+    await nav(page, "Staff console").getByRole("link", { name: "Moderation" }).click();
+    await expect(page).toHaveURL(/\/admin\/moderation$/, SLOW);
+    const briefRow = page.locator("[data-case]").filter({ hasText: BRIEF_TITLE });
+    await expect(briefRow).toContainText(`Brief by ${TELCO_A}`);
+    await show(page, briefRow);
+    await briefRow.getByRole("link", { name: BRIEF_TITLE }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(BRIEF_TITLE, SLOW);
+    await page.locator('main [data-hydrated="true"]').first().waitFor(SLOW);
+    await pause(page);
+    await shot(page, "13b-admin-moderation-brief-1440");
+    await page.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Approved. The Brief is published to developers." }),
+    ).toBeVisible(SLOW);
+    await pause(page, 1.5);
+    await signOut(page);
+  });
+
+  await test.step("Developer: Brian's bell, his answer, a pause, and Telco A's Brief on Discover", async () => {
+    await signIn(page, BRIAN, /\/dev$/);
+    // The bell (REQ-NOT-03): Telco A started the review and asked a question; both landed here.
+    const bell = page.getByRole("banner").locator("[data-notification-bell]");
+    await expect(bell.locator("[data-unread-badge]")).toHaveText(/^[1-9]\d*$/, SLOW);
+    await pause(page);
+    await bell.click();
+    await expect(page).toHaveURL(/\/notifications$/, SLOW);
+    const asked = page.locator("[data-notification]").filter({ hasText: `${TELCO_A} asked you a question` });
+    await expect(asked.first()).toBeVisible(SLOW);
+    await pause(page);
+    await shot(page, "14b-dev-notifications-1440");
+    await asked.first().getByRole("link").click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(BRIAN_IDEA, SLOW);
+    await expect(page.locator("[data-whose-turn]")).toContainText("Awaiting: you");
+    await expect(page.locator("[data-primary]")).toHaveText("Answer the question");
+    await pause(page);
+    const reply = await openSheet(page, "Answer the question");
+    await expect(reply.locator("[data-question]")).toHaveText(QUESTION);
+    await reply.getByLabel("Your answer").fill("Kisumu and Nakuru, for six weeks each, with the county revenue offices.");
+    await pause(page);
+    await sendSheet(page, "Send the answer");
+    await expect(page.locator("[data-whose-turn]")).toContainText(`Awaiting: ${TELCO_A}`);
+    await expect(page.getByRole("list", { name: "Stages" })).toContainText("Now: Under review");
+    await pause(page);
+    // A hold (REQ-ENG-10): either party may pause before the agreement; the deadline waits with it.
+    const hold = await openSheet(page, "Pause this engagement");
+    await hold.getByLabel("Reason").fill("Travelling for the county budget hearings");
+    await hold.getByLabel("Resumes on").fill(nairobiDay(7));
+    await expect(hold.locator("[data-resumes]")).toContainText("It resumes by itself on");
+    await pause(page);
+    await sendSheet(page, "Pause until then");
+    await expect(page.locator("[data-whose-turn]")).toContainText("This engagement is on hold.");
+    await pause(page);
+    await shot(page, "14c-dev-tracker-on-hold-1440");
+    await toTop(page);
+    await nav(page, "Engagement sections").getByRole("link", { name: "History" }).click();
+    await expect(page.locator("[data-event='pause'] [data-note='hold']")).toContainText("Travelling", SLOW);
+    await pause(page, 2);
+
+    // Discover › Briefs (REQ-DIR-05): Telco A's Brief, with its budget band and deadline, and a proposal from it.
+    await toTop(page);
+    await nav(page, "Developer").getByRole("link", { name: "Discover" }).click();
+    await expect(page).toHaveURL(/\/dev\/discover$/, SLOW);
+    await nav(page, "Lists").getByRole("link", { name: "Briefs" }).click();
+    await expect(page).toHaveURL(/\/dev\/discover\?view=briefs$/, SLOW);
+    const brief = page.locator("[data-brief]").filter({ hasText: BRIEF_TITLE });
+    await expect(brief).toContainText(`Posted by ${TELCO_A}`, SLOW);
+    await show(page, brief);
+    await shot(page, "14d-discover-briefs-1440");
+    await brief.getByRole("link", { name: "Start a proposal from this Brief" }).click();
+    await expect(page).toHaveURL(/\/dev\/ideas\/new\?problem=[0-9a-f-]{36}$/, SLOW); // the Brief linked from the start
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("New idea");
+    await expect(page.getByRole("main")).toContainText(BRIEF_TITLE);
+    await pause(page, 2);
     await signOut(page);
   });
 
@@ -477,7 +634,7 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
     await pause(page, 2.5);
   });
 
-  await test.step("Phone width: Amina's Home and tracker, Telco A's Inbox (375 x 812)", async () => {
+  await test.step("Phone width: Amina's Home, tracker and the Briefs, Telco A's Inbox (375 x 812)", async () => {
     const amina = await phoneContext(browser);
     try {
       const phone = await amina.newPage();
@@ -486,6 +643,9 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
       await phone.goto(saccoTracker);
       await expect(phone.locator("[data-whose-turn]")).toContainText("Awaiting: you");
       await shot(phone, "16-dev-tracker-375");
+      await phone.goto("/dev/discover?view=briefs");
+      await expect(phone.locator("[data-brief]").filter({ hasText: BRIEF_TITLE })).toBeVisible(SLOW);
+      await shot(phone, "18-discover-briefs-375");
     } finally {
       await amina.close();
     }

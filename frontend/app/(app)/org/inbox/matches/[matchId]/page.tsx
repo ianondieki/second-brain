@@ -148,6 +148,7 @@ async function Interest({
               myUserId={me.user.id}
               enrolled={me.mfa.enrolled}
               query={query}
+              today={match.today ?? null}
             />
           </ClientStrings>
         ) : (

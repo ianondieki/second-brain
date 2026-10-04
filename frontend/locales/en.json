@@ -17,7 +17,8 @@
     "reviewP10f": "[[COPY-REVIEW]] P10-F (REQ-SCOUT-02): scoutMatches.*, scoutMatch.*, expressInterest.*, scoutPage.*, scoutForm.*, tier2Share.*, tracker.fromHandle; scoutMatches.whySource.* are the EM3 digest's labels; scoutForm.previewOnNew is the API's Preview note; tier2Share.confirm uses the docs/spec/04 4.2 approved logging phrasing; scoutMatch.interestLead says interest is not a contract or a commitment to buy (EM2's words)",
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
     "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
-    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*; round 2: tour.title, tour.showAgainLead, tour.showAgain, tour.showAgainDone (Help), checkout.phone.idle, checkout.stepFailed, orgHome.stats.unknown, orgHome.stats.unavailable, ideaEditor.detailsSectionsLabel, detailsFilesLabel, detailsLinksLabel, detailsNone, ideaFields.problems (\"Problem cards it answers\"), problem.confidenceValue and problem.confidenceBand.* (\"High (85%)\"), discover.trendingShort (the trend badge's short form on a card; the API's sentence stays in its title), checkout.step.notPaid (the third step after a failed or cancelled payment)"
+    "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*; round 2: tour.title, tour.showAgainLead, tour.showAgain, tour.showAgainDone (Help), checkout.phone.idle, checkout.stepFailed, orgHome.stats.unknown, orgHome.stats.unavailable, ideaEditor.detailsSectionsLabel, detailsFilesLabel, detailsLinksLabel, detailsNone, ideaFields.problems (\"Problem cards it answers\"), problem.confidenceValue and problem.confidenceBand.* (\"High (85%)\"), discover.trendingShort (the trend badge's short form on a card; the API's sentence stays in its title), checkout.step.notPaid (the third step after a failed or cancelled payment)",
+    "reviewP19": "[[COPY-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B): nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers); ux round: Brief capitalised in briefs.newTitle, briefs.post, briefForm.submit, briefForm.close.open, briefForm.close.confirm, discover.startBrief, discover.noSources.org_brief; problem.briefEnded.closed and problem.briefEnded.pastDeadline (in place of problem.briefEnded); briefs.anywhere reads Kenya; briefs.capFull, briefs.capFullTop, briefs.upgradeTo; orgHome.stats.briefsValue; adminModeration.visibility.briefHidden, adminModeration.case.leadBrief, adminModeration.decision.approvedBrief, adminModeration.decision.rejectConfirmBrief; ideaChecks.disclosure.flaggedOne and flaggedMany (in place of flagged), ideaChecks.disclosure.demo, ideaChecks.problem.originality_limit (still no number: policy.yaml sets the daily limit); notifications.emptyStaff, notifications.emptyOrg; (4) P19-F F-A (REQ-ENG-10 tracker side states): tracker.event.request_info, .answer_info, .cancel_request, .pause, .resume, .expire; tracker.turn.onHold; tracker.side.*; tracker.expired.*; tracker.history.note.*; trackerActions.command.request_info, .answer_info, .cancel_request, .pause, .resume; trackerActions.sheet.*; trackerActions.refusal.containsContact, .invalidNote, .invalidResumeAt, .questionLimit, .holdLimit. refusal.containsContact is the orchestrator's sentence verbatim; the numbers (60 days, two questions, ten business days) follow policy.yaml and are pinned by state-machine-parity.test.ts; round 2: trackerActions.refusal.containsContact reworded to end at first contact (as sheet.noContact), trackerActions.refusal.tooMany (429 too_many_actions), trackerActions.sheet.questionsLeft, .holdsLeft, .holdDaysLeft (the API's side_limits, shown only when sent), trackerActions.sheet.pause.dateRange; reviewer round: ideaChecks.disclosure.flagged (in place of flaggedOne and flaggedMany: the fields after the sentence, so a label with an article reads); briefs.capFullUnknown, briefs.billing (plans not loaded: never the top-of-ladder sentence); problem.briefEnded.notOpen (an API without brief.ended: no guess); round 3: trackerActions.sheet.pause.dateHintNoDay (no platform day from the API: no range drawn); ux round: tracker.due.resumes, .answerBy, .answerLate (list rows: a hold resumes, the organisation waits on the developer's answer), tracker.chip.awaitingAnswer (the stepper while a question is open), tracker.side.info, .hold, .holdYou, .holdNoNote, .answered (the date kept on one line), inbox.stage.INFO_REQUESTED reworded and inbox.stage.ON_HOLD added (the tracker's stage labels); ux round 2: trackerActions.refusal.generic and .network say nothing was sent"
   },
   "app": {
     "name": "Wazo",
@@ -34,7 +35,7 @@
     "signOutRetry": "Try signing out again",
     "account": "Account",
     "security": "Sign-in security",
-    "notifications": "Notifications",
+    "notifications": "Notification settings",
     "help": "Help",
     "billing": "Plan & billing",
     "theme": {
@@ -343,6 +344,32 @@
       "home": "Go to your home page"
     }
   },
+  "notifications": {
+    "bell": {
+      "label": "Notifications",
+      "unread": "Notifications, {count} unread",
+      "overflow": "{count}+"
+    },
+    "pageTitle": "Notifications",
+    "title": "Notifications",
+    "lead": "Updates from your engagements and proposals, newest first.",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "time": "{time} EAT",
+    "unread": "Unread",
+    "markAllRead": "Mark all as read",
+    "markingAllRead": "Marking as read…",
+    "allRead": "All your notifications are marked as read.",
+    "markAllFailed": "Nothing was marked as read; try again in a moment.",
+    "empty": "Nothing yet: your tracker updates and approvals will land here.",
+    "home": "Go to your home page",
+    "pages": "More notifications",
+    "older": "Older notifications",
+    "newest": "Newest notifications",
+    "staleCursor": "That page of notifications is no longer available.",
+    "emptyStaff": "Nothing yet: moderation and research notices will land here.",
+    "emptyOrg": "Nothing yet: new proposals, scout matches and engagement updates for your organisation will land here."
+  },
   "help": {
     "pageTitle": "Help",
     "lead": "Short answers about pitching, what stays confidential, reminders and support.",
@@ -417,10 +444,12 @@
       "matchesMeta": "newest {date}",
       "engagements": "Engagements",
       "engagementsMeta": "{count, plural, one {# active} other {# active}}",
-      "needsUs": "Need us",
-      "needsUsMeta": "Waiting on us",
       "unknown": "—",
-      "unavailable": "Could not be read just now"
+      "unavailable": "Could not be read just now",
+      "briefs": "Problem Briefs",
+      "briefsMetaReview": "{count, plural, one {# in review} other {# in review}}",
+      "briefsMetaProposals": "{count, plural, one {# proposal} other {# proposals}}",
+      "briefsValue": "{count} open"
     }
   },
   "inbox": {
@@ -435,7 +464,8 @@
     "stage": {
       "SUBMITTED": "New",
       "UNDER_REVIEW": "In review",
-      "INFO_REQUESTED": "Information asked for",
+      "INFO_REQUESTED": "Information requested",
+      "ON_HOLD": "On hold",
       "DECLINED": "Declined",
       "WITHDRAWN": "Withdrawn",
       "TERMINATED": "Ended",
@@ -747,7 +777,8 @@
     "discover": "Discover",
     "companies": "Companies",
     "ideas": "My ideas",
-    "engagements": "Engagements"
+    "engagements": "Engagements",
+    "problems": "Problems"
   },
   "companies": {
     "pageTitle": "Companies",
@@ -1009,7 +1040,9 @@
       "proposal": "Proposal",
       "problem": "Problem",
       "org_claim": "Claim dispute",
-      "other": "Other case"
+      "other": "Other case",
+      "brief": "Problem Brief",
+      "briefBy": "Brief by {org}"
     },
     "untitled": {
       "proposal": "Untitled proposal",
@@ -1029,7 +1062,8 @@
       "hidden": "Hidden until decided",
       "public": "Public while checked",
       "rejected": "Hidden: rejected",
-      "gone": "No longer exists"
+      "gone": "No longer exists",
+      "briefHidden": "Hidden until approved"
     },
     "outcome": {
       "approved": "Approved",
@@ -1053,7 +1087,8 @@
       "false_affiliation": "Claims a link it may not have",
       "third_party_personal_data": "Contains someone else's personal data",
       "malicious_links": "Contains a suspicious link",
-      "other": "Another reason from the check"
+      "other": "Another reason from the check",
+      "new_org_brief": "New Brief from an organisation"
     },
     "field": {
       "title": "Title",
@@ -1061,7 +1096,8 @@
       "impact_claims": "Impact claims",
       "summary": "Summary",
       "statement": "Statement",
-      "other": "Other field"
+      "other": "Other field",
+      "affected_group": "Who is affected"
     },
     "case": {
       "pageTitle": "Moderation case",
@@ -1077,7 +1113,8 @@
       "decisionHeading": "Decision",
       "leadHidden": "Approve to make it public, or reject to keep it hidden.",
       "leadPublic": "Approve to keep it public, or reject to take it down.",
-      "textHeadingDecided": "Text as reviewed"
+      "textHeadingDecided": "Text as reviewed",
+      "leadBrief": "Developers do not see this Brief until it is approved. Approve to publish it to developers, or reject to keep it hidden."
     },
     "decision": {
       "approve": "Approve",
@@ -1093,7 +1130,9 @@
       "rejected": "Rejected. It is hidden now.",
       "changed": "The author published a new version while you were reviewing it. The text above is the new version: read it again, then decide.",
       "next": "Review the next case",
-      "back": "Back to Moderation"
+      "back": "Back to Moderation",
+      "approvedBrief": "Approved. The Brief is published to developers.",
+      "rejectConfirmBrief": "Reject this Brief? Developers never see it, and it no longer counts against the organisation's plan."
     },
     "blocked": {
       "already_decided": "This case has already been decided.",
@@ -1255,7 +1294,8 @@
       "aiDrafted": "AI-drafted, human-reviewed on {date}",
       "seeded": "Seeded example for the demo (not a live AI result), human-reviewed on {date}",
       "developer": "Developer-reported",
-      "demoBadge": "Demo data"
+      "demoBadge": "Demo data",
+      "org_brief": "Posted by {org}"
     },
     "affected": "Who is affected",
     "niche": "Niche",
@@ -1282,7 +1322,16 @@
     "noDate": "No publication date",
     "unknownPublisher": "Unnamed publisher",
     "open": "Read it at {publisher}",
-    "external": "(opens another site)"
+    "external": "(opens another site)",
+    "budget": "Budget band",
+    "budgetOpen": "Not given",
+    "deadline": "Proposals wanted by",
+    "noDeadline": "No deadline",
+    "briefEnded": {
+      "closed": "The organisation closed this Brief, so it is no longer asking for proposals. You can still start one from the problem.",
+      "pastDeadline": "This Brief’s deadline passed on {date}, so the organisation is no longer asking for proposals. You can still start one from the problem.",
+      "notOpen": "This Brief is no longer open, so the organisation is not asking for proposals. You can still start one from the problem."
+    }
   },
   "ideaFields": {
     "title": "Title",
@@ -1474,7 +1523,8 @@
     "heldPending": "{name} is still verifying its details. Your proposal is saved and they'll see it once they are verified.",
     "emailNote": "A record of this pitch goes to your email address.",
     "pitchMore": "Pitch to another company",
-    "orgUnlisted": "A company no longer listed"
+    "orgUnlisted": "A company no longer listed",
+    "preselected": "{org} is already chosen: your idea answers its Brief. Untick it if you would rather not pitch to them."
   },
   "tagWithdraw": {
     "open": "Withdraw",
@@ -1734,6 +1784,39 @@
       "notes": "Notes"
     }
   },
+  "ideaChecks": {
+    "title": "Teaser checks",
+    "hint": "Optional. Two quick looks at your public teaser. Nothing here stops you publishing.",
+    "overlapButton": "Check overlap",
+    "disclosureButton": "Check what it gives away",
+    "checkingOverlap": "Comparing your teaser with other published ideas…",
+    "checkingDisclosure": "Reading your teaser for how it works…",
+    "lastToday": "From your last check today.",
+    "overlap": {
+      "none": "No overlap with other published ideas (compared with {count}).",
+      "noneEmpty": "No other published ideas to compare with yet.",
+      "some_overlap": "Some overlap with another published idea. Saying what makes yours different can help.",
+      "high_overlap": "High overlap: your teaser reads close to another published idea. That is not a judgement; it is worth a look at what makes yours different."
+    },
+    "disclosure": {
+      "flaggedAny": "This reads like how it works, not what it does.",
+      "advice": "Methods, tools and code belong in the full details, which stay confidential.",
+      "clear": "Nothing gives away how it works.",
+      "demo": "No AI model is connected in this demo. The quick check looks only for common giveaways, such as code, file names and tool names, and found none.",
+      "unchecked": "The teaser could not be checked this time. Look over the text, then try again.",
+      "flagged": "This reads like how it works, not what it does: {fields}."
+    },
+    "problem": {
+      "noText": "Write the teaser first, then check it.",
+      "notSaved": "Your latest changes are not saved, so nothing was checked. Fix any marked fields, then try again.",
+      "originality_limit": "You have used today’s overlap checks; they come back at midnight Nairobi time.",
+      "originality_busy": "The overlap check is still running. Try again in a moment.",
+      "disclosure_busy": "The teaser check is still running. Try again in a moment.",
+      "disclosure_rate_limited": "You have run many teaser checks today. Try again tomorrow.",
+      "hidden": "This idea was deleted, so it cannot be checked.",
+      "unavailable": "The check could not finish just now. Try again later."
+    }
+  },
   "devHome": {
     "lead": "What needs you now, then everything else.",
     "newProposal": "New proposal",
@@ -1770,7 +1853,8 @@
     "views": {
       "problems": "Problems",
       "projects": "Projects",
-      "gap": "Opportunity gap"
+      "gap": "Gap",
+      "briefs": "Briefs"
     },
     "filters": "Filters",
     "filtersChosen": "Filters ({count} chosen)",
@@ -1799,7 +1883,7 @@
     "sourcesTitle": "Newest sources",
     "noSources": {
       "developer": "No cited sources: a developer described this problem.",
-      "org_brief": "No cited sources: a verified organisation described this problem in its brief.",
+      "org_brief": "No cited sources: a verified organisation described this problem in its Brief.",
       "research_agent": "No source to show here; the problem card lists every source it cites."
     },
     "sourceUnnamed": "Source",
@@ -1811,7 +1895,15 @@
     "projectsEmpty": "No project is trending or new yet.",
     "gapEmpty": "No rising problem is short of proposals right now.",
     "filteredEmpty": "Nothing here for this niche and county yet.",
-    "toProblems": "See trending problems"
+    "toProblems": "See trending problems",
+    "briefsTitle": "Problem Briefs",
+    "briefsLead": "Problems verified organisations posted themselves, newest first, with their budget and deadline.",
+    "briefsEmpty": "No organisation has an open Brief right now.",
+    "briefBudget": "Budget: {band}",
+    "briefNoBudget": "Budget open",
+    "briefDeadline": "Proposals by {date}",
+    "briefNoDeadline": "No deadline",
+    "startBrief": "Start a proposal from this Brief"
   },
   "recommendations": {
     "title": "Recommended for you",
@@ -1913,6 +2005,7 @@
       "current": "Current",
       "pending": "Pending",
       "onHold": "On hold",
+      "awaitingAnswer": "Waiting for an answer",
       "overdue": "Overdue",
       "ended": "Ended"
     },
@@ -1921,7 +2014,10 @@
       "left": "{count, plural, one {# business day left} other {# business days left}}, due <nowrap>{date}</nowrap>",
       "today": "Due today, <nowrap>{date}</nowrap>",
       "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, was due <nowrap>{date}</nowrap>",
-      "overdueToday": "Overdue, was due <nowrap>{date}</nowrap>"
+      "overdueToday": "Overdue, was due <nowrap>{date}</nowrap>",
+      "resumes": "Resumes <nowrap>{date}</nowrap>",
+      "answerBy": "Answer from {name} due by <nowrap>{date}</nowrap>",
+      "answerLate": "Answer from {name} was due <nowrap>{date}</nowrap>"
     },
     "turn": {
       "you": "Awaiting: you",
@@ -1929,7 +2025,8 @@
       "both": "Awaiting: you and {name}",
       "none": "Nothing is waiting on either side right now.",
       "ended": "This engagement has ended.",
-      "closed": "This engagement is closed."
+      "closed": "This engagement is closed.",
+      "onHold": "This engagement is on hold."
     },
     "endedBecause": "Reason: {reason}",
     "nextYou": "Your next step: {step}",
@@ -1946,6 +2043,22 @@
       "NO_DECISION": "No decision in time",
       "CONTACT_NOT_MADE": "First contact not made in time",
       "NO_DEV_RESPONSE": "No answer from the developer in time"
+    },
+    "expired": {
+      "NO_REVIEW": "Expired: the organisation did not start a review in time.",
+      "NO_DECISION": "Expired: the organisation did not decide in time.",
+      "CONTACT_NOT_MADE": "Expired: first contact was not made in time.",
+      "NO_DEV_RESPONSE": "Expired: the developer did not answer in time."
+    },
+    "side": {
+      "info": "Information requested on <nowrap>{date}</nowrap>: <quote>{question}</quote>",
+      "infoClockYou": "The stage's deadline waits while you answer. Unanswered by <nowrap>{date}</nowrap>, the engagement expires.",
+      "infoClockThem": "The stage's deadline waits until {name} answers. Unanswered by <nowrap>{date}</nowrap>, the engagement expires.",
+      "hold": "Paused by {name} until <nowrap>{date}</nowrap>: <quote>{reason}</quote>",
+      "holdYou": "You paused this engagement until <nowrap>{date}</nowrap>: <quote>{reason}</quote>",
+      "holdNoNote": "Paused until <nowrap>{date}</nowrap>.",
+      "holdClock": "It resumes by itself that day, and due dates move on by the business days it was paused.",
+      "answered": "Question answered on <nowrap>{date}</nowrap>: <quote>{answer}</quote>"
     },
     "endorsements": {
       "title": "Endorsements for this stage",
@@ -2069,7 +2182,13 @@
       "title": "History",
       "chainOk": "The history passed its integrity check when this page loaded.",
       "chainBroken": "The history did not pass its integrity check when this page loaded: some events may have been altered.",
-      "actor": "{name}, {role}"
+      "actor": "{name}, {role}",
+      "note": {
+        "info_request": "Question",
+        "info_answer": "Answer",
+        "hold": "Reason, until {date}",
+        "resume": "Reason for resuming early"
+      }
     },
     "event": {
       "create": "Engagement opened",
@@ -2096,6 +2215,12 @@
       "sign_certificate": "Acceptance certificate signed",
       "record_payment": "Final payment recorded",
       "confirm_payment": "Payment confirmed",
+      "request_info": "Information requested",
+      "answer_info": "Question answered",
+      "cancel_request": "Question withdrawn",
+      "pause": "Put on hold",
+      "resume": "Resumed",
+      "expire": "Expired",
       "other": "Step recorded"
     },
     "tabs": {
@@ -2161,7 +2286,12 @@
       "accept_delivery": "Accept the delivery",
       "sign_certificate": "Sign the acceptance certificate",
       "record_payment": "Record the final payment",
-      "confirm_payment": "Confirm the payment"
+      "confirm_payment": "Confirm the payment",
+      "request_info": "Request information",
+      "answer_info": "Answer the question",
+      "cancel_request": "Withdraw the question",
+      "pause": "Pause this engagement",
+      "resume": "Resume now"
     },
     "milestone": {
       "start_milestone": "Start milestone {number}",
@@ -2173,6 +2303,47 @@
       "withdraw": "Withdraw this proposal from {name}? The engagement ends and {name} can no longer open the full proposal.",
       "decline_interest": "Decline the interest of {name}? The engagement ends.",
       "decline": "Decline this proposal? The engagement ends and {name} sees the reason."
+    },
+    "sheet": {
+      "count": "{count} of {max} characters",
+      "noContact": "Keep contact details and links out: they are shared once first contact is made.",
+      "questionsLeft": "Questions left at this stage: {count}",
+      "holdsLeft": "Holds left at this stage: {count}",
+      "holdDaysLeft": "Days on hold left for this engagement: {count}",
+      "requestInfo": {
+        "lead": "Ask {name} one question. The stage's deadline waits until they answer, and they have ten business days to do so.",
+        "limit": "Your organisation may ask two questions at this stage; a withdrawn question counts too.",
+        "label": "Your question",
+        "submit": "Send the question"
+      },
+      "answerInfo": {
+        "asked": "{name} asked on {date}:",
+        "lead": "Once you send it, the stage carries on where it stopped, its deadline moved by the business days the question was open.",
+        "label": "Your answer",
+        "submit": "Send the answer"
+      },
+      "pause": {
+        "lead": "Nothing is due while it is on hold. When it resumes, due dates move by the business days it was paused.",
+        "reason": "Reason",
+        "reasonHint": "One line that both parties see.",
+        "date": "Resumes on",
+        "dateHint": "From tomorrow to {date}, at most 60 days ahead. All the holds of one engagement together may last 60 days.",
+        "dateHintNoDay": "At most 60 days ahead. All the holds of one engagement together may last 60 days.",
+        "dateRange": "Choose a resume date from {date} to {value}.",
+        "resumes": "It resumes by itself on {date}.",
+        "submit": "Pause until then"
+      },
+      "resume": {
+        "lead": "The engagement carries on from where it was paused, with due dates moved by the business days it was on hold. It was due to resume on {date}.",
+        "leadNoDate": "The engagement carries on from where it was paused, with due dates moved by the business days it was on hold.",
+        "reason": "Reason for resuming now",
+        "reasonHint": "One line that both parties see.",
+        "submit": "Resume now"
+      },
+      "cancelRequest": {
+        "body": "Withdraw your question to {name}? The stage's deadline starts again where it stopped. The question still counts towards the two this stage allows.",
+        "submit": "Withdraw the question"
+      }
     },
     "refusal": {
       "stale": "This engagement changed since you opened it. It is refreshed now: check it and try again.",
@@ -2188,9 +2359,15 @@
       "invalidContactBy": "Choose a contact-by date from today, no more than five business days ahead.",
       "attestation": "Give the date the internal work started and confirm the statement.",
       "reasonText": "Explain the reason in more detail.",
+      "containsContact": "Contact details stay out of the tracker until first contact is made; please remove the email, phone number or link.",
+      "invalidNote": "That text was not accepted. Write it again in plain words, within the box's limit.",
+      "invalidResumeAt": "Choose a resume date from tomorrow, no more than 60 days ahead.",
+      "questionLimit": "Your organisation has asked all the questions this stage allows. Decide, or decline.",
+      "holdLimit": "This engagement has little or no time on hold left: all its holds together may last 60 days. Choose an earlier resume date.",
+      "tooMany": "You have taken many steps on this engagement in the last hour. Try again later.",
       "notFound": "This engagement is no longer available to you.",
-      "network": "We could not reach the server. Check your connection and try again.",
-      "generic": "Something went wrong. Try again."
+      "network": "We could not reach the server; nothing was sent. Try again.",
+      "generic": "Nothing was sent. Try again in a moment."
     },
     "stepUp": {
       "body": "Confirm with the code from your authenticator app to continue.",
@@ -2468,6 +2645,141 @@
     "orgTracker": {
       "title": "One tracker for both sides",
       "body": "From first look to a signed agreement: both sides follow the same five stages, with deadlines and reminders."
+    }
+  },
+  "briefs": {
+    "pageTitle": "Problems",
+    "title": "Problems",
+    "lead": "Problem Briefs {org} has posted. Developers see a Brief once staff approve it, and answer it with proposals.",
+    "newTitle": "Post a Brief",
+    "newLead": "Describe a problem you would like developers to solve. Staff read every Brief before developers see it.",
+    "back": "Back to Problems",
+    "post": "Post a Brief",
+    "cap": "Open Briefs on your plan: {used} of {limit}",
+    "capUnlimited": "Your plan allows any number of open Briefs.",
+    "capFull": "Every open Brief your plan allows is in use ({used} of {limit}). Close one, or move to {plan} to post another.",
+    "capFullTop": "Every open Brief your plan allows is in use ({used} of {limit}). Close one to post another.",
+    "upgrade": "Upgrade your plan",
+    "listLabel": "Your Briefs, newest first",
+    "empty": "{org} has not posted a Brief yet: post one and developers can answer it with proposals.",
+    "emptyViewer": "{org} has not posted a Brief yet.",
+    "openInbox": "Open the Inbox",
+    "state": {
+      "in_review": "In review",
+      "published": "Published",
+      "rejected": "Not approved",
+      "closed": "Closed"
+    },
+    "proposals": "{count, plural, one {# proposal} other {# proposals}}",
+    "deadline": "Proposals by {date}",
+    "noDeadline": "No deadline",
+    "anywhere": "Kenya",
+    "posted": "Brief sent for review. Staff read every Brief before developers see it.",
+    "older": "Older Briefs",
+    "staleCursor": "This page of Briefs is no longer available.",
+    "newest": "Back to the newest",
+    "notFound": "This Brief is not available.",
+    "notEditor": "Only an owner, admin, signatory or reviewer of {org} can post a Brief.",
+    "notVerified": "{org} can post Briefs once its legal verification is complete.",
+    "stateNote": {
+      "in_review": "Staff read every Brief before developers see it. Until then, only {org} and staff can see it.",
+      "published": "Developers see this Brief on Discover and can answer it with proposals.",
+      "rejected": "Staff did not approve this Brief, so developers do not see it.",
+      "closed": "This Brief is closed: it has left Discover. Proposals that already answer it keep their link."
+    },
+    "asDevelopers": "See it as developers do",
+    "notGiven": "Not given",
+    "postedOn": "Posted {date}",
+    "facts": {
+      "statement": "The problem",
+      "affected": "Who is affected",
+      "niche": "Niche",
+      "region": "Region",
+      "budget": "Budget band",
+      "deadline": "Proposals wanted by",
+      "proposals": "Proposals so far"
+    },
+    "upgradeTo": "Upgrade to {plan}",
+    "capFullUnknown": "Every open Brief your plan allows is in use ({used} of {limit}). Close one to post another; the plans you could move to could not be loaded just now.",
+    "billing": "See Plan & billing"
+  },
+  "briefForm": {
+    "group": {
+      "problem": "The problem",
+      "fit": "Where it fits",
+      "terms": "Budget and timing"
+    },
+    "title": "Title",
+    "titleHint": "One line a developer can take in at a glance. Up to {max} characters.",
+    "statement": "Problem statement",
+    "statementHint": "What goes wrong, for whom and how often. Say what the problem is, not how to solve it. No phone numbers, emails or web addresses: the Brief is public once approved.",
+    "meter": "Words: {count} of {max}. Characters: {current} of {limit}.",
+    "affected": "Who is affected (optional)",
+    "affectedHint": "For example: SACCO members in rural branches.",
+    "niche": "Niche",
+    "nicheChoose": "Choose a niche",
+    "nicheAllIn": "All of {name}",
+    "county": "County",
+    "countyAny": "Anywhere in Kenya",
+    "band": "Budget band",
+    "bandNone": "No band yet",
+    "bandNoneHint": "Developers see that the budget is open.",
+    "deadline": "Proposals wanted by (optional)",
+    "deadlineHint": "Leave it empty for no deadline. After this day the Brief leaves Discover.",
+    "invitedNote": "Every Brief is public once staff approve it. Briefs for invited developers only come later.",
+    "submit": "Post the Brief",
+    "posting": "Posting…",
+    "cancel": "Cancel",
+    "upgrade": "Upgrade your plan",
+    "error": {
+      "titleRequired": "Write a title.",
+      "statementRequired": "Describe the problem.",
+      "nicheRequired": "Choose a niche.",
+      "tooLong": "Keep this to {max} characters or fewer.",
+      "deadlinePast": "Choose today or a later date.",
+      "deadlineInvalid": "Enter the date as day, month and year.",
+      "tooManyWords": "Keep this to {max} words or fewer."
+    },
+    "fieldError": {
+      "blank": "Write this part of the Brief.",
+      "too_long": "Keep this to {max} characters or fewer.",
+      "contains_url": "Remove the web address: the Brief is public once approved.",
+      "contains_domain": "Remove the website or domain name: the Brief is public once approved.",
+      "contains_email": "Remove the email address: the Brief is public once approved.",
+      "contains_phone": "Remove the phone number: the Brief is public once approved.",
+      "contains_payment_number": "Remove the till or paybill number: the Brief is public once approved.",
+      "unknown_niche": "Choose a niche from the list.",
+      "unknown_county": "Choose a county from the list.",
+      "unknown_budget_band": "Choose a budget band from the list.",
+      "deadline_past": "Choose today or a later date.",
+      "other": "Check this part of the Brief."
+    },
+    "refusal": {
+      "planLimit": "Open Briefs on your plan: {limit}, all in use. Close one, or move to {plan} to post more.",
+      "planLimitNext": "Open Briefs on your plan: {limit}, all in use. Close one, or upgrade your plan to post more.",
+      "planLimitTop": "Open Briefs on your plan: {limit}, all in use. Close one to post another.",
+      "verification": "{org} can post Briefs once its legal verification is complete.",
+      "forbidden": "Only an owner, admin, signatory or reviewer of {org} can post or close a Brief.",
+      "visibility": "Briefs for invited developers only are not available yet. Post it as a public Brief.",
+      "invalid": "Some parts of the Brief need attention. Check the marked fields.",
+      "closed": "This Brief is already closed.",
+      "notFound": "This Brief no longer exists.",
+      "mfaSetup": "Turn on two-step sign-in to post or close a Brief.",
+      "mfaCode": "Enter the code from your authenticator app, then try again.",
+      "network": "We could not reach the server. Check your connection and try again.",
+      "generic": "Something went wrong, so nothing changed. Try again.",
+      "dailyLimit": "Your organisation has posted as many Briefs as it can today. Try again tomorrow.",
+      "orgUnavailable": "Your organisation cannot post or close Briefs right now.",
+      "notPublished": "This Brief is still in review, so it cannot be closed yet.",
+      "frozen": "A published Brief's text cannot be changed. Close it and post a new one."
+    },
+    "close": {
+      "open": "Close this Brief",
+      "title": "Close this Brief?",
+      "body": "It leaves Discover and frees its place on your plan. Proposals that already answer it keep their link. A closed Brief cannot be opened again.",
+      "confirm": "Close the Brief",
+      "closing": "Closing…",
+      "cancel": "Keep it open"
     }
   }
 }

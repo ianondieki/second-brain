@@ -142,8 +142,11 @@ class ResearchRun(IdMixin, TimestampsMixin, Base):
 
 class ProblemBrief(TimestampsMixin, Base):
     """An organisation's Problem Brief: the problem row holds the ProblemCard fields (``source = org_brief``).
-    Public published Briefs are readable by every signed-in user; invited ones by the organisation's members and the
-    invited users. Only E2 organisations publish, and only once the problem is published and clear (policy check)."""
+    Public published or closed Briefs are readable by every signed-in user while their problem is published and clear;
+    invited published ones by the invited users; every Brief by the organisation's members and staff. Insert it as a
+    draft: approving its problem (``app_moderate_problem``) publishes the draft Brief of a listed E2 organisation, any
+    other decision returns a published Brief to draft. Only moderation sets ``published`` (never the app), ``closed``
+    follows ``published`` only and is terminal (revision 0006, ``problem_briefs_status_guard``, every role)."""
 
     __tablename__ = "problem_briefs"
     __table_args__ = (

@@ -5,8 +5,8 @@ import { Card, cardLinkClass } from "@/components/ui/Card";
 import { LinkPending } from "@/components/ui/LinkPending";
 
 import { Chip } from "./Chip";
-import { isFinished, stageChip, type Party, type Summary } from "./model";
-import { DueText } from "./When";
+import { stageChip, type Party, type Summary } from "./model";
+import { DueLine } from "./When";
 
 /** One engagement as a compact card (D-52, the lists that are not "Needs you"): the title as the link, the other party, the stage. */
 export function EngagementCard({ item, mine, href }: { item: Summary; mine: Party; href: string }) {
@@ -22,9 +22,7 @@ export function EngagementCard({ item, mine, href }: { item: Summary; mine: Part
       <p className="text-sm text-ink-soft">{mine === "developer" ? t("withOrg", { org: item.org_name }) : t("fromDeveloper", { name: item.developer_name })}</p>
       <p className="flex flex-wrap items-center gap-x-5 gap-y-1">
         <Chip kind={stageChip(item)}>{item.stage_label}</Chip>
-        {item.due && !isFinished(item.state) ? (
-          <DueText due={item.due} className={item.due.overdue ? "text-sm font-semibold text-error" : "text-sm text-ink-soft"} />
-        ) : null}
+        <DueLine item={item} mine={mine} />
       </p>
     </Card>
   );

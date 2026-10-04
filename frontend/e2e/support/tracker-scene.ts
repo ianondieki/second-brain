@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 import { waitForSignInLink } from "./mailpit";
 import { totp } from "./totp";
@@ -35,6 +35,14 @@ export function ownerSql(sql: string, variables: Record<string, string>): string
   const result = spawnSync("psql", args, { input: sql, encoding: "utf-8", timeout: 15_000 });
   if (result.status !== 0) throw new Error(`psql failed: ${result.stderr || result.error?.message}`);
   return result.stdout.trim();
+}
+
+/**
+ * Waits until the caller's buttons work: the tracker's actions region says it has hydrated. The server's HTML shows
+ * the buttons first, and a press before hydration does nothing (seen under two workers).
+ */
+export async function actionsReady(page: Page) {
+  await expect(page.locator("[data-actions][data-hydrated='true']")).toBeVisible({ timeout: 20_000 });
 }
 
 export function tag() {
@@ -113,14 +121,14 @@ export interface OrgSide {
 
 /**
  * A new E2 organisation whose first member (owner, admin and signatory, Master Enterprise Terms accepted) is signed
- * in on `request` with two-step sign-in on.
+ * in on `request` with two-step sign-in on. `orgName` names it (the design screenshots); by default a unique name.
  */
-export async function signUpOrg(request: APIRequestContext): Promise<OrgSide> {
+export async function signUpOrg(request: APIRequestContext, { orgName: named }: { orgName?: string } = {}): Promise<OrgSide> {
   const id = tag();
   const domain = `buyer-${id}.example.com`;
   const email = `rita-${id}@${domain}`;
   const name = "Rita Wanjiru";
-  const orgName = `Maziwa Buyers ${id} Limited`;
+  const orgName = named ?? `Maziwa Buyers ${id} Limited`;
   await signUp(request, { email, display_name: name, side: "org", org: { legal_name: orgName, kind: "company" } });
   const person = await turnOnTotp(request, email, name);
   const me = (await (await request.get("/api/auth/me")).json()) as { memberships: Array<{ org_id: string; org_name: string }> };
@@ -143,13 +151,22 @@ export interface DevSide {
   person: Person;
   title: string;
   engagementId: string;
+  /** The developer's display name (what they and, once contact is agreed, the organisation see). */
+  name: string;
+  /** The published version's pseudonymous handle (what the organisation sees until then). */
+  handle: string;
 }
 
 /**
  * A developer signed in on `request`, D1 and D2, two-step sign-in on, with one published proposal pitched to
- * `orgId`: the engagement it opened (SUBMITTED).
+ * `orgId`: the engagement it opened (SUBMITTED). `title` names the proposal (the design screenshots); by default a
+ * unique title.
  */
-export async function pitchFromDeveloper(request: APIRequestContext, orgId: string): Promise<DevSide> {
+export async function pitchFromDeveloper(
+  request: APIRequestContext,
+  orgId: string,
+  { title: named }: { title?: string } = {},
+): Promise<DevSide> {
   const id = tag();
   const email = `dev-${id}@example.com`;
   const name = "Achieng Otieno";
@@ -165,7 +182,7 @@ export async function pitchFromDeveloper(request: APIRequestContext, orgId: stri
     children?: Array<{ id: string }>;
   }>;
   const niche = niches.find((n) => n.children?.length)?.children?.[0]?.id ?? niches[0].id;
-  const title = `Maziwa baridi ${id}`;
+  const title = named ?? `Maziwa baridi ${id}`;
   const draft = await post<{ id: string }>(
     request,
     "/api/me/proposals",
@@ -201,5 +218,6 @@ export async function pitchFromDeveloper(request: APIRequestContext, orgId: stri
   };
   const engagement = list.items.find((e) => e.proposal_id === draft.id);
   expect(engagement?.state, "the pitch opened an engagement").toBe("SUBMITTED");
-  return { person, title, engagementId: engagement!.id };
+  const teaser = (await (await request.get(`/api/proposals/${draft.id}`)).json()) as { owner_handle: string };
+  return { person, title, engagementId: engagement!.id, name, handle: teaser.owner_handle };
 }

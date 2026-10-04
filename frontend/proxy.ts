@@ -5,12 +5,12 @@ import { loginHref, SIGNED_IN_PREFIXES } from "@/lib/return-path";
 
 // Two jobs, before any page renders:
 //
-// 1. Signed-out visits to the signed-in portals (/dev, /org, /billing, /settings, /problems and below) answer a real
-//    307 to /login. Those routes have loading states (loading.tsx), so their HTML streams, and a redirect from the page
-//    itself (requireMe) could only arrive inside a 200 as a streamed meta refresh. This is a presence check only: a
-//    request with no session cookie (as sessionCookieHeader reads it) is redirected; one with a cookie goes on, and the
-//    page's requireMe()/requirePendingMfa() decides as before (an expired session, a second factor still owed). No API
-//    call here. The page asked for rides along as `?next=` when it is one of this site's signed-in pages written
+// 1. Signed-out visits to the signed-in portals (/dev, /org, /billing, /settings, /problems, /notifications and below)
+//    answer a real 307 to /login. Those routes have loading states (loading.tsx), so their HTML streams, and a redirect
+//    from the page itself (requireMe) could only arrive inside a 200 as a streamed meta refresh. This is a presence check
+//    only: a request with no session cookie (as sessionCookieHeader reads it) is redirected; one with a cookie goes on,
+//    and the page's requireMe()/requirePendingMfa() decides as before (an expired session, a second factor still owed).
+//    No API call here. The page asked for rides along as `?next=` when it is one of this site's signed-in pages written
 //    plainly (lib/return-path.ts), so the reader lands back on it after signing in.
 //
 // 2. The staff console is not discoverable (REQ-ADM-01; bridge/admin/deps.py answers 404 to everyone but staff with
@@ -79,5 +79,7 @@ export const config = {
     "/settings/:path*",
     "/problems",
     "/problems/:path*",
+    "/notifications",
+    "/notifications/:path*",
   ],
 };

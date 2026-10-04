@@ -750,6 +750,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discover/briefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discover Briefs
+         * @description Verified organisations' published, open Problem Briefs (a passed deadline leaves the list), newest first.
+         */
+        get: operations["discover_briefs_api_discover_briefs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/discover/opportunity-gap": {
         parameters: {
             query?: never;
@@ -847,6 +867,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/engagements/{engagement_id}/answer-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer Info
+         * @description The developer answers; the engagement returns to its stage with the deadline moved by the pause.
+         */
+        post: operations["answer_info_api_engagements__engagement_id__answer_info_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/engagements/{engagement_id}/approve": {
         parameters: {
             query?: never;
@@ -861,6 +901,26 @@ export interface paths {
          * @description Approve to proceed (non-binding), naming the contact person, channel and contact-by date (stage 3; EM2).
          */
         post: operations["approve_api_engagements__engagement_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/cancel-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Engagement Cancel Request
+         * @description Run 'cancel_request' (docs/spec/06 6.9; the state machine's table).
+         */
+        post: operations["engagement_cancel_request_api_engagements__engagement_id__cancel_request_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1138,6 +1198,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/engagements/{engagement_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause
+         * @description Either party puts the engagement on hold before the agreement, until ``resume_at`` (at most 60 days).
+         */
+        post: operations["pause_api_engagements__engagement_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/engagements/{engagement_id}/propose-terms": {
         parameters: {
             query?: never;
@@ -1192,6 +1272,46 @@ export interface paths {
          * @description Run 'reopen_negotiation' (docs/spec/06 6.9; the state machine's table).
          */
         post: operations["engagement_reopen_negotiation_api_engagements__engagement_id__reopen_negotiation_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/request-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Info
+         * @description The organisation asks the developer a question (stages 1-2); the review clock pauses until the answer.
+         */
+        post: operations["request_info_api_engagements__engagement_id__request_info_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume
+         * @description Either party resumes a hold early; due dates move by the business days on hold.
+         */
+        post: operations["resume_api_engagements__engagement_id__resume_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1449,6 +1569,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notifications
+         * @description The caller's notifications, newest first, 20 a page.
+         */
+        get: operations["list_notifications_api_me_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark All Read
+         * @description Every unread notification of the caller's, read now; one read earlier keeps its moment.
+         */
+        post: operations["mark_all_read_api_me_notifications_read_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unread Count
+         * @description How many of the caller's notifications are unread (the bell's badge).
+         */
+        get: operations["unread_count_api_me_notifications_unread_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Read
+         * @description One of the caller's notifications, read; marking it again changes nothing. Anyone else's id is 404.
+         */
+        post: operations["mark_read_api_me_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/profile": {
         parameters: {
             query?: never;
@@ -1582,6 +1782,50 @@ export interface paths {
         post?: never;
         /** Remove Attachment */
         delete: operations["remove_attachment_api_me_proposals__proposal_id__attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/proposals/{proposal_id}/disclosure-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Disclosure
+         * @description A warning when the public teaser gives away how the project works. Nothing is saved.
+         */
+        post: operations["check_disclosure_api_me_proposals__proposal_id__disclosure_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/proposals/{proposal_id}/originality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Last Originality
+         * @description Today's last originality check of this proposal (Nairobi day), or null, also once the teaser text changed.
+         */
+        get: operations["last_originality_api_me_proposals__proposal_id__originality_get"];
+        put?: never;
+        /**
+         * Check Originality
+         * @description How much this teaser overlaps with other developers' published teasers: a coarse band, never a score.
+         */
+        post: operations["check_originality_api_me_proposals__proposal_id__originality_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1805,6 +2049,71 @@ export interface paths {
         head?: never;
         /** Update Org */
         patch: operations["update_org_api_orgs__org_id__patch"];
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/briefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Briefs
+         * @description The organisation's Briefs, what its plan allows and the budget band codes.
+         */
+        get: operations["list_briefs_api_orgs__org_id__briefs_get"];
+        put?: never;
+        /**
+         * Create Brief
+         * @description Post a Brief; it waits for staff review before developers see it.
+         */
+        post: operations["create_brief_api_orgs__org_id__briefs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/briefs/{problem_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Brief */
+        get: operations["get_brief_api_orgs__org_id__briefs__problem_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Brief
+         * @description Change the budget band or the deadline (``null`` clears it) while the Brief is not closed.
+         */
+        patch: operations["update_brief_api_orgs__org_id__briefs__problem_id__patch"];
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/briefs/{problem_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close Brief
+         * @description Close a published Brief: it leaves Discover and frees its plan slot; its problem page stays.
+         */
+        post: operations["close_brief_api_orgs__org_id__briefs__problem_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/orgs/{org_id}/engagements": {
@@ -2441,6 +2750,19 @@ export interface components {
             /** Publisher */
             publisher: string;
         };
+        /**
+         * AnswerInfoBody
+         * @description The developer's answer: the engagement returns to the stage it was in, its deadline moved by the pause.
+         */
+        AnswerInfoBody: {
+            /** Answer */
+            answer: string;
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when the caller last read it
+             */
+            lock_version: number;
+        };
         /** ApiErrorBody */
         ApiErrorBody: {
             /** Detail */
@@ -2617,6 +2939,185 @@ export interface components {
          * @enum {string}
          */
         BillingInterval: "none" | "month" | "year";
+        /**
+         * BriefFacts
+         * @description What a developer reads about a Brief beside its problem card.
+         */
+        BriefFacts: {
+            /** @description The organisation's budget band; null when it gave none */
+            budget_band: components["schemas"]["BudgetBandOut"] | null;
+            /**
+             * Deadline
+             * @description Proposals wanted by this day (Africa/Nairobi); null when none
+             */
+            deadline: string | null;
+            /**
+             * Ended
+             * @description Why it no longer asks for proposals, on the same day as open: closed (the organisation closed it) or past_deadline (published, not closed, its deadline before today in Africa/Nairobi on the platform clock); null while it is open and for a Brief not published
+             */
+            ended?: ("closed" | "past_deadline") | null;
+            /**
+             * Open
+             * @description Published, not closed, and the deadline unset or not passed (Africa/Nairobi, the platform clock): the organisation is still asking for proposals
+             */
+            open?: boolean;
+            /** @description The organisation that posted it; null when it is not in the directory */
+            org: components["schemas"]["OrgRef"] | null;
+        };
+        /**
+         * BriefIn
+         * @description A new Brief. Plain text only (markup is removed) and no contact details: a Brief is public once approved.
+         */
+        BriefIn: {
+            /**
+             * Affected Group
+             * @description Who has the problem (<= 200)
+             */
+            affected_group?: string | null;
+            /**
+             * Budget Band
+             * @description A code from the list's budget_bands
+             */
+            budget_band?: string | null;
+            /**
+             * County Code
+             * @description Null: nationwide
+             */
+            county_code?: string | null;
+            /**
+             * Deadline
+             * @description Today or later (Africa/Nairobi)
+             */
+            deadline?: string | null;
+            /**
+             * Niche Id
+             * Format: uuid
+             */
+            niche_id: string;
+            /**
+             * Statement
+             * @description At most 120 words and 1,200 characters
+             */
+            statement: string;
+            /**
+             * Title
+             * @description At most 90 characters
+             */
+            title: string;
+            /**
+             * @description public only for now: invited answers 422 visibility_not_available
+             * @default public
+             */
+            visibility: components["schemas"]["BriefVisibility"];
+        };
+        /** BriefList */
+        BriefList: {
+            /**
+             * Budget Bands
+             * @description The budget band codes a Brief may carry
+             */
+            budget_bands: components["schemas"]["BudgetBandOut"][];
+            /**
+             * Items
+             * @description Newest first, every status
+             */
+            items: components["schemas"]["BriefOut"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= for the next page; null on the last page
+             */
+            next_cursor: string | null;
+            plan: components["schemas"]["BriefPlanOut"];
+        };
+        /**
+         * BriefOut
+         * @description One of the organisation's Briefs, as its members see it.
+         */
+        BriefOut: {
+            /** Affected Group */
+            affected_group: string | null;
+            budget_band: components["schemas"]["BudgetBandOut"] | null;
+            /** Country */
+            country: string;
+            /** County Code */
+            county_code: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Deadline */
+            deadline: string | null;
+            /**
+             * Id
+             * Format: uuid
+             * @description The Brief's problem id (its page is GET /api/problems/{id} once published)
+             */
+            id: string;
+            moderation_state: components["schemas"]["ModerationState"];
+            niche: components["schemas"]["NicheOut"] | null;
+            /** @description pending_review until staff decide; published or rejected */
+            problem_status: components["schemas"]["ProblemStatus"];
+            /**
+             * Proposal Count
+             * @description Published proposals that link this Brief
+             */
+            proposal_count: number;
+            /**
+             * Published At
+             * @description When staff approved it (null until then)
+             */
+            published_at: string | null;
+            /**
+             * State
+             * @description What to show: in_review (waiting for staff, or held), published (on Discover), rejected, closed
+             * @enum {string}
+             */
+            state: "in_review" | "published" | "rejected" | "closed";
+            /** Statement */
+            statement: string;
+            /** @description The Brief's own status: closed once the organisation closes it */
+            status: components["schemas"]["BriefStatus"];
+            /** Title */
+            title: string;
+            visibility: components["schemas"]["BriefVisibility"];
+        };
+        /**
+         * BriefPatch
+         * @description Change the budget band or the deadline of a Brief that is not closed (``null`` clears it). The moderated text
+         *     does not change after posting.
+         */
+        BriefPatch: {
+            /** Budget Band */
+            budget_band?: string | null;
+            /** Deadline */
+            deadline?: string | null;
+        };
+        /** BriefPlanOut */
+        BriefPlanOut: {
+            /** Plan */
+            plan: string;
+            /**
+             * Problem Briefs
+             * @description Open Briefs the plan allows; null means unlimited
+             */
+            problem_briefs: number | null;
+            /**
+             * Used
+             * @description Open Briefs now: not closed, deadline not passed, not rejected
+             */
+            used: number;
+        };
+        /**
+         * BriefStatus
+         * @enum {string}
+         */
+        BriefStatus: "draft" | "published" | "closed";
+        /**
+         * BriefVisibility
+         * @enum {string}
+         */
+        BriefVisibility: "public" | "invited";
         /** BrowsePage */
         BrowsePage: {
             /** Items */
@@ -2683,7 +3184,7 @@ export interface components {
         CaseField: {
             /**
              * Name
-             * @description A Tier-1 field: title, problem_statement, impact_claims, summary, statement
+             * @description A Tier-1 field: title, problem_statement, impact_claims, summary, statement, affected_group
              */
             name: string;
             /** Text */
@@ -2706,6 +3207,8 @@ export interface components {
              * @description Why a decision is refused (the route's code); null when both are open
              */
             blocked: ("already_decided" | "unsupported_subject" | "subject_gone" | "own_content" | "cannot_approve_vulnerability") | null;
+            /** @description The organisation that posted the problem as a Problem Brief (REQ-DIR-05: 'Brief by <org>'); null for any other subject, or when the organisation is not in the directory */
+            brief_org?: components["schemas"]["OrgRef"] | null;
             /**
              * Created At
              * Format: date-time
@@ -3064,7 +3567,7 @@ export interface components {
          * Command
          * @enum {string}
          */
-        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment";
+        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment" | "request_info" | "answer_info" | "cancel_request" | "pause" | "resume";
         /** CommandBody */
         CommandBody: {
             /**
@@ -3248,6 +3751,68 @@ export interface components {
              */
             next_cursor: string | null;
         };
+        /** DisclosureCheckOut */
+        DisclosureCheckOut: {
+            /** Ai Drafted */
+            ai_drafted: boolean;
+            /**
+             * Demo Fallback
+             * @description True when no model wrote this (a local demo fallback).
+             * @default false
+             */
+            demo_fallback: boolean;
+            /**
+             * Fields
+             * @description The teaser fields to look at again
+             */
+            fields: components["schemas"]["TeaserField"][];
+            /**
+             * Flagged
+             * @description True when the teaser reads like how it works; a warning only
+             */
+            flagged: boolean;
+            source: components["schemas"]["DisclosureSource"];
+            /**
+             * Version Id
+             * Format: uuid
+             * @description The version that was checked
+             */
+            version_id: string;
+            /**
+             * Why
+             * @description Plain words for the owner (AI-drafted when ai_drafted)
+             */
+            why: string | null;
+        };
+        /**
+         * DisclosureSource
+         * @enum {string}
+         */
+        DisclosureSource: "rules" | "model" | "none";
+        /** DiscoverBrief */
+        DiscoverBrief: {
+            brief: components["schemas"]["BriefFacts"];
+            /** @description The Brief's problem card ('Posted by <organisation>', with org) */
+            problem: components["schemas"]["DiscoverProblem"];
+            /**
+             * Proposal Count
+             * @description Published proposals that link this Brief
+             */
+            proposal_count: number;
+        };
+        /** DiscoverBriefsOut */
+        DiscoverBriefsOut: {
+            /**
+             * Items
+             * @description Published, open Briefs, newest first
+             */
+            items: components["schemas"]["DiscoverBrief"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= for the next page; null on the last page
+             */
+            next_cursor: string | null;
+        };
         /** DiscoverProblem */
         DiscoverProblem: {
             /** Country */
@@ -3261,10 +3826,12 @@ export interface components {
             id: string;
             /**
              * Label
-             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)
+             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief
              */
             label: string | null;
             niche: components["schemas"]["NicheOut"] | null;
+            /** @description The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory */
+            org?: components["schemas"]["OrgRef"] | null;
             /**
              * Published At
              * @description When the problem was published (null while it is not)
@@ -3451,6 +4018,11 @@ export interface components {
             /** My Roles */
             my_roles: components["schemas"]["EngagementActorRole"][];
             /**
+             * Notes
+             * @description The side states' questions, answers and reasons, in event order
+             */
+            notes: components["schemas"]["NoteOut"][];
+            /**
              * Org Id
              * Format: uuid
              */
@@ -3458,6 +4030,8 @@ export interface components {
             /** Org Name */
             org_name: string;
             origin: components["schemas"]["EngagementOrigin"];
+            /** @description In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to */
+            paused_from: components["schemas"]["EngagementState"] | null;
             /** Payments */
             payments: components["schemas"]["PaymentOut"][];
             /**
@@ -3467,6 +4041,8 @@ export interface components {
             proposal_id: string;
             /** Proposal Title */
             proposal_title: string;
+            /** @description The caps left for the current stage's side states; null once ended or none apply */
+            side_limits?: components["schemas"]["SideLimitsOut"] | null;
             /** Signatures */
             signatures: components["schemas"]["SignatureOut"][];
             /** Stage Deadline At */
@@ -3481,6 +4057,11 @@ export interface components {
             /** Stage Label */
             stage_label: string;
             state: components["schemas"]["EngagementState"];
+            /**
+             * Today
+             * @description Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from
+             */
+            today?: string | null;
             /**
              * Updated At
              * Format: date-time
@@ -3558,6 +4139,8 @@ export interface components {
             /** Org Name */
             org_name: string;
             origin: components["schemas"]["EngagementOrigin"];
+            /** @description In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to */
+            paused_from: components["schemas"]["EngagementState"] | null;
             /**
              * Proposal Id
              * Format: uuid
@@ -3973,6 +4556,11 @@ export interface components {
              */
             scout_id: string;
             teaser: components["schemas"]["TeaserOut"] | null;
+            /**
+             * Today
+             * @description Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day Express interest's contact-by date counts from
+             */
+            today?: string | null;
             /** Why */
             why: string | null;
             /**
@@ -4370,6 +4958,76 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /**
+         * NoteOut
+         * @description The text a side-state command carried, in event order: the organisation's question (``info_request``), the
+         *     developer's answer (``info_answer``), a hold's reason with its resume date (``hold``), an early resume's reason
+         *     (``resume``). ``by`` is the party that wrote it.
+         */
+        NoteOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Body */
+            body: string;
+            by: components["schemas"]["EngagementParty"];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "info_request" | "info_answer" | "hold" | "resume";
+            /** Resume At */
+            resume_at: string | null;
+            /**
+             * Seq
+             * @description The seq of the event the note explains (History pairs them); always set by the API
+             */
+            seq?: number | null;
+        };
+        /** NotificationOut */
+        NotificationOut: {
+            /** Body */
+            body: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @description What happened, for example engagement.n03 (the tracker's notice)
+             */
+            kind: string;
+            /**
+             * Link
+             * @description A path on this platform to open (one leading '/'), or null
+             */
+            link: string | null;
+            /**
+             * Read At
+             * @description When the person first marked it read; null while unread
+             */
+            read_at: string | null;
+            /** Title */
+            title: string;
+        };
+        /** NotificationPage */
+        NotificationPage: {
+            /** Items */
+            items: components["schemas"]["NotificationOut"][];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= for the next page; null on the last page
+             */
+            next_cursor: string | null;
+        };
         /** OAuthProvidersResponse */
         OAuthProvidersResponse: {
             /** Providers */
@@ -4492,6 +5150,21 @@ export interface components {
             website: string | null;
         };
         /**
+         * OrgRef
+         * @description The organisation that posted a Problem Brief: its directory name and slug, never a person or a contact.
+         */
+        OrgRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+        };
+        /**
          * OrgRole
          * @enum {string}
          */
@@ -4520,6 +5193,43 @@ export interface components {
          * @enum {string}
          */
         OrgVerification: "unclaimed" | "pending" | "e1" | "e2" | "rejected";
+        /**
+         * OriginalityBand
+         * @description Coarse bands only, never numeric scores (docs/spec/06 6.3).
+         * @enum {string}
+         */
+        OriginalityBand: "none" | "some_overlap" | "high_overlap";
+        /** OriginalityOut */
+        OriginalityOut: {
+            /**
+             * Ai Drafted
+             * @description True when a model wrote the explanation (label it 'AI-drafted')
+             */
+            ai_drafted: boolean;
+            /** @description Coarse band only; never a score */
+            band: components["schemas"]["OriginalityBand"];
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /**
+             * Compared
+             * @description How many other owners' published teasers were compared (never which)
+             */
+            compared: number;
+            /**
+             * Demo Fallback
+             * @description True when no model wrote this (a local demo fallback).
+             * @default false
+             */
+            demo_fallback: boolean;
+            /**
+             * Explanation
+             * @description AI-drafted; one plain sentence, or null
+             */
+            explanation: string | null;
+        };
         /** OtherClaimOut */
         OtherClaimOut: {
             claimant: components["schemas"]["PersonOut"];
@@ -4537,6 +5247,25 @@ export interface components {
             id: string;
             level: components["schemas"]["ClaimLevel"];
             status: components["schemas"]["ClaimStatus"];
+        };
+        /**
+         * PauseBody
+         * @description Put the engagement on hold before the agreement, with a reason and the date it resumes.
+         */
+        PauseBody: {
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when the caller last read it
+             */
+            lock_version: number;
+            /** Reason */
+            reason: string;
+            /**
+             * Resume At
+             * Format: date
+             * @description The Africa/Nairobi date it resumes: after today, at most policy.yaml's on_hold.max_days (60) ahead
+             */
+            resume_at: string;
         };
         /** PaymentBody */
         PaymentBody: {
@@ -4817,10 +5546,12 @@ export interface components {
             id: string;
             /**
              * Label
-             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)
+             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief
              */
             label: string | null;
             niche: components["schemas"]["NicheOut"] | null;
+            /** @description The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory */
+            org?: components["schemas"]["OrgRef"] | null;
             /**
              * Published At
              * @description When the problem was published (null while it is not)
@@ -4846,6 +5577,8 @@ export interface components {
              * @description A model drafted the card (false for a demo seed card, written in code)
              */
             ai_generated: boolean;
+            /** @description A Problem Brief's organisation, budget band and deadline; null for other problems */
+            brief?: components["schemas"]["BriefFacts"] | null;
             /** Citations */
             citations: components["schemas"]["CitationOut"][];
             /** Confidence */
@@ -4861,12 +5594,14 @@ export interface components {
             id: string;
             /**
              * Label
-             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)
+             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief
              */
             label: string | null;
             /** Named Orgs */
             named_orgs: string[];
             niche: components["schemas"]["NicheOut"] | null;
+            /** @description The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory */
+            org?: components["schemas"]["OrgRef"] | null;
             /**
              * Published At
              * @description When the problem was published (null while it is not)
@@ -4902,10 +5637,12 @@ export interface components {
             id: string;
             /**
              * Label
-             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)
+             * @description 'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief
              */
             label: string | null;
             niche: components["schemas"]["NicheOut"] | null;
+            /** @description The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory */
+            org?: components["schemas"]["OrgRef"] | null;
             /**
              * Published At
              * @description When the problem was published (null while it is not)
@@ -5164,6 +5901,19 @@ export interface components {
          */
         RenderKind: "html" | "pdf" | "attachment";
         /**
+         * RequestInfoBody
+         * @description The organisation's question (stages 1-2): the review clock pauses until the developer answers.
+         */
+        RequestInfoBody: {
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when the caller last read it
+             */
+            lock_version: number;
+            /** Question */
+            question: string;
+        };
+        /**
          * ResearchRunStatus
          * @enum {string}
          */
@@ -5179,6 +5929,19 @@ export interface components {
             median_days: number;
             /** Text */
             text: string;
+        };
+        /**
+         * ResumeBody
+         * @description Resume a hold before its date, with a reason; due dates move by the business days on hold.
+         */
+        ResumeBody: {
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when the caller last read it
+             */
+            lock_version: number;
+            /** Reason */
+            reason: string;
         };
         /** RolesUpdate */
         RolesUpdate: {
@@ -5362,6 +6125,28 @@ export interface components {
             current_password?: string | null;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * SideLimitsOut
+         * @description What the policy's caps leave the engagement's current stage (the stage a side state returns to), each null
+         *     where it does not apply.
+         */
+        SideLimitsOut: {
+            /**
+             * Hold Days Left
+             * @description Calendar days on hold the engagement has left over all its holds
+             */
+            hold_days_left: number | null;
+            /**
+             * Holds Left
+             * @description Holds this stage may still have (before the agreement, from stage 2)
+             */
+            holds_left: number | null;
+            /**
+             * Questions Left
+             * @description Questions the organisation may still ask (stages 1-2 only)
+             */
+            questions_left: number | null;
         };
         /**
          * SignatureDocumentKind
@@ -5597,6 +6382,11 @@ export interface components {
             version_no: number;
         };
         /**
+         * TeaserField
+         * @enum {string}
+         */
+        TeaserField: "title" | "problem_statement" | "impact_claims" | "summary";
+        /**
          * TeaserIn
          * @description Tier 1: shown to every signed-in user once published (plain text; no contact details or links).
          */
@@ -5817,6 +6607,14 @@ export interface components {
         UnlinkRequest: {
             /** Current Password */
             current_password?: string | null;
+        };
+        /** UnreadCount */
+        UnreadCount: {
+            /**
+             * Count
+             * @description The caller's unread notifications
+             */
+            count: number;
         };
         /** UploadCheck */
         UploadCheck: {
@@ -10032,6 +10830,106 @@ export interface operations {
             };
         };
     };
+    discover_briefs_api_discover_briefs_get: {
+        parameters: {
+            query?: {
+                /** @description Niche slug (a parent includes children) */
+                niche?: string | null;
+                /** @description ISO 3166-2 county code */
+                county?: string | null;
+                limit?: number;
+                /** @description The previous page's next_cursor; omit it for the first */
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverBriefsOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     discover_opportunity_gap_api_discover_opportunity_gap_get: {
         parameters: {
             query?: {
@@ -10516,6 +11414,104 @@ export interface operations {
             };
         };
     };
+    answer_info_api_engagements__engagement_id__answer_info_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerInfoBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     approve_api_engagements__engagement_id__approve_post: {
         parameters: {
             query?: never;
@@ -10528,6 +11524,104 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ApproveBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    engagement_cancel_request_api_engagements__engagement_id__cancel_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandBody"];
             };
         };
         responses: {
@@ -11979,6 +13073,104 @@ export interface operations {
             };
         };
     };
+    pause_api_engagements__engagement_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PauseBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     propose_terms_api_engagements__engagement_id__propose_terms_post: {
         parameters: {
             query?: never;
@@ -12187,6 +13379,202 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CommandBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    request_info_api_engagements__engagement_id__request_info_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestInfoBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    resume_api_engagements__engagement_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResumeBody"];
             };
         };
         responses: {
@@ -13703,6 +15091,382 @@ export interface operations {
             };
         };
     };
+    list_notifications_api_me_notifications_get: {
+        parameters: {
+            query?: {
+                /** @description 1: only the unread ones */
+                unread?: boolean;
+                limit?: number;
+                /** @description The previous page's next_cursor; omit it for the first */
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPage"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    mark_all_read_api_me_notifications_read_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCount"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    unread_count_api_me_notifications_unread_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCount"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    mark_read_api_me_notifications__notification_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     get_profile_api_me_profile_get: {
         parameters: {
             query?: never;
@@ -15006,6 +16770,297 @@ export interface operations {
             };
         };
     };
+    check_disclosure_api_me_proposals__proposal_id__disclosure_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DisclosureCheckOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    last_originality_api_me_proposals__proposal_id__originality_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OriginalityOut"] | null;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    check_originality_api_me_proposals__proposal_id__originality_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OriginalityOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     pitch_picker_api_me_proposals__proposal_id__pitch_orgs_get: {
         parameters: {
             query?: {
@@ -16205,6 +18260,491 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    list_briefs_api_orgs__org_id__briefs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description The previous page's next_cursor; omit it for the first */
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BriefList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    create_brief_api_orgs__org_id__briefs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BriefIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BriefOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_brief_api_orgs__org_id__briefs__problem_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                problem_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BriefOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    update_brief_api_orgs__org_id__briefs__problem_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                problem_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BriefPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BriefOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    close_brief_api_orgs__org_id__briefs__problem_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                problem_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BriefOut"];
                 };
             };
             /** @description Bad Request */

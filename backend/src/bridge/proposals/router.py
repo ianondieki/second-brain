@@ -50,7 +50,7 @@ from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, json_errors
 from bridge.legal import nda
 from bridge.profiles.verification import D1Developer
 from bridge.proposals import access, attestations, editor, lifecycle, render, service, views
-from bridge.proposals.deps import PreScreenDep, ScannerDep, StoreDep, WrapperDep, get_key_wrapper
+from bridge.proposals.deps import EmbedderDep, PreScreenDep, ScannerDep, StoreDep, WrapperDep, get_key_wrapper
 from bridge.proposals.models import MAX_ATTACHMENT_BYTES
 from bridge.proposals.schemas import (
     AttachmentOut,
@@ -104,10 +104,11 @@ async def publish(
     settings: SettingsDep,
     wrapper: WrapperDep,
     prescreen: PreScreenDep,
+    embedder: EmbedderDep,
 ) -> PublishOut:
     """Register the draft version: the one primary action of the editor."""
     return await service.publish(
-        db, settings, wrapper, prescreen, user_id=profile.user_id, proposal_id=proposal_id, body=body
+        db, settings, wrapper, prescreen, embedder, user_id=profile.user_id, proposal_id=proposal_id, body=body
     )
 
 

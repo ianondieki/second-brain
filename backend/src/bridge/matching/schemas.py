@@ -9,7 +9,7 @@ it, and ``demo_fallback`` (the UI's "demo fallback" label when no model wrote th
 from __future__ import annotations
 
 import unicodedata
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -183,10 +183,22 @@ class MatchOut(DemoFallbackFlag):
     feedback_reason: str | None
 
 
+def _without_default(schema: dict[str, Any]) -> None:
+    """Leave a field's default out of the OpenAPI document: always sent, it stays optional in the generated web types,
+    so a client reads an older API as "not sent" (as ``problems.brief_schemas``)."""
+    schema.pop("default", None)
+
+
 class MatchDetail(MatchOut):
     rule_breakdown: dict[str, Any]
     engagement_id: UUID | None
     interest: InterestState
+    today: date | None = Field(
+        default=None,
+        description="Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day Express"
+        " interest's contact-by date counts from",
+        json_schema_extra=_without_default,
+    )
 
 
 class MatchList(BaseModel):

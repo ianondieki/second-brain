@@ -8,7 +8,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { EyeIcon, SparkIcon } from "@/components/ui/icons";
+import { EyeIcon, LookIcon, SparkIcon } from "@/components/ui/icons";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TextAreaField } from "@/components/ui/TextAreaField";
@@ -17,6 +17,7 @@ import { preloadable } from "@/lib/preloadable";
 
 import type { AssistantCalls } from "../assistant";
 import type { Calls } from "../calls";
+import type { ChecksCalls } from "../checks";
 import {
   ASKS,
   editHref,
@@ -37,6 +38,7 @@ import {
   type Step,
 } from "../ideas";
 import type { SaveProblem } from "../outcomes";
+import type { CheckKind, ChecksMemory } from "./Checks";
 import { useIssueMessage } from "./issues";
 import { preloadPanels, ProblemPicker } from "./ProblemPicker";
 import { Stepper } from "./Stepper";
@@ -77,6 +79,21 @@ function AssistantPanel(props: ComponentProps<typeof import("./AssistantPanel").
   return <Panel {...props} />;
 }
 
+// The teaser checks (REQ-PROP-04, REQ-REPO-01) load the same way, on the first press of either check: until then the
+// card is its heading and two buttons (editor/checks-load.test.tsx fails if the card is imported statically).
+const loadChecks = () => preloadable(() => import("./Checks"));
+let checksModule = loadChecks();
+
+/** Starts loading the checks card's code (tests render it at once). */
+export function preloadChecks() {
+  return checksModule();
+}
+
+function Checks(props: ComponentProps<typeof import("./Checks").Checks>) {
+  const { Checks: Card } = use(checksModule());
+  return <Card {...props} />;
+}
+
 /** A panel whose code did not load (offline) or broke: the editor stays, and the next press loads it afresh. */
 class PanelBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -84,8 +101,7 @@ class PanelBoundary extends Component<{ onError: () => void; children: ReactNode
     return { failed: true };
   }
   componentDidCatch() {
-    assistantModule = loadAssistant(); // a rejected load is kept by preloadable: start a new one
-    this.props.onError();
+    this.props.onError(); // the caller starts a new load: a rejected one is kept by preloadable
   }
   render() {
     return this.state.failed ? null : this.props.children;
@@ -108,6 +124,10 @@ export interface EditorProps {
   calls?: Calls;
   /** The writing assistant's calls (tests pass fakes; the panel loads the real ones when it opens). */
   assistant?: AssistantCalls;
+  /** The teaser checks' calls (tests pass fakes; the card loads the real ones on the first press). */
+  checks?: ChecksCalls;
+  /** Today's last overlap check of this idea, drawn on the server (CheckAnswer), or nothing. */
+  lastOverlap?: ReactNode;
 }
 
 type Save =
@@ -151,6 +171,7 @@ export function Editor(props: EditorProps) {
   const t = useStrings("ideaEditor");
   const f = useStrings("ideaFields");
   const assistantT = useStrings("ideaAssistant");
+  const checksT = useStrings("ideaChecks");
   const issueMessage = useIssueMessage();
   const injected = props.calls;
   const getCalls = () => (injected ? Promise.resolve(injected) : loadCalls());
@@ -165,6 +186,9 @@ export function Editor(props: EditorProps) {
   const [publishing, setPublishing] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantFailed, setAssistantFailed] = useState(false);
+  const [checksPressed, setChecksPressed] = useState<CheckKind | null>(null); // the card is open once one is pressed
+  const [checksFailed, setChecksFailed] = useState(false);
+  const checksMemory = useRef<ChecksMemory>({});
 
   const idRef = useRef<string | null>(props.id);
   const draftRef = useRef(props.hasDraft ?? props.id !== null);
@@ -266,6 +290,13 @@ export function Editor(props: EditorProps) {
     return null;
   }
 
+  /** saveAll for what reads the saved draft (the assistant, the checks, publishing): a new idea still needs one made
+   * first, and a save already under way creates it. */
+  function saveDraft(): Promise<SaveProblem | null> {
+    if (!idRef.current && edits.current === savedEdits.current) edits.current += 1;
+    return saveAll();
+  }
+
   // Leaving with unsaved typing asks first (the browser's own wording).
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -294,6 +325,10 @@ export function Editor(props: EditorProps) {
     returnToAssistant.current = false;
     document.getElementById("assistant-open")?.focus();
   }, [assistantOpen]);
+
+  useEffect(() => {
+    if (checksFailed) document.getElementById(`check-${checksMemory.current.start}`)?.focus();
+  }, [checksFailed]);
 
   // Leaving the editor (a link, the back button) saves what was typed instead of dropping the pending autosave.
   useEffect(() => {
@@ -353,6 +388,28 @@ export function Editor(props: EditorProps) {
   const words = wordCount(state.summary);
 
   const statusLine = <SaveStatus save={save} onRetry={() => void flush()} />;
+
+  // The checks card before its code loads: the same two buttons (the one pressed waits), today's last overlap answer.
+  const checksShell = (
+    <div className="flex flex-col gap-6">
+      {(["overlap", "disclosure"] as CheckKind[]).map((kind) => (
+        <div key={kind} className="flex flex-col items-start">
+          <Button
+            id={`check-${kind}`}
+            busy={checksPressed === kind}
+            onClick={() => {
+              checksMemory.current.start = kind;
+              setChecksFailed(false);
+              setChecksPressed(kind);
+            }}
+          >
+            {checksT(`${kind}Button`)}
+          </Button>
+          {kind === "overlap" && props.lastOverlap ? <div className="mt-3">{props.lastOverlap}</div> : null}
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <>
@@ -520,6 +577,43 @@ export function Editor(props: EditorProps) {
             />
           </Card>
 
+          <Card as="section" variant="flat" aria-labelledby="checks-title" className="flex flex-col gap-4">
+            <div>
+              <h3 id="checks-title" className="flex items-center gap-2 font-semibold text-ink">
+                {/* A magnifier, not a tick: before any check has run nothing has "passed". */}
+                <LookIcon className="size-5 shrink-0 text-accent" data-icon="look" />
+                {checksT("title")}
+              </h3>
+              <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{checksT("hint")}</p>
+            </div>
+            {checksPressed ? (
+              <PanelBoundary
+                onError={() => {
+                  checksModule = loadChecks();
+                  setChecksFailed(true);
+                  setChecksPressed(null);
+                }}
+              >
+                <Suspense fallback={checksShell}>
+                  <Checks
+                    memory={() => checksMemory.current}
+                    state={state}
+                    getId={() => idRef.current}
+                    saveAll={saveDraft}
+                    lastOverlap={props.lastOverlap}
+                    calls={props.checks}
+                  />
+                </Suspense>
+              </PanelBoundary>
+            ) : (
+              <>
+                {/* Polite like the card's own answers (never an alert); the button pressed gets the focus back. */}
+                {checksFailed ? <Alert tone="info">{assistantT("problem.network")}</Alert> : null}
+                {checksShell}
+              </>
+            )}
+          </Card>
+
           <Card as="section" variant="flat" aria-labelledby="assistant-title" className="flex flex-col gap-4">
             <div>
               <h3 id="assistant-title" className="flex items-center gap-2 font-semibold text-ink">
@@ -531,6 +625,7 @@ export function Editor(props: EditorProps) {
             {assistantOpen ? (
               <PanelBoundary
                 onError={() => {
+                  assistantModule = loadAssistant();
                   setAssistantFailed(true);
                   closeAssistant();
                 }}
@@ -545,11 +640,7 @@ export function Editor(props: EditorProps) {
                   <AssistantPanel
                     state={state}
                     getId={() => idRef.current}
-                    saveAll={() => {
-                      // A new idea's first ask still needs a draft; a save already under way creates it.
-                      if (!idRef.current && edits.current === savedEdits.current) edits.current += 1;
-                      return saveAll();
-                    }}
+                    saveAll={saveDraft}
                     onUse={(teaser) => update({ title: teaser.title, summary: teaser.summary })}
                     onClose={closeAssistant}
                     calls={props.assistant}
@@ -600,11 +691,7 @@ export function Editor(props: EditorProps) {
             onIssues={setIssues}
             onShowRequired={() => setShowRequired(true)}
             initialText={props.attestations}
-            saveAll={() => {
-              // Publishing straight away still needs a draft; a save already under way creates it.
-              if (!idRef.current && edits.current === savedEdits.current) edits.current += 1;
-              return saveAll();
-            }}
+            saveAll={saveDraft}
             getId={() => idRef.current}
             getCalls={getCalls}
             onGoTo={goTo}

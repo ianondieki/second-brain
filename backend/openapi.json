@@ -210,6 +210,30 @@
         "title": "AllowedDomainOut",
         "type": "object"
       },
+      "AnswerInfoBody": {
+        "description": "The developer's answer: the engagement returns to the stage it was in, its deadline moved by the pause.",
+        "properties": {
+          "answer": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x08\\x0b-\\x1f\\x7f]*$",
+            "title": "Answer",
+            "type": "string"
+          },
+          "lock_version": {
+            "description": "The engagement's lock_version when the caller last read it",
+            "minimum": 0.0,
+            "title": "Lock Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "lock_version",
+          "answer"
+        ],
+        "title": "AnswerInfoBody",
+        "type": "object"
+      },
       "ApiErrorBody": {
         "properties": {
           "detail": {
@@ -581,6 +605,433 @@
         "title": "BillingInterval",
         "type": "string"
       },
+      "BriefFacts": {
+        "description": "What a developer reads about a Brief beside its problem card.",
+        "properties": {
+          "budget_band": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetBandOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's budget band; null when it gave none"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proposals wanted by this day (Africa/Nairobi); null when none",
+            "title": "Deadline"
+          },
+          "ended": {
+            "anyOf": [
+              {
+                "enum": [
+                  "closed",
+                  "past_deadline"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it no longer asks for proposals, on the same day as open: closed (the organisation closed it) or past_deadline (published, not closed, its deadline before today in Africa/Nairobi on the platform clock); null while it is open and for a Brief not published",
+            "title": "Ended"
+          },
+          "open": {
+            "description": "Published, not closed, and the deadline unset or not passed (Africa/Nairobi, the platform clock): the organisation is still asking for proposals",
+            "title": "Open",
+            "type": "boolean"
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation that posted it; null when it is not in the directory"
+          }
+        },
+        "required": [
+          "org",
+          "budget_band",
+          "deadline"
+        ],
+        "title": "BriefFacts",
+        "type": "object"
+      },
+      "BriefIn": {
+        "additionalProperties": false,
+        "description": "A new Brief. Plain text only (markup is removed) and no contact details: a Brief is public once approved.",
+        "properties": {
+          "affected_group": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who has the problem (<= 200)",
+            "title": "Affected Group"
+          },
+          "budget_band": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A code from the list's budget_bands",
+            "title": "Budget Band"
+          },
+          "county_code": {
+            "anyOf": [
+              {
+                "pattern": "^KE-\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null: nationwide",
+            "title": "County Code"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Today or later (Africa/Nairobi)",
+            "title": "Deadline"
+          },
+          "niche_id": {
+            "format": "uuid",
+            "title": "Niche Id",
+            "type": "string"
+          },
+          "statement": {
+            "description": "At most 120 words and 1,200 characters",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Statement",
+            "type": "string"
+          },
+          "title": {
+            "description": "At most 90 characters",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/BriefVisibility",
+            "default": "public",
+            "description": "public only for now: invited answers 422 visibility_not_available"
+          }
+        },
+        "required": [
+          "title",
+          "statement",
+          "niche_id"
+        ],
+        "title": "BriefIn",
+        "type": "object"
+      },
+      "BriefList": {
+        "properties": {
+          "budget_bands": {
+            "description": "The budget band codes a Brief may carry",
+            "items": {
+              "$ref": "#/components/schemas/BudgetBandOut"
+            },
+            "title": "Budget Bands",
+            "type": "array"
+          },
+          "items": {
+            "description": "Newest first, every status",
+            "items": {
+              "$ref": "#/components/schemas/BriefOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?cursor= for the next page; null on the last page",
+            "title": "Next Cursor"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/BriefPlanOut"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor",
+          "plan",
+          "budget_bands"
+        ],
+        "title": "BriefList",
+        "type": "object"
+      },
+      "BriefOut": {
+        "description": "One of the organisation's Briefs, as its members see it.",
+        "properties": {
+          "affected_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Group"
+          },
+          "budget_band": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BudgetBandOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "county_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "County Code"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "id": {
+            "description": "The Brief's problem id (its page is GET /api/problems/{id} once published)",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "moderation_state": {
+            "$ref": "#/components/schemas/ModerationState"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NicheOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problem_status": {
+            "$ref": "#/components/schemas/ProblemStatus",
+            "description": "pending_review until staff decide; published or rejected"
+          },
+          "proposal_count": {
+            "description": "Published proposals that link this Brief",
+            "title": "Proposal Count",
+            "type": "integer"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When staff approved it (null until then)",
+            "title": "Published At"
+          },
+          "state": {
+            "description": "What to show: in_review (waiting for staff, or held), published (on Discover), rejected, closed",
+            "enum": [
+              "in_review",
+              "published",
+              "rejected",
+              "closed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BriefStatus",
+            "description": "The Brief's own status: closed once the organisation closes it"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/BriefVisibility"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "statement",
+          "affected_group",
+          "niche",
+          "country",
+          "county_code",
+          "visibility",
+          "budget_band",
+          "deadline",
+          "status",
+          "problem_status",
+          "moderation_state",
+          "state",
+          "proposal_count",
+          "created_at",
+          "published_at"
+        ],
+        "title": "BriefOut",
+        "type": "object"
+      },
+      "BriefPatch": {
+        "additionalProperties": false,
+        "description": "Change the budget band or the deadline of a Brief that is not closed (``null`` clears it). The moderated text\ndoes not change after posting.",
+        "properties": {
+          "budget_band": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Band"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          }
+        },
+        "title": "BriefPatch",
+        "type": "object"
+      },
+      "BriefPlanOut": {
+        "properties": {
+          "plan": {
+            "title": "Plan",
+            "type": "string"
+          },
+          "problem_briefs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Open Briefs the plan allows; null means unlimited",
+            "title": "Problem Briefs"
+          },
+          "used": {
+            "description": "Open Briefs now: not closed, deadline not passed, not rejected",
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan",
+          "problem_briefs",
+          "used"
+        ],
+        "title": "BriefPlanOut",
+        "type": "object"
+      },
+      "BriefStatus": {
+        "enum": [
+          "draft",
+          "published",
+          "closed"
+        ],
+        "title": "BriefStatus",
+        "type": "string"
+      },
+      "BriefVisibility": {
+        "enum": [
+          "public",
+          "invited"
+        ],
+        "title": "BriefVisibility",
+        "type": "string"
+      },
       "BrowsePage": {
         "properties": {
           "items": {
@@ -767,7 +1218,7 @@
       "CaseField": {
         "properties": {
           "name": {
-            "description": "A Tier-1 field: title, problem_statement, impact_claims, summary, statement",
+            "description": "A Tier-1 field: title, problem_statement, impact_claims, summary, statement, affected_group",
             "title": "Name",
             "type": "string"
           },
@@ -831,6 +1282,17 @@
             ],
             "description": "Why a decision is refused (the route's code); null when both are open",
             "title": "Blocked"
+          },
+          "brief_org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation that posted the problem as a Problem Brief (REQ-DIR-05: 'Brief by <org>'); null for any other subject, or when the organisation is not in the directory"
           },
           "created_at": {
             "format": "date-time",
@@ -1854,7 +2316,12 @@
           "accept_delivery",
           "sign_certificate",
           "record_payment",
-          "confirm_payment"
+          "confirm_payment",
+          "request_info",
+          "answer_info",
+          "cancel_request",
+          "pause",
+          "resume"
         ],
         "title": "Command",
         "type": "string"
@@ -2385,6 +2852,126 @@
         "title": "DirectoryPage",
         "type": "object"
       },
+      "DisclosureCheckOut": {
+        "properties": {
+          "ai_drafted": {
+            "title": "Ai Drafted",
+            "type": "boolean"
+          },
+          "demo_fallback": {
+            "default": false,
+            "description": "True when no model wrote this (a local demo fallback).",
+            "title": "Demo Fallback",
+            "type": "boolean"
+          },
+          "fields": {
+            "description": "The teaser fields to look at again",
+            "items": {
+              "$ref": "#/components/schemas/TeaserField"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "flagged": {
+            "description": "True when the teaser reads like how it works; a warning only",
+            "title": "Flagged",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DisclosureSource"
+          },
+          "version_id": {
+            "description": "The version that was checked",
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain words for the owner (AI-drafted when ai_drafted)",
+            "title": "Why"
+          }
+        },
+        "required": [
+          "flagged",
+          "fields",
+          "why",
+          "source",
+          "ai_drafted",
+          "version_id"
+        ],
+        "title": "DisclosureCheckOut",
+        "type": "object"
+      },
+      "DisclosureSource": {
+        "enum": [
+          "rules",
+          "model",
+          "none"
+        ],
+        "title": "DisclosureSource",
+        "type": "string"
+      },
+      "DiscoverBrief": {
+        "properties": {
+          "brief": {
+            "$ref": "#/components/schemas/BriefFacts"
+          },
+          "problem": {
+            "$ref": "#/components/schemas/DiscoverProblem",
+            "description": "The Brief's problem card ('Posted by <organisation>', with org)"
+          },
+          "proposal_count": {
+            "description": "Published proposals that link this Brief",
+            "title": "Proposal Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "problem",
+          "brief",
+          "proposal_count"
+        ],
+        "title": "DiscoverBrief",
+        "type": "object"
+      },
+      "DiscoverBriefsOut": {
+        "properties": {
+          "items": {
+            "description": "Published, open Briefs, newest first",
+            "items": {
+              "$ref": "#/components/schemas/DiscoverBrief"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?cursor= for the next page; null on the last page",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "DiscoverBriefsOut",
+        "type": "object"
+      },
       "DiscoverProblem": {
         "properties": {
           "country": {
@@ -2416,7 +3003,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief",
             "title": "Label"
           },
           "niche": {
@@ -2428,6 +3015,17 @@
                 "type": "null"
               }
             ]
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory"
           },
           "published_at": {
             "anyOf": [
@@ -2920,6 +3518,14 @@
             "title": "My Roles",
             "type": "array"
           },
+          "notes": {
+            "description": "The side states' questions, answers and reasons, in event order",
+            "items": {
+              "$ref": "#/components/schemas/NoteOut"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
           "org_id": {
             "format": "uuid",
             "title": "Org Id",
@@ -2931,6 +3537,17 @@
           },
           "origin": {
             "$ref": "#/components/schemas/EngagementOrigin"
+          },
+          "paused_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
           },
           "payments": {
             "items": {
@@ -2947,6 +3564,17 @@
           "proposal_title": {
             "title": "Proposal Title",
             "type": "string"
+          },
+          "side_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SideLimitsOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caps left for the current stage's side states; null once ended or none apply"
           },
           "signatures": {
             "items": {
@@ -2990,6 +3618,19 @@
           "state": {
             "$ref": "#/components/schemas/EngagementState"
           },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from",
+            "title": "Today"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -3030,6 +3671,7 @@
           "lock_version",
           "whose_turn",
           "updated_at",
+          "paused_from",
           "my_party",
           "my_roles",
           "actions",
@@ -3039,7 +3681,8 @@
           "agreements",
           "signatures",
           "payments",
-          "documents"
+          "documents",
+          "notes"
         ],
         "title": "EngagementDetail",
         "type": "object"
@@ -3203,6 +3846,17 @@
           "origin": {
             "$ref": "#/components/schemas/EngagementOrigin"
           },
+          "paused_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
+          },
           "proposal_id": {
             "format": "uuid",
             "title": "Proposal Id",
@@ -3286,7 +3940,8 @@
           "ended_at",
           "lock_version",
           "whose_turn",
-          "updated_at"
+          "updated_at",
+          "paused_from"
         ],
         "title": "EngagementSummary",
         "type": "object"
@@ -4210,6 +4865,19 @@
                 "type": "null"
               }
             ]
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day Express interest's contact-by date counts from",
+            "title": "Today"
           },
           "why": {
             "anyOf": [
@@ -5258,6 +5926,165 @@
         "title": "NicheRef",
         "type": "object"
       },
+      "NoteOut": {
+        "description": "The text a side-state command carried, in event order: the organisation's question (``info_request``), the\ndeveloper's answer (``info_answer``), a hold's reason with its resume date (``hold``), an early resume's reason\n(``resume``). ``by`` is the party that wrote it.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "by": {
+            "$ref": "#/components/schemas/EngagementParty"
+          },
+          "kind": {
+            "enum": [
+              "info_request",
+              "info_answer",
+              "hold",
+              "resume"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "resume_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume At"
+          },
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The seq of the event the note explains (History pairs them); always set by the API",
+            "title": "Seq"
+          }
+        },
+        "required": [
+          "kind",
+          "body",
+          "resume_at",
+          "by",
+          "at"
+        ],
+        "title": "NoteOut",
+        "type": "object"
+      },
+      "NotificationOut": {
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "description": "What happened, for example engagement.n03 (the tracker's notice)",
+            "title": "Kind",
+            "type": "string"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A path on this platform to open (one leading '/'), or null",
+            "title": "Link"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the person first marked it read; null while unread",
+            "title": "Read At"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "body",
+          "link",
+          "created_at",
+          "read_at"
+        ],
+        "title": "NotificationOut",
+        "type": "object"
+      },
+      "NotificationPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?cursor= for the next page; null on the last page",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "NotificationPage",
+        "type": "object"
+      },
       "OAuthProvidersResponse": {
         "properties": {
           "providers": {
@@ -5581,6 +6408,31 @@
         "title": "OrgOut",
         "type": "object"
       },
+      "OrgRef": {
+        "description": "The organisation that posted a Problem Brief: its directory name and slug, never a person or a contact.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ],
+        "title": "OrgRef",
+        "type": "object"
+      },
       "OrgRole": {
         "enum": [
           "owner",
@@ -5673,6 +6525,66 @@
         "title": "OrgVerification",
         "type": "string"
       },
+      "OriginalityBand": {
+        "description": "Coarse bands only, never numeric scores (docs/spec/06 6.3).",
+        "enum": [
+          "none",
+          "some_overlap",
+          "high_overlap"
+        ],
+        "title": "OriginalityBand",
+        "type": "string"
+      },
+      "OriginalityOut": {
+        "properties": {
+          "ai_drafted": {
+            "description": "True when a model wrote the explanation (label it 'AI-drafted')",
+            "title": "Ai Drafted",
+            "type": "boolean"
+          },
+          "band": {
+            "$ref": "#/components/schemas/OriginalityBand",
+            "description": "Coarse band only; never a score"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "compared": {
+            "description": "How many other owners' published teasers were compared (never which)",
+            "title": "Compared",
+            "type": "integer"
+          },
+          "demo_fallback": {
+            "default": false,
+            "description": "True when no model wrote this (a local demo fallback).",
+            "title": "Demo Fallback",
+            "type": "boolean"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "AI-drafted; one plain sentence, or null",
+            "title": "Explanation"
+          }
+        },
+        "required": [
+          "band",
+          "compared",
+          "explanation",
+          "ai_drafted",
+          "checked_at"
+        ],
+        "title": "OriginalityOut",
+        "type": "object"
+      },
       "OtherClaimOut": {
         "properties": {
           "claimant": {
@@ -5708,6 +6620,37 @@
           "created_at"
         ],
         "title": "OtherClaimOut",
+        "type": "object"
+      },
+      "PauseBody": {
+        "description": "Put the engagement on hold before the agreement, with a reason and the date it resumes.",
+        "properties": {
+          "lock_version": {
+            "description": "The engagement's lock_version when the caller last read it",
+            "minimum": 0.0,
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+            "title": "Reason",
+            "type": "string"
+          },
+          "resume_at": {
+            "description": "The Africa/Nairobi date it resumes: after today, at most policy.yaml's on_hold.max_days (60) ahead",
+            "format": "date",
+            "title": "Resume At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lock_version",
+          "reason",
+          "resume_at"
+        ],
+        "title": "PauseBody",
         "type": "object"
       },
       "PaymentBody": {
@@ -6387,7 +7330,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief",
             "title": "Label"
           },
           "niche": {
@@ -6399,6 +7342,17 @@
                 "type": "null"
               }
             ]
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory"
           },
           "published_at": {
             "anyOf": [
@@ -6461,6 +7415,17 @@
             "title": "Ai Generated",
             "type": "boolean"
           },
+          "brief": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BriefFacts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A Problem Brief's organisation, budget band and deadline; null for other problems"
+          },
           "citations": {
             "items": {
               "$ref": "#/components/schemas/CitationOut"
@@ -6509,7 +7474,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief",
             "title": "Label"
           },
           "named_orgs": {
@@ -6528,6 +7493,17 @@
                 "type": "null"
               }
             ]
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory"
           },
           "published_at": {
             "anyOf": [
@@ -6624,7 +7600,7 @@
                 "type": "null"
               }
             ],
-            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example)",
+            "description": "'Developer-reported' for problems developers described; 'AI-drafted, human-reviewed on <date>' for a published research card (a demo seed card says it is a seeded example); 'Posted by <organisation>' for an organisation's Problem Brief",
             "title": "Label"
           },
           "niche": {
@@ -6636,6 +7612,17 @@
                 "type": "null"
               }
             ]
+          },
+          "org": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The verified organisation that posted a Problem Brief (to pre-select it when pitching); null for any other problem, or when the organisation is not in the directory"
           },
           "published_at": {
             "anyOf": [
@@ -7276,6 +8263,30 @@
         "title": "RenderKind",
         "type": "string"
       },
+      "RequestInfoBody": {
+        "description": "The organisation's question (stages 1-2): the review clock pauses until the developer answers.",
+        "properties": {
+          "lock_version": {
+            "description": "The engagement's lock_version when the caller last read it",
+            "minimum": 0.0,
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "question": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x08\\x0b-\\x1f\\x7f]*$",
+            "title": "Question",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lock_version",
+          "question"
+        ],
+        "title": "RequestInfoBody",
+        "type": "object"
+      },
       "ResearchRunStatus": {
         "enum": [
           "running",
@@ -7308,6 +8319,30 @@
           "text"
         ],
         "title": "Responsiveness",
+        "type": "object"
+      },
+      "ResumeBody": {
+        "description": "Resume a hold before its date, with a reason; due dates move by the business days on hold.",
+        "properties": {
+          "lock_version": {
+            "description": "The engagement's lock_version when the caller last read it",
+            "minimum": 0.0,
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lock_version",
+          "reason"
+        ],
+        "title": "ResumeBody",
         "type": "object"
       },
       "RolesUpdate": {
@@ -7890,6 +8925,54 @@
         "title": "SetPasswordRequest",
         "type": "object"
       },
+      "SideLimitsOut": {
+        "description": "What the policy's caps leave the engagement's current stage (the stage a side state returns to), each null\nwhere it does not apply.",
+        "properties": {
+          "hold_days_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Calendar days on hold the engagement has left over all its holds",
+            "title": "Hold Days Left"
+          },
+          "holds_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Holds this stage may still have (before the agreement, from stage 2)",
+            "title": "Holds Left"
+          },
+          "questions_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Questions the organisation may still ask (stages 1-2 only)",
+            "title": "Questions Left"
+          }
+        },
+        "required": [
+          "questions_left",
+          "holds_left",
+          "hold_days_left"
+        ],
+        "title": "SideLimitsOut",
+        "type": "object"
+      },
       "SignatureDocumentKind": {
         "enum": [
           "mutual_nda",
@@ -8453,6 +9536,16 @@
         ],
         "title": "TeaserCard",
         "type": "object"
+      },
+      "TeaserField": {
+        "enum": [
+          "title",
+          "problem_statement",
+          "impact_claims",
+          "summary"
+        ],
+        "title": "TeaserField",
+        "type": "string"
       },
       "TeaserIn": {
         "additionalProperties": false,
@@ -9103,6 +10196,21 @@
           }
         },
         "title": "UnlinkRequest",
+        "type": "object"
+      },
+      "UnreadCount": {
+        "properties": {
+          "count": {
+            "description": "The caller's unread notifications",
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "UnreadCount",
         "type": "object"
       },
       "UploadCheck": {
@@ -14460,6 +15568,180 @@
         ]
       }
     },
+    "/api/discover/briefs": {
+      "get": {
+        "description": "Verified organisations' published, open Problem Briefs (a passed deadline leaves the list), newest first.",
+        "operationId": "discover_briefs_api_discover_briefs_get",
+        "parameters": [
+          {
+            "description": "Niche slug (a parent includes children)",
+            "in": "query",
+            "name": "niche",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Niche slug (a parent includes children)",
+              "title": "Niche"
+            }
+          },
+          {
+            "description": "ISO 3166-2 county code",
+            "in": "query",
+            "name": "county",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{2}-[A-Z0-9]{1,5}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO 3166-2 county code",
+              "title": "County"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The previous page's next_cursor; omit it for the first",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's next_cursor; omit it for the first",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverBriefsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Discover Briefs",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
     "/api/discover/opportunity-gap": {
       "get": {
         "description": "Problems in the top trend decile with fewer than 3 proposals.",
@@ -15107,6 +16389,130 @@
         ]
       }
     },
+    "/api/engagements/{engagement_id}/answer-info": {
+      "post": {
+        "description": "The developer answers; the engagement returns to its stage with the deadline moved by the pause.",
+        "operationId": "answer_info_api_engagements__engagement_id__answer_info_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerInfoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Answer Info",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
     "/api/engagements/{engagement_id}/approve": {
       "post": {
         "description": "Approve to proceed (non-binding), naming the contact person, channel and contact-by date (stage 3; EM2).",
@@ -15226,6 +16632,130 @@
           }
         },
         "summary": "Approve",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/cancel-request": {
+      "post": {
+        "description": "Run 'cancel_request' (docs/spec/06 6.9; the state machine's table).",
+        "operationId": "engagement_cancel_request_api_engagements__engagement_id__cancel_request_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Engagement Cancel Request",
         "tags": [
           "engagements"
         ]
@@ -16982,6 +18512,130 @@
         ]
       }
     },
+    "/api/engagements/{engagement_id}/pause": {
+      "post": {
+        "description": "Either party puts the engagement on hold before the agreement, until ``resume_at`` (at most 60 days).",
+        "operationId": "pause_api_engagements__engagement_id__pause_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Pause",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
     "/api/engagements/{engagement_id}/propose-terms": {
       "post": {
         "description": "A new agreement version (draft): IP terms, milestones, deemed-acceptance clause, optional exclusivity.",
@@ -17349,6 +19003,254 @@
           }
         },
         "summary": "Engagement Reopen Negotiation",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/request-info": {
+      "post": {
+        "description": "The organisation asks the developer a question (stages 1-2); the review clock pauses until the answer.",
+        "operationId": "request_info_api_engagements__engagement_id__request_info_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestInfoBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Request Info",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/resume": {
+      "post": {
+        "description": "Either party resumes a hold early; due dates move by the business days on hold.",
+        "operationId": "resume_api_engagements__engagement_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResumeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Resume",
         "tags": [
           "engagements"
         ]
@@ -19072,6 +20974,471 @@
         ]
       }
     },
+    "/api/me/notifications": {
+      "get": {
+        "description": "The caller's notifications, newest first, 20 a page.",
+        "operationId": "list_notifications_api_me_notifications_get",
+        "parameters": [
+          {
+            "description": "1: only the unread ones",
+            "in": "query",
+            "name": "unread",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "1: only the unread ones",
+              "title": "Unread",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The previous page's next_cursor; omit it for the first",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's next_cursor; omit it for the first",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/me/notifications/read-all": {
+      "post": {
+        "description": "Every unread notification of the caller's, read now; one read earlier keeps its moment.",
+        "operationId": "mark_all_read_api_me_notifications_read_all_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCount"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Mark All Read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/me/notifications/unread-count": {
+      "get": {
+        "description": "How many of the caller's notifications are unread (the bell's badge).",
+        "operationId": "unread_count_api_me_notifications_unread_count_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCount"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Unread Count",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/me/notifications/{notification_id}/read": {
+      "post": {
+        "description": "One of the caller's notifications, read; marking it again changes nothing. Anyone else's id is 404.",
+        "operationId": "mark_read_api_me_notifications__notification_id__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notification Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Mark Read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
     "/api/me/profile": {
       "get": {
         "operationId": "get_profile_api_me_profile_get",
@@ -20653,6 +23020,364 @@
         "summary": "Remove Attachment",
         "tags": [
           "proposals"
+        ]
+      }
+    },
+    "/api/me/proposals/{proposal_id}/disclosure-check": {
+      "post": {
+        "description": "A warning when the public teaser gives away how the project works. Nothing is saved.",
+        "operationId": "check_disclosure_api_me_proposals__proposal_id__disclosure_check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisclosureCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Check Disclosure",
+        "tags": [
+          "originality"
+        ]
+      }
+    },
+    "/api/me/proposals/{proposal_id}/originality": {
+      "get": {
+        "description": "Today's last originality check of this proposal (Nairobi day), or null, also once the teaser text changed.",
+        "operationId": "last_originality_api_me_proposals__proposal_id__originality_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/OriginalityOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Last Originality Api Me Proposals  Proposal Id  Originality Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Last Originality",
+        "tags": [
+          "originality"
+        ]
+      },
+      "post": {
+        "description": "How much this teaser overlaps with other developers' published teasers: a coarse band, never a score.",
+        "operationId": "check_originality_api_me_proposals__proposal_id__originality_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OriginalityOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Check Originality",
+        "tags": [
+          "originality"
         ]
       }
     },
@@ -22302,6 +25027,652 @@
         "summary": "Update Org",
         "tags": [
           "organisations"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/briefs": {
+      "get": {
+        "description": "The organisation's Briefs, what its plan allows and the budget band codes.",
+        "operationId": "list_briefs_api_orgs__org_id__briefs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The previous page's next_cursor; omit it for the first",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's next_cursor; omit it for the first",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Briefs",
+        "tags": [
+          "briefs"
+        ]
+      },
+      "post": {
+        "description": "Post a Brief; it waits for staff review before developers see it.",
+        "operationId": "create_brief_api_orgs__org_id__briefs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create Brief",
+        "tags": [
+          "briefs"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/briefs/{problem_id}": {
+      "get": {
+        "operationId": "get_brief_api_orgs__org_id__briefs__problem_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "problem_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Problem Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Brief",
+        "tags": [
+          "briefs"
+        ]
+      },
+      "patch": {
+        "description": "Change the budget band or the deadline (``null`` clears it) while the Brief is not closed.",
+        "operationId": "update_brief_api_orgs__org_id__briefs__problem_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "problem_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Problem Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Update Brief",
+        "tags": [
+          "briefs"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/briefs/{problem_id}/close": {
+      "post": {
+        "description": "Close a published Brief: it leaves Discover and frees its plan slot; its problem page stays.",
+        "operationId": "close_brief_api_orgs__org_id__briefs__problem_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "problem_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Problem Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Close Brief",
+        "tags": [
+          "briefs"
         ]
       }
     },

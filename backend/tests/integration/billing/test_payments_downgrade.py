@@ -24,7 +24,7 @@ def url(admin_url: URL) -> Iterator[URL]:
     name = f"bridge_pdg_{uuid4().hex[:12]}"
     database = create_database(admin_url, name)
     try:
-        run_alembic(database, lambda config: command.upgrade(config, "head"))
+        run_alembic(database, lambda config: command.upgrade(config, "0005"))  # this revision's guard, not later ones
         yield database
     finally:
         drop_database(admin_url, name)
@@ -81,5 +81,5 @@ def test_the_downgrade_refuses_to_drop_payment_records_unless_told_to(url: URL) 
     assert _state(url) == ("0005", True)  # nothing was dropped
     run_alembic(url, _with_flag)
     assert _state(url) == ("0004", False)
-    run_alembic(url, lambda config: command.upgrade(config, "head"))
+    run_alembic(url, lambda config: command.upgrade(config, "0005"))
     assert _state(url) == ("0005", True)

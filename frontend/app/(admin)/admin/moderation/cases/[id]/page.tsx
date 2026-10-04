@@ -24,6 +24,8 @@ import { getCase } from "../../data";
 import {
   caseHref,
   caseKind,
+  caseKindLabel,
+  isBriefCase,
   caseReasons,
   caseTitle,
   fieldKey,
@@ -87,6 +89,8 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
 
   const locale = await getLocale();
   const kind = caseKind(item.subject_type);
+  const label = caseKindLabel(item);
+  const kindText = label.key === "briefBy" ? t("kind.briefBy", { org: label.org }) : t(`kind.${label.key}`);
   const seen = visibility(item);
   const result = outcome(item);
   const line = await decidedLine(item);
@@ -102,7 +106,7 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
             while checked" or "Hidden until decided" would no longer be true), as the meta line. */}
         <ul className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-soft">
           <li data-header-tag="kind">
-            <Badge tone="neutral">{t(`kind.${kind}`)}</Badge>
+            <Badge tone="neutral">{kindText}</Badge>
           </li>
           {result ? (
             <li data-header-tag="outcome">
@@ -150,12 +154,20 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
           <CaseDecision
             caseId={item.id}
             versionId={item.subject_version_id}
-            kind={kind === "problem" ? "problem" : kind === "proposal" ? "proposal" : "other"}
+            kind={isBriefCase(item) ? "brief" : kind === "problem" ? "problem" : kind === "proposal" ? "proposal" : "other"}
             actions={result ? [] : item.actions}
             blocked={item.blocked}
             decided={result && line ? { outcome: result, line } : null}
             nextHref={nextId ? caseHref(nextId) : null}
-            lead={actionable ? (seen === "public" ? t("case.leadPublic") : t("case.leadHidden")) : null}
+            lead={
+              actionable
+                ? seen === "briefHidden"
+                  ? t("case.leadBrief")
+                  : seen === "public"
+                    ? t("case.leadPublic")
+                    : t("case.leadHidden")
+                : null
+            }
           />
         </ClientStrings>
       </Section>

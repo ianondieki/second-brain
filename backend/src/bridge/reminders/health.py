@@ -5,7 +5,9 @@ Both reminders (the developer's EM7 and the organisation's progress digest) buil
 I/O. Dates are Nairobi calendar dates (``nairobi_today``) and "BD" are Kenyan business days
 (``bridge.engagements.calendar``, holidays passed in as their observed dates).
 
-The rules (docs/spec/06 6.11), for the engagement's main-path stages only (side and terminal states are not assessed):
+The rules (docs/spec/06 6.11), for the engagement's main-path stages only (side and terminal states are not assessed;
+an organisation's open question and a hold, ``PAUSED_STATES``, are paused: nothing in them is due or overdue, and the
+digests say so):
 
 - an item is the developer's milestone (from the **signed** agreement, not yet submitted or accepted), the
   organisation's review of a submitted milestone (due its review date, ``history.review_due_dates``), or the current
@@ -62,6 +64,8 @@ ASSESSED_STATES: Final = frozenset(
         S.PAYMENT_FINAL,
     }
 )
+# REQ-ENG-10 (part): the stage clock stops while the organisation's question is open or the engagement is on hold.
+PAUSED_STATES: Final = frozenset({S.INFO_REQUESTED, S.ON_HOLD})
 _DEVELOPER_WORK: Final = frozenset({M.PLANNED, M.IN_PROGRESS, M.CHANGES_REQUESTED})
 
 
@@ -136,6 +140,11 @@ class EngagementFact:
     @property
     def assessed(self) -> bool:
         return self.state in ASSESSED_STATES
+
+    @property
+    def paused(self) -> bool:
+        """An open question or a hold: listed as paused (a hold's ``stage_deadline_on`` is its resume date)."""
+        return self.state in PAUSED_STATES
 
 
 @dataclass(frozen=True, slots=True)

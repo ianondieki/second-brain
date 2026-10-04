@@ -9,8 +9,11 @@ every transition here stays inside that set (``tests/unit/engagements/test_state
 
 Prototype scope (``PLAN.md`` §8 P5): the main path ``SUBMITTED`` -> ... -> ``CLOSED``, ``DECLINED`` (organisation
 reason codes, and ``BY_DEVELOPER`` from stage 0), ``WITHDRAWN`` (the developer, before the agreement is signed) and
-stage 0 ``ORG_INTEREST`` -> ``INTEREST_CONFIRMED`` | ``DECLINED``. The side states ``EXPIRED``, ``ON_HOLD``,
-``DISPUTED``, ``TERMINATED``, ``INFO_REQUESTED`` and ``PROCUREMENT_ROUTE`` come after the prototype.
+stage 0 ``ORG_INTEREST`` -> ``INTEREST_CONFIRMED`` | ``DECLINED``. P19 (REQ-ENG-10 part) adds the side states
+``INFO_REQUESTED`` (the organisation asks from stages 1-2, the developer answers) and ``ON_HOLD`` before the agreement
+(either party, with a reason and a resume date), each left for the state it was entered from with the deadline moved
+by the business days paused, and ``EXPIRED`` (``EXPIRY``: the system's, written by the expiry job, not a row of the
+table). ``DISPUTED``, ``TERMINATED``, ``PROCUREMENT_ROUTE`` and ``ON_HOLD`` after the agreement come later.
 
 Refusals, in this order: the actor's party or role may not run the command (403 ``Forbidden``); the deals flag is off
 for a deal-stage command (403, AC-SEC-7); the engagement is not in a state the command starts from (409
@@ -21,9 +24,10 @@ about who acts). Input that can never be right (an unknown decline reason, a con
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from enum import StrEnum
 from typing import Final
 
@@ -93,6 +97,11 @@ class Command(StrEnum):
     SIGN_CERTIFICATE = "sign_certificate"
     RECORD_PAYMENT = "record_payment"
     CONFIRM_PAYMENT = "confirm_payment"
+    REQUEST_INFO = "request_info"
+    ANSWER_INFO = "answer_info"
+    CANCEL_REQUEST = "cancel_request"
+    PAUSE = "pause"
+    RESUME = "resume"
 
 
 class Endorse(StrEnum):
@@ -135,6 +144,37 @@ ORG_DECLINE_REASONS: Final = frozenset(
         EngagementEndReason.OTHER,
     }
 )
+# Side states an engagement leaves only for the state it entered them from (revision 0003's chain trigger), and the
+# ones built so far (REQ-ENG-10 part), in which the stage clock is paused.
+RETURNING: Final = frozenset({S.ON_HOLD, S.DISPUTED, S.INFO_REQUESTED})
+PAUSED: Final = frozenset({S.INFO_REQUESTED, S.ON_HOLD})
+# docs/spec/06 6.9: either party pauses before the agreement, except while the proposal is only submitted (the
+# organisation has not looked at it yet); after the agreement a hold needs the other party's acknowledgement (later).
+PAUSABLE: Final = BEFORE_AGREEMENT - {S.SUBMITTED}
+# The stages an engagement expires from when nobody acts (docs/spec/06 6.9 Due rule; policy.yaml expire_bd), with
+# the reason and the notification-matrix row both parties get. The expiry job writes these events as the system.
+EXPIRY: Final[Mapping[EngagementState, EngagementEndReason]] = {
+    S.ORG_INTEREST: EngagementEndReason.NO_DEV_RESPONSE,
+    S.SUBMITTED: EngagementEndReason.NO_REVIEW,
+    S.UNDER_REVIEW: EngagementEndReason.NO_DECISION,
+    S.INTEREST_CONFIRMED: EngagementEndReason.CONTACT_NOT_MADE,
+}
+EXPIRY_NOTICE: Final[Mapping[EngagementState, str]] = {
+    S.ORG_INTEREST: "N17",
+    S.SUBMITTED: "N01",
+    S.UNDER_REVIEW: "N03",
+    S.INTEREST_CONFIRMED: "N05",
+    S.INFO_REQUESTED: "N03",  # a question left unanswered past its answer-by date (policy.yaml info_requested)
+}
+# The side-state commands one party may run a limited number of times an hour (policy.yaml side_states).
+SIDE_COMMANDS: Final = frozenset(
+    {Command.REQUEST_INFO, Command.ANSWER_INFO, Command.CANCEL_REQUEST, Command.PAUSE, Command.RESUME}
+)
+EXPIRE: Final = "expire"  # the command code of the system's expiry event (no party runs it: not a row)
+RESUME_NOTICE: Final = "N20"  # the system's resume of a hold at its date tells both parties
+# The longest text a note carries (engagement_notes' body CHECK, revision 0006), and a reason's.
+QUESTION_MAX_CHARS: Final = 2000
+REASON_MAX_CHARS: Final = 500
 # IP terms the internal simple e-signature refuses (docs/spec/06 6.9 Instruments; AC-TRACK-10).
 OUTSIDE_SIGNATURE_TERMS: Final = frozenset({IpTerms.ASSIGNMENT, IpTerms.EXCLUSIVE_LICENCE})
 # The main path in order (the stepper, and the reveal of contact details from INTEREST_CONFIRMED on).
@@ -155,6 +195,9 @@ MAIN_PATH: Final = (
     S.CLOSED,
 )
 CONTACT_REVEALED: Final = frozenset(MAIN_PATH[MAIN_PATH.index(S.INTEREST_CONFIRMED) :])
+# Until first contact is made only the named contact may learn the developer's details (AC-TRACK-9), so the text the
+# side states carry (read by every member) may hold no contact details in these stages (THREAT_MODEL I).
+BEFORE_CONTACT: Final = frozenset({*MAIN_PATH[: MAIN_PATH.index(S.CONTACT_MADE)], S.PROCUREMENT_ROUTE})
 # Stage labels (docs/spec/06 6.9 "Label"). [[COPY-REVIEW]]
 STAGE_LABELS: Final[Mapping[EngagementState, str]] = {
     S.ORG_INTEREST: "Organisation interested",
@@ -173,6 +216,9 @@ STAGE_LABELS: Final[Mapping[EngagementState, str]] = {
     S.CLOSED: "Project closed",
     S.DECLINED: "Declined",
     S.WITHDRAWN: "Withdrawn",
+    S.EXPIRED: "Expired",
+    S.ON_HOLD: "On hold",
+    S.INFO_REQUESTED: "Information requested",
 }
 # The 5-group stepper (docs/spec/06 6.9 Rendering).
 STAGE_GROUPS: Final[Mapping[EngagementState, str]] = {
@@ -209,6 +255,7 @@ class Transition:
     endorse: Endorse | None = None
     renews_deadline: bool = False  # a same-state event that sets a new stage deadline (a new terms version)
     notice: str | None = None  # the notification-matrix row the other party gets (REQUIREMENTS.md §5)
+    resumes: bool = False  # leaves a side state for the state it was entered from (``Facts.paused_from``)
 
 
 def _t(
@@ -224,6 +271,7 @@ def _t(
     endorse: Endorse | None = None,
     renews_deadline: bool = False,
     notice: str | None = None,
+    resumes: bool = False,
 ) -> Transition:
     return Transition(
         command,
@@ -237,6 +285,7 @@ def _t(
         endorse=endorse,
         renews_deadline=renews_deadline,
         notice=notice,
+        resumes=resumes,
     )
 
 
@@ -266,7 +315,7 @@ TABLE: Final[Mapping[Command, Transition]] = {
         _t(Command.START_REVIEW, {ORG: DECIDERS}, {S.SUBMITTED}, target=S.UNDER_REVIEW, notice="N03"),
         _t(Command.DECLINE, {ORG: DECIDERS}, {S.SUBMITTED, S.UNDER_REVIEW}, target=S.DECLINED, notice="N03"),
         _t(Command.APPROVE, {ORG: SIGNATORY}, {S.UNDER_REVIEW}, target=S.INTEREST_CONFIRMED, notice="N04"),
-        _t(Command.WITHDRAW, _DEV, BEFORE_AGREEMENT, target=S.WITHDRAWN, notice="WITHDRAWN"),
+        _t(Command.WITHDRAW, _DEV, BEFORE_AGREEMENT | PAUSED, target=S.WITHDRAWN, notice="WITHDRAWN"),
         # Stages 3-4: the organisation marks first contact (its endorsement of stage 4); the developer confirms.
         _t(
             Command.MARK_CONTACTED,
@@ -389,6 +438,16 @@ TABLE: Final[Mapping[Command, Transition]] = {
             endorse=Endorse.BEFORE,
             notice="N16",
         ),
+        # Side branches (docs/spec/06 6.9; REQ-ENG-10 part), each with a note (engagement_notes): the organisation
+        # asks from stages 1-2 and the stage clock pauses until the developer answers; either party pauses before the
+        # agreement with a reason and a resume date, and either resumes early (or the expiry job, at the date). Each
+        # returns to the state it left, its deadline moved by the business days paused.
+        _t(Command.REQUEST_INFO, {ORG: DECIDERS}, {S.SUBMITTED, S.UNDER_REVIEW}, target=S.INFO_REQUESTED, notice="N03"),
+        _t(Command.ANSWER_INFO, _DEV, {S.INFO_REQUESTED}, resumes=True, notice="N03"),
+        # The organisation withdraws its own question (no note: the History shows the command).
+        _t(Command.CANCEL_REQUEST, {ORG: DECIDERS}, {S.INFO_REQUESTED}, resumes=True, notice="N03"),
+        _t(Command.PAUSE, {DEV: DEVELOPER, ORG: DECIDERS}, PAUSABLE, target=S.ON_HOLD, notice="N20"),
+        _t(Command.RESUME, {DEV: DEVELOPER, ORG: DECIDERS}, {S.ON_HOLD}, resumes=True, notice="N20"),
     )
 }
 
@@ -420,7 +479,9 @@ class Facts:
     ``endorsed``: the parties that endorsed the current stage in its current round (not a milestone); ``signed``:
     the parties that signed the current stage's document (the NDA, the final agreement or the acceptance
     certificate); ``draft_by``/``draft_status``/``ip_terms``: the latest agreement version; ``milestones``: the
-    states of the signed agreement's milestones."""
+    states of the signed agreement's milestones; ``paused_from``: in a side state, the state it was entered from
+    (where it returns); ``questions_left``, ``holds_left`` and ``hold_days_left``: what the policy's caps leave this
+    stage's questions and holds and the engagement's days on hold (None: these facts do not limit them)."""
 
     endorsed: frozenset[EngagementParty] = frozenset()
     signed: frozenset[EngagementParty] = frozenset()
@@ -432,6 +493,10 @@ class Facts:
     developer_d2: bool = False
     payment_recorded: bool = False
     deals_enabled: bool = True
+    paused_from: EngagementState | None = None
+    questions_left: int | None = None
+    holds_left: int | None = None
+    hold_days_left: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -446,6 +511,7 @@ class Decision:
     step_up: bool
     renews_deadline: bool
     notice: str | None
+    resumes: bool = False
 
     @property
     def changes_state(self) -> bool:
@@ -508,10 +574,16 @@ def decide(
     decline reason code."""
     transition, role = authorize(command, actor, deals_enabled=facts.deals_enabled)
     check_source(command, state)
+    if command is Command.WITHDRAW and state in PAUSED and facts.paused_from not in BEFORE_AGREEMENT:
+        raise Conflict("illegal_transition", "Withdrawing is possible only before the agreement is signed.")
     _guard(command, actor.party, facts, milestone)
     to_state = transition.target or state
     if transition.completes is not None and facts.signed | {actor.party} == BOTH:
         to_state = transition.completes
+    if transition.resumes:
+        if facts.paused_from is None:  # loaded facts always name it; never guess a state to return to
+            raise Conflict("no_return_state", "The state this engagement returns to is not known. Reload and retry.")
+        to_state = facts.paused_from
     end_reason = transition.end_reason
     if command is Command.DECLINE:
         if reason not in ORG_DECLINE_REASONS:
@@ -528,6 +600,7 @@ def decide(
         step_up=transition.step_up,
         renews_deadline=transition.renews_deadline,
         notice=transition.notice,
+        resumes=transition.resumes,
     )
 
 
@@ -574,6 +647,14 @@ def _guard(command: Command, party: EngagementParty, facts: Facts, milestone: Mi
         raise Conflict("payment_recorded", "The final payment is already recorded.")
     if command is Command.CONFIRM_PAYMENT and not facts.payment_recorded:
         raise Conflict("no_payment_recorded", "The organisation has not recorded the final payment yet.")
+    if command is Command.REQUEST_INFO and facts.questions_left is not None and facts.questions_left <= 0:
+        raise Conflict(
+            "info_request_limit", "Your organisation asked all the questions this stage allows: decide, or decline."
+        )
+    if command is Command.PAUSE and facts.holds_left is not None and facts.holds_left <= 0:
+        raise Conflict("hold_limit", "This stage has had all the holds it may have: go on, or withdraw.")
+    if command is Command.PAUSE and facts.hold_days_left is not None and facts.hold_days_left <= 0:
+        raise Conflict("hold_limit", "This engagement has used all the days on hold it may have.")
 
 
 def pending(state: EngagementState, facts: Facts) -> tuple[Pending, ...]:
@@ -613,6 +694,8 @@ def pending(state: EngagementState, facts: Facts) -> tuple[Pending, ...]:
         found = [
             Pending(Command.CONFIRM_PAYMENT, DEV) if facts.payment_recorded else Pending(Command.RECORD_PAYMENT, ORG)
         ]
+    elif state is S.INFO_REQUESTED:
+        found = [Pending(Command.ANSWER_INFO, DEV)]  # the organisation waits for the answer (ON_HOLD: for the date)
     return tuple(found)
 
 
@@ -680,6 +763,53 @@ def stage_deadline(
     return end_of_day(add_business_days(today, due_bd, holidays))
 
 
+def resumed_deadline(
+    paused_due_on: date | None, paused_on: date, today: date, holidays: Collection[date]
+) -> datetime | None:
+    """The deadline of a stage resumed from a side state on ``today``: the one it had when it was paused (its Nairobi
+    date ``paused_due_on``; None: it had none), moved by the business days from ``paused_on`` (the Nairobi date the
+    side state was entered) to ``today`` (docs/spec/06 6.9: "clock paused", "due dates shift by hold duration")."""
+    if paused_due_on is None:
+        return None
+    paused = max(0, business_days_between(paused_on, today, holidays))
+    return end_of_day(add_business_days(paused_due_on, paused, holidays) if paused else paused_due_on)
+
+
+def question_deadline(now: datetime, holidays: Collection[date], policy: TrackerPolicy) -> datetime:
+    """The answer-by date of a question asked at ``now`` (policy.yaml ``info_requested.expire_bd``): the stage's clock
+    is paused, and past this date the engagement expires (``expiry_reason``)."""
+    return end_of_day(add_business_days(local_date(now), policy.info_expire_bd, holidays))
+
+
+def expiry_reason(state: EngagementState) -> EngagementEndReason | None:
+    """Why an engagement the clock ends in ``state`` expired: the stage's reason (``EXPIRY``), or the developer's
+    silence for an unanswered question."""
+    if state is S.INFO_REQUESTED:
+        return EngagementEndReason.NO_DEV_RESPONSE
+    return EXPIRY.get(state)
+
+
+def expires_at(
+    state: EngagementState,
+    entered_on: date,
+    entered_due_on: date | None,
+    due_on: date | None,
+    holidays: Collection[date],
+    policy: TrackerPolicy,
+) -> datetime | None:
+    """When an engagement left in ``state`` expires (``EXPIRY``; policy.yaml ``expire_bd``): the end of the
+    ``expire_bd``-th business day after ``entered_on``, the Nairobi date it entered the stage from the main path,
+    plus the business days its deadline has been moved by pauses since (``due_on``, the deadline's date now, against
+    ``entered_due_on``, the one it entered with). It expires once that moment has passed. None for any other state."""
+    expire_bd = policy.stage(state).expire_bd
+    if state not in EXPIRY or expire_bd is None:
+        return None
+    paused = 0
+    if entered_due_on is not None and due_on is not None:
+        paused = max(0, business_days_between(entered_due_on, due_on, holidays))
+    return end_of_day(add_business_days(entered_on, expire_bd + paused, holidays))
+
+
 @dataclass(frozen=True, slots=True)
 class Due:
     due_on: date
@@ -705,6 +835,47 @@ def check_contact_by(contact_by: date, now: datetime, holidays: Collection[date]
             "invalid_contact_by",
             f"Choose a contact-by date from today to {latest:%d %b %Y} ({policy.contact_by_max_bd} business days).",
         )
+
+
+def platform_day(now: datetime) -> date:
+    """The day the side-state rules count from: the Africa/Nairobi date of the platform clock's ``now``
+    (``app_clock_now()``, the test clock where it is on). ``check_resume_at`` and the detail's ``today`` both read it,
+    so the web app's check and the API's never disagree."""
+    return local_date(now)
+
+
+def check_resume_at(resume_at: date, now: datetime, policy: TrackerPolicy, *, days_left: int | None = None) -> None:
+    """A hold's resume date (docs/spec/06 6.9 ON_HOLD): after today and at most ``on_hold_max_days`` days ahead (422),
+    and within the ``days_left`` the engagement's earlier holds left (policy.yaml ``hold_days_total``; 409)."""
+    today = platform_day(now)
+    latest = today + timedelta(days=policy.on_hold_max_days)
+    if not today < resume_at <= latest:
+        raise Invalid(
+            "invalid_resume_at",
+            f"Choose a resume date from tomorrow to {latest:%d %b %Y} (at most {policy.on_hold_max_days} days ahead).",
+        )
+    if days_left is not None and (resume_at - today).days > days_left:
+        raise Conflict(
+            "hold_limit",
+            f"This engagement may be on hold {days_left} more days: choose a resume date by"
+            f" {today + timedelta(days=max(days_left, 0)):%d %b %Y}.",
+        )
+
+
+_KEPT_CONTROLS: Final = frozenset("\n\t")
+# Controls, format characters (bidi overrides, zero widths), surrogates and private use.
+_DROPPED: Final = frozenset({"Cc", "Cf", "Cs", "Co"})
+
+
+def check_note(text: str | None, limit: int) -> str:
+    """The text a side-state command carries (a question, an answer, a reason) as stored, plain text as teasers are:
+    control and format characters dropped but line feeds and tabs (a right-to-left override or a zero-width space
+    never reaches the other party), then trimmed: 1 to ``limit`` characters."""
+    value = "".join(ch for ch in (text or "") if ch in _KEPT_CONTROLS or unicodedata.category(ch) not in _DROPPED)
+    value = value.strip()
+    if not 0 < len(value) <= limit:
+        raise Invalid("invalid_note", f"Write 1 to {limit} characters.")
+    return value
 
 
 @dataclass(frozen=True, slots=True)
