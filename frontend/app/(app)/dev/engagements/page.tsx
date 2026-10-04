@@ -6,9 +6,11 @@ import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { myEngagements } from "@/components/tracker/data";
 import { EngagementRow } from "@/components/tracker/EngagementRow";
+import { awaitsMe } from "@/components/tracker/model";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RowList } from "@/components/ui/RowList";
+import { cn } from "@/components/ui/cn";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
@@ -39,17 +41,24 @@ export default async function DeveloperEngagementsPage() {
       <div className="max-w-3xl">
         <PageHeader title={t("title")} lead={t("devLead")} />
         {groups.length > 0 ? (
-          <div className="mt-10 flex flex-col gap-12">
+          <div className="mt-8 flex flex-col gap-6 lg:mt-10">
             {groups.map((group) => (
+              // Each idea is one white card of its organisations' rows; an idea with a row waiting on the developer
+              // is raised (P20: the thing that needs you carries the weight).
               <Section
                 key={group.proposalId}
+                className={cn(
+                  "rounded-panel border border-line bg-field p-4 sm:p-6",
+                  group.items.some((item) => awaitsMe(item, "developer")) && "shadow-card",
+                )}
+                headingStyle="card"
                 title={group.title}
                 headingId={`proposal-${group.proposalId}`}
                 description={td("organisations", { count: group.items.length })}
                 link={{ href: `/dev/ideas/${encodeURIComponent(group.proposalId)}`, label: td("openIdea") }}
                 data-proposal={group.proposalId}
               >
-                <RowList aria-label={td("rowsLabel", { title: group.title })}>
+                <RowList aria-label={td("rowsLabel", { title: group.title })} className="[&>li:last-child>article]:pb-0">
                   {group.items.map((item) => (
                     <EngagementRow
                       key={item.id}
