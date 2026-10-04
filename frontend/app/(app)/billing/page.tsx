@@ -100,8 +100,8 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
       headingId="plans-title"
       description={catalogue.sample_prices ? <SamplePrices label={t("samplePrices")} /> : undefined}
     >
-      {/* The ladder: one column on phones, two across from 1024 px so the plans compare side by side. */}
-      <ol data-ladder="" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* The ladder: one column on phones; from 1024 px two or three across, whichever leaves no plan alone in a row. */}
+      <ol data-ladder="" className={cn("grid grid-cols-1 gap-4", plans.length === 3 || plans.length > 4 ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
         {plans.map((plan, index) => (
           <PlanCard
             key={plan.code}
@@ -142,15 +142,25 @@ async function PlanCard({
   return (
     <Card
       as="li"
+      // The plan to move to is raised; the current one carries a bloom ring ("you are here"; a ring, so the card's
+      // own hairline needs no override); the rest are flat.
       variant={action === "upgrade" ? "raised" : "flat"}
       aria-current={current ? "true" : undefined}
       data-plan={plan.code}
-      className={cn("flex flex-col gap-3", current && "border-accent")}
+      className={cn("flex flex-col gap-3", current && "ring-2 ring-accent")}
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+      {/* The name, then the price as the card's figure in the display face (P20), then "Your plan". */}
+      <div className="flex flex-col gap-1">
         <h3 className="text-base text-ink">{plan.name}</h3>
         {kind === "free" ? null : (
-          <p className={cn("text-ink tabular-nums", kind === "notSold" ? "text-sm text-ink-soft" : "font-semibold")}>{price}</p>
+          <p
+            className={cn(
+              "tabular-nums",
+              kind === "notSold" ? "text-sm text-ink-soft" : "font-display text-xl font-[680] tracking-[-0.02em] text-ink",
+            )}
+          >
+            {price}
+          </p>
         )}
       </div>
       {current ? (
@@ -171,13 +181,13 @@ async function PlanCard({
         </ul>
       ) : null}
       {action === "upgrade" ? (
-        <div className="mt-2">
+        <div className="mt-auto pt-2">
           <ButtonLink href={href} variant="primary" className="no-underline">
             {t("upgradeTo", { plan: plan.name })}
           </ButtonLink>
         </div>
       ) : action === "choose" ? (
-        <p>
+        <p className="mt-auto">
           <StandaloneLink href={href}>{t("upgradeTo", { plan: plan.name })}</StandaloneLink>
         </p>
       ) : null}

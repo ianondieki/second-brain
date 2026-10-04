@@ -233,7 +233,7 @@ function Phone({ phase, plan, price, simulated }: { phase: Phase; plan: string; 
       <div className="rounded-[1.75rem] border-[6px] border-bezel bg-paper p-3 shadow-card">
         <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-line" />
         <div className="flex min-h-[15rem] flex-col rounded-[1rem] border border-line bg-field p-4">
-          <p className="text-xs font-semibold tracking-[0.08em] text-ink-soft uppercase">
+          <p className="text-sm font-semibold text-ink-soft">
             {simulated ? t("phone.simulated") : t("phone.title")}
           </p>
           {state === "paid" ? (
@@ -365,7 +365,7 @@ function Confirm({
         <h2 id="checkout-step" ref={headingRef} tabIndex={-1} className="text-lg text-ink focus:outline-none">
           {t("youPay")}
         </h2>
-        <p className="mt-1 text-xl font-semibold text-ink tabular-nums" data-price="">
+        <p className="mt-1 font-display text-2xl font-bold text-ink tabular-nums" data-price="">
           {props.price}
         </p>
         {props.sample ? <div className="mt-2">{props.sample}</div> : null}
