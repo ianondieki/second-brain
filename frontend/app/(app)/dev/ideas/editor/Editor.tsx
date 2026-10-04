@@ -47,11 +47,10 @@ import { Stepper } from "./Stepper";
 // Server-rendered whole (preloadable), so the HTML arrives complete and nothing shifts while the chunk loads.
 const detailsModule = preloadable(() => import("./DetailsStep"));
 const reviewModule = preloadable(() => import("./Review"));
-const checklistModule = preloadable(() => import("../checklist"));
 
 /** Starts loading the later steps' code (tests render them at once). */
 export function preloadSteps() {
-  return Promise.all([detailsModule(), reviewModule(), checklistModule(), preloadPanels()]);
+  return Promise.all([detailsModule(), reviewModule(), preloadPanels()]);
 }
 
 function DetailsStep(props: ComponentProps<typeof import("./DetailsStep").DetailsStep>) {
@@ -60,7 +59,6 @@ function DetailsStep(props: ComponentProps<typeof import("./DetailsStep").Detail
 }
 
 function Review(props: ComponentProps<typeof import("./Review").Review>) {
-  void checklistModule(); // settled long before a publish attempt reads it (the Editor would suspend otherwise)
   const { Review: Step } = use(reviewModule());
   return <Step {...props} />;
 }
@@ -131,6 +129,9 @@ export interface EditorProps {
   lastOverlap?: ReactNode;
 }
 
+/** The screen's publish checklist (../checklist publishChecklist), handed over by the review step. */
+type Checklist = (state: EditorState) => FieldIssue[];
+
 type Save =
   | { kind: "clean" }
   | { kind: "dirty" }
@@ -182,7 +183,9 @@ export function Editor(props: EditorProps) {
   const [attachments, setAttachments] = useState<Attachment[]>(props.attachments);
   const [save, setSave] = useState<Save>({ kind: "clean" });
   const [issues, setIssues] = useState<FieldIssue[]>([]);
-  const [showRequired, setShowRequired] = useState(false);
+  // From the first publish attempt on, the fields show what is missing too: the review step hands over its checklist
+  // (its code came with that step, not with the editor's first load).
+  const [required, setRequired] = useState<{ check: Checklist } | null>(null);
   const [created, setCreated] = useState(props.id !== null);
   const [publishing, setPublishing] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -370,12 +373,10 @@ export function Editor(props: EditorProps) {
 
   // --- issues shown by the fields ---------------------------------------------------------------------------------
 
-  // The screen's own checklist joins the API's findings from the first publish attempt on; its code came with the
-  // review step, so reading it does not wait.
-  const checklist = showRequired ? use(checklistModule()).publishChecklist(state) : [];
+  const checklist = required ? required.check(state) : [];
   const shown: FieldIssue[] = [
     ...issues,
-    ...(showRequired ? checklist.filter((c) => !issues.some((i) => i.field === c.field)) : []),
+    ...checklist.filter((c) => !issues.some((i) => i.field === c.field)),
   ];
   /** Every finding for the field, one per line (the sanitiser can find a link and a phone number at once). */
   const errorFor = (field: FieldName) => {
@@ -673,7 +674,7 @@ export function Editor(props: EditorProps) {
             attachments={attachments.length}
             issues={issues}
             onIssues={setIssues}
-            onShowRequired={() => setShowRequired(true)}
+            onShowRequired={(check) => setRequired({ check })}
             initialText={props.attestations}
             saveAll={saveDraft}
             getId={() => idRef.current}

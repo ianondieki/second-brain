@@ -47,7 +47,7 @@ export interface ReviewProps {
   issues: FieldIssue[];
   onIssues: (issues: FieldIssue[]) => void;
   /** From the first publish attempt on, the fields show what is missing too. */
-  onShowRequired: () => void;
+  onShowRequired: (check: (state: EditorState) => FieldIssue[]) => void;
   initialText: AttestationText;
   /** Saves everything typed (creating the draft if needed); the save's refusal, or null. */
   saveAll: () => Promise<SaveProblem | null>;
@@ -104,7 +104,7 @@ export function Review(props: ReviewProps) {
 
   async function publish() {
     if (publishing.kind === "busy") return;
-    props.onShowRequired();
+    props.onShowRequired(publishChecklist);
     if (checklist.length > 0 || !keys.every((key) => confirmed[key])) {
       setPublishing({ kind: "checklist" });
       return;
