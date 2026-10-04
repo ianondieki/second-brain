@@ -293,7 +293,7 @@ describe("forms for commands with a body", () => {
     const submit = within(document.querySelector("[data-command-form]") as HTMLElement).getByRole("button", {
       name: "Decline",
     });
-    expect(submit.className).toContain("border-error");
+    expect(submit.className).toContain("btn-danger");
     expect(submit.hasAttribute("data-primary")).toBe(false);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Decline" })));
     expect(runImpl.mock.calls[0][0]).toMatchObject({

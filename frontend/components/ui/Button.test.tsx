@@ -101,11 +101,11 @@ describe("Button danger", () => {
     const button = screen.getByRole("button", { name: "Withdraw" });
     expect(button.hasAttribute("data-primary")).toBe(false);
     const css = await cssFor(buttonClass("danger"));
-    expect(declarationsEndingWith(css, ".text-error")).toContain("color: var(--error)");
-    expect(declarationsEndingWith(css, ".border-error")).toContain("border-color: var(--error)");
-    expect(declarationsEndingWith(css, ".bg-transparent")).toContain("background-color: transparent");
-    expect(declarationsEndingWith(css, ".hover\\:bg-error-wash:hover")).toContain("background-color: var(--error-wash)");
-    expect(buttonClass("danger")).not.toMatch(/(^|\s)bg-error(\s|$)/);
+    // P20: the variants are CSS component classes (globals.css), so the rule is read there.
+    const danger = declarationsEndingWith(css, ".btn-danger");
+    expect(danger).toEqual(expect.arrayContaining(["color: var(--error)", "border: 1px solid var(--error)", "background: var(--field)"]));
+    expect(declarationsEndingWith(css, ".btn-danger:hover")).toContain("background: var(--error-wash)");
+    expect(danger.join(";")).not.toMatch(/background: var\(--error\)/);
   });
 
   it("stays focusable and ignores presses while busy", () => {

@@ -352,6 +352,97 @@ html[data-theme="dark"] {
 }
 
 /*
+ * Buttons (components/ui/Button.tsx): pills, one height (48 px; a label that wraps at 360 px keeps its padding and
+ * stays centred). The primary is the bloom fill with a hairline of light on its top edge; secondary is a white pill
+ * with a quiet edge; danger carries the error colour in words and edge, never a fill; link is a word with a line.
+ */
+@layer components {
+  .btn {
+    display: inline-flex;
+    min-height: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding-block: 0.5rem;
+    text-align: center;
+    font-size: var(--text-base);
+    line-height: 1.3;
+    font-weight: 650;
+    letter-spacing: -0.005em;
+    transition-property: color, background-color, border-color, box-shadow, transform;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-out);
+  }
+  .btn[aria-disabled="true"] {
+    cursor: progress;
+  }
+  .btn-primary {
+    width: 100%;
+    padding-inline: 1.5rem;
+    background: var(--accent);
+    color: var(--on-accent);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      0 1px 2px rgb(30 22 64 / 0.18),
+      0 8px 20px -10px color-mix(in oklab, var(--accent) 70%, transparent);
+  }
+  @media (width >= 40rem) {
+    .btn-primary {
+      width: auto;
+    }
+  }
+  .btn-primary:hover,
+  .btn-primary[aria-disabled="true"] {
+    background: var(--accent-strong);
+  }
+  .btn-secondary {
+    padding-inline: 1.25rem;
+    border: 1px solid color-mix(in oklab, var(--ink-soft) 38%, var(--paper));
+    background: var(--field);
+    color: var(--ink);
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent-line);
+    background: var(--wash-soft);
+  }
+  .btn-danger {
+    padding-inline: 1.25rem;
+    border: 1px solid var(--error);
+    background: var(--field);
+    color: var(--error);
+  }
+  .btn-danger:hover {
+    background: var(--error-wash);
+  }
+  .btn-link {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    padding-inline: 0;
+    border-radius: 0;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+  .btn-link:hover {
+    color: var(--accent-strong);
+    text-decoration-thickness: 2px;
+  }
+  .btn-link[aria-disabled="true"] {
+    cursor: progress;
+    color: var(--ink-soft);
+    text-decoration-style: dotted;
+    text-decoration-thickness: 1px;
+  }
+  .btn-link[aria-disabled="true"]:hover {
+    color: var(--ink-soft);
+    text-decoration-thickness: 1px;
+  }
+}
+
+/*
  * The kanga-cut lattice (the one East African mark, D-52, recoloured in D-55): a 6 px two-tone band of triangles,
  * the kanga's border (pindo), drawn on [data-lattice] edges. Never behind text. Tones: bloom and saffron.
  */
