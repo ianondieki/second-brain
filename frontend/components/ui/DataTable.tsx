@@ -94,4 +94,4 @@ export function DataCell({ label, head = false, figure = false, nowrap = false, 
 
 /** A row's title as its one link: no underline until hovered, a 44 px tap band inside the dense row. */
 export const dataLinkClass =
-  "-my-2.5 inline-flex min-h-11 items-center font-semibold text-ink no-underline [overflow-wrap:anywhere] hover:underline hover:decoration-1 hover:underline-offset-[0.2em]";
+  "-my-3 inline-flex items-center py-3 font-semibold text-ink no-underline [overflow-wrap:anywhere] hover:underline hover:decoration-1 hover:underline-offset-[0.2em]";

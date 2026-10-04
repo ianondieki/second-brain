@@ -116,7 +116,7 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
       className="relative flex h-full min-w-0 flex-col rounded-panel border border-line bg-field p-4 transition-[border-color] duration-(--motion-fast) hover:border-accent-line sm:p-5"
     >
       <h3 id={titleId} className="text-base leading-snug font-semibold text-pretty [overflow-wrap:anywhere] text-ink">
-        <Link href={problemHref(item.problem.id)} className={titleLinkClass}>
+        <Link href={problemHref(item.problem.id)} className={cn(titleLinkClass, "-my-[11px] inline-block py-[11px]")}>
           {item.problem.title}
           <LinkPending className="absolute -top-px left-4 sm:left-5" />
         </Link>
