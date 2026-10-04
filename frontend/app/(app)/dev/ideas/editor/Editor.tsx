@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, Suspense, use, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { cloneElement, Component, Suspense, use, useEffect, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 
@@ -25,7 +25,6 @@ import {
   MATURITIES,
   MATURITY_KEY,
   MAX_SUMMARY_WORDS,
-  publishChecklist,
   wordCount,
   type Attachment,
   type AttestationText,
@@ -48,10 +47,11 @@ import { Stepper } from "./Stepper";
 // Server-rendered whole (preloadable), so the HTML arrives complete and nothing shifts while the chunk loads.
 const detailsModule = preloadable(() => import("./DetailsStep"));
 const reviewModule = preloadable(() => import("./Review"));
+const checklistModule = preloadable(() => import("../checklist"));
 
 /** Starts loading the later steps' code (tests render them at once). */
 export function preloadSteps() {
-  return Promise.all([detailsModule(), reviewModule(), preloadPanels()]);
+  return Promise.all([detailsModule(), reviewModule(), checklistModule(), preloadPanels()]);
 }
 
 function DetailsStep(props: ComponentProps<typeof import("./DetailsStep").DetailsStep>) {
@@ -60,6 +60,7 @@ function DetailsStep(props: ComponentProps<typeof import("./DetailsStep").Detail
 }
 
 function Review(props: ComponentProps<typeof import("./Review").Review>) {
+  void checklistModule(); // settled long before a publish attempt reads it (the Editor would suspend otherwise)
   const { Review: Step } = use(reviewModule());
   return <Step {...props} />;
 }
@@ -369,7 +370,9 @@ export function Editor(props: EditorProps) {
 
   // --- issues shown by the fields ---------------------------------------------------------------------------------
 
-  const checklist = publishChecklist(state);
+  // The screen's own checklist joins the API's findings from the first publish attempt on; its code came with the
+  // review step, so reading it does not wait.
+  const checklist = showRequired ? use(checklistModule()).publishChecklist(state) : [];
   const shown: FieldIssue[] = [
     ...issues,
     ...(showRequired ? checklist.filter((c) => !issues.some((i) => i.field === c.field)) : []),
@@ -492,13 +495,7 @@ export function Editor(props: EditorProps) {
           </Card>
 
           <Card as="section" variant="flat" aria-labelledby="teaser-title" className="flex flex-col gap-6">
-            <div>
-              <h3 id="teaser-title" className="flex items-center gap-2 font-semibold text-ink">
-                <EyeIcon className="size-5 shrink-0 text-accent" />
-                {f("teaserTitle")}
-              </h3>
-              <p className="mt-1 text-sm text-ink-soft">{t("teaserHint")}</p>
-            </div>
+            <CardHead id="teaser-title" icon={<EyeIcon />} title={f("teaserTitle")} hint={t("teaserHint")} />
             <TextAreaField
               id="idea-problem-statement"
               label={f("problemStatement")}
@@ -578,14 +575,8 @@ export function Editor(props: EditorProps) {
           </Card>
 
           <Card as="section" variant="flat" aria-labelledby="checks-title" className="flex flex-col gap-4">
-            <div>
-              <h3 id="checks-title" className="flex items-center gap-2 font-semibold text-ink">
-                {/* A magnifier, not a tick: before any check has run nothing has "passed". */}
-                <LookIcon className="size-5 shrink-0 text-accent" data-icon="look" />
-                {checksT("title")}
-              </h3>
-              <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{checksT("hint")}</p>
-            </div>
+            {/* A magnifier, not a tick: before any check has run nothing has "passed". */}
+            <CardHead id="checks-title" icon={<LookIcon data-icon="look" />} title={checksT("title")} hint={checksT("hint")} />
             {checksPressed ? (
               <PanelBoundary
                 onError={() => {
@@ -615,13 +606,7 @@ export function Editor(props: EditorProps) {
           </Card>
 
           <Card as="section" variant="flat" aria-labelledby="assistant-title" className="flex flex-col gap-4">
-            <div>
-              <h3 id="assistant-title" className="flex items-center gap-2 font-semibold text-ink">
-                <SparkIcon className="size-5 shrink-0 text-accent" />
-                {t("assistantTitle")}
-              </h3>
-              <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{t("assistantHint")}</p>
-            </div>
+            <CardHead id="assistant-title" icon={<SparkIcon />} title={t("assistantTitle")} hint={t("assistantHint")} />
             {assistantOpen ? (
               <PanelBoundary
                 onError={() => {
@@ -686,7 +671,6 @@ export function Editor(props: EditorProps) {
             state={state}
             niches={props.niches}
             attachments={attachments.length}
-            checklist={checklist}
             issues={issues}
             onIssues={setIssues}
             onShowRequired={() => setShowRequired(true)}
@@ -714,6 +698,19 @@ export function Editor(props: EditorProps) {
       )}
     </fieldset>
     </>
+  );
+}
+
+/** A step-one card's heading: its icon, the title and a one-line hint. */
+function CardHead({ id, icon, title, hint }: { id: string; icon: ReactElement<{ className?: string }>; title: string; hint: string }) {
+  return (
+    <div>
+      <h3 id={id} className="flex items-center gap-2 font-semibold text-ink">
+        {cloneElement(icon, { className: "size-5 shrink-0 text-accent" })}
+        {title}
+      </h3>
+      <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{hint}</p>
+    </div>
   );
 }
 

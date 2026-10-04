@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/Card";
 import { LockIcon } from "@/components/ui/status-icons";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 
-import { LIMITS, linksProblem, type Attachment, type EditorState } from "../ideas";
+import { linksProblem } from "../checklist";
+import { LIMITS, type Attachment, type EditorState } from "../ideas";
 import type { Calls } from "../calls";
 import { Attachments, type AttachmentsProps } from "./Attachments";
 import { useIssueMessage } from "./issues";

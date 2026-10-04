@@ -14,11 +14,10 @@ import { Checkbox } from "@/components/ui/Checkbox";
 import { upgradeHref } from "@/lib/billing/upgrade";
 
 import type { Calls } from "../calls";
+import { FIELD_STEP, linkLines, publishChecklist } from "../checklist";
 import {
   editHref,
-  FIELD_STEP,
   ideaHref,
-  linkLines,
   type Attestations,
   type AttestationText,
   type EditorState,
@@ -44,8 +43,6 @@ export interface ReviewProps {
   state: EditorState;
   niches: NicheNode[];
   attachments: number;
-  /** What the screen finds missing (publishChecklist). */
-  checklist: FieldIssue[];
   /** What the API refused (the sanitiser, 422 cannot_publish). */
   issues: FieldIssue[];
   onIssues: (issues: FieldIssue[]) => void;
@@ -97,9 +94,10 @@ export function Review(props: ReviewProps) {
   const sections = (["approach", "architecture", "pricing", "notes"] as const).filter((k) => state[k].trim()).length;
   const niche = nicheLabel(props.niches, state.nicheId);
 
-  // One entry per field: the API's finding first, else the screen's.
+  // What the screen finds missing; one entry per field: the API's finding first, else the screen's.
+  const checklist = publishChecklist(state);
   const blocking: FieldIssue[] = [];
-  for (const issue of [...props.issues, ...(attempted ? props.checklist : [])]) {
+  for (const issue of [...props.issues, ...(attempted ? checklist : [])]) {
     if (!blocking.some((b) => b.field === issue.field)) blocking.push(issue);
   }
   const steps = [...new Set(blocking.map((issue) => FIELD_STEP[issue.field]))].sort();
@@ -107,7 +105,7 @@ export function Review(props: ReviewProps) {
   async function publish() {
     if (publishing.kind === "busy") return;
     props.onShowRequired();
-    if (props.checklist.length > 0 || !keys.every((key) => confirmed[key])) {
+    if (checklist.length > 0 || !keys.every((key) => confirmed[key])) {
       setPublishing({ kind: "checklist" });
       return;
     }

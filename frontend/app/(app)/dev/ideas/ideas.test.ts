@@ -2,10 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import { publish, saveDraft, searchProblems, uploadAttachment } from "./calls";
 import { draftBody } from "./draft";
+import { linksProblem, publishChecklist } from "./checklist";
 import {
   editHref,
-  linksProblem,
-  publishChecklist,
   wordCount,
   type EditorState,
   type Version,
