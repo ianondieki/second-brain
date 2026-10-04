@@ -9,7 +9,6 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { Chip } from "@/components/tracker/Chip";
 import { Callout } from "@/components/ui/Callout";
 import { Card } from "@/components/ui/Card";
-import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
@@ -111,18 +110,24 @@ export default async function BriefPage({ params, searchParams }: PageProps<"/or
         <p className="max-w-[65ch] text-lg [overflow-wrap:anywhere] whitespace-pre-line text-ink" data-statement="">
           {brief.statement}
         </p>
-        <DescriptionList className="mt-5 border-t border-line pt-5">
-          <Description label={t("facts.affected")}>{brief.affected_group ?? notGiven}</Description>
-          <Description label={t("facts.niche")}>{brief.niche?.label ?? notGiven}</Description>
-          <Description label={t("facts.region")}>{county ?? t("anywhere")}</Description>
-          <Description label={t("facts.budget")}>{brief.budget_band?.label ?? notGiven}</Description>
-          <Description label={t("facts.deadline")}>
-            {brief.deadline ? formatCalendarDate(locale, brief.deadline) : t("noDeadline")}
-          </Description>
-          <Description label={t("facts.proposals")}>
-            <span data-proposals={brief.proposal_count}>{t("proposals", { count: brief.proposal_count })}</span>
-          </Description>
-        </DescriptionList>
+        {/* The facts as a grid (three across from 640 px, two on phones: six facts, no orphan), as the proposal page's. */}
+        <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-6 sm:grid-cols-3">
+          {(
+            [
+              ["affected", brief.affected_group ?? notGiven],
+              ["niche", brief.niche?.label ?? notGiven],
+              ["region", county ?? t("anywhere")],
+              ["budget", brief.budget_band?.label ?? notGiven],
+              ["deadline", brief.deadline ? formatCalendarDate(locale, brief.deadline) : t("noDeadline")],
+              ["proposals", <span key="p" data-proposals={brief.proposal_count}>{t("proposals", { count: brief.proposal_count })}</span>],
+            ] as const
+          ).map(([key, value]) => (
+            <div key={key} className="flex min-w-0 flex-col gap-0.5">
+              <dt className="text-sm text-ink-soft">{t(`facts.${key}`)}</dt>
+              <dd className="font-semibold [overflow-wrap:anywhere] text-ink">{value}</dd>
+            </div>
+          ))}
+        </dl>
       </Card>
 
       {postsBriefs(org) && closable(brief) ? (
