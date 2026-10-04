@@ -1,7 +1,6 @@
 import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/Badge";
-import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 
@@ -67,24 +66,40 @@ export function HistoryList({ history, notes = [] }: { history: History; notes?:
         </Badge>
       }
     >
-      <RowList ordered>
-        {events.map((event) => (
-          <Row
-            key={event.id}
-            data-event={event.command}
-            title={EVENT_KEYS.has(event.command) ? t(`event.${event.command as Command | "create" | "expire"}`) : t("event.other")}
-            meta={t("history.actor", {
-              name: event.actor_name ?? t("endorsements.platform"),
-              role: t(`role.${event.actor_role}`),
-            })}
-          >
-            <p className="text-sm text-ink-soft">
-              <Eat iso={event.created_at} />
-            </p>
-            <NoteText note={noteOf.get(event.id)} locale={locale} />
-          </Row>
+      {/* A timeline, newest first: a rail down the left with a mark per event (the latest in bloom), the event's
+          name, who acted, when, and any words they wrote. */}
+      <ol className="relative flex flex-col">
+        {events.map((event, i) => (
+          <li key={event.id} data-event={event.command} className="relative flex gap-4 pb-7 last:pb-0">
+            {i < events.length - 1 ? (
+              <span aria-hidden="true" className="absolute top-5 bottom-0 left-[7px] w-0.5 rounded-full bg-ink-soft/30" />
+            ) : null}
+            <span
+              aria-hidden="true"
+              className={
+                i === 0
+                  ? "relative mt-1 size-4 shrink-0 rounded-full bg-accent ring-4 ring-accent-wash"
+                  : "relative mt-1 size-4 shrink-0 rounded-full border-2 border-ink-soft bg-paper"
+              }
+            />
+            <div className="min-w-0 flex-1">
+              <h3 className="font-semibold text-ink">
+                {EVENT_KEYS.has(event.command) ? t(`event.${event.command as Command | "create" | "expire"}`) : t("event.other")}
+              </h3>
+              <p className="mt-0.5 flex flex-wrap gap-x-3 text-sm text-ink-soft">
+                <span className="text-ink">
+                  {t("history.actor", {
+                    name: event.actor_name ?? t("endorsements.platform"),
+                    role: t(`role.${event.actor_role}`),
+                  })}
+                </span>
+                <Eat iso={event.created_at} />
+              </p>
+              <NoteText note={noteOf.get(event.id)} locale={locale} />
+            </div>
+          </li>
         ))}
-      </RowList>
+      </ol>
     </Section>
   );
 }

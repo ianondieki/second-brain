@@ -3,8 +3,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
+import { cn } from "@/components/ui/cn";
 
-import { Chip } from "./Chip";
+import { Chip, ChipMark } from "./Chip";
 import {
   kesAmount,
   shortHash,
@@ -34,10 +35,10 @@ const MILESTONE_CHIP: Record<MilestoneState, ChipKind> = {
 };
 
 /** "KES 250,000" */
-export function Kes({ minor }: { minor: number }) {
+export function Kes({ minor, className }: { minor: number; className?: string }) {
   const t = useTranslations("tracker");
   const locale = useLocale();
-  return <span className="tabular-nums">{t("kes", { amount: kesAmount(minor, locale) })}</span>;
+  return <span className={cn("tabular-nums", className)}>{t("kes", { amount: kesAmount(minor, locale) })}</span>;
 }
 
 /** The latest agreement version in full; earlier versions folded away. */
@@ -48,9 +49,11 @@ export function Agreements({ detail }: { detail: Pick<Detail, "agreements" | "en
   const [latest, ...earlier] = sorted;
   return (
     <Section title={t("agreement.title")} headingId="agreement-heading">
+      {/* The agreement reads like a document: one white sheet with a hairline, its terms, then the milestone schedule. */}
+      <div className="rounded-panel border border-line bg-field px-5 py-6 sm:px-8 sm:py-7">
       <AgreementVersion agreement={latest} endorsements={detail.endorsements} />
       {earlier.length > 0 ? (
-        <details className="mt-4 border-t border-line pt-3">
+        <details className="mt-6 border-t border-line pt-3">
           <summary className="flex min-h-11 cursor-pointer items-center font-semibold text-accent">
             {t("agreement.earlier", { count: earlier.length })}
           </summary>
@@ -64,6 +67,7 @@ export function Agreements({ detail }: { detail: Pick<Detail, "agreements" | "en
           ))}
         </details>
       ) : null}
+      </div>
     </Section>
   );
 }
@@ -83,14 +87,14 @@ function AgreementVersion({
   return (
     // No rule above the latest version: the rule belongs to lists (the milestones, the earlier versions).
     <article data-agreement={agreement.status} className={className}>
-      <h3 className="flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink">
+      <h3 className="flex flex-wrap items-center gap-x-4 gap-y-1 text-lg text-ink">
         {t("agreement.version", { version: agreement.version })}
         <Chip kind={status}>{t(`agreement.status.${agreement.status}`)}</Chip>
       </h3>
       <p className="mt-1 text-sm text-ink-soft">
         {t(`agreement.draftedBy.${agreement.drafted_by}`, { when: eat(agreement.created_at) })}
       </p>
-      <DescriptionList className="mt-3">
+      <DescriptionList className="mt-5 border-t border-line pt-5">
         <Description label={t("agreement.ipTerms")}>
           {agreement.ip_terms ? t(`ipTerms.${agreement.ip_terms}`) : t("agreement.notGiven")}
         </Description>
@@ -105,12 +109,12 @@ function AgreementVersion({
       </DescriptionList>
       {agreement.milestones.length > 0 ? (
         <>
-          <h4 className="mt-5 font-semibold text-ink">{t("milestone.title")}</h4>
+          <h4 className="mt-8 font-semibold text-ink">{t("milestone.title")}</h4>
           <ol className="mt-2 flex flex-col">
             {[...agreement.milestones]
               .sort((a, b) => a.seq - b.seq)
               .map((milestone) => (
-                <li key={milestone.id} className="border-t border-line py-3">
+                <li key={milestone.id} className="border-t border-line py-4">
                   <MilestoneRow
                     milestone={milestone}
                     endorsements={endorsements.filter((e) => e.milestone_id === milestone.id)}
@@ -119,6 +123,16 @@ function AgreementVersion({
                 </li>
               ))}
           </ol>
+          {/* The schedule's sum, under a firmer rule, as a statement of work closes. */}
+          {agreement.milestones.length > 1 ? (
+            <p data-milestone-total="" className="flex items-baseline justify-between gap-4 border-t-2 border-ink pt-3">
+              <span className="font-semibold text-ink">{t("milestone.total")}</span>
+              <Kes
+                minor={agreement.milestones.reduce((sum, m) => sum + m.amount_kes_minor, 0)}
+                className="font-display text-xl font-bold text-ink"
+              />
+            </p>
+          ) : null}
         </>
       ) : null}
     </article>
@@ -143,7 +157,7 @@ function MilestoneRow({
         <span className="font-semibold text-ink">
           {t("milestone.name", { number: milestone.seq, deliverable: milestone.deliverable })}
         </span>
-        <Kes minor={milestone.amount_kes_minor} />
+        <Kes minor={milestone.amount_kes_minor} className="font-display text-lg font-semibold text-ink" />
       </p>
       <p className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink-soft">
         {live ? <Chip kind={MILESTONE_CHIP[milestone.state]}>{t(`milestone.state.${milestone.state}`)}</Chip> : null}
@@ -173,31 +187,49 @@ function MilestoneRow({
   );
 }
 
-/** Who signed which document, when and with which second factor, with the fingerprint signed. */
+/**
+ * Who signed which document, when and with which second factor, with the fingerprint signed: grouped by the document
+ * signed (its kind and fingerprint), each signer a block side by side from 640 px, as signatures close a contract.
+ */
 export function Signatures({ signatures }: { signatures: Signature[] }) {
   const t = useTranslations("tracker");
   if (signatures.length === 0) return null;
+  const groups = new Map<string, Signature[]>();
+  for (const s of signatures) {
+    const key = `${s.document_kind}:${s.document_sha256}`;
+    groups.set(key, [...(groups.get(key) ?? []), s]);
+  }
   return (
     <Section title={t("signature.title")} headingId="signatures-heading">
-      <RowList>
-        {signatures.map((s) => (
-          <Row
-            key={s.id}
-            data-signature={s.document_kind}
-            title={t(`document.${s.document_kind}`)}
-            meta={t("signature.by", {
-              name: s.signer_name ?? t("endorsements.platform"),
-              party: t(`party.${s.party}`),
-              method: t(`method.${s.step_up_method}`),
-            })}
-          >
-            <p className="flex flex-wrap gap-x-4 text-sm text-ink-soft">
-              <Eat iso={s.signed_at} />
-              <span className="tabular-nums">{t("fingerprint", { hash: shortHash(s.document_sha256) })}</span>
-            </p>
-          </Row>
+      <ul className="flex flex-col">
+        {[...groups.entries()].map(([key, group]) => (
+          <li key={key} className="border-t border-line py-5 first:border-t-0 first:pt-0 last:pb-0">
+            <h3 className="font-semibold text-ink">{t(`document.${group[0].document_kind}`)}</h3>
+            <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+              {group.map((s) => (
+                <li key={s.id} data-signature={s.document_kind} className="flex gap-3">
+                  <ChipMark kind="completed" className="mt-0.5 size-5 text-accent" />
+                  <div className="min-w-0">
+                    {/* Each signature names its document for a screen reader moving item by item. */}
+                    <p className="sr-only">{t(`document.${s.document_kind}`)}</p>
+                    <p className="text-sm text-ink">
+                      {t("signature.by", {
+                        name: s.signer_name ?? t("endorsements.platform"),
+                        party: t(`party.${s.party}`),
+                        method: t(`method.${s.step_up_method}`),
+                      })}
+                    </p>
+                    <p className="mt-1 flex flex-wrap gap-x-4 text-sm text-ink-soft">
+                      <Eat iso={s.signed_at} />
+                      <span className="tabular-nums">{t("fingerprint", { hash: shortHash(s.document_sha256) })}</span>
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </li>
         ))}
-      </RowList>
+      </ul>
     </Section>
   );
 }
@@ -215,7 +247,7 @@ export function Payments({ payments }: { payments: Payment[] }) {
             <Row
               key={p.id}
               data-payment={confirmed ? "confirmed" : "recorded"}
-              title={<Kes minor={p.amount_kes_minor} />}
+              title={<Kes minor={p.amount_kes_minor} className="font-display text-xl font-bold" />}
               badges={[
                 <Chip key="state" kind={confirmed ? "completed" : "current"}>
                   {confirmed ? t("payment.confirmed") : t("payment.recorded")}
