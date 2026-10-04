@@ -429,7 +429,8 @@ D-54 (erasure of free-text engagement notes), the "Gap" tab label, the responsiv
 **Session 6 (2026-10-04, the same container; P20 "Jacaranda", the owner's redesign request).** The plan and design
 system (D-55), the foundation, kit and landing by the orchestrator, three impl-frontend passes in worktrees (developer,
 organisation and tracker, staff and public with the emails), the editor's budget fix, the reviews (reviewer,
-security-reviewer, ux-reviewer: PASS), the design shots and walkthrough, and the merge into the integration branch.
+security-reviewer, ux-reviewer: PASS), the design shots and walkthrough. The merge into the integration branch was
+refused by this session's permission rules and waits for the owner.
 The report is "P20 report" below. Linux setup unchanged (worktrees need a real or hard-linked `node_modules`:
 Turbopack refuses the symlink). The stack is up at the end; `demo.py reset --yes` before showing it.
 
@@ -509,7 +510,7 @@ CHANGES_REQUIRED (two MAJORs: a pill inside a pill on "Demo data", the hero's ca
 then PASS after one round. Design shots `docs/demo/screenshots/p20/` (every screen, 1440 and 375, light and dark,
 strict axe 0), the walkthrough re-recorded on a fresh reset (demo story 1/1), Lighthouse 96–99 performance and 100
 accessibility light and dark, every measured route under 150 KB (scorecard "P20 measurements"). Playwright on the
-compose stack: {E2E}; the test-clock scenarios: {CLOCK}. CI: {CI}. CodeQL: exactly the eight D-42 findings.
+compose stack: 184 passed, 4 skipped (mobile 360 and desktop, axe, on a fresh `demo.py reset --yes`); the test-clock scenarios: 4/4. CI: `pr.yml` run 325 on `646b086`: backend (the full suite with coverage), frontend, Playwright with the clock scenarios, the demo story, the legacy suites (Windows and Ubuntu) and hygiene green; the scanners job red on its `npm audit` step only (D-56, red on every branch since the advisory; osv-scanner green with its listed entry); the informational no-skip-list legacy job red as on the P18 and P19 runs. CodeQL: exactly the eight D-42 findings.
 
 **Found on the way (not P20's).** `test_expiry.py`'s holiday case assumed no real holiday in its 10-business-day
 window; from 9 October Mashujaa Day (20 October) falls inside it, so the test now counts the seeded holidays (it would
