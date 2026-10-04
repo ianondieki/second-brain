@@ -16,7 +16,7 @@ describe("Section", () => {
     );
     const region = screen.getByRole("region", { name: "Needs you" });
     const heading = screen.getByRole("heading", { level: 2, name: "Needs you" });
-    expect(heading.className.split(" ")).toContain("text-lg");
+    expect(heading.className.split(" ")).toContain("text-xl");
     expect(region.textContent).toContain("Engagements waiting on you.");
   });
 

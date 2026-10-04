@@ -8,7 +8,7 @@ import { noticeTone } from "./notice";
 afterEach(cleanup);
 
 // P16 design system, Notices: Callout (static) and Alert (announced) share one look: a 1 px tone border, the tone's
-// wash, an icon and words, rounded-control. No coloured left rule.
+// wash, an icon and words, rounded-panel (P20). No coloured left rule.
 describe("Callout", () => {
   it("is static: no live role, so nothing is announced when the page loads", () => {
     const { container } = render(<Callout tone="info">Verification usually takes 2 business days.</Callout>);
@@ -22,7 +22,7 @@ describe("Callout", () => {
   it.each(["error", "info", "ok", "neutral"] as const)("draws the %s tone as a 1 px border and a wash", (tone) => {
     const { container } = render(<Callout tone={tone}>Words</Callout>);
     const classes = container.firstElementChild!.className.split(" ");
-    expect(classes).toEqual(expect.arrayContaining(["border", "rounded-control", ...noticeTone[tone].split(" ")]));
+    expect(classes).toEqual(expect.arrayContaining(["border", "rounded-panel", ...noticeTone[tone].split(" ")]));
     expect(classes.some((c) => /^border-l-/.test(c))).toBe(false);
     expect(container.querySelector("svg[aria-hidden='true']")).not.toBeNull();
   });

@@ -22,8 +22,8 @@ export interface PageHeaderProps {
 }
 
 /**
- * A page's header: optional back link, the h1 at one size (25 px at 360, 31 px from 1024), one-sentence lead and the
- * primary action (docs/platform/design/p16-design-system.md, Page header).
+ * A page's header: optional back link, the h1 in the display face (32 px at 360, 40 px from 1024), a one-sentence lead
+ * and the primary action (docs/platform/design/p20-design-system.md, Layout).
  */
 export function PageHeader({
   title,
@@ -45,11 +45,11 @@ export function PageHeader({
             id={titleId}
             ref={titleRef}
             tabIndex={focusable ? -1 : undefined}
-            className={cn("text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl", focusable && "focus:outline-none")}
+            className={cn("text-2xl [overflow-wrap:anywhere] text-ink lg:text-3xl", focusable && "focus:outline-none")}
           >
             {title}
           </h1>
-          {lead ? <p className="mt-2 max-w-[62ch] text-ink-soft [overflow-wrap:anywhere]">{lead}</p> : null}
+          {lead ? <p className="mt-2 max-w-[62ch] text-ink-soft [overflow-wrap:anywhere] lg:text-[1.0625rem]">{lead}</p> : null}
           {children}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}

@@ -55,10 +55,10 @@ export function Card({ as: Tag = "div", variant = "raised", padding = "md", inte
   );
 }
 
-/** Cards side by side: one column on phones, two from 640 px. */
+/** Cards side by side: one column on phones; from 640 px as many 16 rem tracks as fit, filling the row (no orphan under two). */
 export function CardGrid({ className, children, ...rest }: HTMLAttributes<HTMLUListElement> & { children: ReactNode }) {
   return (
-    <ul className={cn("grid grid-cols-1 gap-4 sm:grid-cols-2 [&>li]:min-w-0 [&>li>*]:h-full", className)} {...rest}>
+    <ul className={cn("grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] [&>li]:min-w-0 [&>li>*]:h-full", className)} {...rest}>
       {children}
     </ul>
   );

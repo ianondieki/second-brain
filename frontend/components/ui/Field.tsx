@@ -49,7 +49,9 @@ export function FieldError({ id, children }: { id?: string; children: ReactNode 
   );
 }
 
-/** Shared look of text inputs and selects: 48 px tall, 16 px text (no zoom on iOS), ink-soft border for 3:1. */
+/** Shared look of text inputs and selects: 48 px tall, 16 px text (no zoom on iOS), ink-soft border for 3:1, a bloom
+ *  edge on hover and a bloom ring with the focus outline (P20). */
 export const controlClass =
-  "h-12 w-full min-w-0 rounded-control border border-ink-soft bg-field px-3 text-base text-ink " +
+  "h-12 w-full min-w-0 rounded-control border border-ink-soft bg-field px-3.5 text-base text-ink " +
+  "transition-[border-color,box-shadow] hover:border-accent focus-visible:border-accent " +
   "aria-invalid:border-error aria-invalid:shadow-[inset_0_0_0_1px_var(--error)]";
