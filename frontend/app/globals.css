@@ -596,7 +596,6 @@ dialog[data-sheet][open] {
   background:
     radial-gradient(42% 46% at 58% 42%, rgb(123 96 255 / 0.42), transparent 72%),
     radial-gradient(30% 32% at 30% 82%, rgb(244 181 63 / 0.16), transparent 70%);
-  filter: blur(8px);
 }
 
 /* The landing's one authored moment: the three product cards rise into place in sequence on load (each card sets
@@ -616,11 +615,6 @@ dialog[data-sheet][open] {
   animation-delay: var(--rise-delay, 0ms);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  html:has(#hero-title) {
-    scroll-behavior: smooth;
-  }
-}
 
 /* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
 @utility code-figures {
