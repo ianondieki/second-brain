@@ -36,34 +36,38 @@ SECTIONS: Final = (
     ("notes", "Notes"),
 )
 STYLE: Final = (
-    # The P18 palette (frontend/app/globals.css) in a page that loads nothing: no web fonts (a serif stack for the
-    # title), no images (the lattice echo is a gradient band). The per-viewer mark keeps its ink, opacity and size from
-    # before the restyle (spec 06 §6.4 item 3: it must survive a screenshot's compression).
+    # The Jacaranda palette (P20, docs/platform/design/p20-design-system.md; frontend/app/globals.css) in a page that
+    # loads nothing: no web fonts (the CSP allows none), so the faces are named first and fall back to the system sans
+    # (Hanken Grotesk for the text, a bold Bricolage Grotesque or system sans for the titles); no images (the lattice
+    # echo is a bloom and saffron gradient band, saffron's only use here). The per-viewer mark keeps its ink, opacity
+    # and size from before the restyle (spec 06 §6.4 item 3: it must survive a screenshot's compression).
     # Dark mode follows the embedding page: a frame's prefers-color-scheme takes the embedder's used color-scheme
     # (CSS Color Adjust), so the marked page is dark inside the dark app and light inside the light one.
     ":root{color-scheme:light dark}"
-    'body{margin:0;background:#fbfaf6;color:#1a1916;font:16px/1.6 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",'
-    "Roboto,sans-serif}"
-    "body::before{content:'';display:block;height:6px;background:repeating-linear-gradient(-45deg,#1f5e49 0 5px,"
-    "#b89a4a 5px 10px)}"
+    'body{margin:0;background:#f7f6fb;color:#1b1730;font:16px/1.6 "Hanken Grotesk",system-ui,-apple-system,"Segoe UI",'
+    "Roboto,Helvetica,Arial,sans-serif}"
+    "body::before{content:'';display:block;height:6px;background:repeating-linear-gradient(-45deg,#5a3fc0 0 5px,"
+    "#f4b53f 5px 10px)}"
     "main{position:relative;max-width:46rem;margin:0 auto;padding:2rem 1.25rem 4rem}"
-    ".label{margin:0;color:#7a5a12;font-size:.75rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase}"
-    'h1{margin:.35rem 0 .5rem;font:500 1.75rem/1.2 Newsreader,"Iowan Old Style",Georgia,"Times New Roman",serif;'
-    "letter-spacing:-.01em}"
-    'h2{margin:2rem 0 .5rem;font:500 1.2rem/1.3 Newsreader,"Iowan Old Style",Georgia,"Times New Roman",serif}'
-    ".owner,.note,.mark{color:#5c5a53;font-size:.9rem}"
-    ".text{white-space:pre-wrap;overflow-wrap:anywhere}"
-    "a{color:#1f5e49;text-decoration-thickness:1px;text-underline-offset:.2em;overflow-wrap:anywhere}"
+    ".label{margin:0;color:#8a5800;font-size:.875rem;font-weight:600}"
+    'h1,h2{font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;'
+    "font-weight:700;letter-spacing:-.02em;text-wrap:balance}"
+    "h1{margin:.35rem 0 .5rem;font-size:2rem;line-height:1.12;letter-spacing:-.028em}"
+    "h2{margin:2.5rem 0 .5rem;font-size:1.5rem;line-height:1.2}"
+    ".owner,.note,.mark{color:#5e5873;font-size:.9rem}"
+    ".text{white-space:pre-wrap;overflow-wrap:anywhere;max-width:68ch}"
+    "a{color:#5a3fc0;font-weight:600;text-decoration-thickness:1px;text-underline-offset:.2em;overflow-wrap:anywhere}"
     "ul{padding-left:1.25rem}"
-    ".mark{margin-top:3rem;padding-top:1rem;border-top:1px solid #dedacf}"
+    ".mark{margin-top:3rem;padding-top:1rem;border-top:1px solid #e4e1ee}"
     ".overlay{position:fixed;inset:-50%;z-index:2;display:grid;"
     "grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:4rem 2.5rem;padding:2rem;"
-    "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.14;color:#1a1916;font-size:.8rem;"
+    "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.14;color:#1b1730;font-size:.8rem;"
     "font-weight:500;letter-spacing:.03em;line-height:1.3;overflow-wrap:anywhere}"
-    "@media (prefers-color-scheme:dark){body{background:#131412;color:#ece9e1}"
-    "body::before{background:repeating-linear-gradient(-45deg,#7fcbab 0 5px,#a08b48 5px 10px)}"
-    ".label{color:#e0b85a}.owner,.note,.mark{color:#b4b0a5}a{color:#7fcbab}.mark{border-top-color:#30312c}"
-    ".overlay{color:#ece9e1}}"
+    "::selection{background:#efebfc;color:#1b1730}"
+    "@media (prefers-color-scheme:dark){body{background:#100c1d;color:#eeeaf8}"
+    "body::before{background:repeating-linear-gradient(-45deg,#a996ff 0 5px,#f6c155 5px 10px)}"
+    ".label{color:#f6c155}.owner,.note,.mark{color:#b5aecc}a{color:#a996ff}.mark{border-top-color:#2d2643}"
+    ".overlay{color:#eeeaf8}::selection{background:#241c44;color:#eeeaf8}}"
     "@media print{.overlay{opacity:.2}}"
 )
 STYLE_HASH: Final = base64.b64encode(hashlib.sha256(STYLE.encode("utf-8")).digest()).decode("ascii")

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { first } from "@/app/(app)/org/membership";
@@ -8,14 +8,17 @@ import { ButtonLink } from "@/components/ui/ButtonLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { DataTable } from "@/components/ui/DataTable";
 
+import { formatDay } from "@/lib/format";
+
 import { AdminShell } from "../AdminShell";
+import { QueueSummary, QueueSurface } from "../QueueSurface";
 import { PageStepUp } from "../research/PageStepUp";
 import { staffContext } from "../staff";
 import { stepUpStrings } from "../strings";
 import { ViewTabs } from "../ViewTabs";
 import { CaseRow } from "./CaseRow";
 import { getQueue } from "./data";
-import { caseHref, moderationView, viewHref } from "./moderation";
+import { caseHref, moderationView, viewHref, visibility, type Case } from "./moderation";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminModeration");
@@ -69,14 +72,16 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
       <ViewTabs label={t("tabsLabel")} tabs={tabs} current={view} />
       <div className="mt-6">
         {items.length > 0 ? (
-          <DataTable
-            aria-label={view === "open" ? t("listOpen") : t("listDecided")}
-            columns={[t("columns.case"), t("columns.kind"), t("columns.when"), t("columns.status")]}
-          >
-            {items.map((item) => (
-              <CaseRow key={item.id} item={item} />
-            ))}
-          </DataTable>
+          <QueueSurface raised={view === "open"} summary={view === "open" ? await openSummary(items) : undefined}>
+            <DataTable
+              aria-label={view === "open" ? t("listOpen") : t("listDecided")}
+              columns={[t("columns.case"), t("columns.kind"), t("columns.when"), t("columns.status")]}
+            >
+              {items.map((item) => (
+                <CaseRow key={item.id} item={item} />
+              ))}
+            </DataTable>
+          </QueueSurface>
         ) : view === "open" ? (
           <EmptyState rule={false} sentence={t("emptyOpen")} action={t("emptyOpenAction")} href={viewHref("decided")} />
         ) : (
@@ -89,5 +94,28 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
         {t("reviewOldest")}
       </ButtonLink>
     ) : undefined,
+  );
+}
+
+/**
+ * The open queue at a glance: how many cases, how many keep their subject hidden while they wait (the ones that cost
+ * an author most), and the day the oldest was filed (the queue is oldest first).
+ */
+async function openSummary(items: readonly Case[]) {
+  const t = await getTranslations("adminModeration");
+  const locale = await getLocale();
+  const hidden = items.filter((item) => {
+    const seen = visibility(item);
+    return seen === "hidden" || seen === "briefHidden";
+  }).length;
+  const oldest = items.reduce((first, item) => (item.created_at < first ? item.created_at : first), items[0].created_at);
+  return (
+    <QueueSummary
+      figures={[
+        { key: "open", label: t("summary.open"), value: items.length },
+        { key: "hidden", label: t("summary.hidden"), value: hidden },
+        { key: "oldest", label: t("summary.oldest"), value: formatDay(locale, oldest) },
+      ]}
+    />
   );
 }
