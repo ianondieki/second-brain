@@ -30,15 +30,15 @@ export async function TopBarBase({ homeHref = "/", Anchor: Home, children }: Top
       >
         {t("skipToContent")}
       </a>
-      <header className="border-b border-line bg-paper">
+      <header className="border-b border-line bg-field">
         <Lattice />
-        <div className="mx-auto flex min-h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="mx-auto flex min-h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <span className="flex min-w-0 items-center gap-2.5">
             <Home href={homeHref} className="-mx-1 inline-flex min-h-11 items-center px-1 no-underline" aria-label={t("workingName")}>
               <Wordmark size={26} />
             </Home>
             {/* The honesty label: this is the prototype, said once per screen, small and muted. */}
-            <span data-prototype-badge="" className="rounded-full border border-line px-2 py-0.5 text-xs font-medium text-ink-soft">
+            <span data-prototype-badge="" className="rounded-full bg-accent-wash px-2.5 py-0.5 text-xs font-semibold text-accent">
               {t("prototypeBadge")}
             </span>
           </span>

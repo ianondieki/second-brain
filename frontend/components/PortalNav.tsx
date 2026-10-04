@@ -26,7 +26,7 @@ export interface PortalNavProps {
 /**
  * A portal's sections, one implementation behind DevNav, OrgNav and AdminNav: bottom tabs under 1024 px, a left rail
  * from 1024 px (one <nav>, restyled). The current section carries aria-current="page" and is marked by colour, weight
- * and a bar, not colour alone. The tab bar is fixed, so pages that show it keep their last control clear of it
+ * and a filled pill, not colour alone. The tab bar is fixed, so pages that show it keep their last control clear of it
  * (SignedInShell pads main; globals.css pads focus scrolling). With a single section there is no tab bar below
  * 1024 px: one tab only takes room on a phone.
  */
@@ -59,27 +59,26 @@ export function PortalNav({ label, items, current, query = "", heading }: Portal
                 className={cn(
                   // Five tabs share 360 px: a size smaller below 380 px, where a two-word label (Swahili's "Mawazo
                   // yangu") may wrap onto a second line inside its own tab rather than run into the next one.
-                  "relative flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 text-center text-sm whitespace-nowrap no-underline",
-                  "max-[380px]:px-0.5 max-[380px]:text-xs max-[380px]:leading-tight max-[380px]:whitespace-normal sm:px-2",
-                  "lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-control lg:px-3 lg:text-left lg:text-base",
+                  "relative flex min-h-14 flex-col items-center justify-center gap-1 px-1 py-1.5 text-center text-xs whitespace-nowrap no-underline",
+                  "max-[380px]:px-0.5 max-[380px]:leading-tight max-[380px]:whitespace-normal sm:px-2",
+                  "lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-full lg:px-4 lg:py-0 lg:text-left lg:text-[0.9375rem]",
                   "transition-colors duration-150 ease-out",
                   active
-                    ? "font-semibold text-accent lg:bg-accent-wash"
-                    : "font-medium text-ink-soft hover:text-ink lg:hover:bg-wash-soft",
+                    ? "font-bold text-accent lg:bg-accent-wash"
+                    : "font-semibold text-ink-soft hover:text-ink lg:hover:bg-wash-soft",
                 )}
               >
-                {active ? (
-                  <span
-                    aria-hidden="true"
-                    className={
-                      // A fixed 32 px bar centred over the tab (not inset from both sides, which left 4 px over "Home"
-                      // at 360 px); from 1024 px a 2 px bar down the rail item's left edge.
-                      "absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-b bg-accent " +
-                      "lg:inset-y-2 lg:left-0 lg:h-auto lg:w-0.5 lg:translate-x-0 lg:rounded-none lg:rounded-r"
-                    }
-                  />
-                ) : null}
-                <Icon className="size-5 shrink-0" />
+                {/* The current section's mark beyond colour: on the tab bar a petal pill behind its icon (the shape
+                    of a pressed tab), on the rail the whole item is that pill. */}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "flex h-7 w-12 items-center justify-center rounded-full lg:h-auto lg:w-auto",
+                    active && "bg-accent-wash lg:bg-transparent",
+                  )}
+                >
+                  <Icon className="size-5 shrink-0" />
+                </span>
                 <span>{text}</span>
                 {/* The tapped section's page on its way: under the label on the tab bar, at the rail item's end. */}
                 <LinkPending className="absolute bottom-1 left-1/2 -translate-x-1/2 lg:static lg:ml-auto lg:translate-x-0" />
