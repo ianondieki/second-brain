@@ -1,8 +1,8 @@
-{# Shared pieces of the branded emails (D-52): the one accent button and a quiet label. Table-free and gradient-free,
-   so every mail client draws the same. #}
+{# Shared pieces of the branded emails (D-52, P20): the one bloom pill button and a quiet label in sentence case (no
+   all-caps labels). Table-free and gradient-free, so every mail client draws the same. #}
 {% macro button(href, label, cta) -%}
-<a href="{{ href }}" data-cta="{{ cta }}" style="display:inline-block;background:#1f5e49;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:6px;font-size:15px;font-weight:600">{{ label }}</a>
+<a href="{{ href }}" data-cta="{{ cta }}" style="display:inline-block;background:#5a3fc0;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:999px;font-size:15px;line-height:20px;font-weight:600">{{ label }}</a>
 {%- endmacro %}
 {% macro label(text) -%}
-<p style="margin:20px 0 6px;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#5c5a53">{{ text }}</p>
+<p style="margin:22px 0 6px;font-size:14px;font-weight:700;color:#1b1730">{{ text }}</p>
 {%- endmacro %}
