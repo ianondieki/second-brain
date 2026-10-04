@@ -8,7 +8,8 @@ import { celebrationSeenFromCookies } from "@/components/tracker/celebration-sto
 import { ClosedCelebration } from "@/components/tracker/ClosedCelebration";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
-import { Card } from "@/components/ui/Card";
+import { cn } from "@/components/ui/cn";
+import { Lattice } from "@/components/ui/Lattice";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
@@ -40,6 +41,7 @@ import {
   sideBanner,
   stageLeft,
   stepperSteps,
+  turnOf,
   type Detail,
   type DocumentKind,
   withQuery,
@@ -102,6 +104,8 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
   const holdEnd = side?.kind === "hold" ? (side.hold?.resume_at ?? detail.due?.due_on ?? null) : null;
   const counterpart = detail.my_party === "developer" ? detail.org_name : detail.developer_name;
   const line = counterpartLine(detail);
+  const turn = turnOf(detail, detail.my_party);
+  const yours = turn.kind === "you" || turn.kind === "both";
   // The party who acts now: the developer, the organisation, or both (the tracker's timeline shows them at the step).
   const awaited = new Set(detail.whose_turn);
   const actors = isFinished(detail.state) ? null : (
@@ -120,11 +124,38 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         lead={<span data-counterpart={line.key}>{t(line.key, line.values)}</span>}
       />
 
-      <div className="mt-6 max-w-3xl">
+      {/* The turn card: the page's headline object. Whose turn, the next step and the countdown, then the caller's
+          buttons, in one card (the next step and the button that takes it side by side, at every width). Raised and
+          edged with the lattice when it is the viewer's turn; a flat card otherwise. Actions stays mounted whatever is
+          left to do (it keeps its own "Done" status and focus after a refresh); its band hides while it is empty. */}
+      <div
+        data-turn-card={yours ? "yours" : "theirs"}
+        className={cn("mt-8 max-w-3xl overflow-hidden rounded-panel border border-line bg-field", yours && "shadow-card")}
+      >
+        {yours ? <Lattice /> : null}
         <WhoseTurn detail={detail} />
+        <div className="border-t border-line p-5 has-[>div:empty]:hidden sm:px-7 sm:py-6">
+          <Actions
+            engagementId={detail.id}
+            lockVersion={detail.lock_version}
+            items={items}
+            counterpart={counterpart}
+            enrolled={me.mfa.enrolled}
+            members={members}
+            myUserId={me.user.id}
+            recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
+            question={question}
+            resumeOn={holdEnd ? formatDate(holdEnd, locale) : null}
+            locale={locale}
+            today={detail.today ?? null}
+            limits={detail.side_limits}
+          />
+        </div>
       </div>
       {/* The one-time celebration of a closed engagement, drawn on the server; the cookie says whether it was seen. */}
+      {/* Its card frames the shell (words and "Got it"); hidden with it before paint and once it is put away. */}
       {detail.state === "CLOSED" ? (
+        <div className="relative mt-6 max-w-3xl overflow-hidden rounded-panel border border-line bg-field p-5 shadow-card empty:hidden sm:p-7 [html[data-celebration-seen]_&]:hidden">
         <ClosedCelebration
           engagementId={detail.id}
           initialSeen={celebrationSeenFromCookies(await cookies(), detail.id)}
@@ -132,12 +163,11 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
           body={t("closed.body")}
           dismiss={t("closed.dismiss")}
         />
+        </div>
       ) : null}
 
-      {/* The one progress indicator: the timeline itself (completed connectors in the accent). On phones the actions
-          card comes first, so the screen's primary action is within reach; the timeline follows it. */}
-      <div className="mt-6 flex flex-col gap-8">
-      <div className="order-2 lg:order-1">
+      {/* The visual spine: the five stages on the canvas, a vertical timeline on phones and a line across from 1024 px. */}
+      <div className="mt-10 max-w-3xl">
         <Stepper
           steps={steps}
           actor={actors}
@@ -148,33 +178,11 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
                 <span className="block font-semibold">{t("stageNow", { stage: detail.stage_label })}</span>
               )}
               {!isFinished(detail.state) ? (
-                <span className="block text-ink-soft lg:hidden">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>
+                <span className="block text-ink-soft">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>
               ) : null}
             </>
           }
         />
-      </div>
-
-      {/* Actions stays mounted whatever is left to do (it keeps its own "Done" status and focus after a refresh);
-          the card frame is drawn only while there is something to do, so a closed or ended engagement draws no
-          empty box. */}
-      <Card as="div" variant={items.length > 0 ? "raised" : "bare"} padding={items.length > 0 ? "md" : "none"} className="order-1 max-w-3xl has-[>div:empty]:hidden lg:order-2">
-        <Actions
-          engagementId={detail.id}
-          lockVersion={detail.lock_version}
-          items={items}
-          counterpart={counterpart}
-          enrolled={me.mfa.enrolled}
-          members={members}
-          myUserId={me.user.id}
-          recorded={finalPayment ? kesAmount(finalPayment.amount_kes_minor, locale) : null}
-          question={question}
-          resumeOn={holdEnd ? formatDate(holdEnd, locale) : null}
-          locale={locale}
-          today={detail.today ?? null}
-          limits={detail.side_limits}
-        />
-      </Card>
       </div>
 
       <div className="mt-8 max-w-3xl empty:hidden">

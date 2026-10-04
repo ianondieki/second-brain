@@ -152,7 +152,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
   return (
     <>
       <section aria-label={t("stats.label")} data-home="stats">
-        <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 [&>li>*]:h-full">
           <li>
             <StatTile
               data-stat="inbox"

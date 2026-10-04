@@ -79,7 +79,7 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
   // The handle shows once: in the teaser's details when they load, else here under the title.
   return (
     <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
-      <article className="flex max-w-3xl flex-col gap-10" data-match={match.id}>
+      <article className="flex max-w-3xl flex-col gap-12" data-match={match.id}>
         {/* One flex item: the back link sits on the title, not a column gap away. */}
         <div>
           <PageHeader
@@ -136,7 +136,8 @@ async function Interest({
   const tracker = match.engagement_id ? engagementsHref(memberships, org.org_id, match.engagement_id) : null;
   return (
     <Section title={t("interestTitle")} headingId="interest-heading" description={t("interestLead")} data-interest="">
-      <div>
+      {/* Offered, it is the step that needs the reader: a raised card. Not offered, the reason stays plain text. */}
+      <div className={reason === null ? "rounded-panel border border-line bg-field p-5 shadow-card sm:p-7" : undefined}>
         {reason === null ? (
           <ClientStrings strings={await clientStrings(["expressInterest", "trackerActions"])}>
             <ExpressInterest

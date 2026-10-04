@@ -1,5 +1,5 @@
 import type { components, paths } from "@/lib/api/schema";
-import { formatCalendarDate, nairobiParts } from "@/lib/format";
+import { nairobiParts } from "@/lib/format";
 
 // The tracker's view model (REQ-ENG-03; docs/spec/06 6.9 Rendering): what the screens draw from the API's engagement.
 // Nothing here decides who may act: the buttons come only from the API's `actions` for the caller, whose turn it is
@@ -500,28 +500,14 @@ export function kesAmount(minor: number, locale = "en"): string {
   }).format(minor / 100);
 }
 
-/** Whole or decimal shillings typed in a form, as minor units; null when it is not a positive amount. */
-export function toMinor(text: string): number | null {
-  const clean = text.replace(/[,\s]/g, "");
-  if (!/^\d+(\.\d{1,2})?$/.test(clean)) return null;
-  const minor = Math.round(Number(clean) * 100);
-  return minor > 0 ? minor : null;
-}
-
 /** A moment in Nairobi time, as its date and time parts ("23 Sep 2026", "14:05"); the message adds "EAT". */
 export function eatParts(iso: string, locale = "en"): { date: string; time: string } {
   return nairobiParts(locale, iso);
 }
 
-/** A calendar date from the API ("2026-10-02") as written in Kenya ("2 Oct 2026"); dates carry no time zone. */
-export function formatDate(day: string, locale = "en"): string {
-  return formatCalendarDate(locale, day);
-}
-
-/** Today's date in Nairobi ("2026-09-29"), for date inputs. */
-export function nairobiToday(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(now);
-}
+// The forms' and sheets' helpers live in ./input, so the tracker's first load (Actions reads this module) carries
+// none of them: they load with the forms. Re-exported here for the server's screens and the tests.
+export { formatDate, nairobiToday, toMinor } from "./input";
 
 /** The first 12 hex digits of a SHA-256, grouped for reading ("3f5a 9c01 7be2"). */
 export function shortHash(hex: string): string {

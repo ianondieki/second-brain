@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import type { confirmStepUp } from "@/components/tracker/calls";
-import { nairobiToday } from "@/components/tracker/model";
+import { nairobiToday } from "@/components/tracker/input";
 import { StepUp } from "@/components/tracker/StepUp";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
