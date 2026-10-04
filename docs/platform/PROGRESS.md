@@ -391,7 +391,7 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-02, session 5): none. P19 merged as `[[MERGE]]` (merge commit of `claude/fervent-mccarthy-0zyqn2` at `[[HEAD]]`); integration head before it `42c6073` (D-53 recorded on `cf0da47`). P18 merged as `cf0da47` (at `dcf6de1`); integration head before it `9142360`.
+**Open branches** (2026-10-02, session 5): none. P19 merged as `f839977` (merge commit of `claude/fervent-mccarthy-0zyqn2` at `fc19695`); integration head before it `42c6073` (D-53 recorded on `cf0da47`). P18 merged as `cf0da47` (at `dcf6de1`); integration head before it `9142360`.
 
 **Session 4 (2026-10-01, new container; P18 "fundable product" brief, D-52).** On `claude/fervent-mccarthy-0zyqn2`
 (not merged: the owner reviews each step). Step 1: five names, three directions in the development-only
@@ -421,7 +421,7 @@ plan `tasks/P19.md` (four tracks, the responsiveness score replaced by the in-ap
 by db-migrations, five implementers in worktrees (≤3 at once), reviewer, security-reviewer and ux-reviewer rounds
 until PASS on every track, the gate (full Playwright 184 + the clock scenarios, the walkthrough with the P19 beats,
 66 design shots, CodeQL exactly D-42, pr.yml green (run 322 on `2a7d253`, the last code commit; every required job green, the Playwright job with the new test-clock step, the demo story and the backend's coverage gate included; the informational legacy job red as on the P18 run; the commits after it are documentation only), Lighthouse 97–100 performance and 100 accessibility light and dark, JS budget every route under except the
-pre-existing editor-with-problem variant) and the merge into the integration branch as `[[MERGE]]`. The report is
+pre-existing editor-with-problem variant) and the merge into the integration branch as `f839977`. The report is
 "P19 report" below; the cards `tasks/P19-*.md` carry every decision. Linux setup unchanged from session 4 (the stack
 is up at the end; `demo.py reset --yes` before showing it: the gate's runs moved its clock). Decisions for the owner:
 D-54 (erasure of free-text engagement notes), the "Gap" tab label, the responsiveness score deferred.
@@ -460,7 +460,7 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 ### P19 report (final, 2026-10-02): side states, Problem Briefs, the bell, the teaser checks
 
 **What was built** (`docs/platform/tasks/P19.md`, cards P19-M, -A, -B, -C, -D, -F; branch
-`claude/fervent-mccarthy-0zyqn2`, merged as `[[MERGE]]`):
+`claude/fervent-mccarthy-0zyqn2`, merged as `f839977`):
 
 - **Tracker side states** (REQ-ENG-10, AC-TRACK-4): an organisation asks a question (`INFO_REQUESTED`: the review
   waits on the developer's clock, two questions per stage, the organisation may withdraw its own), the developer
