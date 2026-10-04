@@ -4,9 +4,6 @@ import type { ReactNode } from "react";
 import { Seal } from "./brand/Seal";
 import { TopBar } from "./TopBar";
 import { Card } from "./ui/Card";
-import { IdeasIcon } from "./ui/icons";
-import { LockIcon } from "./ui/status-icons";
-import { EngagementsIcon } from "./tracker/icons";
 
 export interface AuthShellProps {
   children: ReactNode;
@@ -14,11 +11,7 @@ export interface AuthShellProps {
   topBarAction?: ReactNode;
 }
 
-const STEPS = [
-  { key: "publish", Icon: IdeasIcon },
-  { key: "review", Icon: LockIcon },
-  { key: "track", Icon: EngagementsIcon },
-] as const;
+const STEPS = ["publish", "review", "track"] as const;
 
 /**
  * Signed-out screens (D-55): the top bar, then from 1024 px two halves: the form on the canvas, and a night panel with
@@ -38,14 +31,15 @@ export async function AuthShell({ children, topBarAction }: AuthShellProps) {
         </main>
         <aside
           aria-labelledby="how-it-works"
-          className="relative hidden overflow-hidden bg-night text-on-night lg:order-first lg:flex lg:flex-col lg:justify-between lg:pt-20 lg:pr-14 lg:pb-14 lg:pl-[max(3.5rem,calc((100vw-72rem)/2+1.5rem))]"
+          className="relative hidden overflow-hidden bg-night text-on-night lg:order-first lg:block lg:pt-20 lg:pr-14 lg:pb-24 lg:pl-[max(3.5rem,calc((100vw-72rem)/2+1.5rem))]"
         >
-          <div>
+          {/* Sticky, so a long form (sign-up) scrolls past the panel's content instead of leaving it behind. */}
+          <div className="lg:sticky lg:top-24">
             <h2 id="how-it-works" className="max-w-[16ch] text-3xl text-on-night">
               {t("title")}
             </h2>
             <ol className="mt-10 flex max-w-[42ch] flex-col gap-7">
-              {STEPS.map(({ key, Icon }, index) => (
+              {STEPS.map((key, index) => (
                 <li key={key} className="flex gap-4">
                   <span
                     aria-hidden="true"
@@ -53,16 +47,11 @@ export async function AuthShell({ children, topBarAction }: AuthShellProps) {
                   >
                     {index + 1}
                   </span>
-                  <p className="pt-1.5 text-night-soft">
-                    <Icon aria-hidden="true" className="mr-2 inline size-4 align-[-2px] text-on-night" />
-                    {t(key)}
-                  </p>
+                  <p className="pt-1.5 text-night-soft">{t(key)}</p>
                 </li>
               ))}
             </ol>
-          </div>
-          <div className="mt-14 flex items-end justify-between gap-6">
-            <Seal size={112} />
+            <Seal size={112} className="mt-14 block" />
           </div>
           <div aria-hidden="true" className="lattice-band absolute inset-x-0 bottom-0 opacity-90" />
         </aside>
