@@ -599,14 +599,13 @@ dialog[data-sheet][open] {
 }
 
 /* The landing's one authored moment: the three product cards rise into place in sequence on load (each card sets
-   --rise-delay). Reduced motion shows them in place. */
+   --rise-delay). A slide, not a fade: the cards are legible, and keep their contrast, from the first frame.
+   Reduced motion shows them in place. */
 @keyframes hero-rise {
   from {
-    opacity: 0;
     transform: translateY(18px);
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }
