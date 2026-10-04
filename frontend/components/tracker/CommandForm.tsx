@@ -11,10 +11,9 @@ import { SelectField } from "@/components/ui/SelectField";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 
+import { nairobiToday, toMinor } from "./input";
 import {
   isEndingCommand,
-  nairobiToday,
-  toMinor,
   type ApproveInput,
   type ConfirmPaymentInput,
   type DeclineInput,

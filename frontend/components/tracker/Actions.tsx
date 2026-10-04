@@ -209,24 +209,14 @@ export function Actions(props: ActionsProps) {
       {listed ? (
         <>
           <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            {props.items.map((item) => (
-              <li key={`${item.command}-${item.milestone?.id ?? ""}`} className={isEndingCommand(item.command) ? "sm:ml-auto" : undefined}>
-                {/* Ending steps (withdraw, decline) are the danger variant: outlined in the error colour, never filled,
-                    and set apart at the row's end from 640 px. */}
-                {isEndingCommand(item.command) ? (
+            {props.items.map((item) => {
+              // Ending steps (withdraw, decline) are the danger variant: outlined in the error colour, never filled,
+              // and set apart at the row's end from 640 px.
+              const ending = isEndingCommand(item.command);
+              return (
+                <li key={`${item.command}-${item.milestone?.id ?? ""}`} className={ending ? "sm:ml-auto" : undefined}>
                   <Button
-                    variant="danger"
-                    busy={busy}
-                    className="w-full sm:w-auto"
-                    onClick={() => press(item)}
-                    data-command={item.command}
-                    data-action-key={keyOf(item)}
-                  >
-                    {label(item)}
-                  </Button>
-                ) : (
-                  <Button
-                    variant={item.primary ? "primary" : "secondary"}
+                    variant={ending ? "danger" : item.primary ? "primary" : "secondary"}
                     busy={busy}
                     className="w-full sm:w-auto"
                     onClick={() => press(item)}
@@ -236,9 +226,9 @@ export function Actions(props: ActionsProps) {
                   >
                     {busy && keyOf(item) === pressed ? t("busy") : label(item)}
                   </Button>
-                )}
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </>
       ) : null}
