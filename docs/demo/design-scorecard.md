@@ -188,3 +188,48 @@ Left as built, for the ux-reviewer: with the plan's open Briefs in use, "Post a 
 the plan line and the full-plan notice, and a press adds the 402 below it (the same fact three times); the form is
 not disabled because closing a Brief in another tab frees the slot. A single notice (the plan line folded into it)
 would read better.
+
+## P20 measurements (2026-10-04): the Jacaranda redesign (D-55)
+
+Shots: `frontend/demo/design-shots.spec.ts` with `SHOTS_DIR=docs/demo/screenshots/p20` (every product screen of the
+P18 and P19 sets in the new design), 1440 and 375 px, light and dark, against the compose stack rebuilt from this
+branch. Strict axe: every shot 0 violations, at most one `[data-primary]`, no sideways scroll. The first full run found
+one: the landing's hero badges, read by axe while the cards were still fading in (partial opacity); the cards now slide
+into place without a fade, and the re-run reads 0. The walkthrough's screenshots (`docs/demo/screenshots/*.jpg`) were
+re-recorded on a fresh `demo.py reset --yes` (the demo story 1/1).
+
+JS budget (`scripts/js-budget.mjs`, gzipped script bodies until idle, 360 px, limit 150,000; production build of this
+branch, signed in as the demo accounts). All 43 routes measured are under; the tightest:
+
+| Route | Bytes | |
+|---|---|---|
+| `/org/inbox/scouts/new` and `/<id>` | 149,892 | ok (untouched by P20) |
+| `/dev/ideas/new` and `/dev/ideas/<published, with a chosen problem>/edit` | 149,713 | ok: was 149,719 and 152,206 (over since P18) |
+| `/dev/engagements/<id>`, `/org/engagements/<id>` | 149,534 | ok: was 149,979 (P20-4 moved the forms' helpers out of the first load) |
+| `/signup` | 149,214 | ok |
+| `/auth/link` | 148,253 | ok |
+| `/dev/ideas/<id>` | 148,176 | ok |
+| `/` (the new landing) | 139,503 | ok |
+
+The editor fix is the one P19 recorded: an idea with chosen problems shows them as a plain list, and the search and
+the new-problem fields load on "Link another problem"; the publish checklist and the link checks moved to
+`app/(app)/dev/ideas/checklist.ts`, which the review step loads and hands to the editor.
+
+Lighthouse 12.8.2 (mobile default, simulated Slow 4G; dark through `--blink-settings=preferredColorScheme=0`),
+production build of this branch, one run per cell after the landing fix:
+
+| Page | Light perf / a11y / LCP | Dark perf / a11y / LCP |
+|---|---|---|
+| `/` | 97 / 100 / 2.6 s (96–99, 2.2–2.7 s over four runs) | 98 / 100 / 2.2 s (96–99, 2.2–2.7 s) |
+| `/login` | 99 / 100 / 1.9 s | |
+| `/verify/<id>` | | 99 / 100 / 2.0 s |
+| `/dev` | 99 / 100 / 2.1 s | 99 / 100 / 2.0 s |
+| `/dev/discover` | 98 / 100 / 2.1 s | |
+| `/dev/engagements/<id>` | 97 / 100 / 2.6 s | |
+| `/org/engagements/<id>` | | 99 / 100 / 2.0 s |
+| `/org/inbox` | 99 / 100 / 2.0 s | |
+
+Best practices 100 and CLS 0 everywhere. The landing's first build read 87 / 91 (TBT 340 ms, style and layout
+520 ms): a page-wide `html:has(#hero-title)` rule and a blurred glow layer; both are gone. The landing's LCP element is
+the hero's lead paragraph; its first, uncached Slow 4G visit stays around D-53's 2.5 s line (2.2–2.7 s), as decided
+there.

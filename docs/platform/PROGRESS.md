@@ -426,6 +426,13 @@ pre-existing editor-with-problem variant) and the merge into the integration bra
 is up at the end; `demo.py reset --yes` before showing it: the gate's runs moved its clock). Decisions for the owner:
 D-54 (erasure of free-text engagement notes), the "Gap" tab label, the responsiveness score deferred.
 
+**Session 6 (2026-10-04, the same container; P20 "Jacaranda", the owner's redesign request).** The plan and design
+system (D-55), the foundation, kit and landing by the orchestrator, three impl-frontend passes in worktrees (developer,
+organisation and tracker, staff and public with the emails), the editor's budget fix, the reviews (reviewer,
+security-reviewer, ux-reviewer: PASS), the design shots and walkthrough, and the merge into the integration branch.
+The report is "P20 report" below. Linux setup unchanged (worktrees need a real or hard-linked `node_modules`:
+Turbopack refuses the symlink). The stack is up at the end; `demo.py reset --yes` before showing it.
+
 **Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
 come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for
 db-migrations (below, plus the index needs on `tasks/P16-E1.md`), the Phase 7 UX pass (with D-51's splits) and Phase 8
@@ -456,6 +463,62 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 
 **Research.** Anthropic prices confirmed on 2026-09-29 from the official price page
 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified").
+
+### P20 report (final, 2026-10-04): Jacaranda, the visual redesign (D-55)
+
+**Why.** The owner found the P18 roll-out changed too little in type, colour, the landing page and the section
+layouts, and asked for a world-class redesign, with authority to add features that improve the taste as long as
+nothing becomes inconsistent or breaks (D-55). Design authority: `docs/platform/design/p20-design-system.md`; card:
+`tasks/P20.md`.
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`, 46 commits plus three worktree merges):
+
+- **Foundation** (orchestrator): Bricolage Grotesque for display and Hanken Grotesk for text, self-hosted and
+  instanced (34 KB and 20 KB, OFL, size-adjusted fallbacks; Newsreader and IBM Plex Sans removed, Plex Mono kept); the
+  bloom violet, saffron and night palette in light and dark with the P18 token names kept (every pair AA; night pairs
+  ≥ 6.3:1); a type scale up to 80 px; the kanga lattice recoloured; tinted shadows; a `.on-night` token scope for night
+  bands.
+- **Kit**: buttons and links as CSS component classes (`.btn`, `.btn-primary/secondary/danger`), status badges as soft
+  pills with one solid saffron "Your turn", card grids without orphans, page and section titles in the display face,
+  stat-tile figures, the new mark and wordmark, the pill nav rail, the top bar, the night auth panel (sticky on long
+  forms), staff tables with sentence-case headers.
+- **Landing** (rebuilt): a night hero with the product's own cards (tracker, scout match, certificate) that slide into
+  place once; how it works with the five-stage line; who it is for; four feature miniatures in an asymmetric grid;
+  a night proof band with the seal and a certificate check that works without an account (a GET form to `/verify`);
+  questions (`<details>`, no script); a bloom closing call; a full night footer with the theme switch.
+- **Developer portal** (P20-3, impl-frontend): Home with a raised "Needs you" card and a deadline figure, Discover
+  cards with a clear hierarchy, the editor as a two-column page with its tools rail, the idea page's certificate
+  beside pitches and views, Companies, engagements, billing figures, notifications by day, settings, niches.
+- **Organisation portal and tracker** (P20-4): the tracker's turn card (whose turn, next step, a countdown figure, the
+  actions), the bloom stepper, the agreement as a document with a milestone total, history as a timeline, the
+  proposal's facts strip and raised NDA step, "Needs us" cards, facts rows on scout and Brief pages.
+- **Staff and public** (P20-5): moderation and claims queues on their own sheet with a summary line, the case page's
+  sticky decision panel, `/verify` as an official certificate sheet, help with contents, terms as a reading column,
+  the error screen; every email and the marked full-proposal page in the new palette and fonts.
+- **Taste additions** (no new data or API): the landing's certificate check and questions; "Link another problem" in
+  the editor (also the budget fix below); figures in the display face across the portals.
+
+**Budget fix.** The editor of an idea with a chosen problem, over 150 KB since P18 (152,206 B), now reads 149,713 B:
+the linked problems are a plain list and the search loads on "Link another problem"; the publish checklist moved to
+`dev/ideas/checklist.ts`, loaded with the review step, which hands it to the editor.
+
+**Gate.** `reviewer` PASS (two MINORs: the lazily read checklist could suspend the editor on a slow chunk, fixed by
+handing it over from the review step; one commit over 300 lines, noted), `security-reviewer` PASS on the touched
+sensitive files (watermark render, emails, magic-link page, billing UI, fonts, the checklist split), `ux-reviewer`
+CHANGES_REQUIRED (two MAJORs: a pill inside a pill on "Demo data", the hero's cards colliding at 1024 px; six MINORs)
+then PASS after one round. Design shots `docs/demo/screenshots/p20/` (every screen, 1440 and 375, light and dark,
+strict axe 0), the walkthrough re-recorded on a fresh reset (demo story 1/1), Lighthouse 96–99 performance and 100
+accessibility light and dark, every measured route under 150 KB (scorecard "P20 measurements"). Playwright on the
+compose stack: {E2E}; the test-clock scenarios: {CLOCK}. CI: {CI}. CodeQL: exactly the eight D-42 findings.
+
+**Found on the way (not P20's).** `test_expiry.py`'s holiday case assumed no real holiday in its 10-business-day
+window; from 9 October Mashujaa Day (20 October) falls inside it, so the test now counts the seeded holidays (it would
+have turned the integration branch red the same day). A new advisory against `braces` (GHSA-vfj7-8cjw-p6xm, every
+release, dev-only through `eslint-config-next`) turned the scanners job red on every branch: listed in
+`osv-scanner.toml` with a reason and an expiry (3 November); `npm audit` has no such list, so D-56 asks the owner.
+
+**Decisions for the owner.** D-55 (the redesign itself; G5 reviews this world), D-56 (npm audit on dev-only advisories
+without a fix), and the new strings in `_meta.reviewP20*` (`[[COPY-REVIEW]]`, Swahili `[[SW-REVIEW]]`).
 
 ### P19 report (final, 2026-10-02): side states, Problem Briefs, the bell, the teaser checks
 
