@@ -70,7 +70,8 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
           </p>
         ) : null}
         {/* The headline, and the two parties beside it (the one whose turn it is ringed). */}
-        <div className="flex items-start justify-between gap-4">
+        {/* A long headline ("This engagement is closed.") keeps its line; the parties then wrap under it. */}
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <h2 id="whose-turn" className="flex min-w-0 items-start gap-2.5 text-xl text-ink sm:text-2xl">
             {yours ? null : (
               <ChipMark
