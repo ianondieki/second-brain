@@ -208,8 +208,9 @@ export function Actions(props: ActionsProps) {
         <>
           <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             {props.items.map((item) => (
-              <li key={`${item.command}-${item.milestone?.id ?? ""}`}>
-                {/* Ending steps (withdraw, decline) are the danger variant: outlined in the error colour, never filled. */}
+              <li key={`${item.command}-${item.milestone?.id ?? ""}`} className={isEndingCommand(item.command) ? "sm:ml-auto" : undefined}>
+                {/* Ending steps (withdraw, decline) are the danger variant: outlined in the error colour, never filled,
+                    and set apart at the row's end from 640 px. */}
                 {isEndingCommand(item.command) ? (
                   <Button
                     variant="danger"

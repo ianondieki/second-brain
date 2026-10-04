@@ -2,7 +2,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { Avatar } from "@/components/ui/Avatar";
-import { Callout } from "@/components/ui/Callout";
+import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 
 import { ChipMark } from "./Chip";
@@ -47,71 +47,119 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
   // While a question is open the countdown is its answer-by date, said in the question's own sentence; a hold's date
   // is in its sentence too. Past the answer-by date the overdue countdown shows instead.
   const countdown = detail.due && !ended && !onHold && (side?.kind !== "info" || detail.due.overdue);
-  // A Callout with a title (docs/platform/design/p16-design-system.md, Notices): the accent tone when it is the
-  // viewer's turn, neutral otherwise; the drawn mark says current, completed or ended with the words.
+  // The page's headline object (docs/platform/design/p20-design-system.md, tracker): a section without a frame of its
+  // own (EngagementScreen draws the turn card around it and the actions). Saffron only for "Your turn"; the drawn
+  // mark says current, completed, on hold or ended with the words otherwise. `data-callout` keeps the banner's tone.
+  const tone = yours ? "info" : "neutral";
+  const late = detail.due ? Math.abs(detail.due.business_days_left) : 0;
+  // The countdown as a figure ("7 business days left") when it is a count; "due today" stays a sentence.
+  const figure = countdown && detail.due && (detail.due.overdue ? late > 0 : detail.due.business_days_left > 0);
   return (
-    <Callout
-      as="section"
+    <section
       aria-labelledby="whose-turn"
       data-whose-turn={turn.kind}
-      tone={yours ? "info" : "neutral"}
-      title={onHold ? t("turn.onHold") : headline}
-      titleId="whose-turn"
-      titleSize="lg"
-      icon={
-        <ChipMark
-          kind={turn.kind === "ended" ? (detail.state === "CLOSED" ? "completed" : "ended") : onHold ? "onHold" : "current"}
-          className={cn(
-            "mt-1 size-5",
-            turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : onHold ? "text-ink" : "text-accent",
-          )}
-        />
-      }
+      data-callout={tone}
+      className="flex flex-col gap-5 p-5 sm:flex-row sm:items-start sm:justify-between sm:gap-8 sm:p-7"
     >
-      <p className="flex items-center gap-2 py-0.5" aria-label={t("parties")}>
-        <Avatar name={detail.developer_name} kind="person" size="md" surface="field" active={!ended && awaited.has("developer")} labelled />
-        <Avatar name={detail.org_name} kind="org" size="md" surface="field" active={!ended && awaited.has("org")} labelled />
-      </p>
-      {side ? <SideState side={side} detail={detail} /> : null}
-      {turn.kind === "ended" && detail.end_reason && side?.kind !== "expired" ? (
-        <p className="text-ink">{t("endedBecause", { reason: t(`endReason.${detail.end_reason}`) })}</p>
-      ) : null}
-      {/* The next step, said once: when both parties owe the same step, one sentence names them both. */}
-      {turn.kind === "both" && mine.length === 1 && theirs.length === 1 && mine[0] === theirs[0] ? (
-        <p className="text-ink">{t("nextBoth", { name: other, step: steps(`command.${mine[0]}`) })}</p>
-      ) : (
-        <>
-          {yours
-            ? mine.map((command) => (
-                <p key={command} className="text-ink">
-                  {t("nextYou", { step: steps(`command.${command}`) })}
-                </p>
-              ))
-            : null}
-          {turn.kind === "other" || turn.kind === "both"
-            ? theirs.map((command) => (
-                <p key={command} className="text-ink-soft">
-                  {t("nextThem", { name: other, step: steps(`command.${command}`) })}
-                </p>
-              ))
-            : null}
-        </>
-      )}
-      {side?.kind === "info" && detail.due && !detail.due.overdue ? (
-        <p data-info-clock="" className="text-sm text-ink-soft">
-          {t.rich(detail.my_party === "developer" ? "side.infoClockYou" : "side.infoClockThem", {
-            name: detail.developer_name,
-            date: formatDate(detail.due.due_on, locale),
-            nowrap,
-          })}
+      <div className="min-w-0 flex-1">
+        {yours ? (
+          <p className="mb-3">
+            <Badge tone="warm" solid icon={<ChipMark kind="current" />}>
+              {t("yourTurn")}
+            </Badge>
+          </p>
+        ) : null}
+        <h2 id="whose-turn" className="flex items-start gap-2.5 text-xl text-ink sm:text-2xl">
+          {yours ? null : (
+            <ChipMark
+              kind={turn.kind === "ended" ? (detail.state === "CLOSED" ? "completed" : "ended") : onHold ? "onHold" : "current"}
+              className={cn(
+                "mt-1.5 size-5 sm:mt-2",
+                turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : onHold ? "text-ink" : "text-accent",
+              )}
+            />
+          )}
+          <span className="min-w-0">{onHold ? t("turn.onHold") : headline}</span>
+        </h2>
+        <p className="mt-4 flex items-center gap-1.5" aria-label={t("parties")}>
+          <Avatar name={detail.developer_name} kind="person" size="md" surface="field" active={!ended && awaited.has("developer")} labelled />
+          <span aria-hidden="true" className="h-px w-5 bg-line" />
+          <Avatar name={detail.org_name} kind="org" size="md" surface="field" active={!ended && awaited.has("org")} labelled />
         </p>
-      ) : null}
-      {countdown && detail.due ? (
-        <p className="text-sm">
-          <DueText due={detail.due} className={detail.due.overdue ? "font-semibold text-error" : "text-ink-soft"} />
-        </p>
-      ) : null}
-    </Callout>
+        <div className="mt-4 flex flex-col gap-1.5 empty:hidden">
+          {side ? <SideState side={side} detail={detail} /> : null}
+          {turn.kind === "ended" && detail.end_reason && side?.kind !== "expired" ? (
+            <p className="text-ink">{t("endedBecause", { reason: t(`endReason.${detail.end_reason}`) })}</p>
+          ) : null}
+          {/* The next step, said once: when both parties owe the same step, one sentence names them both. */}
+          {turn.kind === "both" && mine.length === 1 && theirs.length === 1 && mine[0] === theirs[0] ? (
+            <p className="text-lg font-semibold text-ink">{t("nextBoth", { name: other, step: steps(`command.${mine[0]}`) })}</p>
+          ) : (
+            <>
+              {yours
+                ? mine.map((command) => (
+                    <p key={command} className="text-lg font-semibold text-ink">
+                      {t("nextYou", { step: steps(`command.${command}`) })}
+                    </p>
+                  ))
+                : null}
+              {turn.kind === "other" || turn.kind === "both"
+                ? theirs.map((command) => (
+                    <p key={command} className={turn.kind === "other" ? "text-lg text-ink" : "text-ink-soft"}>
+                      {t("nextThem", { name: other, step: steps(`command.${command}`) })}
+                    </p>
+                  ))
+                : null}
+            </>
+          )}
+          {side?.kind === "info" && detail.due && !detail.due.overdue ? (
+            <p data-info-clock="" className="text-sm text-ink-soft">
+              {t.rich(detail.my_party === "developer" ? "side.infoClockYou" : "side.infoClockThem", {
+                name: detail.developer_name,
+                date: formatDate(detail.due.due_on, locale),
+                nowrap,
+              })}
+            </p>
+          ) : null}
+          {/* With a figure beside it the sentence is for screen readers (the figure is its picture); otherwise shown. */}
+          {countdown && detail.due ? (
+            <p className={figure ? "sr-only" : "text-sm"}>
+              <DueText due={detail.due} className={detail.due.overdue ? "font-semibold text-error" : "text-ink-soft"} />
+            </p>
+          ) : null}
+        </div>
+      </div>
+      {figure && detail.due ? <Countdown due={detail.due} /> : null}
+    </section>
+  );
+}
+
+/**
+ * The stage's countdown as a figure (the display face, tabular): business days left, or overdue in the error colour
+ * with its mark. A picture of the sentence beside it (aria-hidden): the sentence is what is read out.
+ */
+function Countdown({ due }: { due: Detail["due"] & object }) {
+  const t = useTranslations("tracker");
+  const locale = useLocale();
+  const count = Math.abs(due.business_days_left);
+  const date = formatDate(due.due_on, locale);
+  return (
+    <div
+      aria-hidden="true"
+      data-countdown={due.overdue ? "overdue" : "open"}
+      className="flex shrink-0 items-center gap-4 border-t border-line pt-4 sm:w-40 sm:flex-col sm:items-start sm:gap-1 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6"
+    >
+      <span className={cn("flex items-center gap-2 font-display text-4xl leading-none font-bold tabular-nums", due.overdue ? "text-error" : "text-ink")}>
+        {due.overdue ? <ChipMark kind="overdue" className="size-6" /> : null}
+        {count}
+      </span>
+      <span className="text-sm leading-snug">
+        <span className={cn("block font-semibold", due.overdue ? "text-error" : "text-ink")}>
+          {t(due.overdue ? "deadline.overdue" : "deadline.left", { count })}
+        </span>
+        <span className="block text-ink-soft">{t(due.overdue ? "deadline.was" : "deadline.due", { date })}</span>
+      </span>
+    </div>
   );
 }
 
