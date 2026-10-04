@@ -15,11 +15,11 @@ export async function Hero() {
   const t = await getTranslations("landing");
   return (
     <section aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-night">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-14 px-4 pt-14 pb-20 sm:px-6 sm:pt-20 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center lg:gap-12 lg:pt-24 lg:pb-28">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-14 px-4 pt-14 pb-20 sm:px-6 sm:pt-20 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:items-center xl:gap-12 lg:pt-24 lg:pb-28">
         <div className="on-night">
           <h1
             id="hero-title"
-            className="max-w-[13ch] text-[2.75rem] leading-[1] tracking-[-0.035em] sm:text-4xl lg:text-[4.25rem] lg:leading-[0.98] xl:text-[4.5rem]"
+            className="max-w-[15ch] text-[2.75rem] text-balance leading-[1] tracking-[-0.035em] sm:text-4xl lg:text-[4.25rem] lg:leading-[0.98] xl:text-[4rem]"
           >
             {t("title")}
           </h1>

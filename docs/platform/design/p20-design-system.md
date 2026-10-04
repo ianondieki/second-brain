@@ -37,7 +37,7 @@ Core palette (light):
 | Name | Hex | Role |
 |---|---|---|
 | Bloom | `#5A3FC0` | The accent: primary buttons, links, the current step, focus. White on bloom 7.2:1; bloom on canvas 6.7:1 |
-| Night | `#1E1640` | Deep jacaranda dusk: the landing hero, proof and closing bands, the footer, the auth panel. Text on night `#EEEAF8` 14.3:1 |
+| Night | `#1E1640` | Deep jacaranda dusk: the landing hero and proof bands, the footer, the auth panel. Text on night `#EEEAF8` 14.3:1 |
 | Saffron | `#F4B53F` | The warm second, from the kanga: "Your turn", the landing's call on night, the lattice's second tone. Never text on light; ink on saffron 9.5:1 |
 | Petal | `#EFEBFC` | Bloom's wash: selected rows, the active nav item, info notices. Bloom on petal 6.2:1 |
 | Ink | `#1B1730` | Text: 16.1:1 on canvas. A violet ink, not a grey near-black |
@@ -67,7 +67,7 @@ confidence of Nairobi's printed signage without imitating it. Hanken is open and
 screen. They are clearly two voices: the display face never sets running text; the text face never sets a page title.
 
 Scale (rem on a 16 px base): 0.8125 (meta, chips) · 0.875 (secondary) · 1 (body) · 1.25 (lead) · 1.5 (section
-title) · 2 (page title, phones) · 2.5 (page title from 1024 px) · 3.5 / 5 (the landing hero, phones / desktop). Display
+title) · 2 (page title, phones) · 2.5 (page title from 1024 px) · 2.75 / 4.25 / 4 (the landing hero: phones / 1024 px, stacked / 1280 px, beside the composition). Display
 tracking −0.02em at section size, −0.035em at hero size; line height 1.0–1.05 for the hero, 1.15 for titles, 1.6 for
 body. Body measure ≤ 68 ch. Figures are tabular wherever they line up.
 
@@ -93,7 +93,7 @@ body. Body measure ≤ 68 ch. Figures are tabular wherever they line up.
 ██ NIGHT ██████████████████████████████████████████████████████████████████████████████████
 █  Local solutions                              ┌ tracker card (white) ──────────────┐    █
 █  for the organisations                        │ Cold chain for dairy co-ops  ◉ turn │    █
-█  that need them        (80 px, left)          │ ●━━━●━━━○───○───○                   │    █
+█  that need them        (64 px, left, balanced) │ ●━━━●━━━○───○───○                   │    █
 █                                               └─────────────────────────────────────┘   █
 █  lead, 20 px, night-soft, ≤ 52 ch         ┌ scout match ┐        ┌ certificate + seal ┐  █
 █  [Create an account]  Check a certificate └─────────────┘        └────────────────────┘  █
@@ -105,16 +105,17 @@ body. Body measure ≤ 68 ch. Figures are tabular wherever they line up.
   ┌ For developers (white, wide) ───────────┐ ┌ For organisations (petal) ─────────┐
   │ three points + the pitch it leads to    │ │ three points + a scout match       │
   └─────────────────────────────────────────┘ └────────────────────────────────────┘
-  What you can do (asymmetric: 7 + 5 columns, then 4 + 4 + 4), each a working miniature
-  of the screen it names: Discover trends · Problem Briefs · Teaser checks · Who has
-  seen this · Notifications
+  What you can do (asymmetric: 7 + 5 columns, then 5 + 7), each a miniature of the
+  screen it names: Discover trends · Problem Briefs · Teaser checks · Notifications
 ██ NIGHT: proof ███ seal (large) │ three facts │ check a certificate [ ID ][Check] ███████
   Questions (h2 left, answers right, <details>, no script)
-██ NIGHT: closing ██ one line + Create an account ███████████████████████████████████████
+▓▓ BLOOM: closing ▓▓ one line + Create an account (a bloom panel between the night proof
+   band and the night footer, so three night bands never meet) ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
 ██ footer (night) wordmark · product, developers, organisations, trust columns · theme ██
 ```
 
-Phones (375): one column; the hero headline at 56 px over three lines; the composition shows the tracker card and the
+Phones (375): one column; the hero headline at 44 px over four balanced lines ("organisations" sets the
+limit at 360 px); the composition shows the tracker card and the
 certificate; the stage line becomes a vertical list; every grid becomes one column, in reading order.
 
 ### Portals (operate)
