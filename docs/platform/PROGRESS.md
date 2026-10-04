@@ -420,7 +420,7 @@ the pitch (Lighthouse on the laptop and the intended host, readings into the sco
 plan `tasks/P19.md` (four tracks, the responsiveness score replaced by the in-app channel), revisions 0006 and 0007
 by db-migrations, five implementers in worktrees (≤3 at once), reviewer, security-reviewer and ux-reviewer rounds
 until PASS on every track, the gate (full Playwright 184 + the clock scenarios, the walkthrough with the P19 beats,
-66 design shots, CodeQL exactly D-42, pr.yml [[CI]], Lighthouse 97–100 performance and 100 accessibility light and dark, JS budget every route under except the
+66 design shots, CodeQL exactly D-42, pr.yml green (run 322 on `2a7d253`, the last code commit; every required job green, the Playwright job with the new test-clock step, the demo story and the backend's coverage gate included; the informational legacy job red as on the P18 run; the commits after it are documentation only), Lighthouse 97–100 performance and 100 accessibility light and dark, JS budget every route under except the
 pre-existing editor-with-problem variant) and the merge into the integration branch as `[[MERGE]]`. The report is
 "P19 report" below; the cards `tasks/P19-*.md` carry every decision. Linux setup unchanged from session 4 (the stack
 is up at the end; `demo.py reset --yes` before showing it: the gate's runs moved its clock). Decisions for the owner:
@@ -517,7 +517,7 @@ text, on-hold rows showing a due date) and round 2 PASS (two MINORs carried the 
 2,823, integration 1,744 on d874dcf (the four later backend commits add tests and change none of the suites' behaviour; their files ran green in the worktrees) (engagements, reminders, notifications, problems, demo, feature flags, RLS,
 privileges, migrations; PGTZ=UTC); the legacy suite unchanged. Playwright on the compose stack: 184 passed, 4 skipped, 0 failed (`2a7d253`, two workers, a fresh reset) and the four test-clock scenarios green scenarios ×
 mobile-360 and desktop green, the test-clock scenarios (`make check-e2e-clock`, a new `pr.yml` step) green, the
-walkthrough green on a fresh reset; `pr.yml` [[CI]]; CodeQL run 262 on `2a7d253`: exactly the eight D-42 findings (7 Python, 1 JavaScript); a ninth, the briefs spec's hand-made regex escape, appeared on 4dc3754 and was removed. JS budget (gzipped bodies, 360 px): the
+walkthrough green on a fresh reset; `pr.yml` green (run 322 on `2a7d253`, the last code commit; every required job green, the Playwright job with the new test-clock step, the demo story and the backend's coverage gate included; the informational legacy job red as on the P18 run; the commits after it are documentation only); CodeQL run 262 on `2a7d253`: exactly the eight D-42 findings (7 Python, 1 JavaScript); a ninth, the briefs spec's hand-made regex escape, appeared on 4dc3754 and was removed. JS budget (gzipped bodies, 360 px): the
 tracker 149,979 B, the editor draft 149,819 (154,340 after pressing "Check overlap", on demand, D-28 addendum) B, the other P19 routes 141–147 KB. Lighthouse 12 mobile:
 the tracker with a side state 99 / 100 / 2.2 s light and 99 / 100 / 2.2 s dark (developer), 99 / 100 / 2.2 s and 97 / 100 / 2.5 s (organisation); `/notifications` 99 / 100 / 1.9 s and 98 / 100 / 2.5 s; `/org/problems` 97 / 100 / 2.5 s and 100 / 100 / 1.9 s (performance / accessibility / LCP, one run per cell on the final build; the two 2.5 s cells sit on the D-53 line, 2.53–2.54 s).
 
