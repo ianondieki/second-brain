@@ -69,7 +69,7 @@ async function NotificationRow({ item }: { item: Notification }) {
   );
 }
 
-/** The notifications in Nairobi day groups (Today, Yesterday, then dates), each a heading and its rows, newest first. */
+/** The notifications in Nairobi day groups (Today, Yesterday, then dates), each a heading and its rows on a card, newest first. */
 export async function NotificationList({ items, now }: { items: readonly Notification[]; now: Date }) {
   const [t, locale] = await Promise.all([getTranslations("notifications"), getLocale()]);
   return (
@@ -78,10 +78,11 @@ export async function NotificationList({ items, now }: { items: readonly Notific
         const headingId = `day-${group.day}`;
         return (
           <section key={group.day} aria-labelledby={headingId} data-day={group.name}>
-            <h2 id={headingId} className="mb-3 font-sans text-sm font-semibold tracking-[0.01em] text-ink-soft">
+            <h2 id={headingId} className="mb-4 text-lg text-ink">
               {group.name === "date" ? formatDay(locale, group.at) : t(group.name)}
             </h2>
-            <RowList aria-labelledby={headingId}>
+            {/* A day's rows on one white card (P20): the day is one object, its rows a list inside it. */}
+            <RowList aria-labelledby={headingId} rule={false} className="rounded-panel border border-line bg-field px-4 sm:px-5">
               {group.items.map((item) => (
                 <NotificationRow key={item.id} item={item} />
               ))}
