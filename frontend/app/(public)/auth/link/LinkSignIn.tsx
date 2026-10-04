@@ -141,7 +141,7 @@ export function LinkSignIn() {
   if (noPassword) {
     return (
       <>
-        <h1 className="text-xl text-ink lg:text-2xl">{t("link.noPasswordTitle")}</h1>
+        <h1 className="text-2xl text-ink lg:text-3xl">{t("link.noPasswordTitle")}</h1>
         <p className="mt-3 text-ink-soft">{t("link.noPasswordBody")}</p>
         <div className="mt-8 flex flex-col items-start gap-4">
           <ButtonLink href="/settings/security#password" variant="primary">
@@ -158,7 +158,7 @@ export function LinkSignIn() {
   if (interrupted) {
     return (
       <>
-        <h1 className="text-xl text-ink lg:text-2xl">{t("link.interruptedTitle")}</h1>
+        <h1 className="text-2xl text-ink lg:text-3xl">{t("link.interruptedTitle")}</h1>
         <p role="status" className="mt-3 text-ink-soft">
           {t("link.interruptedBody")}
         </p>
@@ -174,7 +174,7 @@ export function LinkSignIn() {
   if (!failed) {
     return (
       <>
-        <h1 className="text-xl text-ink lg:text-2xl">{t("link.title")}</h1>
+        <h1 className="text-2xl text-ink lg:text-3xl">{t("link.title")}</h1>
         <Illustration kind="waiting" className="mt-4 max-w-48 text-ink" />
         <p role="status" className="mt-3 text-ink-soft">
           {t("link.working")}
@@ -185,7 +185,7 @@ export function LinkSignIn() {
 
   return (
     <>
-      <h1 className="text-xl text-ink lg:text-2xl">{t("link.failedTitle")}</h1>
+      <h1 className="text-2xl text-ink lg:text-3xl">{t("link.failedTitle")}</h1>
       <p className="mt-3 text-ink-soft">
         {failed === "invalid_or_expired_link"
           ? t("link.failedLead", { minutes: LINK_MINUTES })
