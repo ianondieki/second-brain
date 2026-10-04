@@ -153,7 +153,7 @@ async function approveInQueue(browser: Browser, title: string) {
     await page.waitForURL(/\/admin\/moderation\/cases\//);
     await page.locator('main [data-hydrated="true"]').first().waitFor();
     await page.getByRole("button", { name: "Approve" }).click();
-    await page.getByRole("status").filter({ hasText: "Approved. The problem is published." }).waitFor();
+    await page.getByRole("status").filter({ hasText: "Approved. The Brief is published to developers." }).waitFor();
   });
 }
 
