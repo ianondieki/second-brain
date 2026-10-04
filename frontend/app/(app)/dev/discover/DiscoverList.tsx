@@ -2,7 +2,6 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
-import { RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 
 import {
@@ -19,6 +18,7 @@ import {
   type TrendingProject,
 } from "./discover";
 import { BriefRow } from "./BriefRow";
+import { CardList } from "./CardList";
 import { ProblemRow } from "./ProblemRow";
 import { ProjectRow } from "./ProjectRow";
 
@@ -29,8 +29,8 @@ export type DiscoverListProps = { query: DiscoverQuery; counties: readonly Count
 );
 
 /**
- * The chosen list with its heading and one line on what it holds, its items as compact cards two across from 640 px
- * (D-52, as Home's recommendations). Cold start (nothing in the list trends yet) titles the problems or the projects
+ * The chosen list with its heading and one line on what it holds, its items as compact cards two across from 768 px
+ * (D-52; P20: an odd count gives the top item the whole first row, so no card sits alone). Cold start (nothing in the list trends yet) titles the problems or the projects
  * "New this week". An empty list is one sentence and one action (docs/spec/07 item 4): clear the filters when they
  * narrowed it, else the next useful step.
  */
@@ -49,11 +49,11 @@ export function DiscoverList(props: DiscoverListProps) {
             {...(narrowed ? clear : { sentence: t("briefsEmpty"), action: t("toProblems"), href: discoverHref({}) })}
           />
         ) : (
-          <RowList ordered cards>
+          <CardList>
             {items.map((item) => (
               <BriefRow key={item.problem.id} item={item} counties={counties} />
             ))}
-          </RowList>
+          </CardList>
         )}
       </List>
     );
@@ -68,11 +68,11 @@ export function DiscoverList(props: DiscoverListProps) {
             {...(narrowed ? clear : { sentence: t("gapEmpty"), action: t("toProblems"), href: discoverHref({}) })}
           />
         ) : (
-          <RowList ordered cards>
+          <CardList>
             {items.map((item) => (
               <ProblemRow key={item.problem.id} item={item} counties={counties} query={query} />
             ))}
-          </RowList>
+          </CardList>
         )}
       </List>
     );
@@ -93,11 +93,11 @@ export function DiscoverList(props: DiscoverListProps) {
             {...(narrowed ? clear : { sentence: t("projectsEmpty"), action: t("toProblems"), href: discoverHref({}) })}
           />
         ) : (
-          <RowList ordered cards>
+          <CardList>
             {items.map((item) => (
               <ProjectRow key={item.proposal.id} item={item} />
             ))}
-          </RowList>
+          </CardList>
         )}
       </List>
     );
@@ -119,7 +119,7 @@ export function DiscoverList(props: DiscoverListProps) {
             : { sentence: t("problemsEmpty"), action: t("problemsEmptyAction"), href: "/dev/ideas/new" })}
         />
       ) : (
-        <RowList ordered cards>
+        <CardList>
           {items.map((item) => (
             <ProblemRow
               key={item.problem.id}
@@ -131,7 +131,7 @@ export function DiscoverList(props: DiscoverListProps) {
                 .filter((project): project is TrendingProject => project !== undefined)}
             />
           ))}
-        </RowList>
+        </CardList>
       )}
     </List>
   );

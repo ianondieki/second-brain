@@ -50,7 +50,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="discover" />} wide>
-      <div className="max-w-3xl">
+      <div className="max-w-4xl">
         {/* No primary action: Discover's work is on the rows. "Your niches" is a secondary link in the action slot. */}
         <PageHeader
           title={t("title")}
@@ -62,11 +62,14 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
           }
         />
       </div>
-      <div className="mt-8 flex max-w-3xl flex-col gap-3">
-        <ViewSwitch query={query} />
-        <DiscoverFilters query={query} niches={niches} counties={filterOptions.counties} showClear={!empty} />
+      {/* The lists and their filters as one control surface: the tab strip on top, the filters under it. */}
+      <div className="mt-8 max-w-4xl rounded-panel border border-line bg-field">
+        <ViewSwitch query={query} className="px-2 sm:px-3" />
+        <div className="px-4 py-1 sm:px-5">
+          <DiscoverFilters query={query} niches={niches} counties={filterOptions.counties} showClear={!empty} />
+        </div>
       </div>
-      <div className="mt-8 max-w-3xl">
+      <div className="mt-10 max-w-4xl lg:mt-12">
         <DiscoverList query={query} counties={filterOptions.counties} {...lists} />
       </div>
     </SignedInShell>

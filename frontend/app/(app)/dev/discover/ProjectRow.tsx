@@ -5,15 +5,14 @@ import { problemHref } from "@/components/problem/problem";
 import { ProblemLabelText } from "@/components/problem/ProblemLabelText";
 import { titleLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { Description, DescriptionList } from "@/components/ui/DescriptionList";
-import { Row } from "@/components/ui/RowList";
 
+import { discoverCardClass, discoverTitleClass } from "./CardList";
 import { cardBadges, ChipList, MoreSummary, TrendBadge, WhyChip } from "./Chips";
 import { cardChips, moreWhy, projectAnchor, type TrendingProject } from "./discover";
 
 /**
  * One trending or new project (a published proposal's public teaser) beside the problem it solves (docs/spec/06 6.6,
- * AC-TREND-2), a Row: the problem is always there, links to its card and carries its provenance label. Its badge and
+ * AC-TREND-2), a compact card (P20): the summary, its chips, and at the foot the problem it solves, always there, links to its card and carries its provenance label. Its badge and
  * chips never count or name organisations (the API's rule); at most two badges, the rest under "More about this
  * project". A project has no page of its own here, so its title is not a link.
  */
@@ -24,46 +23,53 @@ export function ProjectRow({ item }: { item: TrendingProject }) {
   const rest = moreWhy(trend, why);
   const anchor = projectAnchor(proposal.id);
 
+  const badges = cardBadges([
+    trend.trending && trend.badge ? <TrendBadge key="trend" badge={trend.badge} /> : null,
+    ...chips.map((chip) => <WhyChip key={chip}>{chip}</WhyChip>),
+  ]);
+
   return (
-    <Row
+    <article
       id={anchor}
       aria-labelledby={`${anchor}-title`}
       data-project={proposal.id}
       data-trending={trend.trending ? "" : undefined}
-      title={proposal.teaser.title ?? proposal.cert_id}
-      titleId={`${anchor}-title`}
-      meta={proposal.teaser.niche?.label}
-      badges={cardBadges([
-        trend.trending && trend.badge ? <TrendBadge key="trend" badge={trend.badge} /> : null,
-        ...chips.map((chip) => <WhyChip key={chip}>{chip}</WhyChip>),
-      ])}
+      className={discoverCardClass}
     >
+      <h3 id={`${anchor}-title`} className={discoverTitleClass}>
+        {proposal.teaser.title ?? proposal.cert_id}
+      </h3>
+      {proposal.teaser.niche ? <p className="mt-1 text-sm text-ink-soft">{proposal.teaser.niche.label}</p> : null}
       {proposal.teaser.summary ? (
-        <p className="mt-1 line-clamp-3 max-w-[65ch] [overflow-wrap:anywhere] text-ink">{proposal.teaser.summary}</p>
+        <p className="mt-3 line-clamp-3 max-w-[65ch] [overflow-wrap:anywhere] text-ink">{proposal.teaser.summary}</p>
       ) : null}
-      {/* The problem it solves, as a fact of the project: its card's link, niche and provenance. */}
-      <DescriptionList dense data-solves={problem.id} className="mt-2">
-        <Description label={t("solves")}>
-          <Link
-            href={problemHref(problem.id)}
-            className={cn(titleLinkClass, "-my-2.5 inline-flex min-h-11 items-center font-semibold text-ink")}
-          >
-            {problem.title}
-          </Link>
-          <span className="flex flex-wrap gap-x-4 text-ink-soft">
-            {problem.niche ? <span>{problem.niche.label}</span> : null}
-            <ProblemLabelText problem={problem} />
-          </span>
-        </Description>
-      </DescriptionList>
+      {badges ? <div className="mt-3 flex flex-wrap items-center gap-2">{badges}</div> : null}
       {rest.length > 0 ? (
-        <details className="group">
+        <details className="group mt-1">
           <MoreSummary>{t("moreProject")}</MoreSummary>
           <div className="mt-1 mb-2">
             <ChipList items={rest} />
           </div>
         </details>
       ) : null}
-    </Row>
+      {/* The problem it solves, as the card's foot: its card's link, niche and provenance. */}
+      <div className="mt-auto pt-3">
+        <div data-solves={problem.id} className="border-t border-line pt-3">
+          <p className="text-sm text-ink-soft">{t("solves")}</p>
+          <p>
+            <Link
+              href={problemHref(problem.id)}
+              className={cn(titleLinkClass, "-my-2 inline-flex min-h-11 items-center font-semibold text-ink")}
+            >
+              {problem.title}
+            </Link>
+          </p>
+          <p className="flex flex-wrap items-center gap-x-4 text-sm text-ink-soft">
+            {problem.niche ? <span>{problem.niche.label}</span> : null}
+            <ProblemLabelText problem={problem} />
+          </p>
+        </div>
+      </div>
+    </article>
   );
 }

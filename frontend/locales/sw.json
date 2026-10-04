@@ -1881,6 +1881,7 @@
     "moreProject": "Zaidi kuhusu mradi huu",
     "whyTitle": "Kwa nini liko hapa",
     "sourcesTitle": "Vyanzo vipya zaidi",
+    "sourcesCount": "{count, plural, one {chanzo #} other {vyanzo #}}",
     "noSources": {
       "developer": "Hakuna vyanzo vilivyotajwa: msanidi programu alieleza tatizo hili.",
       "org_brief": "Hakuna vyanzo vilivyotajwa: shirika lililothibitishwa lilieleza tatizo hili katika maelezo yake.",

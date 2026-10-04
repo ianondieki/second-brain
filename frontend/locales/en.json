@@ -1881,6 +1881,7 @@
     "moreProject": "More about this project",
     "whyTitle": "Why it is here",
     "sourcesTitle": "Newest sources",
+    "sourcesCount": "{count, plural, one {# source} other {# sources}}",
     "noSources": {
       "developer": "No cited sources: a developer described this problem.",
       "org_brief": "No cited sources: a verified organisation described this problem in its Brief.",
