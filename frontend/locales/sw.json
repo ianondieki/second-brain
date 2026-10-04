@@ -18,7 +18,8 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home) [[SW-REVIEW]] draft Swahili",
     "reviewP16c1": "[[COPY-REVIEW]] [[SW-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.*, devEngagements.*; fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided (rasimu ya Kiswahili)",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*",
-    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)) (rasimu ya Kiswahili); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B), draft Swahili for native-speaker review: nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers)  rasimu ya Kiswahili; ux round: Brief capitalised in briefs.newTitle, briefs.post, briefForm.submit, briefForm.close.open, briefForm.close.confirm, discover.startBrief, discover.noSources.org_brief; problem.briefEnded.closed and problem.briefEnded.pastDeadline (in place of problem.briefEnded); briefs.anywhere reads Kenya; briefs.capFull, briefs.capFullTop, briefs.upgradeTo; orgHome.stats.briefsValue; adminModeration.visibility.briefHidden, adminModeration.case.leadBrief, adminModeration.decision.approvedBrief, adminModeration.decision.rejectConfirmBrief; ideaChecks.disclosure.flaggedOne and flaggedMany (in place of flagged), ideaChecks.disclosure.demo, ideaChecks.problem.originality_limit (still no number: policy.yaml sets the daily limit); notifications.emptyStaff, notifications.emptyOrg; (4) P19-F F-A (REQ-ENG-10, upande wa ufuatiliaji): tracker.event.request_info, .answer_info, .cancel_request, .pause, .resume, .expire; tracker.turn.onHold; tracker.side.*; tracker.expired.*; tracker.history.note.*; trackerActions.command.request_info, .answer_info, .cancel_request, .pause, .resume; trackerActions.sheet.*; trackerActions.refusal.containsContact, .invalidNote, .invalidResumeAt, .questionLimit, .holdLimit (rasimu ya Kiswahili); round 2 (rasimu ya Kiswahili): trackerActions.refusal.containsContact (hadi mawasiliano ya kwanza, kama sheet.noContact), trackerActions.refusal.tooMany, trackerActions.sheet.questionsLeft, .holdsLeft, .holdDaysLeft, trackerActions.sheet.pause.dateRange; reviewer round: ideaChecks.disclosure.flagged (in place of flaggedOne and flaggedMany: the fields after the sentence, so a label with an article reads); briefs.capFullUnknown, briefs.billing (plans not loaded: never the top-of-ladder sentence); problem.briefEnded.notOpen (an API without brief.ended: no guess); round 3 (rasimu ya Kiswahili): trackerActions.sheet.pause.dateHintNoDay; ux round (rasimu ya Kiswahili): tracker.due.resumes, .answerBy, .answerLate, tracker.chip.awaitingAnswer, tracker.side.info, .hold, .holdYou, .holdNoNote, .answered (tarehe kwenye mstari mmoja), inbox.stage.INFO_REQUESTED, inbox.stage.ON_HOLD; ux round 2 (rasimu ya Kiswahili): trackerActions.refusal.generic, .network (hakuna kilichotumwa)"
+    "reviewP19": "[[COPY-REVIEW]] [[SW-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)) (rasimu ya Kiswahili); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B), draft Swahili for native-speaker review: nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers)  rasimu ya Kiswahili; ux round: Brief capitalised in briefs.newTitle, briefs.post, briefForm.submit, briefForm.close.open, briefForm.close.confirm, discover.startBrief, discover.noSources.org_brief; problem.briefEnded.closed and problem.briefEnded.pastDeadline (in place of problem.briefEnded); briefs.anywhere reads Kenya; briefs.capFull, briefs.capFullTop, briefs.upgradeTo; orgHome.stats.briefsValue; adminModeration.visibility.briefHidden, adminModeration.case.leadBrief, adminModeration.decision.approvedBrief, adminModeration.decision.rejectConfirmBrief; ideaChecks.disclosure.flaggedOne and flaggedMany (in place of flagged), ideaChecks.disclosure.demo, ideaChecks.problem.originality_limit (still no number: policy.yaml sets the daily limit); notifications.emptyStaff, notifications.emptyOrg; (4) P19-F F-A (REQ-ENG-10, upande wa ufuatiliaji): tracker.event.request_info, .answer_info, .cancel_request, .pause, .resume, .expire; tracker.turn.onHold; tracker.side.*; tracker.expired.*; tracker.history.note.*; trackerActions.command.request_info, .answer_info, .cancel_request, .pause, .resume; trackerActions.sheet.*; trackerActions.refusal.containsContact, .invalidNote, .invalidResumeAt, .questionLimit, .holdLimit (rasimu ya Kiswahili); round 2 (rasimu ya Kiswahili): trackerActions.refusal.containsContact (hadi mawasiliano ya kwanza, kama sheet.noContact), trackerActions.refusal.tooMany, trackerActions.sheet.questionsLeft, .holdsLeft, .holdDaysLeft, trackerActions.sheet.pause.dateRange; reviewer round: ideaChecks.disclosure.flagged (in place of flaggedOne and flaggedMany: the fields after the sentence, so a label with an article reads); briefs.capFullUnknown, briefs.billing (plans not loaded: never the top-of-ladder sentence); problem.briefEnded.notOpen (an API without brief.ended: no guess); round 3 (rasimu ya Kiswahili): trackerActions.sheet.pause.dateHintNoDay; ux round (rasimu ya Kiswahili): tracker.due.resumes, .answerBy, .answerLate, tracker.chip.awaitingAnswer, tracker.side.info, .hold, .holdYou, .holdNoNote, .answered (tarehe kwenye mstari mmoja), inbox.stage.INFO_REQUESTED, inbox.stage.ON_HOLD; ux round 2 (rasimu ya Kiswahili): trackerActions.refusal.generic, .network (hakuna kilichotumwa)",
+    "reviewP20": "[[COPY-REVIEW]] [[SW-REVIEW]] P20 (D-55, the landing rebuilt): landing.nav.*, landing.hero.check, landing.how.lead (reworded), landing.how.stagesTitle, landing.how.stagesLead, landing.how.stages.*, landing.features.* (the samples are example data, labelled), landing.proof.checkLabel, landing.proof.checkHint, landing.proof.checkAction, landing.faq.* (answers follow the product's own rules: the NDA and who looked, the certificate's scope, verified organisations only, phone first, the prototype's honesty), landing.footer.product, .start, .about, .features, .faq, .signUp, .logIn, .verify"
   },
   "app": {
     "name": "Wazo",
@@ -74,7 +75,7 @@
     },
     "how": {
       "title": "Jinsi inavyofanya kazi",
-      "lead": "Hatua tatu, kifuatiliaji kimoja cha pamoja.",
+      "lead": "Chapisha mara moja. Kisha kifuatiliaji kimoja huwabeba pande zote mbili tangu mtazamo wa kwanza hadi mradi kufungwa.",
       "publish": {
         "title": "Chapisha wazo",
         "body": "Andika muhtasari wa umma na maelezo ya siri. Kila toleo husajiliwa na muhuri wa wakati na alama ya kidole."
@@ -86,6 +87,30 @@
       "track": {
         "title": "Kubaliana hatua inayofuata",
         "body": "Nia, mawasiliano, makubaliano, utekelezaji na kufunga: pande zote mbili hufuata hatua tano zilezile, na tarehe za mwisho na vikumbusho."
+      },
+      "stagesTitle": "Kifuatiliaji kimoja, pande mbili",
+      "stagesLead": "Hatua zilezile tano kwenye skrini zote mbili, pamoja na zamu ya nani na kinachohitajika.",
+      "stages": {
+        "review": {
+          "title": "Ukaguzi",
+          "body": "Shirika husoma muhtasari na kuamua kama litaendelea."
+        },
+        "contact": {
+          "title": "Mawasiliano na NDA",
+          "body": "Pande zote mbili hukubali NDA; pendekezo kamili hufunguka, na kila ufunguzi hurekodiwa."
+        },
+        "agreement": {
+          "title": "Makubaliano",
+          "body": "Masharti na hatua za kazi huandaliwa, hukamilishwa na kutiwa sahihi ndani ya kifuatiliaji."
+        },
+        "implementation": {
+          "title": "Utekelezaji",
+          "body": "Hatua za kazi huwasilishwa na kukubaliwa, kila moja na rekodi yake."
+        },
+        "close": {
+          "title": "Kufunga",
+          "body": "Mradi hufungwa na historia hubaki kwa pande zote mbili."
+        }
       }
     },
     "who": {
@@ -120,7 +145,10 @@
         "title": "Nani aliangalia",
         "body": "Mapendekezo kamili huonyeshwa kwa watu waliothibitishwa katika mashirika yaliyokubali NDA yetu, pamoja na wafanyakazi wa jukwaa kupitia ufikiaji wa dharura (break-glass) unaorekodiwa na ambao mmiliki hujulishwa. Unaona ni nani aliyefungua lako, na lini."
       },
-      "note": "Mtu yeyote anaweza kukagua cheti kwenye <verify>ukurasa wa uthibitishaji</verify> bila akaunti."
+      "note": "Mtu yeyote anaweza kukagua cheti kwenye <verify>ukurasa wa uthibitishaji</verify> bila akaunti.",
+      "checkLabel": "Nambari ya cheti",
+      "checkHint": "Herufi na tarakimu kumi na sita, kama zilivyochapishwa kwenye cheti.",
+      "checkAction": "Kagua cheti"
     },
     "cta": {
       "title": "Tuko tayari ukiwa tayari",
@@ -130,7 +158,88 @@
     "footer": {
       "note": "Mfano wa awali: kila takwimu kwenye tovuti hii ni data ya mfano iliyopandwa.",
       "help": "Msaada",
-      "terms": "Masharti"
+      "terms": "Masharti",
+      "product": "Huduma",
+      "start": "Anza",
+      "about": "Kuhusu",
+      "features": "Unachoweza kufanya",
+      "faq": "Maswali",
+      "signUp": "Fungua akaunti",
+      "logIn": "Ingia",
+      "verify": "Kagua cheti"
+    },
+    "nav": {
+      "label": "Kwenye ukurasa huu",
+      "how": "Jinsi inavyofanya kazi",
+      "organisations": "Kwa mashirika",
+      "verify": "Kagua cheti"
+    },
+    "hero": {
+      "check": "Kagua cheti"
+    },
+    "features": {
+      "title": "Unachoweza kufanya",
+      "lead": "Kila kimoja ni skrini ndani ya huduma, kinaonyeshwa hapa kwa data ya mfano.",
+      "discover": {
+        "title": "Ona matatizo yanayoongezeka",
+        "body": "Gundua hupanga matatizo yanayoibuliwa wiki hii, pamoja na vyanzo vyake na sababu ya kila moja kuvuma."
+      },
+      "briefs": {
+        "title": "Jibu ombi la shirika",
+        "body": "Mashirika yaliyothibitishwa huchapisha matatizo yanayotaka yatatuliwe, pamoja na kiwango cha bajeti na tarehe ya mwisho."
+      },
+      "checks": {
+        "title": "Kagua muhtasari wako kabla ya kuchapisha",
+        "body": "Ona kama unafanana na mawazo mengine yaliyochapishwa, na kama unafichua jinsi unavyofanya kazi."
+      },
+      "bell": {
+        "title": "Jua ni zamu yako lini",
+        "body": "Kila hatua kwenye kifuatiliaji hufika kwenye arifa zako na kwenye barua pepe ya kila siku."
+      },
+      "sample": {
+        "trend1": "Dizeli ikichelewa, minara hukosa umeme",
+        "trend1Niche": "Mawasiliano ya simu",
+        "trend2": "Wanachama wa SACCO hukosa tarehe za kulipa",
+        "trend2Niche": "Mikopo midogo na SACCO",
+        "trend3": "Maziwa huharibika kabla ya kukusanywa asubuhi",
+        "trend3Niche": "Kilimo",
+        "rising": "Linaongezeka",
+        "briefTitle": "Minara hukosa umeme dizeli ikiisha",
+        "briefOrg": "Limechapishwa na Telco A (mfano)",
+        "briefBudget": "Bajeti: chini ya KES 500,000",
+        "briefDeadline": "Mapendekezo kabla ya 1 Nov 2026",
+        "checkOverlap": "Hakuna mfanano na mawazo mengine yaliyochapishwa",
+        "checkDisclosure": "Unaeleza unachofanya, si jinsi unavyofanya kazi",
+        "bell1": "Telco A imekuuliza swali",
+        "bell2": "SACCO B imeidhinisha pendekezo lako liendelee",
+        "bell3": "Wazo lako limesajiliwa na muhuri wa wakati",
+        "bellTime1": "09:12",
+        "bellTime2": "Jana",
+        "bellTime3": "Jtatu"
+      }
+    },
+    "faq": {
+      "title": "Maswali",
+      "public": {
+        "q": "Nani anaweza kusoma wazo langu?",
+        "a": "Kila mtu anaweza kusoma muhtasari unaoandikia umma. Maelezo kamili hufunguka tu kwa watu waliothibitishwa katika mashirika yaliyokubali NDA, na unaona nani aliyafungua na lini."
+      },
+      "certificate": {
+        "q": "Cheti kinathibitisha nini?",
+        "a": "Ulichowasilisha na lini: alama ya kipekee ya maandishi na faili halisi, na wakati uliotiwa sahihi na mamlaka huru ya muhuri wa wakati. Hakifanyi wazo kuwa mali ya mtu yeyote."
+      },
+      "verified": {
+        "q": "Ni mashirika gani yanaweza kunitumia mapendekezo au kuyasoma?",
+        "a": "Ni mashirika yaliyothibitishwa kwa nyaraka zao za usajili pekee yanayoweza kupokea mapendekezo na kufungua maelezo kamili."
+      },
+      "phone": {
+        "q": "Inafanya kazi kwenye simu yangu?",
+        "a": "Ndiyo. Kila skrini imeundwa kwa simu kwanza, na kwa mtandao wa polepole."
+      },
+      "demo": {
+        "q": "Je, hii ni huduma halisi?",
+        "a": "Bado. Hiki ni kielelezo chenye data ya mfano: hakuna kinacholipiwa, na hakuna barua pepe inayotoka kwenye onyesho."
+      }
     }
   },
   "fields": {
@@ -1304,7 +1413,11 @@
     "country": "{country, select, KE {Kenya} UG {Uganda} other {{country}}}",
     "confidence": "Uhakika",
     "confidenceValue": "{band} ({value})",
-    "confidenceBand": { "high": "Juu", "medium": "Wastani", "low": "Chini" },
+    "confidenceBand": {
+      "high": "Juu",
+      "medium": "Wastani",
+      "low": "Chini"
+    },
     "namedOrgs": "Mashirika yaliyotajwa",
     "sourcesHeading": "Vyanzo",
     "sourcesCount": "{count, plural, one {# chanzo, kimenukuliwa kama kilivyochapishwa} other {# vyanzo, vimenukuliwa kama vilivyochapishwa}}",
