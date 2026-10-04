@@ -24,21 +24,21 @@ import { Editor } from "./Editor";
 
 // The editor's layout (P20), drawn from the server so the editor's client bundle carries none of it (the edit route
 // sits at the JS budget). Every step keeps a 42 rem column (the stepper, the fields, the buttons); from 1024 px step 1
-// (the one step holding the teaser checks) is two columns: the problem card, then the public teaser on the left, the
-// teaser checks and the writing assistant in a rail on the right from the top, the order of the page unchanged (the
-// problem card spans three rows, the last a flexible one, so the rail's two cards stay together). The two tools sit
-// on the canvas with a hairline, quieter than the white form cards. Tailwind reads these classes as written, so each
-// selector is spelled out ("step 1" is the fieldset's child holding the checks).
+// (the one step holding the teaser checks) is two columns: the problem card, then the public teaser on the left, and
+// beside the teaser the two tools that work on it (the teaser checks, the writing assistant) in a rail, the order of
+// the page unchanged. The teaser spans the rail's rows and a last flexible one, so the rail's cards stay together
+// whatever their height. The tools sit on the canvas with a hairline, quieter than the white form cards. Tailwind
+// reads these classes as written, so each selector is spelled out ("step 1" is the fieldset's child holding the checks).
 const EDITOR_LAYOUT = [
   "max-w-4xl [&_fieldset>*]:max-w-2xl",
   "[&_fieldset>div:has(#checks-title)>section:nth-of-type(n+2)]:bg-paper",
   "lg:[&_fieldset>div:has(#checks-title)]:grid lg:[&_fieldset>div:has(#checks-title)]:max-w-none",
   "lg:[&_fieldset>div:has(#checks-title)]:grid-cols-[minmax(0,1fr)_17rem]",
-  "lg:[&_fieldset>div:has(#checks-title)]:grid-rows-[auto_auto_1fr_auto] lg:[&_fieldset>div:has(#checks-title)]:items-start",
-  "lg:[&_fieldset>div:has(#checks-title)>div:first-child]:row-span-3",
-  "lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(1)]:col-start-1 lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(1)]:row-start-4",
-  "lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(2)]:col-start-2 lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(2)]:row-start-1",
-  "lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(3)]:col-start-2 lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(3)]:row-start-2",
+  "lg:[&_fieldset>div:has(#checks-title)]:grid-rows-[auto_auto_auto_1fr] lg:[&_fieldset>div:has(#checks-title)]:items-start",
+  "lg:[&_fieldset>div:has(#checks-title)>div:first-child]:col-start-1",
+  "lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(1)]:col-start-1 lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(1)]:row-span-3",
+  "lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(2)]:col-start-2 lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(2)]:row-start-2",
+  "lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(3)]:col-start-2 lg:[&_fieldset>div:has(#checks-title)>section:nth-of-type(3)]:row-start-3",
   "lg:has-[#checks-title]:[&_fieldset>div:last-child]:max-w-none",
 ].join(" ");
 
