@@ -75,6 +75,7 @@ export default async function VerifyPage({
           </form>
           <Seal size={96} className="hidden sm:block" />
         </div>
+        <Lattice />
       </Card>
 
       <div className="mt-8">

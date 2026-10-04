@@ -2,11 +2,12 @@ import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { TopBar } from "@/components/TopBar";
-import { Panel } from "@/components/ui/Panel";
+import { CheckIcon, EyeOffIcon } from "@/components/ui/icons";
 
 /**
- * The public verification pages: top bar, one content column, and a panel that says in plain words what a check
- * shows and what it never shows (beside the content from 1024 px, below it on a phone).
+ * The public verification pages: top bar, one content column, and an aside that says in plain words what a check
+ * shows and what it never shows (beside the content from 1024 px behind a hairline, and staying in view; below it
+ * on a phone). The certificate is the page's one raised sheet, so the aside is plain text on the canvas.
  */
 export async function VerifyShell({ children }: { children: ReactNode }) {
   const t = await getTranslations("verify");
@@ -22,16 +23,29 @@ export async function VerifyShell({ children }: { children: ReactNode }) {
         <main id="main" tabIndex={-1} className="w-full min-w-0 max-w-2xl focus:outline-none">
           {children}
         </main>
-        <Panel as="aside" variant="wash" aria-labelledby="what-a-check-shows" className="self-start">
+        <aside
+          aria-labelledby="what-a-check-shows"
+          className="self-start border-t border-line pt-8 lg:sticky lg:top-8 lg:border-t-0 lg:border-l lg:pt-2 lg:pl-8"
+        >
           <h2 id="what-a-check-shows" className="text-lg text-ink">
             {t("panelTitle")}
           </h2>
-          <ul className="mt-3 flex list-disc flex-col gap-3 pl-5 text-ink marker:text-accent">
-            <li className="pl-1">{t("panelFingerprint")}</li>
-            <li className="pl-1">{t("panelTime")}</li>
-            <li className="pl-1">{t("panelNot")}</li>
+          {/* What it shows (a tick each) and what it never shows (a struck eye): a mark and the words, never colour alone. */}
+          <ul className="mt-4 flex flex-col gap-4 text-ink">
+            <li className="flex items-start gap-3">
+              <CheckIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+              <span>{t("panelFingerprint")}</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <CheckIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+              <span>{t("panelTime")}</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <EyeOffIcon className="mt-0.5 size-5 shrink-0 text-ink-soft" />
+              <span>{t("panelNot")}</span>
+            </li>
           </ul>
-        </Panel>
+        </aside>
       </div>
     </>
   );
