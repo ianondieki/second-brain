@@ -92,58 +92,66 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
   const p = await getTranslations("ideaPitches");
 
   return (
-    <SignedInShell homeHref={home} nav={<DevNav current="ideas" />}>
-      <PageHeader back={{ href: BASE_PATH, label: t("back") }} title={version?.teaser.title?.trim() || t("untitled")}>
-        <p className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
-          <IdeaStatusBadge status={status} />
-          {idea.current ? (
-            <span className="text-sm text-ink-soft">{t("version", { number: idea.current.version_no })}</span>
-          ) : null}
-        </p>
-      </PageHeader>
+    <SignedInShell homeHref={home} nav={<DevNav current="ideas" />} wide>
+      <div className="max-w-4xl">
+        <PageHeader back={{ href: BASE_PATH, label: t("back") }} title={version?.teaser.title?.trim() || t("untitled")}>
+          <p className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
+            <IdeaStatusBadge status={status} />
+            {idea.current ? (
+              <span className="text-sm text-ink-soft">{t("version", { number: idea.current.version_no })}</span>
+            ) : null}
+          </p>
+        </PageHeader>
 
-      {justPublished && idea.current?.cert_id ? (
-        <Alert tone="ok" className="mt-6">
-          {t("published", { certId: idea.current.cert_id })}
-        </Alert>
-      ) : null}
-      {/* The idea's standing is part of the page from the start: a static Callout, not an announced Alert. */}
-      {notice ? (
-        <Callout tone={notice.tone} className="mt-6">
-          <p>{t(notice.key)}</p>
-        </Callout>
-      ) : null}
+        {justPublished && idea.current?.cert_id ? (
+          <Alert tone="ok" className="mt-6 max-w-2xl">
+            {t("published", { certId: idea.current.cert_id })}
+          </Alert>
+        ) : null}
+        {/* The idea's standing is part of the page from the start: a static Callout, not an announced Alert. */}
+        {notice ? (
+          <Callout tone={notice.tone} className="mt-6 max-w-2xl">
+            <p>{t(notice.key)}</p>
+          </Callout>
+        ) : null}
 
-      {status !== "hidden" ? (
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          {canPitch ? (
-            <ButtonLink href={pitchHref(idea.id, { selected: [], org: briefOrg })} variant="primary">
-              {p("pitch")}
+        {status !== "hidden" ? (
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            {canPitch ? (
+              <ButtonLink href={pitchHref(idea.id, { selected: [], org: briefOrg })} variant="primary">
+                {p("pitch")}
+              </ButtonLink>
+            ) : null}
+            <ButtonLink href={editHref(idea.id)} variant={canPitch ? "secondary" : "primary"}>
+              {idea.draft ? t("continueDraft") : t("edit")}
             </ButtonLink>
+          </div>
+        ) : null}
+
+        {/* From 1024 px the certificate and, beside it, the pitches and the views share the first band; the teaser
+            and the full details follow in one reading column. The reading order is unchanged. */}
+        <div className="mt-10 grid grid-cols-1 gap-12 lg:mt-12 lg:grid-cols-[minmax(0,30rem)_minmax(0,1fr)] lg:items-start lg:gap-x-10">
+          <Certificate idea={idea} ownerName={me.user.display_name} />
+          {idea.current ? (
+            <div className="flex min-w-0 flex-col gap-12">
+              {status !== "hidden" || (tags?.items.length ?? 0) > 0 ? <Pitches ideaId={idea.id} status={status} tags={tags} /> : null}
+              <WhoHasSeen views={views} />
+            </div>
           ) : null}
-          <ButtonLink href={editHref(idea.id)} variant={canPitch ? "secondary" : "primary"}>
-            {idea.draft ? t("continueDraft") : t("edit")}
-          </ButtonLink>
+          <div className="flex max-w-2xl min-w-0 flex-col gap-12 lg:col-span-2">
+            {version ? <Teaser version={version} status={status} county={county} /> : null}
+            {version ? <Confidential version={version} /> : null}
+
+            {status !== "hidden" ? (
+              <div>
+                <ClientStrings strings={await clientStrings(["ideaDelete"])}>
+                  <DeleteIdea id={idea.id} registered={idea.current !== null} />
+                </ClientStrings>
+              </div>
+            ) : null}
+          </div>
         </div>
-      ) : null}
-
-      <Certificate idea={idea} ownerName={me.user.display_name} />
-
-      {idea.current && (status !== "hidden" || (tags?.items.length ?? 0) > 0) ? (
-        <Pitches ideaId={idea.id} status={status} tags={tags} />
-      ) : null}
-      {idea.current ? <WhoHasSeen views={views} /> : null}
-
-      {version ? <Teaser version={version} status={status} county={county} /> : null}
-      {version ? <Confidential version={version} /> : null}
-
-      {status !== "hidden" ? (
-        <div className="mt-12">
-          <ClientStrings strings={await clientStrings(["ideaDelete"])}>
-            <DeleteIdea id={idea.id} registered={idea.current !== null} />
-          </ClientStrings>
-        </div>
-      ) : null}
+      </div>
     </SignedInShell>
   );
 }
@@ -181,7 +189,7 @@ async function Teaser({
   const { teaser } = version;
   const empty = <span className="text-ink-soft">{f("notGiven")}</span>;
   return (
-    <Section title={f("teaserTitle")} headingId="teaser-heading" description={f(TEASER_HINT[status])} className="mt-12">
+    <Section title={f("teaserTitle")} headingId="teaser-heading" description={f(TEASER_HINT[status])}>
       <DescriptionList>
         <Description label={f("niche")}>{teaser.niche?.label ?? empty}</Description>
         <Description label={f("maturity")}>{teaser.maturity ? f(`maturityValue.${MATURITY_KEY[teaser.maturity]}`) : empty}</Description>
@@ -227,7 +235,7 @@ async function Confidential({ version }: { version: Version }) {
   return (
     // The screen's one Panel: the full details are set apart as the part only the owner (and, after the NDA, verified
     // viewers) can read; its lock Badge says so in words (no coloured left rule).
-    <Panel as="div" className="mt-12">
+    <Panel as="div">
       <Section
         title={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">

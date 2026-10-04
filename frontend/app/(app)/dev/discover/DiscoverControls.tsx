@@ -20,10 +20,11 @@ import { StandaloneLink } from "@/components/ui/StandaloneLink";
  * Discover's four lists as link tabs (TabNav: one at a time; the address holds the choice, so each list is
  * server-rendered and shareable).
  */
-export function ViewSwitch({ query }: { query: DiscoverQuery }) {
+export function ViewSwitch({ query, className }: { query: DiscoverQuery; className?: string }) {
   const t = useTranslations("discover");
   return (
     <TabNav
+      className={className}
       label={t("viewsLabel")}
       current={query.view}
       items={VIEWS.map((view) => ({ key: view, label: t(`views.${view}`), href: discoverHref({ ...query, view }) }))}
@@ -59,7 +60,7 @@ export function DiscoverFilters({ query, niches, counties, showClear = true }: D
           {active > 0 ? t("filtersChosen", { count: active }) : t("filters")}
           <ChevronDownIcon className="size-5 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
         </summary>
-        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <div className="mt-1 mb-4 grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
           <SelectField id="discover-niche" name="niche" label={t("nicheLabel")} defaultValue={query.niche ?? ""}>
             <option value="">{t("nicheAll")}</option>
             {niches.map((parent) =>
@@ -92,7 +93,7 @@ export function DiscoverFilters({ query, niches, counties, showClear = true }: D
           </button>
         </div>
         {showClear && isNarrowed(query) ? (
-          <p className="mt-2">
+          <p className="-mt-1 mb-3">
             <StandaloneLink href={discoverHref({ view: query.view })}>
               {t("clear")}
             </StandaloneLink>

@@ -41,7 +41,7 @@ export async function ProblemCard({
       <Card padding="none" className="overflow-hidden">
         <Lattice />
         <header className="flex flex-col gap-3 p-5 sm:p-8">
-        <h1 id="problem-title" className="text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
+        <h1 id="problem-title" className="text-2xl [overflow-wrap:anywhere] text-ink lg:text-3xl">
           {problem.title}
         </h1>
         {/* The card's label (docs/spec/09 AI labels) under the title as a Badge: no eyebrow above a heading. Neutral:

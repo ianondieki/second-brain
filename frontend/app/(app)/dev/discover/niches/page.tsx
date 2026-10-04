@@ -46,30 +46,31 @@ export default async function LikedNichesPage() {
   }));
 
   return (
-    <SignedInShell homeHref={home} nav={<DevNav current="discover" />}>
-      <PageHeader
-        back={{ href: DISCOVER_PATH, label: t("back") }}
-        title={t("title")}
-        lead={liked ? t("lead", { count: liked.min, max: liked.max }) : undefined}
-      >
-        {liked ? <p className="mt-1 text-sm text-ink-soft">{t("keep", { count: liked.min })}</p> : null}
-      </PageHeader>
-      {liked ? (
-        <>
+    <SignedInShell homeHref={home} nav={<DevNav current="discover" />} wide>
+      <div className="max-w-3xl">
+        <PageHeader
+          back={{ href: DISCOVER_PATH, label: t("back") }}
+          title={t("title")}
+          lead={liked ? t("lead", { count: liked.min, max: liked.max }) : undefined}
+        >
+          {liked ? <p className="mt-1 text-sm text-ink-soft">{t("keep", { count: liked.min })}</p> : null}
+        </PageHeader>
+        {liked ? (
           <ClientStrings strings={strings}>
-            <div className="mt-10">
+            {/* The picker and the consent, each one white card (P20): two settings, two objects. */}
+            <div className="mt-8 rounded-panel border border-line bg-field p-5 sm:p-6 lg:mt-10">
               <NichePicker niches={options} initial={liked.liked.map((niche) => niche.id)} min={liked.min} max={liked.max} />
             </div>
             {consent ? (
-              <div className="mt-12">
+              <div className="mt-6 rounded-panel border border-line bg-field p-5 sm:p-6">
                 <ProfilingToggle consent={consent} />
               </div>
             ) : null}
           </ClientStrings>
-        </>
-      ) : (
-        <EmptyState sentence={t("problem.noProfile")} action={t("back")} href={DISCOVER_PATH} className="mt-8" />
-      )}
+        ) : (
+          <EmptyState sentence={t("problem.noProfile")} action={t("back")} href={DISCOVER_PATH} className="mt-8" />
+        )}
+      </div>
     </SignedInShell>
   );
 }

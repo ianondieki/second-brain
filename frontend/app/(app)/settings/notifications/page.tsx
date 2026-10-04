@@ -47,20 +47,23 @@ export default async function NotificationSettingsPage() {
   const [tNav, tSecurity] = await Promise.all([getTranslations("settingsNav"), getTranslations("security")]);
   return (
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
-      <PageHeader title={tNav("label")} back={{ href: home, label: tSecurity("back") }} />
-      <SettingsTabs current="notifications" />
-      <div className="mt-10">
-        {choices.length === 0 ? (
-          <EmptyState sentence={t("empty")} action={t("action.home")} href={home} />
-        ) : (
-          <Card variant="flat" className="max-w-3xl p-5 sm:p-6">
-            <Section title={t("pageTitle")} headingId="notifications-heading" description={t("lead")} headingStyle="card">
-              <ClientStrings strings={await clientStrings(["notificationSettings"])}>
-                <NotificationChoices initial={choices} />
-              </ClientStrings>
-            </Section>
-          </Card>
-        )}
+      {/* One 48 rem column: the tab strip ends where the card ends. */}
+      <div className="max-w-3xl">
+        <PageHeader title={tNav("label")} back={{ href: home, label: tSecurity("back") }} />
+        <SettingsTabs current="notifications" />
+        <div>
+          {choices.length === 0 ? (
+            <EmptyState sentence={t("empty")} action={t("action.home")} href={home} />
+          ) : (
+            <Card variant="flat" className="p-5 sm:p-6">
+              <Section title={t("pageTitle")} headingId="notifications-heading" description={t("lead")} headingStyle="card">
+                <ClientStrings strings={await clientStrings(["notificationSettings"])}>
+                  <NotificationChoices initial={choices} />
+                </ClientStrings>
+              </Section>
+            </Card>
+          )}
+        </div>
       </div>
     </SignedInShell>
   );

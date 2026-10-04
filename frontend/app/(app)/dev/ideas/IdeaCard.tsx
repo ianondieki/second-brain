@@ -1,47 +1,54 @@
-import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
-import { Card, cardLinkClass } from "@/components/ui/Card";
-import { LinkPending } from "@/components/ui/LinkPending";
+import { Badge } from "@/components/ui/Badge";
+import { Row } from "@/components/ui/RowList";
 
 import { formatDay } from "./dates";
 import { ideaHref, type MyProposalItem } from "./ideas";
 import { IdeaStatusBadge } from "./IdeaStatusBadge";
 import { hasUnpublishedChanges, ideaStatus } from "./status";
-import { Badge } from "@/components/ui/Badge";
 
 /**
- * One idea as a compact card (My ideas and Home's "My ideas", D-52), the whole card its link: the title, the niche and
- * last change, and at most two badges (docs/spec/07 item 2): the status and, for a published idea with saved edits,
- * "Unpublished changes" (in the accent: the developer can act on it). The heading level follows the page: h2 under the
- * My ideas title, h3 under Home's section heading.
+ * One idea as a row of a list (My ideas and Home's "My ideas"; P20: a list is rows, not a pile of cards), the whole
+ * row its link: the title, the niche and last change, and at most two badges (docs/spec/07 item 2): the status and,
+ * for a published idea with saved edits, "Unpublished changes" (in the accent: the developer can act on it). With
+ * `version`, the registered version stands at the row's end from 640 px. The heading level follows the page: h2
+ * under the My ideas title, h3 under Home's section heading. Put it in a RowList.
  */
-export function IdeaCard({ item, headingLevel = 2 }: { item: MyProposalItem; headingLevel?: 2 | 3 }) {
-  const Heading = headingLevel === 3 ? "h3" : "h2";
+export function IdeaCard({ item, headingLevel = 2, version = false }: { item: MyProposalItem; headingLevel?: 2 | 3; version?: boolean }) {
   const t = useTranslations("ideas");
   const fields = useTranslations("ideaFields");
   const locale = useLocale();
+  const status = <IdeaStatusBadge key="status" status={ideaStatus(item.status, item.moderation_state)} />;
   return (
-    <Card as="article" variant="flat" padding="sm" interactive className="flex flex-col gap-1.5">
-      <Heading className="font-sans text-base font-semibold tracking-[-0.005em] text-pretty [overflow-wrap:anywhere] text-ink">
-        <Link href={ideaHref(item.id)} className={cardLinkClass}>
-          {item.title?.trim() || t("untitled")}
-          <LinkPending className="absolute -top-px left-0" />
-        </Link>
-      </Heading>
-      <p className="flex flex-wrap gap-x-4 text-sm text-ink-soft">
-        {item.niche ? <span>{item.niche.label}</span> : null}
-        <span>{t("changed", { date: formatDay(locale, item.updated_at) })}</span>
-      </p>
-      <p className="flex flex-wrap items-center gap-x-5 gap-y-1">
-        <IdeaStatusBadge status={ideaStatus(item.status, item.moderation_state)} />
-        {hasUnpublishedChanges(item) ? (
-          <Badge data-chip="" tone="accent" icon={<DotIcon />}>
-            {fields("unpublishedChanges")}
-          </Badge>
-        ) : null}
-      </p>
-    </Card>
+    <Row
+      href={ideaHref(item.id)}
+      // An h2 takes the display face from the base styles; a row's title is set in the text face whatever its level.
+      title={<span className="font-sans font-semibold tracking-[-0.008em]">{item.title?.trim() || t("untitled")}</span>}
+      headingLevel={headingLevel}
+      meta={
+        <span className="flex flex-wrap gap-x-4">
+          {item.niche ? <span>{item.niche.label}</span> : null}
+          <span>{t("changed", { date: formatDay(locale, item.updated_at) })}</span>
+        </span>
+      }
+      badges={
+        hasUnpublishedChanges(item)
+          ? [
+              status,
+              <Badge key="changes" data-chip="" tone="accent" icon={<DotIcon />}>
+                {fields("unpublishedChanges")}
+              </Badge>,
+            ]
+          : [status]
+      }
+      figure={
+        version && item.current_version_no ? (
+          <span className="text-sm text-ink-soft">{t("version", { number: item.current_version_no })}</span>
+        ) : undefined
+      }
+      figureFrom="sm"
+    />
   );
 }
 

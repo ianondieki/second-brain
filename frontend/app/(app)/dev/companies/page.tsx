@@ -33,11 +33,14 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/dev/co
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="companies" />} wide>
-      <PageHeader title={t("title")} lead={t("lead")} />
-      <div className="mt-8 max-w-3xl">
+      <div className="max-w-4xl">
+        <PageHeader title={t("title")} lead={t("lead")} />
+      </div>
+      {/* The search and its filters as one control surface, as on Discover. */}
+      <div className="mt-8 max-w-4xl rounded-panel border border-line bg-field p-4 sm:p-5">
         <DirectoryFilters filters={filters} niches={niches} options={filterOptions} showClear={hasResults} />
       </div>
-      <div className="mt-8">
+      <div className="mt-10 max-w-4xl lg:mt-12">
         {browse.kind === "page" ? (
           <DirectoryResults kind="page" page={browse.page} filters={filters} />
         ) : (
