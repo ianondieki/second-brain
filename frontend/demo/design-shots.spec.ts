@@ -640,7 +640,11 @@ const SHOTS: Shot[] = [
   // A refusal: the plan's open Briefs are in use (402, with the next plan), else the form's own check of an empty form.
   { name: "org-brief-new-refused", set: "p19", path: "/org/problems/new", who: "org", prepare: async (page, browser) => {
       const brief = await publishedBrief(browser);
-      await page.locator("form[data-brief-form][data-hydrated='true']").waitFor();
+      // A page opened with the plan's Briefs in use shows that in place of the form: that is the refusal to shoot.
+      const form = page.locator("form[data-brief-form][data-hydrated='true']");
+      const capFull = page.getByText(/Every open Brief your plan allows is in use/);
+      await form.or(capFull).first().waitFor();
+      if (await capFull.isVisible()) return;
       const { plan } = await getJson<{ plan: { problem_briefs: number | null; used: number } }>(page.request, `/api/orgs/${brief.orgId}/briefs`);
       if (plan.problem_briefs !== null && plan.used >= plan.problem_briefs) {
         await page.getByLabel("Title").fill("Refuelling trips are planned from guesswork");
