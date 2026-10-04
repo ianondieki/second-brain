@@ -26,7 +26,7 @@ export function DataTable({ columns, className, children, ...rest }: DataTablePr
                 key={index}
                 role="columnheader"
                 scope="col"
-                className="py-2 pr-4 text-xs font-semibold tracking-[0.04em] whitespace-nowrap text-ink-soft uppercase last:pr-0"
+                className="py-2.5 pr-4 text-[0.8125rem] font-semibold whitespace-nowrap text-ink-soft last:pr-0"
               >
                 {column}
               </th>
@@ -73,7 +73,7 @@ export type DataCellProps = (TdHTMLAttributes<HTMLTableCellElement> | ThHTMLAttr
 export function DataCell({ label, head = false, figure = false, nowrap = false, className, children, ...rest }: DataCellProps) {
   const classes = cn(
     "py-2.5 pr-4 text-left font-normal text-ink last:pr-0 max-sm:py-0.5 max-sm:pr-0",
-    head ? "max-sm:mb-1 max-sm:block" : "max-sm:flex max-sm:gap-3 max-sm:before:w-24 max-sm:before:shrink-0 max-sm:before:text-ink-soft max-sm:before:content-[attr(data-label)]",
+    head ? "max-sm:mb-1 max-sm:block" : "max-sm:flex max-sm:gap-3 max-sm:before:w-32 max-sm:before:shrink-0 max-sm:before:text-ink-soft max-sm:before:content-[attr(data-label)]",
     figure && "tabular-nums",
     nowrap && "sm:whitespace-nowrap",
     className,
