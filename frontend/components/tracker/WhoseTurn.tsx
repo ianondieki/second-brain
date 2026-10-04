@@ -146,22 +146,25 @@ function Countdown({ due }: { due: Detail["due"] & object }) {
   const locale = useLocale();
   const count = Math.abs(due.business_days_left);
   const date = formatDate(due.due_on, locale);
+  // One message, the figure tagged in it (<n>), so each language places its words around the number. A grid: the
+  // figure beside its words on phones, above them from 640 px.
+  const figure = (chunks: ReactNode) => (
+    <span className="row-span-2 flex items-center gap-2 font-display text-3xl leading-none font-bold tabular-nums sm:row-span-1 sm:mb-1 sm:text-4xl">
+      {due.overdue ? <ChipMark kind="overdue" className="size-6" /> : null}
+      {chunks}
+    </span>
+  );
   return (
     <div
       aria-hidden="true"
       data-countdown={due.overdue ? "overdue" : "open"}
-      className="flex shrink-0 items-center gap-4 border-t border-line pt-3 sm:w-40 sm:flex-col sm:items-start sm:gap-1 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6"
+      className={cn(
+        "grid shrink-0 grid-cols-[auto_1fr] items-center gap-x-4 border-t border-line pt-3 text-sm leading-snug font-semibold sm:w-40 sm:grid-cols-1 sm:items-start sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6",
+        due.overdue ? "text-error" : "text-ink",
+      )}
     >
-      <span className={cn("flex items-center gap-2 font-display text-3xl leading-none font-bold tabular-nums sm:text-4xl", due.overdue ? "text-error" : "text-ink")}>
-        {due.overdue ? <ChipMark kind="overdue" className="size-6" /> : null}
-        {count}
-      </span>
-      <span className="text-sm leading-snug">
-        <span className={cn("block font-semibold", due.overdue ? "text-error" : "text-ink")}>
-          {t(due.overdue ? "deadline.overdue" : "deadline.left", { count })}
-        </span>
-        <span className="block text-ink-soft">{t(due.overdue ? "deadline.was" : "deadline.due", { date })}</span>
-      </span>
+      {t.rich(due.overdue ? "deadline.overdue" : "deadline.left", { count, n: figure })}
+      <span className="font-normal text-ink-soft">{t(due.overdue ? "deadline.was" : "deadline.due", { date })}</span>
     </div>
   );
 }
