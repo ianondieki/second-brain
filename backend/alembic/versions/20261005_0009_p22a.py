@@ -122,6 +122,14 @@ Operating rules for the code that uses this schema:
   back (RETURNING). Map the policy's refusal of an approved set of another day (the day ended since the set was
   served) to 409 ``set_closed``, the unique violation ``uq_quiz_attempts_set_id_user_id`` to 409 ``already_played``;
   the trigger's object_not_in_prerequisite_state (no approved set with that id) cannot follow a served set.
+- Insert the attempt once, as the last write of its transaction, never inside a savepoint or a retry loop, and return
+  its score, answers and whys only after the commit succeeded: a transaction that inserts, reads the score (or calls
+  ``app_quiz_answers``) and rolls back would be an oracle for the answer key. ``time_ms`` is the client's figure and
+  only a tiebreak on the board (accepted for the prototype).
+- The refusals of a write naming a draft or an unknown set (the triggers run before the policies, so their messages
+  differ from the policies') tell a caller that an id is or is not a draft set: accepted, as ids are uuid7 and
+  approved sets are readable anyway.
+- A flag's ``note`` is a developer's free text for staff: never put it in audit payloads, logs or emails.
 - Staff decisions and pulls only through ``app_decide_quiz_set`` and ``app_set_quiz_question_status``; the app writes
   the audit events (``quiz.set_decided`` and the pull's) in the same transaction. Flags only through
   ``SELECT * FROM app_flag_question(:question, :reason, :note)`` (insufficient_privilege is 403 ``play_first``). The
@@ -254,7 +262,7 @@ POLICIES: tuple[Policy, ...] = (
         + ")",
     ),
     Policy("quiz_questions", "INSERT", check=_JOB),
-    # --- quiz_attempts (USER): the developer's own (staff admin reads all); today's approved set only ---
+    # --- quiz_attempts (USER): the developer's own only (staff: app_quiz_set_stats); today's approved set only ---
     Policy("quiz_attempts", "SELECT", _OWN),  # nobody else reads an attempt (staff: app_quiz_set_stats)
     Policy(
         "quiz_attempts",

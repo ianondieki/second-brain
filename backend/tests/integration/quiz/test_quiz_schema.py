@@ -573,6 +573,33 @@ async def test_at_most_ten_flags_a_nairobi_day_per_developer(owner_engine: Async
         assert await flag(conn, p.developer, questions[10]) is False
 
 
+async def test_the_flag_cap_turns_over_at_nairobi_midnight(owner_engine: AsyncEngine) -> None:
+    """Ten flags in the last minute before midnight in Nairobi fill that day's cap (the eleventh is refused); a second
+    after midnight the next day's cap is open."""
+    async with t.as_app(owner_engine) as conn:
+        p = await people(conn)
+        today = await free_day(conn)
+        set_id, questions = await approved(conn, today, p.admin)
+        await owner_attempt(conn, set_id, p.developer)
+        for back in (1, 2):
+            past, ids = await owner_set(conn, today - timedelta(days=back))
+            await owner_attempt(conn, past, p.developer)
+            questions += ids
+        at = (
+            "UPDATE test_clock SET clock_offset ="
+            " (CAST(:day AS date) + CAST(:time AS time)) AT TIME ZONE 'Africa/Nairobi' - clock_timestamp()"
+        )
+        await t.run(conn, at, day=today, time="23:59:00")
+        for question_id in questions[:10]:
+            assert await flag(conn, p.developer, question_id) is False
+        await t.expect(conn, FLAG, "at most 10 flags a day", question=questions[10], reason="other", note=None)
+        await t.as_owner(conn)
+        days = "SELECT DISTINCT (created_at AT TIME ZONE 'Africa/Nairobi')::date FROM quiz_flags WHERE user_id = :u"
+        assert [row[0] for row in await conn.execute(sa.text(days), {"u": p.developer})] == [today]
+        await t.run(conn, at, day=today + timedelta(days=1), time="00:00:01")
+        assert await flag(conn, p.developer, questions[10]) is False
+
+
 async def test_a_developer_reads_and_writes_only_their_own_attempts_flags_and_profile(
     owner_engine: AsyncEngine,
 ) -> None:
@@ -641,7 +668,8 @@ async def test_a_developer_reads_and_writes_only_their_own_attempts_flags_and_pr
 
 
 async def test_the_board_is_this_weeks_opted_in_developers_by_points_then_time(owner_engine: AsyncEngine) -> None:
-    """The board sums this ISO week's attempts on approved sets (last week's do not count) of active developers who
+    """The board sums this ISO week's attempts on approved sets (last week's and next Monday's do not count) of active
+    developers who
     opted in and are of the caller's kind: a real caller never sees a demo account, a demo caller sees only demo
     accounts (the local demo's people); more points first, then less time, equal both sharing a rank; the first 20
     rows by rank and handle, plus the caller's own row: the rank they would have among their kind when not opted in,
@@ -652,6 +680,7 @@ async def test_the_board_is_this_weeks_opted_in_developers_by_points_then_time(o
         this_week, _ = await approved(conn, today, p.admin)
         monday = today - timedelta(days=today.weekday())
         last_week, _ = await owner_set(conn, monday - timedelta(days=1))
+        next_week, _ = await owner_set(conn, monday + timedelta(days=7))
         players: dict[str, UUID] = {}
         for label in ("ann", "ben", "cat", "dee", "eve", "fay", "gus", "hal", "ivy"):
             players[label] = await developer(conn, label)
@@ -682,6 +711,7 @@ async def test_the_board_is_this_weeks_opted_in_developers_by_points_then_time(o
         await t.run(conn, "UPDATE users SET demo_account = true WHERE id = ANY(:u)", u=demo)
         await plays(players["dee"], list(KEY), 90000, False)  # not opted in
         await plays(players["ann"], list(KEY), 1000, True, set_id=last_week)  # last week: not counted
+        await plays(players["ann"], list(KEY), 1000, True, set_id=next_week)  # next Monday: not counted
         for n, user in enumerate(extras):
             await plays(user, [1, None, None, None, None], 1000 + n, True)
         handle = {user: f"{label}-{user.hex}" for label, user in players.items()}
