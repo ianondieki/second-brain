@@ -38,6 +38,7 @@ export function InboxRow({
     <Row
       data-proposal={item.proposal.id}
       headingLevel={2}
+      titleId={`title-${item.proposal.id}`}
       title={teaser.title ?? t("untitled")}
       href={href}
       meta={
@@ -49,7 +50,7 @@ export function InboxRow({
       badges={[<StageChip key="stage" engagement={item.engagement} href={trackerHref} />]}
       figure={
         org && (shortlisted || editsShortlist(org)) ? (
-          <ShortlistControl org={org} proposalId={item.proposal.id} shortlisted={shortlisted} />
+          <ShortlistControl org={org} proposalId={item.proposal.id} shortlisted={shortlisted} describedBy={`title-${item.proposal.id}`} />
         ) : undefined
       }
     >

@@ -111,7 +111,8 @@ describe("the compare view", () => {
     expect(first.querySelector("[data-fact=fit] dd")?.textContent).toContain("Fit 82 out of 100");
     expect(first.querySelector("[data-fact=engagement] a")?.getAttribute("href")).toBe("/org/engagements/e1");
     const second = document.querySelectorAll("[data-compare=cards] > li")[1] as HTMLElement;
-    expect(second.querySelector("[data-fact=place] dd")?.textContent).toBe("Kenya");
+    // The County row of a proposal without a county says so, never its country (P21 ux review).
+    expect(second.querySelector("[data-fact=place] dd")?.textContent).toBe(en.inbox.notStated);
     expect(second.querySelector("[data-fact=engagement] dd")?.textContent).toBe(en.shortlist.noEngagement);
     expect(second.querySelector("[data-fact=fit] dd")?.textContent).toBe(en.shortlist.notMatched);
   });
