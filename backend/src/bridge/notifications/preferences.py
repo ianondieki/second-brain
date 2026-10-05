@@ -36,6 +36,7 @@ class KindInfo:
     mutable: bool
     default: bool
     label: str  # the settings page's line [[COPY-REVIEW]]
+    developer_only: bool = False  # offered only to someone with a developer profile
 
 
 CATALOGUE: Final[tuple[KindInfo, ...]] = (
@@ -45,6 +46,7 @@ CATALOGUE: Final[tuple[KindInfo, ...]] = (
         mutable=False,
         default=True,
         label="New matches for a saved Discover search, in the app",
+        developer_only=True,
     ),
     KindInfo(
         SAVED_SEARCH_DIGEST,
@@ -52,6 +54,7 @@ CATALOGUE: Final[tuple[KindInfo, ...]] = (
         mutable=True,
         default=False,
         label="A daily email with how many new problems or Briefs match your saved searches",
+        developer_only=True,
     ),
 )
 _BY_KEY: Final = {(info.kind, info.channel): info for info in CATALOGUE}
