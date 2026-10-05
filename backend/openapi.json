@@ -8624,6 +8624,919 @@
         "title": "PursuitOut",
         "type": "object"
       },
+      "QuizAdminQuestionOut": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "integer"
+          },
+          "flag_reasons": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Flags by reason code",
+            "title": "Flag Reasons",
+            "type": "object"
+          },
+          "flags": {
+            "title": "Flags",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "notes": {
+            "description": "The flags' notes for staff, oldest first (never who flagged)",
+            "items": {
+              "$ref": "#/components/schemas/QuizFlagNoteOut"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "pulled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pulled At"
+          },
+          "pulled_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "three_flags, or the staff member's reason",
+            "title": "Pulled Reason"
+          },
+          "restored_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Restored by staff: flags never pull it again",
+            "title": "Restored At"
+          },
+          "source_id": {
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_title": {
+            "title": "Source Title",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "live",
+              "pulled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "topic": {
+            "title": "Topic",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "prompt",
+          "options",
+          "answer",
+          "why",
+          "topic",
+          "source_id",
+          "source_title",
+          "source_url",
+          "status",
+          "pulled_at",
+          "pulled_reason",
+          "restored_at",
+          "flags",
+          "flag_reasons",
+          "notes"
+        ],
+        "title": "QuizAdminQuestionOut",
+        "type": "object"
+      },
+      "QuizAnswersIn": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "description": "Five option indexes (0-3) or null",
+            "items": {
+              "anyOf": [
+                {
+                  "maximum": 3.0,
+                  "minimum": 0.0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 5,
+            "minItems": 5,
+            "title": "Answers",
+            "type": "array"
+          },
+          "set_id": {
+            "description": "The set GET /today served (a set of another day is 409 set_closed)",
+            "format": "uuid",
+            "title": "Set Id",
+            "type": "string"
+          },
+          "time_ms": {
+            "description": "Milliseconds spent: only a tiebreak on the board",
+            "maximum": 86400000.0,
+            "minimum": 0.0,
+            "title": "Time Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "set_id",
+          "answers",
+          "time_ms"
+        ],
+        "title": "QuizAnswersIn",
+        "type": "object"
+      },
+      "QuizAttemptOut": {
+        "properties": {
+          "answers": {
+            "description": "The caller's five answers by position (null: skipped)",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Answers",
+            "type": "array"
+          },
+          "correct": {
+            "description": "Per position: right or wrong; null for a withdrawn question",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Correct",
+            "type": "array"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "title": "Finished At",
+            "type": "string"
+          },
+          "out_of": {
+            "description": "Live questions of the set",
+            "title": "Out Of",
+            "type": "integer"
+          },
+          "score": {
+            "description": "Live questions answered correctly (rescored when a question is withdrawn)",
+            "title": "Score",
+            "type": "integer"
+          },
+          "time_ms": {
+            "title": "Time Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "answers",
+          "correct",
+          "score",
+          "out_of",
+          "time_ms",
+          "finished_at"
+        ],
+        "title": "QuizAttemptOut",
+        "type": "object"
+      },
+      "QuizBoardMeOut": {
+        "properties": {
+          "opted_in": {
+            "title": "Opted In",
+            "type": "boolean"
+          },
+          "played": {
+            "description": "Whether they played this week",
+            "title": "Played",
+            "type": "boolean"
+          },
+          "points": {
+            "description": "The caller's points this week (0 when they did not play)",
+            "title": "Points",
+            "type": "integer"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Their rank among this week's board (also when not opted in); null when they did not play this week",
+            "title": "Rank"
+          }
+        },
+        "required": [
+          "points",
+          "rank",
+          "opted_in",
+          "played"
+        ],
+        "title": "QuizBoardMeOut",
+        "type": "object"
+      },
+      "QuizBoardOut": {
+        "properties": {
+          "me": {
+            "$ref": "#/components/schemas/QuizBoardMeOut"
+          },
+          "rows": {
+            "description": "At most 20, by rank then handle; opted-in developers only",
+            "items": {
+              "$ref": "#/components/schemas/QuizBoardRowOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "week_end": {
+            "description": "Sunday of this ISO week (Nairobi)",
+            "format": "date",
+            "title": "Week End",
+            "type": "string"
+          },
+          "week_start": {
+            "description": "Monday of this ISO week (Nairobi)",
+            "format": "date",
+            "title": "Week Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "week_start",
+          "week_end",
+          "rows",
+          "me"
+        ],
+        "title": "QuizBoardOut",
+        "type": "object"
+      },
+      "QuizBoardRowOut": {
+        "properties": {
+          "handle": {
+            "title": "Handle",
+            "type": "string"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "rank": {
+            "description": "Equal points and time share a rank",
+            "title": "Rank",
+            "type": "integer"
+          },
+          "you": {
+            "description": "The caller's own row",
+            "title": "You",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rank",
+          "handle",
+          "points",
+          "you"
+        ],
+        "title": "QuizBoardRowOut",
+        "type": "object"
+      },
+      "QuizDecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approve",
+              "reject"
+            ],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "QuizDecisionIn",
+        "type": "object"
+      },
+      "QuizFlagIn": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For staff only: at most 300 characters on one line (whitespace collapsed)",
+            "title": "Note"
+          },
+          "reason": {
+            "enum": [
+              "wrong_answer",
+              "unclear",
+              "outdated",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "QuizFlagIn",
+        "type": "object"
+      },
+      "QuizFlagNoteOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "note",
+          "created_at"
+        ],
+        "title": "QuizFlagNoteOut",
+        "type": "object"
+      },
+      "QuizFlagOut": {
+        "properties": {
+          "flag_id": {
+            "format": "uuid",
+            "title": "Flag Id",
+            "type": "string"
+          },
+          "pulled": {
+            "description": "True when this flag withdrew the question (three counted flags)",
+            "title": "Pulled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "flag_id",
+          "pulled"
+        ],
+        "title": "QuizFlagOut",
+        "type": "object"
+      },
+      "QuizPullIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "description": "Why it is withdrawn: one line, at most 300 characters (whitespace collapsed)",
+            "maxLength": 2400,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "QuizPullIn",
+        "type": "object"
+      },
+      "QuizQuestionOut": {
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The correct option's index (0-3); null until the caller finished",
+            "title": "Answer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "Options",
+            "type": "array"
+          },
+          "position": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "pulled": {
+            "description": "Withdrawn (after flags or by staff): it counts for nobody",
+            "title": "Pulled",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/QuizSourceOut"
+          },
+          "topic": {
+            "title": "Topic",
+            "type": "string"
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why that option is right; null until the caller finished",
+            "title": "Why"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "prompt",
+          "options",
+          "topic",
+          "source",
+          "pulled",
+          "answer",
+          "why"
+        ],
+        "title": "QuizQuestionOut",
+        "type": "object"
+      },
+      "QuizQuestionStatusOut": {
+        "properties": {
+          "question_id": {
+            "format": "uuid",
+            "title": "Question Id",
+            "type": "string"
+          },
+          "rescored": {
+            "description": "Attempts whose score changed",
+            "title": "Rescored",
+            "type": "integer"
+          },
+          "set_id": {
+            "format": "uuid",
+            "title": "Set Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "live",
+              "pulled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "question_id",
+          "set_id",
+          "status",
+          "rescored"
+        ],
+        "title": "QuizQuestionStatusOut",
+        "type": "object"
+      },
+      "QuizSetDetailOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "flags": {
+            "description": "Flags on the set's questions",
+            "title": "Flags",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "llm_trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The generating call's trace id (llm_calls), null when seeded",
+            "title": "Llm Trace Id"
+          },
+          "origin": {
+            "enum": [
+              "model",
+              "seeded"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "pulled": {
+            "description": "Questions withdrawn",
+            "title": "Pulled",
+            "type": "integer"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuizAdminQuestionOut"
+            },
+            "title": "Questions",
+            "type": "array"
+          },
+          "quiz_date": {
+            "format": "date",
+            "title": "Quiz Date",
+            "type": "string"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/QuizStatsOut"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "quiz_date",
+          "status",
+          "origin",
+          "created_at",
+          "flags",
+          "pulled",
+          "decided_by",
+          "decided_at",
+          "llm_trace_id",
+          "stats",
+          "questions"
+        ],
+        "title": "QuizSetDetailOut",
+        "type": "object"
+      },
+      "QuizSetListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QuizSetSummaryOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "QuizSetListOut",
+        "type": "object"
+      },
+      "QuizSetSummaryOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "flags": {
+            "description": "Flags on the set's questions",
+            "title": "Flags",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "model",
+              "seeded"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "pulled": {
+            "description": "Questions withdrawn",
+            "title": "Pulled",
+            "type": "integer"
+          },
+          "quiz_date": {
+            "format": "date",
+            "title": "Quiz Date",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "quiz_date",
+          "status",
+          "origin",
+          "created_at",
+          "flags",
+          "pulled"
+        ],
+        "title": "QuizSetSummaryOut",
+        "type": "object"
+      },
+      "QuizSettingsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "leaderboard_opt_in": {
+            "description": "Show my handle and this week's points to other developers",
+            "title": "Leaderboard Opt In",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "leaderboard_opt_in"
+        ],
+        "title": "QuizSettingsIn",
+        "type": "object"
+      },
+      "QuizSettingsOut": {
+        "properties": {
+          "leaderboard_opt_in": {
+            "title": "Leaderboard Opt In",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "leaderboard_opt_in"
+        ],
+        "title": "QuizSettingsOut",
+        "type": "object"
+      },
+      "QuizSourceOut": {
+        "properties": {
+          "id": {
+            "description": "The curated page's id (backend/ai/quiz_sources.yaml)",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "description": "An official documentation page (https), copied from the curated list",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "url"
+        ],
+        "title": "QuizSourceOut",
+        "type": "object"
+      },
+      "QuizStatsOut": {
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "average_score": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "From 3 attempts on; else null",
+            "title": "Average Score"
+          },
+          "per_question_correct": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "By position, from 3 attempts on; else null",
+            "title": "Per Question Correct"
+          }
+        },
+        "required": [
+          "attempts",
+          "average_score",
+          "per_question_correct"
+        ],
+        "title": "QuizStatsOut",
+        "type": "object"
+      },
+      "QuizStreakOut": {
+        "properties": {
+          "best": {
+            "title": "Best",
+            "type": "integer"
+          },
+          "current": {
+            "description": "Consecutive days with an approved set played (a day without a set is skipped); 0 once a set was missed",
+            "title": "Current",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "current",
+          "best"
+        ],
+        "title": "QuizStreakOut",
+        "type": "object"
+      },
+      "QuizTodayOut": {
+        "properties": {
+          "attempt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuizAttemptOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller's finished attempt, or null before they play"
+          },
+          "leaderboard_opt_in": {
+            "title": "Leaderboard Opt In",
+            "type": "boolean"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuizQuestionOut"
+            },
+            "title": "Questions",
+            "type": "array"
+          },
+          "quiz_date": {
+            "description": "The Nairobi day of the set",
+            "format": "date",
+            "title": "Quiz Date",
+            "type": "string"
+          },
+          "set_id": {
+            "format": "uuid",
+            "title": "Set Id",
+            "type": "string"
+          },
+          "streak": {
+            "$ref": "#/components/schemas/QuizStreakOut"
+          }
+        },
+        "required": [
+          "set_id",
+          "quiz_date",
+          "questions",
+          "attempt",
+          "streak",
+          "leaderboard_opt_in"
+        ],
+        "title": "QuizTodayOut",
+        "type": "object"
+      },
       "ReadBody": {
         "additionalProperties": false,
         "description": "Mark the thread read up to one of its messages (its time), or up to now when ``up_to`` is left out.",
@@ -12876,6 +13789,618 @@
           }
         },
         "summary": "Admin Add Niche",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/quiz/questions/{question_id}/pull": {
+      "post": {
+        "description": "Withdraw a question (it counts for nobody) and rescore its set's attempts.",
+        "operationId": "pull_quiz_question_api_admin_quiz_questions__question_id__pull_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Question Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuizPullIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizQuestionStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Pull Quiz Question",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/quiz/questions/{question_id}/restore": {
+      "post": {
+        "description": "Put a withdrawn question back and rescore its set's attempts; flags never pull it again.",
+        "operationId": "restore_quiz_question_api_admin_quiz_questions__question_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Question Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizQuestionStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Restore Quiz Question",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/quiz/sets": {
+      "get": {
+        "description": "The sets with their flag and pull counts (``status`` filters): drafts of today and later first, today's first,\nthen drafts of past days, then decided sets, newest day first.",
+        "operationId": "list_quiz_sets_api_admin_quiz_sets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "approved",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizSetListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Quiz Sets",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/quiz/sets/{set_id}": {
+      "get": {
+        "operationId": "get_quiz_set_api_admin_quiz_sets__set_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizSetDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Quiz Set",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/admin/quiz/sets/{set_id}/decision": {
+      "post": {
+        "description": "Approve or reject a draft set, once (see the module docstring). A set of a day that is over on the shared clock\nmay be rejected but not approved (409 ``day_over``): nobody could play it any more, and an approved set nobody\nplayed would end every streak.",
+        "operationId": "decide_quiz_set_api_admin_quiz_sets__set_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Set Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuizDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizSetSummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "already_decided, incomplete_set (an approval without five questions) or day_over (approving a set of a past day)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Decide Quiz Set",
         "tags": [
           "admin"
         ]
@@ -26822,6 +28347,558 @@
         "summary": "Who Has Seen",
         "tags": [
           "proposals"
+        ]
+      }
+    },
+    "/api/me/quiz/leaderboard": {
+      "get": {
+        "description": "This week's board and the caller's own numbers, in one statement (``app_quiz_board()``).",
+        "operationId": "quiz_leaderboard_api_me_quiz_leaderboard_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizBoardOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Quiz Leaderboard",
+        "tags": [
+          "developer"
+        ]
+      }
+    },
+    "/api/me/quiz/questions/{question_id}/flag": {
+      "post": {
+        "description": "Flag a question of a set the caller played, through ``app_flag_question`` (see the module docstring). The\nquestion is read under the caller's own policy first, so one they cannot read (of a draft, or of a set approved\nahead of its day) answers 404 like an unknown id, never 403 ``play_first``.",
+        "operationId": "flag_question_api_me_quiz_questions__question_id__flag_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "question_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Question Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuizFlagIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizFlagOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Flag Question",
+        "tags": [
+          "developer"
+        ]
+      }
+    },
+    "/api/me/quiz/settings": {
+      "put": {
+        "description": "The caller's leaderboard opt-in (off until they turn it on).",
+        "operationId": "quiz_settings_api_me_quiz_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuizSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Quiz Settings",
+        "tags": [
+          "developer"
+        ]
+      }
+    },
+    "/api/me/quiz/today": {
+      "get": {
+        "description": "Today's approved set with the caller's attempt, streak and opt-in; 404 ``no_quiz`` without one.",
+        "operationId": "quiz_today_api_me_quiz_today_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizTodayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Quiz Today",
+        "tags": [
+          "developer"
+        ]
+      }
+    },
+    "/api/me/quiz/today/answers": {
+      "post": {
+        "description": "The caller's one attempt on today's set (see the module docstring); the response only after the commit.",
+        "operationId": "finish_today_api_me_quiz_today_answers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuizAnswersIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuizTodayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Finish Today",
+        "tags": [
+          "developer"
         ]
       }
     },

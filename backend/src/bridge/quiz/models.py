@@ -76,6 +76,7 @@ SOURCE_TITLE_MAX_CHARS = 160
 SOURCE_URL_MAX_CHARS = 400
 TOPIC_MAX_CHARS = 60
 REASON_MAX_CHARS = 300  # a pull's reason and a flag's note
+RAW_TEXT_MAX_CHARS = 8 * REASON_MAX_CHARS  # the API's bound on a note or reason as sent, before collapsing whitespace
 MAX_TIME_MS = 86_400_000  # an attempt's total time: at most a day
 FLAGS_TO_PULL = 3  # distinct developers whose flags pull a question (app_flag_question)
 FLAGS_PER_DAY = 10  # per developer and Nairobi day (app_flag_question)
@@ -257,8 +258,9 @@ class QuizFlag(IdMixin, Base):
 
 class QuizProfile(Base):
     """A developer's quiz settings and streak, their own row only (bridge_app: read, insert, update every column but
-    the key and ``created_at``). ``current_streak`` counts consecutive Nairobi days played up to ``last_played_on``;
-    ``best_streak`` is never below it. Kept in code when an attempt finishes."""
+    the key and ``created_at``). ``current_streak`` counts consecutive days that had an approved set played, up to
+    ``last_played_on`` (a day without a set is skipped); ``best_streak`` is never below it. Kept in code when an attempt
+    finishes (``bridge.quiz.streaks``)."""
 
     __tablename__ = "quiz_profiles"
     __table_args__ = (

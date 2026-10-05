@@ -6,7 +6,8 @@ verify; the developers are D1 and D2; the fixture organisations carry their leve
 Master Enterprise Terms; the proposals are published with a certificate id each, their problems described or linked,
 their registration queued and completed by the real T2.4 steps; E2 fixtures get delivered tags (a ``SUBMITTED``
 engagement each), E1 and E0 held ones; the exported certificate id is P1's; P21's beats (a thread on Amina's
-engagement with SACCO B, a shortlist entry at Telco A, a saved search of Amina's) are made through the API once.
+engagement with SACCO B, a shortlist entry at Telco A, a saved search of Amina's) are made through the API once, and
+P22's Today's five has two seeded sets (yesterday and today) with Amina's two attempts and Brian's one, no model called.
 Staging, production and an unset ``APP_ENV`` write nothing. The database is the module's own (the seed's rows would
 disturb the directory tests' counts in the shared session database).
 """
@@ -16,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -78,6 +80,7 @@ from bridge.seed.demo.data import (
 )
 from bridge.seed.demo.follow_ups import SHORTLISTED
 from bridge.seed.demo.queues import CLAIMED, HELD
+from bridge.seed.demo.quiz import SEEDED_SETS, nairobi_today
 from bridge.seed.demo.research import SEEDED_ANSWERS
 from bridge.seed.demo.runtime import in_process_app, signed_in
 from bridge.seed.demo.scouts import SCOUT_KEYWORDS, SCOUT_NICHE, SCOUTED
@@ -109,6 +112,10 @@ TABLES = (
     "engagement_messages",
     "org_shortlist",
     "saved_searches",
+    "quiz_sets",
+    "quiz_questions",
+    "quiz_attempts",
+    "quiz_profiles",
 )
 
 
@@ -172,6 +179,20 @@ async def rows(engine: AsyncEngine, sql: str, **params: object) -> list[Any]:
         return list((await conn.execute(text(sql), params)).all())
 
 
+def quiz_lines(today: date) -> list[str]:
+    """What the first run of the quiz steps reports (P22)."""
+    yesterday = (today - timedelta(days=1)).isoformat()
+    return [
+        f"quiz set {yesterday} (seeded)",
+        f"quiz set {yesterday} approved (a past day, by the owner role)",
+        f"quiz set {today.isoformat()} (seeded)",
+        f"quiz set {today.isoformat()} approved by {STAFF_ADMIN.email}",
+        f"quiz attempt of {AMINA.email} on {yesterday}",
+        f"quiz attempt of {AMINA.email} on {today.isoformat()}",
+        f"quiz attempt of {BRIAN.email} on {today.isoformat()}",
+    ]
+
+
 async def counts(engine: AsyncEngine) -> dict[str, int]:
     return {table: int((await rows(engine, f"SELECT count(*) FROM {table}"))[0][0]) for table in TABLES}
 
@@ -184,11 +205,12 @@ async def test_running_the_demo_seed_again_changes_nothing(
 ) -> None:
     first, second, third = seeded
     assert first.created, "the first run seeds"
-    assert first.created[-3:] == [  # P21's beats, last
+    assert first.created[-10:-7] == [  # P21's beats, then P22's quiz, last
         f"thread of {THREAD.proposal} with {THREAD.org}: {len(THREAD.messages)} messages",
         f"shortlist of {SHORTLISTED[1].legal_name}: {SHORTLISTED[0].key} by {SHORTLISTED[2].email}",
         f"saved search of {SAVED_SEARCH.owner}: {SAVED_SEARCH.name}",
     ]
+    assert first.created[-7:] == quiz_lines(await nairobi_today(owner))
     assert first.notes == []
     assert (second.created, second.notes, third.created, third.notes) == ([], [], [], [])
     assert (third.users, third.orgs, third.proposals, third.cert_ids) == (
@@ -863,6 +885,61 @@ async def test_amina_has_a_saved_search_whose_view_lists_seeded_problems(
     ]
     assert P1.new_problem is not None
     assert P1.new_problem.title in {p["problem"]["title"] for p in shown["problems"]}
+
+
+async def test_todays_five_has_two_seeded_sets_and_three_attempts(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P22 (REQ-DEV-01; card test A8): yesterday's and today's sets are seeded, hand-written (the checks in code
+    passed), today's approved by the demo staff admin through the API (audited) and yesterday's by the owner role
+    (the API approves no set of a past day), once however often the seed ran; Amina
+    finished both (4 and 5 of 5: a streak of 2, on the board), Brian today's (3 of 5, not on the board); no model was
+    called."""
+    report = seeded[0]
+    today = await nairobi_today(owner)
+    yesterday = today - timedelta(days=1)
+    admin, amina, brian = (report.users[e] for e in (STAFF_ADMIN.email, AMINA.email, BRIAN.email))
+    sets = await rows(
+        owner, "SELECT id, quiz_date, status, origin, decided_by, llm_trace_id FROM quiz_sets ORDER BY quiz_date"
+    )
+    assert [tuple(s)[1:] for s in sets] == [
+        (yesterday, "approved", "seeded", None, None),  # a past day's set: the owner role approves it
+        (today, "approved", "seeded", admin, None),
+    ]
+    for found, written in zip(sets, (SEEDED_SETS["yesterday"], SEEDED_SETS["today"]), strict=True):
+        questions = await rows(
+            owner,
+            "SELECT prompt, answer, source_id FROM quiz_questions WHERE set_id = :s ORDER BY position",
+            s=found.id,
+        )
+        assert [tuple(q) for q in questions] == [(q.prompt, q.answer, q.source_id) for q in written]
+    decided = await rows(owner, "SELECT actor_user_id FROM audit_events WHERE action = 'quiz.set_decided'")
+    assert [d.actor_user_id for d in decided] == [admin]
+    attempts = await rows(
+        owner,
+        "SELECT a.user_id, s.quiz_date, a.score FROM quiz_attempts a JOIN quiz_sets s ON s.id = a.set_id"
+        " ORDER BY s.quiz_date, a.score DESC",
+    )
+    assert [tuple(a) for a in attempts] == [(amina, yesterday, 4), (amina, today, 5), (brian, today, 3)]
+    profiles = await rows(
+        owner, "SELECT user_id, current_streak, best_streak, last_played_on, leaderboard_opt_in FROM quiz_profiles"
+    )
+    assert sorted(tuple(p) for p in profiles) == sorted([(amina, 2, 2, today, True), (brian, 1, 1, today, False)])
+    assert await rows(owner, "SELECT id FROM llm_calls WHERE trace_id LIKE 'quiz:%'") == []
+    async with in_process_app(demo_settings(), app, runtime) as (demo_app, _):
+        async with signed_in(demo_app, owner, AMINA.email) as developer:
+            played = (await developer.call("GET", "/api/me/quiz/today")).json()
+            board = (await developer.call("GET", "/api/me/quiz/leaderboard")).json()
+        async with signed_in(demo_app, owner, BRIAN.email) as other:
+            brians = (await other.call("GET", "/api/me/quiz/leaderboard")).json()
+    assert (played["attempt"]["score"], played["streak"], played["leaderboard_opt_in"]) == (
+        5,
+        {"current": 2, "best": 2},
+        True,
+    )
+    same_week = yesterday.isocalendar()[:2] == today.isocalendar()[:2]  # on a Monday, yesterday was last week's
+    assert [(r["rank"], r["points"], r["you"]) for r in board["rows"]] == [(1, 9 if same_week else 5, True)]
+    assert brians["me"] == {"points": 3, "rank": 2, "opted_in": False, "played": True}
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:

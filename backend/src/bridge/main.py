@@ -15,6 +15,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from bridge import __version__, errors
 from bridge.admin.claims import router as claims_admin_router
+from bridge.admin.quiz import router as quiz_admin_router
 from bridge.admin.research import router as research_admin_router
 from bridge.admin.router import router as admin_router
 from bridge.api import health
@@ -52,6 +53,7 @@ from bridge.proposals.pitch_router import router as pitch_router
 from bridge.proposals.router import router as proposals_router
 from bridge.proposals.shortlist_router import router as shortlist_router
 from bridge.provenance.router import router as provenance_router
+from bridge.quiz.router import router as quiz_router
 from bridge.tenancy.router import router as orgs_router
 
 API_PREFIX = "/api"
@@ -147,6 +149,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_router)
     app.include_router(research_admin_router)
     app.include_router(claims_admin_router)
+    app.include_router(quiz_admin_router)
     app.include_router(provenance_router)
     app.include_router(pitch_router)
     app.include_router(proposals_router)
@@ -167,6 +170,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(saved_searches_router)
     app.include_router(notifications_router)
     app.include_router(preferences_router)
+    app.include_router(quiz_router)
     clock_router = dev_clock_router(settings)
     if clock_router is not None:
         app.include_router(clock_router)
