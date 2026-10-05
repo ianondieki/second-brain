@@ -240,8 +240,9 @@ async def test_p21_c6_the_digest_email_is_opt_in_once_a_day_with_counts_only(
     w = r.world
     grain = await save(r, owner_engine, "Grain in Nakuru", niche=w.slug("parent"), county=NAKURU)
     briefs = await save(r, owner_engine, "Farming Briefs", "briefs", niche=w.slug("parent"))
-    secret = {"title": SECRET_TITLE, "statement": SECRET_STATEMENT}
-    await research_card(owner_engine, w.niche, county=NAKURU, age_days=1, **secret)
+    await research_card(
+        owner_engine, w.niche, county=NAKURU, age_days=1, title=SECRET_TITLE, statement=SECRET_STATEMENT
+    )
 
     settings = (await r.me.get(PREFERENCES)).json()
     assert {"kind": "saved_search_digest", "channel": "email", "default": False, "enabled": False}.items() <= next(
@@ -263,7 +264,9 @@ async def test_p21_c6_the_digest_email_is_opt_in_once_a_day_with_counts_only(
     assert turned_on.status_code == 200, turned_on.text
     assert next(item for item in turned_on.json()["items"] if item["kind"] == "saved_search_digest")["enabled"]
 
-    await research_card(owner_engine, w.niche, county=NAKURU, age_days=-0.5, **secret)
+    await research_card(
+        owner_engine, w.niche, county=NAKURU, age_days=-0.5, title=SECRET_TITLE, statement=SECRET_STATEMENT
+    )
     await brief(owner_engine, w.niche, age_days=-0.5, title=SECRET_TITLE)
     await brief(owner_engine, w.sibling, age_days=-0.4, title=SECRET_TITLE)
     tomorrow = first.now + timedelta(days=1)
@@ -271,6 +274,7 @@ async def test_p21_c6_the_digest_email_is_opt_in_once_a_day_with_counts_only(
     [email] = r.outbox.outbox
     [address] = await rows(owner_engine, "SELECT email FROM users WHERE id = :u", u=r.user)
     assert (email.to, email.subject) == (address.email, "New matches for your saved searches")
+    assert email.html is not None
     for line in ("Grain in Nakuru: 1 new problem", "Farming Briefs: 2 new Briefs"):
         assert line in email.text
         assert line in email.html
