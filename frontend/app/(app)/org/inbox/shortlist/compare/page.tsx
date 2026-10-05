@@ -71,13 +71,9 @@ export default async function CompareScreen({ searchParams }: PageProps<"/org/in
     );
   } else if (compareShows(read.value.items.length) === "none") {
     body = <EmptyState sentence={t("noneAvailable")} action={t("backToShortlist")} href={back} />;
-  } else if (compareShows(read.value.items.length) === "count") {
-    // Only one of those asked is still available: nothing to compare it with.
-    body = (
-      <EmptyState sentence={t("refusal.count", { min: COMPARE_MIN, max: COMPARE_MAX })} action={t("backToShortlist")} href={back} />
-    );
   } else {
     const left = asked.ids.length - read.value.items.length;
+    // Only one of those asked is still available (count): say how many went, then that there is nothing to compare.
     body = (
       <>
         {left > 0 ? (
@@ -85,7 +81,11 @@ export default async function CompareScreen({ searchParams }: PageProps<"/org/in
             <p>{t("leftOut", { count: left })}</p>
           </Callout>
         ) : null}
-        <CompareView items={read.value.items} memberships={memberships} org={org} counties={counties} />
+        {compareShows(read.value.items.length) === "count" ? (
+          <EmptyState sentence={t("refusal.count", { min: COMPARE_MIN, max: COMPARE_MAX })} action={t("backToShortlist")} href={back} />
+        ) : (
+          <CompareView items={read.value.items} memberships={memberships} org={org} counties={counties} />
+        )}
       </>
     );
   }
