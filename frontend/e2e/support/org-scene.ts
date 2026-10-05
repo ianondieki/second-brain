@@ -132,6 +132,18 @@ export function makeViewer(member: OrgMember): void {
   );
 }
 
+/** Leaves the member a reviewer only (a Tier-2 role that may change the shortlist, not sign or administer). */
+export function makeReviewer(member: OrgMember): void {
+  if (!TEST_DOMAIN.test(member.domain) || !member.email.endsWith(`@${member.domain}`)) {
+    throw new Error("makeReviewer is for test organisations (*.example.com) only");
+  }
+  ownerSql(
+    "UPDATE memberships SET roles = '{reviewer}' WHERE org_id = CAST(:'org' AS uuid)" +
+      " AND user_id = (SELECT id FROM users WHERE email = :'email');",
+    { org: member.orgId, email: member.email },
+  );
+}
+
 /** A listed, unclaimed (E0) organisation of the seeded directory: a pitch there is held and reaches nobody. */
 export function listedOrgId(): string {
   return ownerSql(
