@@ -84,10 +84,19 @@ export async function profilingConsent(): Promise<ConsentItem | null> {
   return data.find((item) => item.purpose === "profiling") ?? null;
 }
 
-/** The developer's saved Discover searches with the cap, or null without a developer profile (404). */
+/**
+ * The developer's saved Discover searches with the cap, or null when they cannot be shown (no developer profile, a
+ * failing API, no answer in time, the network): only the Saved searches strip is missing, Discover itself stands.
+ * Only a lost session (401) leaves, to sign in again.
+ */
 export async function savedSearches(): Promise<SavedSearchList | null> {
-  const { data, response } = await serverApi().GET("/api/me/saved-searches", await options());
-  if (data) return data;
-  if (response.status === 404) return null;
-  return failed("GET /api/me/saved-searches", response.status);
+  let answer;
+  try {
+    answer = await serverApi().GET("/api/me/saved-searches", await options());
+  } catch {
+    return null;
+  }
+  if (answer.data) return answer.data;
+  if (answer.response.status === 401) redirect("/login");
+  return null;
 }
