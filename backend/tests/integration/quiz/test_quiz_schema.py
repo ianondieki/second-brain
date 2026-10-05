@@ -548,6 +548,27 @@ async def test_only_flags_of_verified_accounts_with_a_history_pull_a_question(ow
         assert await flag(conn, p.third, questions[0]) is True  # the third counted flag
 
 
+async def test_a_flag_that_becomes_counted_later_still_counts_towards_the_pull(owner_engine: AsyncEngine) -> None:
+    """Two counted flags and a third from an account not yet established (no verified email) leave the question live;
+    once that account verifies its email, the question has three counted flags, and the next counted flag (the fourth
+    flag, three or more counted) pulls it. A pull only at exactly three counted flags fails this test."""
+    async with t.as_app(owner_engine) as conn:
+        p = await people(conn)
+        today = await free_day(conn)
+        set_id, questions = await approved(conn, today, p.admin)
+        await qualify(conn, today, [p.developer, p.other, p.third, p.fourth])
+        await t.run(conn, "UPDATE users SET email_verified_at = NULL WHERE id = :u", u=p.third)
+        for user in (p.developer, p.other, p.third, p.fourth):
+            await attempt(conn, set_id, user, list(KEY))
+        for user in (p.developer, p.other, p.third):
+            assert await flag(conn, user, questions[0]) is False  # two counted flags
+        await t.as_owner(conn)
+        await t.run(conn, "UPDATE users SET email_verified_at = now() WHERE id = :u", u=p.third)  # now established
+        assert await t.run(conn, "SELECT status FROM quiz_questions WHERE id = :q", q=questions[0]) == "live"
+        assert await flag(conn, p.fourth, questions[0]) is True  # four counted flags: pulled
+        assert await scores(conn, set_id) == dict.fromkeys((p.developer, p.other, p.third, p.fourth), 4)
+
+
 async def test_at_most_ten_flags_a_nairobi_day_per_developer(owner_engine: AsyncEngine) -> None:
     """Ten flags in a Nairobi day, then the eleventh is refused (a fixed limit); the next day, flags are taken again;
     another developer has their own ten. Each flags questions of sets they played."""
@@ -574,8 +595,10 @@ async def test_at_most_ten_flags_a_nairobi_day_per_developer(owner_engine: Async
 
 
 async def test_the_flag_cap_turns_over_at_nairobi_midnight(owner_engine: AsyncEngine) -> None:
-    """Ten flags in the last minute before midnight in Nairobi fill that day's cap (the eleventh is refused); a second
-    after midnight the next day's cap is open."""
+    """The cap's day is the Nairobi day: ten flags in its first half hour (00:30, before 03:00, so still the previous
+    day in UTC) fill it, and the eleventh is refused then and in its last minute; a second after the next Nairobi
+    midnight (within 24 hours of the ten) the next day's cap is open. A cap counted from UTC midnight, or over a rolling
+    24 hours, fails this test."""
     async with t.as_app(owner_engine) as conn:
         p = await people(conn)
         today = await free_day(conn)
@@ -589,13 +612,18 @@ async def test_the_flag_cap_turns_over_at_nairobi_midnight(owner_engine: AsyncEn
             "UPDATE test_clock SET clock_offset ="
             " (CAST(:day AS date) + CAST(:time AS time)) AT TIME ZONE 'Africa/Nairobi' - clock_timestamp()"
         )
-        await t.run(conn, at, day=today, time="23:59:00")
+        await t.run(conn, at, day=today, time="00:30:00")
+        assert await t.run(conn, "SELECT (app_clock_now() AT TIME ZONE 'UTC')::date") == today - timedelta(days=1)
         for question_id in questions[:10]:
             assert await flag(conn, p.developer, question_id) is False
         await t.expect(conn, FLAG, "at most 10 flags a day", question=questions[10], reason="other", note=None)
         await t.as_owner(conn)
         days = "SELECT DISTINCT (created_at AT TIME ZONE 'Africa/Nairobi')::date FROM quiz_flags WHERE user_id = :u"
         assert [row[0] for row in await conn.execute(sa.text(days), {"u": p.developer})] == [today]
+        await t.run(conn, at, day=today, time="23:59:30")
+        await t.act(conn, p.developer)
+        await t.expect(conn, FLAG, "at most 10 flags a day", question=questions[10], reason="other", note=None)
+        await t.as_owner(conn)
         await t.run(conn, at, day=today + timedelta(days=1), time="00:00:01")
         assert await flag(conn, p.developer, questions[10]) is False
 
