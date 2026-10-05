@@ -11,8 +11,6 @@ import { compareProblem, type CompareOut, type CompareProblem, type ShortlistPag
 const TIMEOUT_MS = 5000;
 /** Entries per Shortlist page. */
 export const SHORTLIST_PAGE_SIZE = 50;
-/** How far the proposal page looks for its own entry (100 per page): a shortlist is a working list, not an archive. */
-const LOOKUP_PAGES = 5;
 
 async function options() {
   return { headers: await forwardHeaders(), signal: AbortSignal.timeout(TIMEOUT_MS), cache: "no-store" as const };
@@ -38,21 +36,23 @@ export async function getShortlist(orgId: string, cursor?: string): Promise<Shor
   return { kind: "refused", refusal };
 }
 
-/** Whether the proposal is on the shortlist (the proposal page's star); false when the list cannot be read. */
+/**
+ * Whether the proposal is on the organisation's shortlist (the proposal and match pages' star): one read of its entry,
+ * which every member may make. 404 (not on the list) and any other failure are false, so the page still renders; a lost
+ * session signs in again.
+ */
 export async function isShortlisted(orgId: string, proposalId: string): Promise<boolean> {
-  let cursor: string | undefined;
-  for (let page = 0; page < LOOKUP_PAGES; page++) {
-    const { data, response } = await serverApi().GET("/api/orgs/{org_id}/shortlist", {
-      params: { path: { org_id: orgId }, query: { cursor, limit: 100 } },
+  let answer;
+  try {
+    answer = await serverApi().GET("/api/orgs/{org_id}/shortlist/{proposal_id}", {
+      params: { path: { org_id: orgId, proposal_id: proposalId } },
       ...(await options()),
     });
-    if (response.status === 401) redirect("/login");
-    if (!data) return false;
-    if (data.items.some((entry) => entry.proposal_id === proposalId)) return true;
-    if (!data.next_cursor) return false;
-    cursor = data.next_cursor;
+  } catch {
+    return false;
   }
-  return false;
+  if (answer.response.status === 401) redirect("/login");
+  return answer.response.status === 200;
 }
 
 export type CompareRead =
