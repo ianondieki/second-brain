@@ -21,7 +21,10 @@ approval, and are labelled seeded examples, never live AI results. Then every de
 plan (P14, ``bridge.seed.demo.subscriptions``), and Telco A gets a scout whose first scan matches Brian's untagged
 fifth proposal (P10, ``bridge.seed.demo.scouts``). Last come P21's three beats (``bridge.seed.demo.follow_ups``), each
 through the API: SACCO B's owner and Amina write three messages on the thread of her engagement with SACCO B, Telco A's
-reviewer puts the scout's match on its shortlist, and Amina saves a Discover search of a niche she likes.
+reviewer puts the scout's match on its shortlist, and Amina saves a Discover search of a niche she likes. Last, P22's
+Today's five (``bridge.seed.demo.quiz``): two hand-written sets for yesterday and today, checked and stored as a model's
+would be and approved by the demo staff admin, with Amina's attempts on both (a streak of 2, on the board) and Brian's
+on today's; no model is called.
 
 Idempotent, and safe on a demo that was used (``make demo`` runs it on every start): every step looks for what it
 would create (by address, organisation name, a proposal's first title) and skips what exists, so running it twice
@@ -63,6 +66,7 @@ from bridge.seed.demo.engagements import drive
 from bridge.seed.demo.follow_ups import ensure_saved_search, ensure_shortlisted, ensure_thread
 from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
 from bridge.seed.demo.queues import seed_queues
+from bridge.seed.demo.quiz import PLAYS, ensure_play, ensure_sets, has_profile
 from bridge.seed.demo.research import ensure_staff, seed_research_card, seeded_niches
 from bridge.seed.demo.runtime import (
     Actors,
@@ -103,8 +107,9 @@ async def seed_demo(
 ) -> DemoReport:
     """Load the demo dataset (idempotent). ``owner_engine`` logs in as bridge_owner, ``app_engine`` as bridge_app.
 
-    The steps run in the order the module docstring tells, ending with P21's beats: the message thread on Amina's
-    engagement with SACCO B, Telco A's shortlist entry (after its scout, whose match it is) and Amina's saved search."""
+    The steps run in the order the module docstring tells, ending with P21's beats (the message thread on Amina's
+    engagement with SACCO B, Telco A's shortlist entry after its scout, whose match it is, and Amina's saved search)
+    and P22's Today's five (the two sets, then each attempt)."""
     ensure_demo_allowed(settings)
     runtime = runtime or DemoRuntime.from_settings(settings)
     report = DemoReport()
@@ -155,6 +160,11 @@ async def seed_demo(
         await step("message thread", ensure_thread(owner_engine, actors, report))
         await step("Telco A shortlist", ensure_shortlisted(owner_engine, actors, report))
         await step("saved search", ensure_saved_search(owner_engine, actors, report))
+        await step("quiz sets", ensure_sets(owner_engine, actors, report))
+        fresh = {play.email: not await has_profile(owner_engine, report.users.get(play.email)) for play in PLAYS}
+        for play in PLAYS:
+            attempt = ensure_play(owner_engine, actors, play, fresh[play.email], report)
+            await step(f"quiz attempt of {play.email} ({play.day})", attempt)
     return report
 
 
