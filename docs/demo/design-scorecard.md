@@ -233,3 +233,52 @@ Best practices 100 and CLS 0 everywhere. The landing's first build read 87 / 91 
 520 ms): a page-wide `html:has(#hero-title)` rule and a blurred glow layer; both are gone. The landing's LCP element is
 the hero's lead paragraph; its first, uncached Slow 4G visit stays around D-53's 2.5 s line (2.2–2.7 s), as decided
 there.
+
+## P21 measurements (2026-10-05): messages, the shortlist, saved searches (D-57)
+
+Shots: `frontend/demo/design-shots.spec.ts` with `SHOTS_DIR=docs/demo/screenshots/p21` and the P21 filter, 1440 and
+375 px, light and dark, against the demo stack on :3000 (reset at `0b81dd3`, not rebuilt). 14 screens, 56 shots:
+Messages for Amina and for SACCO B's owner (the seed's thread), a thread not open yet from both sides (Brian's pitch
+to Telco A, at SUBMITTED), History with the message entries, the Inbox with its stars, the proposal page's star, the
+Shortlist and Compare as Telco A's reviewer, Discover with Amina's saved search (the list open) and the save form,
+notification settings for a developer and an organisation (the two new rows), and a reported message in the moderation
+console. Strict axe: every shot 0 violations, at most one `[data-primary]`, no sideways scroll. Compare needs two
+shortlisted proposals: the run starred one more Telco A Inbox proposal (Cashless market-fee collection) and it was
+taken off afterwards, so the seed's one entry is back. The moderation shot uses a message case an e2e run had already
+reported; the shots post and report nothing. Discover's lists also show problems that e2e runs left on this stack.
+
+JS budget (`scripts/js-budget.mjs`, gzipped script bodies until idle, 360 px, limit 150,000; the demo stack's
+production build, signed in as the demo accounts). All 58 routes measured are under (`/admin` redirects to
+`/admin/research` for the staff admin and was skipped); the tightest, then every P21 route:
+
+| Route | Bytes | |
+|---|---|---|
+| `/org/inbox/scouts/new` and `/<id>` | 149,920 | ok (P20: 149,892) |
+| `/dev/engagements/<id>/messages`, `/org/engagements/<id>/messages` | 149,627 | ok: 373 B left |
+| `/dev/engagements/<id>` (also `?tab=history`), `/org/engagements/<id>` | 149,570 | ok (P20: 149,534) |
+| `/admin/moderation/cases/<message case>` | 149,517 | ok |
+| `/signup` | 149,236 | ok |
+| `/dev/ideas/new`, `/dev/ideas/<id>/edit` | 149,014 | ok (P20: 149,713) |
+| `/dev/discover` (every view) | 147,721 | ok |
+| `/settings/notifications` (developer and organisation) | 144,899 | ok |
+| `/org/inbox/shortlist` | 143,468 | ok |
+| `/org/inbox` (and `?tab=matches`) | 143,237 | ok |
+| `/org/inbox/shortlist/compare?ids=<a>,<b>` | 141,823 | ok |
+
+The Messages routes and the tracker are within 500 B of the line: the next import there must be weighed first.
+
+Lighthouse 12.8.2 (mobile default, simulated Slow 4G; dark through `--blink-settings=preferredColorScheme=0`), the
+demo stack's build, signed in through the session cookie; the Messages routes three runs per cell (range), the others
+one:
+
+| Page | Light perf / a11y / LCP | Dark perf / a11y / LCP |
+|---|---|---|
+| `/dev/engagements/<id>/messages` (Amina) | 95–97 / 100 / 2.1–2.7 s | 92–95 / 100 / 2.7–2.8 s |
+| `/org/engagements/<id>/messages` (SACCO B) | 95–98 / 100 / 1.9–2.7 s | 93–97 / 100 / 2.0–2.8 s |
+| `/org/inbox/shortlist` | 100 / 100 / 1.9 s | 96 / 100 / 2.6 s |
+| `/org/inbox/shortlist/compare?ids=…` | 99 / 100 / 1.9 s | 100 / 100 / 1.5 s |
+| `/dev/discover` | 97 / 100 / 2.3 s | 97 / 100 / 2.5 s |
+
+Every cell meets performance ≥ 90 and accessibility ≥ 90; best practices 100 and CLS 0 everywhere. The Messages
+routes' LCP element is the page title (the tracker's `h1`, as on the tracker in P20, 2.6 s); several runs land at
+2.6–2.8 s, above AC-UX-3's 2.5 s, as the tracker's first uncached Slow 4G visit did (D-53).
