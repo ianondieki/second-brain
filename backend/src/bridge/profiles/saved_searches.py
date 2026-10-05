@@ -11,6 +11,8 @@ under Row-Level Security (``user_id = app_user_id()``): another user's id answer
   409 ``saved_searches_limit`` on the 11th (checked first; the database's ``saved_searches_cap`` is the backstop for
   two saves at once, mapped the same).
 - ``PATCH /api/me/saved-searches/{id}``: the name and ``alerts`` only (the query is what was saved; save another).
+  Turning alerts back on (off to on) moves ``last_alerted_at`` to that moment (the platform clock), so the next alert
+  counts only what is published from then on, never what came out while they were off.
 - ``DELETE /api/me/saved-searches/{id}``: 204.
 
 A saved search is the owner's own state: no audit event (as a liked niche or a read notification).
@@ -24,7 +26,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Response
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
-from sqlalchemy import CursorResult, delete, func, insert, select, update
+from sqlalchemy import CursorResult, case, delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -193,7 +195,9 @@ async def update_saved_search(search_id: UUID, body: SavedSearchPatch, live: Cur
     """Rename a saved search or turn its alerts on or off."""
     me = live.user.id
     await _developer(db, me)
-    changes = body.model_dump(exclude_none=True)
+    changes: dict[str, Any] = body.model_dump(exclude_none=True)
+    if body.alerts:  # off to on restarts the window; SET reads the row as it was, so this is one atomic step
+        changes["last_alerted_at"] = case((S.alerts.is_(False), func.app_clock_now()), else_=S.last_alerted_at)
     if changes:
         statement = update(S).where(S.id == search_id, S.user_id == me).values(**changes)
         updated = await db.execute(statement.execution_options(synchronize_session=False))
