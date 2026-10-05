@@ -3,6 +3,8 @@
 - A message waits for an append in flight: the gate (``engagement_messages_1_open``) locks the engagement FOR KEY SHARE
   before it reads the state, so a message racing the engagement's end is refused once the end commits. (Without that
   lock the foreign key check would wait too, then let the message in under the snapshot taken before the end.)
+- At most 10 message reports per reporter in 24 hours holds for concurrent sessions: ``app_report_message``
+  serialises a reporter's reports (an advisory lock), so of two racing past the ninth exactly one is filed.
 - An upload joins only a message of its own transaction (``app_xid_is_current``): a sent message never gains a file in
   a later transaction, its sender's included.
 - The downgrade is destructive (it drops the thread, the shortlists and the saved searches): it refuses while any of
@@ -27,7 +29,7 @@ from tests.integration import world as w
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
 from tests.integration.engagements import tracker as t
 from tests.integration.engagements.test_message_attachments_schema import SEND, upload
-from tests.integration.engagements.test_messages_schema import MESSAGE, READ_ONLY, message, post
+from tests.integration.engagements.test_messages_schema import LIMITED, MESSAGE, READ_ONLY, REPORT, message, post
 
 P21_TABLES = (
     "engagement_messages",
@@ -66,9 +68,9 @@ async def test_a_message_waits_for_an_end_in_flight_and_is_refused_once_it_commi
             await t.append(ender, engagement, p.developer, "developer", "withdraw", "INTEREST_CONFIRMED", "WITHDRAWN")
             await poster.begin()
             await t.act(poster, p.owner, p.org)  # its snapshot still sees INTEREST_CONFIRMED
+            pid = await t.backend_pid(poster)
             sent = asyncio.create_task(poster.execute(sa.text(MESSAGE), message(engagement, p.owner, "org")))
-            await asyncio.sleep(0.5)
-            assert not sent.done(), "the message did not wait for the append in flight"
+            await t.wait_until_blocked(ender, pid, sent)  # the message waits for the append in flight
             await ender.commit()
             with pytest.raises(DBAPIError, match=READ_ONLY):
                 await sent
@@ -79,6 +81,41 @@ async def test_a_message_waits_for_an_end_in_flight_and_is_refused_once_it_commi
                 await t.run(reader, "SELECT count(*) FROM engagement_messages WHERE engagement_id = :e", e=engagement)
                 == 0
             )
+    finally:
+        await owner.dispose()
+        await app.dispose()
+
+
+async def test_two_reports_racing_past_the_ninth_leave_exactly_ten(url: URL) -> None:
+    """Given a member with nine message reports committed in the last 24 hours, When two of their sessions report two
+    more messages at once, Then the second waits for the first (the per-reporter lock), counts its committed report
+    and is refused: exactly one of the two is filed, ten in all."""
+    owner, app = role_engine(url, "bridge_owner"), role_engine(url, "bridge_app")
+    try:
+        async with owner.begin() as conn:
+            p = await t.parties(conn)
+            await t.act(conn, p.developer)
+            engagement = await t.engage(conn, p)
+            await t.walk(conn, p, engagement, "INTEREST_CONFIRMED")
+            messages = [await post(conn, engagement, p.developer, "developer", body=f"#{n}") for n in range(11)]
+            await t.act(conn, p.owner, p.org)
+            for reported in messages[:9]:
+                await conn.execute(sa.text(REPORT), {"m": reported, "reasons": ["spam"]})
+        async with app.connect() as first, app.connect() as second:
+            for session in (first, second):
+                await session.begin()
+                await t.act(session, p.owner, p.org)
+            pid = await t.backend_pid(second)
+            assert (await first.execute(sa.text(REPORT), {"m": messages[9], "reasons": ["spam"]})).one().created
+            racing = asyncio.create_task(second.execute(sa.text(REPORT), {"m": messages[10], "reasons": ["abuse"]}))
+            await t.wait_until_blocked(first, pid, racing)
+            await first.commit()
+            with pytest.raises(DBAPIError, match=LIMITED):
+                await racing
+            await second.rollback()
+        async with owner.connect() as conn:
+            filed = "SELECT subject_id FROM moderation_cases WHERE subject_type = 'message' AND reporter_id = :r"
+            assert set((await conn.execute(sa.text(filed), {"r": p.owner})).scalars()) == set(messages[:10])
     finally:
         await owner.dispose()
         await app.dispose()
