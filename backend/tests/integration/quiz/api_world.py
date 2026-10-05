@@ -199,3 +199,26 @@ class Clients:
 async def clients(quiz: QuizDb) -> AsyncIterator[Clients]:
     async with AsyncExitStack() as stack:
         yield Clients(quiz, stack)
+
+
+TODAY: Final = "/api/me/quiz/today"
+ANSWERS: Final = "/api/me/quiz/today/answers"
+BOARD: Final = "/api/me/quiz/leaderboard"
+SETTINGS: Final = "/api/me/quiz/settings"
+ADMIN: Final = "/api/admin/quiz"
+
+
+def flag_path(question_id: UUID) -> str:
+    return f"/api/me/quiz/questions/{question_id}/flag"
+
+
+async def play(
+    client: httpx.AsyncClient, set_id: UUID, answers: Sequence[int | None], ms: int = 30_000
+) -> httpx.Response:
+    return await client.post(ANSWERS, json={"set_id": str(set_id), "answers": list(answers), "time_ms": ms})
+
+
+def code(response: httpx.Response) -> tuple[int, str | None]:
+    """(status, error code) of a response."""
+    detail = response.json().get("detail") if response.headers.get("content-type") == "application/json" else None
+    return response.status_code, detail.get("code") if isinstance(detail, dict) else None
