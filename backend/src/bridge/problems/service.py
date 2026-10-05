@@ -191,6 +191,13 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def words_match(words: str) -> ColumnElement[bool]:
+    """A problem whose title or statement holds ``words`` as typed, ignoring case (the picker's ``q``, Discover's words
+    filter and the saved searches' alerts: one rule)."""
+    pattern = f"%{_escape_like(words)}%"
+    return or_(Problem.title.ilike(pattern, escape="\\"), Problem.statement.ilike(pattern, escape="\\"))
+
+
 async def list_published(
     db: AsyncSession,
     *,
@@ -212,8 +219,7 @@ async def list_published(
     if county is not None:
         stmt = stmt.where(Problem.county_code == county)
     if q is not None:
-        pattern = f"%{_escape_like(q)}%"
-        stmt = stmt.where(or_(Problem.title.ilike(pattern, escape="\\"), Problem.statement.ilike(pattern, escape="\\")))
+        stmt = stmt.where(words_match(q))
     if after is not None:
         stmt = stmt.where(published_after(after))
     stmt = stmt.order_by(Problem.published_at.desc().nulls_last(), Problem.id.desc()).limit(limit)

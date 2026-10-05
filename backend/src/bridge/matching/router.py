@@ -7,7 +7,9 @@
 - ``GET /api/discover/opportunity-gap``: the top decile of trending problems with fewer than 3 proposals.
 - ``GET /api/discover/briefs``: verified organisations' published, open Problem Briefs (REQ-DIR-05), newest first,
   with the organisation, budget band, deadline and the proposals linking each; paged with ``limit`` and ``cursor``.
-  All three take ``niche`` (a slug; a parent includes its children) and ``county`` (an ISO 3166-2 code).
+  All three take ``niche`` (a slug; a parent includes its children) and ``county`` (an ISO 3166-2 code); trending and
+  Briefs also take ``words`` (a problem's title or statement holds them, ignoring case; a project matches through the
+  problems it solves; P21 track C, the words a saved search keeps).
 - ``GET /api/me/recommendations``: the developer's ranked cards with score, label, pursuit decision, Why chips and
   the feature vector; ``personalised`` is false without the ``profiling`` consent (404 without a developer profile).
 - ``GET|PUT /api/me/niches``: the developer's liked niches (PUT sets all of them: 3 to 5 active niche ids; 422
@@ -45,14 +47,27 @@ NicheSlug = Annotated[
     Query(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=80, description="Niche slug (a parent includes children)"),
 ]
 CountyCode = Annotated[str | None, Query(pattern=r"^[A-Z]{2}-[A-Z0-9]{1,5}$", description="ISO 3166-2 county code")]
+Words = Annotated[
+    str | None,
+    Query(
+        min_length=1,
+        max_length=100,
+        pattern=r"^[^\x00]*$",
+        description="Words a problem's title or statement holds (ignoring case); blank: none",
+    ),
+]
+
+
+def _words(words: str | None) -> str | None:
+    return (words.strip() or None) if words is not None else None
 
 
 @router.get("/api/discover/trending")
 async def discover_trending(
-    live: CurrentSession, db: Db, niche: NicheSlug = None, county: CountyCode = None
+    live: CurrentSession, db: Db, niche: NicheSlug = None, county: CountyCode = None, words: Words = None
 ) -> TrendingOut:
     """Trending Problems and Trending Projects (with the problem each solves), Trending first, then New this week."""
-    return await discover.trending(db, get_ranking(), niche=niche, county=county)
+    return await discover.trending(db, get_ranking(), niche=niche, county=county, words=_words(words))
 
 
 @router.get("/api/discover/opportunity-gap")
@@ -69,11 +84,14 @@ async def discover_briefs(
     db: Db,
     niche: NicheSlug = None,
     county: CountyCode = None,
+    words: Words = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     cursor: pagination.Cursor = None,
 ) -> DiscoverBriefsOut:
     """Verified organisations' published, open Problem Briefs (a passed deadline leaves the list), newest first."""
-    return await discover.briefs_view(db, niche=niche, county=county, limit=limit, after=pagination.decode(cursor))
+    return await discover.briefs_view(
+        db, niche=niche, county=county, words=_words(words), limit=limit, after=pagination.decode(cursor)
+    )
 
 
 @router.get("/api/me/recommendations")
