@@ -25,14 +25,20 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
   (owner, admin, reviewer, signatory, finance: viewers read, never post, as they never act). The body is 1 to 4,000
   characters and not blank (plain text; the database never interprets it).
 - The stage gate (``engagement_thread_open()``, BEFORE INSERT, SECURITY DEFINER, every role, right after the
-  visibility check): the thread opens once the engagement has *reached* ``INTEREST_CONFIRMED`` (an event of its chain
-  entered it), whatever state it is in now, and closes for good at ``DECLINED``, ``WITHDRAWN``, ``EXPIRED``,
-  ``TERMINATED`` and ``CLOSED`` (read-only from then on). "Reached", not "is at or after": the state order is not
-  linear (``PROCUREMENT_ROUTE`` comes before or after stage 3, the side states ``ON_HOLD``, ``INFO_REQUESTED`` and
-  ``DISPUTED`` can be entered from any stage), and the chain never returns before stage 3 once it was entered, so an
-  engagement on hold at ``UNDER_REVIEW`` stays closed and one on hold after ``NDA_SIGNED`` stays open. Both sides
-  are refused before stage 3 (D-57 (1); the organisation's 403 of AC-TRACK-9 is the API's), so no message can exist
-  before it and the read policy needs no stage. The trigger locks the engagement's row FOR KEY SHARE first: an
+  visibility check): the thread opens once an event of the engagement's chain has entered stage 3
+  (``INTEREST_CONFIRMED``) or a later main-path stage (``CONTACT_MADE`` to ``PAYMENT_FINAL``), whatever state it is in
+  now, and closes for good at ``DECLINED``, ``WITHDRAWN``, ``EXPIRED``, ``TERMINATED`` and ``CLOSED`` (read-only from
+  then on). 3b ``PROCUREMENT_ROUTE`` does not count: revision 0003 lets a public entity enter it from
+  ``UNDER_REVIEW``, before any approval, and leave it for ``INTEREST_CONFIRMED`` or straight for ``CONTACT_MADE``, so
+  on that path the thread opens at ``CONTACT_MADE``. Every main-path state after ``CONTACT_MADE`` has it among its
+  chain's predecessors, and a chain that begins later (the owner's insert, as revision 0003's backfill) begins at a
+  counted state, so the rule covers every path 0003 allows to stage 3 and beyond. "Has entered", not "is at or after":
+  the state order is not linear (``PROCUREMENT_ROUTE`` comes before or after stage 3; a disputed first contact returns
+  from ``CONTACT_MADE`` to stage 3; the side states ``ON_HOLD``, ``INFO_REQUESTED`` and ``DISPUTED`` can be entered
+  from any stage and resume only where they were entered), so an engagement on hold at ``UNDER_REVIEW`` or at a
+  ``PROCUREMENT_ROUTE`` entered from it stays closed, and one on hold after stage 3 stays open. Both sides are refused
+  before (D-57 (1); the organisation's 403 of AC-TRACK-9 is the API's), so no message can exist before the thread
+  opens and the read policy needs no stage. The trigger locks the engagement's row FOR KEY SHARE first: an
   append in flight (the chain holds FOR UPDATE until commit) is waited for and its outcome read, so no message is
   written once the engagement's end has committed; concurrent messages do not wait for each other. SQLSTATE 55000
   (object_not_in_prerequisite_state) with "the thread opens at INTEREST_CONFIRMED" or "its thread is read-only".
@@ -93,8 +99,9 @@ Operating rules for the code that uses this schema:
 
 - Map the tracker's refusal for an engagement the caller cannot see ("no engagement of the caller's with that id",
   insufficient_privilege) to 404, and an RLS refusal of a message to 404 for a non-party (staff included) or 403 for a
-  viewer. Check the stage before writing (the organisation's 403 before ``INTEREST_CONFIRMED``, 409 after an end);
-  SQLSTATE 55000 from the gate is the race of the two.
+  viewer. Check the stage before writing with the gate's rule (the organisation's 403 before the thread opens: at
+  ``INTEREST_CONFIRMED``, or ``CONTACT_MADE`` on a procurement route; 409 after an end); SQLSTATE 55000 from the gate
+  is the race of the two.
 - Post a message as the sender, leaving ``created_at`` out (read it back), then attach the staged uploads in the same
   transaction: ``UPDATE engagement_message_attachments SET message_id = :m WHERE id = ANY(:ids) AND message_id IS
   NULL`` and check the row count (a missing, foreign, unclean or already-sent upload matches nothing or is refused).
@@ -282,15 +289,17 @@ POLICIES: tuple[Policy, ...] = (
 # ---------------------------------------------------------------------------------------------------------------------
 
 FUNCTIONS_SQL = r"""
--- The thread's stage gate (REQ-ENG-11, D-57 (1)): a message, or an upload for one, is written only once the engagement
--- has reached INTEREST_CONFIRMED (an event of its chain entered it: the order of states is not linear, and the chain
--- never returns before stage 3 once it was entered) and only until it ends (DECLINED, WITHDRAWN, EXPIRED, TERMINATED,
--- CLOSED: the thread is read-only from then on). Locks the engagement's row FOR KEY SHARE first, so an append in
--- flight (the chain holds FOR UPDATE until commit) is waited for and its outcome read (each statement below takes a
--- new snapshot): no message is written once the engagement's end has committed, and concurrent messages do not wait
--- for each other. Fires right after tracker_engagement_visible() (<table>_1_open sorts second), so it locks and
--- reports only an engagement the caller can see. For every role. SECURITY DEFINER: reads the chain whatever the
--- caller's grants.
+-- The thread's stage gate (REQ-ENG-11, D-57 (1)): a message, or an upload for one, is written only once an event of the
+-- engagement's chain has entered stage 3 (INTEREST_CONFIRMED) or a later main-path stage (CONTACT_MADE to
+-- PAYMENT_FINAL), and only until it ends (DECLINED, WITHDRAWN, EXPIRED, TERMINATED, CLOSED: the thread is read-only
+-- from then on). 3b PROCUREMENT_ROUTE does not count (a public entity may enter it from UNDER_REVIEW, before any
+-- approval, and go on to CONTACT_MADE without INTEREST_CONFIRMED: the thread then opens at CONTACT_MADE). "Has
+-- entered", not "is in": the order of states is not linear and the side states resume where they were entered.
+-- Locks the engagement's row FOR KEY SHARE first, so an append in flight (the chain holds FOR UPDATE until commit) is
+-- waited for and its outcome read (each statement below takes a new snapshot): no message is written once the
+-- engagement's end has committed, and concurrent messages do not wait for each other. Fires right after
+-- tracker_engagement_visible() (<table>_1_open sorts second), so it locks and reports only an engagement the caller
+-- can see. For every role. SECURITY DEFINER: reads the chain whatever the caller's grants.
 CREATE FUNCTION engagement_thread_open() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -304,9 +313,12 @@ BEGIN
             USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.engagement_events ev
-                    WHERE ev.engagement_id = NEW.engagement_id AND ev.to_state = 'INTEREST_CONFIRMED') THEN
-        RAISE EXCEPTION '%: the thread opens at INTEREST_CONFIRMED', TG_TABLE_NAME
-            USING ERRCODE = 'object_not_in_prerequisite_state';
+                    WHERE ev.engagement_id = NEW.engagement_id
+                      AND ev.to_state IN ('INTEREST_CONFIRMED', 'CONTACT_MADE', 'NDA_PENDING', 'NDA_SIGNED',
+                                          'NEGOTIATION', 'AGREEMENT_SIGNING', 'IN_IMPLEMENTATION', 'DELIVERED',
+                                          'SIGN_OFF', 'PAYMENT_FINAL')) THEN
+        RAISE EXCEPTION '%: the thread opens at INTEREST_CONFIRMED (at CONTACT_MADE on a procurement route)',
+            TG_TABLE_NAME USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     RETURN NEW;
 END;

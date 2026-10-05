@@ -1,8 +1,9 @@
 """Revision 0008 (REQ-ENG-11; AC-TRACK-9's database half; D-57 (1), (3), (4)): the engagement thread's messages.
 
-- The stage gate (``engagement_thread_open()``): nobody posts before the engagement has reached ``INTEREST_CONFIRMED``
-  (a side state or ``PROCUREMENT_ROUTE`` before stage 3 keeps it closed); from then on both sides post, through the
-  deal states and the side states entered after stage 3; after ``DECLINED``, ``WITHDRAWN``, ``EXPIRED``,
+- The stage gate (``engagement_thread_open()``): nobody posts before the chain has entered ``INTEREST_CONFIRMED`` or
+  a later main-path stage (a side state or ``PROCUREMENT_ROUTE`` before stage 3 keeps it closed; on a public entity's
+  procurement route that skips stage 3 it opens at ``CONTACT_MADE``); from then on both sides post, through the deal
+  states and the side states entered after it; after ``DECLINED``, ``WITHDRAWN``, ``EXPIRED``,
   ``TERMINATED`` and ``CLOSED`` the thread is read-only for every role, and still readable by the parties.
 - Who: a party posts as themselves on their own side (the developer as ``developer``; an owner, admin, reviewer,
   signatory or finance member as ``org``; never a viewer); the parties read every message (viewers included) and
@@ -106,6 +107,36 @@ async def test_the_thread_opens_at_interest_confirmed_for_both_sides(owner_engin
         await post(conn, engagement, p.owner, "org", p.org, body="Noted.")
         await t.act(conn, p.developer)
         assert await t.run(conn, COUNT, e=engagement) == 7
+
+
+async def test_the_public_entity_path_opens_the_thread_at_contact_made(owner_engine: AsyncEngine) -> None:
+    """Given a public entity's engagement on revision 0003's 3b path that never enters INTEREST_CONFIRMED
+    (UNDER_REVIEW -> PROCUREMENT_ROUTE -> CONTACT_MADE), Then the thread is closed at PROCUREMENT_ROUTE, opens for both
+    sides at CONTACT_MADE and stays open on the way to NDA_SIGNED; and a chain whose genesis is later on the main path
+    (the owner's insert at NDA_SIGNED, as revision 0003's backfill wrote) is open too."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.act(conn, p.developer)
+        engagement = await t.engage(conn, p)
+        await t.walk(conn, p, engagement, "UNDER_REVIEW")
+        await t.act(conn, p.owner, p.org)
+        await t.append(conn, engagement, p.owner, "owner", "procure", "UNDER_REVIEW", "PROCUREMENT_ROUTE")
+        await _closed_for_both(conn, p, engagement, "PROCUREMENT_ROUTE")
+        await t.act(conn, p.owner, p.org)
+        await t.append(conn, engagement, p.owner, "owner", "mark_contacted", "PROCUREMENT_ROUTE", "CONTACT_MADE")
+        await post(conn, engagement, p.developer, "developer")
+        await post(conn, engagement, p.owner, "org", p.org)
+        await t.walk(conn, p, engagement, "NDA_SIGNED")
+        await post(conn, engagement, p.signatory, "org", p.org, body="Signed.")
+        await t.act(conn, p.developer)
+        assert await t.run(conn, COUNT, e=engagement) == 3
+        confirmed = "SELECT count(*) FROM engagement_events WHERE engagement_id = :e AND to_state = :s"
+        assert await t.run(conn, confirmed, e=engagement, s="INTEREST_CONFIRMED") == 0
+        await t.as_owner(conn)
+        q = await t.parties(conn)
+        later = await t.engage(conn, q, state="NDA_SIGNED")  # the owner's insert: a genesis at NDA_SIGNED
+        await post(conn, later, q.developer, "developer")
+        await post(conn, later, q.signatory, "org", q.org)
 
 
 async def test_only_a_party_posts_as_themselves_on_their_own_side(owner_engine: AsyncEngine) -> None:

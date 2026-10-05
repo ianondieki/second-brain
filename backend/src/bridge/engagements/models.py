@@ -24,8 +24,9 @@ Rules the database enforces (revision 0003; the state machine in ``engagements/s
   the chain: written by that event's actor as themselves, in the event's transaction (the event is still the
   engagement's latest), one per event, its kind matching the event's transition.
 - The thread (revision 0008, REQ-ENG-11): messages, their attachments and read markers are the parties' only (never
-  staff's); a message is posted once the engagement has reached ``INTEREST_CONFIRMED`` and until it ends, and is
-  append-only like a note (D-54's redaction aside).
+  staff's); a message is posted once the chain has entered ``INTEREST_CONFIRMED`` or a later main-path stage
+  (``CONTACT_MADE`` on a public entity's procurement route) and until it ends, and is append-only like a note (D-54's
+  redaction aside).
 - Times (event, note and message ``created_at``, ``stage_entered_at``, ``ended_at``, ``endorsed_at``, ``signed_at``,
   ``recorded_at``, ``confirmed_at``) are the database's, on the shared clock ``app_clock_now()`` (the test clock's
   offset applies only where the owner enabled it: dev, test and staging databases).
@@ -302,8 +303,9 @@ class EngagementMessage(IdMixin, Base):
     """One message of an engagement's thread (REQ-ENG-11; revision 0008). Parties only: the developer and the members
     of the organisation (narrowed by ``app.org_id``) read every message, viewers included; staff never read the thread
     (a report shares one message, ``app_reported_message``). A party posts as themselves on their own side
-    (``sender_party``: ``developer``, or ``org`` for a member who may act), once the engagement has reached
-    ``INTEREST_CONFIRMED`` and until it ends (``engagement_thread_open()``: SQLSTATE 55000 otherwise; read stays open).
+    (``sender_party``: ``developer``, or ``org`` for a member who may act), once the chain has entered
+    ``INTEREST_CONFIRMED`` or a later main-path stage (``CONTACT_MADE`` on a procurement route; 3b does not count) and
+    until it ends (``engagement_thread_open()``: SQLSTATE 55000 otherwise; read stays open).
     INSERT-only for the app; D-54: the owner (or a definer function it owns) may redact a body once, setting it to
     ``'[redacted]'`` with ``redacted_at`` and ``redacted_by``. ``created_at`` is the database's clock: leave it out."""
 
