@@ -11,3 +11,12 @@ export function EngagementsIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Messages: a speech bubble. */
+export function MessageIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.25 4.5h11.5a1.25 1.25 0 0 1 1.25 1.25v7.5a1.25 1.25 0 0 1-1.25 1.25H9l-3.5 2.75V14.5H4.25A1.25 1.25 0 0 1 3 13.25v-7.5A1.25 1.25 0 0 1 4.25 4.5z" />
+    </Icon>
+  );
+}

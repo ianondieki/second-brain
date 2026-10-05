@@ -6,6 +6,7 @@ import { LinkPending } from "@/components/ui/LinkPending";
 
 import { Chip } from "./Chip";
 import { stageChip, type Party, type Summary } from "./model";
+import { UnreadLine } from "./UnreadLine";
 import { DueLine } from "./When";
 
 /** One engagement as a compact card (D-52, the lists that are not "Needs you"): the title as the link, the other party, the stage. */
@@ -23,6 +24,7 @@ export function EngagementCard({ item, mine, href }: { item: Summary; mine: Part
       <p className="flex flex-wrap items-center gap-x-5 gap-y-1">
         <Chip kind={stageChip(item)}>{item.stage_label}</Chip>
         <DueLine item={item} mine={mine} />
+        <UnreadLine count={item.unread_messages} />
       </p>
     </Card>
   );
