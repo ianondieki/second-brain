@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { ClientStrings } from "@/components/ClientStrings";
 import { safeHttpsUrl } from "@/components/problem/problem";
 import { Badge } from "@/components/ui/Badge";
-import { textLinkClass } from "@/components/ui/Button";
+import { standaloneLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 import { AlertIcon, CheckIcon, ClosedIcon } from "@/components/ui/icons";
@@ -11,7 +11,16 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { FlagQuestion } from "./FlagQuestion";
 import { Marks } from "./Marks";
-import { BOARD_PATH, optionMark, outcomes, QUESTIONS, questionOutcome, type QuizAttempt, type QuizToday } from "./quiz";
+import {
+  BOARD_PATH,
+  optionMark,
+  outcomes,
+  QUESTIONS,
+  questionOutcome,
+  topicLabel,
+  type QuizAttempt,
+  type QuizToday,
+} from "./quiz";
 
 /**
  * The results of today's five (REQ-DEV-01), drawn on the server once the developer has played: the score as a figure
@@ -62,7 +71,7 @@ export async function QuizResults({ today, attempt }: { today: QuizToday; attemp
                 <article aria-labelledby={promptId} className="flex flex-col gap-3">
                   <p className="flex flex-wrap gap-x-3 text-sm text-ink-soft">
                     <span>{t("results.position", { number: question.position, total: QUESTIONS })}</span>
-                    <span className="[overflow-wrap:anywhere]">{question.topic}</span>
+                    <span className="[overflow-wrap:anywhere]">{topicLabel(t, question.topic)}</span>
                   </p>
                   <h3 id={promptId} className="text-lg font-semibold [overflow-wrap:anywhere] text-ink">
                     {question.prompt}
@@ -111,7 +120,7 @@ export async function QuizResults({ today, attempt }: { today: QuizToday; attemp
                   ) : null}
                   {href ? (
                     <p className="text-sm">
-                      <a href={href} target="_blank" rel="noopener noreferrer" className={cn(textLinkClass, "[overflow-wrap:anywhere]")} data-source="">
+                      <a href={href} target="_blank" rel="noopener noreferrer" className={cn(standaloneLinkClass, "[overflow-wrap:anywhere]")} data-source="">
                         {t("results.source", { title: question.source.title })}
                         <span className="sr-only"> {t("results.newTab")}</span>
                       </a>

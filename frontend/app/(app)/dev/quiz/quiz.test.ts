@@ -1,4 +1,10 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
+
+import en from "@/locales/en.json";
+import sw from "@/locales/sw.json";
 
 import { board, quizToday } from "@/test/quiz";
 import {
@@ -10,6 +16,8 @@ import {
   flagNote,
   flagOutcome,
   isNoQuiz,
+  knownTopic,
+  TOPICS,
   optionMark,
   outcomes,
 } from "./quiz";
@@ -83,5 +91,25 @@ describe("the caller's line on the board", () => {
     expect(boardLine(board().me)).toEqual({ key: "ranked", points: 12, rank: 4 });
     expect(boardLine(board({ opted_in: false }).me)).toEqual({ key: "join", points: 12 });
     expect(boardLine(board({ played: false, rank: null, points: 0 }).me)).toEqual({ key: "notPlayed" });
+  });
+});
+
+describe("topics", () => {
+  // The curated source list's topics (backend/ai/quiz_sources.yaml), each with a label in both languages.
+  const yaml = readFileSync(join(__dirname, "../../../../../backend/ai/quiz_sources.yaml"), "utf8");
+  const listed = /^topics:\s*\[([^\]]*)\]/m.exec(yaml)?.[1].split(",").map((code) => code.trim()) ?? [];
+
+  it("label every topic of the curated list in English and Swahili", () => {
+    expect(listed.length).toBeGreaterThan(0);
+    expect([...TOPICS].sort()).toEqual([...listed].sort());
+    for (const code of listed) {
+      expect(en.quiz.topic[code as keyof typeof en.quiz.topic], code).toBeTruthy();
+      expect(sw.quiz.topic[code as keyof typeof sw.quiz.topic], code).toBeTruthy();
+    }
+  });
+
+  it("show an unknown code as it is", () => {
+    expect(knownTopic("python")).toBe("python");
+    expect(knownTopic("quantum")).toBeNull();
   });
 });

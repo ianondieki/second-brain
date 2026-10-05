@@ -12,7 +12,7 @@ import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { quizToday } from "./data";
-import { BOARD_PATH } from "./quiz";
+import { BOARD_PATH, topicLabel } from "./quiz";
 import { QuizPlay } from "./QuizPlay";
 import { QuizResults } from "./QuizResults";
 
@@ -41,7 +41,7 @@ export default async function QuizPage() {
   } else {
     const questions = [...state.today.questions]
       .sort((a, b) => a.position - b.position)
-      .map(({ id, position, prompt, options, topic }) => ({ id, position, prompt, options, topic }));
+      .map(({ id, position, prompt, options, topic }) => ({ id, position, prompt, options, topic: topicLabel(t, topic) }));
     content = (
       <ClientStrings strings={await clientStrings(["quizPlay"])}>
         <QuizPlay setId={state.today.set_id} questions={questions} />

@@ -25,7 +25,7 @@
     "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
     "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
     "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\").",
-    "reviewP22a": "[[COPY-REVIEW]] P22-AF (REQ-DEV-01; D-59): quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz"
+    "reviewP22a": "[[COPY-REVIEW]] P22-AF (REQ-DEV-01; D-59): quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks"
   },
   "app": {
     "name": "Wazo",
@@ -3189,16 +3189,16 @@
   "quiz": {
     "pageTitle": "Today's five",
     "title": "Today's five",
-    "lead": "Five short questions on the tools you build with. Every answer comes with why, from the official documentation.",
+    "lead": "Five short questions on the tools you build with, each with the reason, from the official documentation.",
     "back": "Home",
-    "none": "No quiz today. Back tomorrow.",
+    "none": "No quiz today, back tomorrow.",
     "noneAction": "See this week's board",
     "card": {
-      "lead": "Five short questions from official documentation, each with why. A few minutes to learn something new.",
+      "lead": "Five short questions, each with the reason, from the official documentation. A few minutes to learn something new.",
       "play": "Play",
       "played": "<fig>{score} of {total}</fig> today · {streak, plural, one {#-day streak} other {#-day streak}}",
       "seeWhy": "See why",
-      "none": "No quiz today. Back tomorrow."
+      "none": "No quiz today, back tomorrow."
     },
     "results": {
       "heading": "Your answers",
@@ -3211,7 +3211,7 @@
       "mark": {
         "rightChosen": "Your answer, right",
         "right": "Right answer",
-        "wrongChosen": "Your answer"
+        "wrongChosen": "Your answer, wrong"
       },
       "skipped": "You skipped this one.",
       "pulled": "Withdrawn after review: it counts for nobody.",
@@ -3236,7 +3236,23 @@
       "points": "{points, plural, one {# point} other {# points}}",
       "you": "You",
       "empty": "No one is on the board yet this week.",
-      "emptyAction": "Play today's five"
+      "emptyAction": "Play today's five",
+      "home": "Go to Home"
+    },
+    "topic": {
+      "python": "Python",
+      "web": "The web",
+      "databases": "Databases",
+      "git": "Git",
+      "linux": "Linux",
+      "security": "Security",
+      "networking": "Networking",
+      "mobile": "Mobile",
+      "cloud": "Cloud",
+      "data": "Data",
+      "kenya-fintech": "Fintech in Kenya",
+      "ai": "AI",
+      "languages": "Programming languages"
     }
   },
   "quizPlay": {
@@ -3245,10 +3261,10 @@
     "check": "Check answers",
     "checking": "Checking…",
     "checkHint": "Answer all five to check them, or skip the rest.",
-    "skip": "Skip the rest",
+    "skip": "Check {count}, skip {number}",
     "problem": {
       "closed": "This quiz's day is over. Today's quiz is a new one, on Home.",
-      "noQuiz": "No quiz today. Back tomorrow.",
+      "noQuiz": "No quiz today, back tomorrow.",
       "signedOut": "You were signed out. Sign in again, then check your answers.",
       "failed": "Your answers were not checked. Try again in a moment.",
       "network": "Your answers were not sent. Check your connection and try again."
@@ -3289,8 +3305,11 @@
       "off": "Off",
       "joined": "You are on the board.",
       "left": "You are off the board.",
-      "failed": "That did not save. Try again in a moment."
-    }
+      "failed": "That did not save. Try again in a moment.",
+      "signedOut": "You were signed out. Sign in again to change this."
+    },
+    "checkHintNone": "Answer all five to check them.",
+    "home": "Go to Home"
   },
   "adminQuiz": {
     "pageTitle": "Quiz",
@@ -3300,10 +3319,11 @@
     "notAdminAction": "Go to the console home",
     "queue": {
       "heading": "Waiting for review",
-      "empty": "No set is waiting for review. The nightly job drafts the next day's set.",
-      "emptyAction": "Check again",
+      "empty": "No set is waiting for review; the nightly job drafts tomorrow's.",
       "decidedHeading": "Decided",
-      "decidedLabel": "Decided quiz sets, newest first"
+      "decidedLabel": "Decided quiz sets, newest first",
+      "emptyActionDecided": "See the decided sets",
+      "emptyActionHome": "Go to the console home"
     },
     "columns": {
       "day": "Day",
@@ -3315,7 +3335,8 @@
     "status": {
       "draft": "Waiting for review",
       "approved": "Approved",
-      "rejected": "Rejected"
+      "rejected": "Rejected",
+      "dayOver": "Day over"
     },
     "origin": {
       "model": "Model draft",
@@ -3329,7 +3350,7 @@
       "gone": "This quiz set does not exist.",
       "goneAction": "Back to quiz sets",
       "decided": "Decided on {date}.",
-      "statsHeading": "Plays",
+      "statsHeading": "Plays and flags",
       "attempts": "Plays",
       "average": "Average score",
       "notEnough": "Not enough plays yet",
@@ -3404,7 +3425,9 @@
       "already_live": "This question is already live.",
       "not_found": "This quiz set no longer exists.",
       "forbidden": "Only staff admins can do this.",
-      "generic": "That did not work. Try again in a moment."
+      "generic": "That did not work. Try again in a moment.",
+      "question_not_found": "This question no longer exists.",
+      "signedOut": "You were signed out. Sign in again, then try once more."
     }
   }
 }

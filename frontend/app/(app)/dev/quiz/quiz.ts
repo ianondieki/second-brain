@@ -21,6 +21,35 @@ export const MAX_TIME_MS = 86_400_000;
 export const MAX_NOTE = 300;
 export const FLAG_REASONS: readonly FlagReason[] = ["wrong_answer", "unclear", "outdated", "other"];
 
+/** The topics of the curated source list (backend/ai/quiz_sources.yaml `topics`), each with a label (quiz.topic.*). */
+export const TOPICS = [
+  "python",
+  "web",
+  "databases",
+  "git",
+  "linux",
+  "security",
+  "networking",
+  "mobile",
+  "cloud",
+  "data",
+  "kenya-fintech",
+  "ai",
+  "languages",
+] as const;
+export type Topic = (typeof TOPICS)[number];
+
+/** A topic code the page has a label for, or null (then the code itself is shown). */
+export function knownTopic(code: string): Topic | null {
+  return (TOPICS as readonly string[]).includes(code) ? (code as Topic) : null;
+}
+
+/** A topic in words (quiz.topic.*), or the code itself when the list has grown since. */
+export function topicLabel(t: (key: `topic.${Topic}`) => string, code: string): string {
+  const known = knownTopic(code);
+  return known ? t(`topic.${known}`) : code;
+}
+
 /** What the Home card shows: today's set (played or not), no set today, or nothing at all (the read failed). */
 export type QuizCardState = { kind: "set"; today: QuizToday } | { kind: "none" } | null;
 
