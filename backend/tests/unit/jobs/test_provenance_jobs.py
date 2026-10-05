@@ -16,9 +16,10 @@ from sqlalchemy.exc import OperationalError
 from bridge.audit.chain import ChainProblem
 from bridge.config import ConfigurationError, Settings
 from bridge.crypto.envelope import LocalKeyWrapper
-from bridge.engagements import notify
+from bridge.engagements import message_notify, notify
 from bridge.jobs import audit as audit_jobs
 from bridge.jobs import expiry as expiry_jobs
+from bridge.jobs import message_uploads as upload_jobs
 from bridge.jobs import provenance as jobs
 from bridge.jobs import reminders as reminder_jobs
 from bridge.jobs.app import IMPORT_PATHS, app
@@ -62,6 +63,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         "bridge.jobs.scouts",
         "bridge.jobs.research",  # P11: one research.run job per research run (REQ-RES-01)
         "bridge.jobs.expiry",  # P19: the tracker's clock, expiry and the end of holds (REQ-ENG-10)
+        "bridge.jobs.message_uploads",  # P21: the hourly purge of unsendable thread uploads (REQ-ENG-11)
     ]
     app.perform_import_paths()  # type: ignore[no-untyped-call]
     for name in (
@@ -71,6 +73,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         jobs.ANCHOR_TASK,
         audit_jobs.VERIFY_TASK,
         notify.TASK,  # REQ-NOT-04: the tracker's notifications (P5)
+        message_notify.TASK,  # REQ-ENG-11: N18, a new message in the thread (P21)
         RESEARCH_RUN_TASK,  # REQ-RES-01 (P11)
     ):
         assert name in app.tasks
@@ -83,6 +86,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         reminder_jobs.ORG_DIGEST_TASK: "*/15 * * * *",
         SCOUT_SCAN_TASK: "*/15 * * * *",
         expiry_jobs.TASK: "*/15 * * * *",
+        upload_jobs.TASK: "17 * * * *",
     }
 
 

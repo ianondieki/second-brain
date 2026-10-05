@@ -421,6 +421,7 @@ def test_every_web_paths_builder_makes_a_platform_path() -> None:
     made = {
         "engagement_path": [web_paths.engagement_path(party, uuid4()) for party in EngagementParty],
         "org_engagements_path": [web_paths.org_engagements_path(uuid4())],
+        "messages_path": [web_paths.messages_path(party, uuid4()) for party in EngagementParty],
         "DEV_ENGAGEMENTS": [web_paths.DEV_ENGAGEMENTS],
         "ORG_ENGAGEMENTS": [web_paths.ORG_ENGAGEMENTS],
     }
