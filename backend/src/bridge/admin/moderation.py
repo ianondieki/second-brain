@@ -23,8 +23,16 @@ The queue (P15) shows what a moderator needs to decide: the subject's current Ti
 decided from its own queue, ``subject_gone``, ``own_content``, ``cannot_approve_vulnerability``). Plain code works these
 out as the decision does; the database still decides (``app_moderate_*``). Unresolved cases come oldest first; decided
 ones newest decision first, with who decided. At most 200 either way; one case is read by its id wherever it falls.
-Claims are read in their own queue (``bridge.admin.claims``); research approval is ``bridge.admin.research``; reports
-arrive after the prototype.
+Claims are read in their own queue (``bridge.admin.claims``); research approval is ``bridge.admin.research``.
+
+Message reports (REQ-ENG-11, D-57 (4); ``subject_type = 'message'``, filed by a party through
+``app_report_message``): the lists show "Reported message" with the reason codes and never the text; the case read by
+its id carries the one reported message (its engagement, sender side, text and time) through
+``app_reported_message``, the only way staff read a message, and each such read writes an audit event (ids only).
+Staff never read the rest of the thread. A report is decided ``dismiss`` (nothing wrong: the case ends ``approved``)
+or ``uphold`` (the message broke the rules: ``rejected``), with an optional staff note kept in the decision's audit
+details; the message itself never changes (a staff redaction is D-54's later function). The reporter never decides
+their own report (``own_content``).
 """
 
 from __future__ import annotations
@@ -42,14 +50,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge.audit.service import record as audit
 from bridge.errors import ApiError, not_found
 from bridge.matching.tasks import defer_on_new
-from bridge.models.enums import AuditActor, ModerationCaseStatus, ModerationSource, ModerationState
+from bridge.models.enums import AuditActor, EngagementParty, ModerationCaseStatus, ModerationSource, ModerationState
 from bridge.problems.service import org_ref
 from bridge.proposals.prescreen import SECURITY_VULNERABILITY, RulesPreScreen, ScreenInput
 from bridge.proposals.schemas import OrgRef
 from bridge.proposals.service import signal
 
 UNRESOLVED: Final = ("open", "held", "escalated")
-Decision = Literal["approve", "reject"]
+Decision = Literal["approve", "reject", "dismiss", "uphold"]  # dismiss / uphold: message reports only
+MESSAGE: Final = "message"
+MESSAGE_TITLE: Final = "Reported message"  # [[COPY-REVIEW]] the queue's title of a message report
+# A message report's outcome as the case's status: dismissed, the message stands (approved); upheld, it broke the rules.
+MESSAGE_OUTCOMES: Final[Mapping[str, ModerationCaseStatus]] = {
+    "dismiss": ModerationCaseStatus.APPROVED,
+    "uphold": ModerationCaseStatus.REJECTED,
+}
+_LINES: Final = r"^[^\x00-\x08\x0b-\x1f\x7f]*$"  # line feeds and tabs only (as the tracker's notes)
 # Why a case cannot be decided: the decision route's refusal code (subject_gone: the subject no longer exists).
 Blocked = Literal[
     "already_decided", "unsupported_subject", "subject_gone", "own_content", "cannot_approve_vulnerability"
@@ -74,6 +90,16 @@ class CaseField(BaseModel):
         description="A Tier-1 field: title, problem_statement, impact_claims, summary, statement, affected_group"
     )
     text: str
+
+
+class ReportedMessageOut(BaseModel):
+    """The one message a report shared with staff (``app_reported_message``): never the rest of its thread."""
+
+    message_id: UUID
+    engagement_id: UUID
+    sender_party: EngagementParty
+    body: str = Field(description="The message's plain text as the party typed it: render it as text")
+    created_at: datetime
 
 
 class StaffRef(BaseModel):
@@ -103,6 +129,11 @@ class CaseOut(BaseModel):
         description="The organisation that posted the problem as a Problem Brief (REQ-DIR-05: 'Brief by <org>');"
         " null for any other subject, or when the organisation is not in the directory",
     )
+    message: ReportedMessageOut | None = Field(
+        default=None,
+        description="A message report's message, on the case read by its id only (each read is audited); null in"
+        " the lists and for every other subject",
+    )
 
 
 class CaseList(BaseModel):
@@ -114,19 +145,29 @@ class DecisionIn(BaseModel):
 
     decision: Decision
     subject_version_id: UUID | None = Field(description="The case's subject_version_id as reviewed (required)")
+    note: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=2000,
+        pattern=_LINES,
+        description="A staff note on the decision, kept in its audit details (never shown to the parties)",
+    )
 
 
 class DecisionOut(BaseModel):
     id: UUID
     status: ModerationCaseStatus
-    subject_state: ModerationState
+    subject_state: ModerationState | None = Field(description="The subject's state now; null for a message report")
 
 
 _CASES_SELECT: Final = (
     "SELECT m.id, m.subject_type, m.subject_id, m.reasons, m.source, m.status, m.created_at, m.classifier,"
-    " m.decided_at, m.decided_by, d.display_name AS decider_name, (p.id IS NOT NULL OR pr.id IS NOT NULL) AS found,"
+    " m.decided_at, m.decided_by, d.display_name AS decider_name,"
+    # A message is never deleted (revision 0008: append-only), so a message report's subject is always there.
+    " (p.id IS NOT NULL OR pr.id IS NOT NULL OR m.subject_type = 'message') AS found,"
     " coalesce(p.moderation_state, pr.moderation_state) AS subject_state, p.current_version_id AS subject_version_id,"
-    " coalesce(p.owner_id = :staff, pr.created_by = :staff, false) AS own,"
+    " coalesce(p.owner_id = :staff, pr.created_by = :staff,"
+    " CASE WHEN m.subject_type = 'message' THEN m.reporter_id = :staff END, false) AS own,"
     " coalesce(p.title, pr.title) AS title, p.problem_statement, p.impact_claims, p.summary, pr.statement,"
     " pr.affected_group, bo.id AS brief_org_id, bo.slug::text AS brief_org_slug, bo.legal_name AS brief_org_name"
     " FROM moderation_cases m"
@@ -151,6 +192,8 @@ def decision_options(
     """The decisions the decision route accepts for a case, and the code it answers when it refuses them."""
     if not unresolved:
         return [], "already_decided"
+    if subject_type == MESSAGE:  # a report: the reporter never decides it
+        return ([], "own_content") if own else (["dismiss", "uphold"], None)
     if subject_type not in TIER1_FIELDS:
         return [], "unsupported_subject"
     if not found:
@@ -204,7 +247,9 @@ async def _case_out(row: Any, *, unresolved: bool) -> CaseOut:
         created_at=row.created_at,
         subject_state=row.subject_state,
         subject_version_id=row.subject_version_id,
-        preview=CasePreview(title=row.title, text=row.summary or row.statement),
+        preview=CasePreview(title=MESSAGE_TITLE, text=None)
+        if row.subject_type == MESSAGE
+        else CasePreview(title=row.title, text=row.summary or row.statement),
         fields=[CaseField(name=name, text=value) for name, value in fields.items()],
         flagged_fields=flagged_fields(row.classifier),
         actions=actions,
@@ -223,12 +268,48 @@ async def list_cases(db: AsyncSession, *, unresolved: bool, staff_id: UUID) -> C
 
 async def get_case(db: AsyncSession, *, case_id: UUID, staff_id: UUID) -> CaseOut | None:
     """One case as ``staff_id`` sees it in the queue, open or decided, wherever it falls in the lists; None when
-    there is no such case (the case page, P16-E1: a queue longer than 200 no longer hides it)."""
+    there is no such case (the case page, P16-E1: a queue longer than 200 no longer hides it). A message report
+    carries its message, and the read is audited (committed)."""
     row = (await db.execute(_ONE_CASE, {"id": case_id, "staff": staff_id})).one_or_none()
-    return None if row is None else await _case_out(row, unresolved=row.status in UNRESOLVED)
+    if row is None:
+        return None
+    case = await _case_out(row, unresolved=row.status in UNRESOLVED)
+    if row.subject_type == MESSAGE:
+        case.message = await reported_message(db, case_id=case_id, staff_id=staff_id)
+    return case
 
 
-_CASE = text("SELECT id, subject_type, subject_id, status FROM moderation_cases WHERE id = :id FOR UPDATE")
+_REPORTED_MESSAGE = text(
+    "SELECT message_id, engagement_id, sender_party, body, created_at FROM app_reported_message(:case)"
+)
+
+
+async def reported_message(db: AsyncSession, *, case_id: UUID, staff_id: UUID) -> ReportedMessageOut | None:
+    """The message of a message report, read through ``app_reported_message`` (staff admin or moderator), with an
+    audit event on the staff member's chain for every read (ids only, never the text). Committed."""
+    row = (await db.execute(_REPORTED_MESSAGE, {"case": case_id})).one_or_none()
+    if row is None:
+        return None
+    await audit(
+        db,
+        "moderation.reported_message_read",
+        actor_user_id=staff_id,
+        actor_kind=AuditActor.STAFF,
+        subject_type="moderation_case",
+        subject_id=case_id,
+        payload={"message_id": str(row.message_id), "engagement_id": str(row.engagement_id)},
+    )
+    await db.commit()
+    return ReportedMessageOut(
+        message_id=row.message_id,
+        engagement_id=row.engagement_id,
+        sender_party=row.sender_party,
+        body=row.body,
+        created_at=row.created_at,
+    )
+
+
+_CASE = text("SELECT id, subject_type, subject_id, status, reporter_id FROM moderation_cases WHERE id = :id FOR UPDATE")
 _PROPOSAL = text("SELECT owner_id, status, moderation_state, current_version_id FROM proposals WHERE id = :id")
 _CURRENT_VERSION = text("SELECT current_version_id FROM proposals WHERE id = :id")
 _MODERATE_PROPOSAL = text("SELECT app_moderate_proposal(:id, CAST(:state AS moderation_state))")
@@ -268,14 +349,49 @@ async def _subject_version(db: AsyncSession, subject_type: str, subject_id: UUID
     return version
 
 
+async def _decide_message(
+    db: AsyncSession, *, staff_id: UUID, case: Any, decision: Decision, note: str | None
+) -> DecisionOut:
+    """Dismiss or uphold a message report: the case closes (the message never changes) and the decision is audited
+    with the staff note in its details."""
+    if decision not in MESSAGE_OUTCOMES:
+        raise ApiError(422, "invalid_decision", "Dismiss or uphold a message report.")
+    if case.reporter_id == staff_id:
+        raise ApiError(403, "own_content", "You cannot decide your own report.")
+    outcome = MESSAGE_OUTCOMES[decision]
+    await db.execute(_CLOSE, {"status": outcome.value, "staff": staff_id, "id": case.id})
+    await audit(
+        db,
+        "moderation.case_decided",
+        actor_user_id=staff_id,
+        actor_kind=AuditActor.STAFF,
+        subject_type="moderation_case",
+        subject_id=case.id,
+        payload={"subject_type": MESSAGE, "subject_id": str(case.subject_id), "decision": decision},
+        details={"note": note} if note else None,
+    )
+    await db.commit()
+    return DecisionOut(id=case.id, status=outcome, subject_state=None)
+
+
 async def decide(
-    db: AsyncSession, *, staff_id: UUID, case_id: UUID, decision: Decision, subject_version_id: UUID | None
+    db: AsyncSession,
+    *,
+    staff_id: UUID,
+    case_id: UUID,
+    decision: Decision,
+    subject_version_id: UUID | None,
+    note: str | None = None,
 ) -> DecisionOut:
     case = (await db.execute(_CASE, {"id": case_id})).one_or_none()
     if case is None:
         raise not_found("No such case.")
     if case.status not in UNRESOLVED:
         raise ApiError(409, "already_decided", "This case was already decided.")
+    if case.subject_type == MESSAGE:
+        return await _decide_message(db, staff_id=staff_id, case=case, decision=decision, note=note)
+    if decision not in ("approve", "reject"):
+        raise ApiError(422, "invalid_decision", "Approve or reject this case.")
     if case.subject_type not in _CURRENT_TEXT:
         raise ApiError(409, "unsupported_subject", "Decide this case from its own queue.")
     current = (await db.execute(_CURRENT_TEXT[case.subject_type], {"id": case.subject_id})).one_or_none()
@@ -330,6 +446,7 @@ async def decide(
         subject_type="moderation_case",
         subject_id=case_id,
         payload={"subject_type": case.subject_type, "subject_id": str(case.subject_id), "decision": decision},
+        details={"note": note} if note else None,
     )
     await db.commit()
     return DecisionOut(id=case_id, status=outcome, subject_state=state)
