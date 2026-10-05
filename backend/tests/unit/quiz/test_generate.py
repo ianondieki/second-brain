@@ -91,5 +91,7 @@ async def test_each_page_is_framed_in_its_own_block_and_the_call_is_recorded() -
     for rule in ("exactly 5 multiple-choice questions", "exactly 4 distinct options", "never a URL", "named_people"):
         assert rule in system
     assert "at most 300 characters, an option at most 120, a why at most 600" in system
+    assert "a question may ask what a page specifies (an API's parameters" in system
+    assert "make no claim about any company's or organisation's market share, prices, customers" in system
     [entry] = client.ledger.entries
     assert (entry.task, entry.trace_id, entry.user_id, entry.org_id) == (generate.TASK, "quiz:test", None, None)

@@ -96,9 +96,11 @@ SYSTEM_PROMPT: Final = (
     " the pages and give that page's id as source_id (use only ids from the submission blocks, never a URL or"
     " another source); write a why of one to three sentences that a reader can check on that page; spread the"
     " questions over different pages and topics, and mix easy, medium and hard; ask about how the technology works,"
-    " never about a person, and name no person at all (list any name you use in named_people); make no claim about"
-    " a company, its products, prices, market or conduct; no trick questions, no 'all of the above' or 'none of the"
-    " above', no opinions; plain English, Latin letters, no emoji and no other scripts. A prompt has at most"
+    " never about a person, and name no person at all (list any name you use in named_people); a question may ask"
+    " what a page specifies (an API's parameters, an endpoint's behaviour, a standard's rule), even when a company"
+    " publishes the page, but make no claim about any company's or organisation's market share, prices, customers,"
+    " performance or conduct; no trick questions, no 'all of the above' or 'none of the above', no opinions; plain"
+    " English, Latin letters, no emoji and no other scripts. A prompt has at most"
     f" {MAX_PROMPT_CHARS} characters, an option at most {MAX_OPTION_CHARS}, a why at most {MAX_WHY_CHARS}."
 )
 

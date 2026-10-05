@@ -23,6 +23,11 @@ job (``bridge.quiz.run``) then tries once more and otherwise gives up for the da
      ("Dr Achieng", "Mr. Smith", "Bwana Otieno"). Residual: a person named without a title and not declared passes
      these checks; telling a private person's name from a technical term ("Ada", "Debian", "Linus") is not a rule
      code can keep, so the staff admin's approval of every set is the backstop (D-59).
+   A named organisation has no code check here: the prompt lets a question ask what a page specifies (Safaricom's
+   Daraja API parameters, a standard's rule) and forbids claims about an organisation's market, prices, customers,
+   performance or conduct, and the staff admin's approval of every set is the backstop. The research agent's D-45
+   rule (a named organisation needs an official cited source) does not apply: no excerpt is quoted, so there is no
+   cited text to check a claim against, and every page on the curated list is the publisher's own documentation.
 4. ``duplicate_prompt``: two questions of the draft with the same prompt hash.
 5. ``repeated_prompt``: a prompt hash drafted in the last ``quiz.no_repeat_days`` days (the caller passes them in).
 
