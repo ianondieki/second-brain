@@ -27,6 +27,7 @@ IMPORT_PATHS = [
     "bridge.jobs.scouts",
     "bridge.jobs.research",
     "bridge.jobs.expiry",
+    "bridge.jobs.saved_searches",
 ]
 
 app = App(connector=PsycopgConnector(conninfo=conninfo()), import_paths=IMPORT_PATHS)
