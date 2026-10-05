@@ -125,8 +125,8 @@ export function Thread({ engagementId, initial, today, locale, orgName, empty, c
                 <li key={message.id} className="flex flex-col gap-5">
                   {message.id === newFrom ? (
                     <p data-new-divider="" className="flex items-center gap-3 text-xs font-bold text-accent">
-                      <span aria-hidden="true" className="h-0.5 flex-1 rounded-full bg-accent" />
                       {t("newDivider")}
+                      <span aria-hidden="true" className="h-0.5 flex-1 rounded-full bg-accent" />
                     </p>
                   ) : null}
                   <MessageItem
@@ -313,7 +313,7 @@ function ReportControl({
     );
   }
   return (
-    <Button variant="link" className="-ml-1 self-start text-sm" aria-describedby={describedBy} onClick={onOpen} data-report="">
+    <Button variant="link" className="self-start text-sm" aria-describedby={describedBy} onClick={onOpen} data-report="">
       {t("report")}
     </Button>
   );

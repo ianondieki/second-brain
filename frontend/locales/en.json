@@ -1286,7 +1286,7 @@
       "oldest": "Oldest filed"
     },
     "message": {
-      "heading": "Reported message",
+      "heading": "What was written",
       "lead": "The one message this report shares. The rest of the thread stays with the engagement's parties.",
       "fromDeveloper": "Sent by the developer",
       "fromOrg": "Sent by the organisation",
