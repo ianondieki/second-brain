@@ -186,8 +186,9 @@ async def test_a_message_keeps_its_text_as_typed(owner_engine: AsyncEngine, app_
 
 async def test_contact_details_wait_for_first_contact(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
     """Given INTEREST_CONFIRMED (every member reads the thread; THREAT_MODEL I), When a party writes an email address
-    or a link, Then 422 contains_contact, also while the engagement is on hold from that stage (the thread stays
-    open for plain text); once first contact is made (CONTACT_MADE), the same text is posted."""
+    or a link, in the text or in a file's name, Then 422 contains_contact, also while the engagement is on hold from
+    that stage (the thread stays open for plain text); once first contact is made (CONTACT_MADE), the same text and
+    file are posted."""
     async with thread_at(owner_engine, app_engine) as thread:
         s, e = thread.seats, thread.engagement
         text = "Write to amina@example.com or see https://example.com/demo"
@@ -198,7 +199,13 @@ async def test_contact_details_wait_for_first_contact(owner_engine: AsyncEngine,
         assert code(await post(s.dev, e, text)) == (422, "contains_contact")
         await posted(s.dev, e, "Back next week; talk then.")
         await thread.tracker.ok(s.dev, "resume", {"reason": "Back early."})
+        named = await uploaded(s.dev, e, name="call amina on 0712 345 678.pdf")
+        plain = await uploaded(s.dev, e, name="pilot plan.pdf")
+        refused = await post(s.dev, e, "The plan, attached.", attachments=[plain, named])
+        assert code(refused) == (422, "contains_contact")
+        assert len((await posted(s.dev, e, "The plan, attached.", attachments=[plain]))["attachments"]) == 1
         await thread.tracker.ok(s.owner, "mark-contacted")
+        assert len((await posted(s.dev, e, "And the contact sheet.", attachments=[named]))["attachments"]) == 1
         assert (await posted(s.dev, e, text))["body"] == text
 
 

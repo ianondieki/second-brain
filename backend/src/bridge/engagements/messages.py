@@ -13,9 +13,12 @@ is also a member of the organisation). Under the caller's RLS throughout.
   row-level security refuses them, 403 ``cannot_post``); every member reads.
 - **What.** Plain text, 1 to 4,000 characters (``message_schemas.MessageBody``); before first contact (the stage, or
   the stage a side state returns to, is in ``state_machine.BEFORE_CONTACT``) no contact details or links, as for the
-  side states' notes (every member reads the thread: THREAT_MODEL I). Up to 5 staged uploads, each the caller's own,
-  scanned and clean (409 ``attachment_pending`` while a scan is pending, 422 otherwise), join the message in its
-  transaction. 60 messages per user per hour per engagement (``POSTS_PER_HOUR``; 429 with ``Retry-After``).
+  side states' notes (every member reads the thread: THREAT_MODEL I), in the text and in the files' names. Residual
+  (D-57): a file's content (a text file or a PDF holding a phone number) is not read for contact details, and a
+  number split or spelled out to dodge the detectors passes, as for the notes. Up to 5 staged uploads, each the
+  caller's own, scanned and clean (409 ``attachment_pending`` while a scan is pending, 422 otherwise), join the
+  message in its transaction. 60 messages per user per hour per engagement (``POSTS_PER_HOUR``; 429 with
+  ``Retry-After``).
 - **Record.** Append-only (the database); each post writes an audit event (ids and counts, never the text) and queues
   N18 (``message_notify``). The text never enters a payload, a log, an audit detail, a notification or an email.
 - **Files.** Staged, scanned, sent and downloaded through ``bridge.engagements.message_files``.
@@ -98,6 +101,7 @@ NOT_OPEN = "The thread opens once the organisation approves to proceed (Approved
 READ_ONLY = "This engagement has ended, so its thread is read-only."
 CANNOT_POST = "Viewers read the thread; ask a colleague who acts on this engagement to reply."
 STAGED_EXPIRED = "A file waited more than a day to be sent. Upload it again."
+CONTAINS_CONTACT_FILE = "A file's name holds contact details or a link, which are shared once first contact is made."
 CONTAINS_CONTACT = "Contact details and links are shared once first contact is made. Remove them from the message."
 
 
@@ -282,8 +286,10 @@ async def post_message(db: AsyncSession, party: Party, body: MessageBody) -> Mes
     engagement = await db.get(Engagement, engagement_id)
     if engagement is None:  # it was visible a moment ago (the insert's check)
         raise not_found()
-    await _no_contact_details(db, engagement, body.body)
-    files = await _attach(db, party, message_id, body.attachment_ids, sent_at=created_at)
+    before_contact = await _before_contact(db, engagement)
+    if before_contact and contact_codes(body.body):
+        raise ApiError(422, "contains_contact", CONTAINS_CONTACT)
+    files = await _attach(db, party, message_id, body.attachment_ids, sent_at=created_at, before_contact=before_contact)
     await audit(
         db,
         "engagement.message_posted",
@@ -339,20 +345,28 @@ async def _throttle(db: AsyncSession, party: Party, created_at: datetime) -> Non
     raise error
 
 
-async def _no_contact_details(db: AsyncSession, engagement: Engagement, body: str) -> None:
+async def _before_contact(db: AsyncSession, engagement: Engagement) -> bool:
+    """Whether the engagement's stage (in a side state, the stage it returns to) is before first contact, when every
+    member reads what the thread carries but only the named contact may learn the developer's details."""
     stage = engagement.state
     if stage in sm.RETURNING:
         paused = await entering_event(db, engagement.id, stage)
         stage = paused.from_state if paused is not None and paused.from_state is not None else stage
-    if stage in sm.BEFORE_CONTACT and contact_codes(body):
-        raise ApiError(422, "contains_contact", CONTAINS_CONTACT)
+    return stage in sm.BEFORE_CONTACT
 
 
 async def _attach(
-    db: AsyncSession, party: Party, message_id: UUID, ids: list[UUID], *, sent_at: datetime
+    db: AsyncSession,
+    party: Party,
+    message_id: UUID,
+    ids: list[UUID],
+    *,
+    sent_at: datetime,
+    before_contact: bool,
 ) -> list[MessageAttachmentOut]:
     """Join the caller's staged uploads to the message (in its transaction, and within ``STAGED_TTL`` of each upload,
-    as revision 0008 requires)."""
+    as revision 0008 requires); before first contact no file name may carry contact details or a link (the other
+    side reads the names in the thread)."""
     if not ids:
         return []
     a = EngagementMessageAttachment
@@ -371,6 +385,8 @@ async def _attach(
         raise ApiError(422, "attachment_infected", "A file did not pass the malware scan, so it cannot be sent.")
     if any(row.created_at < sent_at - STAGED_TTL for row in rows.values()):
         raise ApiError(422, "attachment_expired", STAGED_EXPIRED)
+    if before_contact and any(contact_codes(row.file_name) for row in rows.values()):
+        raise ApiError(422, "contains_contact", CONTAINS_CONTACT_FILE)
     try:
         result = await db.execute(
             update(a).where(*mine).values(message_id=message_id).execution_options(synchronize_session=False)
