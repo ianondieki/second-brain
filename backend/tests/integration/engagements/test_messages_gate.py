@@ -19,6 +19,7 @@ from bridge.notifications.email import FakeEmailProvider
 from tests.integration.engagements.api_world import db_today
 from tests.integration.engagements.thread_world import (
     Thread,
+    append,
     code,
     email_of,
     in_app,
@@ -170,3 +171,36 @@ async def test_the_history_tab_lists_both_sides_messages_without_their_text(
         assert names == {"developer": first["sender_name"], "org": second["sender_name"]}
         assert world.org_name not in names.values()
         assert "pilot plan" not in str(histories[0])
+
+
+async def test_a_public_entitys_procurement_route_opens_the_thread_at_contact_made(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Given UNDER_REVIEW, When a public entity takes the procurement route (3b), Then the thread stays closed (the
+    organisation 403, the developer not_open); once first contact is made on that route it opens for both."""
+    async with thread_at(owner_engine, app_engine, "UNDER_REVIEW") as thread:
+        s, e, world = thread.seats, thread.engagement, thread.world
+        await append(
+            owner_engine,
+            e,
+            actor=world.owner,
+            role="owner",
+            org=world.org,
+            to_state="PROCUREMENT_ROUTE",
+            command="procure",
+        )
+        await _org_refused(thread, s.owner)
+        await _developer_waits(thread)
+        await append(
+            owner_engine,
+            e,
+            actor=world.owner,
+            role="owner",
+            org=world.org,
+            to_state="CONTACT_MADE",
+            command="contacted",
+        )
+        assert (await read(s.owner, e))["status"] == "open"
+        await posted(s.owner, e, "Our procurement office will write to you.")
+        await posted(s.dev, e, "Thank you, I will watch for it.")
+        assert len((await read(thread.viewer, e))["items"]) == 2

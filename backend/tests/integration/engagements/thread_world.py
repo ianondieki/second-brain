@@ -184,16 +184,20 @@ async def email_of(owner_engine: AsyncEngine, user: UUID) -> str:
         return str((await conn.execute(text("SELECT email FROM users WHERE id = :u"), {"u": user})).scalar_one())
 
 
-async def end(owner_engine: AsyncEngine, world: World, engagement: UUID, state: str) -> None:
-    """Append the event that ends the engagement in ``state`` from where it is, written as bridge_app by the party
-    that ends it (the system for an expiry), as the tracker's schema tests do: DECLINED and TERMINATED have no API
-    path after stage 3 yet, and an expiry needs the job and the clock."""
-    actor, role, org, reason = {
-        "DECLINED": (world.signatory, "signatory", world.org, "NOT_PRIORITY"),
-        "WITHDRAWN": (world.developer, "developer", None, None),
-        "EXPIRED": (None, "system", None, "CONTACT_NOT_MADE"),
-        "TERMINATED": (world.owner, "owner", world.org, None),
-    }[state]
+async def append(
+    owner_engine: AsyncEngine,
+    engagement: UUID,
+    *,
+    actor: UUID | None,
+    role: str,
+    org: UUID | None,
+    to_state: str,
+    command: str,
+    reason: str | None = None,
+    bound: UUID | None = None,
+) -> None:
+    """Append one event from wherever the engagement is to ``to_state``, written as bridge_app by ``actor`` (bound
+    as ``bound`` for a system event), as the tracker's schema tests do, for the paths the API has no command for."""
     async with owner_engine.begin() as conn:
         here = (
             await conn.execute(text("SELECT state::text FROM engagements WHERE id = :e"), {"e": engagement})
@@ -201,7 +205,7 @@ async def end(owner_engine: AsyncEngine, world: World, engagement: UUID, state: 
         await conn.execute(text("SET LOCAL ROLE bridge_app"))
         await conn.execute(
             text("SELECT set_config('app.user_id', :u, true), set_config('app.org_id', :o, true)"),
-            {"u": str(actor or world.developer), "o": str(org) if org else ""},
+            {"u": str(actor or bound), "o": str(org) if org else ""},
         )
         await conn.execute(
             text(
@@ -215,10 +219,32 @@ async def end(owner_engine: AsyncEngine, world: World, engagement: UUID, state: 
                 "e": engagement,
                 "actor": actor,
                 "role": role,
-                "command": state.lower(),
+                "command": command,
                 "here": here,
-                "there": state,
+                "there": to_state,
                 "reason": reason,
                 "payload": json.dumps({}),
             },
         )
+
+
+async def end(owner_engine: AsyncEngine, world: World, engagement: UUID, state: str) -> None:
+    """End the engagement in ``state`` as the party that ends it (the system for an expiry, bound to the developer):
+    DECLINED and TERMINATED have no API path after stage 3 yet, and an expiry needs the job and the clock."""
+    actor, role, org, reason = {
+        "DECLINED": (world.signatory, "signatory", world.org, "NOT_PRIORITY"),
+        "WITHDRAWN": (world.developer, "developer", None, None),
+        "EXPIRED": (None, "system", None, "CONTACT_NOT_MADE"),
+        "TERMINATED": (world.owner, "owner", world.org, None),
+    }[state]
+    await append(
+        owner_engine,
+        engagement,
+        actor=actor,
+        role=role,
+        org=org,
+        to_state=state,
+        command=state.lower(),
+        reason=reason,
+        bound=world.developer,
+    )

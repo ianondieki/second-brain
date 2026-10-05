@@ -18,6 +18,7 @@ from bridge.engagements import message_files
 from bridge.engagements.models import MAX_MESSAGE_ATTACHMENT_BYTES
 from bridge.ids import uuid7
 from bridge.storage.scanner import EICAR
+from tests.integration.engagements.api_world import moved_clock
 from tests.integration.engagements.thread_world import (
     PDF,
     code,
@@ -221,3 +222,19 @@ async def test_uploads_are_checked_for_size_type_name_and_count(
         five = await posted(s.dev, e, "Five files.", attachments=staged[:5])
         assert len(five["attachments"]) == 5
         assert (await upload(s.dev, e)).status_code == 201  # five of the ten went out with the message
+
+
+async def test_a_file_staged_more_than_a_day_ago_is_not_sent(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Given a file staged two days ago (the shared clock moved), When its uploader sends it, Then 422
+    attachment_expired and the message is not posted; a fresh upload is sent."""
+    async with thread_at(owner_engine, app_engine) as thread:
+        s, e = thread.seats, thread.engagement
+        old = await uploaded(s.dev, e)
+        async with moved_clock(owner_engine) as advance:
+            await advance(2)
+            assert code(await post(s.dev, e, "The plan.", attachments=[old])) == (422, "attachment_expired")
+            assert (await read(s.dev, e))["items"] == []
+            fresh = await uploaded(s.dev, e)
+            assert len((await posted(s.dev, e, "The plan.", attachments=[fresh]))["attachments"]) == 1
