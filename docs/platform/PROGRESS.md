@@ -511,7 +511,18 @@ MINORs fixed. The backend: reviewer CHANGES_REQUIRED (one MAJOR: approving a lef
 streak) then PASS; security-reviewer PASS, two MINORs fixed. The screens: reviewer CHANGES_REQUIRED (one MAJOR: the
 board e2e assumed room in the top 20) then PASS; ux-reviewer PASS with eleven MINORs, all fixed before the merge.
 
-**Gate.** GATE_RESULTS
+**Gate.** Playwright on a fresh database (the stack reset at the backend merge, the merged frontend served with `next start`
+on :3000; mobile 360 and desktop, axe): 202 passed, 4 skipped, 2 failed on the first pass (`verify.spec.ts`'s
+registered certificate: `.env.e2e` still held the previous seed's certificate id because `demo.py e2e-env` needs the
+web container; refreshed from the database, the spec passed 14/14); the test-clock scenarios 4/4. Backend suite on the
+merged head: 4,981 passed (23.5 min). CodeQL run 271 on `f4dcd42`: exactly the eight D-42 findings. `pr.yml` run 335 on
+`f4dcd42`: Playwright with the clock scenarios, the demo story, frontend, legacy (Windows and Ubuntu) and hygiene
+green; scanners red on `npm audit` only (D-56); the informational legacy job red as before; the backend job
+BACKEND_CI. Design shots `docs/demo/screenshots/p22a/` (10 screens, 1440 and 375, light and dark, strict axe 0, ≤1
+primary, no sideways scroll; a fresh developer for the unplayed states, nothing changed on the demo's sets; the set
+page shows two flags left by the e2e run). JS budget and Lighthouse: scorecard "P22-A measurements" (every route under
+150,000 B; performance 97–99, accessibility 100). Demo seed check: two approved seeded sets, three attempts, Amina
+on the demo board (a demo caller sees the demo accounts' board; real accounts never see them). Traceability PASS.
 
 **Deviations.** (1) The sub-agents sign their commits as the model that wrote them (Opus 5.5) while the orchestrator's
 carry the session's attribution (Fable 5.1); every commit carries the session line. (2) Commits over ~300 lines: 0009's
