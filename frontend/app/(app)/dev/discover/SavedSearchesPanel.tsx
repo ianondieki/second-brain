@@ -68,7 +68,15 @@ export async function SavedSearchesPanel({
 
   return (
     <ClientStrings strings={await clientStrings(["savedSearches"])}>
-      <SavedSearches initial={rows} max={list.max} current={current} settingsHref="/settings/notifications" />
+      {/* Keyed by the search on screen: applying a saved search (or any filter) starts the strip afresh, closed and
+          with the list as the server read it. */}
+      <SavedSearches
+        key={discoverHref(query)}
+        initial={rows}
+        max={list.max}
+        current={current}
+        settingsHref="/settings/notifications"
+      />
     </ClientStrings>
   );
 }
