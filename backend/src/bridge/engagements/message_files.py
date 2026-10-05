@@ -133,7 +133,9 @@ async def precheck_upload(db: AsyncSession, party: Party, *, content_type: str) 
     """What an upload must pass before its body is read (the caller then ends the transaction, so nothing is held
     while the file streams in): the thread is open and the caller may post (the database decides again at the
     insert), the type is on the allow-list, fewer than ``STAGED_PER_ENGAGEMENT`` files wait unsent, and the limits
-    hold for at least one more byte."""
+    hold for at least one more byte. The limits come first: a refusal below is recorded and counts toward them, so
+    refused attempts stop at the hourly limit too (a 429 is never recorded)."""
+    await check_limits(db, party, size=0)
     current = await gate(db, party)  # the organisation before the thread opens: 403 thread_not_open
     if current.status is ThreadStatus.READ_ONLY:
         raise ApiError(409, "thread_read_only", READ_ONLY)
@@ -145,7 +147,6 @@ async def precheck_upload(db: AsyncSession, party: Party, *, content_type: str) 
         raise ApiError(422, "unsupported_file", attachment_problem(content_type, b"") or "Attach a supported file.")
     if await _unsent(db, party) >= STAGED_PER_ENGAGEMENT:
         raise _too_many_staged()
-    await check_limits(db, party, size=0)
 
 
 async def record_refusal(db: AsyncSession, party: Party, refused: ApiError) -> None:

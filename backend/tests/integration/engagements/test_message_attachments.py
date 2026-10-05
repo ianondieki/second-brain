@@ -261,3 +261,19 @@ async def test_thirty_uploads_an_hour_then_429_even_when_each_was_removed(
         assert limited.json()["detail"]["retry_after_seconds"] == int(limited.headers["Retry-After"])
         assert set(thread.store.objects) == stored
         assert (await upload(s.owner, e)).status_code == 201
+
+
+async def test_refused_attempts_stop_at_the_hourly_limit_and_are_never_recorded_past_it(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Given a party whose uploads are each refused before their body is read (a type off the allow-list), When they
+    try 30 times within the hour and then again, Then the 31st is 429 too_many_uploads and only the 30 refusals are
+    on the record: refused attempts can neither run unbounded nor grow the audit chain past the limit."""
+    async with thread_at(owner_engine, app_engine) as thread:
+        s, e = thread.seats, thread.engagement
+        for _ in range(message_files.UPLOADS_PER_HOUR):
+            refused = await upload(s.dev, e, b"PK", content_type="application/zip", name="a.zip")
+            assert code(refused) == (422, "unsupported_file")
+        limited = await upload(s.dev, e, b"PK", content_type="application/zip", name="a.zip")
+        assert code(limited) == (429, "too_many_uploads")
+        assert len(await _audits(owner_engine, message_files.REFUSED, e)) == message_files.UPLOADS_PER_HOUR
