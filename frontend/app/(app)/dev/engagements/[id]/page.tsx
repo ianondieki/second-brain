@@ -23,8 +23,11 @@ export default async function DeveloperEngagementPage({ params, searchParams }: 
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const found = await engagement((await params).id);
+  const { id } = await params;
   const query = await searchParams;
+  // The Messages tab is its own route; old links and the N18 notices (?tab=messages) land there.
+  if (query.tab === "messages") redirect(`${BASE_PATH}/${encodeURIComponent(id)}/messages`);
+  const found = await engagement(id);
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="engagements" />} wide>
       {found.ok ? (

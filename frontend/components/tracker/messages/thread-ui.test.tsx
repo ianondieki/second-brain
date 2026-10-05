@@ -1,7 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -10,9 +6,8 @@ import { message, thread } from "@/test/messages";
 import { ENGAGEMENT_ID } from "@/test/engagement";
 
 import type { UploadOptions } from "./calls";
-import { MessagesThread, preloadThread } from "./MessagesThread";
-import type { ThreadCalls, ThreadProps } from "./Thread";
-import type { Thread } from "./thread";
+import { Thread, type ThreadCalls, type ThreadProps } from "./Thread";
+import type { Thread as ThreadPage } from "./thread";
 
 // REQ-ENG-11 (AC-TRACK-9; docs/spec/06 6.9 "Messages tab", docs/spec/07 items 2, 4 and 6): the thread as the parties
 // see it: messages by day with sender, side and time, plain text with its line breaks and never a link, own messages
@@ -23,8 +18,7 @@ import type { Thread } from "./thread";
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }) }));
 
-beforeAll(async () => {
-  await preloadThread();
+beforeAll(() => {
   // jsdom has no <dialog> methods.
   HTMLDialogElement.prototype.showModal ??= function showModal(this: HTMLDialogElement) {
     this.setAttribute("open", "");
@@ -60,9 +54,9 @@ function fakeCalls(overrides: Partial<ThreadCalls> = {}): ThreadCalls {
   };
 }
 
-function renderThread(initial: Thread, calls: ThreadCalls = fakeCalls(), props: Partial<ThreadProps> = {}) {
+function renderThread(initial: ThreadPage, calls: ThreadCalls = fakeCalls(), props: Partial<ThreadProps> = {}) {
   const view = renderWithIntl(
-    <MessagesThread
+    <Thread
       engagementId={ENGAGEMENT_ID}
       initial={initial}
       today="2026-10-05"
@@ -159,8 +153,12 @@ describe("reporting a message", () => {
   it("asks for at least one reason, sends the chosen ones, and says what happens next", async () => {
     const { calls } = renderThread(thread({ items: [theirs] }));
     fireEvent.click(screen.getByRole("button", { name: "Report" }));
-    const sheet = document.querySelector("dialog")!;
-    expect(sheet.hasAttribute("open")).toBe(true);
+    // The sheet's code loads on the first press, then it opens as a modal.
+    const sheet = await waitFor(() => {
+      const found = document.querySelector("dialog[open]");
+      expect(found).not.toBeNull();
+      return found as HTMLDialogElement;
+    });
     expect(sheet.querySelectorAll("input[type=checkbox]")).toHaveLength(5);
     fireEvent.click(within(sheet).getByRole("button", { name: "Send the report" }));
     expect(sheet.textContent).toContain("Choose at least one reason.");
@@ -177,7 +175,11 @@ describe("reporting a message", () => {
   it("says a refusal inside the sheet", async () => {
     renderThread(thread({ items: [theirs] }), fakeCalls({ reportMessage: vi.fn(async () => ({ ok: false as const, refusal: "reportLimit" as const })) }));
     fireEvent.click(screen.getByRole("button", { name: "Report" }));
-    const sheet = document.querySelector("dialog")!;
+    const sheet = await waitFor(() => {
+      const found = document.querySelector("dialog[open]");
+      expect(found).not.toBeNull();
+      return found as HTMLDialogElement;
+    });
     fireEvent.click(within(sheet).getByLabelText("Abusive or threatening"));
     fireEvent.click(within(sheet).getByRole("button", { name: "Send the report" }));
     await waitFor(() => expect(sheet.textContent).toContain("You have reported the most messages allowed in a day. Try again tomorrow."));
@@ -202,13 +204,5 @@ describe("the composer in the thread", () => {
     expect(document.querySelector("[data-composer]")).toBeNull();
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
     expect(document.querySelector("[data-message='m-theirs']")).toBeTruthy();
-  });
-});
-
-describe("code splitting", () => {
-  it("never imports the thread's code into the tracker's own (it loads with the Messages tab)", () => {
-    const shim = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "MessagesThread.tsx"), "utf8");
-    expect(shim).not.toMatch(/^\s*import(?!\s+type\b)[^;]*?from\s+["']\.\/(Thread|Composer|calls)["']/m);
-    expect(shim).toContain('import("./Thread")');
   });
 });

@@ -6,14 +6,14 @@ import { InfoIcon } from "@/components/ui/status-icons";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import type { ThreadRead } from "./data";
-import { MessagesThread } from "./messages/MessagesThread";
+import { Thread } from "./messages/Thread";
 import { nairobiToday } from "./input";
 import type { Detail } from "./model";
 
 /**
  * The tracker's Messages tab (REQ-ENG-11, AC-TRACK-9; docs/spec/06 6.9, docs/spec/07 item 1: Tracker · Documents ·
  * Messages · History). Before INTEREST_CONFIRMED one sentence says when the thread opens, and nothing else (the
- * organisation cannot read it then). Open, the thread and its composer (a lazily loaded island). After the end, or for
+ * organisation cannot read it then). Open, the thread and its composer. After the end, or for
  * a member whose role cannot write, the thread stays readable and a sentence stands where the composer would be.
  */
 export async function MessagesTab({ detail, read }: { detail: Detail; read: ThreadRead }) {
@@ -46,7 +46,7 @@ export async function MessagesTab({ detail, read }: { detail: Detail; read: Thre
       data-thread-state={thread.status}
     >
       <ClientStrings strings={await clientStrings(["trackerMessages"])}>
-        <MessagesThread
+        <Thread
           engagementId={detail.id}
           initial={thread}
           today={detail.today ?? nairobiToday()}

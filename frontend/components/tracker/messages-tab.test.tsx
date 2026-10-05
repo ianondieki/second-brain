@@ -1,6 +1,10 @@
 import { cleanup, screen, within } from "@testing-library/react";
 import { createTranslator } from "next-intl";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
 import { detail } from "@/test/engagement";
@@ -12,7 +16,7 @@ import type { Me } from "@/lib/auth/routing";
 
 import type { ThreadRead } from "./data";
 import { EngagementScreen, type Tab } from "./EngagementScreen";
-import { preloadThread } from "./messages/MessagesThread";
+import { MessagesScreen } from "./MessagesScreen";
 import { MessagesTab } from "./MessagesTab";
 import type { Detail } from "./model";
 
@@ -42,9 +46,6 @@ vi.mock("./data", () => ({
 
 const ME = { user: { id: "u-dev" }, mfa: { enrolled: true } } as unknown as Me;
 
-beforeAll(async () => {
-  await preloadThread();
-});
 beforeEach(() => {
   read.current = { open: false };
 });
@@ -54,6 +55,10 @@ async function screenOf(d: Detail, tab: Tab) {
   return renderWithIntl(
     <>{await resolveServerTree(<EngagementScreen detail={d} me={ME} tab={tab} doc={null} basePath="/dev/engagements" />)}</>,
   );
+}
+
+async function messagesOf(d: Detail, basePath = "/dev/engagements", query = "") {
+  return renderWithIntl(<>{await resolveServerTree(<MessagesScreen detail={d} basePath={basePath} query={query} />)}</>);
 }
 
 async function tabOf(d: Detail) {
@@ -71,7 +76,7 @@ describe("the tab", () => {
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/dev/engagements/0199b000-0000-7000-8000-00000000e001",
       "/dev/engagements/0199b000-0000-7000-8000-00000000e001?tab=documents",
-      "/dev/engagements/0199b000-0000-7000-8000-00000000e001?tab=messages",
+      "/dev/engagements/0199b000-0000-7000-8000-00000000e001/messages",
       "/dev/engagements/0199b000-0000-7000-8000-00000000e001?tab=history",
     ]);
     const messages = links[2];
@@ -84,18 +89,35 @@ describe("the tab", () => {
     expect(document.querySelector("[data-unread]")).toBeNull();
     cleanup();
     read.current = { open: true, thread: thread() };
-    await screenOf(confirmed({ unread_messages: 2 }), "messages");
+    await messagesOf(confirmed({ unread_messages: 2 }));
     expect(document.querySelector("[data-unread]")).toBeNull();
+    const current = screen.getByRole("link", { name: "Messages" });
+    expect(current.getAttribute("aria-current")).toBe("page");
   });
 
-  it("makes Send the screen's one primary action while the composer is there", async () => {
+  it("makes Send the Messages route's one primary action; the turn card links to the Tracker tab's buttons", async () => {
     read.current = { open: true, thread: thread({ items: [message()] }) };
-    await screenOf(confirmed({ actions: ["send_nda", "withdraw"], awaiting: [{ command: "send_nda", party: "developer" }], whose_turn: ["developer"] }), "messages");
+    await messagesOf(
+      confirmed({ my_party: "org", actions: ["mark_contacted"], awaiting: [{ command: "mark_contacted", party: "org" }], whose_turn: ["org"] }),
+      "/org/engagements",
+      "?org=o1",
+    );
     const primaries = document.querySelectorAll("[data-primary]");
     expect(primaries).toHaveLength(1);
     expect(primaries[0].textContent).toBe("Send");
-    // The turn card's next step is still there, as a secondary button.
-    expect(within(document.querySelector<HTMLElement>("[data-actions]")!).getByRole("button", { name: "Send the mutual NDA" })).toBeTruthy();
+    expect(document.querySelector("[data-actions]")).toBeNull();
+    const toTracker = document.querySelector("[data-to-tracker]")!;
+    expect(toTracker.textContent).toBe("Take your next step on the Tracker tab");
+    expect(toTracker.getAttribute("href")).toBe("/org/engagements/0199b000-0000-7000-8000-00000000e001?org=o1");
+    expect(screen.getByRole("link", { name: "History" }).getAttribute("href")).toBe(
+      "/org/engagements/0199b000-0000-7000-8000-00000000e001?org=o1&tab=history",
+    );
+  });
+
+  it("offers no link to the buttons when the caller has none", async () => {
+    read.current = { open: true, thread: thread() };
+    await messagesOf(confirmed({ actions: [] }));
+    expect(document.querySelector("[data-to-tracker]")).toBeNull();
   });
 
   it("keeps the turn card's primary action on the other tabs", async () => {
@@ -148,5 +170,21 @@ describe("once open", () => {
     expect(document.querySelector("[data-composer]")).toBeNull();
     expect(document.querySelector("[data-thread-empty]")?.textContent).toBe("No messages were sent on this engagement.");
     expect(document.querySelector("[data-thread-closed='viewer']")?.textContent).toBe("Your role lets you read this thread but not write in it.");
+  });
+});
+
+describe("code splitting (docs/spec/07 item 5: 150 KB per route)", () => {
+  const source = (name: string) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), name), "utf8");
+  const imports = (text: string, from: string) =>
+    new RegExp(String.raw`^\s*import(?!\s+type\b)[^;]*?from\s+["']${from}["']`, "m").test(text);
+
+  it("keeps the thread out of the tracker's page and the tracker's buttons out of the Messages route", () => {
+    const tracker = source("EngagementScreen.tsx");
+    expect(imports(tracker, "./MessagesTab")).toBe(false);
+    expect(imports(tracker, "./messages/Thread")).toBe(false);
+    const messages = source("MessagesScreen.tsx");
+    expect(imports(messages, "./Actions")).toBe(false);
+    expect(imports(messages, "./EngagementScreen")).toBe(false);
+    expect(imports(source("TrackerFrame.tsx"), "./Actions")).toBe(false);
   });
 });

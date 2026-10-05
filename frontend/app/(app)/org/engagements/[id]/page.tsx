@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { engagement } from "@/components/tracker/data";
 import { asDocumentKind, asTab, EngagementScreen } from "@/components/tracker/EngagementScreen";
+import { withQuery } from "@/components/tracker/model";
 import { Refused } from "@/components/tracker/Refused";
 
 import { orgContext } from "../../data";
@@ -23,8 +25,14 @@ export async function generateMetadata({ params }: PageProps<"/org/engagements/[
  */
 export default async function OrganisationEngagementPage({ params, searchParams }: PageProps<"/org/engagements/[id]">) {
   const query = await searchParams;
+  const { id } = await params;
+  // The Messages tab is its own route; old links and the N18 notices (?tab=messages) land there, ?org= kept.
+  if (query.tab === "messages") {
+    const org: Record<string, string> = typeof query.org === "string" ? { org: query.org } : {};
+    redirect(withQuery(`${ENGAGEMENTS_PATH}/${encodeURIComponent(id)}/messages`, "", org));
+  }
   const { me, query: requested } = await orgContext(query.org);
-  const found = await engagement((await params).id);
+  const found = await engagement(id);
   // Links act for the engagement's own organisation, whatever ?org= said (the API decides access by it anyway).
   const orgParam = found.ok ? orgQuery(me.memberships, found.value.org_id) : requested;
   return (
