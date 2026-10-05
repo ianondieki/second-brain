@@ -369,7 +369,8 @@ class OrgShortlist(Base):
     """An organisation's shortlist (P21 track B, REQ-REPO-02; revision 0008): one row per (organisation, proposal),
     shared by its members. Every member reads it; members with a Tier-2 role (reviewer, signatory, admin) add, as
     themselves (``added_by``), a proposal that is in the organisation's Inbox (``app_org_sees_proposal``: pitched to
-    it, matched by its scout or answering its Brief), and remove one. ``added_at`` is the database's clock."""
+    it, matched by its scout or answering its Brief, and its author not an active member), and remove one.
+    ``added_at`` is the database's clock."""
 
     __tablename__ = "org_shortlist"
     __table_args__ = ({"info": {"tenancy": Tenancy.ORG, "tenant_column": "org_id"}},)

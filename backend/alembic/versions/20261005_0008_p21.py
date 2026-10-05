@@ -93,11 +93,15 @@ one row per (organisation, proposal). Every member reads (narrowed by ``app.org_
 (reviewer, signatory, admin) add as themselves (``added_by``) and remove. A proposal is added only while
 ``app_org_sees_proposal(org, proposal)`` (SECURITY DEFINER, EXECUTE bridge_app; the API calls it too, for its 404):
 the caller is a member of the organisation (narrowed by ``app.org_id``; false for anyone else, so it tells nobody
-what another organisation's Inbox holds) and the proposal is published and clear and is in the organisation's Inbox:
-pitched to it (a delivered tag), matched by its scout (``agent_matches``) or answering its Brief (the proposal's
-current version links a problem whose Brief is the organisation's). A row is ids and who added it when, nothing of the
-proposal: once its proposal is held or unpublished the row stays but leads nowhere (the proposals' RLS hides it from
-every member, the Inbox check is false, so it is not added back), and a Tier-2 member may remove it.
+what another organisation's Inbox holds) and the proposal is published and clear, its author is not an active member
+of the organisation (P10, the exclusion ``bridge.matching.matches`` applies to scout matches, here on all three
+paths: otherwise a member could tell that a pseudonymous developer joined the organisation by comparing the match view,
+unavailable, with a shortlist add, accepted) and it is in the organisation's Inbox: pitched to it (a delivered tag),
+matched by its scout (``agent_matches``) or answering its Brief (the proposal's current version links a problem whose
+Brief is the organisation's). A row is ids and who added it when, nothing of the proposal: once its proposal is held
+or unpublished the row stays but leads nowhere (the proposals' RLS hides it from every member, the Inbox check is
+false, so it is not added back), and a Tier-2 member may remove it. A row added before its author joined the
+organisation stays too; the Inbox check is false from then on, so it is not added back once removed.
 
 Saved searches (track C; tenancy USER): ``saved_searches`` (bridge_app: SELECT, INSERT without ``last_alerted_at``
 and ``created_at``, UPDATE of ``name``, ``alerts`` and ``last_alerted_at``, DELETE), the owner's only. A name of 1
@@ -129,7 +133,8 @@ Operating rules for the code that uses this schema:
   ``bridge.engagements.models.MESSAGE_REPORT_REASONS``); staff read a reported message only with
   ``app_reported_message(:case)``.
 - Call ``app_org_sees_proposal`` before adding to the shortlist (404 when false); a repeat add is a unique violation
-  (or ``ON CONFLICT DO NOTHING``).
+  (or ``ON CONFLICT DO NOTHING``). Show a shortlisted proposal only while the check is true, so the list never shows
+  what the match view hides (a held proposal, one whose author is an active member).
 - The purge job calls ``app_purge_stale_message_uploads(now)`` with no user bound and deletes the returned objects
   after it commits; the API sends a staged upload within 24 hours (it stages files as the message is written).
 - The alert job calls ``app_saved_searches_due(now)`` with no user bound, then acts per user in a session bound to
@@ -459,10 +464,12 @@ $$;
 
 -- Whether p_proposal is in p_org's Inbox (P21 track B, REQ-REPO-02): the caller is an active member of p_org (narrowed
 -- by app.org_id; false for anyone else, so nobody learns what another organisation's Inbox holds), and the proposal is
--- published and clear and was pitched to the organisation (a delivered tag), matched by its scout (agent_matches) or
--- answers its Brief (the proposal's current version links a problem whose Brief is the organisation's). The
--- shortlist's INSERT policy and the API (its 404) call it. SECURITY DEFINER: reads the tags, matches and Briefs
--- whatever the caller sees; returns the boolean only.
+-- published and clear, its author is not an active member of p_org (P10, as the scout matches' view: a proposal found
+-- before its author joined is unavailable on every Inbox path, so no member learns that a pseudonymous developer
+-- joined the organisation by comparing that view with a shortlist add), and it was pitched to the organisation (a
+-- delivered tag), matched by its scout (agent_matches) or answers its Brief (the proposal's current version links a
+-- problem whose Brief is the organisation's). The shortlist's INSERT policy and the API (its 404) call it. SECURITY
+-- DEFINER: reads the memberships, tags, matches and Briefs whatever the caller sees; returns the boolean only.
 CREATE FUNCTION app_org_sees_proposal(p_org uuid, p_proposal uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -471,6 +478,8 @@ AS $$
        AND EXISTS (
            SELECT 1 FROM public.proposals p
             WHERE p.id = p_proposal AND p.status = 'published' AND p.moderation_state = 'clear'
+              AND NOT EXISTS (SELECT 1 FROM public.memberships om
+                               WHERE om.org_id = p_org AND om.user_id = p.owner_id AND om.status = 'active')
               AND (EXISTS (SELECT 1 FROM public.tags t
                             WHERE t.proposal_id = p.id AND t.org_id = p_org AND t.status = 'delivered')
                    OR EXISTS (SELECT 1 FROM public.agent_matches m WHERE m.proposal_id = p.id AND m.org_id = p_org)
