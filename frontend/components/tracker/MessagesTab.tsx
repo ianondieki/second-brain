@@ -8,6 +8,7 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 
 import type { ThreadRead } from "./data";
 import { nairobiToday } from "./input";
+import { HashFocus } from "./messages/HashFocus";
 import { Thread } from "./messages/Thread";
 import { isFinished, type Detail } from "./model";
 
@@ -28,6 +29,7 @@ export async function MessagesTab({ detail, read, trackerHref }: { detail: Detai
   if (read.kind === "refused") {
     return (
       <Section {...frame} data-thread-state="refused">
+        <HashFocus fallback={MESSAGES_HEADING} />
         <EmptyState rule={false} data-refusal={read.refusal} sentence={t(`refused.${read.refusal}`)} action={t("messages.toTracker")} href={trackerHref} />
       </Section>
     );
@@ -36,6 +38,7 @@ export async function MessagesTab({ detail, read, trackerHref }: { detail: Detai
     const ended = isFinished(detail.state);
     return (
       <Section {...frame} data-thread-state="not_open">
+        <HashFocus fallback={MESSAGES_HEADING} />
         <EmptyState
           rule={false}
           data-thread-closed={ended ? "ended" : "not_open"}
@@ -55,7 +58,15 @@ export async function MessagesTab({ detail, read, trackerHref }: { detail: Detai
   const { thread } = read;
   const locale = await getLocale();
   const closed = thread.status === "read_only";
-  const note = closed ? t("messages.readOnly") : thread.can_post ? null : t("messages.viewer");
+  // An ended thread with nothing in it has nothing to read: its sentence says only that no message can be sent.
+  const empty = thread.items.length === 0 && !thread.next_cursor;
+  const note = closed
+    ? empty
+      ? t("messages.readOnlyEmpty")
+      : t("messages.readOnly")
+    : thread.can_post
+      ? null
+      : t("messages.viewer");
   return (
     <Section
       {...frame}
@@ -68,6 +79,7 @@ export async function MessagesTab({ detail, read, trackerHref }: { detail: Detai
       }
       data-thread-state={thread.status}
     >
+      <HashFocus fallback={MESSAGES_HEADING} />
       <ClientStrings strings={await clientStrings(["trackerMessages"])}>
         <Thread
           engagementId={detail.id}

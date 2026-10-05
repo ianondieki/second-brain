@@ -153,6 +153,12 @@ describe("before the thread opens (AC-TRACK-9)", () => {
     expect(document.querySelector("[data-thread], textarea, [data-primary]")).toBeNull();
   });
 
+  it("shows 'Open the Tracker tab' once, in the state, not again in the turn card", async () => {
+    await messagesOf(orgTurn({ state: "UNDER_REVIEW", stage_group: "review" }), "/org/engagements");
+    expect(document.querySelector("[data-to-tracker]")).toBeNull();
+    expect(screen.getAllByRole("link", { name: "Open the Tracker tab" })).toHaveLength(1);
+  });
+
   it("tells the organisation the same about its own step", async () => {
     await messagesOf(detail({ my_party: "org", my_roles: ["reviewer"] }), "/org/engagements");
     expect(document.querySelector("[data-thread-closed='not_open'] p")?.textContent).toBe(
@@ -196,11 +202,13 @@ describe("once open", () => {
     );
   });
 
-  it("says an empty ended thread in one sentence", async () => {
+  it("says an empty ended thread in one sentence, which does not offer anything to read", async () => {
     read.current = { kind: "open", thread: thread({ status: "read_only", can_post: false }) };
     await messagesOf(detail({ state: "WITHDRAWN", stage_group: null, due: null }));
     expect(document.querySelector("[data-thread-empty]")).toBeNull();
-    expect(document.querySelectorAll("[data-thread-closed]")).toHaveLength(1);
+    const closed = document.querySelectorAll("[data-thread-closed]");
+    expect(closed).toHaveLength(1);
+    expect(closed[0].textContent).toBe("This engagement has ended, so no new messages can be sent.");
   });
 
   it("tells a member whose role only reads that there are no messages yet, and why there is no composer", async () => {

@@ -108,7 +108,7 @@ export function HistoryList({
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold [overflow-wrap:anywhere] text-ink">
                     {messageLink ? (
-                      <Link href={messageLink(message.id)} className={titleLinkClass}>
+                      <Link href={messageLink(message.id)} className={`${titleLinkClass} -my-2.5 inline-block py-2.5`}>
                         {t("history.message", { name: message.sender_name })}
                       </Link>
                     ) : (

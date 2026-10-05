@@ -23,9 +23,10 @@ export async function MessagesScreen({ detail, basePath, query = "" }: { detail:
   ]);
   const href = engagementHref(basePath, detail.id);
   const trackerHref = tabHref(href, query, "tracker");
-  // The way to the turn card's buttons, only when the next step is the viewer's.
+  // The way to the turn card's buttons, only when the next step is the viewer's and the tab does not already show it
+  // (a thread not open yet, or a refused read, ends in the same "Open the Tracker tab").
   const turn = turnOf(detail, detail.my_party);
-  const yours = turn.kind === "you" || turn.kind === "both";
+  const yours = (turn.kind === "you" || turn.kind === "both") && read.kind === "open";
   return (
     <>
       <TrackerHeader detail={detail} basePath={basePath} query={query} />

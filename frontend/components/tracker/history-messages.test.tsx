@@ -49,6 +49,9 @@ describe("the History tab", () => {
     const link = document.querySelector("[data-history-message='org'] h3 a")!;
     expect(link.textContent).toBe("Message from Rita Wanjiru");
     expect(link.getAttribute("href")).toBe("/dev/engagements/e/messages#message-msg-2");
+    // A 44 px tap area (WCAG 2.5.8): padding taken back by a negative margin, the text unmoved.
+    expect(link.className).toContain("py-2.5");
+    expect(link.className).toContain("-my-2.5");
   });
 
   it("reads as before without messages", () => {
