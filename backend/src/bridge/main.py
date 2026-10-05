@@ -42,6 +42,7 @@ from bridge.problems.briefs_router import router as briefs_router
 from bridge.problems.router import router as problems_router
 from bridge.profiles.router import public_router as consents_router
 from bridge.profiles.router import router as me_router
+from bridge.profiles.saved_searches import router as saved_searches_router
 from bridge.proposals.assistant_router import router as assistant_router
 from bridge.proposals.disclosure_router import router as disclosure_router
 from bridge.proposals.originality_router import router as originality_router
@@ -158,6 +159,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(scouts_router)
     app.include_router(matches_router)
     app.include_router(discover_router)
+    app.include_router(saved_searches_router)
     app.include_router(notifications_router)
     clock_router = dev_clock_router(settings)
     if clock_router is not None:
