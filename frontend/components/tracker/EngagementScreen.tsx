@@ -23,10 +23,11 @@ import type { Me } from "@/lib/auth/routing";
 import { Actions } from "./Actions";
 import { documentLinkClass } from "./document-link";
 import { ContactReveal } from "./ContactReveal";
-import { engagementDocument, engagementHistory, orgMembers } from "./data";
+import { engagementDocument, engagementHistory, engagementThread, orgMembers } from "./data";
 import { Agreements, ContactPerson, Payments, Signatures } from "./Deal";
 import { Endorsements } from "./Endorsements";
 import { HistoryList } from "./HistoryList";
+import { MessagesTab } from "./MessagesTab";
 import {
   actionItems,
   counterpartLine,
@@ -50,7 +51,7 @@ import { Stepper } from "./Stepper";
 import { Tier2Section } from "./Tier2Section";
 import { WhoseTurn } from "./WhoseTurn";
 
-export const TABS = ["tracker", "documents", "history"] as const;
+export const TABS = ["tracker", "documents", "messages", "history"] as const;
 export type Tab = (typeof TABS)[number];
 
 
@@ -87,15 +88,20 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
   const finished = isFinished(detail.state) && detail.state !== "CLOSED";
   // An ended engagement has no stage group: its history says which stage it left (a paused one has `paused_from`).
   // The history and, for an approver, the organisation's members are read together.
-  const [history, members] = await Promise.all([
+  const [history, members, thread] = await Promise.all([
     tab === "history" || finished || (detail.stage_group === null && !detail.paused_from)
       ? engagementHistory(detail.id)
       : null,
     detail.actions.includes("approve") ? orgMembers(detail.org_id) : undefined,
+    tab === "messages" ? engagementThread(detail.id) : null,
   ]);
   const steps = stepperSteps({ ...detail, left: stageLeft(detail.state, history?.events) });
   const href = `${basePath}/${encodeURIComponent(detail.id)}`;
-  const items = actionItems(detail);
+  // On the Messages tab with its composer, Send is the screen's one primary action (docs/spec/07 item 2): the turn
+  // card's buttons stay, none of them marked primary.
+  const composing = thread?.open === true && thread.thread.can_post;
+  const items = actionItems(detail).map((item) => (composing ? { ...item, primary: false } : item));
+  const unread = detail.unread_messages ?? 0;
   const finalPayment = detail.payments.find((p) => p.milestone_id === null) ?? null;
   // The side state's facts the sheets quote: the open question (answer_info) and a hold's end (resume).
   const side = sideBanner(detail);
@@ -195,7 +201,24 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         className="mt-10 max-w-3xl"
         items={TABS.map((name) => ({
           key: name,
-          label: t(`tabs.${name}`),
+          // The unread count (words for screen readers, the figure for the eye), except on the open Messages tab.
+          label:
+            name === "messages" && unread > 0 && tab !== "messages" ? (
+              <>
+                {t("tabs.messages")}
+                <span
+                  aria-hidden="true"
+                  data-unread={unread}
+                  className="ml-1.5 inline-grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1.5 text-xs font-bold text-on-accent tabular-nums"
+                >
+                  {unread}
+                </span>
+                {" "}
+                <span className="sr-only">{t("unread", { count: unread })}</span>
+              </>
+            ) : (
+              t(`tabs.${name}`)
+            ),
           href: withQuery(href, query, name === "tracker" ? {} : { tab: name }),
         }))}
       />
@@ -203,6 +226,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
       <div className="mt-6 flex max-w-3xl flex-col gap-10">
         {tab === "tracker" ? <TrackerTab detail={detail} me={me} /> : null}
         {tab === "documents" ? <DocumentsTab detail={detail} doc={doc} href={href} query={query} /> : null}
+        {tab === "messages" && thread ? <MessagesTab detail={detail} read={thread} /> : null}
         {tab === "history" && history ? <HistoryList history={history} notes={detail.notes} /> : null}
       </div>
     </ClientStrings>
