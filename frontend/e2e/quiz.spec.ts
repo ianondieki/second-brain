@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 
 import { signUpDeveloper } from "./support/accounts";
 import { checkWidths, shot } from "./support/discover-scene";
@@ -9,6 +9,11 @@ import { OWNER_DATABASE_URL, signUpOrg } from "./support/tracker-scene";
 // board and finds their handle on it; an organisation member has no quiz on their Home and is sent home from
 // /dev/quiz as from every developer route. Strict axe, one primary action and no sideways scroll on every state, at
 // 360 and 375 px (mobile-360) and 1440 px (desktop). E2E_SHOTS_DIR saves screenshots at 375 and 1440 px.
+//
+// Precondition: an approved set for the current Nairobi day on the stack's clock (the demo seed writes one for the
+// day it runs, `make demo` / `make demo-reset`). Without it GET /api/me/quiz/today answers 404 no_quiz and the
+// developer test is skipped with that reason. The new developer opts back out of the board at the end, so repeated
+// runs never fill this week's top 20.
 
 const SERVER_STEP = { timeout: 20_000 };
 
@@ -22,6 +27,16 @@ const ANSWERS: Record<string, number> = {
   "Under Rust's ownership rules, how many owners can a value have at one time?": 0,
 };
 
+/** Turns the board opt-in on or off through the API (the screen's switch is tested above it). */
+async function setOptIn(request: APIRequestContext, value: boolean) {
+  const csrf = (await (await request.get("/api/auth/csrf")).json()) as { csrf_token: string };
+  const response = await request.put("/api/me/quiz/settings", {
+    headers: { "X-CSRF-Token": csrf.csrf_token },
+    data: { leaderboard_opt_in: value },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+}
+
 test.describe("Today's five", () => {
   test.setTimeout(150_000);
 
@@ -30,6 +45,12 @@ test.describe("Today's five", () => {
     const profile = await page.request.get("/api/me/profile");
     expect(profile.ok()).toBeTruthy();
     const { handle } = (await profile.json()) as { handle: string };
+    const today = await page.request.get("/api/me/quiz/today");
+    if (today.status() === 404) {
+      const { detail } = (await today.json()) as { detail: { code: string } };
+      test.skip(detail.code === "no_quiz", "No approved quiz set for today's Nairobi day on this stack (seed the demo first)");
+    }
+    expect(today.status()).toBe(200);
 
     // Home: the card, not played yet: one sentence and Play (Home keeps its own one primary action).
     const card = page.locator("[data-home=quiz]");
@@ -88,7 +109,15 @@ test.describe("Today's five", () => {
     await expect(card.locator("[data-quiz-card=played]")).toContainText("today · 1-day streak");
     await checkWidths(page, info);
 
-    // The board: not on it until the switch is on; then the handle is listed and marked as the caller's.
+    // The board: not on it until the switch is on; then ranked, and listed (marked as theirs) when in the top 20.
+    try {
+      await board(page, info, handle);
+    } finally {
+      await setOptIn(page.request, false);
+    }
+  });
+
+  async function board(page: Page, info: TestInfo, handle: string) {
     await page.goto("/dev/quiz/board");
     await expect(page.getByRole("heading", { name: "This week", level: 1 })).toBeVisible();
     await expect(page.locator("[data-board-line]")).toHaveAttribute("data-board-line", "join");
@@ -98,14 +127,20 @@ test.describe("Today's five", () => {
     await optIn.click();
     await expect(page.getByRole("status").filter({ hasText: "You are on the board." })).toBeVisible(SERVER_STEP);
     await expect(page.locator("[data-board-line]")).toHaveAttribute("data-board-line", "ranked", SERVER_STEP);
+    await expect(page.locator("[data-board-line]")).toHaveText(/^You: \d+ points?, rank \d+$/);
+    const week = (await (await page.request.get("/api/me/quiz/leaderboard")).json()) as { me: { rank: number | null } };
     const mine = page.locator(`[data-board-row="${handle}"]`);
-    await expect(mine).toBeVisible(SERVER_STEP);
-    await expect(mine).toHaveAttribute("data-you", "");
+    if (week.me.rank !== null && week.me.rank <= 20) {
+      await expect(mine).toBeVisible(SERVER_STEP);
+      await expect(mine).toHaveAttribute("data-you", "");
+    } else {
+      await expect(mine).toHaveCount(0);
+    }
     await page.reload();
     await expect(optIn).toHaveAttribute("aria-checked", "true");
     await checkWidths(page, info);
     await shot(page, info, "quiz-board");
-  });
+  }
 
   test("an organisation member has no quiz and is sent home from it", async ({ page }, info) => {
     expect(OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL makes the organisation E2").toBeTruthy();
