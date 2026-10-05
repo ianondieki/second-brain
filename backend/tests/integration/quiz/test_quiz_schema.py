@@ -53,6 +53,7 @@ from tests.integration.quiz.schema_world import (
     owner_attempt,
     owner_set,
     people,
+    qualify,
     question,
     scores,
 )
@@ -317,6 +318,7 @@ async def test_three_developers_flags_pull_a_question_and_every_attempt_is_resco
         today = await free_day(conn)
         set_id, questions = await approved(conn, today, p.admin)
         _, later = await draft(conn, today + timedelta(days=1))
+        await qualify(conn, today, [p.developer, p.other, p.third, p.fourth])
         assert await attempt(conn, set_id, p.developer, list(KEY)) == 5
         assert await attempt(conn, set_id, p.other, [0, 2, 3, 0, 1]) == 4  # wrong on question 1
         assert await attempt(conn, set_id, p.third, [None] * 5) == 0
@@ -413,6 +415,7 @@ async def test_a_staff_restore_is_never_overturned_by_flags(owner_engine: AsyncE
         p = await people(conn)
         today = await free_day(conn)
         set_id, questions = await approved(conn, today, p.admin)
+        await qualify(conn, today, [p.developer, p.other, p.third, p.fourth])
         for user in (p.developer, p.other, p.third, p.fourth):
             await attempt(conn, set_id, user, list(KEY))
         status = "SELECT status, restored_at IS NOT NULL AS restored FROM quiz_questions WHERE id = :q"
@@ -438,6 +441,39 @@ async def test_a_staff_restore_is_never_overturned_by_flags(owner_engine: AsyncE
         await t.expect(
             conn, "UPDATE quiz_questions SET restored_at = NULL WHERE id = :q", "never undone", q=questions[1]
         )
+
+
+async def test_only_flags_of_verified_accounts_with_a_history_pull_a_question(owner_engine: AsyncEngine) -> None:
+    """Flags count towards the automatic pull only from accounts with a verified email and three finished attempts on
+    sets of earlier days: three fresh accounts, an unverified one with a history and a verified one with two earlier
+    attempts (and today's) pull nothing, though every flag is kept for staff; the third counted flag pulls it."""
+    async with t.as_app(owner_engine) as conn:
+        p = await people(conn)
+        today = await free_day(conn)
+        set_id, questions = await approved(conn, today, p.admin)
+        await t.as_owner(conn)
+        fresh = [await developer(conn, f"fresh{n}") for n in range(3)]
+        unverified, short = await developer(conn, "unverified"), await developer(conn, "short")
+        await qualify(conn, today, [p.developer, p.other, unverified])
+        await t.run(conn, "UPDATE users SET email_verified_at = NULL WHERE id = :u", u=unverified)
+        for back in (1, 2):
+            past, _ = await owner_set(conn, today - timedelta(days=back))
+            await owner_attempt(conn, past, short)
+        await t.run(conn, "UPDATE users SET email_verified_at = now() WHERE id = :u", u=short)
+        flaggers = [*fresh, unverified, short, p.developer, p.other]
+        for user in flaggers:
+            await attempt(conn, set_id, user, list(KEY))
+        for user in flaggers[:5]:
+            assert await flag(conn, user, questions[0]) is False
+        assert await flag(conn, p.developer, questions[0]) is False  # one counted flag
+        assert await flag(conn, p.other, questions[0]) is False  # two
+        await t.act(conn, p.admin)
+        assert await t.run(conn, "SELECT count(*) FROM quiz_flags WHERE question_id = :q", q=questions[0]) == 7
+        assert await t.run(conn, "SELECT status FROM quiz_questions WHERE id = :q", q=questions[0]) == "live"
+        await t.as_owner(conn)
+        await qualify(conn, today + timedelta(days=-3), [p.third])  # days 7 to 9 before today
+        await attempt(conn, set_id, p.third, list(KEY))
+        assert await flag(conn, p.third, questions[0]) is True  # the third counted flag
 
 
 async def test_at_most_ten_flags_a_nairobi_day_per_developer(owner_engine: AsyncEngine) -> None:

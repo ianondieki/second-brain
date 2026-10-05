@@ -75,14 +75,14 @@ async def people(conn: AsyncConnection) -> People:
 
 
 async def free_day(conn: AsyncConnection, *, offset_days: int = 120) -> date:
-    """As the owner, in this transaction only: move the shared clock ahead to a Nairobi day with no set within a week
-    before its Monday or two weeks after (other tests of the session may have committed sets), and return it."""
+    """As the owner, in this transaction only: move the shared clock ahead to a Nairobi day with no set within two
+    weeks before its Monday or two weeks after (other tests of the session may have committed sets), and return it."""
     for days in range(offset_days, 358, 9):
         await t.run(conn, "UPDATE test_clock SET enabled = true, clock_offset = make_interval(days => :d)", d=days)
         today: date = await t.run(conn, "SELECT app_nairobi_today()")
         monday = today - timedelta(days=today.weekday())
         busy = "SELECT EXISTS (SELECT 1 FROM quiz_sets WHERE quiz_date BETWEEN :a AND :b)"
-        if not await t.run(conn, busy, a=monday - timedelta(days=7), b=monday + timedelta(days=13)):
+        if not await t.run(conn, busy, a=monday - timedelta(days=14), b=monday + timedelta(days=13)):
             return today
     raise AssertionError("no free quiz day within the test clock's reach")
 
@@ -162,6 +162,16 @@ async def owner_attempt(
         user=user,
         answers=answers or [None] * 5,
     )
+
+
+async def qualify(conn: AsyncConnection, today: date, users: list[UUID]) -> None:
+    """As the owner: make ``users`` accounts whose flags count towards an automatic pull (a verified email and three
+    finished attempts on sets of earlier days: seeded sets 4 to 6 days before ``today``)."""
+    for back in (4, 5, 6):
+        past, _ = await owner_set(conn, today - timedelta(days=back))
+        for user in users:
+            await owner_attempt(conn, past, user)
+    await t.run(conn, "UPDATE users SET email_verified_at = now() WHERE id = ANY(:u)", u=users)
 
 
 async def scores(conn: AsyncConnection, set_id: UUID) -> dict[UUID, int]:

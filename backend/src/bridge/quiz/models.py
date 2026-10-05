@@ -21,8 +21,9 @@ One set of five multiple-choice questions per Nairobi day, drafted by the nightl
   staff admin reads a set's attempts in aggregate through ``app_quiz_set_stats(set)``.
 - A flag is filed only through ``app_flag_question(question, reason, note)``: by a developer who played the set
   (insufficient_privilege otherwise: 403 ``play_first``), once per developer per question, at most 10 a Nairobi day,
-  on a live question of an approved set; the third distinct developer's flag pulls the question (reason
-  ``three_flags``) and rescores the set.
+  on a live question of an approved set; three counted flags (from accounts with a verified email and at least 3
+  attempts on sets of earlier days) pull the question (reason ``three_flags``) and rescore the set, unless staff
+  restored it.
 - ``quiz_profiles`` is the developer's own row (leaderboard opt-in and the streak, kept in code at finish time). The
   weekly board reads other developers only through ``app_quiz_board()``, and only of the caller's kind: real accounts
   for a real caller, demo accounts for a demo caller.

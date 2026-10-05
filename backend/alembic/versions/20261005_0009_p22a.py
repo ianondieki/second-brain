@@ -77,8 +77,10 @@ listed in ``FUNCTION_GRANTS``):
   pulled); once per developer and question (unique_violation, constraint
   ``uq_quiz_flags_question_id_user_id``); at most 10 a Nairobi day per developer (program_limit_exceeded; serialised
   per developer by an advisory lock). Locks the set FOR UPDATE, inserts the flag and, when the question then has 3
-  flags or more (from distinct developers: one flag per developer) and staff never restored it (``restored_at`` is
-  NULL), pulls it (``pulled_reason = 'three_flags'``) and rescores the set; ``pulled`` says so. A staff restore is
+  counted flags or more (one per developer; a flag counts only from an account with a verified email and at least 3
+  finished attempts on sets of earlier days, so throwaway accounts cannot pull a question; every flag still reaches
+  the staff queue) and staff never restored it (``restored_at`` is NULL), pulls it (``pulled_reason =
+  'three_flags'``) and rescores the set; ``pulled`` says so. A staff restore is
   final for the flags: neither later flags nor a count that falls (a deleted account's flags) and rises again pull it.
 - ``app_rescore_quiz_set(set)`` -> attempts whose score changed: staff admin, or a job with no user bound (a repair);
   an unknown set no_data_found. The flag and staff paths rescore through the internal ``quiz_rescore_set(set)``
@@ -399,10 +401,12 @@ $$;
 -- A developer flags a live question of an approved set (D-59) they played (a finished attempt on its set: accounts
 -- that never played cannot brigade a question out), once per question, at most 10 a Nairobi day (fixed here: no caller
 -- names the limit), a reason code and an optional note. A caller who is not a developer reads no question, so for them
--- the question does not exist. Once a question has 3 flags (one per developer, so three distinct developers who
--- played) it is pulled with the reason 'three_flags' and the set rescored in the same transaction, unless staff ever
--- restored it (restored_at): a staff decision is not overturned by flags, however many come or go (a deleted account's
--- flags go with it, so a count may fall and rise again). Serialised per set (FOR UPDATE) and per developer (an
+-- the question does not exist. Once a question has 3 counted flags (one per developer) it is pulled with the reason
+-- 'three_flags' and the set rescored in the same transaction, unless staff ever restored it (restored_at): a staff
+-- decision is not overturned by flags, however many come or go (a deleted account's flags go with it, so a count may
+-- fall and rise again). A flag counts towards the pull only from an account with a verified email and at least 3
+-- finished attempts on sets of earlier days (fresh throwaway accounts cannot pull a question); every flag is kept for
+-- the staff queue. Serialised per set (FOR UPDATE) and per developer (an
 -- advisory lock; the count then reads every committed flag at READ COMMITTED, the application's level).
 CREATE FUNCTION app_flag_question(p_question uuid, p_reason text, p_note text)
     RETURNS TABLE (flag_id uuid, pulled boolean)
@@ -412,6 +416,7 @@ AS $$
 DECLARE
     v_user uuid := public.app_user_id();
     v_set uuid;
+    v_day date;
     v_flag uuid;
     v_question public.quiz_questions%ROWTYPE;
 BEGIN
@@ -424,7 +429,8 @@ BEGIN
         RAISE EXCEPTION 'app_flag_question: a reason of wrong_answer, unclear, outdated or other, and a note of 1'
             ' to 300 characters or none' USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    SELECT q.set_id INTO v_set FROM public.quiz_questions q JOIN public.quiz_sets s ON s.id = q.set_id
+    SELECT q.set_id, s.quiz_date INTO v_set, v_day
+      FROM public.quiz_questions q JOIN public.quiz_sets s ON s.id = q.set_id
      WHERE q.id = p_question AND s.status = 'approved';
     IF NOT FOUND THEN
         RAISE EXCEPTION 'app_flag_question: no question of an approved set with that id'
@@ -452,7 +458,10 @@ BEGIN
     INSERT INTO public.quiz_flags (id, question_id, user_id, reason, note)
     VALUES (v_flag, p_question, v_user, p_reason, p_note);
     IF v_question.restored_at IS NULL
-       AND (SELECT count(*) FROM public.quiz_flags f WHERE f.question_id = p_question) >= 3 THEN
+       AND (SELECT count(*) FROM public.quiz_flags f JOIN public.users u ON u.id = f.user_id
+             WHERE f.question_id = p_question AND u.email_verified_at IS NOT NULL
+               AND (SELECT count(*) FROM public.quiz_attempts a JOIN public.quiz_sets e ON e.id = a.set_id
+                     WHERE a.user_id = f.user_id AND e.quiz_date < v_day) >= 3) >= 3 THEN
         UPDATE public.quiz_questions
            SET status = 'pulled', pulled_at = public.app_clock_now(), pulled_reason = 'three_flags'
          WHERE id = p_question;
