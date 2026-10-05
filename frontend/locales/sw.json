@@ -2738,7 +2738,10 @@
       "infected": "Faili hili halikupita ukaguzi wa programu hasidi, kwa hivyo halikuhifadhiwa.",
       "tooMany": "Ujumbe mmoja unaweza kubeba hadi faili {max}.",
       "staged": "Faili nyingi mno zinasubiri kutumwa hapa. Tuma au ondoa baadhi kwanza.",
-      "limit": "Umepakia faili nyingi hapa hivi karibuni. Jaribu tena baada ya dakika {count}.",
+      "limit": {
+        "one": "Umepakia faili nyingi hapa hivi karibuni. Jaribu tena baada ya dakika {count}.",
+        "other": "Umepakia faili nyingi hapa hivi karibuni. Jaribu tena baada ya dakika {count}."
+      },
       "storage": "Faili haziwezi kupakiwa kwa sasa. Jaribu tena baada ya muda mfupi.",
       "failed": "Upakiaji haukukamilika. Ondoa faili na uliambatishe tena."
     },
@@ -2757,7 +2760,10 @@
       "notOpen": "Mazungumzo bado hayajafunguliwa.",
       "readOnly": "Ushirikiano huu umeisha, kwa hivyo hakuna ujumbe mpya unaoweza kutumwa.",
       "cannotPost": "Jukumu lako linakuruhusu kusoma mazungumzo haya lakini si kuandika.",
-      "tooMany": "Umetuma jumbe nyingi hapa katika saa iliyopita. Jaribu tena baada ya dakika {count}.",
+      "tooMany": {
+        "one": "Umetuma jumbe nyingi hapa katika saa iliyopita. Jaribu tena baada ya dakika {count}.",
+        "other": "Umetuma jumbe nyingi hapa katika saa iliyopita. Jaribu tena baada ya dakika {count}."
+      },
       "conflict": "Kuna kilichobadilika. Pakia upya ukurasa na ujaribu tena.",
       "network": "Ujumbe haukutumwa. Angalia muunganisho wako na ujaribu tena.",
       "generic": "Ujumbe haukutumwa. Jaribu tena."

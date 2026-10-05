@@ -2738,7 +2738,10 @@
       "infected": "This file did not pass the malware scan, so it was not kept.",
       "tooMany": "A message can carry up to {max} files.",
       "staged": "Too many files are waiting to be sent here. Send or remove some first.",
-      "limit": "You have uploaded many files here recently. Try again in {count} minutes.",
+      "limit": {
+        "one": "You have uploaded many files here recently. Try again in {count} minute.",
+        "other": "You have uploaded many files here recently. Try again in {count} minutes."
+      },
       "storage": "Files cannot be uploaded just now. Try again in a moment.",
       "failed": "The upload did not finish. Remove the file and attach it again."
     },
@@ -2757,7 +2760,10 @@
       "notOpen": "The thread is not open yet.",
       "readOnly": "This engagement has ended, so no new messages can be sent.",
       "cannotPost": "Your role lets you read this thread but not write in it.",
-      "tooMany": "You have sent many messages here in the last hour. Try again in {count} minutes.",
+      "tooMany": {
+        "one": "You have sent many messages here in the last hour. Try again in {count} minute.",
+        "other": "You have sent many messages here in the last hour. Try again in {count} minutes."
+      },
       "conflict": "Something changed. Reload the page and try again.",
       "network": "The message was not sent. Check your connection and try again.",
       "generic": "The message was not sent. Try again."

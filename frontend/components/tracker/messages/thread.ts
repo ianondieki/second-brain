@@ -208,3 +208,22 @@ export function refusedAttachmentId(error: unknown): string | null {
   const id = detailOf(error)?.attachment_id;
   return typeof id === "string" ? id : null;
 }
+
+/**
+ * The plural form of a count in the page's language ("one" or "other"; English and Swahili use only these). The
+ * thread's strings are formatted for the browser without the ICU runtime (lib/i18n/client-strings.ts), so a sentence
+ * with a count has one key per form, chosen here by Intl.PluralRules.
+ */
+export function pluralForm(count: number, locale = "en"): "one" | "other" {
+  return new Intl.PluralRules(locale).select(count) === "one" ? "one" : "other";
+}
+
+/** The key of a post refusal's sentence: "refusal.tooMany.one" / ".other" by the minutes, else "refusal.<kind>". */
+export function postRefusalKey(kind: PostRefusal, count: number, locale = "en") {
+  return kind === "tooMany" ? (`refusal.tooMany.${pluralForm(count, locale)}` as const) : (`refusal.${kind}` as const);
+}
+
+/** The key of a file problem's sentence: "file.limit.one" / ".other" by the minutes, else "file.<problem>". */
+export function fileProblemKey(problem: FileProblem, count: number, locale = "en") {
+  return problem === "limit" ? (`file.limit.${pluralForm(count, locale)}` as const) : (`file.${problem}` as const);
+}

@@ -108,6 +108,16 @@ describe("the case page", () => {
     expect(screen.getByRole("button", { name: "Dismiss" }).hasAttribute("data-primary")).toBe(true);
   });
 
+  it("quotes markup in a reported message as text: no element made, no link, line breaks kept", async () => {
+    const raw = "<img src=x onerror=alert(1)><b>hi</b> https://x.example\nsecond line";
+    await page(report({ message: { ...report().message!, body: raw } }));
+    const quoted = document.querySelector<HTMLElement>("[data-message-body]")!;
+    expect(quoted.textContent).toBe(raw);
+    expect(quoted.querySelector("img, b, a")).toBeNull();
+    expect(quoted.children).toHaveLength(0);
+    expect(quoted.textContent?.split("\n")).toHaveLength(2);
+  });
+
   it("says why a moderator cannot decide their own report, without the buttons", async () => {
     await page(report({ actions: [], blocked: "own_content" }));
     expect(document.querySelector("[data-blocked='own_content']")?.textContent).toBe(

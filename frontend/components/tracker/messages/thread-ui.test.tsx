@@ -103,6 +103,17 @@ describe("the thread", () => {
     expect(within(own).queryByRole("button", { name: "Report" })).toBeNull();
   });
 
+  it("renders markup in a message as the text it is: no element made, no link, line breaks kept", () => {
+    const raw = "<img src=x onerror=alert(1)><b>hi</b> https://x.example\nsecond line";
+    renderThread(thread({ items: [message({ id: "m-markup", body: raw })] }));
+    const body = document.querySelector<HTMLElement>("[data-message='m-markup'] [data-body]")!;
+    expect(body.textContent).toBe(raw);
+    expect(body.querySelector("img, b, a")).toBeNull();
+    expect(body.children).toHaveLength(0);
+    expect(body.className).toContain("whitespace-pre-wrap");
+    expect(body.textContent?.split("\n")).toEqual(["<img src=x onerror=alert(1)><b>hi</b> https://x.example", "second line"]);
+  });
+
   it("lists a sent file with its size and status, and opens it through a signed link", async () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });
@@ -170,6 +181,20 @@ describe("reporting a message", () => {
     const said = await screen.findByText("Reported. A moderator will review this message; it stays in the thread meanwhile.");
     expect(said.closest("[role=status]")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Report" })).toBeNull();
+  });
+
+  it("says a second report of the same message is the one already filed", async () => {
+    renderThread(thread({ items: [theirs] }), fakeCalls({ reportMessage: vi.fn(async () => ({ ok: true as const, created: false })) }));
+    fireEvent.click(screen.getByRole("button", { name: "Report" }));
+    const sheet = await waitFor(() => {
+      const found = document.querySelector("dialog[open]");
+      expect(found).not.toBeNull();
+      return found as HTMLDialogElement;
+    });
+    fireEvent.click(within(sheet).getByLabelText("Spam"));
+    fireEvent.click(within(sheet).getByRole("button", { name: "Send the report" }));
+    const said = await screen.findByText("You already reported this message. A moderator will review it.");
+    expect(said.closest("[data-reported='reportedAgain']")).toBeTruthy();
   });
 
   it("says a refusal inside the sheet", async () => {

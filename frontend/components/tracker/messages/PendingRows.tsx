@@ -7,7 +7,7 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { AlertIcon, CheckIcon, ClockIcon } from "@/components/ui/status-icons";
 
 import { FileIcon } from "./FileIcon";
-import { fileSize, maxMegabytes, type FileProblem, type Limits, type PostRefusal } from "./thread";
+import { fileProblemKey, fileSize, maxMegabytes, postRefusalKey, type FileProblem, type Limits, type PostRefusal } from "./thread";
 
 // The composer's file rows (REQ-ENG-11), loaded with the first file a person chooses (Composer.tsx).
 
@@ -51,8 +51,12 @@ function PendingRow({ file, locale, limits, onRemove }: { file: Pending; locale:
     file.status === "uploading" ? t("status.uploading", { value: file.progress }) : t(`status.${file.status}`);
   const problem = file.problem
     ? (file.problem in FILE_KEYS
-        ? t(`file.${file.problem as FileProblem}`, { value: maxMegabytes(limits), max: limits.max_attachments, count: file.minutes ?? 1 })
-        : t(`refusal.${file.problem as PostRefusal}`, { count: file.minutes ?? 1, max: limits.max_attachments }))
+        ? t(fileProblemKey(file.problem as FileProblem, file.minutes ?? 1, locale), {
+            value: maxMegabytes(limits),
+            max: limits.max_attachments,
+            count: file.minutes ?? 1,
+          })
+        : t(postRefusalKey(file.problem as PostRefusal, file.minutes ?? 1, locale), { count: file.minutes ?? 1, max: limits.max_attachments }))
     : null;
   const nameId = `${file.key}-name`;
   return (
@@ -77,7 +81,7 @@ function PendingRow({ file, locale, limits, onRemove }: { file: Pending; locale:
             </span>
           </span>
         </span>
-        <Button variant="link" className="shrink-0" aria-describedby={nameId} onClick={onRemove}>
+        <Button variant="link" className="shrink-0" aria-describedby={nameId} onClick={onRemove} data-remove={file.key}>
           {t("remove")}
         </Button>
       </div>

@@ -164,5 +164,43 @@ describe("the composer", () => {
     await waitFor(() => expect(row.getAttribute("data-status")).toBe("ready"));
   });
 
-});
+  it("moves focus after Remove to the next row's Remove, then to Attach files when no row is left", async () => {
+    renderComposer();
+    fireEvent.change(document.querySelector("input[type=file]")!, {
+      target: { files: [new File(["a"], "one.txt", { type: "text/plain" }), new File(["b"], "two.txt", { type: "text/plain" })] },
+    });
+    await waitFor(() => expect(document.querySelectorAll("[data-pending-file][data-status='ready']")).toHaveLength(2));
+    const first = document.querySelector<HTMLElement>("[data-pending-file='one.txt']")!;
+    fireEvent.click(within(first).getByRole("button", { name: "Remove" }));
+    const second = document.querySelector<HTMLElement>("[data-pending-file='two.txt']")!;
+    await waitFor(() => expect(document.activeElement).toBe(within(second).getByRole("button", { name: "Remove" })));
+    fireEvent.click(within(second).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Attach files" })));
+    expect(document.activeElement?.tagName).not.toBe("INPUT");
+  });
 
+  it("lets a file being scanned finish when it is removed, then deletes what was staged", async () => {
+    let answer: () => void = () => {};
+    const uploadFile = vi.fn<ThreadCalls["uploadFile"]>(
+      (_id, file, options) =>
+        new Promise((resolve) => {
+          options.onProgress?.(100); // every byte sent: the API is scanning
+          answer = () => resolve({ ok: true, file: { id: "staged-late", file_name: file.name, content_type: "text/plain", size_bytes: 1, sha256: "0", av_status: "clean" } });
+        }),
+    );
+    const { calls } = renderComposer(LIMITS, fakeCalls({ uploadFile }));
+    fireEvent.change(document.querySelector("input[type=file]")!, { target: { files: [new File(["a"], "late.txt", { type: "text/plain" })] } });
+    const row = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-pending-file='late.txt'][data-status='scanning']");
+      expect(found).toBeTruthy();
+      return found!;
+    });
+    const signal = vi.mocked(uploadFile).mock.calls[0][2].signal!;
+    fireEvent.click(within(row).getByRole("button", { name: "Remove" }));
+    expect(signal.aborted).toBe(false);
+    expect(document.querySelector("[data-pending-file]")).toBeNull();
+    await act(async () => answer());
+    expect(calls.removeStaged).toHaveBeenCalledWith(ENGAGEMENT_ID, "staged-late");
+    expect(document.querySelector("[data-pending-file]")).toBeNull();
+  });
+});

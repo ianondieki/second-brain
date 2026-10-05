@@ -18,6 +18,7 @@ import {
   contentTypeOf,
   fileProblem,
   maxMegabytes,
+  postRefusalKey,
   type Limits,
   type Message,
   type PostRefusal,
@@ -53,6 +54,9 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState("");
   const picker = useRef<HTMLInputElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  // Files removed while the API scanned them: the upload finishes, then its staged record is deleted.
+  const discarded = useRef(new Set<string>());
   const alert = useRef<HTMLDivElement>(null);
   const uploads = useRef(new Map<string, AbortController>());
   const counter = useRef(0);
@@ -88,6 +92,11 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
     });
     uploads.current.delete(key);
     if (controller.signal.aborted) return;
+    if (discarded.current.delete(key)) {
+      const staged = outcome.ok ? outcome.file.id : (outcome.attachmentId ?? null);
+      if (staged) void calls.removeStaged(engagementId, staged);
+      return;
+    }
     if (outcome.ok) {
       update(key, { status: "ready", id: outcome.file.id, progress: 100 });
       setSaid(t("fileStatus", { name: file.name, value: t("status.ready") }));
@@ -124,12 +133,24 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
   }
 
   function remove(file: Pending) {
-    uploads.current.get(file.key)?.abort();
-    uploads.current.delete(file.key);
+    if (file.status === "uploading") {
+      // Not every byte has reached the API, so it has kept nothing: the request can stop.
+      uploads.current.get(file.key)?.abort();
+      uploads.current.delete(file.key);
+    } else if (file.status === "scanning") {
+      // The API holds the file while it scans: let it answer, then delete what it staged (upload above).
+      discarded.current.add(file.key);
+    }
+    const index = files.findIndex((f) => f.key === file.key);
+    const next = files[index + 1] ?? files[index - 1];
     setFiles((now) => now.filter((f) => f.key !== file.key));
     if (file.id) void calls.removeStaged(engagementId, file.id);
     setRefusal(null);
-    picker.current?.focus();
+    // Focus goes to the next row's Remove, or to Attach files once no row is left (never to the hidden input).
+    requestAnimationFrame(() => {
+      const target = next ? `[data-remove="${next.key}"]` : "[data-attach]";
+      form.current?.querySelector<HTMLElement>(target)?.focus();
+    });
   }
 
   async function send(event: FormEvent<HTMLFormElement>) {
@@ -156,10 +177,14 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
   }
 
   const refusalText = (kind: PostRefusal, minutes?: number) =>
-    t(`refusal.${kind}`, { max: kind === "tooLong" ? limits.max_chars : limits.max_attachments, count: minutes ?? 1 });
+    t(postRefusalKey(kind, minutes ?? 1, locale), {
+      max: kind === "tooLong" ? limits.max_chars : limits.max_attachments,
+      count: minutes ?? 1,
+    });
 
   return (
     <form
+      ref={form}
       noValidate
       onSubmit={(event) => void send(event)}
       data-composer=""
