@@ -4,7 +4,7 @@
   open; its uploader alone reads, scans and deletes it while staged; it joins only its uploader's own message, only
   clean, at most 5 per message; once sent every party reads it and it never changes or goes (but by the owner, the
   room left for D-54's erasure). Its file is 1 byte to 20 MB with a SHA-256, a file name without a path or control
-  character, and an object key of ids only.
+  character, and its own object key, ``messages/<engagement>/<id>`` (never another object of the bucket).
 - A read marker is a party's own: inserted, upserted and read by its user only, on an engagement they are a party of,
   at any stage.
 
@@ -31,6 +31,7 @@ UPLOAD = (
     " size_bytes, sha256, object_key, av_status) VALUES (:id, :e, :by, :name, 'application/pdf', :size, :sha, :key,"
     " CAST(:status AS av_status))"
 )
+TABLE = "engagement_message_attachments"
 SEND = "UPDATE engagement_message_attachments SET message_id = :m WHERE id = ANY(:ids) AND message_id IS NULL"
 SEEN = "SELECT count(*) FROM engagement_message_attachments WHERE engagement_id = :e"
 MAX_BYTES = 20 * 1024 * 1024
@@ -148,16 +149,16 @@ async def test_who_may_upload_and_what_an_upload_is(owner_engine: AsyncEngine) -
             ({"name": "plan\\v2.pdf"}, "file_name_valid"),
             ({"name": "plan\x07.pdf"}, "file_name_valid"),
             ({"name": "x" * 256}, "file_name_valid"),
-            ({"key": "messages/Pilot Plan.pdf"}, "object_key_ids_only"),
-            ({"key": "/messages/x"}, "object_key_ids_only"),
-            ({"key": "m" * 201}, "object_key_ids_only"),
+            ({"key": f"messages/{engagement}/Pilot Plan.pdf"}, "object_key_is_its_own"),
+            ({"key": "/messages/x"}, "object_key_is_its_own"),
+            ({"key": "m" * 201}, "object_key_is_its_own"),
         ):
             params = upload_params(engagement, p.developer) | overrides
             await t.expect(conn, UPLOAD, f"ck_engagement_message_attachments_{constraint}", **params)
         largest = upload_params(engagement, p.developer, size=MAX_BYTES, name="Pilot plan (final) v2.pdf")
         await t.run(conn, UPLOAD, **largest)
-        again = upload_params(engagement, p.developer) | {"key": largest["key"]}
-        await t.expect(conn, UPLOAD, "uq_engagement_message_attachments_object_key", **again)
+        again = upload_params(engagement, p.developer) | {"key": largest["key"]}  # another upload's object
+        await t.expect(conn, UPLOAD, "ck_engagement_message_attachments_object_key_is_its_own", **again)
         await t.append(conn, engagement, p.developer, "developer", "withdraw", "INTEREST_CONFIRMED", "WITHDRAWN")
         await t.expect(conn, UPLOAD, READ_ONLY, **upload_params(engagement, p.developer))
         await t.as_owner(conn)
@@ -165,6 +166,35 @@ async def test_who_may_upload_and_what_an_upload_is(owner_engine: AsyncEngine) -
         await t.act(conn, q.developer)
         early = await t.engage(conn, q)
         await t.expect(conn, UPLOAD, OPENS, **upload_params(early, q.developer))
+
+
+async def test_an_upload_names_only_its_own_object(owner_engine: AsyncEngine) -> None:
+    """The object key is the row's own, ``messages/<engagement>/<id>`` in the uuid text form, so an upload never names
+    another object of the bucket: a proposal's file (``attachments/<proposal>/<attachment>``, Tier-2 included),
+    another engagement's or another upload's, a deeper path, or the same ids spelt otherwise; for the owner neither."""
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await opened(conn)
+        params = upload_params(engagement, p.developer)
+        upload_id = params["id"]
+        foreign = (
+            f"attachments/{p.proposal}/{uuid7()}",  # bridge.proposals.editor.object_key: a proposal's file
+            f"messages/{uuid7()}/{upload_id}",  # another engagement's
+            f"messages/{engagement}/{uuid7()}",  # another upload's
+            f"messages/{engagement}/{upload_id}/x",
+            f"messages/{engagement.hex}/{upload_id.hex}",
+            f"messages/{str(engagement).upper()}/{str(upload_id).upper()}",
+        )
+        for role in ("app", "owner"):
+            if role == "app":
+                await t.act(conn, p.developer)
+            else:
+                await t.as_owner(conn)
+            for key in foreign:
+                await t.expect(conn, UPLOAD, f"ck_{TABLE}_object_key_is_its_own", **(params | {"key": key}))
+        await t.act(conn, p.developer)
+        await t.run(conn, UPLOAD, **params)
+        own = "SELECT object_key FROM engagement_message_attachments WHERE id = :id"
+        assert await t.run(conn, own, id=upload_id) == f"messages/{engagement}/{upload_id}"
 
 
 async def test_at_most_five_attachments_per_message(owner_engine: AsyncEngine) -> None:

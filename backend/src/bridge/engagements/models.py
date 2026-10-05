@@ -299,6 +299,11 @@ MAX_FILE_NAME_CHARS = 255
 MESSAGE_POSTING_ORG_ROLES = frozenset({"owner", "admin", "reviewer", "signatory", "finance"})
 
 
+def message_attachment_key(engagement_id: UUID, attachment_id: UUID) -> str:
+    """The object key of a thread attachment, the only one its row accepts (CHECK ``object_key_is_its_own``)."""
+    return f"messages/{engagement_id}/{attachment_id}"
+
+
 class EngagementMessage(IdMixin, Base):
     """One message of an engagement's thread (REQ-ENG-11; revision 0008). Parties only: the developer and the members
     of the organisation (narrowed by ``app.org_id``) read every message, viewers included; staff never read the thread
@@ -337,8 +342,9 @@ class EngagementMessageAttachment(IdMixin, Base):
     post uploads it as themselves (``message_id`` NULL) while the thread is open; its uploader alone reads, scans
     (``av_status`` from ``pending_upload``/``pending_scan`` to a final verdict) and deletes it while it is staged. It
     joins only its uploader's own message, in the transaction that inserts the message, and only ``clean``; at most
-    5 per message. Once sent every party reads it and it never changes or goes. The object key holds ids only (never
-    the file name); ``created_at`` is the database's clock."""
+    5 per message. Once sent every party reads it and it never changes or goes. The object key is the row's own,
+    ``message_attachment_key(engagement_id, id)`` (ids only, never the file name; the CHECK refuses any other);
+    ``created_at`` is the database's clock."""
 
     __tablename__ = "engagement_message_attachments"
     __table_args__ = (
@@ -354,8 +360,9 @@ class EngagementMessageAttachment(IdMixin, Base):
         ),
         CheckConstraint(f"size_bytes BETWEEN 1 AND {MAX_MESSAGE_ATTACHMENT_BYTES}", name="size_limit"),
         CheckConstraint(SHA256_SIZE.format(column="sha256"), name="sha256_length"),
+        # The row's own object (ids only), never another of the bucket: see message_attachment_key().
         CheckConstraint(
-            "object_key ~ '^[a-z0-9][a-z0-9/_-]*$' AND char_length(object_key) <= 200", name="object_key_ids_only"
+            "object_key = 'messages/' || engagement_id::text || '/' || id::text", name="object_key_is_its_own"
         ),
         CheckConstraint("message_id IS NULL OR av_status = 'clean'", name="attached_only_when_clean"),
         VIA_ENGAGEMENT,
@@ -559,4 +566,5 @@ __all__ = [
     "Milestone",
     "PaymentRecord",
     "Signature",
+    "message_attachment_key",
 ]

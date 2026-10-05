@@ -62,8 +62,9 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
   deleted, but by the owner (room for D-54's erasure). Every party reads a sent attachment. At most 5 per message
   (``engagement_message_attachments_cap``, AFTER INSERT OR UPDATE OF message_id, every role; check_violation with
   constraint name ``engagement_message_attachments_at_most_5``). Each is 1 byte to 20 MB with its SHA-256; the object
-  key holds ids only (``[a-z0-9/_-]``, no file name); the file name is 1 to 255 characters without a control
-  character or a path separator.
+  key is the row's own, ``messages/<engagement_id>/<id>`` in the uuid text form (CHECK ``object_key_is_its_own``: ids
+  only, no file name, and never another object of the bucket, such as a proposal's Tier-2 file under
+  ``attachments/``); the file name is 1 to 255 characters without a control character or a path separator.
 - ``engagement_message_reads`` (USER; bridge_app: SELECT, INSERT, UPDATE of ``last_read_at``): one row per party
   and engagement, the user's own, on an engagement they are a party of.
 - The report (D-57 (4)): ``app_report_message(message, reasons, daily_limit)`` (SECURITY DEFINER, EXECUTE bridge_app)
@@ -167,6 +168,8 @@ AV_STATUS = ("pending_upload", "pending_scan", "clean", "infected", "failed")
 REDACTED = "'[redacted]'"  # D-54: the one body a message may be changed to
 MESSAGE_BODY = "body ~ '[^[:space:]]' AND char_length(body) <= 4000"
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+# An upload's object is its own: messages/<engagement>/<id> (the uuid text form), never another object of the bucket.
+OBJECT_KEY = "object_key = 'messages/' || engagement_id::text || '/' || id::text"
 SAVED_SEARCH_VIEWS = ("problems", "briefs")
 
 # moderation_cases (revision 0002): bridge_app's INSERT policy, as it was and narrowed (restored on downgrade).
@@ -729,10 +732,7 @@ def _create_tables() -> None:
             name=op.f("ck_engagement_message_attachments_size_limit"),
         ),
         sa.CheckConstraint("octet_length(sha256) = 32", name=op.f("ck_engagement_message_attachments_sha256_length")),
-        sa.CheckConstraint(
-            "object_key ~ '^[a-z0-9][a-z0-9/_-]*$' AND char_length(object_key) <= 200",
-            name=op.f("ck_engagement_message_attachments_object_key_ids_only"),
-        ),
+        sa.CheckConstraint(OBJECT_KEY, name=op.f("ck_engagement_message_attachments_object_key_is_its_own")),
         sa.CheckConstraint(
             "message_id IS NULL OR av_status = 'clean'",
             name=op.f("ck_engagement_message_attachments_attached_only_when_clean"),
