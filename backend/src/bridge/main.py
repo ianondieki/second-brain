@@ -47,6 +47,7 @@ from bridge.proposals.disclosure_router import router as disclosure_router
 from bridge.proposals.originality_router import router as originality_router
 from bridge.proposals.pitch_router import router as pitch_router
 from bridge.proposals.router import router as proposals_router
+from bridge.proposals.shortlist_router import router as shortlist_router
 from bridge.provenance.router import router as provenance_router
 from bridge.tenancy.router import router as orgs_router
 
@@ -147,6 +148,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(assistant_router)
     app.include_router(originality_router)
     app.include_router(disclosure_router)
+    app.include_router(shortlist_router)
     app.include_router(problems_router)
     app.include_router(briefs_router)
     app.include_router(engagements_router)
