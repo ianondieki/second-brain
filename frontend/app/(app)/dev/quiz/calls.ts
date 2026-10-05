@@ -5,13 +5,15 @@ import { answersBody, finishProblem, flagNote, flagOutcome, type FinishProblem, 
 // The browser's quiz calls (same-origin /api, CSRF header added by the client). Each settles into what the screen
 // says, never a thrown error: a thrown fetch (offline, reset) is "network".
 
+export type OptInOutcome = "ok" | "signedOut" | "failed";
+
 export type FinishOutcome = { ok: true } | { ok: false; problem: FinishProblem };
 
 export interface QuizCalls {
   finish: (setId: string, chosen: readonly (number | null)[], elapsedMs: number) => Promise<FinishOutcome>;
   flag: (questionId: string, reason: FlagReason, note: string) => Promise<FlagOutcome>;
-  /** The board opt-in; true when the API kept it. */
-  optIn: (value: boolean) => Promise<boolean>;
+  /** The board opt-in: kept, refused because the session ended (401), or not kept. */
+  optIn: (value: boolean) => Promise<OptInOutcome>;
 }
 
 export function quizCalls(client: ApiClient = api): QuizCalls {
@@ -40,9 +42,9 @@ export function quizCalls(client: ApiClient = api): QuizCalls {
     async optIn(value) {
       try {
         const { response } = await client.PUT("/api/me/quiz/settings", { body: { leaderboard_opt_in: value } });
-        return response.ok;
+        return response.ok ? "ok" : response.status === 401 ? "signedOut" : "failed";
       } catch {
-        return false;
+        return "failed";
       }
     },
   };

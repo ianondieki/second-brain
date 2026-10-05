@@ -18,7 +18,7 @@ export function OptIn({ initial, calls: given }: { initial: boolean; calls?: Qui
   const calls = useRef(given ?? quizCalls()).current;
   const [on, setOn] = useState(initial);
   const [status, setStatus] = useState("");
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<"signedOut" | "failed" | null>(null);
   const [busy, setBusy] = useState(false);
   const [, startRefresh] = useTransition();
 
@@ -27,13 +27,13 @@ export function OptIn({ initial, calls: given }: { initial: boolean; calls?: Qui
     const next = !on;
     setOn(next);
     setBusy(true);
-    setFailed(false);
+    setFailed(null);
     setStatus("");
-    const kept = await calls.optIn(next);
+    const outcome = await calls.optIn(next);
     setBusy(false);
-    if (!kept) {
+    if (outcome !== "ok") {
       setOn(!next);
-      setFailed(true);
+      setFailed(outcome);
       return;
     }
     setStatus(next ? t("optIn.joined") : t("optIn.left"));
@@ -68,7 +68,7 @@ export function OptIn({ initial, calls: given }: { initial: boolean; calls?: Qui
       </p>
       {failed ? (
         <p role="alert" className="text-sm text-error">
-          {t("optIn.failed")}
+          {t(`optIn.${failed}`)}
         </p>
       ) : null}
       <p role="status" className="text-sm text-ok empty:hidden">

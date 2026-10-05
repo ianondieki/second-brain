@@ -8,6 +8,7 @@ import { isNoQuiz, type QuizBoard, type QuizCardState, type QuizToday } from "./
 // so a hung API ends in the route's error page (or, on Home, in a Home without the card) instead of a page that
 // never renders.
 const TIMEOUT_MS = 5000;
+const HOME = "/dev";
 
 async function options() {
   return { headers: await forwardHeaders(), signal: AbortSignal.timeout(TIMEOUT_MS), cache: "no-store" as const };
@@ -31,19 +32,24 @@ export async function quizCard(): Promise<QuizCardState> {
   return null;
 }
 
-/** /dev/quiz: today's set, or "none" (404 no_quiz). Anything else is the route's error page. */
+/**
+ * /dev/quiz: today's set, or "none" (404 no_quiz). Any other 404 (an account the quiz is not for, such as staff with
+ * a developer profile) goes back to Home, never the error page; anything else is the route's error page.
+ */
 export async function quizToday(): Promise<{ kind: "set"; today: QuizToday } | { kind: "none" }> {
   const { data, error, response } = await serverApi().GET("/api/me/quiz/today", await options());
   if (data) return { kind: "set", today: data };
   if (response.status === 401) redirect("/login");
   if (isNoQuiz(response.status, error)) return { kind: "none" };
+  if (response.status === 404) redirect(HOME);
   throw new Error(`GET /api/me/quiz/today answered ${response.status}`);
 }
 
-/** /dev/quiz/board: this week's board and the caller's own numbers. */
+/** /dev/quiz/board: this week's board and the caller's own numbers; a 404 (the quiz is not for them) goes to Home. */
 export async function quizBoard(): Promise<QuizBoard> {
   const { data, response } = await serverApi().GET("/api/me/quiz/leaderboard", await options());
   if (data) return data;
   if (response.status === 401) redirect("/login");
+  if (response.status === 404) redirect(HOME);
   throw new Error(`GET /api/me/quiz/leaderboard answered ${response.status}`);
 }

@@ -72,12 +72,19 @@ describe("the quiz page's and the board's reads", () => {
     await expect(quizToday()).rejects.toThrow("NEXT_REDIRECT /login");
   });
 
+  it("sends an account the quiz is not for (any other 404) back to Home, never the error page", async () => {
+    GET.mockResolvedValueOnce(status(404, "not_found"));
+    await expect(quizToday()).rejects.toThrow("NEXT_REDIRECT /dev");
+    GET.mockResolvedValueOnce(status(404, "not_found"));
+    await expect(quizBoard()).rejects.toThrow("NEXT_REDIRECT /dev");
+  });
+
   it("reads this week's board", async () => {
     const week = board();
     GET.mockResolvedValueOnce({ data: week, response: new Response(null, { status: 200 }) });
     await expect(quizBoard()).resolves.toBe(week);
     expect(GET).toHaveBeenCalledWith("/api/me/quiz/leaderboard", expect.anything());
-    GET.mockResolvedValueOnce(status(404, "not_found"));
-    await expect(quizBoard()).rejects.toThrow("answered 404");
+    GET.mockResolvedValueOnce(status(500));
+    await expect(quizBoard()).rejects.toThrow("answered 500");
   });
 });

@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
+import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { RadioGroup } from "@/components/ui/RadioGroup";
 
 import { quizCalls, type QuizCalls } from "./calls";
@@ -27,10 +28,10 @@ const OPTION_VALUES = ["0", "1", "2", "3"] as const;
 /**
  * The five questions on one page (REQ-DEV-01): each a radio group (its prompt the legend, its position and topic as a
  * plain line above), then "Check answers", the screen's one primary action, which ignores presses until all five are
- * answered (pressing it then takes focus to the first unanswered question); "Skip the rest" sends what is answered,
- * the rest as skipped. The time from the page opening to the check is sent and shown nowhere. Once the API has the
+ * answered (pressing it then takes focus to the first unanswered question); once something is answered, "Check 2, skip
+ * 3" sends what is answered, the rest as skipped. The time from the page opening to the check is sent and shown nowhere. Once the API has the
  * answers the page is fetched again (the server draws the results) and focus moves to the results heading. A day that
- * ended meanwhile, or a day without a set, is one sentence in place of the form.
+ * ended meanwhile, or a day without a set, is one sentence and the way Home in place of the form.
  */
 export function QuizPlay({ setId, questions, resultsId = "quiz-results", calls: given }: QuizPlayProps) {
   const t = useStrings("quizPlay");
@@ -90,6 +91,9 @@ export function QuizPlay({ setId, questions, resultsId = "quiz-results", calls: 
     return (
       <Alert tone="info" ref={notice}>
         <p data-quiz-ended={ended}>{t(`problem.${ended}`)}</p>
+        <Link href="/dev" className={standaloneLinkClass}>
+          {t("home")}
+        </Link>
       </Alert>
     );
   }
@@ -140,14 +144,14 @@ export function QuizPlay({ setId, questions, resultsId = "quiz-results", calls: 
           </Button>
           {answered > 0 && !complete ? (
             <Button variant="link" busy={working} onClick={() => void send()} data-quiz-skip="">
-              {t("skip")}
+              {t("skip", { count: answered, number: QUESTIONS - answered })}
             </Button>
           ) : null}
         </div>
       </div>
       {complete ? null : (
         <p id="quiz-check-hint" className="mt-3 text-sm text-ink-soft sm:text-right">
-          {t("checkHint")}
+          {answered > 0 ? t("checkHint") : t("checkHintNone")}
         </p>
       )}
     </form>

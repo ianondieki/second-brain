@@ -15,7 +15,7 @@ import { homeFor } from "@/lib/auth/routing";
 import { formatCalendarDate, formatShortDate } from "@/lib/format";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
-import { quizBoard } from "../data";
+import { quizBoard, quizCard } from "../data";
 import { boardLine, QUIZ_PATH } from "../quiz";
 import { OptIn } from "./OptIn";
 
@@ -33,8 +33,16 @@ export default async function BoardPage() {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const [t, locale, board] = await Promise.all([getTranslations("quiz"), getLocale(), quizBoard()]);
+  const [t, locale, board, today] = await Promise.all([getTranslations("quiz"), getLocale(), quizBoard(), quizCard()]);
   const line = boardLine(board.me);
+  // One way to play, said once: under the caller's line when they have no points yet, else on the empty list; a day
+  // without a set to play (or a read that failed) points the empty list at Home instead.
+  const canPlay = today?.kind === "set" && !today.today.attempt;
+  const playOnLine = canPlay && line.key === "notPlayed";
+  const emptyAction =
+    canPlay && !playOnLine
+      ? { label: t("board.emptyAction"), href: QUIZ_PATH }
+      : { label: t("board.home"), href: "/dev" };
   const dates = t("board.dates", {
     start: formatShortDate(locale, board.week_start),
     end: formatCalendarDate(locale, board.week_end),
@@ -58,7 +66,7 @@ export default async function BoardPage() {
                 ? t("board.me.join", { points: line.points })
                 : t("board.me.notPlayed")}
           </p>
-          {line.key === "notPlayed" ? (
+          {playOnLine ? (
             <StandaloneLink href={QUIZ_PATH} className="-mt-2 self-start">
               {t("board.play")}
             </StandaloneLink>
@@ -72,7 +80,7 @@ export default async function BoardPage() {
 
         <Section title={t("board.listHeading")} headingId="board-list">
           {board.rows.length === 0 ? (
-            <EmptyState rule={false} sentence={t("board.empty")} action={t("board.emptyAction")} href={QUIZ_PATH} />
+            <EmptyState rule={false} sentence={t("board.empty")} action={emptyAction.label} href={emptyAction.href} />
           ) : (
             <ol aria-labelledby="board-list" className="flex flex-col divide-y divide-line rounded-panel border border-line bg-field">
               {board.rows.map((row) => (

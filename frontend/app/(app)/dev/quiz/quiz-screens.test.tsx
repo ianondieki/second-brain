@@ -15,7 +15,7 @@ import { QuizPlay } from "./QuizPlay";
 import { QuizResults } from "./QuizResults";
 
 // REQ-DEV-01 (P22-AF): Today's five on screen. The Home card in its three states (and left out), the play form (one
-// primary action, inert until five answers; "Skip the rest"; a day that ended), the results (score, marks in words,
+// primary action, inert until five answers; "Check 1, skip 4"; a day that ended), the results (score, marks in words,
 // why, the source in a new tab, Flag), the flag sheet and the board's opt-in switch.
 
 const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }));
@@ -43,7 +43,7 @@ function calls(overrides: Partial<QuizCalls> = {}): QuizCalls {
   return {
     finish: vi.fn(async () => ({ ok: true as const })),
     flag: vi.fn(async () => "sent" as const),
-    optIn: vi.fn(async () => true),
+    optIn: vi.fn(async () => "ok" as const),
     ...overrides,
   };
 }
@@ -69,7 +69,7 @@ describe("Home's Today's five card", () => {
 
   it("is one sentence and no action on a day without a set", async () => {
     render(await resolveServerTree(await QuizCard({ state: { kind: "none" } })));
-    expect(screen.getByText("No quiz today. Back tomorrow.")).toBeTruthy();
+    expect(screen.getByText("No quiz today, back tomorrow.")).toBeTruthy();
     expect(screen.queryAllByRole("link")).toHaveLength(0);
   });
 
@@ -104,12 +104,14 @@ describe("the play form", () => {
     await waitFor(() => expect(router.refresh).toHaveBeenCalledTimes(1));
   });
 
-  it("sends the rest as skipped through Skip the rest", async () => {
+  it("says how to check before anything is answered, then offers to check what is answered and skip the rest", async () => {
     const given = calls();
     renderWithIntl(<QuizPlay setId="set-1" questions={QUESTIONS} calls={given} />);
-    expect(screen.queryByRole("button", { name: "Skip the rest" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /skip/ })).toBeNull();
+    expect(document.getElementById("quiz-check-hint")?.textContent).toBe("Answer all five to check them.");
     fireEvent.click(within(screen.getByRole("group", { name: QUESTIONS[1].prompt })).getAllByRole("radio")[2]);
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Skip the rest" })));
+    expect(document.getElementById("quiz-check-hint")?.textContent).toBe("Answer all five to check them, or skip the rest.");
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Check 1, skip 4" })));
     expect(given.finish).toHaveBeenCalledWith("set-1", [null, 2, null, null, null], expect.any(Number));
   });
 
@@ -117,8 +119,9 @@ describe("the play form", () => {
     const closed = calls({ finish: vi.fn(async () => ({ ok: false as const, problem: "closed" as const })) });
     renderWithIntl(<QuizPlay setId="set-1" questions={QUESTIONS} calls={closed} />);
     fireEvent.click(within(screen.getByRole("group", { name: QUESTIONS[0].prompt })).getAllByRole("radio")[0]);
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Skip the rest" })));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Check 1, skip 4" })));
     expect(document.querySelector("[data-quiz-ended=closed]")?.textContent).toBe(en.quizPlay.problem.closed);
+    expect(screen.getByRole("link", { name: "Go to Home" }).getAttribute("href")).toBe("/dev");
     expect(screen.queryByRole("group")).toBeNull();
     expect(router.refresh).not.toHaveBeenCalled();
     cleanup();
@@ -126,7 +129,7 @@ describe("the play form", () => {
     const failing = calls({ finish: vi.fn(async () => ({ ok: false as const, problem: "network" as const })) });
     renderWithIntl(<QuizPlay setId="set-1" questions={QUESTIONS} calls={failing} />);
     fireEvent.click(within(screen.getByRole("group", { name: QUESTIONS[0].prompt })).getAllByRole("radio")[3]);
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Skip the rest" })));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Check 1, skip 4" })));
     expect(screen.getByRole("alert").textContent).toBe(en.quizPlay.problem.network);
     expect((within(screen.getByRole("group", { name: QUESTIONS[0].prompt })).getAllByRole("radio")[3] as HTMLInputElement).checked).toBe(true);
   });
@@ -218,12 +221,15 @@ describe("the board's opt-in switch", () => {
     expect(router.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it("turns back and says so when the choice was not kept", async () => {
-    renderWithIntl(<OptIn initial calls={calls({ optIn: vi.fn(async () => false) })} />);
-    const toggle = screen.getByRole("switch", { name: "Show me on the board" });
-    await act(async () => fireEvent.click(toggle));
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByRole("alert").textContent).toBe(en.quizPlay.optIn.failed);
-    expect(router.refresh).not.toHaveBeenCalled();
+  it("turns back and says so when the choice was not kept, or the session ended", async () => {
+    for (const outcome of ["failed", "signedOut"] as const) {
+      renderWithIntl(<OptIn initial calls={calls({ optIn: vi.fn(async () => outcome) })} />);
+      const toggle = screen.getByRole("switch", { name: "Show me on the board" });
+      await act(async () => fireEvent.click(toggle));
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      expect(screen.getByRole("alert").textContent).toBe(en.quizPlay.optIn[outcome]);
+      expect(router.refresh).not.toHaveBeenCalled();
+      cleanup();
+    }
   });
 });
