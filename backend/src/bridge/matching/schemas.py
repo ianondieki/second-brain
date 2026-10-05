@@ -165,6 +165,12 @@ class InterestState(BaseModel):
     reason: str | None
 
 
+def _without_default(schema: dict[str, Any]) -> None:
+    """Leave a field's default out of the OpenAPI document: always sent, it stays optional in the generated web types,
+    so a client reads an older API as "not sent" (as ``problems.brief_schemas``)."""
+    schema.pop("default", None)
+
+
 class MatchOut(DemoFallbackFlag):
     id: UUID
     scout_id: UUID
@@ -181,12 +187,11 @@ class MatchOut(DemoFallbackFlag):
     digest_sent_at: datetime | None
     feedback: MatchFeedback | None
     feedback_reason: str | None
-
-
-def _without_default(schema: dict[str, Any]) -> None:
-    """Leave a field's default out of the OpenAPI document: always sent, it stays optional in the generated web types,
-    so a client reads an older API as "not sent" (as ``problems.brief_schemas``)."""
-    schema.pop("default", None)
+    shortlisted: bool = Field(
+        default=False,
+        description="Whether the proposal is on this organisation's shortlist (the Inbox's star; P21)",
+        json_schema_extra=_without_default,
+    )
 
 
 class MatchDetail(MatchOut):
