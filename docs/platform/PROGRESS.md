@@ -391,7 +391,9 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-02, session 5): none. P19 merged as `f839977` (merge commit of `claude/fervent-mccarthy-0zyqn2` at `fc19695`); integration head before it `42c6073` (D-53 recorded on `cf0da47`). P18 merged as `cf0da47` (at `dcf6de1`); integration head before it `9142360`.
+**Open branches** (2026-10-05, session 6): none. P20 and P21 merged together as `429a7aa` on the owner's
+instruction (merge commit of `claude/fervent-mccarthy-0zyqn2` at `9218fce`); integration head before it `5c3db9d`.
+Earlier (2026-10-02, session 5): P19 merged as `f839977` (merge commit of `claude/fervent-mccarthy-0zyqn2` at `fc19695`); integration head before it `42c6073` (D-53 recorded on `cf0da47`). P18 merged as `cf0da47` (at `dcf6de1`); integration head before it `9142360`.
 
 **Session 4 (2026-10-01, new container; P18 "fundable product" brief, D-52).** On `claude/fervent-mccarthy-0zyqn2`
 (not merged: the owner reviews each step). Step 1: five names, three directions in the development-only
@@ -430,7 +432,7 @@ D-54 (erasure of free-text engagement notes), the "Gap" tab label, the responsiv
 system (D-55), the foundation, kit and landing by the orchestrator, three impl-frontend passes in worktrees (developer,
 organisation and tracker, staff and public with the emails), the editor's budget fix, the reviews (reviewer,
 security-reviewer, ux-reviewer: PASS), the design shots and walkthrough. The merge into the integration branch was
-refused by this session's permission rules and waits for the owner.
+first refused by this session's permission rules; the owner then asked for it (2026-10-05, with P21).
 The report is "P20 report" below. Linux setup unchanged (worktrees need a real or hard-linked `node_modules`:
 Turbopack refuses the symlink). The stack is up at the end; `demo.py reset --yes` before showing it.
 P21 (2026-10-05, the same session after a context summary): the owner asked for feature ideas and said "Go ahead and
@@ -515,7 +517,10 @@ spec (`bc70121`) and 10/10 on re-run; the test-clock scenarios ran in the same r
 92–100 and accessibility 100, light and dark, on the five new screens; the Messages routes' LCP reaches 2.6–2.8 s in some
 runs (the page title, as the tracker's in P20; D-53 (d) measures on the laptop and the host). CodeQL: exactly the eight
 D-42 findings. `pr.yml` run 328 on `a1467b1`: Playwright with the clock scenarios, the demo story, frontend, legacy
-(Windows and Ubuntu) and hygiene green; the backend job (full suite, coverage gate) was still running when this was written (result in the line below); scanners red on `npm audit` only (D-56); the informational
+(Windows and Ubuntu) and hygiene green; the backend job (full suite, coverage gate) hit its 35-minute limit twice on 2026-10-05, at about twice P20's
+per-file times; a comparison run on the integration branch (P19-era code, run 329) was as slow the same hour, so
+the runners were slow that day, not P21's code (locally the same files run at P20's speed with coverage on, and the
+full backend suite passes, 4,764); a re-run on normal runners is the open item; scanners red on `npm audit` only (D-56); the informational
 no-skip-list legacy job red as before. The first run (326) found what local runs had not: mypy over `tests/` (CI
 checks them, the implementers ran `mypy src`), fixed in `a1467b1`.
 
@@ -532,8 +537,8 @@ Amina deletes, with no other kept, comes back at the next demo start (as the lik
 code, not seen in CI.
 
 **Decisions for the owner.** D-57 (the nine defaults), the new strings under `_meta.reviewP21*` (`[[COPY-REVIEW]]`,
-Swahili `[[SW-REVIEW]]`), and the merge of P20 and P21 into the integration branch (refused by this session's
-permission rules; it waits for the owner). D-56 still open.
+Swahili `[[SW-REVIEW]]`), D-56 still open. P20 and P21 were merged into the integration branch as `429a7aa` on the owner's instruction
+(2026-10-05).
 
 ### P20 report (final, 2026-10-04): Jacaranda, the visual redesign (D-55)
 
