@@ -1118,6 +1118,150 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/engagements/{engagement_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Thread
+         * @description The thread, the latest page first (within a page oldest first). 403 for the organisation before it opens.
+         */
+        get: operations["get_thread_api_engagements__engagement_id__messages_get"];
+        put?: never;
+        /**
+         * Post Message
+         * @description Post a message (plain text) with up to 5 staged files; the other side is told (N18, never the text).
+         */
+        post: operations["post_message_api_engagements__engagement_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/messages/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage Attachment
+         * @description Stage a file for the caller's next message: scanned before it is kept; only the uploader sees it until sent.
+         */
+        post: operations["stage_attachment_api_engagements__engagement_id__messages_attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/messages/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Staged Attachment
+         * @description Remove one of the caller's staged files (a sent file never goes).
+         */
+        delete: operations["remove_staged_attachment_api_engagements__engagement_id__messages_attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/messages/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Read
+         * @description Mark the thread read up to one of its messages, or up to now.
+         */
+        post: operations["mark_read_api_engagements__engagement_id__messages_read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/messages/{message_id}/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Attachment Link
+         * @description A link to a sent file, signed for the caller and valid for 5 minutes.
+         */
+        get: operations["attachment_link_api_engagements__engagement_id__messages__message_id__attachments__attachment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/messages/{message_id}/attachments/{attachment_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Attachment File
+         * @description The file behind a signed link, as a download (never rendered by the browser as a page).
+         */
+        get: operations["attachment_file_api_engagements__engagement_id__messages__message_id__attachments__attachment_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/engagements/{engagement_id}/messages/{message_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Message
+         * @description Report one message of the thread to the moderators (it stays visible to the parties).
+         */
+        post: operations["report_message_api_engagements__engagement_id__messages__message_id__report_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/engagements/{engagement_id}/milestones/{milestone_id}/accept": {
         parameters: {
             query?: never;
@@ -1562,6 +1706,30 @@ export interface paths {
          * @description Set your liked niches: 3 to 5 niche ids from ``GET /api/directory/niches``.
          */
         put: operations["set_my_niches_api_me_niches_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/notification-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preferences
+         * @description The caller's notification choices (in-app is always on and is not one of them).
+         */
+        get: operations["get_preferences_api_me_notification_preferences_get"];
+        /**
+         * Put Preferences
+         * @description Set the caller's choices; 422 unknown_preference for anything the catalogue does not offer.
+         */
+        put: operations["put_preferences_api_me_notification_preferences_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2866,6 +3034,19 @@ export interface components {
              */
             version_id: string;
         };
+        /** AttachmentLinkOut */
+        AttachmentLinkOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Url
+             * @description A path on this API, signed for the caller, valid until expires_at
+             */
+            url: string;
+        };
         /** AttachmentOut */
         AttachmentOut: {
             av_status: components["schemas"]["AvStatus"];
@@ -4063,6 +4244,11 @@ export interface components {
              */
             today?: string | null;
             /**
+             * Unread Messages
+             * @description Messages of the engagement's thread by others that the caller has not read
+             */
+            unread_messages?: number;
+            /**
              * Updated At
              * Format: date-time
              */
@@ -4160,6 +4346,11 @@ export interface components {
             /** Stage Label */
             stage_label: string;
             state: components["schemas"]["EngagementState"];
+            /**
+             * Unread Messages
+             * @description Messages of the engagement's thread by others that the caller has not read
+             */
+            unread_messages?: number;
             /**
              * Updated At
              * Format: date-time
@@ -4348,9 +4539,29 @@ export interface components {
             to_state: components["schemas"]["EngagementState"];
         };
         /**
+         * HistoryMessageOut
+         * @description A message of the thread as the History tab lists it (AC-TRACK-9): who wrote and when, never the text.
+         */
+        HistoryMessageOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Sender Name */
+            sender_name: string;
+            sender_party: components["schemas"]["EngagementParty"];
+        };
+        /**
          * HistoryOut
-         * @description The engagement's History tab: every event of the hash chain and every endorsement, identical for both
-         *     parties; ``chain_verified`` is the independent verifier's result over the events read.
+         * @description The engagement's History tab: every event of the hash chain, every endorsement and every message of the
+         *     thread (who and when; REQ-ENG-11), identical for both parties; ``chain_verified`` is the independent verifier's
+         *     result over the events read (messages are not part of the chain).
          */
         HistoryOut: {
             /** Chain Verified */
@@ -4364,6 +4575,11 @@ export interface components {
             engagement_id: string;
             /** Events */
             events: components["schemas"]["HistoryEventOut"][];
+            /**
+             * Messages
+             * @description The thread's messages, oldest first
+             */
+            messages?: components["schemas"]["HistoryMessageOut"][];
         };
         /** IdentityOut */
         IdentityOut: {
@@ -4669,6 +4885,104 @@ export interface components {
             org_name: string;
             /** Roles */
             roles: components["schemas"]["OrgRole"][];
+        };
+        /**
+         * MessageAttachmentOut
+         * @description A file sent with a message (always ``clean``: only scanned, clean files are sent).
+         */
+        MessageAttachmentOut: {
+            /** Content Type */
+            content_type: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /**
+         * MessageBody
+         * @description A message: 1 to 4,000 characters of plain text, not blank, and up to 5 staged uploads (ids) sent with it.
+         */
+        MessageBody: {
+            /** Attachment Ids */
+            attachment_ids?: string[];
+            /** Body */
+            body: string;
+        };
+        /** MessageOut */
+        MessageOut: {
+            /** Attachments */
+            attachments: components["schemas"]["MessageAttachmentOut"][];
+            /**
+             * Body
+             * @description Plain text as typed: render it as text, never as markup, and never auto-link it
+             */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Mine
+             * @description The caller wrote it
+             */
+            mine: boolean;
+            /**
+             * Redacted
+             * @description Staff redacted the text (D-54): body is the fixed marker
+             */
+            redacted: boolean;
+            /**
+             * Sender Name
+             * @description The sender's display name, as the tracker names the parties
+             */
+            sender_name: string;
+            sender_party: components["schemas"]["EngagementParty"];
+        };
+        /**
+         * MessageThreadOut
+         * @description One page of the thread. Pages run from the newest back: the first page holds the latest messages and
+         *     ``next_cursor`` fetches the older ones; within a page the messages are oldest first (newest last).
+         */
+        MessageThreadOut: {
+            /**
+             * Can Post
+             * @description The caller may post now (open, and not a viewer)
+             */
+            can_post: boolean;
+            /**
+             * Engagement Id
+             * Format: uuid
+             */
+            engagement_id: string;
+            /** Items */
+            items: components["schemas"]["MessageOut"][];
+            /** Last Read At */
+            last_read_at: string | null;
+            limits: components["schemas"]["ThreadLimits"];
+            /**
+             * Next Cursor
+             * @description Pass as ?cursor= for the older page; null on the oldest
+             */
+            next_cursor: string | null;
+            /** @description The stage the thread opens at (INTEREST_CONFIRMED) */
+            opens_at_stage: components["schemas"]["EngagementState"];
+            status: components["schemas"]["ThreadStatus"];
+            /**
+             * Unread
+             * @description Messages by others newer than the caller's read marker
+             */
+            unread: number;
         };
         /** MfaState */
         MfaState: {
@@ -4986,6 +5300,11 @@ export interface components {
              */
             seq?: number | null;
         };
+        /**
+         * NotificationChannel
+         * @enum {string}
+         */
+        NotificationChannel: "email" | "whatsapp" | "sms" | "in_app";
         /** NotificationOut */
         NotificationOut: {
             /** Body */
@@ -5486,6 +5805,46 @@ export interface components {
             /** Simulated Checkout */
             simulated_checkout: boolean;
         };
+        /** PreferenceIn */
+        PreferenceIn: {
+            channel: components["schemas"]["NotificationChannel"];
+            /** Enabled */
+            enabled: boolean;
+            /** Kind */
+            kind: string;
+        };
+        /** PreferenceOut */
+        PreferenceOut: {
+            /**
+             * Audience
+             * @description Who receives it: show the rows that apply to the person's portals
+             * @enum {string}
+             */
+            audience: "developer" | "org" | "both";
+            channel: components["schemas"]["NotificationChannel"];
+            /** Default */
+            default: boolean;
+            /**
+             * Enabled
+             * @description The person's choice, or the default while they made none
+             */
+            enabled: boolean;
+            /**
+             * Kind
+             * @description The notice, for example engagement.n18 (a new message in an engagement's thread)
+             */
+            kind: string;
+        };
+        /** PreferencesIn */
+        PreferencesIn: {
+            /** Items */
+            items: components["schemas"]["PreferenceIn"][];
+        };
+        /** PreferencesOut */
+        PreferencesOut: {
+            /** Items */
+            items: components["schemas"]["PreferenceOut"][];
+        };
         /** PreviewItem */
         PreviewItem: {
             /** Keywords Found */
@@ -5828,6 +6187,24 @@ export interface components {
             /** Reasons */
             reasons: string[];
         };
+        /**
+         * ReadBody
+         * @description Mark the thread read up to one of its messages (its time), or up to now when ``up_to`` is left out.
+         */
+        ReadBody: {
+            /**
+             * Up To
+             * @description The newest message the caller has seen
+             */
+            up_to?: string | null;
+        };
+        /** ReadOut */
+        ReadOut: {
+            /** Last Read At */
+            last_read_at: string | null;
+            /** Unread */
+            unread: number;
+        };
         /** Recommendation */
         Recommendation: {
             /**
@@ -5900,6 +6277,24 @@ export interface components {
          * @enum {string}
          */
         RenderKind: "html" | "pdf" | "attachment";
+        /** ReportBody */
+        ReportBody: {
+            /** Reasons */
+            reasons: ("spam" | "abuse" | "contact_details" | "confidential" | "other")[];
+        };
+        /** ReportOut */
+        ReportOut: {
+            /**
+             * Case Id
+             * Format: uuid
+             */
+            case_id: string;
+            /**
+             * Created
+             * @description False when the caller had already reported this message (the same case)
+             */
+            created: boolean;
+        };
         /**
          * RequestInfoBody
          * @description The organisation's question (stages 1-2): the review clock pauses until the developer answers.
@@ -6274,6 +6669,26 @@ export interface components {
          */
         StaffRole: "admin" | "moderator" | "support";
         /**
+         * StagedAttachmentOut
+         * @description An upload waiting to be sent with the caller's next message (only the uploader sees it).
+         */
+        StagedAttachmentOut: {
+            av_status: components["schemas"]["AvStatus"];
+            /** Content Type */
+            content_type: string;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /**
          * StepUpMethod
          * @description The step-up that preceded an internal e-signature (docs/spec/06 6.9 SignatureProvider).
          * @enum {string}
@@ -6468,6 +6883,31 @@ export interface components {
             /** Milestones */
             milestones: components["schemas"]["MilestoneBody"][];
         };
+        /** ThreadLimits */
+        ThreadLimits: {
+            /** Accepted Types */
+            accepted_types: string[];
+            /**
+             * Max Attachment Bytes
+             * @default 20971520
+             */
+            max_attachment_bytes: number;
+            /**
+             * Max Attachments
+             * @default 5
+             */
+            max_attachments: number;
+            /**
+             * Max Chars
+             * @default 4000
+             */
+            max_chars: number;
+        };
+        /**
+         * ThreadStatus
+         * @enum {string}
+         */
+        ThreadStatus: "not_open" | "open" | "read_only";
         /**
          * Tier2ShareOut
          * @description Whether the developer shared the full proposal (Tier 2) with the engagement's organisation: a live grant.
@@ -12677,6 +13117,828 @@ export interface operations {
             };
         };
     };
+    get_thread_api_engagements__engagement_id__messages_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description The previous page's next_cursor; omit it for the first */
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageThreadOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    post_message_api_engagements__engagement_id__messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    stage_attachment_api_engagements__engagement_id__messages_attachments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Percent-encoded UTF-8 name */
+                "x-file-name"?: string | null;
+            };
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/pdf": string;
+                "image/jpeg": string;
+                "image/png": string;
+                "text/markdown": string;
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StagedAttachmentOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    remove_staged_attachment_api_engagements__engagement_id__messages_attachments__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: string;
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    mark_read_api_engagements__engagement_id__messages_read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    attachment_link_api_engagements__engagement_id__messages__message_id__attachments__attachment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+                attachment_id: string;
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttachmentLinkOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    attachment_file_api_engagements__engagement_id__messages__message_id__attachments__attachment_id__file_get: {
+        parameters: {
+            query: {
+                expires: number;
+                sig: string;
+            };
+            header?: never;
+            path: {
+                message_id: string;
+                attachment_id: string;
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    report_message_api_engagements__engagement_id__messages__message_id__report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+                engagement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     milestone_accept_milestone_api_engagements__engagement_id__milestones__milestone_id__accept_post: {
         parameters: {
             query?: never;
@@ -15015,6 +16277,194 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LikedNichesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_preferences_api_me_notification_preferences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferencesOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    put_preferences_api_me_notification_preferences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferencesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferencesOut"];
                 };
             };
             /** @description Bad Request */

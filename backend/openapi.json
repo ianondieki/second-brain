@@ -425,6 +425,26 @@
         "title": "AssistantSuggestionOut",
         "type": "object"
       },
+      "AttachmentLinkOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "url": {
+            "description": "A path on this API, signed for the caller, valid until expires_at",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "AttachmentLinkOut",
+        "type": "object"
+      },
       "AttachmentOut": {
         "properties": {
           "av_status": {
@@ -3631,6 +3651,12 @@
             "description": "Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from",
             "title": "Today"
           },
+          "unread_messages": {
+            "description": "Messages of the engagement's thread by others that the caller has not read",
+            "minimum": 0.0,
+            "title": "Unread Messages",
+            "type": "integer"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -3900,6 +3926,12 @@
           },
           "state": {
             "$ref": "#/components/schemas/EngagementState"
+          },
+          "unread_messages": {
+            "description": "Messages of the engagement's thread by others that the caller has not read",
+            "minimum": 0.0,
+            "title": "Unread Messages",
+            "type": "integer"
           },
           "updated_at": {
             "format": "date-time",
@@ -4398,8 +4430,38 @@
         "title": "HistoryEventOut",
         "type": "object"
       },
+      "HistoryMessageOut": {
+        "description": "A message of the thread as the History tab lists it (AC-TRACK-9): who wrote and when, never the text.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "sender_name": {
+            "title": "Sender Name",
+            "type": "string"
+          },
+          "sender_party": {
+            "$ref": "#/components/schemas/EngagementParty"
+          }
+        },
+        "required": [
+          "id",
+          "sender_party",
+          "sender_name",
+          "created_at"
+        ],
+        "title": "HistoryMessageOut",
+        "type": "object"
+      },
       "HistoryOut": {
-        "description": "The engagement's History tab: every event of the hash chain and every endorsement, identical for both\nparties; ``chain_verified`` is the independent verifier's result over the events read.",
+        "description": "The engagement's History tab: every event of the hash chain, every endorsement and every message of the\nthread (who and when; REQ-ENG-11), identical for both parties; ``chain_verified`` is the independent verifier's\nresult over the events read (messages are not part of the chain).",
         "properties": {
           "chain_verified": {
             "title": "Chain Verified",
@@ -4422,6 +4484,14 @@
               "$ref": "#/components/schemas/HistoryEventOut"
             },
             "title": "Events",
+            "type": "array"
+          },
+          "messages": {
+            "description": "The thread's messages, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/HistoryMessageOut"
+            },
+            "title": "Messages",
             "type": "array"
           }
         },
@@ -5179,6 +5249,194 @@
           "roles"
         ],
         "title": "MembershipOut",
+        "type": "object"
+      },
+      "MessageAttachmentOut": {
+        "description": "A file sent with a message (always ``clean``: only scanned, clean files are sent).",
+        "properties": {
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "content_type",
+          "size_bytes"
+        ],
+        "title": "MessageAttachmentOut",
+        "type": "object"
+      },
+      "MessageBody": {
+        "additionalProperties": false,
+        "description": "A message: 1 to 4,000 characters of plain text, not blank, and up to 5 staged uploads (ids) sent with it.",
+        "properties": {
+          "attachment_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Attachment Ids",
+            "type": "array"
+          },
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "pattern": "^[^\\x00-\\x08\\x0b-\\x1f\\x7f]*$",
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "MessageBody",
+        "type": "object"
+      },
+      "MessageOut": {
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/MessageAttachmentOut"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "body": {
+            "description": "Plain text as typed: render it as text, never as markup, and never auto-link it",
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mine": {
+            "description": "The caller wrote it",
+            "title": "Mine",
+            "type": "boolean"
+          },
+          "redacted": {
+            "description": "Staff redacted the text (D-54): body is the fixed marker",
+            "title": "Redacted",
+            "type": "boolean"
+          },
+          "sender_name": {
+            "description": "The sender's display name, as the tracker names the parties",
+            "title": "Sender Name",
+            "type": "string"
+          },
+          "sender_party": {
+            "$ref": "#/components/schemas/EngagementParty"
+          }
+        },
+        "required": [
+          "id",
+          "sender_party",
+          "sender_name",
+          "mine",
+          "body",
+          "redacted",
+          "created_at",
+          "attachments"
+        ],
+        "title": "MessageOut",
+        "type": "object"
+      },
+      "MessageThreadOut": {
+        "description": "One page of the thread. Pages run from the newest back: the first page holds the latest messages and\n``next_cursor`` fetches the older ones; within a page the messages are oldest first (newest last).",
+        "properties": {
+          "can_post": {
+            "description": "The caller may post now (open, and not a viewer)",
+            "title": "Can Post",
+            "type": "boolean"
+          },
+          "engagement_id": {
+            "format": "uuid",
+            "title": "Engagement Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MessageOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "last_read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Read At"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/ThreadLimits"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?cursor= for the older page; null on the oldest",
+            "title": "Next Cursor"
+          },
+          "opens_at_stage": {
+            "$ref": "#/components/schemas/EngagementState",
+            "description": "The stage the thread opens at (INTEREST_CONFIRMED)"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ThreadStatus"
+          },
+          "unread": {
+            "description": "Messages by others newer than the caller's read marker",
+            "minimum": 0.0,
+            "title": "Unread",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "engagement_id",
+          "status",
+          "opens_at_stage",
+          "can_post",
+          "unread",
+          "last_read_at",
+          "limits",
+          "items",
+          "next_cursor"
+        ],
+        "title": "MessageThreadOut",
         "type": "object"
       },
       "MfaState": {
@@ -5985,6 +6243,16 @@
         ],
         "title": "NoteOut",
         "type": "object"
+      },
+      "NotificationChannel": {
+        "enum": [
+          "email",
+          "whatsapp",
+          "sms",
+          "in_app"
+        ],
+        "title": "NotificationChannel",
+        "type": "string"
       },
       "NotificationOut": {
         "properties": {
@@ -7213,6 +7481,106 @@
         "title": "PlansOut",
         "type": "object"
       },
+      "PreferenceIn": {
+        "additionalProperties": false,
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/NotificationChannel"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "channel",
+          "enabled"
+        ],
+        "title": "PreferenceIn",
+        "type": "object"
+      },
+      "PreferenceOut": {
+        "properties": {
+          "audience": {
+            "description": "Who receives it: show the rows that apply to the person's portals",
+            "enum": [
+              "developer",
+              "org",
+              "both"
+            ],
+            "title": "Audience",
+            "type": "string"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/NotificationChannel"
+          },
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "enabled": {
+            "description": "The person's choice, or the default while they made none",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "The notice, for example engagement.n18 (a new message in an engagement's thread)",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "channel",
+          "enabled",
+          "default",
+          "audience"
+        ],
+        "title": "PreferenceOut",
+        "type": "object"
+      },
+      "PreferencesIn": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PreferenceIn"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PreferencesIn",
+        "type": "object"
+      },
+      "PreferencesOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PreferenceOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PreferencesOut",
+        "type": "object"
+      },
       "PreviewItem": {
         "properties": {
           "keywords_found": {
@@ -8082,6 +8450,54 @@
         "title": "PursuitOut",
         "type": "object"
       },
+      "ReadBody": {
+        "additionalProperties": false,
+        "description": "Mark the thread read up to one of its messages (its time), or up to now when ``up_to`` is left out.",
+        "properties": {
+          "up_to": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest message the caller has seen",
+            "title": "Up To"
+          }
+        },
+        "title": "ReadBody",
+        "type": "object"
+      },
+      "ReadOut": {
+        "properties": {
+          "last_read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Read At"
+          },
+          "unread": {
+            "minimum": 0.0,
+            "title": "Unread",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unread",
+          "last_read_at"
+        ],
+        "title": "ReadOut",
+        "type": "object"
+      },
       "Recommendation": {
         "properties": {
           "exploring": {
@@ -8262,6 +8678,52 @@
         ],
         "title": "RenderKind",
         "type": "string"
+      },
+      "ReportBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reasons": {
+            "items": {
+              "enum": [
+                "spam",
+                "abuse",
+                "contact_details",
+                "confidential",
+                "other"
+              ],
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reasons"
+        ],
+        "title": "ReportBody",
+        "type": "object"
+      },
+      "ReportOut": {
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created": {
+            "description": "False when the caller had already reported this message (the same case)",
+            "title": "Created",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "case_id",
+          "created"
+        ],
+        "title": "ReportOut",
+        "type": "object"
       },
       "RequestInfoBody": {
         "description": "The organisation's question (stages 1-2): the review clock pauses until the developer answers.",
@@ -9287,6 +9749,45 @@
         "title": "StaffRole",
         "type": "string"
       },
+      "StagedAttachmentOut": {
+        "description": "An upload waiting to be sent with the caller's next message (only the uploader sees it).",
+        "properties": {
+          "av_status": {
+            "$ref": "#/components/schemas/AvStatus"
+          },
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "content_type",
+          "size_bytes",
+          "sha256",
+          "av_status"
+        ],
+        "title": "StagedAttachmentOut",
+        "type": "object"
+      },
       "StepUpMethod": {
         "description": "The step-up that preceded an internal e-signature (docs/spec/06 6.9 SignatureProvider).",
         "enum": [
@@ -9843,6 +10344,46 @@
         ],
         "title": "TermsBody",
         "type": "object"
+      },
+      "ThreadLimits": {
+        "properties": {
+          "accepted_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Accepted Types",
+            "type": "array"
+          },
+          "max_attachment_bytes": {
+            "default": 20971520,
+            "title": "Max Attachment Bytes",
+            "type": "integer"
+          },
+          "max_attachments": {
+            "default": 5,
+            "title": "Max Attachments",
+            "type": "integer"
+          },
+          "max_chars": {
+            "default": 4000,
+            "title": "Max Chars",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accepted_types"
+        ],
+        "title": "ThreadLimits",
+        "type": "object"
+      },
+      "ThreadStatus": {
+        "enum": [
+          "not_open",
+          "open",
+          "read_only"
+        ],
+        "title": "ThreadStatus",
+        "type": "string"
       },
       "Tier2ShareOut": {
         "description": "Whether the developer shared the full proposal (Tier 2) with the engagement's organisation: a live grant.",
@@ -17976,6 +18517,1147 @@
         ]
       }
     },
+    "/api/engagements/{engagement_id}/messages": {
+      "get": {
+        "description": "The thread, the latest page first (within a page oldest first). 403 for the organisation before it opens.",
+        "operationId": "get_thread_api_engagements__engagement_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The previous page's next_cursor; omit it for the first",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's next_cursor; omit it for the first",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageThreadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Thread",
+        "tags": [
+          "engagements"
+        ]
+      },
+      "post": {
+        "description": "Post a message (plain text) with up to 5 staged files; the other side is told (N18, never the text).",
+        "operationId": "post_message_api_engagements__engagement_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Post Message",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/messages/attachments": {
+      "post": {
+        "description": "Stage a file for the caller's next message: scanned before it is kept; only the uploader sees it until sent.",
+        "operationId": "stage_attachment_api_engagements__engagement_id__messages_attachments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Percent-encoded UTF-8 name",
+            "in": "header",
+            "name": "x-file-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 1000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Percent-encoded UTF-8 name",
+              "title": "X-File-Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/pdf": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "text/markdown": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            },
+            "text/plain": {
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagedAttachmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Stage Attachment",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/messages/attachments/{attachment_id}": {
+      "delete": {
+        "description": "Remove one of the caller's staged files (a sent file never goes).",
+        "operationId": "remove_staged_attachment_api_engagements__engagement_id__messages_attachments__attachment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Remove Staged Attachment",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/messages/read": {
+      "post": {
+        "description": "Mark the thread read up to one of its messages, or up to now.",
+        "operationId": "mark_read_api_engagements__engagement_id__messages_read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Mark Read",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/messages/{message_id}/attachments/{attachment_id}": {
+      "get": {
+        "description": "A link to a sent file, signed for the caller and valid for 5 minutes.",
+        "operationId": "attachment_link_api_engagements__engagement_id__messages__message_id__attachments__attachment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentLinkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Attachment Link",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/messages/{message_id}/attachments/{attachment_id}/file": {
+      "get": {
+        "description": "The file behind a signed link, as a download (never rendered by the browser as a page).",
+        "operationId": "attachment_file_api_engagements__engagement_id__messages__message_id__attachments__attachment_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expires",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Expires",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sig",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 64,
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sig",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Attachment File",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/engagements/{engagement_id}/messages/{message_id}/report": {
+      "post": {
+        "description": "Report one message of the thread to the moderators (it stays visible to the parties).",
+        "operationId": "report_message_api_engagements__engagement_id__messages__message_id__report_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Report Message",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
     "/api/engagements/{engagement_id}/milestones/{milestone_id}/accept": {
       "post": {
         "description": "Run 'accept_milestone' on one milestone of the signed agreement (the milestone sub-tracker).",
@@ -20971,6 +22653,218 @@
         "summary": "Set My Niches",
         "tags": [
           "discover"
+        ]
+      }
+    },
+    "/api/me/notification-preferences": {
+      "get": {
+        "description": "The caller's notification choices (in-app is always on and is not one of them).",
+        "operationId": "get_preferences_api_me_notification_preferences_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferencesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Preferences",
+        "tags": [
+          "notifications"
+        ]
+      },
+      "put": {
+        "description": "Set the caller's choices; 422 unknown_preference for anything the catalogue does not offer.",
+        "operationId": "put_preferences_api_me_notification_preferences_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreferencesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Put Preferences",
+        "tags": [
+          "notifications"
         ]
       }
     },

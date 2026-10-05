@@ -157,9 +157,11 @@ class EngagementSummary(BaseModel):
     paused_from: EngagementState | None = Field(
         description="In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
     )
-    # Always sent; optional in the generated web types (as ``today`` below).
+    # Always sent; optional in the generated web types (no default in the schema), so a client reads an older API as 0.
     unread_messages: int = Field(
-        default=0, ge=0, description="Messages of the engagement's thread by others that the caller has not read"
+        default_factory=int,
+        ge=0,
+        description="Messages of the engagement's thread by others that the caller has not read",
     )
 
 
