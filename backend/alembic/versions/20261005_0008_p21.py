@@ -4,7 +4,7 @@ REQ-ENG-11 (R37, AC-TRACK-9, N18; track A: ``engagement_messages``, ``engagement
 ``engagement_message_reads`` and the message report), REQ-REPO-02 (R10; track B: ``org_shortlist``) and REQ-PERS-03
 (R27, with REQ-TREND-02; track C: ``saved_searches``). Design: ``docs/platform/tasks/P21.md`` and D-57's defaults.
 Additive but for one narrowing of an earlier object, restored on downgrade: five new tables with their policies,
-triggers and grants; nine new functions; one new partial unique index on ``moderation_cases``; and bridge_app's INSERT
+triggers and grants; ten new functions; one new partial unique index on ``moderation_cases``; and bridge_app's INSERT
 policy on ``moderation_cases`` (revision 0002) narrowed so that the app files a message report only through
 ``app_report_message``. No enum type: the tables reuse ``engagement_party`` (revision 0003) and ``av_status`` (revision
 0002), and the triggers reuse ``tracker_engagement_visible()`` (revision 0003), ``block_mutation()`` (revision 0002) and
@@ -63,14 +63,17 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
   ``storage/scanner.py`` ran, so the API writes the scanner's result and never a value from the client.
   ``engagement_message_attachments_guard`` (BEFORE UPDATE OR DELETE, SECURITY INVOKER, every role): an upload joins
   only its uploader's own message, in the transaction that inserted the message (``app_xid_is_current(m.xmin)``, so a
-  sent message never gains a file later), and only clean (CHECK ``attached_only_when_clean``); its file, keys and time
-  never change; once sent nothing changes and nothing is deleted, but by the owner (room for D-54's erasure). Every
-  party reads a sent attachment. At most 5 per message (``engagement_message_attachments_cap``, AFTER INSERT OR UPDATE
-  OF message_id, every role; check_violation with constraint name ``engagement_message_attachments_at_most_5``). Each
-  is 1 byte to 20 MB with its SHA-256; the object key is the row's own, ``messages/<engagement_id>/<id>`` in the uuid
-  text form (CHECK ``object_key_is_its_own``: ids only, no file name, and never another object of the bucket, such as
-  a proposal's Tier-2 file under ``attachments/``); the file name is 1 to 255 characters without a control character
-  or a path separator.
+  sent message never gains a file later), only clean (CHECK ``attached_only_when_clean``) and within 24 hours of its
+  upload; its file, keys and time never change; once sent nothing changes and nothing is deleted, but by the owner
+  (room for D-54's erasure). Every party reads a sent attachment. At most 5 per message
+  (``engagement_message_attachments_cap``, AFTER INSERT OR UPDATE OF message_id, every role; check_violation with
+  constraint name ``engagement_message_attachments_at_most_5``). Each is 1 byte to 20 MB with its SHA-256; the object
+  key is the row's own, ``messages/<engagement_id>/<id>`` in the uuid text form (CHECK ``object_key_is_its_own``: ids
+  only, no file name, and never another object of the bucket, such as a proposal's Tier-2 file under
+  ``attachments/``); the file name is 1 to 255 characters without a control character or a path separator.
+- ``app_purge_stale_message_uploads(now)`` (SECURITY DEFINER, EXECUTE bridge_app, with no user bound only, as
+  ``app_saved_searches_due``): deletes the staged uploads that can never be sent, those of an ended engagement or
+  older than 24 hours at ``now``, and returns their object keys for the job to delete the objects; never a sent one.
 - ``engagement_message_reads`` (USER; bridge_app: SELECT, INSERT, UPDATE of ``last_read_at``): one row per party
   and engagement, the user's own, on an engagement they are a party of.
 - The report (D-57 (4)): ``app_report_message(message, reasons)`` (SECURITY DEFINER, EXECUTE bridge_app) files a
@@ -121,6 +124,8 @@ Operating rules for the code that uses this schema:
   ``app_reported_message(:case)``.
 - Call ``app_org_sees_proposal`` before adding to the shortlist (404 when false); a repeat add is a unique violation
   (or ``ON CONFLICT DO NOTHING``).
+- The purge job calls ``app_purge_stale_message_uploads(now)`` with no user bound and deletes the returned objects
+  after it commits; the API sends a staged upload within 24 hours (it stages files as the message is written).
 - The alert job calls ``app_saved_searches_due(now)`` with no user bound, then acts per user in a session bound to
   that user (``bind_tenant``), deciding again there; it advances ``last_alerted_at`` in the transaction that writes the
   notification.
@@ -363,7 +368,8 @@ $$;
 -- change; it is inserted pending (bridge_app cannot name av_status) and its scan verdict (clean, infected, failed),
 -- given by an UPDATE, is final; it joins only its uploader's own message, in
 -- the transaction that inserted the message (app_xid_is_current(xmin): its own id or a savepoint's), so a sent message
--- never gains a file later (and only clean: CHECK attached_only_when_clean); once sent it never changes and is never
+-- never gains a file later (and only clean: CHECK attached_only_when_clean), and within 24 hours of its upload (an
+-- older staged upload is app_purge_stale_message_uploads()'s); once sent it never changes and is never
 -- deleted, but by the table's owner (room for D-54's erasure). A staged upload is deleted by its uploader (policy).
 -- For every role; RLS has already narrowed an UPDATE or DELETE to the caller's own staged uploads. SECURITY INVOKER:
 -- current_user is the writer, and the uploader reads their own message under their RLS.
@@ -402,6 +408,10 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'engagement_message_attachments: an upload joins only its uploader''s own message, in the'
             ' transaction that sends it' USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.message_id IS NOT NULL AND OLD.created_at < public.app_clock_now() - interval '24 hours' THEN
+        RAISE EXCEPTION 'engagement_message_attachments: an upload joins a message within 24 hours of its upload'
+            USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
 END;
@@ -493,6 +503,39 @@ BEGIN
 END;
 $$;
 
+-- Staged uploads that can never be sent (REQ-ENG-11): a staged upload joins a message only while the thread is open
+-- and within 24 hours of its upload (engagement_message_attachments_guard()), so one of an ended engagement or older
+-- than 24 hours at p_now is dead weight. The purge job, with no user bound (a signed-in request deletes nothing of
+-- anyone's), deletes those rows and gets their object keys back, then deletes the objects after it commits (an object
+-- whose deletion fails is unreferenced: nothing serves it, and its key names only ids). A sent attachment is never
+-- touched. A send in flight is waited for (the row lock) and the row re-checked, so an upload that joined its message
+-- stays. SECURITY DEFINER: deletes whatever the caller's RLS (bridge_app's own DELETE is the uploader's).
+CREATE FUNCTION app_purge_stale_message_uploads(p_now timestamptz)
+    RETURNS TABLE (object_key text)
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF public.app_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'app_purge_stale_message_uploads: the stale-upload purge job only, with no user bound'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_now IS NULL THEN
+        RAISE EXCEPTION 'app_purge_stale_message_uploads: name the time' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN QUERY
+    WITH gone AS (
+        DELETE FROM public.engagement_message_attachments a
+         USING public.engagements e
+         WHERE e.id = a.engagement_id AND a.message_id IS NULL
+           AND (a.created_at < p_now - interval '24 hours'
+                OR e.state IN ('DECLINED', 'WITHDRAWN', 'EXPIRED', 'TERMINATED', 'CLOSED'))
+        RETURNING a.object_key
+    )
+    SELECT g.object_key FROM gone g ORDER BY g.object_key;
+END;
+$$;
+
 -- A party reports a message (REQ-ENG-11, D-57 (4)): files one moderation case (subject_type 'message', source
 -- 'report', the caller as reporter_id) for a message the caller reads as a party (its engagement's developer, or a
 -- member of its organisation narrowed by app.org_id; anyone else gets one refusal, the same as for a message that does
@@ -577,6 +620,7 @@ $$;
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_org_sees_proposal(uuid, uuid)": ("bridge_app",),  # the shortlist's INSERT policy and the API's 404
     "app_saved_searches_due(timestamptz)": ("bridge_app",),  # the alert job, with no user bound (ids only)
+    "app_purge_stale_message_uploads(timestamptz)": ("bridge_app",),  # the purge job, with no user bound
     "app_report_message(uuid, text[])": ("bridge_app",),  # a party's report of one message
     "app_reported_message(uuid)": ("bridge_app",),  # staff admin|moderator read the reported message
 }

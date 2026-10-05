@@ -347,8 +347,10 @@ class EngagementMessageAttachment(IdMixin, Base):
     post uploads it as themselves (``message_id`` NULL, ``av_status`` left to its default ``pending_scan``: the app
     cannot insert either) while the thread is open; its uploader alone reads, scans (an UPDATE to a final verdict:
     the API writes ``storage/scanner.py``'s result, never the client's) and deletes it while it is staged. It
-    joins only its uploader's own message, in the transaction that inserts the message, and only ``clean``; at most
-    5 per message. Once sent every party reads it and it never changes or goes. The object key is the row's own,
+    joins only its uploader's own message, in the transaction that inserts the message, only ``clean`` and within 24
+    hours of its upload; at most 5 per message. A staged upload of an ended engagement or older than 24 hours can
+    never be sent: the purge job deletes it (``app_purge_stale_message_uploads(now)``, no user bound, returning the
+    object keys). Once sent every party reads it and it never changes or goes. The object key is the row's own,
     ``message_attachment_key(engagement_id, id)`` (ids only, never the file name; the CHECK refuses any other);
     ``created_at`` is the database's clock."""
 

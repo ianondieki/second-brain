@@ -452,6 +452,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "saved_searches_cap()": (True, set()),
     "app_org_sees_proposal(uuid, uuid)": (True, {"bridge_app"}),  # the shortlist's INSERT policy and the API
     "app_saved_searches_due(timestamp with time zone)": (True, {"bridge_app"}),  # the alert job, no user bound
+    "app_purge_stale_message_uploads(timestamp with time zone)": (True, {"bridge_app"}),  # the purge job, ditto
     "app_report_message(uuid, text[])": (True, {"bridge_app"}),  # a party's report of one message (fixed limit)
     "app_reported_message(uuid)": (True, {"bridge_app"}),  # staff admin|moderator read the reported message
 }
@@ -1262,11 +1263,15 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             await expect_error(  # revision 0007: the expiry job's list, refused to a signed-in session
                 conn, "SELECT count(*) FROM app_engagements_due_for_expiry(now())", "the engagements.expire job only"
             )
-            # revision 0008: the shortlist's Inbox check (false: no such proposal), the alert job's list (refused to a
-            # signed-in session), a report (refused: no such message) and the staff reader (refused: not staff)
+            # revision 0008: the shortlist's Inbox check (false: no such proposal), the alert job's list and the
+            # purge (refused to a signed-in session), a report (refused: no such message) and the staff reader
+            # (refused: not staff)
             inbox = sa.text("SELECT app_org_sees_proposal(:org, uuid7())")
             assert (await conn.execute(inbox, {"org": org_id})).scalar_one() is False
             await expect_error(conn, "SELECT count(*) FROM app_saved_searches_due(now())", "the saved-search alert job")
+            await expect_error(
+                conn, "SELECT count(*) FROM app_purge_stale_message_uploads(now())", "the stale-upload purge job"
+            )
             await expect_error(
                 conn, "SELECT * FROM app_report_message(uuid7(), ARRAY['spam'])", "no message of the caller's"
             )

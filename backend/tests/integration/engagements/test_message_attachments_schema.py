@@ -13,6 +13,8 @@ The rule that an upload joins only a message of its own transaction commits, so 
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -264,3 +266,73 @@ async def test_a_party_keeps_only_their_own_read_marker(owner_engine: AsyncEngin
             await t.expect(conn, sql, "permission denied", e=engagement)
         await t.as_owner(conn)
         assert await t.run(conn, MARKERS, e=engagement) == 3
+
+
+PURGE = "SELECT object_key FROM app_purge_stale_message_uploads(:now)"
+OWNER_UPLOAD = UPLOAD.replace("object_key)", "object_key, message_id, av_status, created_at)").replace(
+    ":key)", ":key, :m, CAST(:status AS av_status), :at)"
+)
+
+
+async def _owner_upload(
+    conn: AsyncConnection, engagement: UUID, by: UUID, at: datetime, message: UUID | None = None
+) -> str:
+    """As the owner: an upload of ``by`` dated ``at`` (staged, or sent with ``message``); returns its object key."""
+    await t.as_owner(conn)
+    params = upload_params(engagement, by) | {"m": message, "status": "clean", "at": at}
+    await t.run(conn, OWNER_UPLOAD, **params)
+    return str(params["key"])
+
+
+async def test_the_purge_job_deletes_staged_uploads_that_can_never_be_sent(owner_engine: AsyncEngine) -> None:
+    """Given staged uploads on an open thread (fresh, exactly 24 hours old, older) and on an ended one, and sent
+    attachments on both (an old one too), When the purge job runs with no user bound, Then it deletes exactly the
+    staged uploads older than 24 hours or of an ended engagement and returns their object keys (the job then deletes
+    the objects); fresh staged uploads and every sent attachment stay, and a re-run deletes nothing more. An upload
+    older than 24 hours can no longer join a message, so nothing the job deletes could have been sent. A signed-in
+    session and a missing time are refused."""
+    async with t.as_app(owner_engine) as conn:
+        now: datetime = await t.run(conn, "SELECT app_clock_now()")
+        day = timedelta(hours=24)
+        p, engagement = await opened(conn)
+        await t.as_owner(conn)
+        q, ended = await opened(conn)
+        await t.act(conn, p.developer)
+        fresh = await upload(conn, engagement, p.developer, None)
+        sent = await post(conn, engagement, p.developer, "developer", body="The plan.")
+        old_sent = await _owner_upload(conn, engagement, p.developer, now - 2 * day, sent)
+        boundary = await _owner_upload(conn, engagement, p.developer, now - day)
+        stale = await _owner_upload(conn, engagement, p.owner, now - day - timedelta(seconds=1))
+        stale_mine = await _owner_upload(conn, engagement, p.developer, now - 2 * day)
+        await t.act(conn, p.developer)
+        late = await post(conn, engagement, p.developer, "developer", body="Two days on.")
+        stale_id = await t.run(
+            conn, "SELECT id FROM engagement_message_attachments WHERE object_key = :k", k=stale_mine
+        )
+        await t.expect(conn, SEND, "within 24 hours of its upload", m=late, ids=[stale_id])
+        await t.act(conn, q.developer)
+        ended_staged = await upload(conn, ended, q.developer)
+        ended_message = await post(conn, ended, q.developer, "developer", body="Before I withdraw.")
+        ended_sent = await upload(conn, ended, q.developer)
+        assert await t.rowcount(conn, SEND, m=ended_message, ids=[ended_sent]) == 1
+        await t.append(conn, ended, q.developer, "developer", "withdraw", "INTEREST_CONFIRMED", "WITHDRAWN")
+        for by in (p.developer, q.developer):
+            await t.act(conn, by)
+            await t.expect(conn, PURGE, "the stale-upload purge job only, with no user bound", now=now)
+        await t.act(conn, None)
+        await t.expect(conn, PURGE, "name the time", now=None)
+
+        def ours(keys: Iterable[str]) -> set[str]:
+            return {key for key in keys if key.split("/")[1] in {str(engagement), str(ended)}}
+
+        purged = ours(row.object_key for row in await conn.execute(sa.text(PURGE), {"now": now}))
+        assert purged == {stale, stale_mine, f"messages/{ended}/{ended_staged}"}
+        assert ours(row.object_key for row in await conn.execute(sa.text(PURGE), {"now": now})) == set()
+        await t.as_owner(conn)
+        left = "SELECT object_key FROM engagement_message_attachments WHERE engagement_id = ANY(:e)"
+        assert ours((await conn.execute(sa.text(left), {"e": [engagement, ended]})).scalars()) == {
+            f"messages/{engagement}/{fresh}",
+            old_sent,
+            boundary,
+            f"messages/{ended}/{ended_sent}",
+        }
