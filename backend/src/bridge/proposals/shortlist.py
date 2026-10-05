@@ -2,7 +2,7 @@
 
 One row per (organisation, proposal) in ``org_shortlist``, shared by the organisation's members: every member reads it
 (the Inbox's Shortlist view, each entry saying who added it and when), members with a Tier-2 role (reviewer,
-signatory, admin: ``TIER2_ROLES``, docs/spec/06 6.1) add and remove. A proposal is added only while it is in the
+signatory, admin: ``EDITOR_ROLES``, docs/spec/06 6.1) add and remove. A proposal is added only while it is in the
 organisation's Inbox: ``app_org_sees_proposal`` (pitched to it, matched by its scout, or answering its Brief), asked
 first so that anything else is a 404 like an unknown id; the shortlist's INSERT policy asks again, so a proposal held
 in between is refused by the database too (mapped to the same 404). Adding is idempotent (``ON CONFLICT DO NOTHING``:
@@ -40,7 +40,7 @@ from bridge.models.enums import EngagementState, OrgRole, ProposalAsk, ProposalM
 from bridge.problems.service import niche_out
 from bridge.proposals.schemas import NicheOut
 
-TIER2_ROLES: Final = frozenset({OrgRole.ADMIN, OrgRole.REVIEWER, OrgRole.SIGNATORY})  # revision 0008's _TIER2_MEMBER
+EDITOR_ROLES: Final = frozenset({OrgRole.ADMIN, OrgRole.REVIEWER, OrgRole.SIGNATORY})  # revision 0008's _TIER2_MEMBER
 COMPARE_MIN: Final = 2
 COMPARE_MAX: Final = 4
 ADDED: Final = "shortlist.added"

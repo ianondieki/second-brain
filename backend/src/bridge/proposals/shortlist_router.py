@@ -27,7 +27,7 @@ from bridge.tenancy.deps import OrgContext, OrgMember, org_member
 router = APIRouter(prefix="/api/orgs/{org_id}/shortlist", tags=["organisations"], responses=ERROR_RESPONSES)
 PAGE: Final = 50
 MAX_PAGE: Final = 100
-Tier2Member = Annotated[OrgContext, Depends(org_member(*sorted(shortlist.TIER2_ROLES)))]
+Tier2Member = Annotated[OrgContext, Depends(org_member(*sorted(shortlist.EDITOR_ROLES)))]
 
 
 @router.get("")
