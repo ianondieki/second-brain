@@ -152,3 +152,39 @@ async def test_tier2_members_keep_the_shortlist_and_every_member_reads_it(owner_
         await t.act(conn, p.signatory, p.org)
         assert await t.rowcount(conn, remove, org=p.org, p=s.pitched) == 1
         assert await t.run(conn, LISTED) == 2
+
+
+async def test_a_shortlisted_proposal_put_on_hold_stays_harmless(owner_engine: AsyncEngine) -> None:
+    """Given proposals on the organisation's shortlist, When moderation holds one (staff, app_moderate_proposal), Then
+    its shortlist row stays, holding ids, who added it and when only, but shows nothing: no member reads the proposal
+    through it (the proposals' RLS hides a held proposal from everyone but its owner and staff, so the API, which
+    re-reads under RLS, drops it from the list and Compare), the Inbox check is false, a Tier-2 member still removes
+    it and nobody adds it back while it is held; the other entry is untouched. No database change is needed."""
+    async with t.as_app(owner_engine) as conn:
+        s = await inbox(conn)
+        p = s.p
+        await t.act(conn, p.reviewer, p.org)
+        for proposal in (s.matched, s.pitched):
+            await t.run(conn, ADD, org=p.org, p=proposal, by=p.reviewer)
+        await t.act(conn, p.staff)
+        await t.run(conn, "SELECT app_moderate_proposal(:p, 'held')", p=s.matched)
+        through = (
+            "SELECT count(*) FROM org_shortlist s JOIN proposals x ON x.id = s.proposal_id"
+            " LEFT JOIN proposal_versions v ON v.id = x.current_version_id WHERE s.proposal_id = :p"
+        )
+        for reader in (p.viewer, p.reviewer, p.owner):
+            await t.act(conn, reader, p.org)
+            assert await t.run(conn, LISTED) == 2, reader  # the row stays
+            assert await t.run(conn, through, p=s.matched) == 0, reader  # but leads nowhere
+            assert await t.run(conn, through, p=s.pitched) == 1, reader
+            assert await t.run(conn, SEES, org=p.org, p=s.matched) is False
+        columns = (
+            "SELECT array_agg(column_name::text ORDER BY column_name) FROM information_schema.columns"
+            " WHERE table_schema = 'public' AND table_name = 'org_shortlist'"
+        )
+        assert await t.run(conn, columns) == ["added_at", "added_by", "org_id", "proposal_id"]  # no proposal text
+        await t.act(conn, p.reviewer, p.org)
+        remove = "DELETE FROM org_shortlist WHERE org_id = :org AND proposal_id = :p"
+        assert await t.rowcount(conn, remove, org=p.org, p=s.matched) == 1
+        await t.expect(conn, ADD, RLS, org=p.org, p=s.matched, by=p.reviewer)  # not back while held
+        assert await t.run(conn, LISTED) == 1
