@@ -6,6 +6,9 @@ reason codes, never the text, and offers dismiss or uphold; When they open the c
 ids only; When they decide it, Then the case closes (dismiss: approved; uphold: rejected) with the staff note in the
 decision's audit details and the message unchanged in the thread; the reporter never decides their own report, a
 message report takes neither approve nor reject, and a proposal case takes neither dismiss nor uphold.
+
+It lives with the thread's tests: its world (``api_world.build``) leaves its organisations behind, as every module here
+does, and the directory's seed tests, which run between ``admin`` and ``engagements``, count the seeded ones.
 """
 
 from __future__ import annotations
