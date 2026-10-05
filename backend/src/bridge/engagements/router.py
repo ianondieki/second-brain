@@ -84,7 +84,11 @@ async def my_engagements(live: CurrentSession, db: Db, settings: SettingsDep) ->
         select(Engagement).where(Engagement.developer_id == live.user.id).order_by(Engagement.updated_at.desc())
     )
     items = await history.summaries(
-        db, list(rows.scalars()), deals_enabled=settings.feature_deals_enabled, developer_caller=True
+        db,
+        list(rows.scalars()),
+        deals_enabled=settings.feature_deals_enabled,
+        developer_caller=True,
+        reader_id=live.user.id,
     )
     return EngagementList(items=items)
 
@@ -95,7 +99,11 @@ async def org_engagements(org: OrgMember, db: Db, settings: SettingsDep) -> Enga
         select(Engagement).where(Engagement.org_id == org.org_id).order_by(Engagement.updated_at.desc())
     )
     items = await history.summaries(
-        db, list(rows.scalars()), deals_enabled=settings.feature_deals_enabled, developer_caller=False
+        db,
+        list(rows.scalars()),
+        deals_enabled=settings.feature_deals_enabled,
+        developer_caller=False,
+        reader_id=org.live.user.id,
     )
     return EngagementList(items=items)
 

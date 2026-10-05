@@ -123,3 +123,16 @@ def test_search_words_never_reach_the_access_log(access_log: io.StringIO, path: 
     assert f'"GET {logged} HTTP/1.1" 302' in line
     assert "Wanjiku" not in line
     assert "example.com" not in line
+
+
+@pytest.mark.parametrize("key", ["sig", "%73ig", "SIG"])
+def test_a_download_links_signature_never_reaches_the_access_log(access_log: io.StringIO, key: str) -> None:
+    """REQ-ENG-11: a thread attachment's signed link (``.../file?expires=&sig=``) is logged without its signature, on
+    every path and however its key is encoded; the expiry, an id-free number, stays."""
+    configure_logging()
+    signature = "9f" * 32
+    path = "/api/engagements/e/messages/m/attachments/a/file"
+    log_request(f"{path}?expires=1800000000&{key}={signature}")
+    line = access_log.getvalue()
+    assert signature not in line
+    assert f"{path}?expires=1800000000&{key}=[redacted]" in line

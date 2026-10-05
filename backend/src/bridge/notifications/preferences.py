@@ -25,6 +25,7 @@ from bridge.notifications.models import NotificationPreference
 
 SAVED_SEARCH_MATCH: Final = "saved_search_match"  # in-app, once per saved search and day (P21 track C)
 SAVED_SEARCH_DIGEST: Final = "saved_search_digest"  # the day's saved-search counts by email, opt-in (P21 track C)
+ENGAGEMENT_MESSAGE: Final = "engagement.n18"  # N18, a new message on an engagement: its email is mutable (P21 track A)
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +56,13 @@ CATALOGUE: Final[tuple[KindInfo, ...]] = (
         default=False,
         label="A daily email with how many new problems or Briefs match your saved searches",
         developer_only=True,
+    ),
+    KindInfo(
+        ENGAGEMENT_MESSAGE,
+        NotificationChannel.EMAIL,
+        mutable=True,
+        default=True,
+        label="A new message on an engagement, by email (at most one per engagement every 30 minutes)",
     ),
 )
 _BY_KEY: Final = {(info.kind, info.channel): info for info in CATALOGUE}

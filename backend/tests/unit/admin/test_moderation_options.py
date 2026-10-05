@@ -24,7 +24,10 @@ from bridge.admin.moderation import _CURRENT_TEXT, TIER1_FIELDS, decision_option
         ({"own": True, "vulnerable": True}, ([], "own_content")),
         ({"found": False}, ([], "subject_gone")),
         ({"subject_type": "org_claim", "found": False}, ([], "unsupported_subject")),
-        ({"subject_type": "message"}, ([], "unsupported_subject")),
+        ({"subject_type": "user"}, ([], "unsupported_subject")),
+        ({"subject_type": "message"}, (["dismiss", "uphold"], None)),  # REQ-ENG-11: a message report (P21)
+        ({"subject_type": "message", "own": True}, ([], "own_content")),  # its reporter never decides it
+        ({"subject_type": "message", "unresolved": False}, ([], "already_decided")),
         ({"unresolved": False}, ([], "already_decided")),
         ({"unresolved": False, "subject_type": "org_claim"}, ([], "already_decided")),
     ],

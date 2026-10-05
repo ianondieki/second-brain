@@ -1,9 +1,11 @@
-"""Notification jobs (REQ-NOT-04; ``bridge.engagements.notify``).
+"""Notification jobs (REQ-NOT-04; ``bridge.engagements.notify``; REQ-ENG-11 N18, ``bridge.engagements.message_notify``).
 
 ``engagements.notify`` tells the other party about one tracker event (in-app, and EM2 on entering
 ``INTEREST_CONFIRMED``), queued by the command's transaction on the ``notifications`` queue, one engagement at a time
-(lock ``engagement:<id>``). It is idempotent (dedupe keys), so a retry never notifies twice; an email still queued
-after transient provider errors raises ``EmailStillQueued`` and the job backs off and resumes it.
+(lock ``engagement:<id>``). ``engagements.message_notify`` tells the other party's people about one message of the
+thread (N18), queued by the post's transaction the same way. Both are idempotent (dedupe keys), so a retry never
+notifies twice; an email still queued after transient provider errors raises ``EmailStillQueued`` and the job backs
+off and resumes it.
 
 The runtime (settings, database sessions, email provider) is built from settings on first use; tests install their
 own with ``use_runtime``.
@@ -17,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.config import Settings, get_settings
 from bridge.db import create_engine, create_session_factory
-from bridge.engagements import notify
+from bridge.engagements import message_notify, notify
 from bridge.jobs.app import app
 from bridge.jobs.provenance import Backoff
 from bridge.notifications.email import EmailProvider, provider_from_settings
@@ -90,6 +92,21 @@ async def engagement_notify(
         event_id=UUID(event_id),
         developer_id=UUID(developer_id),
         reason_text=reason_text,
+    )
+    if not done:
+        raise EmailStillQueued(f"engagement {engagement_id}: an email is still queued")
+
+
+@app.task(name=message_notify.TASK, queue=message_notify.QUEUE, retry=NOTIFY_RETRY)
+async def engagement_message_notify(engagement_id: str, message_id: str, developer_id: str) -> None:
+    rt = runtime()
+    done = await message_notify.deliver(
+        rt.session_factory,
+        rt.email_provider,
+        rt.settings,
+        engagement_id=UUID(engagement_id),
+        message_id=UUID(message_id),
+        developer_id=UUID(developer_id),
     )
     if not done:
         raise EmailStillQueued(f"engagement {engagement_id}: an email is still queued")

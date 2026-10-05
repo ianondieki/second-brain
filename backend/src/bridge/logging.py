@@ -54,19 +54,23 @@ QUERYLESS_PATHS = ("/api/auth/oauth/",)
 # Query parameters that carry what people type (search words, which can be a name or an address): their values are
 # redacted on every path (P16-E1). A key is compared decoded, as the server reads it, so ``%71=`` is ``q=`` too.
 FREE_TEXT_PARAMETERS = frozenset({"q"})
+# Query parameters that carry a credential: a thread attachment's signed download link (REQ-ENG-11, ``sig``), redacted
+# on every path; compared decoded and in any case.
+SECRET_PARAMETERS = frozenset({"sig"})
+_REDACTED_PARAMETERS = FREE_TEXT_PARAMETERS | SECRET_PARAMETERS
 _QUERY_PAIR = re.compile(r"(^|&)([^&=]*)=([^&]*)")
 
 
 def _redact_free_text(match: re.Match[str]) -> str:
-    if unquote_plus(match.group(2)) in FREE_TEXT_PARAMETERS:
+    if unquote_plus(match.group(2)).lower() in _REDACTED_PARAMETERS:
         return f"{match.group(1)}{match.group(2)}={_REDACTED}"
     return match.group(0)
 
 
 class DropQueryStrings(logging.Filter):
     """Drops the query string from uvicorn access-log records for ``QUERYLESS_PATHS``, and the values of
-    ``FREE_TEXT_PARAMETERS`` from every other. uvicorn logs ``'%s - "%s %s HTTP/%s" %d'`` with (client, method,
-    path?query, HTTP version, status); records of any other shape pass unchanged."""
+    ``FREE_TEXT_PARAMETERS`` and ``SECRET_PARAMETERS`` from every other. uvicorn logs ``'%s - "%s %s HTTP/%s" %d'``
+    with (client, method, path?query, HTTP version, status); records of any other shape pass unchanged."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         args = record.args
