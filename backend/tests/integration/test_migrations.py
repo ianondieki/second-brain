@@ -1,16 +1,19 @@
-"""Revisions 0001 to 0007 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
-REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08, REQ-ENG-10, REQ-NOT-03, REQ-PROP-03; docs/spec/08
-Migrations and Tenancy; AC-IP-2).
+"""Revisions 0001 to 0008 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
+REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08, REQ-ENG-10, REQ-NOT-03, REQ-PROP-03, REQ-ENG-11,
+REQ-REPO-02, REQ-PERS-03; docs/spec/08 Migrations and Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0007, 0006, 0005, 0004, 0003 and 0002 leaves the revision before it exactly as
-it found it), table classification, RLS coverage generated from the ORM metadata, the grant matrix of every role, role
-attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained audit log, the evidence triggers
-of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column grants, the schema v5 notes
-triggers, policies and in-app column grant, the tags policies revision 0007 leaves as they were, the
-listed-organisations policy and the Procrastinate schema. The tracker's behaviour (chain, projection, parties,
-payments, clock) is tested in ``integration/engagements/``; schema v4's in ``integration/matching/``,
-``integration/problems/`` and ``integration/billing/``; schema v5's (the notes' writers and readers, marking read) in
-``test_rls.py``; revision 0007's ``app_close_tag(tag, status)`` in ``test_privileges.py``.
+Migration round trip and drift (each of 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the revision before it
+exactly as it found it), table classification, RLS coverage generated from the ORM metadata, the grant matrix of every
+role, role attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained audit log, the evidence
+triggers of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column grants, the schema v5 notes
+triggers, policies and in-app column grant, the tags policies revision 0007 leaves as they were, the schema v6
+(revision 0008) policies, triggers and column grants, the listed-organisations policy and the Procrastinate schema.
+The tracker's behaviour (chain, projection, parties, payments, clock) is tested in ``integration/engagements/``;
+schema v4's in ``integration/matching/``, ``integration/problems/`` and ``integration/billing/``; schema v5's (the
+notes' writers and readers, marking read) in ``test_rls.py``; revision 0007's ``app_close_tag(tag, status)`` in
+``test_privileges.py``; schema v6's (the thread, its stage gate and report, the shortlist, saved searches and their
+job) in ``integration/engagements/test_messages_schema.py``, ``integration/engagements/test_messages_race.py``,
+``integration/proposals/test_shortlist_schema.py`` and ``integration/profiles/test_saved_searches_schema.py``.
 """
 
 from __future__ import annotations
@@ -193,6 +196,11 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     },
     # revision 0006: marking read only; never the recipient, the organisation or the text (table-wide since 0001)
     "in_app_notifications": {"read_at"},
+    # revision 0008: an upload joins its message and gets its scan verdict; a reader moves their marker; a saved
+    # search is renamed, muted and advanced by the alert job (never its owner or query)
+    "engagement_message_attachments": {"message_id", "av_status"},
+    "engagement_message_reads": {"last_read_at"},
+    "saved_searches": {"name", "alerts", "last_alerted_at"},
 }
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
@@ -269,6 +277,13 @@ APP_GRANTS: dict[str, set[str]] = {
     "payments": {S, I},
     # revision 0006: the side states' notes (append-only: SELECT and INSERT only, the INSERT without created_at)
     "engagement_notes": {S, I},
+    # revision 0008: the thread (messages append-only; a staged upload is the uploader's to delete), the shortlist (a
+    # working list: no UPDATE) and saved searches
+    "engagement_messages": {S, I},
+    "engagement_message_attachments": {S, I, U, D},
+    "engagement_message_reads": {S, I, U},
+    "org_shortlist": {S, I, D},
+    "saved_searches": {S, I, U, D},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -429,6 +444,16 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_close_tag(uuid, tag_status)": (True, {"bridge_app"}),
     # the engagements.expire job with no user bound: the engagements the clock may act on, ids only
     "app_engagements_due_for_expiry(timestamp with time zone)": (True, {"bridge_app"}),
+    # revision 0008: the thread's gate, append-only guard, attachment guard and caps (triggers: nobody)
+    "engagement_thread_open()": (True, set()),  # locks the engagement and reads the chain
+    "engagement_messages_redaction_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer (D-54)
+    "engagement_message_attachments_guard()": (False, set()),  # SECURITY INVOKER: the uploader reads their message
+    "engagement_message_attachments_cap()": (True, set()),
+    "saved_searches_cap()": (True, set()),
+    "app_org_sees_proposal(uuid, uuid)": (True, {"bridge_app"}),  # the shortlist's INSERT policy and the API
+    "app_saved_searches_due(timestamp with time zone)": (True, {"bridge_app"}),  # the alert job, no user bound
+    "app_report_message(uuid, text[], integer)": (True, {"bridge_app"}),  # a party's report of one message
+    "app_reported_message(uuid)": (True, {"bridge_app"}),  # staff admin|moderator read the reported message
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -650,13 +675,23 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     at_0006 = schema_snapshot(scratch_url)
     assert set(at_0006["policies"]) - set(at_0005["policies"]), "0006 adds the policies of engagement_notes"
     assert set(at_0005["table_acl"]) - set(at_0006["table_acl"]), "0006 narrows the in-app UPDATE to read_at"
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0007"))
+    at_0007 = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_0007[kind] != at_0006[kind]}
+    assert changed == {"functions", "function_acl"}, "0007 replaces app_close_tag, adds one function, nothing else"
+    assert "app_close_tag(uuid,tag_status) bridge_app EXECUTE" in at_0007["function_acl"]
+    assert "app_engagements_due_for_expiry(timestamp with time zone) bridge_app EXECUTE" in at_0007["function_acl"]
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
     run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
     at_head = schema_snapshot(scratch_url)
-    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0006[kind]}
-    assert changed == {"functions", "function_acl"}, "0007 replaces app_close_tag, adds one function, nothing else"
-    assert "app_close_tag(uuid,tag_status) bridge_app EXECUTE" in at_head["function_acl"]
-    assert "app_engagements_due_for_expiry(timestamp with time zone) bridge_app EXECUTE" in at_head["function_acl"]
+    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0007[kind]}
+    assert changed == set(SNAPSHOT) - {"enums"}, "0008 adds tables, functions and policies; no enum type"
+    assert set(at_0007["policies"]) - set(at_head["policies"]), "0008 narrows the app's report INSERT policy"
+    assert "app_report_message(uuid,text[],integer) bridge_app EXECUTE" in at_head["function_acl"]
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0007"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0008 leaves every object of 0007 exactly as it found it (the report policy included)
+        assert after[kind] == at_0007[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0006"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0007 leaves every object of 0006 exactly as it found it (app_close_tag byte for byte)
@@ -1015,6 +1050,13 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
         )
     held = "SELECT has_any_column_privilege('bridge_app', 'engagement_notes', 'UPDATE')"
     assert not await scalar(owner_engine, held)  # no column-scoped UPDATE either
+    for privilege in ("UPDATE", "DELETE", "TRUNCATE"):  # revision 0008: the thread's messages, like the notes
+        assert not await scalar(
+            owner_engine, "SELECT has_table_privilege('bridge_app', 'engagement_messages', :p)", p=privilege
+        )
+    assert not await scalar(
+        owner_engine, "SELECT has_any_column_privilege('bridge_app', 'engagement_messages', 'UPDATE')"
+    )
 
 
 async def test_schema_v5_policies_are_exactly_the_notes_and_the_in_app_ones(owner_engine: AsyncEngine) -> None:
@@ -1036,6 +1078,31 @@ async def test_schema_v5_policies_are_exactly_the_notes_and_the_in_app_ones(owne
     assert {role for row in found for role in row.roles} == {"bridge_app"}
     (update,) = (row for row in found if row.cmd == "UPDATE")
     assert update.qual == update.with_check == "(user_id = app_user_id())"
+
+
+async def test_schema_v6_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
+    """Revision 0008: messages have one SELECT and one INSERT policy (append-only); the other new tables the commands
+    they are granted; every policy is bridge_app's. bridge_app's report INSERT on moderation_cases (revision 0002) is
+    narrowed to every subject type but 'message' (app_report_message files those)."""
+    found = await rows(
+        owner_engine,
+        "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, with_check FROM pg_policies"
+        " WHERE schemaname = 'public' AND tablename = ANY (:tables)",
+        tables=[*V8_THREAD_TABLES, "org_shortlist", "saved_searches", "moderation_cases"],
+    )
+    commands = {
+        "engagement_messages": ("SELECT", "INSERT"),
+        "engagement_message_attachments": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+        "engagement_message_reads": ("SELECT", "INSERT", "UPDATE"),
+        "org_shortlist": ("SELECT", "INSERT", "DELETE"),
+        "saved_searches": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+        "moderation_cases": ("SELECT", "INSERT", "UPDATE"),
+    }
+    expected = {(table, f"bridge_app_{cmd.lower()}", cmd) for table, cmds in commands.items() for cmd in cmds}
+    assert {(row.tablename, row.policyname, row.cmd) for row in found} == expected
+    assert {role for row in found for role in row.roles} == {"bridge_app"}
+    (report,) = (row for row in found if row.tablename == "moderation_cases" and row.cmd == "INSERT")
+    assert report.with_check.endswith("AND ((subject_type)::text <> 'message'::text))")
 
 
 async def test_tags_keep_revision_0002s_policies(owner_engine: AsyncEngine) -> None:
@@ -1195,6 +1262,15 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             await expect_error(  # revision 0007: the expiry job's list, refused to a signed-in session
                 conn, "SELECT count(*) FROM app_engagements_due_for_expiry(now())", "the engagements.expire job only"
             )
+            # revision 0008: the shortlist's Inbox check (false: no such proposal), the alert job's list (refused to a
+            # signed-in session), a report (refused: no such message) and the staff reader (refused: not staff)
+            inbox = sa.text("SELECT app_org_sees_proposal(:org, uuid7())")
+            assert (await conn.execute(inbox, {"org": org_id})).scalar_one() is False
+            await expect_error(conn, "SELECT count(*) FROM app_saved_searches_due(now())", "the saved-search alert job")
+            await expect_error(
+                conn, "SELECT * FROM app_report_message(uuid7(), ARRAY['spam'], 10)", "no message of the caller's"
+            )
+            await expect_error(conn, "SELECT * FROM app_reported_message(uuid7())", "staff admin or moderator only")
             # revision 0005: the definers and CHECK helpers bridge_app may call
             await conn.execute(sa.text("SELECT count(*) FROM app_trend_aggregates(now() - interval '1 day', now())"))
             await conn.execute(sa.text("SELECT app_uuid_set_is_valid(ARRAY[uuid7()], 1, 5)"))
@@ -1783,6 +1859,9 @@ DEFINER_ONLY_COLUMNS: dict[str, set[str]] = {
     "problem_sources": {"excerpt_ref"},
     "agent_runs": {"started_at"},
     "engagement_notes": {"created_at", "redacted_at", "redacted_by"},  # D-54: a redaction is the owner's
+    # Revision 0008: a message's time and redaction (as a note's), a shortlist entry's time.
+    "engagement_messages": {"created_at", "redacted_at", "redacted_by"},
+    "org_shortlist": {"added_at"},
 }
 
 
@@ -1805,6 +1884,32 @@ async def test_bridge_app_inserts_every_column_but_the_databases_ones(
         t=f"public.{table}",
     )
     assert {row.name for row in insertable} == {c.name for c in TABLES[table].columns} - columns
+
+
+# Revision 0008: columns bridge_app inserts on the tables whose other columns it writes later (an upload's message and
+# verdict, a search's last alert) or never (the database's times). The UPDATE side is APP_COLUMN_UPDATES.
+V6_INSERT_EXCLUDED: dict[str, set[str]] = {
+    "engagement_message_attachments": {"message_id", "created_at"},  # staged first, sent by an UPDATE
+    "engagement_message_reads": set(),
+    "saved_searches": {"last_alerted_at", "created_at"},  # the alert job's, the database's
+}
+
+
+@pytest.mark.parametrize(("table", "excluded"), sorted(V6_INSERT_EXCLUDED.items()))
+async def test_schema_v6_insert_columns_are_exactly_the_apps(
+    owner_engine: AsyncEngine, table: str, excluded: set[str]
+) -> None:
+    columns = [c.name for c in TABLES[table].columns]
+    held = (
+        "SELECT c.name FROM unnest(CAST(:columns AS text[])) AS c(name)"
+        " WHERE has_column_privilege('bridge_app', CAST(:t AS text), c.name, CAST(:p AS text))"
+    )
+    insertable = await rows(owner_engine, held, columns=columns, t=f"public.{table}", p="INSERT")
+    assert {row.name for row in insertable} == set(columns) - excluded
+    readable = await rows(owner_engine, held, columns=columns, t=f"public.{table}", p="SELECT")
+    assert {row.name for row in readable} == set(columns)
+    whole = "SELECT has_table_privilege('bridge_app', CAST(:t AS text), 'INSERT')"
+    assert await scalar(owner_engine, whole, t=f"public.{table}") is False  # column-scoped, never table-wide
 
 
 async def test_schema_v4_protected_columns_and_tables_are_not_the_apps(app_engine: AsyncEngine) -> None:
@@ -2405,6 +2510,41 @@ V6_TRIGGERS = {
 }
 
 
+# Revision 0008: the thread's tables follow the tracker's pattern (the visibility check first on INSERT, then the stage
+# gate); messages are append-only for every role (an UPDATE only as the owner's redaction, D-54); a sent attachment
+# never changes; the caps count after the rows are in (after RLS).
+V8_TRIGGERS = {
+    **{
+        (t, f"{t}_0_visible"): ("tracker_engagement_visible", ROW | BEFORE | ON_INSERT)
+        for t in ("engagement_messages", "engagement_message_attachments", "engagement_message_reads")
+    },
+    **{
+        (t, f"{t}_1_open"): ("engagement_thread_open", ROW | BEFORE | ON_INSERT)
+        for t in ("engagement_messages", "engagement_message_attachments")
+    },
+    ("engagement_messages", "engagement_messages_no_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE),
+    ("engagement_messages", "engagement_messages_redaction_guard"): (
+        "engagement_messages_redaction_guard",
+        ROW | BEFORE | ON_UPDATE,
+    ),
+    **{
+        (t, f"{t}_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE)
+        for t in ("engagement_messages", "engagement_message_attachments")
+    },
+    ("engagement_message_attachments", "engagement_message_attachments_guard"): (
+        "engagement_message_attachments_guard",
+        ROW | BEFORE | ON_UPDATE | ON_DELETE,
+    ),
+    # AFTER INSERT OR UPDATE OF message_id (the column list is not in tgtype).
+    ("engagement_message_attachments", "engagement_message_attachments_cap"): (
+        "engagement_message_attachments_cap",
+        ROW | ON_INSERT | ON_UPDATE,
+    ),
+    ("saved_searches", "saved_searches_cap"): ("saved_searches_cap", ROW | ON_INSERT),
+}
+V8_THREAD_TABLES = ("engagement_messages", "engagement_message_attachments", "engagement_message_reads")
+
+
 async def test_a_published_briefs_text_changes_only_with_a_return_to_review(owner_engine: AsyncEngine) -> None:
     """Revision 0006 (REQ-DIR-05, the P19-B security review): problems_brief_text_guard keeps the moderated text of a
     published org_brief problem, for every role. Its organisation's editor (bridge_app) is refused with SQLSTATE 55000
@@ -2450,7 +2590,7 @@ async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine)
         " FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal"
         " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
     )
-    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS
+    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS | V8_TRIGGERS
     assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == expected
     assert {row.tgenabled for row in found} == {"O"}
 
@@ -2551,8 +2691,8 @@ async def test_the_visibility_trigger_fires_first_on_every_tracker_table(owner_e
         " JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_proc p ON p.oid = t.tgfoid"
         " WHERE NOT t.tgisinternal AND c.relname = ANY (:tables) AND t.tgtype & 7 = 7"  # ROW | BEFORE | INSERT
         ' ORDER BY c.relname, t.tgname COLLATE "C"',
-        tables=[*V3_TRACKER_TABLES, "engagement_notes"],
+        tables=[*V3_TRACKER_TABLES, "engagement_notes", *V8_THREAD_TABLES],
     )
     assert {row.table_name: row.function for row in found} == dict.fromkeys(
-        (*V3_TRACKER_TABLES, "engagement_notes"), "tracker_engagement_visible"
+        (*V3_TRACKER_TABLES, "engagement_notes", *V8_THREAD_TABLES), "tracker_engagement_visible"
     )

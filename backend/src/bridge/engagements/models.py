@@ -23,7 +23,10 @@ Rules the database enforces (revision 0003; the state machine in ``engagements/s
 - A note (revision 0006) is the text a side-state command carries, a sibling of the event it explains, never part of
   the chain: written by that event's actor as themselves, in the event's transaction (the event is still the
   engagement's latest), one per event, its kind matching the event's transition.
-- Times (event and note ``created_at``, ``stage_entered_at``, ``ended_at``, ``endorsed_at``, ``signed_at``,
+- The thread (revision 0008, REQ-ENG-11): messages, their attachments and read markers are the parties' only (never
+  staff's); a message is posted once the engagement has reached ``INTEREST_CONFIRMED`` and until it ends, and is
+  append-only like a note (D-54's redaction aside).
+- Times (event, note and message ``created_at``, ``stage_entered_at``, ``ended_at``, ``endorsed_at``, ``signed_at``,
   ``recorded_at``, ``confirmed_at``) are the database's, on the shared clock ``app_clock_now()`` (the test clock's
   offset applies only where the owner enabled it: dev, test and staging databases).
 
@@ -65,6 +68,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from bridge.models.base import Base, IdMixin, Tenancy, TimestampsMixin
 from bridge.models.enums import (
     AgreementStatus,
+    AvStatus,
     ContactChannel,
     EndorsementMethod,
     EngagementActorRole,
@@ -284,6 +288,103 @@ class EngagementNote(IdMixin, Base):
     redacted_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
 
 
+# REQ-ENG-11 (revision 0008): the engagement thread's limits, as the database enforces them.
+MESSAGE_MAX_CHARS = 4000  # a message's body: 1 to 4,000 characters, not blank
+MESSAGE_REDACTED = "[redacted]"  # D-54: the one body a message may be changed to, by the owner's redaction
+MAX_MESSAGE_ATTACHMENTS = 5  # per message (engagement_message_attachments_cap)
+MAX_MESSAGE_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20 MB, as proposal attachments (docs/spec/06 6.1)
+MAX_FILE_NAME_CHARS = 255
+# Who posts on the organisation's side: a member who may act on the tracker (viewers read, never post).
+MESSAGE_POSTING_ORG_ROLES = frozenset({"owner", "admin", "reviewer", "signatory", "finance"})
+
+
+class EngagementMessage(IdMixin, Base):
+    """One message of an engagement's thread (REQ-ENG-11; revision 0008). Parties only: the developer and the members
+    of the organisation (narrowed by ``app.org_id``) read every message, viewers included; staff never read the thread
+    (a report shares one message, ``app_reported_message``). A party posts as themselves on their own side
+    (``sender_party``: ``developer``, or ``org`` for a member who may act), once the engagement has reached
+    ``INTEREST_CONFIRMED`` and until it ends (``engagement_thread_open()``: SQLSTATE 55000 otherwise; read stays open).
+    INSERT-only for the app; D-54: the owner (or a definer function it owns) may redact a body once, setting it to
+    ``'[redacted]'`` with ``redacted_at`` and ``redacted_by``. ``created_at`` is the database's clock: leave it out."""
+
+    __tablename__ = "engagement_messages"
+    __table_args__ = (
+        UniqueConstraint("id", "engagement_id"),  # target of the attachments' (message_id, engagement_id) key
+        Index("ix_engagement_messages_thread", "engagement_id", "created_at", "id"),
+        CheckConstraint(f"body ~ '[^[:space:]]' AND char_length(body) <= {MESSAGE_MAX_CHARS}", name="body_length"),
+        CheckConstraint(
+            f"(redacted_at IS NOT NULL) = (body = {MESSAGE_REDACTED!r})"
+            " AND (redacted_at IS NULL) = (redacted_by IS NULL)",
+            name="redaction_complete",
+        ),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    sender_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    sender_party: Mapped[EngagementParty] = mapped_column(pg_enum(EngagementParty, "engagement_party"))
+    body: Mapped[str] = mapped_column(Text)  # plain text, never interpreted; never in payloads, logs or emails
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    # D-54: set together, exactly when the body is MESSAGE_REDACTED, only by the owner's redaction; never the app's.
+    redacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    redacted_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+
+
+class EngagementMessageAttachment(IdMixin, Base):
+    """A file of the thread (REQ-ENG-11; revision 0008), staged first and then sent with its message. A party who may
+    post uploads it as themselves (``message_id`` NULL) while the thread is open; its uploader alone reads, scans
+    (``av_status`` from ``pending_upload``/``pending_scan`` to a final verdict) and deletes it while it is staged. It
+    joins only its uploader's own message, in the transaction that inserts the message, and only ``clean``; at most
+    5 per message. Once sent every party reads it and it never changes or goes. The object key holds ids only (never
+    the file name); ``created_at`` is the database's clock."""
+
+    __tablename__ = "engagement_message_attachments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["message_id", "engagement_id"],
+            ["engagement_messages.id", "engagement_messages.engagement_id"],
+            name="fk_engagement_message_attachments_message",
+        ),
+        CheckConstraint(
+            f"file_name ~ '[^[:space:]]' AND char_length(file_name) <= {MAX_FILE_NAME_CHARS}"
+            " AND file_name !~ '[[:cntrl:]/\\\\]'",
+            name="file_name_valid",
+        ),
+        CheckConstraint(f"size_bytes BETWEEN 1 AND {MAX_MESSAGE_ATTACHMENT_BYTES}", name="size_limit"),
+        CheckConstraint(SHA256_SIZE.format(column="sha256"), name="sha256_length"),
+        CheckConstraint(
+            "object_key ~ '^[a-z0-9][a-z0-9/_-]*$' AND char_length(object_key) <= 200", name="object_key_ids_only"
+        ),
+        CheckConstraint("message_id IS NULL OR av_status = 'clean'", name="attached_only_when_clean"),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    message_id: Mapped[UUID | None] = mapped_column(index=True)  # NULL while staged
+    uploader_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    file_name: Mapped[str] = mapped_column(Text)
+    content_type: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[bytes] = mapped_column(LargeBinary)
+    object_key: Mapped[str] = mapped_column(Text, unique=True)
+    av_status: Mapped[AvStatus] = mapped_column(
+        pg_enum(AvStatus, "av_status"), server_default=AvStatus.PENDING_SCAN.value
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
+class EngagementMessageRead(Base):
+    """How far a party has read a thread (REQ-ENG-11; revision 0008): one row per party and engagement, the user's
+    own, on an engagement they are a party of. Upsert ``last_read_at`` (never another column)."""
+
+    __tablename__ = "engagement_message_reads"
+    __table_args__ = ({"info": {"tenancy": Tenancy.USER, "tenant_column": "user_id", "via": "engagements"}},)
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    last_read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
 class Agreement(IdMixin, TimestampsMixin, Base):
     """A version of the definitive agreement (docs/spec/06 6.9 stage 8, AC-TRACK-10). A draft is edited by either
     party; marking it ``final`` needs the IP terms, the deemed-acceptance clause, the final PDF's SHA-256 and at least
@@ -449,6 +550,9 @@ __all__ = [
     "Engagement",
     "EngagementEndorsement",
     "EngagementEvent",
+    "EngagementMessage",
+    "EngagementMessageAttachment",
+    "EngagementMessageRead",
     "EngagementNote",
     "Milestone",
     "PaymentRecord",

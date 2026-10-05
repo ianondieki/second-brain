@@ -365,6 +365,21 @@ class DisclosureGrant(IdMixin, TimestampsMixin, Base):
     revoked_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
 
 
+class OrgShortlist(Base):
+    """An organisation's shortlist (P21 track B, REQ-REPO-02; revision 0008): one row per (organisation, proposal),
+    shared by its members. Every member reads it; members with a Tier-2 role (reviewer, signatory, admin) add, as
+    themselves (``added_by``), a proposal that is in the organisation's Inbox (``app_org_sees_proposal``: pitched to
+    it, matched by its scout or answering its Brief), and remove one. ``added_at`` is the database's clock."""
+
+    __tablename__ = "org_shortlist"
+    __table_args__ = ({"info": {"tenancy": Tenancy.ORG, "tenant_column": "org_id"}},)
+
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    proposal_id: Mapped[UUID] = mapped_column(ForeignKey("proposals.id"), primary_key=True)
+    added_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
 class DocumentView(IdMixin, Base):
     """The access log of Tier-2 renders ("Who has seen this"). ``id`` is the ``view_id`` printed on the render."""
 
