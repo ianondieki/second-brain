@@ -3,7 +3,7 @@ link is signed and bound to its reader, how the database's refusals become API e
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, get_args
 from uuid import UUID
 
 import pytest
@@ -13,7 +13,8 @@ from sqlalchemy.exc import DBAPIError
 from bridge.config import get_settings
 from bridge.engagements import message_files, message_notify, messages
 from bridge.engagements import state_machine as sm
-from bridge.engagements.message_schemas import MessageBody, ReadBody, ReportBody, ThreadStatus
+from bridge.engagements.message_schemas import MessageBody, ReadBody, ReportBody, ReportReason, ThreadStatus
+from bridge.engagements.models import MESSAGE_REPORT_REASONS
 from bridge.engagements.service import Party
 from bridge.jobs import message_uploads, notifications
 from bridge.jobs.app import IMPORT_PATHS, app
@@ -53,6 +54,7 @@ def test_a_body_is_plain_text_of_one_to_four_thousand_characters() -> None:
 
 
 def test_report_reasons_are_codes_from_the_fixed_list() -> None:
+    assert get_args(ReportReason) == MESSAGE_REPORT_REASONS  # the database's list (app_report_message)
     assert ReportBody(reasons=["spam", "abuse", "spam"]).reasons == ["spam", "abuse"]
     for bad in ([], ["rude"], ["spam"] * 6):
         with pytest.raises(ValidationError):

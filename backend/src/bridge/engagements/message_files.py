@@ -37,7 +37,7 @@ from bridge.auth.crypto import keyed_digest
 from bridge.config import Settings
 from bridge.engagements.message_schemas import AttachmentLinkOut, StagedAttachmentOut
 from bridge.engagements.messages import gate, refusal
-from bridge.engagements.models import MAX_FILE_NAME_CHARS, EngagementMessageAttachment
+from bridge.engagements.models import MAX_FILE_NAME_CHARS, EngagementMessageAttachment, message_attachment_key
 from bridge.engagements.service import Party
 from bridge.errors import ApiError, forbidden, not_found
 from bridge.ids import uuid7
@@ -54,8 +54,8 @@ LINK_PURPOSE: Final = "message-attachment"
 
 
 def object_key(engagement_id: UUID, attachment_id: UUID) -> str:
-    """Ids only (revision 0008's CHECK): never a file name or anything the client sent."""
-    return f"messages/{engagement_id}/{attachment_id}"
+    """The row's own key (revision 0008's CHECK ``object_key_is_its_own``): ids only, never anything the client sent."""
+    return message_attachment_key(engagement_id, attachment_id)
 
 
 def file_name_of(raw: str | None) -> str:

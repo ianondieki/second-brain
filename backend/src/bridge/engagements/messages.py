@@ -54,6 +54,7 @@ from bridge.engagements.message_schemas import (
     ThreadStatus,
 )
 from bridge.engagements.models import (
+    MESSAGE_REPORTS_PER_DAY,
     Engagement,
     EngagementEvent,
     EngagementMessage,
@@ -153,7 +154,11 @@ def refusal(exc: DBAPIError, party: Party) -> ApiError | None:
             return not_found()
         return forbidden("cannot_post", CANNOT_POST)
     if sqlstate == "54000":
-        return ApiError(429, "too_many_reports", "You have reported 10 messages today. Try again tomorrow.")
+        return ApiError(
+            429,
+            "too_many_reports",
+            f"You have reported {MESSAGE_REPORTS_PER_DAY} messages in the last day. Try again later.",
+        )
     if sqlstate == "23514" and "within 24 hours" in message:
         return ApiError(422, "attachment_expired", STAGED_EXPIRED)
     if sqlstate == "22023":
