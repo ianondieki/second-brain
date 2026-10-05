@@ -85,6 +85,14 @@ describe("an Inbox row", () => {
     expect(document.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2);
   });
 
+  it("describes each star by its row's title, so a list of stars reads apart", () => {
+    renderWithIntl(<InboxRow item={item} href="/org/inbox/p1" org={reviewer} />);
+    const star = screen.getByRole("button", { name: "Remove from shortlist" });
+    const described = document.getElementById(star.getAttribute("aria-describedby")!);
+    expect(described?.tagName).toBe("H2");
+    expect(described?.textContent).toBe(screen.getByRole("heading", { level: 2 }).textContent);
+  });
+
   it("shows the mark, not the star, to a viewer", () => {
     renderWithIntl(<InboxRow item={item} href="/org/inbox/p1" org={viewer} />);
     expect(screen.queryByRole("button", { name: /shortlist/ })).toBeNull();

@@ -17,11 +17,14 @@ export function ShortlistControl({
   proposalId,
   shortlisted,
   variant = "icon",
+  describedBy,
 }: {
   org: Membership;
   proposalId: string;
   shortlisted: boolean;
   variant?: "icon" | "button";
+  /** The id of the row's title, so each star in a list has its own description. */
+  describedBy?: string;
 }) {
   const t = useTranslations("shortlist");
   if (!editsShortlist(org)) {
@@ -42,6 +45,7 @@ export function ShortlistControl({
       proposalId={proposalId}
       initial={shortlisted}
       variant={variant}
+      describedBy={describedBy}
       labels={{ add: t("add"), remove: t("remove"), problem }}
     />
   );

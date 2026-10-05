@@ -28,6 +28,7 @@ export function MatchRow({ match, href, org }: { match: Match; href: string; org
       data-match={match.id}
       data-available={available ? "true" : "false"}
       headingLevel={2}
+      titleId={`title-${match.proposal_id}`}
       title={title}
       href={href}
       meta={
@@ -48,7 +49,7 @@ export function MatchRow({ match, href, org }: { match: Match; href: string; org
       ]}
       figure={
         org && available && (shortlisted || editsShortlist(org)) ? (
-          <ShortlistControl org={org} proposalId={match.proposal_id} shortlisted={shortlisted} />
+          <ShortlistControl org={org} proposalId={match.proposal_id} shortlisted={shortlisted} describedBy={`title-${match.proposal_id}`} />
         ) : undefined
       }
     >

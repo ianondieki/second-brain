@@ -48,6 +48,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "tagWithdraw",
   "orgProposal",
   "trackerActions",
+  "trackerMessages",
   "scoutForm",
   "briefForm",
   "expressInterest",

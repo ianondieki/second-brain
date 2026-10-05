@@ -15,6 +15,8 @@ export interface ShortlistStarProps {
   labels: { add: string; remove: string; problem: Record<ShortlistProblem, string> };
   /** "icon": the star alone (an Inbox row); "button": the star and its words (a proposal or match page). */
   variant?: "icon" | "button";
+  /** The id of what the star is for (its row's title): each star's description differs. */
+  describedBy?: string;
   setImpl?: typeof setShortlisted;
 }
 
@@ -30,6 +32,7 @@ export function ShortlistStar({
   initial,
   labels,
   variant = "icon",
+  describedBy,
   setImpl = setShortlisted,
 }: ShortlistStarProps) {
   const [on, setOn] = useState(initial);
@@ -57,6 +60,7 @@ export function ShortlistStar({
       <button
         type="button"
         aria-label={icon ? name : undefined}
+        aria-describedby={describedBy}
         aria-disabled={busy || undefined}
         onClick={press}
         data-shortlist={on ? "on" : "off"}

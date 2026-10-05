@@ -21,6 +21,7 @@ import { stepUpStrings } from "../../../strings";
 import { CaseDecision } from "../../CaseDecision";
 import { decidedLine } from "../../CaseRow";
 import { getCase } from "../../data";
+import { MessageCase } from "../../MessageCase";
 import {
   caseHref,
   caseKind,
@@ -86,6 +87,8 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
   }
   const { item, nextId } = loaded.data;
   if (!item) return gone();
+  // A party's report of an engagement message: its own page (the message quoted, Dismiss or Uphold; REQ-ENG-11).
+  if (caseKind(item.subject_type) === "message") return shell(<MessageCase item={item} nextId={nextId} />, true);
 
   const locale = await getLocale();
   const kind = caseKind(item.subject_type);

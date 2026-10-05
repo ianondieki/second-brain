@@ -6,6 +6,7 @@ import { forwardHeaders, serverApi } from "@/lib/api/server";
 
 import type { Member } from "./CommandForm";
 import type { Detail, DocumentKind, History, Summary } from "./model";
+import type { Thread } from "./messages/thread";
 import type { Tier2Share } from "./share";
 
 // Server-side reads for the tracker screens (signed in only). Each call is bounded, so a hung API ends in the route's
@@ -77,6 +78,27 @@ export const engagementHistory = cache(async function engagementHistory(id: stri
   refused(response.status, error, "GET /api/engagements/{engagement_id}/history");
   return null;
 });
+
+export type ThreadRead =
+  | { kind: "open"; thread: Thread }
+  | { kind: "notOpen" }
+  | { kind: "refused"; refusal: ReadRefusal };
+
+/**
+ * The Messages tab's first page (REQ-ENG-11; GET …/messages): the latest messages, the thread's state and what the
+ * caller may do. The organisation is refused (403 thread_not_open) until the engagement reaches INTEREST_CONFIRMED
+ * (AC-TRACK-9): the tab then says when it opens, as it does for the developer's not-yet-open thread. Any other
+ * refusal (the engagement is gone or no longer the caller's: 404) is said as the tracker says it.
+ */
+export async function engagementThread(id: string): Promise<ThreadRead> {
+  const { data, error, response } = await serverApi().GET("/api/engagements/{engagement_id}/messages", {
+    params: { path: { engagement_id: id } },
+    ...(await options()),
+  });
+  if (data) return data.status === "not_open" ? { kind: "notOpen" } : { kind: "open", thread: data };
+  if (response.status === 403 && apiErrorCode(error) === "thread_not_open") return { kind: "notOpen" };
+  return { kind: "refused", refusal: refused(response.status, error, "GET /api/engagements/{engagement_id}/messages") };
+}
 
 export type DocumentText = { kind: DocumentKind; ref: string; sha256: string; text: string; intact: boolean };
 

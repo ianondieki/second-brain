@@ -23,7 +23,8 @@
     "reviewP20pub": "[[COPY-REVIEW]] P20-5 (staff console, public pages; REQ-UX-01..04): adminModeration.summary.open; adminModeration.summary.hidden; adminModeration.summary.oldest; adminClaims.summary.waiting; adminClaims.summary.pressing; adminClaims.summary.next; help.contents",
     "reviewP20dev": "[[COPY-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (a Discover card's foot: how many sources back the problem)",
     "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
-    "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted"
+    "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
+    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\")."
   },
   "app": {
     "name": "Wazo",
@@ -457,7 +458,10 @@
       "home": "Go to your home page"
     },
     "preference": {
-      "saved_search_digest": "Send me a daily email with how many new problems or Briefs match my saved searches."
+      "saved_search_digest": "Send me a daily email with how many new problems or Briefs match my saved searches.",
+      "engagement": {
+        "n18": "Email me when someone writes to me on an engagement (at most one email per engagement every 30 minutes)."
+      }
     }
   },
   "notifications": {
@@ -1161,13 +1165,15 @@
       "org_claim": "Claim dispute",
       "other": "Other case",
       "brief": "Problem Brief",
-      "briefBy": "Brief by {org}"
+      "briefBy": "Brief by {org}",
+      "message": "Message"
     },
     "untitled": {
       "proposal": "Untitled proposal",
       "problem": "Untitled problem",
       "org_claim": "Competing claim on an organisation",
-      "other": "Case without a title"
+      "other": "Case without a title",
+      "message": "Reported message"
     },
     "filed": "Filed {date}",
     "source": {
@@ -1186,15 +1192,21 @@
     },
     "outcome": {
       "approved": "Approved",
-      "rejected": "Rejected"
+      "rejected": "Rejected",
+      "dismissed": "Dismissed",
+      "upheld": "Upheld"
     },
     "decidedBy": {
       "approved": "Approved by {name} on {date}.",
-      "rejected": "Rejected by {name} on {date}."
+      "rejected": "Rejected by {name} on {date}.",
+      "dismissed": "Dismissed by {name} on {date}.",
+      "upheld": "Upheld by {name} on {date}."
     },
     "decidedOn": {
       "approved": "Approved on {date}.",
-      "rejected": "Rejected on {date}."
+      "rejected": "Rejected on {date}.",
+      "dismissed": "Dismissed on {date}.",
+      "upheld": "Upheld on {date}."
     },
     "reason": {
       "names_real_org_negative": "Speaks negatively of a named organisation",
@@ -1280,6 +1292,37 @@
       "open": "Open cases",
       "hidden": "Hidden until decided",
       "oldest": "Oldest filed"
+    },
+    "message": {
+      "heading": "What was written",
+      "lead": "The one message this report shares. The rest of the thread stays with the engagement's parties.",
+      "fromDeveloper": "Sent by the developer",
+      "fromOrg": "Sent by the organisation",
+      "sentAt": "{date} EAT",
+      "engagement": "Engagement {id}",
+      "reason": {
+        "spam": "Spam",
+        "abuse": "Abusive or threatening",
+        "contact_details": "Shares contact details too early",
+        "confidential": "Shares confidential information",
+        "other": "Something else"
+      },
+      "decisionLead": "Dismiss if the message breaks no rule, or uphold if it does. The message stays in the thread either way.",
+      "dismiss": "Dismiss",
+      "dismissing": "Dismissing…",
+      "uphold": "Uphold",
+      "upholding": "Upholding…",
+      "noteLabel": "Note for the record (optional)",
+      "noteHint": "Kept with the decision. The parties never see it.",
+      "dismissTitle": "Dismiss this report?",
+      "dismissBody": "The case closes and nothing changes for the parties.",
+      "upholdTitle": "Uphold this report?",
+      "upholdBody": "The case closes as a breach of the rules. The message stays in the thread.",
+      "dismissYes": "Yes, dismiss",
+      "upholdYes": "Yes, uphold",
+      "dismissed": "Dismissed. The case is closed.",
+      "upheld": "Upheld. The case is closed.",
+      "own": "You filed this report or are a party of its engagement, so another moderator decides it."
     }
   },
   "adminClaims": {
@@ -2333,6 +2376,11 @@
         "info_answer": "Answer",
         "hold": "Reason, until {date}",
         "resume": "Reason for resuming early"
+      },
+      "message": "Message from {name}",
+      "messageSide": {
+        "developer": "Developer",
+        "org": "Organisation"
       }
     },
     "event": {
@@ -2372,6 +2420,7 @@
       "label": "Engagement sections",
       "tracker": "Tracker",
       "documents": "Documents",
+      "messages": "Messages",
       "history": "History"
     },
     "documents": {
@@ -2407,6 +2456,22 @@
       "overdue": "{count, plural, one {<n>#</n> business day overdue} other {<n>#</n> business days overdue}}",
       "due": "Due {date}",
       "was": "Was due {date}"
+    },
+    "unread": "{count, plural, one {# unread message} other {# unread messages}}",
+    "messages": {
+      "title": "Messages",
+      "leadDev": "Write to {org} about this engagement.",
+      "leadOrg": "Write to {name} about this engagement.",
+      "notOpenDev": "Messages open when {org} approves to proceed, a non-binding step.",
+      "notOpenOrg": "Messages open when your organisation approves to proceed, a non-binding step.",
+      "readOnly": "This engagement has ended, so the thread stays here to read and no new messages can be sent.",
+      "readOnlyEmpty": "This engagement has ended, so no new messages can be sent.",
+      "viewer": "Your role lets you read this thread but not write in it.",
+      "empty": "No messages yet: write the first one below.",
+      "toTracker": "Open the Tracker tab",
+      "pageTitle": "Messages: {title}",
+      "endedBeforeOpen": "This engagement ended before messages opened, so there is no thread.",
+      "emptyViewer": "No messages yet."
     }
   },
   "trackerActions": {
@@ -2615,6 +2680,94 @@
       "name": "Name",
       "email": "Email",
       "noEmail": "The developer has no verified email address yet."
+    }
+  },
+  "trackerMessages": {
+    "you": "You",
+    "developer": "Developer",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "newDivider": "New",
+    "redacted": "A moderator removed the text of this message.",
+    "loadEarlier": "Load earlier messages",
+    "loadingEarlier": "Loading earlier messages…",
+    "earlierFailed": "Earlier messages could not be loaded. Try again.",
+    "report": "Report",
+    "reportTitle": "Report this message",
+    "reportLead": "A moderator reads this one message, not the rest of the thread. It stays visible to both sides while they look.",
+    "reasonsLegend": "Why are you reporting it?",
+    "reason": {
+      "spam": "Spam",
+      "abuse": "Abusive or threatening",
+      "contact_details": "Shares contact details too early",
+      "confidential": "Shares confidential information",
+      "other": "Something else"
+    },
+    "reportConfirm": "Send the report",
+    "reportBusy": "Sending…",
+    "cancel": "Cancel",
+    "reportNeedsReason": "Choose at least one reason.",
+    "reported": "Reported. A moderator will review this message; it stays in the thread meanwhile.",
+    "reportedAgain": "You already reported this message. A moderator will review it.",
+    "reportOwn": "You cannot report your own message.",
+    "reportLimit": "You have reported the most messages allowed in a day. Try again tomorrow.",
+    "reportFailed": "The report was not sent. Try again.",
+    "files": "Files",
+    "download": "Download",
+    "downloadFailed": "This file could not be opened. Try again.",
+    "downloadChanged": "This file does not match what was sent, so it cannot be opened.",
+    "status": {
+      "uploading": "Uploading {value}%",
+      "scanning": "Scanning…",
+      "ready": "Ready",
+      "blocked": "Blocked"
+    },
+    "label": "Your message",
+    "meterLeft": "Characters left: {count}",
+    "meterOver": "Characters over the limit: {count}",
+    "attach": "Attach files",
+    "attachHint": "PDF, PNG, JPEG, Markdown or plain text, up to {value} MB each and {max} per message.",
+    "remove": "Remove",
+    "send": "Send",
+    "sending": "Sending…",
+    "sent": "Message sent.",
+    "fileStatus": "{name}: {value}",
+    "file": {
+      "type": "This kind of file cannot be sent. Attach a PDF, PNG, JPEG, Markdown or plain-text file.",
+      "size": "This file is larger than {value} MB.",
+      "empty": "This file is empty.",
+      "infected": "This file did not pass the malware scan, so it was not kept.",
+      "tooMany": "A message can carry up to {max} files.",
+      "staged": "Too many files are waiting to be sent here. Send or remove some first.",
+      "limit": {
+        "one": "You have uploaded many files here recently. Try again in {count} minute.",
+        "other": "You have uploaded many files here recently. Try again in {count} minutes."
+      },
+      "storage": "Files cannot be uploaded just now. Try again in a moment.",
+      "failed": "The upload did not finish. Remove the file and attach it again."
+    },
+    "refusal": {
+      "blank": "Write a message first.",
+      "tooLong": "Shorten your message to {max} characters or fewer.",
+      "invalid": "This message could not be sent as written. Check it and try again.",
+      "containsContact": "Remove phone numbers, email addresses and links from your message and file names: before first contact is made, contact details are shared only through the tracker's contact step.",
+      "waitUploads": "Wait until every file shows Ready, or remove it.",
+      "blockedFiles": "Remove the blocked files before you send.",
+      "pending": "A file is still being scanned. Send once it shows Ready.",
+      "unknownFile": "A file is no longer waiting to be sent. Remove it and attach it again.",
+      "infected": "A file did not pass the malware scan. Remove it to send your message.",
+      "expired": "A file waited more than 24 hours. Remove it and attach it again.",
+      "tooManyFiles": "A message can carry up to {max} files.",
+      "notOpen": "The thread is not open yet.",
+      "readOnly": "This engagement has ended, so no new messages can be sent.",
+      "cannotPost": "Your role lets you read this thread but not write in it.",
+      "tooMany": {
+        "one": "You have sent many messages here in the last hour. Try again in {count} minute.",
+        "other": "You have sent many messages here in the last hour. Try again in {count} minutes."
+      },
+      "conflict": "Something changed. Reload the page and try again.",
+      "network": "The message was not sent. Check your connection and try again.",
+      "generic": "The message was not sent. Try again."
     }
   },
   "billing": {
@@ -3001,7 +3154,7 @@
     "nameHint": "Up to {max} characters, for example Agriculture in Nakuru.",
     "keeps": "This keeps",
     "alertsLabel": "Tell me each morning when something new matches",
-    "submit": "Save search",
+    "submit": "Save",
     "saving": "Saving…",
     "cancel": "Cancel",
     "saved": "Saved: {name}.",

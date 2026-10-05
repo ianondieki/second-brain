@@ -15,6 +15,9 @@ import { StageChip } from "../../../StageChip";
 import { FitMeter } from "../../matches/MatchParts";
 
 type Fact = "niche" | "place" | "maturity" | "ask" | "registered" | "engagement" | "fit";
+/** A title link's tap area: 44 px tall (WCAG 2.5.8) without moving the text (the padding is taken back). */
+const TARGET = "-my-2.5 inline-block py-2.5";
+
 const FACTS: readonly Fact[] = ["niche", "place", "maturity", "ask", "registered", "engagement", "fit"];
 
 export interface CompareViewProps {
@@ -45,9 +48,9 @@ export function CompareView({ items, memberships, org, counties }: CompareViewPr
       case "niche":
         return item.niche ? item.niche.label : none(ti("notStated"));
       case "place": {
+        // The row is "County", as on the teaser: a proposal without a county says so (never its country instead).
         const county = item.county_code ? counties.find((c) => c.code === item.county_code)?.name : undefined;
-        if (county) return county;
-        return item.country ? countryName(item.country, locale) : none(ti("notStated"));
+        return county ?? none(ti("notStated"));
       }
       case "maturity":
         return item.maturity ? tf(MATURITY_KEY[item.maturity]) : none(ti("notStated"));
@@ -104,7 +107,7 @@ export function CompareView({ items, memberships, org, counties }: CompareViewPr
               <td className="sticky left-0 bg-field" />
               {items.map((item) => (
                 <th key={item.proposal_id} scope="col" className={cn(cell, "pt-5 align-bottom text-base font-semibold text-ink")}>
-                  <Link href={href(item)} className={cn(titleLinkClass, "[overflow-wrap:anywhere]")}>
+                  <Link href={href(item)} className={cn(titleLinkClass, TARGET, "[overflow-wrap:anywhere]")}>
                     {title(item)}
                   </Link>
                 </th>
@@ -136,7 +139,7 @@ export function CompareView({ items, memberships, org, counties }: CompareViewPr
         {items.map((item) => (
           <li key={item.proposal_id} className="min-w-0 rounded-panel border border-line bg-field p-5">
             <h2 className="text-base font-semibold [overflow-wrap:anywhere] text-ink">
-              <Link href={href(item)} className={titleLinkClass}>
+              <Link href={href(item)} className={cn(titleLinkClass, TARGET)}>
                 {title(item)}
               </Link>
             </h2>
@@ -157,13 +160,4 @@ export function CompareView({ items, memberships, org, counties }: CompareViewPr
       </ul>
     </>
   );
-}
-
-/** "KE" as the reader's language names it ("Kenya"), or the code when the runtime cannot. */
-function countryName(code: string, locale: string): string {
-  try {
-    return new Intl.DisplayNames([locale], { type: "region" }).of(code) ?? code;
-  } catch {
-    return code;
-  }
 }

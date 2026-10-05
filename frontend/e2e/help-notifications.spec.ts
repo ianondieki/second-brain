@@ -20,8 +20,9 @@ const MARKETING = "Send me occasional product news by email. You can stop at any
 const WHATSAPP = "Send me reminders on WhatsApp (available later).";
 // P21 (REQ-PERS-03, D-57 (7)): developers only, off by default.
 const DIGEST = "Send me a daily email with how many new problems or Briefs match my saved searches.";
-// P21 (REQ-ENG-11, N18, D-57 (2)): a message on an engagement by email, on by default (mutable).
-const MESSAGES = /new message on an engagement/i;
+// P21 (REQ-ENG-11, N18, D-57 (2)): a message on an engagement by email, on by default (mutable), in the page's own
+// words (notificationSettings.preference.engagement.n18), never the API's English label.
+const MESSAGES = "Email me when someone writes to me on an engagement (at most one email per engagement every 30 minutes).";
 
 async function openMenuItem(page: Page, name: string) {
   await page.getByRole("button", { name: "Account" }).click();

@@ -4,6 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
+import { cn } from "@/components/ui/cn";
 import { titleLinkClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -228,7 +229,7 @@ async function EntryRow({
       <div className="flex min-w-0 flex-col gap-1.5">
         <h2 id={titleId} className="text-base font-semibold [overflow-wrap:anywhere] text-ink">
           {entry.available ? (
-            <Link href={proposalHref(memberships, org.org_id, entry.proposal_id)} className={titleLinkClass}>
+            <Link href={proposalHref(memberships, org.org_id, entry.proposal_id)} className={cn(titleLinkClass, "-my-2.5 inline-block py-2.5")}>
               {title}
             </Link>
           ) : (

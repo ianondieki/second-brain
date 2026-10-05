@@ -38,7 +38,7 @@ test.describe("saved Discover searches", () => {
     await expect(strip.getByRole("checkbox", { name: "Tell me each morning when something new matches" })).toBeChecked();
     await checkWidths(page, info);
     await name.fill("Water in the fields");
-    await strip.getByRole("button", { name: "Save search" }).click();
+    await strip.getByRole("button", { name: "Save", exact: true }).click();
     await expect(strip.getByRole("status")).toHaveText("Saved: Water in the fields.", SERVER_STEP);
     const saved = strip.getByRole("listitem").filter({ hasText: "Water in the fields" });
     await expect(saved.locator("[data-facts]")).toContainText("“water”");
