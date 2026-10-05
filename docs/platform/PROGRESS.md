@@ -472,6 +472,63 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 **Research.** Anthropic prices confirmed on 2026-09-29 from the official price page
 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified").
 
+### P22-A report (2026-10-06): Today's five, the daily developer quiz (D-59)
+
+**Why.** The owner's developer-space brief (2026-10-05) asked for a "breakout space" with daily agent-made tech
+trivia, a leaderboard and learning. The critique cut it to a shape the principles allow (a model drafts, code checks,
+staff approve, a streak over a ranking, nothing visible to organisations) and the owner accepted the cuts. Card:
+`tasks/P22.md` section A; decisions D-58 to D-62 (D-59 for this track).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`, on top of P21; five worktree merges):
+
+- **Revision 0009** (db-migrations): `quiz_sets`, `quiz_questions`, `quiz_attempts`, `quiz_flags`, `quiz_profiles`,
+  a new `Tenancy.CURATED` class for rows with no owner, RLS, five triggers and seventeen functions: the attempt's
+  score computed in SQL from live questions, answers and whys unreadable until a finished attempt
+  (`app_quiz_answers`), `app_flag_question` (once per developer, ten a day under an advisory lock, only after
+  playing, the third flag from distinct established accounts pulls and rescores, a staff restore is final),
+  staff-only decisions and pulls through definer functions, the board through `app_quiz_board()` (ISO week, opt-in,
+  demo accounts only to demo callers), staff aggregates from three attempts, a date bound so no developer reads a
+  future day's set, staff never play or rank; the downgrade refuses with rows.
+- **The generation task** (impl-ai): `backend/ai/quiz_sources.yaml` (60 official documentation pages over 13 topics),
+  the `quiz_generation` task (Haiku, no tools, the caps and kill switch, one retry), twelve checks in code with reason
+  codes (the model never writes a URL: it picks a source id from the pages it was sent), a cassette and fakes so no
+  test reaches a provider, an eval over the cassettes.
+- **The backend** (impl-backend): storage with the 60-day no-repeat rule, the nightly `quiz.draft` job (23:30 UTC,
+  today and tomorrow, idempotent, silent when a set exists), `/api/me/quiz/*` (today, answers, flag, leaderboard,
+  settings; developers only, 404 to organisations and staff), `/api/admin/quiz/*` (queue, set page with stats and
+  detail, decisions, pull and restore, behind the staff step-up, audited; a past day's draft can only be rejected),
+  streaks that skip days without an approved set, the demo seed (two seeded sets, Amina's two attempts and opt-in,
+  Brian's one, no model call).
+- **The screens** (impl-frontend): the Home card (server-rendered, no new client code on `/dev`), `/dev/quiz` (five
+  radio groups, "Check answers" as the one primary action, "Check 2, skip 3", results with the reason, the source
+  link and Flag, a flag sheet), `/dev/quiz/board` (the week, the caller's line, the opt-in switch with its one
+  sentence, the top 20 by handle), `/admin/quiz` (queue with "Day over", the set page with Approve/Reject behind the
+  step-up, Pull/Restore, "Plays and flags", "Not enough plays yet"), topic labels in en and sw, `e2e/quiz.spec.ts`.
+
+**Reviews.** 0009: reviewer CHANGES_REQUIRED (one MAJOR: a staff restore could be overturned by later flags) then
+PASS; security-reviewer PASS with nine MINORs, seven fixed in the revision. The generation task: reviewer PASS, three
+MINORs fixed. The backend: reviewer CHANGES_REQUIRED (one MAJOR: approving a leftover draft for a past day zeroed every
+streak) then PASS; security-reviewer PASS, two MINORs fixed. The screens: reviewer CHANGES_REQUIRED (one MAJOR: the
+board e2e assumed room in the top 20) then PASS; ux-reviewer PASS with eleven MINORs, all fixed before the merge.
+
+**Gate.** GATE_RESULTS
+
+**Deviations.** (1) The sub-agents sign their commits as the model that wrote them (Opus 5.5) while the orchestrator's
+carry the session's attribution (Fable 5.1); every commit carries the session line. (2) Commits over ~300 lines: 0009's
+first (1,390), three of the generation task's, five of the backend's, two of the screens'; one screens commit does not
+typecheck alone (8535be8). (3) The demo stack could not be rebuilt for the gate (Docker Hub rate-limited the base
+image pulls, 429): the API, worker, database and mail ran from the images built at the backend merge (d016df4, the
+same backend) and the merged frontend was served locally with `next start` on :3000.
+
+**Residuals (on the card).** `time_ms` is the client's figure and only a tiebreak; three throwaway accounts cannot
+pull a question any more, but an established trio can (staff restore is final); the person-name check is a title
+rule plus the model's own declaration, staff approval the backstop; the Messages route keeps its 373 B of budget,
+the admin set page has 1,639 B; "Day over" on the set page uses the web server's clock (the API's 409 still
+catches a moved test clock); the demo has questions for two days per 60 (a later day shows "No quiz today").
+
+**Decisions for the owner.** D-62 (the contributor wording) before P22-C; the new strings under `_meta.reviewP22a`;
+the CI runner question (the backend job's 35-minute limit against slow runners). D-56 still open.
+
 ### P21 report (final, 2026-10-05): talk, compare, come back (D-57)
 
 **Why.** After P20 the owner asked which features would most improve the product experience; the orchestrator
