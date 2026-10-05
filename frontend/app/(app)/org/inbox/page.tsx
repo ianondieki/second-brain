@@ -13,6 +13,7 @@ import { engagementsHref, first, inboxHref, proposalHref, type Membership } from
 import { OrgPicker } from "../OrgPicker";
 import { ACTION_HREF } from "../refusals";
 import { matchesHref } from "../scout";
+import { shortlistHref } from "../shortlist";
 import { InboxRow } from "./InboxRow";
 import { InboxTabs, inboxTab } from "./InboxTabs";
 import { ScoutMatches } from "./matches/ScoutMatches";
@@ -47,7 +48,11 @@ export default async function InboxScreen({ searchParams }: PageProps<"/org/inbo
           <>
             <InboxTabs
               current={tab}
-              hrefs={{ tagged: inboxHref(memberships, org.org_id), matches: matchesHref(memberships, org.org_id) }}
+              hrefs={{
+                tagged: inboxHref(memberships, org.org_id),
+                matches: matchesHref(memberships, org.org_id),
+                shortlist: shortlistHref(memberships, org.org_id),
+              }}
             />
             {tab === "matches" ? (
               <ScoutMatches memberships={memberships} org={org} />
@@ -171,6 +176,7 @@ async function InboxList({
             item={item}
             href={proposalHref(memberships, org.org_id, item.proposal.id)}
             trackerHref={item.engagement ? engagementsHref(memberships, org.org_id, item.engagement.id) : undefined}
+            org={org}
           />
         ))}
       </RowList>
