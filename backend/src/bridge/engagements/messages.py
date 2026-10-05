@@ -29,22 +29,30 @@ is also a member of the organisation). Under the caller's RLS throughout.
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select, text
+from sqlalchemy import and_, func, insert, or_, select, text, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge import pagination
+from bridge.audit.service import record as audit
+from bridge.engagements import message_notify
 from bridge.engagements import state_machine as sm
 from bridge.engagements.history import party_names, unread_counts
 from bridge.engagements.message_schemas import (
     MessageAttachmentOut,
+    MessageBody,
     MessageOut,
     MessageThreadOut,
+    ReadOut,
+    ReportOut,
     ThreadLimits,
     ThreadStatus,
 )
@@ -55,10 +63,12 @@ from bridge.engagements.models import (
     EngagementMessageAttachment,
     EngagementMessageRead,
 )
-from bridge.engagements.service import Party
+from bridge.engagements.service import Party, app_now, entering_event
 from bridge.errors import ApiError, forbidden, not_found
+from bridge.ids import uuid7
 from bridge.models.enums import AvStatus, EngagementState
 from bridge.proposals.editor import ACCEPTED_TYPES
+from bridge.proposals.sanitise import contact_codes
 
 S = EngagementState
 # revision 0008's engagement_thread_open(): the thread opens once the chain has entered one of these.
@@ -219,3 +229,200 @@ def _out(
         created_at=message.created_at,
         attachments=files,
     )
+
+
+# ------------------------------------------------------------------------------------------------------------- post
+
+
+async def post_message(db: AsyncSession, party: Party, body: MessageBody) -> MessageOut:
+    """Post as the caller on their side (the database decides whether the thread is open and whether they may post),
+    then check the rate and the text, attach the staged uploads, audit and queue N18. Committed."""
+    engagement_id, user_id = party.engagement_id, party.user_id
+    await db.execute(_LOCK, {"key": f"engagement_messages:{engagement_id}:{user_id}"})  # one post at a time per user
+    message_id = uuid7()
+    try:
+        created_at: datetime = (
+            await db.execute(
+                insert(EngagementMessage)
+                .values(
+                    id=message_id,
+                    engagement_id=engagement_id,
+                    sender_user_id=user_id,
+                    sender_party=party.actor.party,
+                    body=body.body,
+                )
+                .returning(EngagementMessage.created_at)
+            )
+        ).scalar_one()
+    except DBAPIError as exc:
+        raise _refused(exc, party) from exc
+    await _throttle(db, party, created_at)
+    engagement = await db.get(Engagement, engagement_id)
+    if engagement is None:  # it was visible a moment ago (the insert's check)
+        raise not_found()
+    await _no_contact_details(db, engagement, body.body)
+    files = await _attach(db, party, message_id, body.attachment_ids)
+    await audit(
+        db,
+        "engagement.message_posted",
+        actor_user_id=user_id,
+        org_id=None if party.is_developer else party.org_id,
+        subject_type="engagement",
+        subject_id=engagement_id,
+        payload={
+            "message_id": str(message_id),
+            "sender_party": party.actor.party.value,
+            "attachments": len(files),
+        },
+    )
+    await message_notify.enqueue(db, engagement, message_id)
+    names = await party_names(db, engagement, {user_id}, developer_caller=party.is_developer)
+    await db.commit()
+    message = EngagementMessage(
+        id=message_id,
+        engagement_id=engagement_id,
+        sender_user_id=user_id,
+        sender_party=party.actor.party,
+        body=body.body,
+        created_at=created_at,
+    )
+    return _out(message, names, files, party)
+
+
+def retry_after(oldest: datetime, now: datetime) -> int:
+    """Whole seconds until the oldest message of the hour leaves the window (at least 1)."""
+    return max(1, math.ceil((oldest + timedelta(hours=1) - now).total_seconds()))
+
+
+async def _throttle(db: AsyncSession, party: Party, created_at: datetime) -> None:
+    """429 ``too_many_messages`` (with ``Retry-After``) when this post is the caller's 61st on the engagement within
+    the hour (on the database's clock; posts of one user are serialised by the advisory lock)."""
+    m = EngagementMessage
+    window = (
+        m.engagement_id == party.engagement_id,
+        m.sender_user_id == party.user_id,
+        m.created_at > created_at - timedelta(hours=1),
+    )
+    count, oldest = (await db.execute(select(func.count(), func.min(m.created_at)).where(*window))).one()
+    if int(count) <= POSTS_PER_HOUR:
+        return
+    seconds = retry_after(oldest, created_at)
+    error = ApiError(
+        429,
+        "too_many_messages",
+        f"You have sent {POSTS_PER_HOUR} messages on this engagement in the last hour. Try again later.",
+        retry_after_seconds=seconds,
+    )
+    error.headers = {"Retry-After": str(seconds)}
+    raise error
+
+
+async def _no_contact_details(db: AsyncSession, engagement: Engagement, body: str) -> None:
+    stage = engagement.state
+    if stage in sm.RETURNING:
+        paused = await entering_event(db, engagement.id, stage)
+        stage = paused.from_state if paused is not None and paused.from_state is not None else stage
+    if stage in sm.BEFORE_CONTACT and contact_codes(body):
+        raise ApiError(422, "contains_contact", CONTAINS_CONTACT)
+
+
+async def _attach(db: AsyncSession, party: Party, message_id: UUID, ids: list[UUID]) -> list[MessageAttachmentOut]:
+    """Join the caller's staged uploads to the message (in its transaction, as revision 0008 requires)."""
+    if not ids:
+        return []
+    a = EngagementMessageAttachment
+    mine = (
+        a.id.in_(ids),
+        a.engagement_id == party.engagement_id,
+        a.uploader_user_id == party.user_id,
+        a.message_id.is_(None),
+    )
+    rows = {row.id: row for row in (await db.execute(select(a).where(*mine))).scalars()}
+    if len(rows) != len(ids):
+        raise ApiError(422, "unknown_attachment", "A file is no longer waiting to be sent. Upload it again.")
+    if any(row.av_status in PENDING for row in rows.values()):
+        raise ApiError(409, "attachment_pending", "A file is still being scanned. Send it once the scan is done.")
+    if any(row.av_status is not AvStatus.CLEAN for row in rows.values()):
+        raise ApiError(422, "attachment_infected", "A file did not pass the malware scan, so it cannot be sent.")
+    try:
+        result = await db.execute(
+            update(a).where(*mine).values(message_id=message_id).execution_options(synchronize_session=False)
+        )
+    except DBAPIError as exc:
+        raise _refused(exc, party) from exc
+    if int(getattr(result, "rowcount", 0)) != len(ids):
+        raise ApiError(409, "conflict", "A file changed while it was being sent. Reload and retry.")
+    return [
+        MessageAttachmentOut(
+            id=row.id, file_name=row.file_name, content_type=row.content_type, size_bytes=row.size_bytes
+        )
+        for row in (rows[i] for i in ids)
+    ]
+
+
+# ------------------------------------------------------------------------------------------------------- read marker
+
+
+async def mark_read(db: AsyncSession, party: Party, up_to: UUID | None) -> ReadOut:
+    """Move the caller's read marker to ``up_to``'s time (a message of this thread; 404 otherwise) or to now; it
+    never moves back. Committed."""
+    current = await gate(db, party)
+    if up_to is None:
+        at = await app_now(db)
+    else:
+        found = await db.scalar(
+            select(EngagementMessage.created_at).where(
+                EngagementMessage.id == up_to, EngagementMessage.engagement_id == current.engagement.id
+            )
+        )
+        if found is None:
+            raise not_found("No such message in this thread.")
+        at = found
+    r = EngagementMessageRead
+    values = pg_insert(r).values(engagement_id=current.engagement.id, user_id=party.user_id, last_read_at=at)
+    upsert = values.on_conflict_do_update(
+        index_elements=[r.engagement_id, r.user_id],
+        set_={"last_read_at": func.greatest(r.last_read_at, values.excluded.last_read_at)},
+    ).returning(r.last_read_at)
+    marked: datetime = (await db.execute(upsert)).scalar_one()
+    unread = (await unread_counts(db, party.user_id, [current.engagement.id])).get(current.engagement.id, 0)
+    await db.commit()
+    return ReadOut(unread=unread, last_read_at=marked)
+
+
+# ----------------------------------------------------------------------------------------------------------- report
+
+
+async def report(db: AsyncSession, party: Party, message_id: UUID, reasons: list[str]) -> ReportOut:
+    """File the one moderation case of the caller's report of a message of this thread (``app_report_message``:
+    once per reporter and message, 10 a day). The caller shares that one message with staff. Committed."""
+    await gate(db, party)
+    sender = await db.scalar(
+        select(EngagementMessage.sender_user_id).where(
+            EngagementMessage.id == message_id, EngagementMessage.engagement_id == party.engagement_id
+        )
+    )
+    if sender is None:
+        raise not_found("No such message in this thread.")
+    if sender == party.user_id:
+        raise ApiError(409, "own_message", "You cannot report your own message.")
+    try:
+        row = (await db.execute(_REPORT, {"message": message_id, "reasons": reasons})).one()
+    except DBAPIError as exc:
+        mapped = refusal(exc, party)
+        if mapped is None:
+            raise
+        raise (not_found("No such message in this thread.") if mapped.status_code == 403 else mapped) from exc
+    case_id, created = UUID(str(row.case_id)), bool(row.created)
+    if created:
+        await audit(
+            db,
+            "engagement.message_reported",
+            actor_user_id=party.user_id,
+            org_id=None if party.is_developer else party.org_id,
+            subject_type="engagement",
+            subject_id=party.engagement_id,
+            payload={"message_id": str(message_id), "case_id": str(case_id), "reasons": sorted(reasons)},
+        )
+    await db.commit()
+    return ReportOut(case_id=case_id, created=created)

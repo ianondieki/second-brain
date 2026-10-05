@@ -19,6 +19,7 @@ engagement reaches ``INTEREST_CONFIRMED``.
 from __future__ import annotations
 
 from typing import Annotated, Any
+from uuid import UUID
 
 from fastapi import APIRouter, Query
 
@@ -26,7 +27,13 @@ from bridge import pagination
 from bridge.auth.deps import Db
 from bridge.engagements import messages
 from bridge.engagements.message_schemas import (
+    MessageBody,
+    MessageOut,
     MessageThreadOut,
+    ReadBody,
+    ReadOut,
+    ReportBody,
+    ReportOut,
 )
 from bridge.engagements.router import PREFIX, PartyDep
 from bridge.errors import ERROR_RESPONSES, ApiErrorBody, json_errors
@@ -49,3 +56,21 @@ async def get_thread(
 ) -> MessageThreadOut:
     """The thread, the latest page first (within a page oldest first). 403 for the organisation before it opens."""
     return await messages.thread(db, party, limit=limit, cursor=cursor)
+
+
+@router.post(THREAD, status_code=201)
+async def post_message(body: MessageBody, party: PartyDep, db: Db) -> MessageOut:
+    """Post a message (plain text) with up to 5 staged files; the other side is told (N18, never the text)."""
+    return await messages.post_message(db, party, body)
+
+
+@router.post(f"{THREAD}/read")
+async def mark_read(body: ReadBody, party: PartyDep, db: Db) -> ReadOut:
+    """Mark the thread read up to one of its messages, or up to now."""
+    return await messages.mark_read(db, party, body.up_to)
+
+
+@router.post(f"{THREAD}/{{message_id}}/report")
+async def report_message(message_id: UUID, body: ReportBody, party: PartyDep, db: Db) -> ReportOut:
+    """Report one message of the thread to the moderators (it stays visible to the parties)."""
+    return await messages.report(db, party, message_id, list(body.reasons))
