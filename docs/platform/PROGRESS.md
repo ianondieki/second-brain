@@ -518,7 +518,8 @@ web container; refreshed from the database, the spec passed 14/14); the test-clo
 merged head: 4,981 passed (23.5 min). CodeQL run 271 on `f4dcd42`: exactly the eight D-42 findings. `pr.yml` run 335 on
 `f4dcd42`: Playwright with the clock scenarios, the demo story, frontend, legacy (Windows and Ubuntu) and hygiene
 green; scanners red on `npm audit` only (D-56); the informational legacy job red as before; the backend job
-BACKEND_CI. Design shots `docs/demo/screenshots/p22a/` (10 screens, 1440 and 375, light and dark, strict axe 0, ≤1
+timed out at its 35-minute limit, the sixth time that day on runners about twice as slow as P20's (the full suite
+passed locally in 23.5 min; a re-run on normal runners, or a sharded job, is the owner's call). Design shots `docs/demo/screenshots/p22a/` (10 screens, 1440 and 375, light and dark, strict axe 0, ≤1
 primary, no sideways scroll; a fresh developer for the unplayed states, nothing changed on the demo's sets; the set
 page shows two flags left by the e2e run). JS budget and Lighthouse: scorecard "P22-A measurements" (every route under
 150,000 B; performance 97–99, accessibility 100). Demo seed check: two approved seeded sets, three attempts, Amina
