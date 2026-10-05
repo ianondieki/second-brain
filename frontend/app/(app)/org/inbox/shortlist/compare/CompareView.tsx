@@ -86,7 +86,7 @@ export function CompareView({ items, memberships, org, counties }: CompareViewPr
     }
   }
 
-  const cell = "py-3.5 pr-5 align-top text-left last:pr-0";
+  const cell = "py-3.5 pr-5 align-top text-left";
   return (
     <>
       {/* From 1024 px: the table. */}
@@ -128,8 +128,11 @@ export function CompareView({ items, memberships, org, counties }: CompareViewPr
         </table>
       </div>
 
-      {/* Below 1024 px: one card per proposal. */}
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:hidden" data-compare="cards">
+      {/* Below 1024 px: one card per proposal, two across only for an even count (never two-and-one). */}
+      <ul
+        className={cn("grid grid-cols-1 gap-4 lg:hidden", items.length % 2 === 0 && "sm:grid-cols-2")}
+        data-compare="cards"
+      >
         {items.map((item) => (
           <li key={item.proposal_id} className="min-w-0 rounded-panel border border-line bg-field p-5">
             <h2 className="text-base font-semibold [overflow-wrap:anywhere] text-ink">

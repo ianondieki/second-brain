@@ -142,7 +142,8 @@ async function Entries({
     // A GET form: without script it opens the compare page with the ticked ids (CompareBar shortens the address).
     <form method="get" action={COMPARE_PATH} aria-label={t("formLabel")}>
       {multi ? <input type="hidden" name="org" value={org.org_id} /> : null}
-      <ul aria-label={t("listLabel", { org: org.org_name })} className="flex flex-col">
+      {/* tabIndex -1: Remove moves focus here once its row leaves the list. */}
+      <ul aria-label={t("listLabel", { org: org.org_name })} tabIndex={-1} data-shortlist-list="" className="flex flex-col focus:outline-none">
         {page.items.map((entry) => (
           <li key={entry.proposal_id}>
             <EntryRow entry={entry} memberships={memberships} org={org} selectable={comparable} />
@@ -205,8 +206,9 @@ async function EntryRow({
       aria-labelledby={titleId}
       className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 border-t border-line py-5 sm:gap-x-4"
     >
-      <span className="flex size-11 -mt-2.5 -ml-2.5 items-center justify-center">
-        {selectable && entry.available ? (
+      {selectable && entry.available ? (
+        // The whole 44 px square is the box's target (WCAG 2.5.8), not only the 20 px box.
+        <label className="-mt-2.5 -ml-2.5 flex size-11 cursor-pointer items-center justify-center">
           <input
             type="checkbox"
             name="ids"
@@ -214,8 +216,10 @@ async function EntryRow({
             aria-label={t("choose", { title })}
             className="size-5 cursor-pointer accent-accent"
           />
-        ) : null}
-      </span>
+        </label>
+      ) : (
+        <span className="-mt-2.5 -ml-2.5 size-11" />
+      )}
       <div className="flex min-w-0 flex-col gap-1.5">
         <h2 id={titleId} className="text-base font-semibold [overflow-wrap:anywhere] text-ink">
           {entry.available ? (
