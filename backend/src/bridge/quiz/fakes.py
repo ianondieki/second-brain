@@ -3,10 +3,12 @@
 ``valid_answer(sample)`` is a fixed answer that passes every check for a day's sample: one question on each of the
 sample's first five pages, written from the page's host and title only (true by construction), the correct option at
 a different place each time. ``answer(sample, variant)`` is that answer with one fault, one variant per check of
-``bridge.quiz.checks`` (``VARIANTS``: the variant's name is the ``Reason`` it triggers, plus ``"valid"`` and
-``"no_answer"``, which triggers ``answer_count`` with no option marked correct). ``FakeQuizClient`` is the real
-``LLMService`` over ``FakeAdapter`` (``bridge.llm.fakes.FakeLLMClient``) answering with those variants in order, so a
-test still goes through the registry, the kill switch, the caps, the sanitiser and the ledger.
+``bridge.quiz.checks`` (``VARIANTS``: the variant's name is the ``Reason`` it triggers, plus ``"valid"``,
+``"no_answer"`` (``answer_count`` with no option marked correct), ``"titled_person"`` (``names_a_person`` by a title)
+and the text rules in an option and in the why (``option_``/``why_`` + ``control_character`` or ``non_latin_text``).
+``FakeQuizClient`` is the real ``LLMService`` over ``FakeAdapter`` (``bridge.llm.fakes.FakeLLMClient``) answering
+with those variants in order, so a test still goes through the registry, the kill switch, the caps, the sanitiser and
+the ledger.
 """
 
 from __future__ import annotations
@@ -66,6 +68,14 @@ VARIANTS: Final[dict[str, Callable[[QuizAnswer], QuizAnswer]]] = {
     "option_count": lambda a: _options(a, 1, lambda o: o[:3]),
     "control_character": lambda a: edit_question(a, 2, prompt="Which site\u200b publishes this page?"),
     "non_latin_text": lambda a: edit_question(a, 0, prompt="\u041a\u0430\u043a\u043e\u0439 site publishes this page?"),
+    "option_control_character": lambda a: _options(
+        a, 1, lambda o: [o[0], o[1].model_copy(update={"text": "docs\u0007.example.org"}), o[2], o[3]]
+    ),
+    "option_non_latin_text": lambda a: _options(
+        a, 2, lambda o: [o[0], o[1], o[2], o[3].model_copy(update={"text": "d\u043ecs.example.org"})]
+    ),
+    "why_control_character": lambda a: edit_question(a, 3, why="The page\u202e says so on its own site."),
+    "why_non_latin_text": lambda a: edit_question(a, 4, why="The page says so on its own \u0441ite."),
     "text_out_of_bounds": lambda a: edit_question(a, 3, why="A long why. " * (MAX_WHY_CHARS // 10)),
     "duplicate_options": lambda a: _options(
         a, 4, lambda o: [o[0], o[1], o[2], o[1].model_copy(update={"text": f"  {o[1].text} ", "correct": False})]
