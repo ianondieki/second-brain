@@ -21,6 +21,7 @@ from bridge.jobs import audit as audit_jobs
 from bridge.jobs import expiry as expiry_jobs
 from bridge.jobs import message_uploads as upload_jobs
 from bridge.jobs import provenance as jobs
+from bridge.jobs import quiz as quiz_jobs
 from bridge.jobs import reminders as reminder_jobs
 from bridge.jobs import saved_searches as saved_search_jobs
 from bridge.jobs.app import IMPORT_PATHS, app
@@ -66,6 +67,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         "bridge.jobs.expiry",  # P19: the tracker's clock, expiry and the end of holds (REQ-ENG-10)
         "bridge.jobs.saved_searches",  # P21: the daily saved-search alerts (REQ-PERS-03)
         "bridge.jobs.message_uploads",  # P21: the hourly purge of unsendable thread uploads (REQ-ENG-11)
+        "bridge.jobs.quiz",  # P22: the nightly draft of Today's five (REQ-DEV-01)
     ]
     app.perform_import_paths()  # type: ignore[no-untyped-call]
     for name in (
@@ -90,6 +92,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         expiry_jobs.TASK: "*/15 * * * *",
         saved_search_jobs.TASK: "5 4 * * *",  # P21: 07:05 in Nairobi
         upload_jobs.TASK: "17 * * * *",
+        quiz_jobs.TASK: "30 23 * * *",  # P22: 02:30 in Nairobi
     }
 
 
