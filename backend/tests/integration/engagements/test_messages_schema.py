@@ -163,6 +163,24 @@ async def test_only_a_party_posts_as_themselves_on_their_own_side(owner_engine: 
         assert await t.run(conn, COUNT, e=engagement) == 0
 
 
+async def test_a_developer_who_is_also_a_member_never_posts_as_the_organisation(owner_engine: AsyncEngine) -> None:
+    """Given an open thread whose developer is also an owner and signatory of the counterpart organisation, When they
+    post as 'org' on their own engagement (with or without that organisation's context), Then the policy refuses it:
+    one person never speaks for both sides; they still post as 'developer', and a member of the organisation who is
+    not its developer still posts as 'org'."""
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await opened(conn)
+        await t.as_owner(conn)
+        await t.member(conn, p.org, p.developer, "{owner,signatory}")
+        for org in (p.org, None):
+            await refused(conn, engagement, p.developer, "org", RLS, org)
+        await post(conn, engagement, p.developer, "developer", p.org)
+        await post(conn, engagement, p.owner, "org", p.org)
+        await t.act(conn, p.developer)
+        parties = "SELECT array_agg(CAST(sender_party AS text) ORDER BY created_at, id) FROM engagement_messages"
+        assert await t.run(conn, parties + " WHERE engagement_id = :e", e=engagement) == ["developer", "org"]
+
+
 @pytest.mark.parametrize("end", TERMINAL)
 async def test_the_thread_is_read_only_after_each_end(owner_engine: AsyncEngine, end: str) -> None:
     """Given an open thread with a message, When the engagement ends (each terminal state), Then nobody posts any more

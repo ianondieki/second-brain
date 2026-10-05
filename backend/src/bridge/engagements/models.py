@@ -308,11 +308,12 @@ class EngagementMessage(IdMixin, Base):
     """One message of an engagement's thread (REQ-ENG-11; revision 0008). Parties only: the developer and the members
     of the organisation (narrowed by ``app.org_id``) read every message, viewers included; staff never read the thread
     (a report shares one message, ``app_reported_message``). A party posts as themselves on their own side
-    (``sender_party``: ``developer``, or ``org`` for a member who may act), once the chain has entered
-    ``INTEREST_CONFIRMED`` or a later main-path stage (``CONTACT_MADE`` on a procurement route; 3b does not count) and
-    until it ends (``engagement_thread_open()``: SQLSTATE 55000 otherwise; read stays open).
-    INSERT-only for the app; D-54: the owner (or a definer function it owns) may redact a body once, setting it to
-    ``'[redacted]'`` with ``redacted_at`` and ``redacted_by``. ``created_at`` is the database's clock: leave it out."""
+    (``sender_party``: ``developer``, or ``org`` for a member who may act and is not the engagement's developer),
+    once the chain has entered ``INTEREST_CONFIRMED`` or a later main-path stage (``CONTACT_MADE`` on a procurement
+    route; 3b does not count) and until it ends (``engagement_thread_open()``: SQLSTATE 55000 otherwise; read stays
+    open). INSERT-only for the app; D-54: the owner (or a definer function it owns) may redact a body once, setting it
+    to ``'[redacted]'`` with ``redacted_at`` and ``redacted_by``. ``created_at`` is the database's clock: leave it
+    out."""
 
     __tablename__ = "engagement_messages"
     __table_args__ = (

@@ -22,7 +22,9 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
 - ``engagement_messages`` (bridge_app: SELECT and INSERT only, the INSERT without ``created_at`` and the redaction
   columns): written by a party as themselves (``sender_user_id = app_user_id()``) on their own side
   (``sender_party``): ``developer`` for the engagement's developer, ``org`` for a member who may act on the tracker
-  (owner, admin, reviewer, signatory, finance: viewers read, never post, as they never act). The body is 1 to 4,000
+  (owner, admin, reviewer, signatory, finance: viewers read, never post, as they never act) and is not the
+  engagement's developer (a developer who is also a member of the counterpart organisation posts as ``developer``
+  only: one person never speaks for both sides). The body is 1 to 4,000
   characters and not blank (plain text; the database never interprets it).
 - The stage gate (``engagement_thread_open()``, BEFORE INSERT, SECURITY DEFINER, every role, right after the
   visibility check): the thread opens once an event of the engagement's chain has entered stage 3
@@ -230,7 +232,7 @@ def _engagement(table: str, condition: str) -> str:
 MESSAGE_INSERT = "sender_user_id = app_user_id() AND " + _engagement(
     "engagement_messages",
     "CASE engagement_messages.sender_party WHEN 'developer' THEN e.developer_id = app_user_id()"
-    f" WHEN 'org' THEN {_ACTING_MEMBER} ELSE false END",
+    f" WHEN 'org' THEN e.developer_id <> app_user_id() AND {_ACTING_MEMBER} ELSE false END",
 )
 _UPLOADER = "uploader_user_id = app_user_id()"
 _UNSENT = "message_id IS NULL"
