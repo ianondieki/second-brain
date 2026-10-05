@@ -6,7 +6,8 @@ turns two-step sign-in off) and the demo starts again, then the seed step (``pyt
 adds nothing and changes nothing they did: each engagement it did not open in that run is left where it is, with one
 line in the report. P21's beats keep the rule: a shortlist entry people removed is not made again, no saved search is
 added while Amina keeps one of her own, a thread whose engagement ended is left with one line, and a thread one of whose
-writers cannot sign in is not half written. Own database: the actions end engagements for good.
+writers cannot sign in is not half written. P22's quiz keeps it too: a day that has a set gets nothing, an attempt that
+exists is left, and an opt-in turned off stays off. Own database: the actions end engagements for good.
 """
 
 from __future__ import annotations
@@ -126,11 +127,12 @@ async def test_with_the_flags_off_the_seed_stops_before_deal_steps_and_says_so(
     seeded: tuple[DemoReport, DemoReport],
 ) -> None:
     off, _ = seeded
-    assert off.created[-3:] == [  # P21's beats: P1's thread is open at CONTACT_MADE too
+    assert off.created[-10:-7] == [  # P21's beats: P1's thread is open at CONTACT_MADE too
         f"thread of {P1.key} with {SACCO_B.legal_name}: {len(THREAD.messages)} messages",
         f"shortlist of {TELCO_A.legal_name}: {SCOUTED.key} by {TELCO_REVIEWER}",
         f"saved search of {AMINA.email}: {SAVED_SEARCH.name}",
     ]
+    assert [line.split(" ")[:2] for line in off.created[-7:]] == [["quiz", "set"]] * 4 + [["quiz", "attempt"]] * 3
     assert off.notes == [
         "Tier-2 view skipped: FEATURE_TIER2_ENABLED is off",
         f"{P1.key} with {SACCO_B.legal_name} stopped at CONTACT_MADE: FEATURE_DEALS_ENABLED is off",
@@ -377,3 +379,31 @@ async def test_a_thread_is_not_half_written_when_a_writer_cannot_sign_in(
     finally:
         async with owner.begin() as conn:
             await conn.execute(set_password, {"h": kept.password_hash, "e": AMINA.email})
+
+
+async def test_the_quiz_keeps_what_people_did(
+    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P22 (REQ-DEV-01; card test A8): Amina turned the board off (her change in the app; the owner role writes it, as
+    her password changed above): the seed leaves it off, adds no set or attempt and signs nobody in."""
+    amina = seeded[1].users[AMINA.email]
+    quiz_rows = (
+        "SELECT (SELECT count(*) FROM quiz_sets) AS sets, (SELECT count(*) FROM quiz_attempts) AS attempts,"
+        " (SELECT count(*) FROM quiz_questions) AS questions"
+    )
+    before = await rows(owner, quiz_rows)
+    opt_in = text("UPDATE quiz_profiles SET leaderboard_opt_in = :o WHERE user_id = :u")
+    try:
+        async with owner.begin() as conn:
+            await conn.execute(opt_in, {"o": False, "u": amina})
+        audit_before = await rows(owner, "SELECT count(*) FROM audit_events")
+        again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+        assert again.created == []
+        assert not [note for note in again.notes if note.startswith("quiz")]
+        assert await rows(owner, "SELECT count(*) FROM audit_events") == audit_before
+        kept = await rows(owner, "SELECT leaderboard_opt_in FROM quiz_profiles WHERE user_id = :u", u=amina)
+        assert kept[0].leaderboard_opt_in is False
+        assert await rows(owner, quiz_rows) == before
+    finally:
+        async with owner.begin() as conn:
+            await conn.execute(opt_in, {"o": True, "u": amina})
