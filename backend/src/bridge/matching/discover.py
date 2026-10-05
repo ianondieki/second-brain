@@ -15,20 +15,28 @@ beside the problems they solve, and the Opportunity Gap. Computed on read from `
   and that have fewer than 3 published proposals (AC-TREND-2). The decile is the scope's (a niche's top tenth when
   filtered), and the z floor keeps a quiet scope's top tenth, which is no trend, out.
 
-Filters: a niche slug (a parent includes its children) and a county code; the baselines are the whole platform's.
-Chips and badges are code-written copy ([[COPY-REVIEW]]).
+Filters: a niche slug (a parent includes its children), a county code and words (a problem's title or statement holds
+them, ignoring case: ``problems.service.words_match``; a project matches through the problems it solves); the
+baselines are the whole platform's. Chips and badges are code-written copy ([[COPY-REVIEW]]).
+
+Saved searches (P21 track C): ``NewMatches`` counts, for a saved view and filters, what this module's own queries list
+that was published in a window. The Problems view lists a problem only while it is Trending or New this week, so the
+window is capped there at the New-this-week days (``ranking.trending.new_days``, the same rule): every problem counted
+is one the Discover page lists for those filters (bar its 20-item cut). The Briefs view lists every open Brief with no
+time window, so its count has no cap.
 """
 
 from __future__ import annotations
 
 import math
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Final
+from datetime import date, datetime
+from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import Row, Select, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -49,13 +57,13 @@ from bridge.matching.discover_schemas import (
     TrendOut,
 )
 from bridge.matching.ranking_config import RankingConfig
-from bridge.matching.trend_facts import Board, ProblemFact, ProblemSignals, board, load
-from bridge.matching.trending import Trend
+from bridge.matching.trend_facts import Board, ProblemFact, ProblemSignals, board, load, visible_problems
+from bridge.matching.trending import Trend, nairobi_day, new_this_week
 from bridge.models.enums import BriefStatus, BriefVisibility, ModerationState, ProblemSource, ProblemStatus
 from bridge.problems import brief_rules, briefs
 from bridge.problems.brief_schemas import BriefFacts
 from bridge.problems.models import Problem, ProblemBrief
-from bridge.problems.service import label_for, niche_out, org_ref, published_after, published_facts
+from bridge.problems.service import label_for, niche_out, org_ref, published_after, published_facts, words_match
 from bridge.proposals.schemas import NicheOut, OrgRef, ProblemRef
 from bridge.proposals.serializers import teaser_items
 from bridge.tenancy.models import Organization
@@ -230,7 +238,17 @@ async def _problem_items(
     return items
 
 
-async def trending(db: AsyncSession, cfg: RankingConfig, *, niche: str | None, county: str | None) -> TrendingOut:
+async def _with_words(db: AsyncSession, ids: Iterable[UUID], words: str) -> set[UUID]:
+    """Which of these problems hold ``words`` in their title or statement (``words_match``)."""
+    wanted = list(dict.fromkeys(ids))
+    if not wanted:
+        return set()
+    return set((await db.scalars(select(Problem.id).where(Problem.id.in_(wanted), words_match(words)))).all())
+
+
+async def trending(
+    db: AsyncSession, cfg: RankingConfig, *, niche: str | None, county: str | None, words: str | None = None
+) -> TrendingOut:
     b, tree = await _board(db, cfg)
     scope = None if niche is None else tree.scope(niche)
     shown = [
@@ -239,16 +257,26 @@ async def trending(db: AsyncSession, cfg: RankingConfig, *, niche: str | None, c
         if (b.problems[pid].trending or b.problems[pid].new_this_week)
         and _in_scope(fact.niche_id, fact.county_code, scope, county)
     ]
+    projected = [
+        prop
+        for prop in b.facts.proposals.values()
+        if (b.projects[prop.id].trending or b.projects[prop.id].new_this_week)
+        and _in_scope(prop.niche_id, prop.county_code, scope, county)
+    ]
+    matching: set[UUID] | None = None
+    if words is not None:  # a problem by its own text; a project through the problems it solves
+        matching = await _with_words(db, [*shown, *(pid for prop in projected for pid in prop.problem_ids)], words)
+        shown = [pid for pid in shown if pid in matching]
     shown.sort(key=lambda pid: (*_order(b.problems[pid]), str(pid)))
     shown = shown[: cfg.discover.items]
 
     project_rows = []
-    for prop in b.facts.proposals.values():
-        trend = b.projects[prop.id]
-        if not (trend.trending or trend.new_this_week) or not _in_scope(prop.niche_id, prop.county_code, scope, county):
+    for prop in projected:
+        linked = [pid for pid in prop.problem_ids if matching is None or pid in matching]
+        if not linked:
             continue
-        problem = min(prop.problem_ids, key=lambda pid: (*_order(b.problems[pid]), str(pid)))
-        project_rows.append((prop.id, problem, trend))
+        problem = min(linked, key=lambda pid: (*_order(b.problems[pid]), str(pid)))
+        project_rows.append((prop.id, problem, b.projects[prop.id]))
     project_rows.sort(key=lambda row: (*_order(row[2]), str(row[0])))
     project_rows = project_rows[: cfg.discover.items]
     teasers = await teaser_items(db, [row[0] for row in project_rows])
@@ -304,17 +332,9 @@ async def opportunity_gap(
 _Parent = aliased(Niche)
 
 
-async def briefs_view(
-    db: AsyncSession,
-    *,
-    niche: str | None,
-    county: str | None,
-    limit: int,
-    after: pagination.MomentCursor | None,
-) -> DiscoverBriefsOut:
-    """Verified organisations' Problem Briefs (REQ-DIR-05): published and clear, public, not closed and whose deadline
-    has not passed (Africa/Nairobi, platform clock), newest first, under the reader's RLS; each with its organisation,
-    budget band, deadline and the published proposals linking it."""
+def _briefs_query(niche: str | None, county: str | None, words: str | None, today: date) -> Select[Any]:
+    """The Briefs view's rows (``briefs_view``): published and clear, public, not closed, the deadline not before
+    ``today``, the organisation listed, in the filters' scope; under the reader's RLS."""
     stmt = (
         select(
             Problem.id,
@@ -344,13 +364,31 @@ async def briefs_view(
             ProblemBrief.status == BriefStatus.PUBLISHED,
             ProblemBrief.visibility == BriefVisibility.PUBLIC,
             listed(),  # a delisted organisation's Briefs leave the view (its members read it under RLS too)
-            or_(ProblemBrief.deadline.is_(None), ProblemBrief.deadline >= await briefs.today(db)),
+            or_(ProblemBrief.deadline.is_(None), ProblemBrief.deadline >= today),
         )
     )
     if niche is not None:
         stmt = stmt.where(or_(Niche.slug == niche, _Parent.slug == niche))
     if county is not None:
         stmt = stmt.where(Problem.county_code == county)
+    if words is not None:
+        stmt = stmt.where(words_match(words))
+    return stmt
+
+
+async def briefs_view(
+    db: AsyncSession,
+    *,
+    niche: str | None,
+    county: str | None,
+    limit: int,
+    after: pagination.MomentCursor | None,
+    words: str | None = None,
+) -> DiscoverBriefsOut:
+    """Verified organisations' Problem Briefs (REQ-DIR-05): published and clear, public, not closed and whose deadline
+    has not passed (Africa/Nairobi, platform clock), newest first, under the reader's RLS; each with its organisation,
+    budget band, deadline and the published proposals linking it."""
+    stmt = _briefs_query(niche, county, words, await briefs.today(db))
     if after is not None:
         stmt = stmt.where(published_after(after))
     order = (Problem.published_at.desc().nulls_last(), Problem.id.desc())
@@ -381,3 +419,51 @@ async def briefs_view(
     return DiscoverBriefsOut(
         items=items, next_cursor=None if last is None else pagination.encode(last.published_at, last.id)
     )
+
+
+@dataclass(frozen=True, slots=True)
+class SavedQuery:
+    """A saved Discover view and filters (P21 track C): ``problems`` or ``briefs``, a niche slug, a county code and
+    words, each optional."""
+
+    view: str
+    niche: str | None = None
+    county: str | None = None
+    words: str | None = None
+
+
+class NewMatches:
+    """How many items Discover lists for a saved query that were published after ``since`` and at or before ``now``,
+    read under the session's RLS (bind it to the person first): open Briefs for the Briefs view; for the Problems view,
+    visible problems that are also New this week at ``now`` (the page lists no older one unless it trends, and an old
+    problem that trends is not new). The visible problems and the niche tree are read once per instance (one person's
+    searches)."""
+
+    def __init__(self, db: AsyncSession, now: datetime, cfg: RankingConfig) -> None:
+        self._db, self._now, self._new_days = db, now, cfg.trending.new_days
+        self._problems: tuple[Sequence[Row[Any]], Niches] | None = None
+
+    async def _visible(self) -> tuple[Sequence[Row[Any]], Niches]:
+        if self._problems is None:
+            self._problems = (await visible_problems(self._db, self._now), await niches(self._db))
+        return self._problems
+
+    async def count(self, query: SavedQuery, since: datetime) -> int:
+        if query.view == "briefs":
+            stmt = _briefs_query(query.niche, query.county, query.words, nairobi_day(self._now)).where(
+                Problem.published_at > since, Problem.published_at <= self._now
+            )
+            return int(await self._db.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
+        rows, tree = await self._visible()
+        scope = None if query.niche is None else tree.scope(query.niche)
+        ids = [
+            row.id
+            for row in rows
+            if row.published_at is not None
+            and since < row.published_at <= self._now
+            and new_this_week(row.published_at, nairobi_day(self._now), self._new_days)
+            and _in_scope(row.niche_id, row.county_code, scope, query.county)
+        ]
+        if query.words is not None:
+            return len(await _with_words(self._db, ids, query.words))
+        return len(ids)

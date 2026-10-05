@@ -7,7 +7,18 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,7 +47,9 @@ class ModerationCase(IdMixin, TimestampsMixin, Base):
     Tier-1 pre-screen, claim disputes, the Tier-2 similarity job) file through ``app_open_moderation_case``, which
     checks the caller against the subject and returns the case id. ``classifier`` holds the pre-screen output over
     Tier-1 fields only. Changing a subject's ``moderation_state`` is a separate step through
-    ``app_moderate_proposal`` / ``app_moderate_problem``."""
+    ``app_moderate_proposal`` / ``app_moderate_problem``. A report of an engagement message (``subject_type =
+    'message'``, revision 0008) is filed only through ``app_report_message`` (once per reporter and message) and read
+    by staff only through ``app_reported_message``."""
 
     __tablename__ = "moderation_cases"
     # Inserted by callers that may not read the new row back (no SELECT grant or policy), so the ORM must not add
@@ -45,6 +58,14 @@ class ModerationCase(IdMixin, TimestampsMixin, Base):
     __table_args__ = (
         Index("ix_moderation_cases_subject", "subject_type", "subject_id"),
         Index("ix_moderation_cases_status_created_at", "status", "created_at"),
+        # Revision 0008: one report per reporter and engagement message.
+        Index(
+            "uq_moderation_cases_message_report",
+            "subject_id",
+            "reporter_id",
+            unique=True,
+            postgresql_where=text("subject_type = 'message' AND source = 'report'"),
+        ),
         # 1 to 50 non-blank reasons of at most 200 characters (app_reasons_are_valid, revision 0002).
         CheckConstraint("app_reasons_are_valid(reasons, 50)", name="reasons_valid"),
         {"info": {"tenancy": Tenancy.STAFF}},

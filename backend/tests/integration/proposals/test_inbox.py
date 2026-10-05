@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from tests.integration.proposals.helpers import Developers, ProposalWorld, published
 from tests.integration.proposals.pitch_helpers import Members, PitchOrgs, add_member, pitch, pitchable
 
-ITEM_KEYS = {"tag_id", "pitched_at", "engagement", "proposal"}
+ITEM_KEYS = {"tag_id", "pitched_at", "engagement", "proposal", "shortlisted"}  # the star: P21 track B
 
 
 async def test_newest_first_paged_and_readable_by_any_member(

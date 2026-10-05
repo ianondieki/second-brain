@@ -423,6 +423,16 @@ def test_every_web_paths_builder_makes_a_platform_path() -> None:
         "org_engagements_path": [web_paths.org_engagements_path(uuid4())],
         "DEV_ENGAGEMENTS": [web_paths.DEV_ENGAGEMENTS],
         "ORG_ENGAGEMENTS": [web_paths.ORG_ENGAGEMENTS],
+        "DEV_DISCOVER": [web_paths.DEV_DISCOVER],
+        "discover_path": [  # P21 track C: a saved search's alert; values are query-encoded, too-long words left out
+            web_paths.discover_path(view, niche=niche, county=county, words=words)
+            for view in ("problems", "briefs")
+            for niche, county, words in (
+                (None, None, None),
+                ("agri-x", "KE-32", "//evil.example/ \\x?a=b#c"),
+                (None, None, "\U0001f33e" * 200),
+            )
+        ],
     }
     assert set(made) == public  # a new builder is added here before a writer may use it
     assert all(is_platform_path(link) for links in made.values() for link in links)
