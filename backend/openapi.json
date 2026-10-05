@@ -2341,6 +2341,178 @@
         "title": "CommandBody",
         "type": "object"
       },
+      "CompareEngagement": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngagementState"
+          }
+        },
+        "required": [
+          "id",
+          "state"
+        ],
+        "title": "CompareEngagement",
+        "type": "object"
+      },
+      "CompareItem": {
+        "description": "One proposal's Tier-1 facts, for the side-by-side view (never a Tier-2 field).",
+        "properties": {
+          "ask": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalAsk"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the developer is looking for"
+          },
+          "cert_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The registration certificate's id",
+            "title": "Cert Id"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "county_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "County Code"
+          },
+          "engagement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompareEngagement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "This organisation's engagement with it, if any"
+          },
+          "fit_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The best fit (0-100) this organisation's scouts gave it; null: no match",
+            "title": "Fit Score"
+          },
+          "maturity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalMaturity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NicheOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "registered_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the certificate's version was registered",
+            "title": "Registered At"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "title",
+          "niche",
+          "country",
+          "county_code",
+          "maturity",
+          "ask",
+          "cert_id",
+          "registered_at",
+          "engagement",
+          "fit_score"
+        ],
+        "title": "CompareItem",
+        "type": "object"
+      },
+      "CompareOut": {
+        "properties": {
+          "items": {
+            "description": "In the order asked; a proposal the organisation can no longer see (held, unpublished, out of its Inbox) is left out",
+            "items": {
+              "$ref": "#/components/schemas/CompareItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CompareOut",
+        "type": "object"
+      },
       "ConfidentialIn": {
         "additionalProperties": false,
         "description": "Tier 2: encrypted per proposal; released only through the Tier-2 predicate (T2.5).",
@@ -4510,6 +4682,11 @@
           "proposal": {
             "$ref": "#/components/schemas/TeaserItem"
           },
+          "shortlisted": {
+            "description": "Whether the proposal is on this organisation's shortlist (the Inbox's star)",
+            "title": "Shortlisted",
+            "type": "boolean"
+          },
           "tag_id": {
             "format": "uuid",
             "title": "Tag Id",
@@ -4856,6 +5033,11 @@
             "title": "Scout Id",
             "type": "string"
           },
+          "shortlisted": {
+            "description": "Whether the proposal is on this organisation's shortlist (the Inbox's star; P21)",
+            "title": "Shortlisted",
+            "type": "boolean"
+          },
           "teaser": {
             "anyOf": [
               {
@@ -5041,6 +5223,11 @@
             "format": "uuid",
             "title": "Scout Id",
             "type": "string"
+          },
+          "shortlisted": {
+            "description": "Whether the proposal is on this organisation's shortlist (the Inbox's star; P21)",
+            "title": "Shortlisted",
+            "type": "boolean"
           },
           "teaser": {
             "anyOf": [
@@ -8923,6 +9110,96 @@
           "new_password"
         ],
         "title": "SetPasswordRequest",
+        "type": "object"
+      },
+      "ShortlistEntry": {
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "added_by_id": {
+            "format": "uuid",
+            "title": "Added By Id",
+            "type": "string"
+          },
+          "added_by_name": {
+            "description": "The member who added it",
+            "title": "Added By Name",
+            "type": "string"
+          },
+          "available": {
+            "description": "False once the organisation can no longer see it (held, unpublished, out of its Inbox): no Tier-1 facts then; a Tier-2 member may still remove it",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NicheOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "available",
+          "title",
+          "niche",
+          "added_by_id",
+          "added_by_name",
+          "added_at"
+        ],
+        "title": "ShortlistEntry",
+        "type": "object"
+      },
+      "ShortlistPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShortlistEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as ?cursor= for the next page; null on the last page",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "ShortlistPage",
         "type": "object"
       },
       "SideLimitsOut": {
@@ -27962,6 +28239,516 @@
         "summary": "Update Scout",
         "tags": [
           "scouts"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/shortlist": {
+      "get": {
+        "description": "The organisation's shortlist, newest first.",
+        "operationId": "list_shortlist_api_orgs__org_id__shortlist_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The previous page's next_cursor; omit it for the first",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The previous page's next_cursor; omit it for the first",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortlistPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "List Shortlist",
+        "tags": [
+          "organisations"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/shortlist/compare": {
+      "get": {
+        "description": "Shortlisted proposals side by side, on their Tier-1 facts only.",
+        "operationId": "compare_shortlisted_api_orgs__org_id__shortlist_compare_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "2 to 4 shortlisted proposal ids, separated by commas",
+            "in": "query",
+            "name": "ids",
+            "required": true,
+            "schema": {
+              "description": "2 to 4 shortlisted proposal ids, separated by commas",
+              "maxLength": 200,
+              "title": "Ids",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Compare Shortlisted",
+        "tags": [
+          "organisations"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/shortlist/{proposal_id}": {
+      "delete": {
+        "description": "Take a proposal off the shortlist (reviewer, signatory or admin).",
+        "operationId": "remove_from_shortlist_api_orgs__org_id__shortlist__proposal_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Remove From Shortlist",
+        "tags": [
+          "organisations"
+        ]
+      },
+      "put": {
+        "description": "Shortlist a proposal of the organisation's Inbox (reviewer, signatory or admin); a repeat changes nothing.",
+        "operationId": "add_to_shortlist_api_orgs__org_id__shortlist__proposal_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortlistEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Add To Shortlist",
+        "tags": [
+          "organisations"
         ]
       }
     },
