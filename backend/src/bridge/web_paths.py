@@ -24,6 +24,11 @@ def engagement_path(party: EngagementParty, engagement_id: UUID) -> str:
     return f"{portal}/{engagement_id}"
 
 
+def messages_path(party: EngagementParty, engagement_id: UUID) -> str:
+    """One engagement's tracker in ``party``'s portal, opened on its Messages tab (N18)."""
+    return f"{engagement_path(party, engagement_id)}?tab=messages"
+
+
 def org_engagements_path(org_id: UUID) -> str:
     """The organisation's engagements list, for that organisation."""
     return f"{ORG_ENGAGEMENTS}?org={org_id}"
