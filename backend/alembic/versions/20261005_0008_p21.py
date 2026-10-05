@@ -24,8 +24,8 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
   (``sender_party``): ``developer`` for the engagement's developer, ``org`` for a member who may act on the tracker
   (owner, admin, reviewer, signatory, finance: viewers read, never post, as they never act) and is not the
   engagement's developer (a developer who is also a member of the counterpart organisation posts as ``developer``
-  only: one person never speaks for both sides). The body is 1 to 4,000
-  characters and not blank (plain text; the database never interprets it).
+  only: one person never speaks for both sides). The body is 1 to 4,000 characters and not blank (plain text; the
+  database never interprets it).
 - The stage gate (``engagement_thread_open()``, BEFORE INSERT, SECURITY DEFINER, every role, right after the
   visibility check): the thread opens once an event of the engagement's chain has entered stage 3
   (``INTEREST_CONFIRMED``) or a later main-path stage (``CONTACT_MADE`` to ``PAYMENT_FINAL``), whatever state it is in
@@ -40,9 +40,9 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
   from any stage and resume only where they were entered), so an engagement on hold at ``UNDER_REVIEW`` or at a
   ``PROCUREMENT_ROUTE`` entered from it stays closed, and one on hold after stage 3 stays open. Both sides are refused
   before (D-57 (1); the organisation's 403 of AC-TRACK-9 is the API's), so no message can exist before the thread
-  opens and the read policy needs no stage. The trigger locks the engagement's row FOR KEY SHARE first: an
-  append in flight (the chain holds FOR UPDATE until commit) is waited for and its outcome read, so no message is
-  written once the engagement's end has committed; concurrent messages do not wait for each other. SQLSTATE 55000
+  opens and the read policy needs no stage. The trigger locks the engagement's row FOR KEY SHARE first: an append in
+  flight (the chain holds FOR UPDATE until commit) is waited for and its outcome read, so no message is written once
+  the engagement's end has committed; concurrent messages do not wait for each other. SQLSTATE 55000
   (object_not_in_prerequisite_state) with "the thread opens at INTEREST_CONFIRMED" or "its thread is read-only".
 - Append-only, but for its redaction (D-54's default (a), D-57 (3)): no UPDATE or DELETE grant;
   ``engagement_messages_no_delete`` and ``_no_truncate`` (``block_mutation()``) refuse DELETE and TRUNCATE for every
@@ -95,13 +95,16 @@ one row per (organisation, proposal). Every member reads (narrowed by ``app.org_
 the caller is a member of the organisation (narrowed by ``app.org_id``; false for anyone else, so it tells nobody
 what another organisation's Inbox holds) and the proposal is published and clear and is in the organisation's Inbox:
 pitched to it (a delivered tag), matched by its scout (``agent_matches``) or answering its Brief (the proposal's
-current version links a problem whose Brief is the organisation's).
+current version links a problem whose Brief is the organisation's). A row is ids and who added it when, nothing of the
+proposal: once its proposal is held or unpublished the row stays but leads nowhere (the proposals' RLS hides it from
+every member, the Inbox check is false, so it is not added back), and a Tier-2 member may remove it.
 
 Saved searches (track C; tenancy USER): ``saved_searches`` (bridge_app: SELECT, INSERT without ``last_alerted_at``
 and ``created_at``, UPDATE of ``name``, ``alerts`` and ``last_alerted_at``, DELETE), the owner's only. A name of 1
 to 60 characters, the Discover view (``problems`` or ``briefs``), an optional niche (``niches.slug``) and county
 (``regions.code``), optional words (1 to 100 characters), ``alerts`` (default on) and ``last_alerted_at``. At most 10
-per user (``saved_searches_cap``, AFTER INSERT, every role, serialised per user; check_violation with constraint name
+per user (``saved_searches_cap``, AFTER INSERT, every role, serialised per user by an advisory lock, after which the
+count reads every committed row at READ COMMITTED, the application's level; check_violation with constraint name
 ``saved_searches_at_most_10``). The daily alert job runs as bridge_app like every job: ``app_saved_searches_due(now)``
 (SECURITY DEFINER, EXECUTE bridge_app) lists, to a session with no user bound only, the (user, saved search) ids with
 alerts on, of active users, not alerted since 00:00 Africa/Nairobi of ``now``'s day; the job then binds to each user
@@ -117,6 +120,9 @@ Operating rules for the code that uses this schema:
 - Post a message as the sender, leaving ``created_at`` out (read it back), then attach the staged uploads in the same
   transaction: ``UPDATE engagement_message_attachments SET message_id = :m WHERE id = ANY(:ids) AND message_id IS
   NULL`` and check the row count (a missing, foreign, unclean or already-sent upload matches nothing or is refused).
+- Stage an upload leaving ``message_id`` and ``av_status`` out (it is ``pending_scan``), then scan it in a session
+  bound to its uploader and write ``storage/scanner.py``'s verdict (``clean``, ``infected``, ``failed``), never a
+  value the client sent: the database checks who sets the verdict and that it is final, not the scan itself.
 - A message is free text a party typed and is never deleted: keep it out of event payloads, logs, audit details and
   emails (N18 says who wrote, never the text). Its erasure is D-54 (a staff-only definer redaction, not written yet).
 - File a report only with ``SELECT * FROM app_report_message(:message, :reasons)`` (the codes of
