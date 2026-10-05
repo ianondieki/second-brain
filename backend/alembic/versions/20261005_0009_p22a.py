@@ -9,10 +9,12 @@ of revisions 0001 to 0008 is changed or dropped; the triggers reuse ``block_muta
 ``downgrade()``).
 
 Who reads and writes what (bridge_app; there is no worker role: the nightly job is bridge_app with no user bound, as
-revisions 0007 and 0008's jobs; a "developer" is an active user with a developer profile, ``app_is_developer()``):
+revisions 0007 and 0008's jobs; a "developer" is an active user with a developer profile and no staff role,
+``app_is_developer()``: staff approve the sets, so they never play or rank):
 
 - ``quiz_sets`` (CURATED; bridge_app: SELECT, INSERT of ``id``, ``quiz_date``, ``origin``, ``llm_trace_id``). Staff
-  admin reads every set, a developer the approved ones, nobody else any. The job (no user bound) inserts a draft for
+  admin reads every set, a developer the approved ones dated today or earlier (never tomorrow's ahead of time), nobody
+  else any. The job (no user bound) inserts a draft for
   today or a later Nairobi day. ``status`` moves once, ``draft`` to ``approved`` (only with its five questions) or
   ``rejected``, by ``app_decide_quiz_set(set, decision)`` (staff admin; sets ``decided_by`` and ``decided_at``); then
   nothing of the set changes (``quiz_sets_guard``, every role; its day, origin, trace id and creation time never
@@ -21,7 +23,8 @@ revisions 0007 and 0008's jobs; a "developer" is an active user with a developer
   that call's ``llm_calls`` rows, one per attempt; a ledger row's id is not returned to the caller and an in-memory
   ledger writes none, so there is no foreign key), required for ``origin = 'model'``, optional for ``seeded``.
 - ``quiz_questions`` (CURATED; bridge_app: SELECT of every column but ``answer`` and ``why``, INSERT of the content
-  columns). Staff admin reads every question, a developer those of approved sets, live and pulled. ``answer`` and
+  columns). Staff admin reads every question, a developer those of approved sets dated today or earlier, live and
+  pulled. ``answer`` and
   ``why`` are read only through ``app_quiz_answers(set)``: rows only for a caller with an attempt on the set (attempts
   are inserted finished) or staff admin. The job (no user bound) inserts them; ``quiz_questions_guard`` (every role)
   admits a question only into a draft set (locked FOR SHARE, so a concurrent decision waits) and changes nothing but
@@ -91,12 +94,12 @@ listed in ``FUNCTION_GRANTS``):
   aggregate (their number, the average score to 2 decimals, and by position how many answered correctly).
 - ``app_quiz_board()`` -> (rank, handle, points, time_ms, is_caller): a developer only. The ISO week (Monday to Sunday)
   of the current Nairobi day; the points and total time of each developer's attempts on that week's approved sets;
-  ranked (``rank()``: more points first, then less time; equal points and time share a rank) among active developers
-  who opted in and played this week and are of the caller's kind: real accounts for a real caller (demo accounts never
-  show to one), demo accounts (``users.demo_account``) for a demo caller (the local demo shows its own people); the
-  first 20 rows by rank and handle, plus the caller's own row when it is not among them (``is_caller``): their points
-  and time (0 when they did not play), and the rank they would have among their kind (NULL when they did not play).
-  Nothing of past weeks.
+  ranked (``rank()``: more points first, then less time; equal points and time share a rank) among active,
+  non-staff developers who opted in and played this week and are of the caller's kind: real accounts for a real
+  caller (demo accounts never show to one), demo accounts (``users.demo_account``) for a demo caller (the local demo
+  shows its own people); the first 20 rows by rank and handle, plus the caller's own row when it is not among them
+  (``is_caller``): their points and time (0 when they did not play), and the rank they would have among their kind
+  (NULL when they did not play). Nothing of past weeks.
 - ``app_quiz_day_taken(day)`` and ``app_quiz_recent_prompt_hashes(since)``: the quiz job only, with no user bound
   (insufficient_privilege otherwise; invalid_parameter_value for a NULL argument). Whether the day has a draft or
   approved set; the distinct prompt hashes of draft and approved sets dated ``since`` or later.
@@ -226,14 +229,20 @@ _OWN = "user_id = app_user_id()"
 _APPROVED_SET = "EXISTS (SELECT 1 FROM quiz_sets s WHERE s.id = {table}.set_id AND s.status = 'approved'{today})"
 
 POLICIES: tuple[Policy, ...] = (
-    # --- quiz_sets (CURATED): staff admin reads all, a developer the approved ones; the job inserts drafts ---
-    Policy("quiz_sets", "SELECT", f"{_STAFF_ADMIN} OR (status = 'approved' AND app_is_developer())"),
+    # --- quiz_sets (CURATED): staff admin reads all, a developer the approved ones up to today; the job drafts ---
+    Policy(
+        "quiz_sets",
+        "SELECT",
+        f"{_STAFF_ADMIN} OR (status = 'approved' AND quiz_date <= app_nairobi_today() AND app_is_developer())",
+    ),
     Policy("quiz_sets", "INSERT", check=f"{_JOB} AND quiz_date >= app_nairobi_today()"),
     # --- quiz_questions (CURATED): those of the sets the caller reads (answer and why by column grant: never) ---
     Policy(
         "quiz_questions",
         "SELECT",
-        f"{_STAFF_ADMIN} OR (app_is_developer() AND {_APPROVED_SET.format(table='quiz_questions', today='')})",
+        f"{_STAFF_ADMIN} OR (app_is_developer() AND "
+        + _APPROVED_SET.format(table="quiz_questions", today=" AND s.quiz_date <= app_nairobi_today()")
+        + ")",
     ),
     Policy("quiz_questions", "INSERT", check=_JOB),
     # --- quiz_attempts (USER): the developer's own (staff admin reads all); today's approved set only ---
@@ -268,15 +277,16 @@ CREATE FUNCTION app_nairobi_today() RETURNS date
     SET search_path = pg_catalog, public, pg_temp
 AS $$ SELECT (public.app_clock_now() AT TIME ZONE 'Africa/Nairobi')::date $$;
 
--- The caller (app.user_id) is an active user with a developer profile: who plays the quiz. Organisation-only accounts,
--- and staff without a developer profile, are not. SECURITY DEFINER: reads users and profiles whatever the caller's RLS.
+-- The caller (app.user_id) is an active user with a developer profile and no staff role: who plays the quiz.
+-- Organisation-only accounts, suspended or deactivated users and staff (who approve the sets, so never play or rank,
+-- even with a developer profile) are not. SECURITY DEFINER: reads users and profiles whatever the caller's RLS.
 CREATE FUNCTION app_is_developer() RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
     SELECT EXISTS (
         SELECT 1 FROM public.developer_profiles d JOIN public.users u ON u.id = d.user_id
-         WHERE d.user_id = public.app_user_id() AND u.status = 'active'
+         WHERE d.user_id = public.app_user_id() AND u.status = 'active' AND u.staff_role IS NULL
     )
 $$;
 
@@ -491,12 +501,12 @@ $$;
 
 -- This week's board (D-59): the ISO week (Monday to Sunday) of the current Nairobi day, the points and total time of
 -- each developer's attempts on the week's approved sets, ranked (more points first, then less time; equal points and
--- time share a rank) among active developers who opted in and played this week and are of the caller's kind: real
--- accounts for a real caller (a demo account never shows to one), demo accounts (users.demo_account) for a demo
--- caller (the local demo shows its own people). The first 20 rows by rank and handle, plus the caller's own row when
--- it is not among them (their points and time, 0 when they did not play, and the rank they would have among their
--- kind: NULL when they did not play). Developers only. SECURITY DEFINER: reads every developer's attempts, opt-in and
--- handle, and returns handles and sums only.
+-- time share a rank) among active, non-staff developers who opted in and played this week and are of the caller's
+-- kind: real accounts for a real caller (a demo account never shows to one), demo accounts (users.demo_account) for a
+-- demo caller (the local demo shows its own people). The first 20 rows by rank and handle, plus the caller's own row
+-- when it is not among them (their points and time, 0 when they did not play, and the rank they would have among
+-- their kind: NULL when they did not play). Developers only. SECURITY DEFINER: reads every developer's attempts,
+-- opt-in and handle, and returns handles and sums only.
 CREATE FUNCTION app_quiz_board()
     RETURNS TABLE (rank integer, handle text, points integer, time_ms bigint, is_caller boolean)
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -525,7 +535,8 @@ BEGIN
                (pg_catalog.rank() OVER (ORDER BY w.pts DESC, w.ms))::integer AS pos
           FROM week w
           JOIN public.quiz_profiles p ON p.user_id = w.user_id AND p.leaderboard_opt_in
-          JOIN public.users u ON u.id = w.user_id AND u.status = 'active' AND u.demo_account = v_demo
+          JOIN public.users u
+            ON u.id = w.user_id AND u.status = 'active' AND u.staff_role IS NULL AND u.demo_account = v_demo
           JOIN public.developer_profiles d ON d.user_id = w.user_id
     ), leaders AS (
         SELECT b.user_id, b.who, b.pts, b.ms, b.pos FROM board b ORDER BY b.pos, b.who LIMIT 20

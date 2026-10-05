@@ -58,6 +58,7 @@ from tests.integration.quiz.schema_world import (
     scores,
 )
 
+BOARD = "SELECT rank, handle, points, time_ms, is_caller FROM app_quiz_board()"
 STATS = "SELECT attempts, average_score, per_question_correct FROM app_quiz_set_stats(:s)"
 
 
@@ -188,20 +189,21 @@ async def test_a_question_holds_four_distinct_options_one_answer_and_a_sourced_w
 
 
 async def test_developers_read_approved_sets_without_answers_until_they_played(owner_engine: AsyncEngine) -> None:
-    """A developer reads today's approved set and its questions but no draft; never the answer or the why directly;
-    ``app_quiz_answers`` returns them only after their own attempt; staff admin reads every set and every answer; an
-    organisation-only account and a moderator read nothing."""
+    """A developer reads today's approved set and its questions but no draft and no approved set of a later day; never
+    the answer or the why directly; ``app_quiz_answers`` returns them only after their own attempt; staff admin reads
+    every set and every answer; an organisation-only account and a moderator read nothing."""
     async with t.as_app(owner_engine) as conn:
         p = await people(conn)
         today = await free_day(conn)
         set_id, questions = await approved(conn, today, p.admin)
         tomorrow, _ = await draft(conn, today + timedelta(days=1))
+        ahead, _ = await approved(conn, today + timedelta(days=2), p.admin)  # approved early: not shown before its day
         answers = "SELECT question_id, answer, why FROM app_quiz_answers(:s)"
+        sets = "SELECT count(*) FROM quiz_sets WHERE id IN (:a, :b, :c)"
+        their_questions = "SELECT count(*) FROM quiz_questions WHERE set_id IN (:a, :b, :c)"
         await t.act(conn, p.developer)
-        assert await t.run(conn, "SELECT count(*) FROM quiz_sets WHERE id IN (:a, :b)", a=set_id, b=tomorrow) == 1
-        assert (
-            await t.run(conn, "SELECT count(*) FROM quiz_questions WHERE set_id IN (:a, :b)", a=set_id, b=tomorrow) == 5
-        )
+        assert await t.run(conn, sets, a=set_id, b=tomorrow, c=ahead) == 1
+        assert await t.run(conn, their_questions, a=set_id, b=tomorrow, c=ahead) == 5
         visible = "SELECT prompt, options, source_url, status, prompt_hash FROM quiz_questions WHERE set_id = :s"
         assert len((await conn.execute(sa.text(visible), {"s": set_id})).all()) == 5
         for column in ("answer", "why", "*"):
@@ -219,9 +221,47 @@ async def test_developers_read_approved_sets_without_answers_until_they_played(o
                 assert await t.run(conn, f"SELECT count(*) FROM {table}") == 0, table
             assert (await conn.execute(sa.text(answers), {"s": set_id})).all() == []
         await t.act(conn, p.admin)
-        assert await t.run(conn, "SELECT count(*) FROM quiz_sets WHERE id IN (:a, :b)", a=set_id, b=tomorrow) == 2
+        assert await t.run(conn, sets, a=set_id, b=tomorrow, c=ahead) == 3
+        assert await t.run(conn, their_questions, a=set_id, b=tomorrow, c=ahead) == 15
         assert len((await conn.execute(sa.text(answers), {"s": tomorrow})).all()) == 5  # a draft's, for the queue
         await t.expect(conn, "SELECT answer FROM quiz_questions", DENIED)  # staff too: the function only
+
+
+async def test_staff_and_suspended_accounts_neither_play_nor_flag_nor_rank(owner_engine: AsyncEngine) -> None:
+    """Staff are no developers, even with a developer profile (they approve the sets), and nor is a suspended
+    developer: neither reads a set, plays, flags or opens the board, and neither shows on a developer's board, though
+    each has an opted-in attempt this week (written before the suspension or by the owner)."""
+    async with t.as_app(owner_engine) as conn:
+        p = await people(conn)
+        today = await free_day(conn)
+        set_id, questions = await approved(conn, today, p.admin)
+        await t.as_owner(conn)
+        staff = await developer(conn, "staffdev")
+        await t.run(conn, "UPDATE users SET staff_role = 'moderator', totp_enabled_at = now() WHERE id = :u", u=staff)
+        suspended = await developer(conn, "suspended")
+        opted = "INSERT INTO quiz_profiles (user_id, leaderboard_opt_in) VALUES (:u, true)"
+        for user in (p.developer, suspended):
+            assert await attempt(conn, set_id, user, list(KEY)) == 5
+            await t.run(conn, opted, u=user)
+        await t.act(conn, staff)
+        await t.expect(conn, ATTEMPT, RLS, id=uuid7(), set=set_id, user=staff, answers=list(KEY), ms=1)
+        await owner_attempt(conn, set_id, staff, list(KEY))
+        await t.run(conn, opted, u=staff)
+        await t.run(conn, "UPDATE users SET status = 'suspended' WHERE id = :u", u=suspended)
+        for user in (staff, suspended):
+            await t.act(conn, user)
+            assert await t.run(conn, "SELECT app_is_developer()") is False
+            assert await t.run(conn, "SELECT count(*) FROM quiz_sets WHERE id = :s", s=set_id) == 0
+            await t.expect(
+                conn, FLAG, "no question of an approved set", question=questions[0], reason="other", note=None
+            )
+            await t.expect(conn, BOARD, "developers only")
+        await t.act(conn, suspended)
+        await t.expect(conn, ATTEMPT, RLS, id=uuid7(), set=set_id, user=suspended, answers=list(KEY), ms=1)
+        await t.act(conn, p.developer)
+        assert await t.run(conn, "SELECT app_is_developer()") is True
+        board = [tuple(row) for row in await conn.execute(sa.text(BOARD))]
+        assert board == [(1, f"dev-{p.developer.hex}", 5, 60000, True)]  # neither staff nor the suspended account
 
 
 async def test_one_attempt_per_developer_on_todays_approved_set_scored_by_the_database(
@@ -565,9 +605,6 @@ async def test_a_developer_reads_and_writes_only_their_own_attempts_flags_and_pr
             await t.run(conn, "SELECT count(*) FROM quiz_profiles WHERE user_id IN (:a, :b)", a=p.developer, b=p.other)
             == 0
         )
-
-
-BOARD = "SELECT rank, handle, points, time_ms, is_caller FROM app_quiz_board()"
 
 
 async def test_the_board_is_this_weeks_opted_in_developers_by_points_then_time(owner_engine: AsyncEngine) -> None:
