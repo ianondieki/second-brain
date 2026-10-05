@@ -102,10 +102,10 @@ test.describe("the organisation shortlist", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Compare proposals");
     await expect(page.locator("[data-tier1-note]")).toContainText("public teaser facts only");
     for (const pitched of [newer, older]) {
-      await expect(page.getByRole("link", { name: pitched.title })).toHaveAttribute("href", `/org/inbox/${pitched.proposalId}`);
+      await expect(page.getByRole("link", { name: pitched.title, exact: true })).toHaveAttribute("href", `/org/inbox/${pitched.proposalId}`);
     }
     await expect(page.getByText(TIER2_TEXT)).toHaveCount(0); // Tier 1 only (B4)
-    await expect(page.getByText("Wants to run a pilot").first()).toBeVisible();
+    await expect(page.getByText("Wants to run a pilot").filter({ visible: true }).first()).toBeVisible(); // the table at 1440, the cards at 360
     await checkScreen(page, { strict: true });
 
     // Too few ids: one sentence and the way back.
