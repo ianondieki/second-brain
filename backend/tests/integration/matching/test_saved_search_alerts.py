@@ -16,7 +16,7 @@ are written relative to ``app_clock_now()`` (``trend_world``), and each test's n
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bridge.config import get_settings
 from bridge.db import create_session_factory
 from bridge.matching.saved_search_alerts import AlertDeps, Report, run_alerts
+from bridge.matching.trending import NAIROBI, nairobi_day
 from bridge.notifications.email import FakeEmailProvider
 from tests.integration.engagements.api_world import clients
 from tests.integration.matching.trend_world import TrendWorld, brief, build, research_card
@@ -264,12 +265,14 @@ async def test_p21_c6_the_digest_email_is_opt_in_once_a_day_with_counts_only(
     assert turned_on.status_code == 200, turned_on.text
     assert next(item for item in turned_on.json()["items"] if item["kind"] == "saved_search_digest")["enabled"]
 
+    # Published after the first run and before 09:00 on the next Nairobi day, which is at least 9 hours after it,
+    # so the test reads the same at any hour (a moment of "now + 1 day" crossed midnight with the hour added below).
+    tomorrow = datetime.combine(nairobi_day(first.now) + timedelta(days=1), time(9, 0), tzinfo=NAIROBI)
     await research_card(
-        owner_engine, w.niche, county=NAKURU, age_days=-0.5, title=SECRET_TITLE, statement=SECRET_STATEMENT
+        owner_engine, w.niche, county=NAKURU, age_days=-0.2, title=SECRET_TITLE, statement=SECRET_STATEMENT
     )
-    await brief(owner_engine, w.niche, age_days=-0.5, title=SECRET_TITLE)
-    await brief(owner_engine, w.sibling, age_days=-0.4, title=SECRET_TITLE)
-    tomorrow = first.now + timedelta(days=1)
+    await brief(owner_engine, w.niche, age_days=-0.2, title=SECRET_TITLE)
+    await brief(owner_engine, w.sibling, age_days=-0.15, title=SECRET_TITLE)
     assert counts(await r.run(tomorrow), r.user) == {UUID(grain): 1, UUID(briefs): 2}
     [email] = r.outbox.outbox
     [address] = await rows(owner_engine, "SELECT email FROM users WHERE id = :u", u=r.user)
@@ -285,8 +288,8 @@ async def test_p21_c6_the_digest_email_is_opt_in_once_a_day_with_counts_only(
 
     async with owner_engine.begin() as conn:  # forced again the same day, with something new: still one email
         await conn.execute(text("UPDATE saved_searches SET last_alerted_at = NULL WHERE user_id = :u"), {"u": r.user})
-    await research_card(owner_engine, w.niche, county=NAKURU, age_days=-0.6)
-    await r.run(tomorrow + timedelta(hours=1))
+    await research_card(owner_engine, w.niche, county=NAKURU, age_days=-0.25)
+    await r.run(tomorrow + timedelta(hours=1))  # 10:00, the same Nairobi day
     assert len(r.outbox.outbox) == 1
     [sent] = await rows(
         owner_engine,
