@@ -1,8 +1,7 @@
 """Notification preferences (REQ-NOT-06; docs/spec/06 6.10; ``REQUIREMENTS.md`` §5 "Mutable").
 
 ``notification_preferences(user_id, kind, channel, enabled)`` holds a user's explicit choices; a kind and channel with
-no row has the catalogue's default (``notifications.catalogue``), and is on when the catalogue does not list it
-(mutable notifications default on; the 🔒 transactional ones never read this). Read on a session bound to
+no row is on (mutable notifications default on; the 🔒 transactional ones never read this). Read on a session bound to
 the user (the table is the user's own under RLS). In-app is always on and is never looked up here.
 """
 
@@ -14,12 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.models.enums import NotificationChannel
-from bridge.notifications.catalogue import default_for
 from bridge.notifications.models import NotificationPreference
 
 
 async def channel_enabled(db: AsyncSession, user_id: UUID, kind: str, channel: NotificationChannel) -> bool:
-    """The user's choice for ``kind`` on ``channel``; the catalogue's default when they never made one."""
+    """The user's choice for ``kind`` on ``channel``; True when they never made one."""
     enabled = await db.scalar(
         select(NotificationPreference.enabled).where(
             NotificationPreference.user_id == user_id,
@@ -27,4 +25,4 @@ async def channel_enabled(db: AsyncSession, user_id: UUID, kind: str, channel: N
             NotificationPreference.channel == channel,
         )
     )
-    return default_for(kind, channel) if enabled is None else bool(enabled)
+    return True if enabled is None else bool(enabled)
