@@ -9,10 +9,11 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
-import { briefs, opportunityGap, trending } from "./data";
+import { briefs, opportunityGap, savedSearches, trending } from "./data";
 import { NICHES_PATH, parseDiscover } from "./discover";
 import { DiscoverFilters, ViewSwitch } from "./DiscoverControls";
 import { DiscoverList } from "./DiscoverList";
+import { SavedSearchesPanel } from "./SavedSearchesPanel";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -24,8 +25,9 @@ export async function generateMetadata(): Promise<Metadata> {
  * Developer › Discover (REQ-TREND-02; docs/spec/06 6.6, docs/spec/07 item 1): Trending problems with their sources and
  * Why chips, Trending projects beside the problems they solve, the Opportunity gap and the organisations' Problem
  * Briefs (REQ-DIR-05), one list at a time, filtered
- * by niche and county. Rendered on the server from GET /api/discover/*; no script beyond the framework's. Developers
- * only; others go to their own home.
+ * by niche, county and words, with the developer's saved searches under the filters (REQ-PERS-03, P21). Rendered on
+ * the server from GET /api/discover/*; the saved searches strip is the one client island. Developers only; others go
+ * to their own home.
  */
 export default async function DiscoverPage({ searchParams }: PageProps<"/dev/discover">) {
   const me = await requireMe();
@@ -33,13 +35,14 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
   if (home !== "/dev") redirect(home);
   const t = await getTranslations("discover");
   const query = parseDiscover(await searchParams);
-  const [lists, { niches, filterOptions }] = await Promise.all([
+  const [lists, { niches, filterOptions }, saved] = await Promise.all([
     query.view === "gap"
       ? opportunityGap(query).then((gap) => ({ kind: "gap" as const, gap }))
       : query.view === "briefs"
         ? briefs(query).then((list) => ({ kind: "briefs" as const, briefs: list }))
         : trending(query).then((board) => ({ kind: "board" as const, board })),
     directoryOptions(),
+    savedSearches(),
   ]);
   const empty =
     lists.kind === "gap"
@@ -68,6 +71,9 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
         <div className="px-4 py-1 sm:px-5">
           <DiscoverFilters query={query} niches={niches} counties={filterOptions.counties} showClear={!empty} />
         </div>
+        {saved ? (
+          <SavedSearchesPanel list={saved} query={query} niches={niches} counties={filterOptions.counties} />
+        ) : null}
       </div>
       <div className="mt-10 max-w-4xl lg:mt-12">
         <DiscoverList query={query} counties={filterOptions.counties} {...lists} />

@@ -22,7 +22,8 @@
     "reviewP20": "[[COPY-REVIEW]] P20 (D-55, the landing rebuilt): landing.nav.*, landing.hero.check, landing.how.lead (reworded), landing.how.stagesTitle, landing.how.stagesLead, landing.how.stages.*, landing.features.* (the samples are example data, labelled), landing.proof.checkLabel, landing.proof.checkHint, landing.proof.checkAction, landing.faq.* (answers follow the product's own rules: the NDA and who looked, the certificate's scope, verified organisations only, phone first, the prototype's honesty), landing.footer.product, .start, .about, .features, .faq, .signUp, .logIn, .verify, ideaEditor.linkAnother, orgHome.stats.briefsMetaNone",
     "reviewP20pub": "[[COPY-REVIEW]] P20-5 (staff console, public pages; REQ-UX-01..04): adminModeration.summary.open; adminModeration.summary.hidden; adminModeration.summary.oldest; adminClaims.summary.waiting; adminClaims.summary.pressing; adminClaims.summary.next; help.contents",
     "reviewP20dev": "[[COPY-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (a Discover card's foot: how many sources back the problem)",
-    "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown)."
+    "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
+    "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted"
   },
   "app": {
     "name": "Wazo",
@@ -454,6 +455,9 @@
       "reload": "Reload the page",
       "logIn": "Log in",
       "home": "Go to your home page"
+    },
+    "preference": {
+      "saved_search_digest": "Send me a daily email with how many new problems or Briefs match my saved searches."
     }
   },
   "notifications": {
@@ -716,7 +720,8 @@
     "unavailableTitle": "A proposal that is no longer available",
     "unavailableNote": "It was unpublished or is held for review, so its teaser is hidden.",
     "nicheNotGiven": "Niche not given",
-    "changeNamed": "Change the scout that looks for {niches}"
+    "changeNamed": "Change the scout that looks for {niches}",
+    "tabShortlist": "Shortlist"
   },
   "scoutMatch": {
     "pageTitle": "Scout match",
@@ -2033,7 +2038,16 @@
     "briefNoBudget": "Budget open",
     "briefDeadline": "Proposals by {date}",
     "briefNoDeadline": "No deadline",
-    "startBrief": "Start a proposal from this Brief"
+    "startBrief": "Start a proposal from this Brief",
+    "wordsLabel": "Words in a problem",
+    "wordsLabelBriefs": "Words in a Brief",
+    "wordsQuoted": "“{words}”",
+    "filteredEmptyWords": "Nothing here matches “{words}” with these filters yet.",
+    "saveName": {
+      "nicheCounty": "{niche} in {county}",
+      "viewCounty": "{view} in {county}",
+      "all": "All {view}"
+    }
   },
   "recommendations": {
     "title": "Recommended for you",
@@ -2918,5 +2932,103 @@
       "closing": "Closing…",
       "cancel": "Keep it open"
     }
+  },
+  "shortlist": {
+    "pageTitle": "Shortlist",
+    "add": "Add to shortlist",
+    "remove": "Remove from shortlist",
+    "marked": "Shortlisted",
+    "problem": {
+      "code": "Enter the code from your authenticator app, then try again.",
+      "role": "Only a reviewer, signatory or admin can change the shortlist.",
+      "gone": "This proposal is no longer in your Inbox, so the shortlist did not change.",
+      "network": "The shortlist did not change because the connection failed; try again.",
+      "signedOut": "You were signed out. Sign in again, then change the shortlist.",
+      "failed": "The shortlist did not change; try again in a moment."
+    },
+    "lead": "Proposals the people of {org} starred to look at again, newest first. Choose 2 to 4 to compare their public facts side by side.",
+    "formLabel": "Choose proposals to compare",
+    "listLabel": "Shortlist of {org}",
+    "choose": "Compare {title}",
+    "addedBy": "Added by {name} on {date}",
+    "unavailable": "No longer available",
+    "unavailableNote": "The developer unpublished it or it left your Inbox, so its details are not shown.",
+    "removeEntry": "Remove",
+    "removeNamed": "Remove {title} from the shortlist",
+    "removing": "Removing…",
+    "compare": "Compare",
+    "chosen": "{count} of {max} chosen",
+    "compareHint": "Choose {min} to {max} proposals to compare.",
+    "tooFew": "Choose at least {min} proposals to compare.",
+    "tooMany": "Choose at most {max} proposals to compare.",
+    "needTwo": "Compare opens once the shortlist holds 2 proposals that are still available.",
+    "pages": "Shortlist pages",
+    "older": "Older entries",
+    "staleCursor": "This page of the shortlist is no longer available.",
+    "empty": "Nothing is on the shortlist yet: star a proposal in the Inbox to keep it here.",
+    "emptyReader": "Nothing is on the shortlist of {org} yet.",
+    "emptyAction": "Open the Inbox",
+    "compareTitle": "Compare proposals",
+    "backToShortlist": "Back to the shortlist",
+    "tier1Note": "Compare shows each proposal's public teaser facts only. Open a title to read the full proposal, behind its Evaluation NDA as usual.",
+    "refusal": {
+      "count": "Choose {min} to {max} proposals from the shortlist to compare.",
+      "notShortlisted": "One of these proposals is no longer on the shortlist, so they cannot be compared."
+    },
+    "noneAvailable": "None of these proposals is available any more.",
+    "leftOut": "{count, plural, one {# proposal you chose is no longer available, so it is left out.} other {# proposals you chose are no longer available, so they are left out.}}",
+    "tableCaption": "{count, plural, one {# proposal} other {# proposals}} side by side",
+    "fact": {
+      "niche": "Niche",
+      "place": "County",
+      "maturity": "Stage",
+      "ask": "Looking for",
+      "registered": "Registered",
+      "engagement": "Engagement",
+      "fit": "Scout fit"
+    },
+    "certificate": "Check certificate",
+    "certificateNamed": "Check certificate: {title}",
+    "noEngagement": "None yet",
+    "notMatched": "Not matched by your scout"
+  },
+  "savedSearches": {
+    "toggle": "Saved searches ({count})",
+    "save": "Save this search",
+    "empty": "Save the list and filters you use, to come back in one tap and hear about new matches.",
+    "limit": "You have {max} saved searches, the most you can keep. Delete one to save this search.",
+    "nameLabel": "Name",
+    "nameHint": "Up to {max} characters, for example Agriculture in Nakuru.",
+    "keeps": "This keeps",
+    "alertsLabel": "Tell me each morning when something new matches",
+    "submit": "Save search",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "saved": "Saved: {name}.",
+    "deleted": "Deleted: {name}.",
+    "lead": "With alerts on, new matches reach you once a day in the app; a daily email can be turned on as well.",
+    "settingsLink": "Notification settings",
+    "listLabel": "Your saved searches",
+    "alerts": "Alerts",
+    "on": "On",
+    "off": "Off",
+    "alertsProblem": "The alerts did not change; try again.",
+    "delete": "Delete",
+    "deleteNamed": "Delete {name}",
+    "deleting": "Deleting…",
+    "confirmTitle": "Delete this saved search?",
+    "confirmBody": "{name} goes, and so do its alerts. Discover itself stays as it is.",
+    "deleteProblem": "The search was not deleted; try again.",
+    "problem": {
+      "nameMissing": "Give the search a name.",
+      "nameLong": "Keep the name to 60 characters or fewer.",
+      "limit": "You have {max} saved searches, the most you can keep. Delete one to save this search.",
+      "unknown": "This niche or county is no longer on the list; choose another and save again.",
+      "signedOut": "You are signed out, so nothing was saved.",
+      "network": "Nothing was saved because the connection failed; try again.",
+      "failed": "Nothing was saved; try again in a moment."
+    },
+    "heading": "Saved searches",
+    "alreadyDeleted": "{name} was already deleted."
   }
 }

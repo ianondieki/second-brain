@@ -8,13 +8,15 @@ import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Callout } from "@/components/ui/Callout";
 
-import { saveChoices } from "./calls";
+import { saveChoices, savePreference } from "./calls";
 import {
   CHANNELS,
   changedDecisions,
   isOffered,
   notificationChoices,
+  preferenceKey,
   type Channel,
+  type PreferenceChoice,
   type NotificationChoice,
   type NotificationPurpose,
   type SaveRefusal,
@@ -31,7 +33,13 @@ const REFUSAL_ACTION: Partial<Record<SaveRefusal, { key: "reload" | "logIn"; hre
 export interface NotificationChoicesProps {
   /** The notification consents as GET /api/me/consents gave them (choices.ts notificationChoices). */
   initial: NotificationChoice[];
+  /**
+   * The notification preferences (GET /api/me/notification-preferences, a store apart from the consents), each placed
+   * in its channel's group after the consents; a save sends each changed one on its own.
+   */
+  preferences?: PreferenceChoice[];
   saveImpl?: typeof saveChoices;
+  savePreferenceImpl?: typeof savePreference;
 }
 
 type Ticked = Partial<Record<NotificationPurpose, boolean>>;
@@ -44,7 +52,12 @@ const tickedOf = (choices: readonly NotificationChoice[]): Ticked =>
  * shown; a refusal is one fixed sentence (and its one action) that takes focus. WhatsApp is not available yet: its
  * box can be unticked (a withdrawal) but not ticked.
  */
-export function NotificationChoices({ initial, saveImpl = saveChoices }: NotificationChoicesProps) {
+export function NotificationChoices({
+  initial,
+  preferences = [],
+  saveImpl = saveChoices,
+  savePreferenceImpl = savePreference,
+}: NotificationChoicesProps) {
   const t = useStrings("notificationSettings");
   const [shown, setShown] = useState(initial);
   const [ticked, setTicked] = useState<Ticked>(() => tickedOf(initial));
@@ -54,6 +67,16 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
   const alert = useRef<HTMLDivElement>(null);
   // The ticks as they are now (the state above as of the last render), read when a save comes back.
   const latest = useRef<Ticked>(ticked);
+  const [prefs, setPrefs] = useState(preferences);
+  const [prefTicked, setPrefTicked] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(preferences.map((pref) => [preferenceKey(pref), pref.enabled])),
+  );
+
+  function tickPreference(key: string, value: boolean) {
+    setPrefTicked((now) => ({ ...now, [key]: value }));
+    setSaved(false);
+    setRefusal(null);
+  }
 
   function tick(purpose: NotificationPurpose, value: boolean) {
     latest.current = { ...latest.current, [purpose]: value };
@@ -68,11 +91,28 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
     setSaved(false);
     setRefusal(null);
     const decisions = changedDecisions(shown, ticked);
-    if (Object.keys(decisions).length === 0) {
+    const prefChanges = prefs.filter((pref) => (prefTicked[preferenceKey(pref)] ?? pref.enabled) !== pref.enabled);
+    if (Object.keys(decisions).length === 0 && prefChanges.length === 0) {
       setSaved(true);
       return;
     }
     setBusy(true);
+    // The preferences first, one PUT each (their own store); the consents after, as before.
+    for (const pref of prefChanges) {
+      const done = await savePreferenceImpl({ kind: pref.kind, channel: pref.channel, enabled: !pref.enabled });
+      if (!done.ok) {
+        setBusy(false);
+        setRefusal(done.refusal);
+        return;
+      }
+      const now = done.items.find((item) => item.kind === pref.kind && item.channel === pref.channel);
+      if (now) setPrefs((list) => list.map((item) => (item === pref ? { ...item, enabled: now.enabled } : item)));
+    }
+    if (Object.keys(decisions).length === 0) {
+      setBusy(false);
+      setSaved(true);
+      return;
+    }
     const sent = ticked;
     const outcome = await saveImpl(decisions);
     setBusy(false);
@@ -108,13 +148,14 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
     .map((channel) => ({
       channel,
       choices: shown.filter((choice) => (CHANNELS[channel] as readonly string[]).includes(choice.purpose)),
+      preferences: prefs.filter((pref) => pref.channel === channel),
     }))
-    .filter((group) => group.choices.length > 0);
+    .filter((group) => group.choices.length > 0 || group.preferences.length > 0);
   const action = refusal ? REFUSAL_ACTION[refusal] : undefined;
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-8" data-notification-choices="">
-      {channels.map(({ channel, choices }) => (
+      {channels.map(({ channel, choices, preferences: own }) => (
         // Disabled while a save is in flight, so what is sent is what the page shows (P16-A review MINOR 4).
         <fieldset key={channel} data-channel={channel} disabled={busy}>
           <legend className="text-base font-medium text-ink">{t(`channel.${channel}`)}</legend>
@@ -138,6 +179,20 @@ export function NotificationChoices({ initial, saveImpl = saveChoices }: Notific
                       {t("notYet")}
                     </p>
                   )}
+                </div>
+              );
+            })}
+            {own.map((pref) => {
+              const key = preferenceKey(pref);
+              return (
+                <div key={key} data-preference={pref.kind}>
+                  <Checkbox
+                    id={`preference-${pref.kind}-${pref.channel}`}
+                    name={key}
+                    label={pref.label}
+                    checked={prefTicked[key] ?? pref.enabled}
+                    onChange={(event) => tickPreference(key, event.currentTarget.checked)}
+                  />
                 </div>
               );
             })}

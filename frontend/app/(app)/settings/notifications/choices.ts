@@ -11,6 +11,34 @@ import type { components } from "@/lib/api/schema";
 
 export type ConsentItem = components["schemas"]["ConsentItem"];
 export type ConsentDecision = components["schemas"]["ConsentDecision"];
+export type PreferenceItem = components["schemas"]["PreferenceOut"];
+export type PreferenceIn = components["schemas"]["PreferenceIn"];
+
+/**
+ * A notification preference as the page shows it (GET /api/me/notification-preferences, a store of its own beside the
+ * consents): its kind and channel, the person's choice, and its label in the page's language (the API's English
+ * label when the page has none of its own).
+ */
+export interface PreferenceChoice {
+  kind: string;
+  channel: Channel;
+  enabled: boolean;
+  label: string;
+}
+
+export const preferenceKey = ({ kind, channel }: Pick<PreferenceChoice, "kind" | "channel">) => `${kind}:${channel}`;
+
+/** The preferences the page can place: those on a channel it shows (in-app ones are never settable). */
+export function preferenceChoices(
+  items: readonly PreferenceItem[],
+  label: (item: PreferenceItem) => string,
+): PreferenceChoice[] {
+  return items.flatMap((item) =>
+    item.channel in CHANNELS
+      ? [{ kind: item.kind, channel: item.channel as Channel, enabled: item.enabled, label: label(item) }]
+      : [],
+  );
+}
 
 /** The purposes of each channel, in screen order. */
 export const CHANNELS = {

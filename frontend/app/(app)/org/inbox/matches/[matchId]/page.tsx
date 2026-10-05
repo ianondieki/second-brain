@@ -17,6 +17,7 @@ import { engagementsHref, type Membership } from "../../../membership";
 import { interestReasonOf, matchesHref, type MatchDetail } from "../../../scout";
 import { getMatch, getMembers, type Member } from "../../../scout-data";
 import { TeaserDetails } from "../../[proposalId]/TeaserDetails";
+import { ShortlistControl } from "../../ShortlistControl";
 import { FitMeter, Why } from "../MatchParts";
 import { ExpressInterest } from "./ExpressInterest";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
@@ -85,6 +86,14 @@ export default async function MatchScreen({ params, searchParams }: PageProps<"/
           <PageHeader
             back={{ href: back, label: t("back") }}
             title={teaser.title ?? ti("untitled")}
+            action={
+              <ShortlistControl
+                org={org}
+                proposalId={match.proposal_id}
+                shortlisted={match.shortlisted ?? false}
+                variant="button"
+              />
+            }
             lead={
               match.owner_handle || match.niche ? (
                 <>

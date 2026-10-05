@@ -37,7 +37,12 @@ export interface DiscoverQuery {
   niche?: string;
   /** An ISO 3166-2 county code (KE-01 … KE-47). */
   county?: string;
+  /** Words a problem's title or statement holds (1 to 100 characters; problems, projects and Briefs, not the gap). */
+  words?: string;
 }
+
+/** The longest words filter the API takes. */
+export const MAX_WORDS = 100;
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -57,27 +62,53 @@ export function parseDiscover(params: SearchParams): DiscoverQuery {
   if (niche && niche.length <= 80 && NICHE_SLUG.test(niche)) out.niche = niche;
   const county = first(params.county);
   if (county && COUNTY.test(county)) out.county = county;
+  const words = cleanWords(first(params.words));
+  if (words) out.words = words;
   return out;
 }
 
-/** True when a niche or county narrows the lists (an empty list then means "nothing here", not "nothing at all"). */
-export function isNarrowed({ niche, county }: DiscoverQuery): boolean {
-  return Boolean(niche || county);
+/** The words filter as the API takes it: trimmed, spaces collapsed, 1 to 100 characters, no NUL; else none. */
+export function cleanWords(value: string | undefined): string | undefined {
+  const words = value?.replace(/\s+/g, " ").trim();
+  if (!words || words.length > MAX_WORDS || words.includes("\u0000")) return undefined;
+  return words;
 }
 
-/** /dev/discover?view=…&niche=…&county=…, leaving out the default view ("problems"). */
-export function discoverHref({ view = "problems", niche, county }: Partial<DiscoverQuery> = {}): string {
+/** Whether a list takes the words filter (the opportunity gap does not). */
+export function takesWords(view: View): boolean {
+  return view !== "gap";
+}
+
+/**
+ * True when a niche, a county or (on a list that takes them) words narrow the list: an empty list then means "nothing
+ * here", not "nothing at all".
+ */
+export function isNarrowed({ view, niche, county, words }: DiscoverQuery): boolean {
+  return Boolean(niche || county || (words && takesWords(view)));
+}
+
+/**
+ * /dev/discover?view=…&niche=…&county=…&words=…, leaving out the default view ("problems"), in the order the backend's
+ * saved-search alert links write it (bridge/web_paths.py discover_path).
+ */
+export function discoverHref({ view = "problems", niche, county, words }: Partial<DiscoverQuery> = {}): string {
   const query = new URLSearchParams();
   if (view !== "problems") query.set("view", view);
   if (niche) query.set("niche", niche);
   if (county) query.set("county", county);
+  if (words) query.set("words", words);
   const text = query.toString();
   return text ? `${DISCOVER_PATH}?${text}` : DISCOVER_PATH;
 }
 
-/** The query for GET /api/discover/trending, /api/discover/opportunity-gap and /api/discover/briefs. */
+/** The query for GET /api/discover/opportunity-gap (niche and county only). */
 export function trendQuery({ niche, county }: DiscoverQuery): { niche?: string; county?: string } {
   return { niche, county };
+}
+
+/** The query for GET /api/discover/trending and /api/discover/briefs: niche, county and words. */
+export function searchQuery(query: DiscoverQuery): { niche?: string; county?: string; words?: string } {
+  return { ...trendQuery(query), words: query.words };
 }
 
 /**

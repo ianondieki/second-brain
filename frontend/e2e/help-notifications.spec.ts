@@ -18,6 +18,10 @@ const SERVER_STEP = { timeout: 20_000 };
 const REMINDERS = "Send me reminders about my proposals and engagements by email.";
 const MARKETING = "Send me occasional product news by email. You can stop at any time.";
 const WHATSAPP = "Send me reminders on WhatsApp (available later).";
+// P21 (REQ-PERS-03, D-57 (7)): developers only, off by default.
+const DIGEST = "Send me a daily email with how many new problems or Briefs match my saved searches.";
+// P21 (REQ-ENG-11, N18, D-57 (2)): a message on an engagement by email, on by default (mutable).
+const MESSAGES = /new message on an engagement/i;
 
 async function openMenuItem(page: Page, name: string) {
   await page.getByRole("button", { name: "Account" }).click();
@@ -89,9 +93,11 @@ test.describe("a signed-in developer", () => {
     await expectNotificationSettings(page);
     await choicesReady(page);
     const email = page.getByRole("group", { name: "Email" });
-    await expect(email.getByRole("checkbox")).toHaveCount(2);
+    await expect(email.getByRole("checkbox")).toHaveCount(4);
     await expect(email.getByRole("checkbox", { name: REMINDERS })).not.toBeChecked();
     await expect(email.getByRole("checkbox", { name: MARKETING })).not.toBeChecked();
+    await expect(email.getByRole("checkbox", { name: DIGEST })).not.toBeChecked();
+    await expect(email.getByRole("checkbox", { name: MESSAGES })).toBeChecked();
     const whatsapp = page.getByRole("checkbox", { name: WHATSAPP });
     await expect(whatsapp).toBeDisabled();
     await expect(page.getByText("WhatsApp messages are not available yet, so this cannot be turned on.")).toBeVisible();
