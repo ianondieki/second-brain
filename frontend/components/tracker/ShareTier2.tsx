@@ -137,11 +137,17 @@ export function ShareTier2({
 
 /**
  * Once the refreshed page replaces this form with the server's "You shared ..." line, focus moves to it (WCAG 2.4.3),
- * so the confirmation is announced where the control was. Gives up after a few seconds.
+ * so the confirmation is announced where the control was. Gives up after a few seconds. It outlives this component on
+ * purpose (the refresh unmounts the form before the line is there), so it stops by itself once there is no document
+ * any more (a test environment torn down, the page gone).
  */
 function focusWhenShown(id: string) {
   const started = Date.now();
   const timer = setInterval(() => {
+    if (typeof document === "undefined") {
+      clearInterval(timer);
+      return;
+    }
     const target = document.getElementById(id);
     if (target) target.focus();
     if (target || Date.now() - started > 5000) clearInterval(timer);
