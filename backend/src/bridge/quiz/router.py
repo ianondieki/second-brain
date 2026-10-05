@@ -15,31 +15,46 @@ an attempt on the set), and their own attempts, flags and quiz profile only.
   ``set_closed`` (the set's day is over on the shared clock), 409 ``already_played``, 422 on shape. The profile is
   written first and the attempt last, outside any savepoint, and nothing of the score or key is returned before the
   commit succeeded (revision 0009's operating rules: no rolled-back insert can be an oracle for the key).
+- ``POST /questions/{id}/flag`` ``{reason, note?}``: 201 ``{flag_id, pulled}`` through ``app_flag_question``: 404
+  (no question of an approved set of the caller's), 403 ``play_first``, 409 ``already_flagged`` or
+  ``question_pulled``, 429 ``flag_limit`` (10 a Nairobi day). When the flag pulled the question (three counted flags),
+  the audit event ``quiz.question_pulled`` (system actor, reason ``flags``). The note is for staff only: never logged
+  or audited.
+- ``GET /leaderboard``: this ISO week (Monday to Sunday, Nairobi), the first 20 opted-in developers of the caller's
+  kind (real or demo accounts) by points then less time, by handle, and the caller's own points and rank (the rank
+  they would have, also when not opted in; null when they did not play this week). One statement
+  (``app_quiz_board()``).
+- ``PUT /settings`` ``{leaderboard_opt_in}``: the caller's opt-in (their own state: no audit event).
 """
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
-from typing import Annotated, Any, Final
+from datetime import date, datetime, timedelta
+from typing import Annotated, Any, Final, Literal, get_args
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 from sqlalchemy import Row, func, insert, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge.audit.service import record as audit
 from bridge.auth.deps import CurrentSession, Db
 from bridge.auth.sessions import LiveSession
-from bridge.errors import ERROR_RESPONSES, ApiError, not_found
+from bridge.errors import ERROR_RESPONSES, ApiError, forbidden, not_found
 from bridge.ids import uuid7
+from bridge.models.enums import AuditActor
 from bridge.quiz.models import (
+    FLAG_REASONS,
     MAX_TIME_MS,
     OPTIONS_PER_QUESTION,
     QUESTIONS_PER_SET,
+    REASON_MAX_CHARS,
     QuizAttempt,
     QuizProfile,
     QuizQuestion,
@@ -48,10 +63,19 @@ from bridge.quiz.models import (
 from bridge.quiz.streaks import Streak, after_playing, shown
 
 router = APIRouter(prefix="/api/me/quiz", tags=["developer"], responses=ERROR_RESPONSES)
+BOARD_SIZE: Final = 20
 ATTEMPT_UNIQUE: Final = "uq_quiz_attempts_set_id_user_id"
+FlagReason = Literal["wrong_answer", "unclear", "outdated", "other"]
+assert set(get_args(FlagReason)) == set(FLAG_REASONS)
 
 _IS_DEVELOPER: Final = text("SELECT app_is_developer()")
 _ANSWERS: Final = text("SELECT question_id, answer, why FROM app_quiz_answers(:s)")
+_FLAG: Final = text("SELECT flag_id, pulled FROM app_flag_question(:q, :r, :n)")
+_BOARD: Final = text(
+    "SELECT b.rank, b.handle, b.points, b.is_caller, app_nairobi_today() AS today,"
+    " coalesce((SELECT p.leaderboard_opt_in FROM quiz_profiles p WHERE p.user_id = app_user_id()), false)"
+    " AS opted_in FROM app_quiz_board() b"
+)
 Q = QuizQuestion
 _QUESTION_COLUMNS: Final = (
     Q.id,
@@ -69,6 +93,10 @@ _QUESTION_COLUMNS: Final = (
 NO_QUIZ: Final = "There is no quiz today. Come back tomorrow."
 SET_CLOSED: Final = "This quiz's day is over. Today's quiz is a new one."
 ALREADY_PLAYED: Final = "You already played this quiz."
+PLAY_FIRST: Final = "Play this quiz before you flag its questions."
+ALREADY_FLAGGED: Final = "You already flagged this question."
+QUESTION_PULLED: Final = "This question was already withdrawn."
+FLAG_LIMIT: Final = "You can flag up to 10 questions a day. Try again tomorrow."
 
 
 async def quiz_developer(live: CurrentSession, db: Db) -> LiveSession:
@@ -133,6 +161,63 @@ class QuizAnswersIn(BaseModel):
         min_length=QUESTIONS_PER_SET, max_length=QUESTIONS_PER_SET, description="Five option indexes (0-3) or null"
     )
     time_ms: StrictInt = Field(ge=0, le=MAX_TIME_MS, description="Milliseconds spent: only a tiebreak on the board")
+
+
+class QuizFlagIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: FlagReason
+    note: str | None = Field(default=None, description="For staff only: at most 300 characters on one line")
+
+    @field_validator("note")
+    @classmethod
+    def _one_line(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        note = " ".join(value.split())
+        if any(unicodedata.category(c) == "Cc" for c in note):
+            raise ValueError("a note has no control characters")
+        if len(note) > REASON_MAX_CHARS:
+            raise ValueError(f"a note has at most {REASON_MAX_CHARS} characters")
+        return note or None
+
+
+class QuizFlagOut(BaseModel):
+    flag_id: UUID
+    pulled: bool = Field(description="True when this flag withdrew the question (three counted flags)")
+
+
+class QuizBoardRowOut(BaseModel):
+    rank: int = Field(description="Equal points and time share a rank")
+    handle: str
+    points: int
+    you: bool = Field(description="The caller's own row")
+
+
+class QuizBoardMeOut(BaseModel):
+    points: int = Field(description="The caller's points this week (0 when they did not play)")
+    rank: int | None = Field(
+        description="Their rank among this week's board (also when not opted in); null when they did not play this week"
+    )
+    opted_in: bool
+    played: bool = Field(description="Whether they played this week")
+
+
+class QuizBoardOut(BaseModel):
+    week_start: date = Field(description="Monday of this ISO week (Nairobi)")
+    week_end: date = Field(description="Sunday of this ISO week (Nairobi)")
+    rows: list[QuizBoardRowOut] = Field(description="At most 20, by rank then handle; opted-in developers only")
+    me: QuizBoardMeOut
+
+
+class QuizSettingsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    leaderboard_opt_in: bool = Field(description="Show my handle and this week's points to other developers")
+
+
+class QuizSettingsOut(BaseModel):
+    leaderboard_opt_in: bool
 
 
 # ------------------------------------------------------------------------------------------------------------- reads
@@ -319,3 +404,78 @@ async def finish_today(body: QuizAnswersIn, live: Developer, db: Db) -> QuizToda
     profile = Profile(streak, before.opted_in if before else False)
     played = Played(list(body.answers), attempt.score, body.time_ms, attempt.finished_at)
     return _today_out(found.id, found.quiz_date, found.today, questions, played, key, profile)
+
+
+_FLAG_REFUSALS: Final[Mapping[str, tuple[int, str, str]]] = {
+    "42501": (403, "play_first", PLAY_FIRST),
+    "23505": (409, "already_flagged", ALREADY_FLAGGED),
+    "55000": (409, "question_pulled", QUESTION_PULLED),
+    "54000": (429, "flag_limit", FLAG_LIMIT),
+    "22023": (422, "invalid_flag", "A flag has a reason and at most a one-line note of 300 characters."),
+}
+
+
+@router.post("/questions/{question_id}/flag", status_code=201)
+async def flag_question(question_id: UUID, body: QuizFlagIn, live: Developer, db: Db) -> QuizFlagOut:
+    """Flag a question of a set the caller played, through ``app_flag_question`` (see the module docstring)."""
+    try:
+        row = (await db.execute(_FLAG, {"q": question_id, "r": body.reason, "n": body.note})).one()
+    except DBAPIError as exc:
+        await db.rollback()
+        sqlstate = str(getattr(exc.orig, "sqlstate", None))
+        if sqlstate == "P0002":
+            raise not_found("No such question.") from None
+        if sqlstate not in _FLAG_REFUSALS:
+            raise
+        status, code, message = _FLAG_REFUSALS[sqlstate]
+        if status == 403:
+            raise forbidden(code, message) from None
+        raise ApiError(status, code, message) from None
+    if row.pulled:
+        set_id = await db.scalar(select(Q.set_id).where(Q.id == question_id))
+        await audit(
+            db,
+            "quiz.question_pulled",
+            actor_user_id=None,
+            actor_kind=AuditActor.SYSTEM,
+            subject_type="quiz_question",
+            subject_id=question_id,
+            payload={"set_id": str(set_id), "reason": "flags"},
+        )
+    await db.commit()
+    return QuizFlagOut(flag_id=row.flag_id, pulled=row.pulled)
+
+
+@router.get("/leaderboard")
+async def quiz_leaderboard(live: Developer, db: Db) -> QuizBoardOut:
+    """This week's board and the caller's own numbers, in one statement (``app_quiz_board()``)."""
+    rows = (await db.execute(_BOARD)).all()
+    mine = next(row for row in rows if row.is_caller)  # the board always answers the caller's own row
+    others = [row for row in rows if not row.is_caller]
+    played = mine.rank is not None
+    listed = mine.opted_in and played and len(others) < BOARD_SIZE  # the caller's row is one of the first 20
+    monday = mine.today - timedelta(days=mine.today.weekday())
+    return QuizBoardOut(
+        week_start=monday,
+        week_end=monday + timedelta(days=6),
+        rows=[
+            QuizBoardRowOut(rank=row.rank, handle=row.handle, points=row.points, you=row.is_caller)
+            for row in rows
+            if not row.is_caller or listed
+        ],
+        me=QuizBoardMeOut(points=mine.points, rank=mine.rank, opted_in=mine.opted_in, played=played),
+    )
+
+
+@router.put("/settings")
+async def quiz_settings(body: QuizSettingsIn, live: Developer, db: Db) -> QuizSettingsOut:
+    """The caller's leaderboard opt-in (off until they turn it on)."""
+    await db.execute(
+        pg_insert(QuizProfile)
+        .values(user_id=live.user.id, leaderboard_opt_in=body.leaderboard_opt_in)
+        .on_conflict_do_update(
+            index_elements=[QuizProfile.user_id], set_={"leaderboard_opt_in": body.leaderboard_opt_in}
+        )
+    )
+    await db.commit()
+    return QuizSettingsOut(leaderboard_opt_in=body.leaderboard_opt_in)
