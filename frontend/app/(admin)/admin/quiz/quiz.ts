@@ -57,17 +57,39 @@ const REFUSALS = [
   "not_found",
   "forbidden",
 ] as const;
-export type RefusalCode = (typeof REFUSALS)[number] | "generic";
+export type RefusalCode = (typeof REFUSALS)[number] | "signedOut" | "question_not_found" | "generic";
 export type Refusal = { kind: "stepUp" } | { kind: "refusal"; code: RefusalCode };
 
-/** The refusal for an answer's status and error body (a 404 is "not_found"; a thrown call is "generic"). */
+/**
+ * The refusal for an answer's status and error body (401 is "signedOut", a 404 "not_found"; a thrown call is
+ * "generic").
+ */
 export function refusalOf(status: number, error: unknown): Refusal {
+  if (status === 401) return { kind: "refusal", code: "signedOut" };
   if (status === 404) return { kind: "refusal", code: "not_found" };
   const code = apiErrorCode(error);
   if (code === "step_up_required") return { kind: "stepUp" };
   if (status === 403) return { kind: "refusal", code: "forbidden" };
   if (code && (REFUSALS as readonly string[]).includes(code)) return { kind: "refusal", code: code as RefusalCode };
   return { kind: "refusal", code: "generic" };
+}
+
+/** A pull or restore names the question it could not find, not the set. */
+export function questionRefusal(code: RefusalCode): RefusalCode {
+  return code === "not_found" ? "question_not_found" : code;
+}
+
+/** The Nairobi calendar day of a moment ("2026-10-06"), as the API's quiz days are counted. */
+export function nairobiDay(at: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(at);
+}
+
+/**
+ * A draft whose day is already over can only be rejected (the API answers 409 day_over to an approval). Counted from
+ * the web server's clock; a test clock moved ahead of it still meets the API's 409, which the decision handles too.
+ */
+export function isDayOver(set: Pick<QuizSetSummary, "status" | "quiz_date">, today: string): boolean {
+  return set.status === "draft" && set.quiz_date < today;
 }
 
 /**

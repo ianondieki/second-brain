@@ -23,8 +23,9 @@ import { staffContext } from "../../staff";
 import { stepUpStrings } from "../../strings";
 import { getQuizSet } from "../data";
 import { QuestionActions } from "../QuestionActions";
-import { ADMIN_QUIZ_PATH, averageScore, flagReason, pulledBecause, type QuizAdminQuestion } from "../quiz";
+import { ADMIN_QUIZ_PATH, averageScore, flagReason, isDayOver, nairobiDay, pulledBecause, type QuizAdminQuestion } from "../quiz";
 import { SetDecision } from "../SetDecision";
+import { topicLabel } from "@/app/(app)/dev/quiz/quiz";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminQuiz");
@@ -35,6 +36,7 @@ const STATUS = {
   draft: { tone: "accent", Icon: ClockIcon },
   approved: { tone: "ok", Icon: CheckIcon },
   rejected: { tone: "neutral", Icon: ClosedIcon },
+  dayOver: { tone: "warm", Icon: ClockIcon },
 } as const;
 
 /**
@@ -84,7 +86,9 @@ export default async function QuizSetPage({ params }: PageProps<"/admin/quiz/[id
   if (!set) return empty(t("set.gone"), t("set.goneAction"), ADMIN_QUIZ_PATH);
 
   const day = formatCalendarDate(locale, set.quiz_date);
-  const { tone, Icon } = STATUS[set.status];
+  const dayOver = isDayOver(set, nairobiDay(new Date()));
+  const status = dayOver ? "dayOver" : set.status;
+  const { tone, Icon } = STATUS[status];
   const average = averageScore(locale, set.stats.average_score);
   const questions = [...set.questions].sort((a, b) => a.position - b.position);
   const strings = { ...(await clientStrings(["adminQuiz"])), ...(await stepUpStrings()) };
@@ -93,8 +97,8 @@ export default async function QuizSetPage({ params }: PageProps<"/admin/quiz/[id
     <article aria-labelledby="set-title" className="flex flex-col gap-12">
       <PageHeader titleId="set-title" focusable title={t("set.title", { date: day })}>
         <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-soft">
-          <Badge tone={tone} icon={<Icon />} data-set-status={set.status}>
-            {t(`status.${set.status}`)}
+          <Badge tone={tone} icon={<Icon />} data-set-status={status}>
+            {t(`status.${status}`)}
           </Badge>
           <span>{t(`origin.${set.origin}`)}</span>
           {set.decided_at ? <span>{t("set.decided", { date: formatMoment(locale, set.decided_at) })}</span> : null}
@@ -142,7 +146,7 @@ export default async function QuizSetPage({ params }: PageProps<"/admin/quiz/[id
           className="rounded-panel border border-line bg-field p-5 shadow-card sm:p-6"
         >
           <ClientStrings strings={strings}>
-            <SetDecision setId={set.id} day={day} />
+            <SetDecision setId={set.id} day={day} dayOver={dayOver} />
           </ClientStrings>
         </Section>
       ) : null}
@@ -152,7 +156,7 @@ export default async function QuizSetPage({ params }: PageProps<"/admin/quiz/[id
 
 /** One question as staff review it: prompt, the four options with the answer marked, why, source, flags, actions. */
 async function AdminQuestion({ question, right }: { question: QuizAdminQuestion; right: number | null }) {
-  const [t, locale] = await Promise.all([getTranslations("adminQuiz"), getLocale()]);
+  const [t, tq, locale] = await Promise.all([getTranslations("adminQuiz"), getTranslations("quiz"), getLocale()]);
   const href = safeHttpsUrl(question.source_url);
   const pulled = pulledBecause(question);
   const headingId = `question-${question.position}`;
@@ -166,7 +170,7 @@ async function AdminQuestion({ question, right }: { question: QuizAdminQuestion;
         <Badge tone={question.status === "live" ? "ok" : "error"} icon={question.status === "live" ? <CheckIcon /> : <ClosedIcon />}>
           {t(`question.${question.status}`)}
         </Badge>
-        <span className="text-sm text-ink-soft [overflow-wrap:anywhere]">{question.topic}</span>
+        <span className="text-sm text-ink-soft [overflow-wrap:anywhere]">{topicLabel(tq, question.topic)}</span>
       </div>
       <p className="text-lg font-semibold [overflow-wrap:anywhere] text-ink">{question.prompt}</p>
       <ul className="flex flex-col gap-2">

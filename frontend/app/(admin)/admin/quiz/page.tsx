@@ -18,7 +18,7 @@ import { PageStepUp } from "../research/PageStepUp";
 import { staffContext } from "../staff";
 import { stepUpStrings } from "../strings";
 import { getQuizSets } from "./data";
-import { ADMIN_QUIZ_PATH, queue, setHref, type QuizSetSummary } from "./quiz";
+import { isDayOver, nairobiDay, queue, setHref, type QuizSetSummary } from "./quiz";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminQuiz");
@@ -56,6 +56,7 @@ export default async function QuizQueuePage() {
   }
 
   const { waiting, decided } = queue(loaded.data);
+  const today = nairobiDay(new Date());
   const columns = [t("columns.day"), t("columns.status"), t("columns.origin"), t("columns.flags"), t("columns.pulled")];
 
   return shell(
@@ -65,12 +66,17 @@ export default async function QuizQueuePage() {
           <QueueSurface>
             <DataTable aria-labelledby="quiz-waiting" columns={columns}>
               {waiting.map((set) => (
-                <SetRow key={set.id} set={set} />
+                <SetRow key={set.id} set={set} today={today} />
               ))}
             </DataTable>
           </QueueSurface>
         ) : (
-          <EmptyState rule={false} sentence={t("queue.empty")} action={t("queue.emptyAction")} href={ADMIN_QUIZ_PATH} />
+          <EmptyState
+            rule={false}
+            sentence={t("queue.empty")}
+            action={decided.length > 0 ? t("queue.emptyActionDecided") : t("queue.emptyActionHome")}
+            href={decided.length > 0 ? "#quiz-decided" : "/admin"}
+          />
         )}
       </Section>
 
@@ -79,7 +85,7 @@ export default async function QuizQueuePage() {
           <QueueSurface raised={false}>
             <DataTable aria-label={t("queue.decidedLabel")} columns={columns}>
               {decided.map((set) => (
-                <SetRow key={set.id} set={set} />
+                <SetRow key={set.id} set={set} today={today} />
               ))}
             </DataTable>
           </QueueSurface>
@@ -93,14 +99,19 @@ const STATUS = {
   draft: { tone: "accent", Icon: ClockIcon },
   approved: { tone: "ok", Icon: CheckIcon },
   rejected: { tone: "neutral", Icon: ClosedIcon },
+  dayOver: { tone: "warm", Icon: ClockIcon },
 } as const;
 
-/** One set, a row of the queue: its day (the way in), its status (icon and words), who drafted it, flags, pulled. */
-async function SetRow({ set }: { set: QuizSetSummary }) {
+/**
+ * One set, a row of the queue: its day (the way in), its status (icon and words; a draft whose day is over says so),
+ * who drafted it, flags, pulled.
+ */
+async function SetRow({ set, today }: { set: QuizSetSummary; today: string }) {
   const [t, locale] = await Promise.all([getTranslations("adminQuiz"), getLocale()]);
-  const { tone, Icon } = STATUS[set.status];
+  const status = isDayOver(set, today) ? "dayOver" : set.status;
+  const { tone, Icon } = STATUS[status];
   return (
-    <DataRow data-quiz-set={set.id} data-status={set.status}>
+    <DataRow data-quiz-set={set.id} data-status={status}>
       <DataCell head label={t("columns.day")} className="sm:w-[34%]">
         <Link href={setHref(set.id)} className={dataLinkClass}>
           {t("openSet", { date: formatCalendarDate(locale, set.quiz_date) })}
@@ -108,7 +119,7 @@ async function SetRow({ set }: { set: QuizSetSummary }) {
       </DataCell>
       <DataCell label={t("columns.status")} nowrap>
         <Badge tone={tone} icon={<Icon />}>
-          {t(`status.${set.status}`)}
+          {t(`status.${status}`)}
         </Badge>
       </DataCell>
       <DataCell label={t("columns.origin")}>{t(`origin.${set.origin}`)}</DataCell>

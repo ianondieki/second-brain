@@ -5,7 +5,17 @@ import { renderWithIntl } from "@/test/intl";
 
 import type { AdminQuizCalls, Outcome } from "./calls";
 import { QuestionActions } from "./QuestionActions";
-import { averageScore, pulledBecause, queue, refusalNext, refusalOf, type QuizSetSummary } from "./quiz";
+import {
+  averageScore,
+  isDayOver,
+  nairobiDay,
+  pulledBecause,
+  questionRefusal,
+  queue,
+  refusalNext,
+  refusalOf,
+  type QuizSetSummary,
+} from "./quiz";
 import { SetDecision } from "./SetDecision";
 
 // REQ-DEV-01 (P22-AF): the staff quiz screens. The queue's order, the stats and refusals in words, the decision
@@ -13,6 +23,15 @@ import { SetDecision } from "./SetDecision";
 
 const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
+// The console's step-up call (research/calls.ts): a fresh code is accepted.
+const confirmStepUp = vi.hoisted(() => vi.fn(async () => ({ ok: true as const })));
+vi.mock("../research/calls", () => ({ confirmStepUp }));
+
+/** Enters a fresh code in the step-up form and confirms it. */
+async function stepUp() {
+  fireEvent.change(screen.getByLabelText("Code from your app"), { target: { value: "123456" } });
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Confirm" })));
+}
 
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
@@ -65,12 +84,22 @@ describe("the quiz queue's rules", () => {
     expect(pulledBecause({ status: "live", pulled_reason: null })).toBeNull();
   });
 
+  it("knows a draft whose Nairobi day is over", () => {
+    expect(nairobiDay(new Date("2026-10-05T21:30:00Z"))).toBe("2026-10-06");
+    expect(isDayOver(summary("2026-10-05", "draft"), "2026-10-06")).toBe(true);
+    expect(isDayOver(summary("2026-10-06", "draft"), "2026-10-06")).toBe(false);
+    expect(isDayOver(summary("2026-10-05", "approved"), "2026-10-06")).toBe(false);
+  });
+
   it("maps each refusal to its sentence and what it leaves", () => {
     expect(refusalOf(403, err("step_up_required"))).toEqual({ kind: "stepUp" });
     expect(refusalOf(409, err("day_over"))).toEqual({ kind: "refusal", code: "day_over" });
     expect(refusalOf(404, err("not_found"))).toEqual({ kind: "refusal", code: "not_found" });
     expect(refusalOf(403, err("forbidden"))).toEqual({ kind: "refusal", code: "forbidden" });
     expect(refusalOf(500, undefined)).toEqual({ kind: "refusal", code: "generic" });
+    expect(refusalOf(401, err("unauthenticated"))).toEqual({ kind: "refusal", code: "signedOut" });
+    expect(questionRefusal("not_found")).toBe("question_not_found");
+    expect(questionRefusal("already_live")).toBe("already_live");
     expect(refusalNext("day_over")).toBe("reject");
     expect(refusalNext("incomplete_set")).toBe("reject");
     expect(refusalNext("already_decided")).toBe("reload");
@@ -105,6 +134,19 @@ describe("the set decision", () => {
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Reject" })));
     expect(document.querySelector("[data-step-up]")).not.toBeNull();
     expect(decide).toHaveBeenCalledTimes(1);
+    await stepUp();
+    expect(confirmStepUp).toHaveBeenCalledWith("123456");
+    expect(decide).toHaveBeenCalledTimes(2);
+    expect(decide).toHaveBeenLastCalledWith("set-1", "reject");
+    expect(screen.getByRole("status").textContent).toBe("Rejected. No one will see it.");
+  });
+
+  it("starts a draft whose day is over with Reject as the one primary action", () => {
+    renderWithIntl(<SetDecision setId="set-1" day="4 Oct 2026" dayOver calls={calls()} />);
+    expect(document.querySelector("[data-day-over]")?.textContent).toBe("This day is over; it can only be rejected.");
+    expect(screen.getByRole("button", { name: "Approve" }).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("button", { name: "Reject" }).hasAttribute("data-primary")).toBe(true);
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
   });
 
   it("leaves only Reject, as the primary action, on a day that is over", async () => {
@@ -136,6 +178,40 @@ describe("pulling and restoring a question", () => {
     expect(given.pull).toHaveBeenCalledWith("q-3", "Two options are right");
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Pulled. Plays scored again: 3."));
     expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks for a fresh code before a pull, then repeats it; cancelling gives focus back to Pull", async () => {
+    const pull = vi
+      .fn<AdminQuizCalls["pull"]>()
+      .mockResolvedValueOnce({ ok: false, refusal: { kind: "stepUp" } })
+      .mockResolvedValueOnce({ ok: false, refusal: { kind: "stepUp" } })
+      .mockResolvedValueOnce({ ok: true, data: { rescored: 1 } });
+    renderWithIntl(<QuestionActions questionId="q-2" number={2} status="live" calls={calls({ pull })} />);
+    const ask = async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Pull question 2" }));
+      const dialog = screen.getByRole("dialog", { name: "Pull question 2?" });
+      fireEvent.change(within(dialog).getByRole("textbox", { name: "Why it is pulled" }), { target: { value: "Outdated" } });
+      await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pull question" })));
+    };
+    await ask();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Pull question 2" })));
+
+    await ask();
+    await stepUp();
+    expect(pull).toHaveBeenCalledTimes(3);
+    expect(pull).toHaveBeenLastCalledWith("q-2", "Outdated");
+    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("Pulled. Plays scored again: 1."));
+  });
+
+  it("names the question when a pull finds it gone", async () => {
+    const pull = vi.fn<AdminQuizCalls["pull"]>(async () => ({ ok: false, refusal: { kind: "refusal", code: "not_found" } }));
+    renderWithIntl(<QuestionActions questionId="q-2" number={2} status="live" calls={calls({ pull })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Pull question 2" }));
+    const dialog = screen.getByRole("dialog", { name: "Pull question 2?" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Why it is pulled" }), { target: { value: "Wrong" } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Pull question" })));
+    expect(screen.getByRole("alert").textContent).toBe("This question no longer exists.");
   });
 
   it("restores a pulled question after a confirmation, and says when it was already live", async () => {

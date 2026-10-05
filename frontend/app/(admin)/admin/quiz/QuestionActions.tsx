@@ -11,7 +11,7 @@ import { TextAreaField } from "@/components/ui/TextAreaField";
 
 import { StepUp } from "../research/StepUp";
 import { adminQuizCalls, type AdminQuizCalls } from "./calls";
-import { MAX_REASON, type RefusalCode } from "./quiz";
+import { MAX_REASON, questionRefusal, type RefusalCode } from "./quiz";
 
 export interface QuestionActionsProps {
   questionId: string;
@@ -41,6 +41,7 @@ export function QuestionActions({ questionId, number, status, calls: given }: Qu
   const [done, setDone] = useState<number | null>(null);
   const action = status === "live" ? "pull" : "restore";
   const fieldId = `pull-reason-${number}`;
+  const buttonId = `question-action-${number}`;
 
   useEffect(() => {
     if (refusal || done !== null) said.current?.focus();
@@ -66,7 +67,7 @@ export function QuestionActions({ questionId, number, status, calls: given }: Qu
       setStepUp(true);
     } else {
       setStepUp(false);
-      setRefusal(outcome.refusal.code);
+      setRefusal(questionRefusal(outcome.refusal.code));
       router.refresh();
     }
   }
@@ -80,7 +81,15 @@ export function QuestionActions({ questionId, number, status, calls: given }: Qu
   }
 
   if (stepUp) {
-    return <StepUp onConfirmed={run} onCancel={() => setStepUp(false)} />;
+    return (
+      <StepUp
+        onConfirmed={run}
+        onCancel={() => {
+          setStepUp(false);
+          requestAnimationFrame(() => document.getElementById(buttonId)?.focus());
+        }}
+      />
+    );
   }
 
   return (
@@ -91,6 +100,7 @@ export function QuestionActions({ questionId, number, status, calls: given }: Qu
         </Alert>
       ) : null}
       <Button
+        id={buttonId}
         variant={action === "pull" ? "danger" : "secondary"}
         aria-label={t(`${action}.openNamed`, { number })}
         onClick={() => {

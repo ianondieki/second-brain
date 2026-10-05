@@ -16,6 +16,8 @@ export interface SetDecisionProps {
   setId: string;
   /** The set's day as the page writes it ("6 Oct 2026"). */
   day: string;
+  /** The set's day is over (counted on the server): only Reject is left, as the primary action, from the start. */
+  dayOver?: boolean;
   calls?: AdminQuizCalls;
 }
 
@@ -23,9 +25,10 @@ export interface SetDecisionProps {
  * The staff admin's decision on a draft set (REQ-DEV-01; POST /api/admin/quiz/sets/{id}/decision): "Approve" is the
  * screen's one primary action, "Reject" the other; each asks once more in a dialog that says what follows. A stale
  * second factor asks for a fresh code in place, then repeats the decision. A day that is over can only be rejected:
- * Reject becomes the primary action and Approve stays but is inert. Done: one sentence, and the page is fetched again.
+ * known on the server (dayOver) or from the API's 409, Reject is then the primary action and Approve stays but is
+ * inert. Done: one sentence, and the page is fetched again.
  */
-export function SetDecision({ setId, day, calls: given }: SetDecisionProps) {
+export function SetDecision({ setId, day, dayOver = false, calls: given }: SetDecisionProps) {
   const t = useStrings("adminQuiz");
   const router = useRouter();
   const calls = useRef(given ?? adminQuizCalls()).current;
@@ -41,7 +44,7 @@ export function SetDecision({ setId, day, calls: given }: SetDecisionProps) {
     if (refusal || done) notice.current?.focus();
   }, [refusal, done]);
 
-  const final = refusal !== null && refusalNext(refusal) === "reject";
+  const final = dayOver || (refusal !== null && refusalNext(refusal) === "reject");
 
   async function run(decision: Decision) {
     setBusy(true);
@@ -96,6 +99,10 @@ export function SetDecision({ setId, day, calls: given }: SetDecisionProps) {
         <Alert ref={notice}>
           <p data-refusal={refusal}>{t(`refusal.${refusal}`)}</p>
         </Alert>
+      ) : dayOver ? (
+        <p className="text-ink" data-day-over="">
+          {t("refusal.day_over")}
+        </p>
       ) : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Button
