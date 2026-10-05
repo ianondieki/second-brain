@@ -4,6 +4,9 @@ email that is mutable, at most one per recipient and engagement in any 30 minute
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy import text
@@ -142,3 +145,47 @@ def test_the_bells_title_fits_its_column() -> None:
     assert title.startswith('New message from Telco A on "AAA')
     assert title.endswith('…"')
     assert message_notify.title_for("Telco  A\n", "Pilot") == 'New message from Telco A on "Pilot"'
+
+
+@asynccontextmanager
+async def minutes_clock(owner_engine: AsyncEngine) -> AsyncIterator[Callable[[int], Awaitable[None]]]:
+    """The shared test clock moved forward by whole minutes on demand, and put back as it was at the end."""
+    async with owner_engine.connect() as conn:
+        enabled, offset = (await conn.execute(text("SELECT enabled, clock_offset FROM test_clock"))).one()
+    moved = [offset]
+
+    async def advance(minutes: int) -> None:
+        moved[0] += timedelta(minutes=minutes)
+        async with owner_engine.begin() as conn:
+            await conn.execute(text("UPDATE test_clock SET enabled = true, clock_offset = :o"), {"o": moved[0]})
+
+    try:
+        yield advance
+    finally:
+        async with owner_engine.begin() as conn:
+            await conn.execute(
+                text("UPDATE test_clock SET enabled = :e, clock_offset = :o"), {"e": enabled, "o": offset}
+            )
+
+
+async def test_the_email_gap_is_thirty_minutes_on_the_messages_clock(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Given the owner's message emailed to the developer, When the owner writes again 29 minutes later, Then the
+    developer gets the in-app notice but no email; When they write 31 minutes after the first, Then an email again."""
+    async with thread_at(owner_engine, app_engine) as thread:
+        s, e, world = thread.seats, thread.engagement, thread.world
+        provider = FakeEmailProvider()
+        async with minutes_clock(owner_engine) as advance:
+            await posted(s.owner, e, "First.")
+            await run_message_jobs(owner_engine, app_engine, e, provider)
+            assert len(provider.outbox) == 1
+            await advance(29)
+            await posted(s.owner, e, "Twenty-nine minutes on.")
+            await run_message_jobs(owner_engine, app_engine, e, provider)
+            assert len(provider.outbox) == 1
+            await advance(2)
+            await posted(s.owner, e, "Thirty-one minutes on.")
+            await run_message_jobs(owner_engine, app_engine, e, provider)
+            assert len(provider.outbox) == 2
+        assert len(await in_app(owner_engine, world.developer)) == 3

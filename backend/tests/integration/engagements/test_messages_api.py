@@ -212,8 +212,9 @@ async def test_contact_details_wait_for_first_contact(owner_engine: AsyncEngine,
 async def test_sixty_messages_an_hour_then_429_with_retry_after(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    """Given 60 messages by the developer on this engagement within the hour, When they post again, Then 429
-    too_many_messages with a Retry-After of at most an hour; the organisation still posts."""
+    """Given 59 messages by the developer on this engagement within the hour, When they post the 60th, Then 201; When
+    they post the 61st, Then 429 too_many_messages with a Retry-After of at most an hour; the organisation still
+    posts."""
     async with thread_at(owner_engine, app_engine) as thread:
         s, e = thread.seats, thread.engagement
         async with owner_engine.begin() as conn:
@@ -221,7 +222,7 @@ async def test_sixty_messages_an_hour_then_429_with_retry_after(
             await conn.execute(
                 sa.text("SELECT set_config('app.user_id', :u, true)"), {"u": str(thread.world.developer)}
             )
-            for n in range(messages.POSTS_PER_HOUR):
+            for n in range(messages.POSTS_PER_HOUR - 1):
                 await run(
                     conn,
                     "INSERT INTO engagement_messages (id, engagement_id, sender_user_id, sender_party, body)"
@@ -231,6 +232,7 @@ async def test_sixty_messages_an_hour_then_429_with_retry_after(
                     u=thread.world.developer,
                     body=f"Message {n}",
                 )
+        await posted(s.dev, e, "The sixtieth.")
         refused = await post(s.dev, e, "One more.")
         assert code(refused) == (429, "too_many_messages")
         assert 1 <= int(refused.headers["Retry-After"]) <= 3600
