@@ -10,7 +10,8 @@ engagement reaches ``INTEREST_CONFIRMED``.
 - ``POST /api/engagements/{id}/messages/read``: move the caller's read marker.
 - ``POST /api/engagements/{id}/messages/{message_id}/report``: report one message to the moderators (once; 10 a day).
 - ``POST /api/engagements/{id}/messages/attachments``: stage a file (the raw body, its type in ``Content-Type``, its
-  name percent-encoded in ``X-File-Name``; up to 20 MB; scanned; 422 ``attachment_infected``).
+  name percent-encoded in ``X-File-Name``; up to 20 MB; scanned; 422 ``attachment_infected``; 30 an hour per
+  engagement, 429 ``too_many_uploads`` with ``Retry-After``).
 - ``DELETE /api/engagements/{id}/messages/attachments/{attachment_id}``: remove the caller's own staged file.
 - ``GET /api/engagements/{id}/messages/{message_id}/attachments/{attachment_id}``: a short-lived link, signed for the
   caller, to a sent file; ``GET .../file?expires=&sig=`` serves it (signed in as the same person).
@@ -125,6 +126,7 @@ async def stage_attachment(
         file_name = message_files.file_name_of(x_file_name)
     except UnicodeDecodeError as exc:
         raise ApiError(422, "invalid_file_name", "Send the file name as percent-encoded UTF-8.") from exc
+    await message_files.check_upload_rate(db, party)  # before the body is read
     data = await _read_body(request)
     return await message_files.stage_upload(
         db, store, scanner, party, data=data, content_type=content_type, file_name=file_name

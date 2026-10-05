@@ -7,7 +7,9 @@
   (ids only, never the name) and waits for the uploader's next message; an infected one is never stored, stays marked
   ``infected`` (it can never be sent; its uploader or the purge removes it) and is refused (422, naming its id), with an
   audit event either way. A user holds at most ``STAGED_PER_ENGAGEMENT`` unsent files per engagement, an infected one
-  included (so a refused file cannot be retried without bound).
+  included (so a refused file cannot be retried without bound), and makes at most ``UPLOADS_PER_HOUR`` uploads per
+  engagement in any hour, counted from those audit events so that removing a file does not free its place (429
+  ``too_many_uploads`` with ``Retry-After``, checked before the body is read).
 - **Remove.** The uploader removes a staged file (never a sent one); the row goes first, then its object.
 - **Download.** A sent (hence clean) file is read by the parties only: ``attachment_link`` signs a link for the caller
   (HMAC under ``SECRET_KEY`` over the engagement, message, file, user and expiry; ``LINK_TTL``) and
@@ -32,11 +34,12 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge import clock
+from bridge.audit.models import AuditEvent
 from bridge.audit.service import record as audit
 from bridge.auth.crypto import keyed_digest
 from bridge.config import Settings
 from bridge.engagements.message_schemas import AttachmentLinkOut, StagedAttachmentOut
-from bridge.engagements.messages import gate, refusal
+from bridge.engagements.messages import gate, refusal, retry_after
 from bridge.engagements.models import MAX_FILE_NAME_CHARS, EngagementMessageAttachment, message_attachment_key
 from bridge.engagements.service import Party
 from bridge.errors import ApiError, forbidden, not_found
@@ -48,6 +51,10 @@ from bridge.storage.objects import ObjectNotFoundError, ObjectStore
 from bridge.storage.scanner import Scanner, Verdict
 
 STAGED_PER_ENGAGEMENT: Final = 10  # unsent files a user may hold on one engagement (two messages' worth)
+UPLOADS_PER_HOUR: Final = 30  # uploads a user may make on one engagement in any hour, removed ones included
+STAGED: Final = "engagement.message_attachment_staged"  # the audit events of an upload, whatever its verdict
+REJECTED: Final = "engagement.message_attachment_rejected"
+_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
 LINK_TTL: Final = timedelta(minutes=5)
 UPLOADS: Final = "uploads"
 LINK_PURPOSE: Final = "message-attachment"
@@ -56,6 +63,36 @@ LINK_PURPOSE: Final = "message-attachment"
 def object_key(engagement_id: UUID, attachment_id: UUID) -> str:
     """The row's own key (revision 0008's CHECK ``object_key_is_its_own``): ids only, never anything the client sent."""
     return message_attachment_key(engagement_id, attachment_id)
+
+
+async def check_upload_rate(db: AsyncSession, party: Party) -> None:
+    """429 ``too_many_uploads`` (with ``Retry-After``) once the caller made ``UPLOADS_PER_HOUR`` uploads on this
+    engagement within the hour (their staged and rejected audit events, which no removal or purge takes back; on the
+    database's clock). Serialises the caller's uploads on the engagement until the upload commits."""
+    await db.execute(_LOCK, {"key": f"engagement_uploads:{party.engagement_id}:{party.user_id}"})
+    e = AuditEvent
+    count, oldest, now = (
+        await db.execute(
+            select(func.count(), func.min(e.occurred_at), func.now()).where(
+                e.actor_user_id == party.user_id,
+                e.subject_type == "engagement",
+                e.subject_id == party.engagement_id,
+                e.action.in_((STAGED, REJECTED)),
+                e.occurred_at > func.now() - timedelta(hours=1),
+            )
+        )
+    ).one()
+    if int(count) < UPLOADS_PER_HOUR:
+        return
+    seconds = retry_after(oldest, now)
+    error = ApiError(
+        429,
+        "too_many_uploads",
+        f"You have uploaded {UPLOADS_PER_HOUR} files on this engagement in the last hour. Try again later.",
+        retry_after_seconds=seconds,
+    )
+    error.headers = {"Retry-After": str(seconds)}
+    raise error
 
 
 def file_name_of(raw: str | None) -> str:
@@ -127,7 +164,7 @@ async def stage_upload(
     )
     await audit(
         db,
-        "engagement.message_attachment_staged" if clean else "engagement.message_attachment_rejected",
+        STAGED if clean else REJECTED,
         actor_user_id=party.user_id,
         org_id=None if party.is_developer else party.org_id,
         subject_type="engagement",

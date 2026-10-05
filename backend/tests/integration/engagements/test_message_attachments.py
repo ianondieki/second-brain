@@ -238,3 +238,26 @@ async def test_a_file_staged_more_than_a_day_ago_is_not_sent(
             assert (await read(s.dev, e))["items"] == []
             fresh = await uploaded(s.dev, e)
             assert len((await posted(s.dev, e, "The plan.", attachments=[fresh]))["attachments"]) == 1
+
+
+async def test_thirty_uploads_an_hour_then_429_even_when_each_was_removed(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Given a party who uploaded and removed a file 30 times (an infected one included) within the hour, When they
+    upload again, Then 429 too_many_uploads with a Retry-After of at most an hour, before anything is stored; the
+    other party still uploads."""
+    async with thread_at(owner_engine, app_engine) as thread:
+        s, e = thread.seats, thread.engagement
+        refused = await upload(s.dev, e, b"plain " + EICAR, content_type="text/plain", name="x.txt")
+        infected = UUID(refused.json()["detail"]["attachment_id"])
+        assert (await s.dev.delete(thread_path(e, f"/attachments/{infected}"))).status_code == 204
+        for _ in range(message_files.UPLOADS_PER_HOUR - 1):
+            file_id = await uploaded(s.dev, e)
+            assert (await s.dev.delete(thread_path(e, f"/attachments/{file_id}"))).status_code == 204
+        stored = set(thread.store.objects)
+        limited = await upload(s.dev, e)
+        assert code(limited) == (429, "too_many_uploads")
+        assert 1 <= int(limited.headers["Retry-After"]) <= 3600
+        assert limited.json()["detail"]["retry_after_seconds"] == int(limited.headers["Retry-After"])
+        assert set(thread.store.objects) == stored
+        assert (await upload(s.owner, e)).status_code == 201
