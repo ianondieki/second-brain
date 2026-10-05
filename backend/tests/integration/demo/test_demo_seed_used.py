@@ -5,8 +5,8 @@ Given a demo seeded with the feature flags off (as CI's stack once ran it) and t
 turns two-step sign-in off) and the demo starts again, then the seed step (``python -m bridge.seed --demo``) exits 0,
 adds nothing and changes nothing they did: each engagement it did not open in that run is left where it is, with one
 line in the report. P21's beats keep the rule: a shortlist entry people removed and a saved search they renamed are not
-made again, a saved search is not added past the cap, and a thread whose engagement ended is left with one line. Own
-database: the actions end engagements for good.
+made again, a saved search is not added past the cap, a thread whose engagement ended is left with one line, and a
+thread one of whose writers cannot sign in is not half written. Own database: the actions end engagements for good.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from bridge.auth.passwords import verify_password
+from bridge.auth.passwords import hash_password, verify_password
 from bridge.config import Settings, get_settings
 from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.integrations.sms import FakeSmsProvider
@@ -32,7 +32,20 @@ from bridge.notifications.email import FakeEmailProvider
 from bridge.profiles.models import MAX_SAVED_SEARCHES
 from bridge.seed import __main__ as seed_command
 from bridge.seed.demo import DemoReport, DemoRuntime, follow_ups, seed_demo
-from bridge.seed.demo.data import AMINA, BRIAN, P1, P2, P3, SACCO_B, SAVED_SEARCH, TELCO_A, THREAD, VIEWED, DemoThread
+from bridge.seed.demo.data import (
+    AMINA,
+    BRIAN,
+    DEMO_PASSWORD,
+    P1,
+    P2,
+    P3,
+    SACCO_B,
+    SAVED_SEARCH,
+    TELCO_A,
+    THREAD,
+    VIEWED,
+    DemoThread,
+)
 from bridge.seed.demo.runtime import in_process_app, signed_in
 from bridge.seed.demo.scouts import SCOUTED
 from bridge.seed.reference import SEED_TABLES, seed_all
@@ -296,3 +309,44 @@ async def test_no_saved_search_is_added_past_the_cap(
     kept = await rows(owner, "SELECT count(*) FROM saved_searches WHERE user_id = :u", u=amina)
     assert kept[0][0] == MAX_SAVED_SEARCHES
     assert await rows(owner, "SELECT count(*) FROM audit_events") == audit_before
+
+
+async def test_a_thread_is_not_half_written_when_a_writer_cannot_sign_in(
+    seeded: tuple[DemoReport, DemoReport],
+    owner: AsyncEngine,
+    app: AsyncEngine,
+    runtime: DemoRuntime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every writer of the thread signs in before its first post: on Amina's P2 with Telco A (CONTACT_MADE, an empty
+    thread), Telco A's owner signs in but Amina cannot (her password changed), so nothing is posted and the report's
+    line is true; once she can sign in again, a later run writes the whole thread, and the run after adds nothing."""
+    report = seeded[1]
+    p2 = await engagement(owner, report, P2.key, TELCO_A.legal_name)
+    assert p2.state == "CONTACT_MADE"
+    monkeypatch.setattr(follow_ups, "THREAD", DemoThread(P2.key, TELCO_A.legal_name, THREAD.messages))
+    messages = "SELECT sender_user_id FROM engagement_messages WHERE engagement_id = :e ORDER BY created_at, id"
+    assert await rows(owner, messages, e=p2.id) == []
+    [kept] = await rows(owner, "SELECT password_hash FROM users WHERE email = :e", e=AMINA.email)
+    set_password = text("UPDATE users SET password_hash = :h WHERE email = :e")
+    try:
+        async with owner.begin() as conn:  # test data: a password changed in the app, as above
+            await conn.execute(set_password, {"h": hash_password("changed-again-in-the-app"), "e": AMINA.email})
+        refused = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+        assert refused.created == []
+        [line] = [note for note in refused.notes if note.startswith("message thread: left as it is")]
+        assert f"{AMINA.email} could not sign in" in line
+        assert await rows(owner, messages, e=p2.id) == []  # nothing half written: the line is true
+
+        async with owner.begin() as conn:
+            await conn.execute(set_password, {"h": hash_password(DEMO_PASSWORD), "e": AMINA.email})
+        later = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+        assert later.created == [f"thread of {P2.key} with {TELCO_A.legal_name}: {len(THREAD.messages)} messages"]
+        assert TELCO_A.owner is not None
+        grace, amina = report.users[TELCO_A.owner.email], report.users[AMINA.email]
+        assert [m.sender_user_id for m in await rows(owner, messages, e=p2.id)] == [grace, amina, grace]
+        after = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+        assert after.created == []
+    finally:
+        async with owner.begin() as conn:
+            await conn.execute(set_password, {"h": kept.password_hash, "e": AMINA.email})

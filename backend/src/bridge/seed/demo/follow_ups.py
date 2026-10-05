@@ -16,13 +16,14 @@ Telco A scout (whose match is the shortlist entry).
 
 Idempotent and safe on a used demo (P9's rules), each step looking first as the owner role, so a run with nothing to do
 signs nobody in. The thread step writes only into an empty thread (one people wrote in is theirs) and only while the
-engagement has not ended (one that ended is left with one line in the report). The shortlist step runs only while
-Telco A never shortlisted the match (no row and no ``shortlist.added`` event), so an entry people removed stays
-removed. The saved search is looked for by its name and by its view and filters (renaming changes only the name), and
-is not added when Amina keeps the most a developer may (``MAX_SAVED_SEARCHES``, one line in the report); a deleted
-saved search leaves no trace, so the next start saves it again. A refusal of the app (a thread that is not open, a
-proposal no longer in the Inbox, a password changed) is left to ``guarded``. Dev and test only (``demo_refusal``,
-checked by the seed before any step).
+engagement has not ended (one that ended is left with one line in the report); every writer signs in before the first
+post, so a sign-in refused on a used demo (a password changed) writes nothing rather than half a thread, which, being
+append-only, a later run could never complete. The shortlist step runs only while Telco A never shortlisted the match
+(no row and no ``shortlist.added`` event), so an entry people removed stays removed. The saved search is looked for by
+its name and by its view and filters (renaming changes only the name), and is not added when Amina keeps the most a
+developer may (``MAX_SAVED_SEARCHES``, one line in the report); a deleted saved search leaves no trace, so the next
+start saves it again. A refusal of the app (a thread that is not open, a proposal no longer in the Inbox, a password
+changed) is left to ``guarded``. Dev and test only (``demo_refusal``, checked by the seed before any step).
 """
 
 from __future__ import annotations
@@ -32,10 +33,10 @@ from typing import Final
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.engagements import state_machine as sm
-from bridge.models.enums import EngagementState, OrgRole
+from bridge.models.enums import EngagementState
 from bridge.profiles.models import MAX_SAVED_SEARCHES
-from bridge.seed.demo.data import ORGS, PROPOSALS, SAVED_SEARCH, TELCO_A, THREAD, DemoThread
-from bridge.seed.demo.engagements import DEVELOPER
+from bridge.seed.demo.data import SAVED_SEARCH, TELCO_A, THREAD
+from bridge.seed.demo.engagements import party_email
 from bridge.seed.demo.runtime import Actors, DemoReport, DemoSeedError, _one
 from bridge.seed.demo.scouts import SCOUTED
 
@@ -59,16 +60,6 @@ _SAVED = (
 )
 
 
-def writer(thread: DemoThread, who: str) -> str:
-    """The address of whoever writes as ``who`` on ``thread``: the proposal's owner, or the fixture's seat with the
-    role (its owner first)."""
-    if who == DEVELOPER:
-        return next(p.owner for p in PROPOSALS if p.key == thread.proposal)
-    org = next(o for o in ORGS if o.legal_name == thread.org)
-    seats = ([org.owner] if org.owner else []) + list(org.seats)
-    return next(seat.email for seat in seats if OrgRole(who) in seat.roles)
-
-
 async def ensure_thread(owner: AsyncEngine, actors: Actors, report: DemoReport) -> None:
     """``THREAD``'s messages, posted in turn by their writers into its engagement's empty thread (module docstring)."""
     plan = THREAD
@@ -83,9 +74,12 @@ async def ensure_thread(owner: AsyncEngine, actors: Actors, report: DemoReport) 
     if state in sm.TERMINAL:
         report.notes.append(f"thread of {plan.proposal} with {plan.org} left as it is: the engagement is {state.value}")
         return
-    for message in plan.messages:
-        actor = await actors.get(writer(plan, message.who))
-        await actor.call("POST", f"/api/engagements/{row.id}/messages", json={"body": message.body}, expect=(201,))
+    # Every writer signs in before the first post: a refused sign-in then writes nothing (the thread is append-only).
+    emails = [party_email(plan, message.who) for message in plan.messages]
+    writers = {email: await actors.get(email) for email in dict.fromkeys(emails)}
+    path = f"/api/engagements/{row.id}/messages"
+    for message, email in zip(plan.messages, emails, strict=True):
+        await writers[email].call("POST", path, json={"body": message.body}, expect=(201,))
     report.did(f"thread of {plan.proposal} with {plan.org}: {len(plan.messages)} messages")
 
 
