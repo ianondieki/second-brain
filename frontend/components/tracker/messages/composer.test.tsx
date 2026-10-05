@@ -203,4 +203,28 @@ describe("the composer", () => {
     expect(calls.removeStaged).toHaveBeenCalledWith(ENGAGEMENT_ID, "staged-late");
     expect(document.querySelector("[data-pending-file]")).toBeNull();
   });
+
+  it("still deletes a removed file's staged record when the page is left during its scan", async () => {
+    let answer: () => void = () => {};
+    const uploadFile = vi.fn<ThreadCalls["uploadFile"]>(
+      (_id, file, options) =>
+        new Promise((resolve) => {
+          options.onProgress?.(100);
+          answer = () => resolve({ ok: true, file: { id: "staged-left", file_name: file.name, content_type: "text/plain", size_bytes: 1, sha256: "0", av_status: "clean" } });
+        }),
+    );
+    const { calls, unmount } = renderComposer(LIMITS, fakeCalls({ uploadFile }));
+    fireEvent.change(document.querySelector("input[type=file]")!, { target: { files: [new File(["a"], "left.txt", { type: "text/plain" })] } });
+    const row = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-pending-file='left.txt'][data-status='scanning']");
+      expect(found).toBeTruthy();
+      return found!;
+    });
+    const signal = vi.mocked(uploadFile).mock.calls[0][2].signal!;
+    fireEvent.click(within(row).getByRole("button", { name: "Remove" }));
+    unmount();
+    expect(signal.aborted).toBe(false);
+    await act(async () => answer());
+    expect(calls.removeStaged).toHaveBeenCalledWith(ENGAGEMENT_ID, "staged-left");
+  });
 });

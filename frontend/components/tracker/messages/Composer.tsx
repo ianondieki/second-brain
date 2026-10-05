@@ -63,7 +63,10 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
 
   useEffect(() => {
     const running = uploads.current;
-    return () => running.forEach((controller) => controller.abort());
+    const dropped = discarded.current;
+    // Leaving the page stops the uploads still running, except a removed file the API is scanning: its answer still
+    // comes, and its staged record is deleted then (upload below).
+    return () => running.forEach((controller, key) => (dropped.has(key) ? undefined : controller.abort()));
   }, []);
 
   const length = Array.from(text).length;
@@ -91,12 +94,12 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
       onProgress: (percent) => update(key, percent < 100 ? { progress: percent } : { progress: 100, status: "scanning" }),
     });
     uploads.current.delete(key);
-    if (controller.signal.aborted) return;
     if (discarded.current.delete(key)) {
       const staged = outcome.ok ? outcome.file.id : (outcome.attachmentId ?? null);
       if (staged) void calls.removeStaged(engagementId, staged);
       return;
     }
+    if (controller.signal.aborted) return;
     if (outcome.ok) {
       update(key, { status: "ready", id: outcome.file.id, progress: 100 });
       setSaid(t("fileStatus", { name: file.name, value: t("status.ready") }));
