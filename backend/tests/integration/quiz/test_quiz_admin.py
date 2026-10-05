@@ -7,7 +7,7 @@
   generating call, and its attempts in aggregate only from three attempts on.
 - One decision per set (409 ``already_decided``), an approval needs five questions (409 ``incomplete_set``) and a day
   that is not over (409 ``day_over``: rejecting stays allowed, and nobody's streak is touched), audited
-  ``quiz.set_decided``; a rejected set is never served.
+  ``quiz.set_decided``; a rejected set is never served. The draft queue lists today's set first.
 - Pull and restore rescore the set's attempts, each audited with the number of scores changed; the same state again
   is 409; a reason is one line of 1 to 300 characters.
 """
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import text
 
@@ -36,6 +37,7 @@ from tests.integration.quiz.api_world import (
     audit_actions,
     cast,
     code,
+    decide,
     draft_set,
     flag_path,
     owner_attempt,
@@ -221,3 +223,29 @@ async def test_a_set_whose_day_is_over_is_never_approved_and_streaks_stay(quiz: 
     assert rejected.json()["status"] == "rejected"
     decision = admin.app.openapi()["paths"][f"{ADMIN}/sets/{{set_id}}/decision"]["post"]  # type: ignore[attr-defined]
     assert "day_over" in decision["responses"]["409"]["description"]
+
+
+async def test_the_draft_queue_lists_todays_set_first(quiz: QuizDb, as_user: Clients) -> None:
+    """Drafts of today and later first, today's first, then drafts of past days, then decided sets newest first."""
+    monday = quiz.monday()
+    day = {name: monday + timedelta(days=n) for n, name in enumerate(("mon", "tue", "wed", "thu", "fri"))}
+    p = await cast(quiz)
+    await at(quiz, day["mon"])
+    approved, _ = await approved_set(quiz, day["mon"], p.admin)
+    stale = await draft_set(quiz, day["tue"], role="job")
+    await at(quiz, day["wed"])
+    rejected = await draft_set(quiz, day["wed"], role="job")
+    await decide(quiz, rejected, p.admin, "rejected")
+    later = await draft_set(quiz, day["fri"], role="job")
+    soon = await draft_set(quiz, day["thu"], role="job")
+    today = await draft_set(quiz, day["wed"], role="job")
+    admin = await as_user(p.admin)
+    mine = {approved, stale, rejected, later, soon, today}
+
+    async def listed(**params: str) -> list[str]:
+        items = (await admin.get(f"{ADMIN}/sets", params=params)).json()["items"]
+        return [item["id"] for item in items if UUID(item["id"]) in mine]
+
+    assert await listed(status="draft") == [str(s) for s in (today, soon, later, stale)]
+    assert await listed() == [str(s) for s in (today, soon, later, stale, rejected, approved)]
+    assert await listed(status="approved") == [str(approved)]

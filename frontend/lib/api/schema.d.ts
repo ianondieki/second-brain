@@ -193,7 +193,8 @@ export interface paths {
         };
         /**
          * List Quiz Sets
-         * @description The sets, newest day first (``status`` filters), with their flag and pull counts.
+         * @description The sets with their flag and pull counts (``status`` filters): drafts of today and later first, today's first,
+         *     then drafts of past days, then decided sets, newest day first.
          */
         get: operations["list_quiz_sets_api_admin_quiz_sets_get"];
         put?: never;

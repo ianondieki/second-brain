@@ -5,7 +5,8 @@ for everyone else, a developer included; 403 for a moderator; 403 ``step_up_requ
 database repeats the rule (staff admin reads every set, question and flag; the decisions and pulls are its definer
 functions, which refuse anyone else).
 
-- ``GET /sets?status=draft|approved|rejected``: newest day first, with the flag and pull counts of each set.
+- ``GET /sets?status=draft|approved|rejected``: drafts of today and later first (today's first), then drafts of past
+  days, then decided sets newest day first, with the flag and pull counts of each set.
 - ``GET /sets/{id}``: the set with who decided it, when and its generating call (``app_quiz_set_detail``), its
   attempts in aggregate (``app_quiz_set_stats``: counts from 3 attempts on), each question with its answer and why
   (``app_quiz_answers``), source, pull state and flags (reason counts and the notes, never who flagged).
@@ -30,7 +31,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import Label, func, select, text
+from sqlalchemy import Label, and_, case, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -143,6 +144,19 @@ def _counts() -> tuple[Label[int], Label[int]]:
     return flags.label("flags"), pulled.label("pulled")
 
 
+# The queue's order: drafts of today and later first, today's first (the card: "today's first"), then drafts of past
+# days (they can only be rejected), then decided sets, newest day first.
+_TODAY = func.app_nairobi_today()
+_GROUP = case((and_(S.status == "draft", S.quiz_date >= _TODAY), 0), (S.status == "draft", 1), else_=2)
+_QUEUE_ORDER: Final = (
+    _GROUP,
+    case((_GROUP == 0, S.quiz_date)).asc().nulls_last(),
+    S.quiz_date.desc(),
+    S.created_at.desc(),
+    S.id.desc(),
+)
+
+
 async def _summaries(
     db: AsyncSession, *, status: SetStatus | None = None, set_id: UUID | None = None, limit: int = 100
 ) -> list[QuizSetSummaryOut]:
@@ -151,7 +165,7 @@ async def _summaries(
         stmt = stmt.where(S.status == status)
     if set_id is not None:
         stmt = stmt.where(S.id == set_id)
-    rows = (await db.execute(stmt.order_by(S.quiz_date.desc(), S.created_at.desc(), S.id.desc()).limit(limit))).all()
+    rows = (await db.execute(stmt.order_by(*_QUEUE_ORDER).limit(limit))).all()
     return [QuizSetSummaryOut.model_validate(row, from_attributes=True) for row in rows]
 
 
@@ -162,7 +176,8 @@ async def list_quiz_sets(
     status: SetStatus | None = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
 ) -> QuizSetListOut:
-    """The sets, newest day first (``status`` filters), with their flag and pull counts."""
+    """The sets with their flag and pull counts (``status`` filters): drafts of today and later first, today's first,
+    then drafts of past days, then decided sets, newest day first."""
     return QuizSetListOut(items=await _summaries(db, status=status, limit=limit))
 
 

@@ -14032,7 +14032,7 @@
     },
     "/api/admin/quiz/sets": {
       "get": {
-        "description": "The sets, newest day first (``status`` filters), with their flag and pull counts.",
+        "description": "The sets with their flag and pull counts (``status`` filters): drafts of today and later first, today's first,\nthen drafts of past days, then decided sets, newest day first.",
         "operationId": "list_quiz_sets_api_admin_quiz_sets_get",
         "parameters": [
           {
