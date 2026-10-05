@@ -186,12 +186,18 @@ async def test_a_message_keeps_its_text_as_typed(owner_engine: AsyncEngine, app_
 
 async def test_contact_details_wait_for_first_contact(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
     """Given INTEREST_CONFIRMED (every member reads the thread; THREAT_MODEL I), When a party writes an email address
-    or a link, Then 422 contains_contact; once first contact is made (CONTACT_MADE), the same text is posted."""
+    or a link, Then 422 contains_contact, also while the engagement is on hold from that stage (the thread stays
+    open for plain text); once first contact is made (CONTACT_MADE), the same text is posted."""
     async with thread_at(owner_engine, app_engine) as thread:
         s, e = thread.seats, thread.engagement
         text = "Write to amina@example.com or see https://example.com/demo"
         assert code(await post(s.dev, e, text)) == (422, "contains_contact")
         assert code(await post(s.owner, e, text)) == (422, "contains_contact")
+        resume_at = await db_today(owner_engine) + timedelta(days=7)
+        await thread.tracker.ok(s.dev, "pause", {"reason": "Travelling this week.", "resume_at": str(resume_at)})
+        assert code(await post(s.dev, e, text)) == (422, "contains_contact")
+        await posted(s.dev, e, "Back next week; talk then.")
+        await thread.tracker.ok(s.dev, "resume", {"reason": "Back early."})
         await thread.tracker.ok(s.owner, "mark-contacted")
         assert (await posted(s.dev, e, text))["body"] == text
 
