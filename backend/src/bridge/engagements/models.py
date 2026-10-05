@@ -295,6 +295,10 @@ MESSAGE_REDACTED = "[redacted]"  # D-54: the one body a message may be changed t
 MAX_MESSAGE_ATTACHMENTS = 5  # per message (engagement_message_attachments_cap)
 MAX_MESSAGE_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20 MB, as proposal attachments (docs/spec/06 6.1)
 MAX_FILE_NAME_CHARS = 255
+# A message report (app_report_message): one or more of these codes, never free text; at most this many message
+# reports per reporter in 24 hours (fixed in the function: the caller names no limit).
+MESSAGE_REPORT_REASONS = ("spam", "abuse", "contact_details", "confidential", "other")
+MESSAGE_REPORTS_PER_DAY = 10
 # Who posts on the organisation's side: a member who may act on the tracker (viewers read, never post).
 MESSAGE_POSTING_ORG_ROLES = frozenset({"owner", "admin", "reviewer", "signatory", "finance"})
 

@@ -73,13 +73,15 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
   or a path separator.
 - ``engagement_message_reads`` (USER; bridge_app: SELECT, INSERT, UPDATE of ``last_read_at``): one row per party
   and engagement, the user's own, on an engagement they are a party of.
-- The report (D-57 (4)): ``app_report_message(message, reasons, daily_limit)`` (SECURITY DEFINER, EXECUTE bridge_app)
-  files a ``moderation_cases`` row (``subject_type = 'message'``, ``source = 'report'``, the caller as
-  ``reporter_id``) for a message the caller reads as a party (insufficient_privilege, "no message of the caller's
-  with that id", otherwise), once per reporter and message (a repeat returns the same case, ``created`` false; the
-  partial unique index ``uq_moderation_cases_message_report`` backs it), and at most ``daily_limit`` message reports
-  per reporter in 24 hours (SQLSTATE 54000, program_limit_exceeded). bridge_app's direct INSERT of a report is
-  narrowed to every other subject type, so every message case has been filed by a party.
+- The report (D-57 (4)): ``app_report_message(message, reasons)`` (SECURITY DEFINER, EXECUTE bridge_app) files a
+  ``moderation_cases`` row (``subject_type = 'message'``, ``source = 'report'``, the caller as ``reporter_id``) for a
+  message the caller reads as a party (insufficient_privilege, "no message of the caller's with that id",
+  otherwise), once per reporter and message (a repeat returns the same case, ``created`` false; the partial unique
+  index ``uq_moderation_cases_message_report`` backs it), with reasons that are one or more of the fixed codes
+  ``spam``, ``abuse``, ``contact_details``, ``confidential`` and ``other`` (never free text; each kept once; SQLSTATE
+  22023, invalid_parameter_value, otherwise), and at most 10 message reports per reporter in 24 hours, a limit fixed
+  in the function that no caller can raise (SQLSTATE 54000, program_limit_exceeded). bridge_app's direct INSERT of a
+  report is narrowed to every other subject type, so every message case has been filed by a party.
   ``app_reported_message(case)`` (SECURITY DEFINER, EXECUTE bridge_app, staff admin|moderator only) returns the one
   message of a message report (id, engagement, sender party, body, time): the only way staff read a message.
 
@@ -114,8 +116,9 @@ Operating rules for the code that uses this schema:
   NULL`` and check the row count (a missing, foreign, unclean or already-sent upload matches nothing or is refused).
 - A message is free text a party typed and is never deleted: keep it out of event payloads, logs, audit details and
   emails (N18 says who wrote, never the text). Its erasure is D-54 (a staff-only definer redaction, not written yet).
-- File a report only with ``SELECT * FROM app_report_message(:message, :reasons, :limit)``; staff read a reported
-  message only with ``app_reported_message(:case)``.
+- File a report only with ``SELECT * FROM app_report_message(:message, :reasons)`` (the codes of
+  ``bridge.engagements.models.MESSAGE_REPORT_REASONS``); staff read a reported message only with
+  ``app_reported_message(:case)``.
 - Call ``app_org_sees_proposal`` before adding to the shortlist (404 when false); a repeat add is a unique violation
   (or ``ON CONFLICT DO NOTHING``).
 - The alert job calls ``app_saved_searches_due(now)`` with no user bound, then acts per user in a session bound to
@@ -491,13 +494,16 @@ END;
 $$;
 
 -- A party reports a message (REQ-ENG-11, D-57 (4)): files one moderation case (subject_type 'message', source
--- 'report', the caller as reporter_id, the reasons given) for a message the caller reads as a party (its engagement's
--- developer, or a member of its organisation narrowed by app.org_id; anyone else gets one refusal, the same as for a
--- message that does not exist), once per reporter and message (a repeat returns the same case with created false), and
--- at most p_daily_limit message reports per reporter in 24 hours (program_limit_exceeded). Serialised per reporter.
--- The report is the reporter sharing that one message with staff (app_reported_message). SECURITY DEFINER: reads the
--- message and writes the case whatever the caller's RLS (bridge_app's own INSERT of a message report is refused).
-CREATE FUNCTION app_report_message(p_message uuid, p_reasons text[], p_daily_limit integer)
+-- 'report', the caller as reporter_id) for a message the caller reads as a party (its engagement's developer, or a
+-- member of its organisation narrowed by app.org_id; anyone else gets one refusal, the same as for a message that does
+-- not exist), once per reporter and message (a repeat returns the same case with created false). The reasons are one
+-- or more of the fixed codes spam, abuse, contact_details, confidential, other (never free text: the case is staff's
+-- to read; each kept once, in code order; invalid_parameter_value otherwise). At most 10 message reports per reporter
+-- in 24 hours, fixed here (no caller names the limit; program_limit_exceeded). Serialised per reporter (an advisory
+-- lock; the count then reads every committed report, at READ COMMITTED, the application's level). The report is the
+-- reporter sharing that one message with staff (app_reported_message). SECURITY DEFINER: reads the message and writes
+-- the case whatever the caller's RLS (bridge_app's own INSERT of a message report is refused).
+CREATE FUNCTION app_report_message(p_message uuid, p_reasons text[])
     RETURNS TABLE (case_id uuid, created boolean)
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -515,8 +521,11 @@ BEGIN
         RAISE EXCEPTION 'app_report_message: no message of the caller''s with that id'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
-    IF p_daily_limit IS NULL OR p_daily_limit < 1 THEN
-        RAISE EXCEPTION 'app_report_message: name the daily limit' USING ERRCODE = 'invalid_parameter_value';
+    IF p_reasons IS NULL OR cardinality(p_reasons) = 0 OR array_ndims(p_reasons) <> 1
+       OR array_position(p_reasons, NULL) IS NOT NULL
+       OR NOT (p_reasons <@ ARRAY['spam', 'abuse', 'contact_details', 'confidential', 'other']) THEN
+        RAISE EXCEPTION 'app_report_message: the reasons are one or more of spam, abuse, contact_details,'
+            ' confidential, other' USING ERRCODE = 'invalid_parameter_value';
     END IF;
     PERFORM pg_catalog.pg_advisory_xact_lock(
         pg_catalog.hashtextextended('moderation_cases:message_report:' || v_user::text, 0));
@@ -528,13 +537,16 @@ BEGIN
     END IF;
     IF (SELECT count(*) FROM public.moderation_cases c
          WHERE c.subject_type = 'message' AND c.source = 'report' AND c.reporter_id = v_user
-           AND c.created_at > now() - interval '1 day') >= p_daily_limit THEN
-        RAISE EXCEPTION 'app_report_message: at most % message reports a day', p_daily_limit
-            USING ERRCODE = 'program_limit_exceeded';
+           AND c.created_at > now() - interval '24 hours') >= 10 THEN
+        RAISE EXCEPTION 'app_report_message: at most 10 message reports a day' USING ERRCODE = 'program_limit_exceeded';
     END IF;
     v_case := public.uuid7();
     INSERT INTO public.moderation_cases (id, subject_type, subject_id, reasons, source, reporter_id)
-    VALUES (v_case, 'message', p_message, p_reasons, 'report', v_user);
+    VALUES (v_case, 'message', p_message,
+            ARRAY(SELECT r.code FROM unnest(ARRAY['spam', 'abuse', 'contact_details', 'confidential', 'other'])
+                                     WITH ORDINALITY AS r(code, n)
+                   WHERE r.code = ANY (p_reasons) ORDER BY r.n),
+            'report', v_user);
     RETURN QUERY SELECT v_case, true;
 END;
 $$;
@@ -565,7 +577,7 @@ $$;
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_org_sees_proposal(uuid, uuid)": ("bridge_app",),  # the shortlist's INSERT policy and the API's 404
     "app_saved_searches_due(timestamptz)": ("bridge_app",),  # the alert job, with no user bound (ids only)
-    "app_report_message(uuid, text[], integer)": ("bridge_app",),  # a party's report of one message
+    "app_report_message(uuid, text[])": ("bridge_app",),  # a party's report of one message
     "app_reported_message(uuid)": ("bridge_app",),  # staff admin|moderator read the reported message
 }
 TRIGGER_FUNCTIONS = (
