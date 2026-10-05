@@ -23,7 +23,7 @@
     "reviewP20pub": "[[COPY-REVIEW]] P20-5 (staff console, public pages; REQ-UX-01..04): adminModeration.summary.open; adminModeration.summary.hidden; adminModeration.summary.oldest; adminClaims.summary.waiting; adminClaims.summary.pressing; adminClaims.summary.next; help.contents",
     "reviewP20dev": "[[COPY-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (a Discover card's foot: how many sources back the problem)",
     "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
-    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.*, tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*"
+    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.*, tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.<kind>, kind engagement.n18)"
   },
   "app": {
     "name": "Wazo",
@@ -455,6 +455,11 @@
       "reload": "Reload the page",
       "logIn": "Log in",
       "home": "Go to your home page"
+    },
+    "preference": {
+      "engagement": {
+        "n18": "Email me when someone writes to me on an engagement (at most one email per engagement every 30 minutes)."
+      }
     }
   },
   "notifications": {
