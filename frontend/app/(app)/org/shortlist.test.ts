@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { Membership } from "./membership";
 import {
   compareAction,
   compareProblem,
@@ -16,12 +17,12 @@ const B = "01a10b26-6be1-7063-8349-cb4c580ce388";
 const C = "01a10b26-9998-7127-ae29-77e53da2a85e";
 const D = "01a10b26-9998-7127-ae29-77e53da2a85f";
 const E = "01a10b26-9998-7127-ae29-77e53da2a860";
-const one = [{ org_id: "o1", org_name: "Telco A", roles: ["reviewer"] }];
-const two = [...one, { org_id: "o2", org_name: "SACCO B", roles: ["viewer"] }];
+const one: Membership[] = [{ org_id: "o1", org_name: "Telco A", roles: ["reviewer"] }];
+const two: Membership[] = [...one, { org_id: "o2", org_name: "SACCO B", roles: ["viewer"] }];
 
 describe("the shortlist's rules", () => {
   it("lets reviewers, signatories and admins change it, not an owner or viewer alone (P21 B1)", () => {
-    for (const role of ["reviewer", "signatory", "admin"]) expect(editsShortlist({ roles: [role] })).toBe(true);
+    for (const role of ["reviewer", "signatory", "admin"] as const) expect(editsShortlist({ roles: [role] })).toBe(true);
     expect(editsShortlist({ roles: ["owner", "viewer"] })).toBe(false);
     expect(editsShortlist({ roles: [] })).toBe(false);
   });
