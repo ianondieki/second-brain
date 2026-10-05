@@ -16,7 +16,8 @@ gave the proposal if they matched it. Never a Tier-2 column, even where the orga
 full proposal stays one click away, with its watermark and view log.
 
 Every read asks again whether the organisation can still see each proposal (published, clear and in its Inbox,
-``app_org_sees_proposal``, under the caller's RLS): a proposal held by moderation, unpublished or whose tag was
+``app_org_sees_proposal``, under the caller's RLS, and not written by one of its own active members, P10's rule as
+in the scout matches): a proposal held by moderation, unpublished or whose tag was
 withdrawn after it was shortlisted keeps its row, so a Tier-2 member can remove it, but the list shows it as
 ``available`` false with no Tier-1 facts, and compare leaves it out (its ``items`` may then be fewer than asked).
 """
@@ -49,11 +50,17 @@ INSUFFICIENT_PRIVILEGE: Final = "42501"  # the INSERT policy's refusal (a propos
 
 # The proposal's current registered version, re-read on every request and only while the organisation can still see
 # the proposal: published, clear and in its Inbox (``app_org_sees_proposal``; a held proposal, or one whose tag was
-# withdrawn, keeps its row but loses its facts). Tier 1 only.
+# withdrawn, keeps its row but loses its facts), and its author is not an active member of the organisation (P10's
+# rule, as ``matching.matches``: a member's own proposal is never shown to their organisation, so the shortlist never
+# tells who wrote it). Tier 1 only.
+_AUTHOR_IS_MEMBER = (  # over ``p``, the proposal; {org}: the organisation's column or parameter
+    "EXISTS (SELECT 1 FROM memberships om WHERE om.org_id = {org} AND om.user_id = p.owner_id AND om.status = 'active')"
+)
 _TIER1_JOINS = (
     " LEFT JOIN proposals p ON p.id = s.proposal_id AND p.status = 'published' AND p.moderation_state = 'clear'"
-    " AND app_org_sees_proposal(s.org_id, s.proposal_id)"
-    " LEFT JOIN proposal_versions v ON v.id = p.current_version_id"
+    " AND app_org_sees_proposal(s.org_id, s.proposal_id) AND NOT "
+    + _AUTHOR_IS_MEMBER.format(org="s.org_id")
+    + " LEFT JOIN proposal_versions v ON v.id = p.current_version_id"
     " LEFT JOIN niches n ON n.id = v.niche_id LEFT JOIN niches pn ON pn.id = n.parent_id"
 )
 _ENTRIES = (  # constant SQL fragments; every value is bound
@@ -79,7 +86,10 @@ _COMPARE = text(  # constant SQL fragments; every value is bound
     + " LEFT JOIN engagements e ON e.proposal_id = s.proposal_id AND e.org_id = s.org_id"
     " WHERE s.org_id = :org AND s.proposal_id = ANY(:ids)"
 )
-_SEES = text("SELECT app_org_sees_proposal(:org, :proposal)")
+_SEES = text(  # in the Inbox, and not written by one of the organisation's own members (P10)
+    "SELECT app_org_sees_proposal(:org, :proposal) AND NOT EXISTS"  # noqa: S608 (constant fragments, bound values)
+    " (SELECT 1 FROM proposals p WHERE p.id = :proposal AND " + _AUTHOR_IS_MEMBER.format(org=":org") + ")"
+)
 _ADD = text(
     "INSERT INTO org_shortlist (org_id, proposal_id, added_by) VALUES (:org, :proposal, :user)"
     " ON CONFLICT (org_id, proposal_id) DO NOTHING"
