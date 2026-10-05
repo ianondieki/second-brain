@@ -337,6 +337,8 @@ occur, as sub-rows; DECISIONS-NEEDED D-06 asks whether they get their own ids.
 | N21 | `DISPUTED` opened (category, statement, evidence; legal hold set; mediator assigned ≤2 BD) | The other party; platform moderator | in-app + email | 🔒 | Status email |
 | N22 | `TERMINATED` (dual endorsement or mediator outcome; summary of work accepted, amounts paid, IP position) | Both parties | in-app + email | 🔒 | Status email |
 | N23 | Daily reminder: developer `reminders.dispatch` once at `send_after_hour` (default 07:30 EAT); enterprise `reminders.org_digest` 08:30 (daily or weekly per plan) | Developer with active engagements; org members opted in to the progress digest | email (+ WhatsApp in Release 2); in-app summary on Home | Yes (reminders consent; per-channel; ≤1 per user/day/channel) | EM7 (developer and org versions) |
+| N24 | New problems or Briefs match a saved Discover search (the daily `saved_searches.alert` job, 07:05 EAT; P21, REQ-PERS-03, D-57) | The developer who saved the search (alerts on) | in-app (`saved_search_match`, one per saved search and Nairobi day) | Yes (per saved search: Alerts on/off) | In-app notice with a link to Discover filtered |
+| N25 | Daily digest of saved-search matches (P21, REQ-PERS-03, D-57) | Developers who opted in (`saved_search_digest`, off by default) | email | Yes | Status email: saved search names and counts only, never problem text |
 | (side) | `WITHDRAWN` by developer before agreement (Tier-2 access revoked) | Org | in-app + email | Yes | Status email |
 | (side) | `EM8` verification result (D1/D2/E1/E2 decisions) | The verified user or org admin | in-app + email | Yes | EM8 |
 
