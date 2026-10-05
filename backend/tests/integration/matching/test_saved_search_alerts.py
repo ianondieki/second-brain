@@ -28,6 +28,7 @@ from bridge.config import get_settings
 from bridge.db import create_session_factory
 from bridge.matching.saved_search_alerts import AlertDeps, Report, run_alerts
 from bridge.notifications.email import FakeEmailProvider
+from tests.integration.engagements.api_world import clients
 from tests.integration.matching.trend_world import TrendWorld, brief, build, research_card
 from tests.integration.proposals.helpers import Developers, rows, user_of
 
@@ -146,9 +147,68 @@ async def test_p21_c4_alerts_off_and_deleted_searches_send_nothing(
     [row] = await rows(owner_engine, "SELECT last_alerted_at FROM saved_searches WHERE id = :id", id=UUID(quiet))
     assert row.last_alerted_at is None
 
-    assert (await r.me.patch(f"{URL}/{quiet}", json={"alerts": True})).status_code == 200
-    assert counts(await r.run(), r.user) == {UUID(quiet): 1}
-    assert [title for title, _, _ in await notices(owner_engine, r.user)] == ["1 new problem matches Quiet"]
+    # Turned back on, the window restarts then: what came out while alerts were off is never counted.
+    await research_card(owner_engine, w.niche, age_days=0.5)  # published while off
+    renamed = await r.me.patch(f"{URL}/{quiet}", json={"name": "Quiet again"})  # alerts untouched: no reset
+    assert renamed.json()["last_alerted_at"] is None
+    back_on = await r.me.patch(f"{URL}/{quiet}", json={"alerts": True})
+    assert back_on.status_code == 200
+    [clock] = await rows(owner_engine, "SELECT app_clock_now() AS now")
+    reset = datetime.fromisoformat(back_on.json()["last_alerted_at"])
+    assert timedelta(0) <= clock.now - reset < timedelta(minutes=1)
+    again = await r.me.patch(f"{URL}/{quiet}", json={"alerts": True})  # already on: the window stays
+    assert again.json()["last_alerted_at"] == back_on.json()["last_alerted_at"]
+    assert (await r.run()).of(r.user) is None  # alerted (re-enabled) today: nothing due until tomorrow
+    await research_card(owner_engine, w.niche, age_days=-0.1)  # published after alerts came back on
+    assert counts(await r.run(clock.now + timedelta(days=1)), r.user) == {UUID(quiet): 1}
+    assert [title for title, _, _ in await notices(owner_engine, r.user)] == ["1 new problem matches Quiet again"]
+
+
+async def test_the_counts_hold_the_saved_words_as_typed_in_both_views(
+    developers: Developers, owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The saved words narrow the count exactly as Discover's words filter does: title or statement, ignoring case,
+    ``%`` and ``_`` taken as typed (a LIKE wildcard would also match the look-alike items)."""
+    r = await rig(developers, owner_engine, app_engine)
+    w = r.world
+    typed = await save(r, owner_engine, "Typed", niche=w.slug("parent"), words="CHAIN_100%")
+    milk = await save(r, owner_engine, "Milk", niche=w.slug("parent"), words="milk")
+    stated = await save(r, owner_engine, "Stated", niche=w.slug("parent"), words="silo doors")
+    briefs = await save(r, owner_engine, "Typed Briefs", "briefs", niche=w.slug("parent"), words="chain_100%")
+    await research_card(owner_engine, w.niche, title="Milk chain_100% spoilage")
+    await research_card(owner_engine, w.sibling, title="Milk chainX100Y spoilage")  # wildcards would match it
+    await research_card(owner_engine, w.niche, title="Grain pests", statement="Weevils get past the SILO DOORS.")
+    await brief(owner_engine, w.niche, title="Depot chain_100% audit")
+    await brief(owner_engine, w.sibling, title="Depot chainX100Y audit")
+    await brief(owner_engine, w.niche, title="Depot counts")
+    # The Problems view lists Briefs as problems too: "Typed" counts the card and the Brief holding the words, never
+    # the look-alikes; without the words each problems search would count all six.
+    assert counts(await r.run(), r.user) == {UUID(typed): 2, UUID(milk): 2, UUID(stated): 1, UUID(briefs): 1}
+
+
+async def test_the_problems_count_is_capped_at_what_the_page_lists(
+    developers: Developers, owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The Problems view lists a problem only while it trends or is New this week (7 days), so an alert never counts an
+    older one, however long ago the last alert was; the Briefs view lists every open Brief, so its count is uncapped."""
+    r = await rig(developers, owner_engine, app_engine)
+    w = r.world
+    problems = await save(r, owner_engine, "Problems", niche=w.slug("parent"))
+    briefs = await save(r, owner_engine, "Briefs", "briefs", niche=w.slug("parent"))
+    async with owner_engine.begin() as conn:  # saved (and last alerted) three weeks ago
+        await conn.execute(
+            text("UPDATE saved_searches SET created_at = app_clock_now() - interval '21 days' WHERE user_id = :u"),
+            {"u": r.user},
+        )
+    old = await research_card(owner_engine, w.niche, age_days=10)  # since the last alert, but no longer new
+    await research_card(owner_engine, w.niche, age_days=2)
+    await brief(owner_engine, w.niche, age_days=10)
+    await brief(owner_engine, w.niche, age_days=2)
+    async with clients(app_engine, get_settings(), r.user) as (viewer,):
+        listed = (await viewer.get("/api/discover/trending", params={"niche": w.slug("parent")})).json()
+    assert str(old) not in {item["problem"]["id"] for item in listed["problems"]}  # what the notice's link shows
+    # Problems: the card and the Brief of 2 days ago (the Problems view lists Briefs too); Briefs: both Briefs.
+    assert counts(await r.run(), r.user) == {UUID(problems): 2, UUID(briefs): 2}
 
 
 async def test_p21_c5_only_published_visible_items_count(
