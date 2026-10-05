@@ -1,8 +1,8 @@
 """Revision 0008 (REQ-REPO-02, P21 track B, D-57 (6)): the organisation shortlist's tenancy and roles.
 
 - ``app_org_sees_proposal(org, proposal)`` is the organisation's Inbox: a published, clear proposal pitched to it (a
-  delivered tag), matched by its scout or answering its Brief; true only for a member of that organisation (narrowed
-  by ``app.org_id``), so nobody learns another organisation's Inbox.
+  delivered tag), matched by its scout or answering its Brief, whose author is not an active member of it (P10); true
+  only for a member of that organisation (narrowed by ``app.org_id``), so nobody learns another organisation's Inbox.
 - Every member reads the shortlist (no other organisation, staff or developer does); members with a Tier-2 role
   (reviewer, signatory, admin) add a proposal of the Inbox as themselves and remove one; finance and viewers do not.
 
@@ -91,6 +91,39 @@ async def test_the_inbox_check_answers_only_for_the_callers_own_organisation(own
             assert await t.run(conn, SEES, org=p.org, p=s.pitched) is False, by
         await t.act(conn, p.other_member, p.other_org)
         assert await t.run(conn, SEES, org=p.other_org, p=s.elsewhere) is True
+
+
+async def test_a_proposal_whose_author_joined_the_organisation_leaves_its_inbox(owner_engine: AsyncEngine) -> None:
+    """P10, the exclusion the scout matches' view applies (``bridge.matching.matches``): Given a proposal in the
+    organisation's Inbox on each of its three paths, When its author becomes an active member of the organisation,
+    Then the Inbox check is false and a Tier-2 member's shortlist add is refused, so no member learns that a
+    pseudonymous developer joined by comparing the match view (unavailable) with a shortlist add (accepted). The
+    exclusion is the organisation's own (the author's proposal stays in another organisation's Inbox) and an active
+    membership's only (once removed, the proposal is back)."""
+    async with t.as_app(owner_engine) as conn:
+        s = await inbox(conn)
+        p = s.p
+        await t.tag(conn, s.pitched, p.other_org, p.developer)  # pitched to the other organisation too
+        await t.member(conn, p.org, p.developer, "{viewer}")  # the pitched proposal's author joins
+        await t.member(conn, p.org, p.outsider, "{viewer}")  # the matched and Brief-answering proposals' author joins
+        await t.act(conn, p.reviewer, p.org)
+        for proposal in (s.pitched, s.matched, s.answering):
+            assert await t.run(conn, SEES, org=p.org, p=proposal) is False, proposal
+            await t.expect(conn, ADD, RLS, org=p.org, p=proposal, by=p.reviewer)
+        await t.act(conn, p.other_member, p.other_org)
+        assert await t.run(conn, SEES, org=p.other_org, p=s.pitched) is True
+        await t.as_owner(conn)
+        await t.run(
+            conn,
+            "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u",
+            org=p.org,
+            u=p.outsider,
+        )
+        await t.act(conn, p.reviewer, p.org)
+        for proposal, seen in ((s.pitched, False), (s.matched, True), (s.answering, True)):
+            assert await t.run(conn, SEES, org=p.org, p=proposal) is seen, proposal
+        await t.run(conn, ADD, org=p.org, p=s.matched, by=p.reviewer)
+        assert await t.run(conn, LISTED) == 1
 
 
 async def test_tier2_members_keep_the_shortlist_and_every_member_reads_it(owner_engine: AsyncEngine) -> None:
