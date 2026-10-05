@@ -130,8 +130,9 @@ async def test_an_expired_or_tampered_link_is_refused(
 async def test_an_infected_file_is_refused_never_stored_and_never_sent(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    """Given the EICAR test file, When a party uploads it, Then 422 attachment_infected, nothing is stored, the
-    staged row is marked infected (unsendable) and the rejection is audited."""
+    """Given the EICAR test file, When a party uploads it, Then 422 attachment_infected naming the refused upload,
+    nothing is stored, the staged row is marked infected (unsendable; its uploader removes it) and the rejection is
+    audited."""
     async with thread_at(owner_engine, app_engine) as thread:
         s, e = thread.seats, thread.engagement
         refused = await upload(s.owner, e, b"plain text " + EICAR, content_type="text/plain", name="notes.txt")
@@ -143,7 +144,10 @@ async def test_an_infected_file_is_refused_never_stored_and_never_sent(
         row = await _row(owner_engine, infected)
         assert row is not None
         assert row["av_status"] == "infected"
+        assert refused.json()["detail"]["attachment_id"] == str(infected)
         assert code(await post(s.owner, e, "See notes.", attachments=[infected])) == (422, "attachment_infected")
+        assert (await s.owner.delete(thread_path(e, f"/attachments/{infected}"))).status_code == 204
+        assert await _row(owner_engine, infected) is None
 
 
 async def test_a_file_pending_its_scan_is_neither_sent_nor_downloadable(

@@ -17,11 +17,7 @@ is also a member of the organisation). Under the caller's RLS throughout.
   transaction. 60 messages per user per hour per engagement (``POSTS_PER_HOUR``; 429 with ``Retry-After``).
 - **Record.** Append-only (the database); each post writes an audit event (ids and counts, never the text) and queues
   N18 (``message_notify``). The text never enters a payload, a log, an audit detail, a notification or an email.
-- **Files.** A staged upload (raw body, ``Content-Type`` on the proposal attachments' allow-list, the name in
-  ``X-File-Name``, up to 20 MB) is inserted pending, scanned (``storage.scanner``), and given its verdict: a clean
-  file is stored under ``messages/<engagement>/<attachment>`` (ids only); an infected one is never stored, stays
-  marked ``infected`` (unsendable; the purge job removes it) and is refused (422). A sent file is downloaded by the
-  parties only, through a link signed for the caller and valid for ``LINK_TTL``.
+- **Files.** Staged, scanned, sent and downloaded through ``bridge.engagements.message_files``.
 - **Report.** ``app_report_message`` (once per reporter and message; 10 a day, SQLSTATE 54000: 429).
 - **Unread.** A per-member read marker (``engagement_message_reads``); the thread, the lists and the detail count the
   messages by others after it.

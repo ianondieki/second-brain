@@ -5,8 +5,9 @@
   database decides whether the caller may: the thread's gate and its row-level security), the file is scanned
   (``storage.scanner``) and the verdict recorded: a clean file is stored under ``messages/<engagement>/<attachment>``
   (ids only, never the name) and waits for the uploader's next message; an infected one is never stored, stays marked
-  ``infected`` (it can never be sent; the purge removes it) and is refused (422), with an audit event either way. A
-  user holds at most ``STAGED_PER_ENGAGEMENT`` unsent files per engagement.
+  ``infected`` (it can never be sent; its uploader or the purge removes it) and is refused (422, naming its id), with an
+  audit event either way. A user holds at most ``STAGED_PER_ENGAGEMENT`` unsent files per engagement, an infected one
+  included (so a refused file cannot be retried without bound).
 - **Remove.** The uploader removes a staged file (never a sent one); the row goes first, then its object.
 - **Download.** A sent (hence clean) file is read by the parties only: ``attachment_link`` signs a link for the caller
   (HMAC under ``SECRET_KEY`` over the engagement, message, file, user and expiry; ``LINK_TTL``) and
@@ -35,7 +36,7 @@ from bridge.audit.service import record as audit
 from bridge.auth.crypto import keyed_digest
 from bridge.config import Settings
 from bridge.engagements.message_schemas import AttachmentLinkOut, StagedAttachmentOut
-from bridge.engagements.messages import PENDING, gate, refusal
+from bridge.engagements.messages import gate, refusal
 from bridge.engagements.models import MAX_FILE_NAME_CHARS, EngagementMessageAttachment
 from bridge.engagements.service import Party
 from bridge.errors import ApiError, forbidden, not_found
@@ -107,8 +108,7 @@ async def stage_upload(
         select(func.count()).where(
             a.engagement_id == party.engagement_id,
             a.uploader_user_id == party.user_id,
-            a.message_id.is_(None),
-            a.av_status.in_([*PENDING, AvStatus.CLEAN]),
+            a.message_id.is_(None),  # whatever its verdict: an infected file holds its place until removed or purged
         )
     )
     if int(staged or 0) > STAGED_PER_ENGAGEMENT:
@@ -142,7 +142,12 @@ async def stage_upload(
     )
     await db.commit()
     if not clean:
-        raise ApiError(422, "attachment_infected", "This file did not pass the malware scan, so it was not kept.")
+        raise ApiError(
+            422,
+            "attachment_infected",
+            "This file did not pass the malware scan, so it was not kept.",
+            attachment_id=str(attachment_id),  # the refused upload's record, which its uploader may remove
+        )
     return StagedAttachmentOut(
         id=attachment_id,
         file_name=file_name,
