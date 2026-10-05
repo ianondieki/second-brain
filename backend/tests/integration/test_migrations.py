@@ -1889,7 +1889,8 @@ async def test_bridge_app_inserts_every_column_but_the_databases_ones(
 # Revision 0008: columns bridge_app inserts on the tables whose other columns it writes later (an upload's message and
 # verdict, a search's last alert) or never (the database's times). The UPDATE side is APP_COLUMN_UPDATES.
 V6_INSERT_EXCLUDED: dict[str, set[str]] = {
-    "engagement_message_attachments": {"message_id", "created_at"},  # staged first, sent by an UPDATE
+    # staged first and pending: sent and scanned by an UPDATE (the verdict is the API's: storage/scanner.py)
+    "engagement_message_attachments": {"message_id", "av_status", "created_at"},
     "engagement_message_reads": set(),
     "saved_searches": {"last_alerted_at", "created_at"},  # the alert job's, the database's
 }

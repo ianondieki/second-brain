@@ -51,20 +51,24 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
   ``redacted_at = app_clock_now()`` and ``redacted_by = app_user_id()``.
 - ``created_at`` is the database's clock (default ``app_clock_now()``; bridge_app's INSERT is column-scoped without
   it). The thread reads by ``ix_engagement_messages_thread (engagement_id, created_at, id)``.
-- ``engagement_message_attachments`` (bridge_app: SELECT, INSERT without ``message_id`` and ``created_at``, UPDATE of
-  ``message_id`` and ``av_status``, DELETE): an upload is staged first, then joins its message. A party who may post
-  inserts it as themselves (``uploader_user_id = app_user_id()``) with ``message_id`` NULL while the thread is open
-  (the same gate); a staged upload is read, scanned (``av_status`` from ``pending_upload``/``pending_scan`` to a
-  verdict, which is final) and deleted by its uploader only. ``engagement_message_attachments_guard`` (BEFORE UPDATE
-  OR DELETE, SECURITY INVOKER, every role): an upload joins only its uploader's own message, in the transaction that
-  inserted the message (``app_xid_is_current(m.xmin)``, so a sent message never gains a file later), and only clean
-  (CHECK ``attached_only_when_clean``); its file, keys and time never change; once sent nothing changes and nothing is
-  deleted, but by the owner (room for D-54's erasure). Every party reads a sent attachment. At most 5 per message
-  (``engagement_message_attachments_cap``, AFTER INSERT OR UPDATE OF message_id, every role; check_violation with
-  constraint name ``engagement_message_attachments_at_most_5``). Each is 1 byte to 20 MB with its SHA-256; the object
-  key is the row's own, ``messages/<engagement_id>/<id>`` in the uuid text form (CHECK ``object_key_is_its_own``: ids
-  only, no file name, and never another object of the bucket, such as a proposal's Tier-2 file under
-  ``attachments/``); the file name is 1 to 255 characters without a control character or a path separator.
+- ``engagement_message_attachments`` (bridge_app: SELECT, INSERT without ``message_id``, ``av_status`` and
+  ``created_at``, UPDATE of ``message_id`` and ``av_status``, DELETE): an upload is staged first, then joins its
+  message. A party who may post inserts it as themselves (``uploader_user_id = app_user_id()``) with ``message_id``
+  NULL while the thread is open (the same gate), always pending (``av_status`` takes its default, ``pending_scan``);
+  only a later UPDATE gives it a scan verdict (``clean``, ``infected`` or ``failed``), which is final. A staged
+  upload is read, scanned and deleted by its uploader only (the scan, too, runs bound to the uploader). The verdict
+  itself is the API's responsibility: the database checks who writes it, when and that it is final, not that
+  ``storage/scanner.py`` ran, so the API writes the scanner's result and never a value from the client.
+  ``engagement_message_attachments_guard`` (BEFORE UPDATE OR DELETE, SECURITY INVOKER, every role): an upload joins
+  only its uploader's own message, in the transaction that inserted the message (``app_xid_is_current(m.xmin)``, so a
+  sent message never gains a file later), and only clean (CHECK ``attached_only_when_clean``); its file, keys and time
+  never change; once sent nothing changes and nothing is deleted, but by the owner (room for D-54's erasure). Every
+  party reads a sent attachment. At most 5 per message (``engagement_message_attachments_cap``, AFTER INSERT OR UPDATE
+  OF message_id, every role; check_violation with constraint name ``engagement_message_attachments_at_most_5``). Each
+  is 1 byte to 20 MB with its SHA-256; the object key is the row's own, ``messages/<engagement_id>/<id>`` in the uuid
+  text form (CHECK ``object_key_is_its_own``: ids only, no file name, and never another object of the bucket, such as
+  a proposal's Tier-2 file under ``attachments/``); the file name is 1 to 255 characters without a control character
+  or a path separator.
 - ``engagement_message_reads`` (USER; bridge_app: SELECT, INSERT, UPDATE of ``last_read_at``): one row per party
   and engagement, the user's own, on an engagement they are a party of.
 - The report (D-57 (4)): ``app_report_message(message, reasons, daily_limit)`` (SECURITY DEFINER, EXECUTE bridge_app)
@@ -145,12 +149,13 @@ NEW_TABLES = (
 RLS_TABLES = NEW_TABLES
 
 # Table privileges of bridge_app on this revision's tables; anything not listed is not granted. Column-scoped where the
-# database owns a column (times, redaction) or a column is written later (an upload's message, a search's last alert).
+# database owns a column (times, redaction) or a column is written later (an upload's message and scan verdict, a
+# search's last alert).
 APP_GRANTS: dict[str, str] = {
     "engagement_messages": "SELECT, INSERT (id, engagement_id, sender_user_id, sender_party, body)",
     "engagement_message_attachments": (
-        "SELECT, INSERT (id, engagement_id, uploader_user_id, file_name, content_type, size_bytes, sha256, object_key,"
-        " av_status), UPDATE (message_id, av_status), DELETE"
+        "SELECT, INSERT (id, engagement_id, uploader_user_id, file_name, content_type, size_bytes, sha256, object_key),"
+        " UPDATE (message_id, av_status), DELETE"
     ),
     "engagement_message_reads": "SELECT, INSERT (engagement_id, user_id, last_read_at), UPDATE (last_read_at)",
     "org_shortlist": "SELECT, INSERT (org_id, proposal_id, added_by), DELETE",
@@ -350,7 +355,8 @@ END;
 $$;
 
 -- An upload's life (REQ-ENG-11): its file (name, type, size, digest, object key), engagement, uploader and time never
--- change; its scan verdict (clean, infected, failed) is final once given; it joins only its uploader's own message, in
+-- change; it is inserted pending (bridge_app cannot name av_status) and its scan verdict (clean, infected, failed),
+-- given by an UPDATE, is final; it joins only its uploader's own message, in
 -- the transaction that inserted the message (app_xid_is_current(xmin): its own id or a savepoint's), so a sent message
 -- never gains a file later (and only clean: CHECK attached_only_when_clean); once sent it never changes and is never
 -- deleted, but by the table's owner (room for D-54's erasure). A staged upload is deleted by its uploader (policy).

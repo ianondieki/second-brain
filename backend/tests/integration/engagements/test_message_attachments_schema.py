@@ -28,16 +28,16 @@ from tests.integration.engagements.test_messages_schema import HIDDEN, OPENS, RE
 
 UPLOAD = (
     "INSERT INTO engagement_message_attachments (id, engagement_id, uploader_user_id, file_name, content_type,"
-    " size_bytes, sha256, object_key, av_status) VALUES (:id, :e, :by, :name, 'application/pdf', :size, :sha, :key,"
-    " CAST(:status AS av_status))"
+    " size_bytes, sha256, object_key) VALUES (:id, :e, :by, :name, 'application/pdf', :size, :sha, :key)"
 )
 TABLE = "engagement_message_attachments"
+VERDICT = "UPDATE engagement_message_attachments SET av_status = CAST(:s AS av_status) WHERE id = :id"
 SEND = "UPDATE engagement_message_attachments SET message_id = :m WHERE id = ANY(:ids) AND message_id IS NULL"
 SEEN = "SELECT count(*) FROM engagement_message_attachments WHERE engagement_id = :e"
 MAX_BYTES = 20 * 1024 * 1024
 
 
-def upload_params(engagement: UUID, by: UUID, status: str = "clean", **overrides: Any) -> dict[str, Any]:
+def upload_params(engagement: UUID, by: UUID, **overrides: Any) -> dict[str, Any]:
     upload_id = uuid7()
     params: dict[str, Any] = {
         "id": upload_id,
@@ -47,15 +47,17 @@ def upload_params(engagement: UUID, by: UUID, status: str = "clean", **overrides
         "size": 1024,
         "sha": bytes(range(32)),
         "key": f"messages/{engagement}/{upload_id}",
-        "status": status,
     }
     return params | overrides
 
 
-async def upload(conn: AsyncConnection, engagement: UUID, by: UUID, status: str = "clean") -> UUID:
-    """Stage an upload as ``by`` (the connection already acts for them); returns its id."""
-    params = upload_params(engagement, by, status)
+async def upload(conn: AsyncConnection, engagement: UUID, by: UUID, verdict: str | None = "clean") -> UUID:
+    """Stage an upload as ``by`` (the connection already acts for them; it is inserted ``pending_scan``) and, unless
+    ``verdict`` is None, give it that scan verdict as the scan does (an UPDATE); returns its id."""
+    params = upload_params(engagement, by)
     await t.run(conn, UPLOAD, **params)
+    if verdict is not None:
+        assert await t.rowcount(conn, VERDICT, s=verdict, id=params["id"]) == 1
     return UUID(str(params["id"]))
 
 
@@ -66,14 +68,16 @@ async def test_an_upload_is_staged_by_its_uploader_then_sent_with_their_message(
     async with t.as_app(owner_engine) as conn:
         p, engagement = await opened(conn)
         await t.act(conn, p.developer)
-        plan = await upload(conn, engagement, p.developer, "pending_scan")
-        infected = await upload(conn, engagement, p.developer, "pending_scan")
-        pending = await upload(conn, engagement, p.developer, "pending_upload")
+        plan = await upload(conn, engagement, p.developer, None)
+        infected = await upload(conn, engagement, p.developer, None)
+        pending = await upload(conn, engagement, p.developer, None)
+        status = "SELECT array_agg(DISTINCT CAST(av_status AS text)) FROM engagement_message_attachments"
+        assert await t.run(conn, status + " WHERE engagement_id = :e", e=engagement) == ["pending_scan"]
         for reader, org, seen in ((p.developer, None, 3), (p.owner, p.org, 0), (p.staff, None, 0)):
             await t.act(conn, reader, org)
             assert await t.run(conn, SEEN, e=engagement) == seen, reader
         await t.act(conn, p.developer)
-        verdict = "UPDATE engagement_message_attachments SET av_status = CAST(:s AS av_status) WHERE id = :id"
+        verdict = VERDICT
         assert await t.rowcount(conn, verdict, s="clean", id=plan) == 1
         assert await t.rowcount(conn, verdict, s="infected", id=infected) == 1
         await t.expect(conn, verdict, "a scan verdict \\(infected\\) is final", s="clean", id=infected)
@@ -121,8 +125,9 @@ async def test_an_upload_is_staged_by_its_uploader_then_sent_with_their_message(
 
 
 async def test_who_may_upload_and_what_an_upload_is(owner_engine: AsyncEngine) -> None:
-    """Uploads come from a party who may post, as themselves, staged, while the thread is open; the file's size,
-    digest, name and object key are checked (no path, no control character, no file name in the key)."""
+    """Uploads come from a party who may post, as themselves, staged and pending (the app names neither a message nor
+    a scan verdict on insert: a verdict is an UPDATE), while the thread is open; the file's size, digest, name and
+    object key are checked (no path, no control character, no file name in the key)."""
     async with t.as_app(owner_engine) as conn:
         p, engagement = await opened(conn)
         for by, org, uploader, refusal in (
@@ -140,6 +145,8 @@ async def test_who_may_upload_and_what_an_upload_is(owner_engine: AsyncEngine) -
             ":by,", ":by, uuid7(),"
         )
         await t.expect(conn, sent_upload, "permission denied", **upload_params(engagement, p.developer))
+        claimed_clean = UPLOAD.replace("object_key)", "object_key, av_status)").replace(":key)", ":key, 'clean')")
+        await t.expect(conn, claimed_clean, "permission denied", **upload_params(engagement, p.developer))
         for overrides, constraint in (
             ({"size": 0}, "size_limit"),
             ({"size": MAX_BYTES + 1}, "size_limit"),

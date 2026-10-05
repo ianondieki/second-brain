@@ -339,8 +339,9 @@ class EngagementMessage(IdMixin, Base):
 
 class EngagementMessageAttachment(IdMixin, Base):
     """A file of the thread (REQ-ENG-11; revision 0008), staged first and then sent with its message. A party who may
-    post uploads it as themselves (``message_id`` NULL) while the thread is open; its uploader alone reads, scans
-    (``av_status`` from ``pending_upload``/``pending_scan`` to a final verdict) and deletes it while it is staged. It
+    post uploads it as themselves (``message_id`` NULL, ``av_status`` left to its default ``pending_scan``: the app
+    cannot insert either) while the thread is open; its uploader alone reads, scans (an UPDATE to a final verdict:
+    the API writes ``storage/scanner.py``'s result, never the client's) and deletes it while it is staged. It
     joins only its uploader's own message, in the transaction that inserts the message, and only ``clean``; at most
     5 per message. Once sent every party reads it and it never changes or goes. The object key is the row's own,
     ``message_attachment_key(engagement_id, id)`` (ids only, never the file name; the CHECK refuses any other);
