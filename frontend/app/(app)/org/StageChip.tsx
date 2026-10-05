@@ -22,7 +22,7 @@ export function StageChip({
   href,
   className,
 }: {
-  engagement: InboxItem["engagement"];
+  engagement: Pick<NonNullable<InboxItem["engagement"]>, "id" | "state"> | null;
   href?: string;
   className?: string;
 }) {
