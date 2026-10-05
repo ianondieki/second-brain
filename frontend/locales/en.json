@@ -24,7 +24,8 @@
     "reviewP20dev": "[[COPY-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (a Discover card's foot: how many sources back the problem)",
     "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
     "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
-    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\")."
+    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\").",
+    "reviewP22a": "[[COPY-REVIEW]] P22-AF (REQ-DEV-01; D-59): quiz.*, quizPlay.*"
   },
   "app": {
     "name": "Wazo",
@@ -3183,5 +3184,111 @@
     },
     "heading": "Saved searches",
     "alreadyDeleted": "{name} was already deleted."
+  },
+  "quiz": {
+    "pageTitle": "Today's five",
+    "title": "Today's five",
+    "lead": "Five short questions on the tools you build with. Every answer comes with why, from the official documentation.",
+    "back": "Home",
+    "none": "No quiz today. Back tomorrow.",
+    "noneAction": "See this week's board",
+    "card": {
+      "lead": "Five short questions from official documentation, each with why. A few minutes to learn something new.",
+      "play": "Play",
+      "played": "<fig>{score} of {total}</fig> today · {streak, plural, one {#-day streak} other {#-day streak}}",
+      "seeWhy": "See why",
+      "none": "No quiz today. Back tomorrow."
+    },
+    "results": {
+      "heading": "Your answers",
+      "score": "<fig>{score} of {total}</fig> right",
+      "streak": "{current, plural, one {#-day streak.} other {#-day streak.}} Your best: {best, plural, one {# day} other {# days}}.",
+      "tomorrow": "Come back tomorrow for five more.",
+      "board": "See this week's board",
+      "listLabel": "Today's questions with the answers",
+      "position": "Question {number} of {total}",
+      "mark": {
+        "rightChosen": "Your answer, right",
+        "right": "Right answer",
+        "wrongChosen": "Your answer"
+      },
+      "skipped": "You skipped this one.",
+      "pulled": "Withdrawn after review: it counts for nobody.",
+      "why": "Why?",
+      "source": "Source: {title}",
+      "newTab": "(opens in a new tab)"
+    },
+    "board": {
+      "pageTitle": "This week's board",
+      "title": "This week",
+      "dates": "{start} to {end}",
+      "lead": "Points from Today's five, Monday to Sunday. The board starts again every Monday.",
+      "back": "Today's five",
+      "me": {
+        "ranked": "You: {points, plural, one {# point} other {# points}}, rank {rank}",
+        "join": "You: {points, plural, one {# point} other {# points}} · join the board to be ranked",
+        "notPlayed": "You have no points yet this week."
+      },
+      "play": "Play today's five",
+      "listHeading": "Top 20",
+      "rank": "Rank {rank}",
+      "points": "{points, plural, one {# point} other {# points}}",
+      "you": "You",
+      "empty": "No one is on the board yet this week.",
+      "emptyAction": "Play today's five"
+    }
+  },
+  "quizPlay": {
+    "position": "Question {number} of {total}",
+    "progress": "{count} of {total} answered",
+    "check": "Check answers",
+    "checking": "Checking…",
+    "checkHint": "Answer all five to check them, or skip the rest.",
+    "skip": "Skip the rest",
+    "problem": {
+      "closed": "This quiz's day is over. Today's quiz is a new one, on Home.",
+      "noQuiz": "No quiz today. Back tomorrow.",
+      "signedOut": "You were signed out. Sign in again, then check your answers.",
+      "failed": "Your answers were not checked. Try again in a moment.",
+      "network": "Your answers were not sent. Check your connection and try again."
+    },
+    "flag": {
+      "open": "Flag",
+      "openNamed": "Flag question {number}",
+      "title": "Flag question {number}",
+      "lead": "Tell us what is wrong. Staff read every flag.",
+      "legend": "What is wrong?",
+      "reason": {
+        "wrong_answer": "The answer is wrong",
+        "unclear": "The question is unclear",
+        "outdated": "It is out of date",
+        "other": "Something else"
+      },
+      "noteLabel": "Note (optional)",
+      "noteHint": "For staff only, at most {max} characters.",
+      "send": "Send",
+      "sending": "Sending…",
+      "cancel": "Cancel",
+      "pickReason": "Choose what is wrong.",
+      "outcome": {
+        "sent": "Thanks, we'll look.",
+        "already": "You already flagged this.",
+        "pulled": "This question was already withdrawn.",
+        "limit": "You can flag up to 10 questions a day. Try again tomorrow.",
+        "playFirst": "Play this quiz before you flag its questions.",
+        "signedOut": "You were signed out. Sign in again to flag this question.",
+        "failed": "The flag was not sent. Try again in a moment.",
+        "network": "The flag was not sent. Check your connection and try again."
+      }
+    },
+    "optIn": {
+      "label": "Show me on the board",
+      "explain": "Your handle and this week's points are shown to other developers. Never to organisations.",
+      "on": "On",
+      "off": "Off",
+      "joined": "You are on the board.",
+      "left": "You are off the board.",
+      "failed": "That did not save. Try again in a moment."
+    }
   }
 }
