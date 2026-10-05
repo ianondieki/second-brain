@@ -24,6 +24,8 @@ tenant table without a fixture fails the run. Tables read on the request path by
   public Brief stays readable.
 - The expiry job's list (revision 0007, ``app_engagements_due_for_expiry``): only a session with no user bound reads
   it, and it learns only developer and engagement ids, of the engagements the clock may act on.
+- CURATED tables (revision 0009, the quiz's sets and questions, ``world.CURATED_ROWS``): staff admin reads every row,
+  a developer the approved ones, an account without a developer profile none.
 - A cross-tenant API access returns 404.
 """
 
@@ -58,6 +60,7 @@ TENANT_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get
 STAFF_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") == Tenancy.STAFF)
 EVIDENCE_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") == Tenancy.EVIDENCE)
 PUBLISHED_TABLES = sorted(t for t in TENANT_TABLES if TABLES[t].info["tenancy"] == Tenancy.PUBLISHED)
+CURATED_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") == Tenancy.CURATED)
 RLS_TABLES = sorted(t.name for t in Base.metadata.sorted_tables if t.info.get("tenancy") in RLS_TENANCIES)
 
 
@@ -69,8 +72,9 @@ def test_every_table_declares_its_tenancy() -> None:
 def test_every_tenant_table_has_an_rls_fixture() -> None:
     assert sorted(w.TENANT_ROWS) == TENANT_TABLES
     assert sorted(w.STAFF_ROWS) == STAFF_TABLES
+    assert sorted(w.CURATED_ROWS) == CURATED_TABLES
     assert EVIDENCE_TABLES == ["provenance_records"]  # a new EVIDENCE table needs its own writer test below
-    assert sorted(TENANT_TABLES + STAFF_TABLES + EVIDENCE_TABLES) == RLS_TABLES
+    assert sorted(TENANT_TABLES + STAFF_TABLES + EVIDENCE_TABLES + CURATED_TABLES) == RLS_TABLES
 
 
 @pytest.fixture(scope="module")
@@ -167,6 +171,33 @@ async def test_staff_tables_are_read_by_staff_only(
     async with app_engine.connect() as conn, conn.begin():
         await _as_tenant(conn, world.staff_id, None, table)
         assert fixture <= await _visible(conn, table, rows), f"{table}: staff cannot read the queue"
+
+
+@pytest.mark.parametrize("table", CURATED_TABLES)
+async def test_curated_tables_are_read_by_staff_admin_and_by_developers_once_approved(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, world: w.World, table: str
+) -> None:
+    """Revision 0009 (REQ-DEV-01): staff admin reads every fixture row; a developer (tenant A, who also owns an
+    organisation) reads the approved set's rows and none of the rejected one's; a signed-in account without a developer
+    profile (an organisation-only account) reads no row at all."""
+    rows = w.CURATED_ROWS[table]
+    async with owner_engine.connect() as conn:
+        fixture = {row.key: row.pub for row in (await conn.execute(text(rows.owners))).all()}
+    assert set(fixture.values()) == {True, False}, f"{table}: fixture needs approved and unapproved rows"
+    async with app_engine.connect() as conn, conn.begin():
+        await _as_tenant(conn, world.staff_id, None, table)
+        assert set(fixture) <= await _visible(conn, table, rows), f"{table}: staff admin cannot read the queue"
+    async with app_engine.connect() as conn, conn.begin():
+        await _as_tenant(conn, world.a.user_id, world.a.org_id, table)
+        visible = await _visible(conn, table, rows)
+    assert {key for key, pub in fixture.items() if pub} <= visible, f"{table}: a developer cannot read approved rows"
+    assert not {key for key, pub in fixture.items() if not pub} & visible, f"{table}: a developer reads a rejected row"
+    async with rolled_back(owner_engine) as conn:
+        org_only = await _add_user(conn, f"org-only-{uuid7().hex}@example.test")
+        await _add_member(conn, world.a.org_id, org_only, "{viewer}")
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
+        await _as_tenant(conn, org_only, world.a.org_id, table)
+        assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0
 
 
 @pytest.mark.parametrize("table", PUBLISHED_TABLES)

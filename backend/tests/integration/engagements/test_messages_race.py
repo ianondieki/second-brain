@@ -45,7 +45,8 @@ def url(admin_url: URL) -> Iterator[URL]:
     name = f"bridge_p21_{uuid4().hex[:12]}"
     database = create_database(admin_url, name)
     try:
-        run_alembic(database, lambda config: command.upgrade(config, "head"))
+        # Revision 0008's rules at 0008 (a later revision's downgrade would otherwise run first in the downgrade test).
+        run_alembic(database, lambda config: command.upgrade(config, "0008"))
         yield database
     finally:
         drop_database(admin_url, name)

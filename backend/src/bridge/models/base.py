@@ -40,13 +40,25 @@ class Tenancy(StrEnum):
     # Public registration evidence (provenance_records): every reader reads every row (/verify is anonymous); rows are
     # written only by the worker bound to the owner of the version they register.
     EVIDENCE = "evidence"
+    # Platform content a job drafts and staff approve before developers see it (the daily quiz's sets and questions,
+    # revision 0009): staff admin reads every row; a developer (an active user with a developer profile) reads the
+    # approved ones; nobody else reads any (organisation-only accounts and unbound sessions included).
+    CURATED = "curated"
     GLOBAL = "global"  # reference data readable by everyone (niches, plans, holidays, regions)
     SYSTEM = "system"  # internal tables with no tenant (auth credentials, sessions, suppressions, jobs)
 
 
 # Tenancy classes whose tables have Row-Level Security (every other class has none).
 RLS_TENANCIES = frozenset(
-    {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER, Tenancy.PUBLISHED, Tenancy.STAFF, Tenancy.EVIDENCE}
+    {
+        Tenancy.ORG,
+        Tenancy.USER,
+        Tenancy.ORG_OR_USER,
+        Tenancy.PUBLISHED,
+        Tenancy.STAFF,
+        Tenancy.EVIDENCE,
+        Tenancy.CURATED,
+    }
 )
 
 

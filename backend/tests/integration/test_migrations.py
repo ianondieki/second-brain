@@ -1,19 +1,22 @@
-"""Revisions 0001 to 0008 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
+"""Revisions 0001 to 0009 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
 REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08, REQ-ENG-10, REQ-NOT-03, REQ-PROP-03, REQ-ENG-11,
-REQ-REPO-02, REQ-PERS-03; docs/spec/08 Migrations and Tenancy; AC-IP-2).
+REQ-REPO-02, REQ-PERS-03, REQ-DEV-01; docs/spec/08 Migrations and Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the revision before it
+Migration round trip and drift (each of 0009, 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the revision before it
 exactly as it found it), table classification, RLS coverage generated from the ORM metadata, the grant matrix of every
 role, role attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained audit log, the evidence
 triggers of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column grants, the schema v5 notes
 triggers, policies and in-app column grant, the tags policies revision 0007 leaves as they were, the schema v6
-(revision 0008) policies, triggers and column grants, the listed-organisations policy and the Procrastinate schema.
+(revision 0008) and v7 (revision 0009) policies, triggers and column grants, the listed-organisations policy and the
+Procrastinate schema.
 The tracker's behaviour (chain, projection, parties, payments, clock) is tested in ``integration/engagements/``;
 schema v4's in ``integration/matching/``, ``integration/problems/`` and ``integration/billing/``; schema v5's (the
 notes' writers and readers, marking read) in ``test_rls.py``; revision 0007's ``app_close_tag(tag, status)`` in
 ``test_privileges.py``; schema v6's (the thread, its stage gate and report, the shortlist, saved searches and their
 job) in ``integration/engagements/test_messages_schema.py``, ``integration/engagements/test_messages_race.py``,
-``integration/proposals/test_shortlist_schema.py`` and ``integration/profiles/test_saved_searches_schema.py``.
+``integration/proposals/test_shortlist_schema.py`` and ``integration/profiles/test_saved_searches_schema.py``; schema
+v7's (the quiz: its readers, the attempt and flag rules, rescoring, the board, the job's functions) in
+``integration/quiz/test_quiz_schema.py``.
 """
 
 from __future__ import annotations
@@ -201,6 +204,8 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     "engagement_message_attachments": {"message_id", "av_status"},
     "engagement_message_reads": {"last_read_at"},
     "saved_searches": {"name", "alerts", "last_alerted_at"},
+    # revision 0009: a developer's quiz settings and streak (never the key or its time)
+    "quiz_profiles": {"leaderboard_opt_in", "current_streak", "best_streak", "last_played_on"},
 }
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
@@ -284,6 +289,13 @@ APP_GRANTS: dict[str, set[str]] = {
     "engagement_message_reads": {S, I, U},
     "org_shortlist": {S, I, D},
     "saved_searches": {S, I, U, D},
+    # revision 0009: the quiz (sets and questions inserted by the job, decided and pulled only through the definers;
+    # attempts append-only; flags only through app_flag_question; a developer's own profile)
+    "quiz_sets": {S, I},
+    "quiz_questions": {S, I},  # SELECT column-scoped: never answer or why (app_quiz_answers)
+    "quiz_attempts": {S, I},
+    "quiz_flags": {S},
+    "quiz_profiles": {S, I, U},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -455,6 +467,23 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_purge_stale_message_uploads(timestamp with time zone)": (True, {"bridge_app"}),  # the purge job, ditto
     "app_report_message(uuid, text[])": (True, {"bridge_app"}),  # a party's report of one message (fixed limit)
     "app_reported_message(uuid)": (True, {"bridge_app"}),  # staff admin|moderator read the reported message
+    # revision 0009: the quiz (triggers and internal functions: nobody)
+    "app_nairobi_today()": (False, {"bridge_app"}),  # the policies, the API and the job
+    "app_is_developer()": (True, {"bridge_app"}),  # the policies and the API
+    "quiz_attempt_score(uuid, smallint[])": (False, set()),  # the attempts' triggers and the rescore
+    "quiz_rescore_set(uuid)": (False, set()),  # the definer functions below
+    "app_rescore_quiz_set(uuid)": (True, {"bridge_app"}),  # staff admin, or a job with no user bound
+    "app_decide_quiz_set(uuid, text)": (True, {"bridge_app"}),  # staff admin
+    "app_set_quiz_question_status(uuid, text, text)": (True, {"bridge_app"}),  # staff admin
+    "app_flag_question(uuid, text, text)": (True, {"bridge_app"}),  # a developer (fixed limits)
+    "app_quiz_answers(uuid)": (True, {"bridge_app"}),  # after the caller's attempt, or staff admin
+    "app_quiz_board()": (True, {"bridge_app"}),  # a developer
+    "app_quiz_day_taken(date)": (True, {"bridge_app"}),  # the quiz job, no user bound
+    "app_quiz_recent_prompt_hashes(date)": (True, {"bridge_app"}),  # the quiz job, no user bound
+    "quiz_sets_guard()": (False, set()),
+    "quiz_questions_guard()": (True, set()),  # the job (no user bound) reads no set
+    "quiz_attempts_score()": (True, set()),  # reads the answers
+    "quiz_attempts_guard()": (False, set()),
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -682,13 +711,24 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     assert changed == {"functions", "function_acl"}, "0007 replaces app_close_tag, adds one function, nothing else"
     assert "app_close_tag(uuid,tag_status) bridge_app EXECUTE" in at_0007["function_acl"]
     assert "app_engagements_due_for_expiry(timestamp with time zone) bridge_app EXECUTE" in at_0007["function_acl"]
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0008"))
+    at_0008 = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_0008[kind] != at_0007[kind]}
+    assert changed == set(SNAPSHOT) - {"enums"}, "0008 adds tables, functions and policies; no enum type"
+    assert set(at_0007["policies"]) - set(at_0008["policies"]), "0008 narrows the app's report INSERT policy"
+    assert "app_report_message(uuid,text[]) bridge_app EXECUTE" in at_0008["function_acl"]
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
     run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
     at_head = schema_snapshot(scratch_url)
-    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0007[kind]}
-    assert changed == set(SNAPSHOT) - {"enums"}, "0008 adds tables, functions and policies; no enum type"
-    assert set(at_0007["policies"]) - set(at_head["policies"]), "0008 narrows the app's report INSERT policy"
-    assert "app_report_message(uuid,text[]) bridge_app EXECUTE" in at_head["function_acl"]
+    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0008[kind]}
+    assert changed == set(SNAPSHOT) - {"enums"}, "0009 adds tables, functions, policies and grants; no enum type"
+    for kind in SNAPSHOT:  # additive: every object of 0008 is still there, unchanged
+        assert set(at_0008[kind]) <= set(at_head[kind]), kind
+    assert "app_flag_question(uuid,text,text) bridge_app EXECUTE" in at_head["function_acl"]
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0008"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0009 leaves every object of 0008 exactly as it found it
+        assert after[kind] == at_0008[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0007"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0008 leaves every object of 0007 exactly as it found it (the report policy included)
@@ -1058,6 +1098,12 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
     assert not await scalar(
         owner_engine, "SELECT has_any_column_privilege('bridge_app', 'engagement_messages', 'UPDATE')"
     )
+    for table in ("quiz_attempts", "quiz_flags"):  # revision 0009: an attempt, a flag (rescores are the definer's)
+        for privilege in ("UPDATE", "DELETE", "TRUNCATE"):
+            assert not await scalar(
+                owner_engine, "SELECT has_table_privilege('bridge_app', :t, :p)", t=table, p=privilege
+            )
+        assert not await scalar(owner_engine, "SELECT has_any_column_privilege('bridge_app', :t, 'UPDATE')", t=table)
 
 
 async def test_schema_v5_policies_are_exactly_the_notes_and_the_in_app_ones(owner_engine: AsyncEngine) -> None:
@@ -1104,6 +1150,30 @@ async def test_schema_v6_policies_are_exactly_the_planned_ones(owner_engine: Asy
     assert {role for row in found for role in row.roles} == {"bridge_app"}
     (report,) = (row for row in found if row.tablename == "moderation_cases" and row.cmd == "INSERT")
     assert report.with_check.endswith("AND ((subject_type)::text <> 'message'::text))")
+
+
+async def test_schema_v7_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
+    """Revision 0009: each quiz table has a policy for each command it is granted and no other; every policy is
+    bridge_app's. Attempts and flags have no UPDATE or DELETE policy (append-only); flags have no INSERT policy
+    (app_flag_question writes them); the job's inserts of sets and questions are for a session with no user bound."""
+    found = await rows(
+        owner_engine,
+        "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, with_check FROM pg_policies"
+        " WHERE schemaname = 'public' AND tablename LIKE 'quiz%'",
+    )
+    commands = {
+        "quiz_sets": ("SELECT", "INSERT"),
+        "quiz_questions": ("SELECT", "INSERT"),
+        "quiz_attempts": ("SELECT", "INSERT"),
+        "quiz_flags": ("SELECT",),
+        "quiz_profiles": ("SELECT", "INSERT", "UPDATE"),
+    }
+    expected = {(table, f"bridge_app_{cmd.lower()}", cmd) for table, cmds in commands.items() for cmd in cmds}
+    assert {(row.tablename, row.policyname, row.cmd) for row in found} == expected
+    assert {role for row in found for role in row.roles} == {"bridge_app"}
+    job = {row.tablename: row.with_check for row in found if row.cmd == "INSERT"}
+    assert job["quiz_sets"].startswith("((app_user_id() IS NULL) AND")
+    assert job["quiz_questions"] == "(app_user_id() IS NULL)"
 
 
 async def test_tags_keep_revision_0002s_policies(owner_engine: AsyncEngine) -> None:
@@ -2550,6 +2620,16 @@ V8_TRIGGERS = {
 }
 V8_THREAD_TABLES = ("engagement_messages", "engagement_message_attachments", "engagement_message_reads")
 
+# Revision 0009: a set changes once (its decision); a question joins a draft and changes only by a pull or restore; an
+# attempt is scored by the database at insert and changes only by its rescore; a flag never changes.
+V9_TRIGGERS = {
+    ("quiz_sets", "quiz_sets_guard"): ("quiz_sets_guard", ROW | BEFORE | ON_UPDATE),
+    ("quiz_questions", "quiz_questions_guard"): ("quiz_questions_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
+    ("quiz_attempts", "quiz_attempts_score"): ("quiz_attempts_score", ROW | BEFORE | ON_INSERT),
+    ("quiz_attempts", "quiz_attempts_guard"): ("quiz_attempts_guard", ROW | BEFORE | ON_UPDATE),
+    ("quiz_flags", "quiz_flags_no_update"): ("block_mutation", ROW | BEFORE | ON_UPDATE),
+}
+
 
 async def test_a_published_briefs_text_changes_only_with_a_return_to_review(owner_engine: AsyncEngine) -> None:
     """Revision 0006 (REQ-DIR-05, the P19-B security review): problems_brief_text_guard keeps the moderated text of a
@@ -2596,7 +2676,7 @@ async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine)
         " FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal"
         " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
     )
-    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS | V8_TRIGGERS
+    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS | V8_TRIGGERS | V9_TRIGGERS
     assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == expected
     assert {row.tgenabled for row in found} == {"O"}
 
