@@ -16,6 +16,8 @@ export const SHORTLIST_PATH = `${INBOX_PATH}/shortlist`;
 export const COMPARE_PATH = `${SHORTLIST_PATH}/compare`;
 export const COMPARE_MIN = 2;
 export const COMPARE_MAX = 4;
+/** The Shortlist view's heading, where focus goes once its last entry is removed. */
+export const SHORTLIST_HEADING_ID = "shortlist-heading";
 
 /** The roles that add to and remove from the shortlist (the API's EDITOR_ROLES); every member reads it. */
 const EDITOR_ROLES: readonly string[] = ["admin", "reviewer", "signatory"];

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
-import type { ShortlistProblem } from "../../shortlist";
+import { SHORTLIST_HEADING_ID, type ShortlistProblem } from "../../shortlist";
 import { setShortlisted } from "../shortlist-calls";
 
 export interface RemoveEntryProps {
@@ -30,8 +30,11 @@ export function RemoveEntry({ orgId, proposalId, labels, setImpl = setShortliste
     setProblem(null);
     const outcome = await setImpl(orgId, proposalId, false);
     if (outcome.ok) {
-      // Focus would fall to the page once this row leaves: the list keeps it instead.
-      root.current?.closest<HTMLElement>("[data-shortlist-list]")?.focus();
+      // Focus would fall to the page once this row leaves: the list keeps it, or the Shortlist's heading when this was
+      // the last entry (the list then gives way to the empty state).
+      const list = root.current?.closest<HTMLElement>("[data-shortlist-list]");
+      const last = (list?.querySelectorAll("[data-shortlist-entry]").length ?? 0) <= 1;
+      (last ? document.getElementById(SHORTLIST_HEADING_ID) : list)?.focus();
       router.refresh();
       return; // the row leaves with the refreshed list
     }

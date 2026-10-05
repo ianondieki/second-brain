@@ -21,6 +21,7 @@ import {
   COMPARE_PATH,
   compareAction,
   editsShortlist,
+  SHORTLIST_HEADING_ID,
   shortlistHref,
   type ShortlistEntry,
   type ShortlistProblem,
@@ -109,6 +110,10 @@ async function ShortlistBody({ memberships, org, cursor }: { memberships: Member
 
   return (
     <>
+      {/* The tab names the view; this heading (for assistive technology) stays when the list empties, to keep focus. */}
+      <h2 id={SHORTLIST_HEADING_ID} tabIndex={-1} className="sr-only">
+        {t("pageTitle")}
+      </h2>
       <p className="mt-6 max-w-[62ch] text-ink-soft">{t("lead", { org: org.org_name })}</p>
       {memberships.length > 1 ? (
         <div className="mt-6">
