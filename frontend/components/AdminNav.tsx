@@ -3,7 +3,7 @@ import type { ComponentType, SVGProps } from "react";
 
 import type { components } from "@/lib/api/schema";
 
-import { ClaimsIcon, ModerationIcon, ResearchIcon } from "./admin-icons";
+import { ClaimsIcon, ModerationIcon, QuizIcon, ResearchIcon } from "./admin-icons";
 import { PortalNav } from "./PortalNav";
 
 export type StaffRole = components["schemas"]["StaffRole"];
@@ -11,13 +11,14 @@ export type StaffRole = components["schemas"]["StaffRole"];
 /**
  * The staff console's sections (REQ-ADM-01; docs/spec/07 item 1: "Admin is a separate console", at most five), each
  * with the staff roles the API admits to it (docs/spec/03; bridge/admin/deps.py): a section is listed only for those
- * roles. Research and Claims are the staff admin's; Moderation is the staff admin's and the moderator's. Support has
- * no section yet (the console home tells them so).
+ * roles. Research, Claims and Quiz (REQ-DEV-01) are the staff admin's; Moderation is the staff admin's and the
+ * moderator's. Support has no section yet (the console home tells them so).
  */
 export const ADMIN_SECTIONS = [
   { key: "research", href: "/admin/research", Icon: ResearchIcon, roles: ["admin"] },
   { key: "moderation", href: "/admin/moderation", Icon: ModerationIcon, roles: ["admin", "moderator"] },
   { key: "claims", href: "/admin/claims", Icon: ClaimsIcon, roles: ["admin"] },
+  { key: "quiz", href: "/admin/quiz", Icon: QuizIcon, roles: ["admin"] },
 ] as const satisfies ReadonlyArray<{
   key: string;
   href: string;

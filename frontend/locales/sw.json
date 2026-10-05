@@ -24,7 +24,8 @@
     "reviewP20dev": "[[COPY-REVIEW]] [[SW-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (rasimu ya Kiswahili, kama discover.proposals)",
     "reviewP20org": "[[COPY-REVIEW]] [[SW-REVIEW]] P20-4 (REQ-UX-01..04), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.deadline.left na tracker.deadline.overdue (hesabu ya siku kwenye bango la zamu: nambari ni lebo n, huchorwa kubwa, maneno kando yake; mpangilio \"7 siku za kazi zimebaki\" unahitaji ukaguzi), tracker.deadline.due na tracker.deadline.was (tarehe chini yake); tracker.milestone.total (jumla ya hatua za kazi za makubaliano).",
     "reviewP21f1": "[[COPY-REVIEW]] [[SW-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: shortlist.* (\"orodha fupi\" kwa shortlist), scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
-    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\"). [[SW-REVIEW]] draft Swahili"
+    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\"). [[SW-REVIEW]] draft Swahili",
+    "reviewP22a": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-AF (REQ-DEV-01; D-59), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks"
   },
   "app": {
     "name": "Wazo",
@@ -998,7 +999,8 @@
     "nav": {
       "research": "Utafiti",
       "moderation": "Udhibiti",
-      "claims": "Madai"
+      "claims": "Madai",
+      "quiz": "Maswali"
     },
     "noSection": "Jukumu lako la wafanyakazi bado halina sehemu kwenye dashibodi.",
     "noSectionAction": "Nenda kwenye ukurasa wako wa nyumbani"
@@ -3183,5 +3185,249 @@
     },
     "heading": "Utafutaji uliohifadhiwa",
     "alreadyDeleted": "{name} ilikuwa imeshafutwa."
+  },
+  "quiz": {
+    "pageTitle": "Maswali matano ya leo",
+    "title": "Maswali matano ya leo",
+    "lead": "Maswali matano mafupi kuhusu zana unazojengea, kila moja na sababu yake, kutoka kwa nyaraka rasmi.",
+    "back": "Nyumbani",
+    "none": "Hakuna maswali leo, rudi kesho.",
+    "noneAction": "Tazama ubao wa wiki hii",
+    "card": {
+      "lead": "Maswali matano mafupi, kila moja na sababu yake, kutoka kwa nyaraka rasmi. Dakika chache za kujifunza jambo jipya.",
+      "play": "Cheza",
+      "played": "<fig>{score} kati ya {total}</fig> leo · mfululizo wa siku {streak}",
+      "seeWhy": "Tazama sababu",
+      "none": "Hakuna maswali leo, rudi kesho."
+    },
+    "results": {
+      "heading": "Majibu yako",
+      "score": "<fig>{score} kati ya {total}</fig> sahihi",
+      "streak": "Mfululizo wa siku {current}. Bora yako: siku {best}.",
+      "tomorrow": "Rudi kesho kwa maswali mengine matano.",
+      "board": "Tazama ubao wa wiki hii",
+      "listLabel": "Maswali ya leo pamoja na majibu",
+      "position": "Swali {number} kati ya {total}",
+      "mark": {
+        "rightChosen": "Jibu lako, sahihi",
+        "right": "Jibu sahihi",
+        "wrongChosen": "Jibu lako, si sahihi"
+      },
+      "skipped": "Uliruka swali hili.",
+      "pulled": "Liliondolewa baada ya ukaguzi: halihesabiwi kwa yeyote.",
+      "why": "Kwa nini?",
+      "source": "Chanzo: {title}",
+      "newTab": "(linafunguka kwenye kichupo kipya)"
+    },
+    "board": {
+      "pageTitle": "Ubao wa wiki hii",
+      "title": "Wiki hii",
+      "dates": "{start} hadi {end}",
+      "lead": "Alama kutoka kwa Maswali matano ya leo, Jumatatu hadi Jumapili. Ubao unaanza upya kila Jumatatu.",
+      "back": "Maswali matano ya leo",
+      "me": {
+        "ranked": "Wewe: alama {points}, nafasi ya {rank}",
+        "join": "Wewe: alama {points} · jiunge na ubao ili upewe nafasi",
+        "notPlayed": "Bado huna alama wiki hii."
+      },
+      "play": "Cheza maswali matano ya leo",
+      "listHeading": "Ishirini bora",
+      "rank": "Nafasi ya {rank}",
+      "points": "alama {points}",
+      "you": "Wewe",
+      "empty": "Bado hakuna aliye kwenye ubao wiki hii.",
+      "emptyAction": "Cheza maswali matano ya leo",
+      "home": "Nenda Nyumbani"
+    },
+    "topic": {
+      "python": "Python",
+      "web": "Wavuti",
+      "databases": "Hifadhidata",
+      "git": "Git",
+      "linux": "Linux",
+      "security": "Usalama",
+      "networking": "Mitandao",
+      "mobile": "Simu za mkononi",
+      "cloud": "Wingu",
+      "data": "Data",
+      "kenya-fintech": "Teknolojia ya fedha nchini Kenya",
+      "ai": "Akili bandia",
+      "languages": "Lugha za programu"
+    }
+  },
+  "quizPlay": {
+    "position": "Swali {number} kati ya {total}",
+    "progress": "Umejibu {count} kati ya {total}",
+    "check": "Kagua majibu",
+    "checking": "Inakagua…",
+    "checkHint": "Jibu yote matano ili kuyakagua, au ruka yaliyobaki.",
+    "skip": "Kagua {count}, ruka {number}",
+    "problem": {
+      "closed": "Siku ya maswali haya imekwisha. Maswali ya leo ni mapya, yako Nyumbani.",
+      "noQuiz": "Hakuna maswali leo, rudi kesho.",
+      "signedOut": "Umetolewa kwenye akaunti. Ingia tena, kisha ukague majibu yako.",
+      "failed": "Majibu yako hayakukaguliwa. Jaribu tena baada ya muda mfupi.",
+      "network": "Majibu yako hayakutumwa. Angalia muunganisho wako kisha ujaribu tena."
+    },
+    "flag": {
+      "open": "Ripoti",
+      "openNamed": "Ripoti swali {number}",
+      "title": "Ripoti swali {number}",
+      "lead": "Tuambie kilicho na kasoro. Wafanyakazi husoma kila ripoti.",
+      "legend": "Kuna kasoro gani?",
+      "reason": {
+        "wrong_answer": "Jibu si sahihi",
+        "unclear": "Swali halieleweki",
+        "outdated": "Limepitwa na wakati",
+        "other": "Jambo jingine"
+      },
+      "noteLabel": "Maelezo (si lazima)",
+      "noteHint": "Kwa wafanyakazi pekee, hadi herufi {max}.",
+      "send": "Tuma",
+      "sending": "Inatuma…",
+      "cancel": "Ghairi",
+      "pickReason": "Chagua kilicho na kasoro.",
+      "outcome": {
+        "sent": "Asante, tutaliangalia.",
+        "already": "Tayari umeripoti swali hili.",
+        "pulled": "Swali hili lilikwisha ondolewa.",
+        "limit": "Unaweza kuripoti hadi maswali 10 kwa siku. Jaribu tena kesho.",
+        "playFirst": "Cheza maswali haya kabla ya kuripoti swali lake.",
+        "signedOut": "Umetolewa kwenye akaunti. Ingia tena ili uripoti swali hili.",
+        "failed": "Ripoti haikutumwa. Jaribu tena baada ya muda mfupi.",
+        "network": "Ripoti haikutumwa. Angalia muunganisho wako kisha ujaribu tena."
+      }
+    },
+    "optIn": {
+      "label": "Nionyeshe kwenye ubao",
+      "explain": "Jina lako la utambulisho na alama zako za wiki hii zinaonyeshwa kwa wasanidi wengine. Kamwe si kwa mashirika.",
+      "on": "Imewashwa",
+      "off": "Imezimwa",
+      "joined": "Uko kwenye ubao.",
+      "left": "Hauko kwenye ubao.",
+      "failed": "Haikuhifadhiwa. Jaribu tena baada ya muda mfupi.",
+      "signedOut": "Umetolewa kwenye akaunti. Ingia tena ili ubadilishe hili."
+    },
+    "checkHintNone": "Jibu yote matano ili kuyakagua.",
+    "home": "Nenda Nyumbani"
+  },
+  "adminQuiz": {
+    "pageTitle": "Maswali",
+    "title": "Maswali matano ya leo",
+    "lead": "Maswali matano ya kila siku yanasubiri hapa hadi msimamizi wa wafanyakazi ayaidhinishe. Ondoa swali linalobainika kuwa si sahihi.",
+    "notAdmin": "Ni wasimamizi wa wafanyakazi pekee wanaokagua seti za maswali.",
+    "notAdminAction": "Nenda kwenye ukurasa mkuu wa dashibodi",
+    "queue": {
+      "heading": "Zinasubiri ukaguzi",
+      "empty": "Hakuna seti inayosubiri ukaguzi; kazi ya usiku huandaa ya kesho.",
+      "decidedHeading": "Zilizoamuliwa",
+      "decidedLabel": "Seti za maswali zilizoamuliwa, mpya kwanza",
+      "emptyActionDecided": "Tazama seti zilizoamuliwa",
+      "emptyActionHome": "Nenda kwenye ukurasa mkuu wa dashibodi"
+    },
+    "columns": {
+      "day": "Siku",
+      "status": "Hali",
+      "flags": "Ripoti",
+      "pulled": "Yaliyoondolewa",
+      "origin": "Imeandaliwa na"
+    },
+    "status": {
+      "draft": "Inasubiri ukaguzi",
+      "approved": "Imeidhinishwa",
+      "rejected": "Imekataliwa",
+      "dayOver": "Siku imekwisha"
+    },
+    "origin": {
+      "model": "Rasimu ya modeli",
+      "seeded": "Imeandikwa kwa mkono"
+    },
+    "openSet": "Maswali ya {date}",
+    "set": {
+      "pageTitle": "Seti ya maswali",
+      "title": "Maswali ya {date}",
+      "back": "Seti za maswali",
+      "gone": "Seti hii ya maswali haipo.",
+      "goneAction": "Rudi kwenye seti za maswali",
+      "decided": "Iliamuliwa tarehe {date}.",
+      "statsHeading": "Michezo na ripoti",
+      "attempts": "Michezo",
+      "average": "Wastani wa alama",
+      "notEnough": "Bado hakuna michezo ya kutosha",
+      "averageValue": "{value} kati ya 5",
+      "rightCount": "Waliojibu sahihi: {count}",
+      "questionsHeading": "Maswali matano"
+    },
+    "question": {
+      "heading": "Swali {number}",
+      "answer": "Jibu",
+      "why": "Sababu",
+      "source": "Chanzo",
+      "topic": "Mada",
+      "flags": "Ripoti: {count}",
+      "noFlags": "Hakuna ripoti",
+      "reason": {
+        "wrong_answer": "Jibu si sahihi",
+        "unclear": "Swali halieleweki",
+        "outdated": "Limepitwa na wakati",
+        "other": "Jambo jingine"
+      },
+      "reasonCount": "{name}: {count}",
+      "notesHeading": "Maelezo kutoka kwa ripoti",
+      "live": "Linatumika",
+      "pulled": "Limeondolewa",
+      "pulledByFlags": "Liliondolewa baada ya ripoti tatu.",
+      "pulledBecause": "Limeondolewa: {value}",
+      "restored": "Limerejeshwa na wafanyakazi: ripoti haziwezi kuliondoa tena.",
+      "newTab": "(linafunguka kwenye kichupo kipya)"
+    },
+    "decision": {
+      "heading": "Uamuzi",
+      "lead": "Wasanidi wanaona seti hii tu ikishaidhinishwa, katika siku yake.",
+      "approve": "Idhinisha",
+      "reject": "Kataa",
+      "approveTitle": "Uidhinishe seti hii?",
+      "approveBody": "Wasanidi wanaona maswali haya matano tarehe {date}.",
+      "rejectTitle": "Ukatae seti hii?",
+      "rejectBody": "Hakuna atakayeiona. Kazi ya usiku inaweza kuandaa seti mpya ya tarehe {date}.",
+      "approving": "Inaidhinisha…",
+      "rejecting": "Inakataa…",
+      "cancel": "Ghairi",
+      "approved": "Imeidhinishwa. Wasanidi wanaiona tarehe {date}.",
+      "rejected": "Imekataliwa. Hakuna atakayeiona."
+    },
+    "pull": {
+      "open": "Ondoa",
+      "openNamed": "Ondoa swali {number}",
+      "title": "Uondoe swali {number}?",
+      "body": "Litaacha kuhesabiwa kwa kila mtu, na kila mchezo wa seti hii utapewa alama upya.",
+      "reasonLabel": "Sababu ya kuliondoa",
+      "reasonHint": "Mstari mmoja wa kumbukumbu, hadi herufi {max}.",
+      "reasonMissing": "Sema kwa nini linaondolewa.",
+      "confirm": "Ondoa swali",
+      "busy": "Inaondoa…",
+      "done": "Limeondolewa. Michezo iliyopewa alama upya: {count}."
+    },
+    "restore": {
+      "open": "Rejesha",
+      "openNamed": "Rejesha swali {number}",
+      "title": "Urejeshe swali {number}?",
+      "body": "Litahesabiwa tena, kila mchezo wa seti hii utapewa alama upya, na ripoti haziwezi kuliondoa tena.",
+      "confirm": "Rejesha swali",
+      "busy": "Inarejesha…",
+      "done": "Limerejeshwa. Michezo iliyopewa alama upya: {count}."
+    },
+    "refusal": {
+      "already_decided": "Seti hii ilikwisha amuliwa.",
+      "incomplete_set": "Seti hii haina maswali matano yanayotumika, kwa hiyo haiwezi kuidhinishwa.",
+      "day_over": "Siku hii imekwisha; inaweza kukataliwa tu.",
+      "already_pulled": "Swali hili lilikwisha ondolewa.",
+      "already_live": "Swali hili tayari linatumika.",
+      "not_found": "Seti hii ya maswali haipo tena.",
+      "forbidden": "Ni wasimamizi wa wafanyakazi pekee wanaoweza kufanya hivi.",
+      "generic": "Haikufanikiwa. Jaribu tena baada ya muda mfupi.",
+      "question_not_found": "Swali hili halipo tena.",
+      "signedOut": "Umetolewa kwenye akaunti. Ingia tena, kisha ujaribu tena."
+    }
   }
 }

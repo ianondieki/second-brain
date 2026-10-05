@@ -24,7 +24,8 @@
     "reviewP20dev": "[[COPY-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (a Discover card's foot: how many sources back the problem)",
     "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
     "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
-    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\")."
+    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\").",
+    "reviewP22a": "[[COPY-REVIEW]] P22-AF (REQ-DEV-01; D-59): quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks"
   },
   "app": {
     "name": "Wazo",
@@ -998,7 +999,8 @@
     "nav": {
       "research": "Research",
       "moderation": "Moderation",
-      "claims": "Claims"
+      "claims": "Claims",
+      "quiz": "Quiz"
     },
     "noSection": "Your staff role has no console section yet.",
     "noSectionAction": "Go to your home page"
@@ -3183,5 +3185,249 @@
     },
     "heading": "Saved searches",
     "alreadyDeleted": "{name} was already deleted."
+  },
+  "quiz": {
+    "pageTitle": "Today's five",
+    "title": "Today's five",
+    "lead": "Five short questions on the tools you build with, each with the reason, from the official documentation.",
+    "back": "Home",
+    "none": "No quiz today, back tomorrow.",
+    "noneAction": "See this week's board",
+    "card": {
+      "lead": "Five short questions, each with the reason, from the official documentation. A few minutes to learn something new.",
+      "play": "Play",
+      "played": "<fig>{score} of {total}</fig> today · {streak, plural, one {#-day streak} other {#-day streak}}",
+      "seeWhy": "See why",
+      "none": "No quiz today, back tomorrow."
+    },
+    "results": {
+      "heading": "Your answers",
+      "score": "<fig>{score} of {total}</fig> right",
+      "streak": "{current, plural, one {#-day streak.} other {#-day streak.}} Your best: {best, plural, one {# day} other {# days}}.",
+      "tomorrow": "Come back tomorrow for five more.",
+      "board": "See this week's board",
+      "listLabel": "Today's questions with the answers",
+      "position": "Question {number} of {total}",
+      "mark": {
+        "rightChosen": "Your answer, right",
+        "right": "Right answer",
+        "wrongChosen": "Your answer, wrong"
+      },
+      "skipped": "You skipped this one.",
+      "pulled": "Withdrawn after review: it counts for nobody.",
+      "why": "Why?",
+      "source": "Source: {title}",
+      "newTab": "(opens in a new tab)"
+    },
+    "board": {
+      "pageTitle": "This week's board",
+      "title": "This week",
+      "dates": "{start} to {end}",
+      "lead": "Points from Today's five, Monday to Sunday. The board starts again every Monday.",
+      "back": "Today's five",
+      "me": {
+        "ranked": "You: {points, plural, one {# point} other {# points}}, rank {rank}",
+        "join": "You: {points, plural, one {# point} other {# points}} · join the board to be ranked",
+        "notPlayed": "You have no points yet this week."
+      },
+      "play": "Play today's five",
+      "listHeading": "Top 20",
+      "rank": "Rank {rank}",
+      "points": "{points, plural, one {# point} other {# points}}",
+      "you": "You",
+      "empty": "No one is on the board yet this week.",
+      "emptyAction": "Play today's five",
+      "home": "Go to Home"
+    },
+    "topic": {
+      "python": "Python",
+      "web": "The web",
+      "databases": "Databases",
+      "git": "Git",
+      "linux": "Linux",
+      "security": "Security",
+      "networking": "Networking",
+      "mobile": "Mobile",
+      "cloud": "Cloud",
+      "data": "Data",
+      "kenya-fintech": "Fintech in Kenya",
+      "ai": "AI",
+      "languages": "Programming languages"
+    }
+  },
+  "quizPlay": {
+    "position": "Question {number} of {total}",
+    "progress": "{count} of {total} answered",
+    "check": "Check answers",
+    "checking": "Checking…",
+    "checkHint": "Answer all five to check them, or skip the rest.",
+    "skip": "Check {count}, skip {number}",
+    "problem": {
+      "closed": "This quiz's day is over. Today's quiz is a new one, on Home.",
+      "noQuiz": "No quiz today, back tomorrow.",
+      "signedOut": "You were signed out. Sign in again, then check your answers.",
+      "failed": "Your answers were not checked. Try again in a moment.",
+      "network": "Your answers were not sent. Check your connection and try again."
+    },
+    "flag": {
+      "open": "Flag",
+      "openNamed": "Flag question {number}",
+      "title": "Flag question {number}",
+      "lead": "Tell us what is wrong. Staff read every flag.",
+      "legend": "What is wrong?",
+      "reason": {
+        "wrong_answer": "The answer is wrong",
+        "unclear": "The question is unclear",
+        "outdated": "It is out of date",
+        "other": "Something else"
+      },
+      "noteLabel": "Note (optional)",
+      "noteHint": "For staff only, at most {max} characters.",
+      "send": "Send",
+      "sending": "Sending…",
+      "cancel": "Cancel",
+      "pickReason": "Choose what is wrong.",
+      "outcome": {
+        "sent": "Thanks, we'll look.",
+        "already": "You already flagged this.",
+        "pulled": "This question was already withdrawn.",
+        "limit": "You can flag up to 10 questions a day. Try again tomorrow.",
+        "playFirst": "Play this quiz before you flag its questions.",
+        "signedOut": "You were signed out. Sign in again to flag this question.",
+        "failed": "The flag was not sent. Try again in a moment.",
+        "network": "The flag was not sent. Check your connection and try again."
+      }
+    },
+    "optIn": {
+      "label": "Show me on the board",
+      "explain": "Your handle and this week's points are shown to other developers. Never to organisations.",
+      "on": "On",
+      "off": "Off",
+      "joined": "You are on the board.",
+      "left": "You are off the board.",
+      "failed": "That did not save. Try again in a moment.",
+      "signedOut": "You were signed out. Sign in again to change this."
+    },
+    "checkHintNone": "Answer all five to check them.",
+    "home": "Go to Home"
+  },
+  "adminQuiz": {
+    "pageTitle": "Quiz",
+    "title": "Today's five",
+    "lead": "Each day's five questions wait here until a staff admin approves them. Pull a question that turns out wrong.",
+    "notAdmin": "Only staff admins review quiz sets.",
+    "notAdminAction": "Go to the console home",
+    "queue": {
+      "heading": "Waiting for review",
+      "empty": "No set is waiting for review; the nightly job drafts tomorrow's.",
+      "decidedHeading": "Decided",
+      "decidedLabel": "Decided quiz sets, newest first",
+      "emptyActionDecided": "See the decided sets",
+      "emptyActionHome": "Go to the console home"
+    },
+    "columns": {
+      "day": "Day",
+      "status": "Status",
+      "flags": "Flags",
+      "pulled": "Pulled",
+      "origin": "Drafted by"
+    },
+    "status": {
+      "draft": "Waiting for review",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "dayOver": "Day over"
+    },
+    "origin": {
+      "model": "Model draft",
+      "seeded": "Written by hand"
+    },
+    "openSet": "Quiz for {date}",
+    "set": {
+      "pageTitle": "Quiz set",
+      "title": "Quiz for {date}",
+      "back": "Quiz sets",
+      "gone": "This quiz set does not exist.",
+      "goneAction": "Back to quiz sets",
+      "decided": "Decided on {date}.",
+      "statsHeading": "Plays and flags",
+      "attempts": "Plays",
+      "average": "Average score",
+      "notEnough": "Not enough plays yet",
+      "averageValue": "{value} of 5",
+      "rightCount": "Answered right: {count}",
+      "questionsHeading": "The five questions"
+    },
+    "question": {
+      "heading": "Question {number}",
+      "answer": "Answer",
+      "why": "Why",
+      "source": "Source",
+      "topic": "Topic",
+      "flags": "Flags: {count}",
+      "noFlags": "No flags",
+      "reason": {
+        "wrong_answer": "The answer is wrong",
+        "unclear": "The question is unclear",
+        "outdated": "It is out of date",
+        "other": "Something else"
+      },
+      "reasonCount": "{name}: {count}",
+      "notesHeading": "Notes from flags",
+      "live": "Live",
+      "pulled": "Pulled",
+      "pulledByFlags": "Pulled after three flags.",
+      "pulledBecause": "Pulled: {value}",
+      "restored": "Restored by staff: flags never pull it again.",
+      "newTab": "(opens in a new tab)"
+    },
+    "decision": {
+      "heading": "Decision",
+      "lead": "Developers see this set only once it is approved, on its own day.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "approveTitle": "Approve this set?",
+      "approveBody": "Developers see these five questions on {date}.",
+      "rejectTitle": "Reject this set?",
+      "rejectBody": "No one will see it. The nightly job can draft a new set for {date}.",
+      "approving": "Approving…",
+      "rejecting": "Rejecting…",
+      "cancel": "Cancel",
+      "approved": "Approved. Developers see it on {date}.",
+      "rejected": "Rejected. No one will see it."
+    },
+    "pull": {
+      "open": "Pull",
+      "openNamed": "Pull question {number}",
+      "title": "Pull question {number}?",
+      "body": "It stops counting for everyone, and every play of the set is scored again.",
+      "reasonLabel": "Why it is pulled",
+      "reasonHint": "One line for the record, at most {max} characters.",
+      "reasonMissing": "Say why it is pulled.",
+      "confirm": "Pull question",
+      "busy": "Pulling…",
+      "done": "Pulled. Plays scored again: {count}."
+    },
+    "restore": {
+      "open": "Restore",
+      "openNamed": "Restore question {number}",
+      "title": "Restore question {number}?",
+      "body": "It counts again, every play of the set is scored again, and flags never pull it again.",
+      "confirm": "Restore question",
+      "busy": "Restoring…",
+      "done": "Restored. Plays scored again: {count}."
+    },
+    "refusal": {
+      "already_decided": "This set was already decided.",
+      "incomplete_set": "This set does not have five live questions, so it cannot be approved.",
+      "day_over": "This day is over; it can only be rejected.",
+      "already_pulled": "This question was already pulled.",
+      "already_live": "This question is already live.",
+      "not_found": "This quiz set no longer exists.",
+      "forbidden": "Only staff admins can do this.",
+      "generic": "That did not work. Try again in a moment.",
+      "question_not_found": "This question no longer exists.",
+      "signedOut": "You were signed out. Sign in again, then try once more."
+    }
   }
 }

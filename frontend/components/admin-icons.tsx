@@ -36,3 +36,14 @@ export function ClaimsIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Quiz: a card with five lines and a tick (Today's five, approved before anyone plays it). */
+export function QuizIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.25" y="3.25" width="13.5" height="13.5" rx="2.5" />
+      <path d="M6.5 7.25h4.25M6.5 10h3M6.5 12.75h2" />
+      <path d="m11.75 12 1.5 1.5 2.5-2.75" />
+    </Icon>
+  );
+}
