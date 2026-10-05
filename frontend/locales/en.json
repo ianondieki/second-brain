@@ -25,7 +25,7 @@
     "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
     "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
     "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\").",
-    "reviewP22a": "[[COPY-REVIEW]] P22-AF (REQ-DEV-01; D-59): quiz.*, quizPlay.*"
+    "reviewP22a": "[[COPY-REVIEW]] P22-AF (REQ-DEV-01; D-59): quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz"
   },
   "app": {
     "name": "Wazo",
@@ -999,7 +999,8 @@
     "nav": {
       "research": "Research",
       "moderation": "Moderation",
-      "claims": "Claims"
+      "claims": "Claims",
+      "quiz": "Quiz"
     },
     "noSection": "Your staff role has no console section yet.",
     "noSectionAction": "Go to your home page"
@@ -3289,6 +3290,121 @@
       "joined": "You are on the board.",
       "left": "You are off the board.",
       "failed": "That did not save. Try again in a moment."
+    }
+  },
+  "adminQuiz": {
+    "pageTitle": "Quiz",
+    "title": "Today's five",
+    "lead": "Each day's five questions wait here until a staff admin approves them. Pull a question that turns out wrong.",
+    "notAdmin": "Only staff admins review quiz sets.",
+    "notAdminAction": "Go to the console home",
+    "queue": {
+      "heading": "Waiting for review",
+      "empty": "No set is waiting for review. The nightly job drafts the next day's set.",
+      "emptyAction": "Check again",
+      "decidedHeading": "Decided",
+      "decidedLabel": "Decided quiz sets, newest first"
+    },
+    "columns": {
+      "day": "Day",
+      "status": "Status",
+      "flags": "Flags",
+      "pulled": "Pulled",
+      "origin": "Drafted by"
+    },
+    "status": {
+      "draft": "Waiting for review",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "origin": {
+      "model": "Model draft",
+      "seeded": "Written by hand"
+    },
+    "openSet": "Quiz for {date}",
+    "set": {
+      "pageTitle": "Quiz set",
+      "title": "Quiz for {date}",
+      "back": "Quiz sets",
+      "gone": "This quiz set does not exist.",
+      "goneAction": "Back to quiz sets",
+      "decided": "Decided on {date}.",
+      "statsHeading": "Plays",
+      "attempts": "Plays",
+      "average": "Average score",
+      "notEnough": "Not enough plays yet",
+      "averageValue": "{value} of 5",
+      "rightCount": "Answered right: {count}",
+      "questionsHeading": "The five questions"
+    },
+    "question": {
+      "heading": "Question {number}",
+      "answer": "Answer",
+      "why": "Why",
+      "source": "Source",
+      "topic": "Topic",
+      "flags": "Flags: {count}",
+      "noFlags": "No flags",
+      "reason": {
+        "wrong_answer": "The answer is wrong",
+        "unclear": "The question is unclear",
+        "outdated": "It is out of date",
+        "other": "Something else"
+      },
+      "reasonCount": "{name}: {count}",
+      "notesHeading": "Notes from flags",
+      "live": "Live",
+      "pulled": "Pulled",
+      "pulledByFlags": "Pulled after three flags.",
+      "pulledBecause": "Pulled: {value}",
+      "restored": "Restored by staff: flags never pull it again.",
+      "newTab": "(opens in a new tab)"
+    },
+    "decision": {
+      "heading": "Decision",
+      "lead": "Developers see this set only once it is approved, on its own day.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "approveTitle": "Approve this set?",
+      "approveBody": "Developers see these five questions on {date}.",
+      "rejectTitle": "Reject this set?",
+      "rejectBody": "No one will see it. The nightly job can draft a new set for {date}.",
+      "approving": "Approving…",
+      "rejecting": "Rejecting…",
+      "cancel": "Cancel",
+      "approved": "Approved. Developers see it on {date}.",
+      "rejected": "Rejected. No one will see it."
+    },
+    "pull": {
+      "open": "Pull",
+      "openNamed": "Pull question {number}",
+      "title": "Pull question {number}?",
+      "body": "It stops counting for everyone, and every play of the set is scored again.",
+      "reasonLabel": "Why it is pulled",
+      "reasonHint": "One line for the record, at most {max} characters.",
+      "reasonMissing": "Say why it is pulled.",
+      "confirm": "Pull question",
+      "busy": "Pulling…",
+      "done": "Pulled. Plays scored again: {count}."
+    },
+    "restore": {
+      "open": "Restore",
+      "openNamed": "Restore question {number}",
+      "title": "Restore question {number}?",
+      "body": "It counts again, every play of the set is scored again, and flags never pull it again.",
+      "confirm": "Restore question",
+      "busy": "Restoring…",
+      "done": "Restored. Plays scored again: {count}."
+    },
+    "refusal": {
+      "already_decided": "This set was already decided.",
+      "incomplete_set": "This set does not have five live questions, so it cannot be approved.",
+      "day_over": "This day is over; it can only be rejected.",
+      "already_pulled": "This question was already pulled.",
+      "already_live": "This question is already live.",
+      "not_found": "This quiz set no longer exists.",
+      "forbidden": "Only staff admins can do this.",
+      "generic": "That did not work. Try again in a moment."
     }
   }
 }

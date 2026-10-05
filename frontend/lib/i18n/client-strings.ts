@@ -57,6 +57,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "likedNiches",
   "savedSearches",
   "quizPlay",
+  "adminQuiz",
   "security",
   "password",
   "fields",
