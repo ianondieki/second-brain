@@ -518,8 +518,8 @@ spec (`bc70121`) and 10/10 on re-run; the test-clock scenarios ran in the same r
 runs (the page title, as the tracker's in P20; D-53 (d) measures on the laptop and the host). CodeQL: exactly the eight
 D-42 findings. `pr.yml` run 328 on `a1467b1`: Playwright with the clock scenarios, the demo story, frontend, legacy
 (Windows and Ubuntu) and hygiene green; the backend job (full suite, coverage gate) hit its 35-minute limit twice on 2026-10-05, at about twice P20's
-per-file times; a comparison run on the integration branch (P19-era code, run 329) was as slow the same hour, so
-the runners were slow that day, not P21's code (locally the same files run at P20's speed with coverage on, and the
+per-file times; a comparison run on the integration branch (P19-era code, run 329) took 32.5 minutes for 4,570 tests the same hour
+(failing only `test_expiry.py`'s holiday case, which P20 fixed), so the runners were slow that day, not P21's code (locally the same files run at P20's speed with coverage on, and the
 full backend suite passes, 4,764); a re-run on normal runners is the open item; scanners red on `npm audit` only (D-56); the informational
 no-skip-list legacy job red as before. The first run (326) found what local runs had not: mypy over `tests/` (CI
 checks them, the implementers ran `mypy src`), fixed in `a1467b1`.
