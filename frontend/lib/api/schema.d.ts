@@ -1154,6 +1154,8 @@ export interface paths {
         /**
          * Stage Attachment
          * @description Stage a file for the caller's next message: scanned before it is kept; only the uploader sees it until sent.
+         *     Everything that needs no body is checked first; no transaction is open while the body streams in. Every attempt
+         *     refused here counts toward the hourly upload limit.
          */
         post: operations["stage_attachment_api_engagements__engagement_id__messages_attachments_post"];
         delete?: never;

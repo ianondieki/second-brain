@@ -18751,7 +18751,7 @@
     },
     "/api/engagements/{engagement_id}/messages/attachments": {
       "post": {
-        "description": "Stage a file for the caller's next message: scanned before it is kept; only the uploader sees it until sent.",
+        "description": "Stage a file for the caller's next message: scanned before it is kept; only the uploader sees it until sent.\nEverything that needs no body is checked first; no transaction is open while the body streams in. Every attempt\nrefused here counts toward the hourly upload limit.",
         "operationId": "stage_attachment_api_engagements__engagement_id__messages_attachments_post",
         "parameters": [
           {
