@@ -4,7 +4,7 @@ REQ-ENG-11 (R37, AC-TRACK-9, N18; track A: ``engagement_messages``, ``engagement
 ``engagement_message_reads`` and the message report), REQ-REPO-02 (R10; track B: ``org_shortlist``) and REQ-PERS-03
 (R27, with REQ-TREND-02; track C: ``saved_searches``). Design: ``docs/platform/tasks/P21.md`` and D-57's defaults.
 Additive but for one narrowing of an earlier object, restored on downgrade: five new tables with their policies,
-triggers and grants; nine new functions; one new partial unique index on ``moderation_cases``; and bridge_app's INSERT
+triggers and grants; ten new functions; one new partial unique index on ``moderation_cases``; and bridge_app's INSERT
 policy on ``moderation_cases`` (revision 0002) narrowed so that the app files a message report only through
 ``app_report_message``. No enum type: the tables reuse ``engagement_party`` (revision 0003) and ``av_status`` (revision
 0002), and the triggers reuse ``tracker_engagement_visible()`` (revision 0003), ``block_mutation()`` (revision 0002) and
@@ -22,19 +22,27 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
 - ``engagement_messages`` (bridge_app: SELECT and INSERT only, the INSERT without ``created_at`` and the redaction
   columns): written by a party as themselves (``sender_user_id = app_user_id()``) on their own side
   (``sender_party``): ``developer`` for the engagement's developer, ``org`` for a member who may act on the tracker
-  (owner, admin, reviewer, signatory, finance: viewers read, never post, as they never act). The body is 1 to 4,000
-  characters and not blank (plain text; the database never interprets it).
+  (owner, admin, reviewer, signatory, finance: viewers read, never post, as they never act) and is not the
+  engagement's developer (a developer who is also a member of the counterpart organisation posts as ``developer``
+  only: one person never speaks for both sides). The body is 1 to 4,000 characters and not blank (plain text; the
+  database never interprets it).
 - The stage gate (``engagement_thread_open()``, BEFORE INSERT, SECURITY DEFINER, every role, right after the
-  visibility check): the thread opens once the engagement has *reached* ``INTEREST_CONFIRMED`` (an event of its chain
-  entered it), whatever state it is in now, and closes for good at ``DECLINED``, ``WITHDRAWN``, ``EXPIRED``,
-  ``TERMINATED`` and ``CLOSED`` (read-only from then on). "Reached", not "is at or after": the state order is not
-  linear (``PROCUREMENT_ROUTE`` comes before or after stage 3, the side states ``ON_HOLD``, ``INFO_REQUESTED`` and
-  ``DISPUTED`` can be entered from any stage), and the chain never returns before stage 3 once it was entered, so an
-  engagement on hold at ``UNDER_REVIEW`` stays closed and one on hold after ``NDA_SIGNED`` stays open. Both sides
-  are refused before stage 3 (D-57 (1); the organisation's 403 of AC-TRACK-9 is the API's), so no message can exist
-  before it and the read policy needs no stage. The trigger locks the engagement's row FOR KEY SHARE first: an
-  append in flight (the chain holds FOR UPDATE until commit) is waited for and its outcome read, so no message is
-  written once the engagement's end has committed; concurrent messages do not wait for each other. SQLSTATE 55000
+  visibility check): the thread opens once an event of the engagement's chain has entered stage 3
+  (``INTEREST_CONFIRMED``) or a later main-path stage (``CONTACT_MADE`` to ``PAYMENT_FINAL``), whatever state it is in
+  now, and closes for good at ``DECLINED``, ``WITHDRAWN``, ``EXPIRED``, ``TERMINATED`` and ``CLOSED`` (read-only from
+  then on). 3b ``PROCUREMENT_ROUTE`` does not count: revision 0003 lets a public entity enter it from
+  ``UNDER_REVIEW``, before any approval, and leave it for ``INTEREST_CONFIRMED`` or straight for ``CONTACT_MADE``, so
+  on that path the thread opens at ``CONTACT_MADE``. Every main-path state after ``CONTACT_MADE`` has it among its
+  chain's predecessors, and a chain that begins later (the owner's insert, as revision 0003's backfill) begins at a
+  counted state, so the rule covers every path 0003 allows to stage 3 and beyond. "Has entered", not "is at or after":
+  the state order is not linear (``PROCUREMENT_ROUTE`` comes before or after stage 3; a disputed first contact returns
+  from ``CONTACT_MADE`` to stage 3; the side states ``ON_HOLD``, ``INFO_REQUESTED`` and ``DISPUTED`` can be entered
+  from any stage and resume only where they were entered), so an engagement on hold at ``UNDER_REVIEW`` or at a
+  ``PROCUREMENT_ROUTE`` entered from it stays closed, and one on hold after stage 3 stays open. Both sides are refused
+  before (D-57 (1); the organisation's 403 of AC-TRACK-9 is the API's), so no message can exist before the thread
+  opens and the read policy needs no stage. The trigger locks the engagement's row FOR KEY SHARE first: an append in
+  flight (the chain holds FOR UPDATE until commit) is waited for and its outcome read, so no message is written once
+  the engagement's end has committed; concurrent messages do not wait for each other. SQLSTATE 55000
   (object_not_in_prerequisite_state) with "the thread opens at INTEREST_CONFIRMED" or "its thread is read-only".
 - Append-only, but for its redaction (D-54's default (a), D-57 (3)): no UPDATE or DELETE grant;
   ``engagement_messages_no_delete`` and ``_no_truncate`` (``block_mutation()``) refuse DELETE and TRUNCATE for every
@@ -45,28 +53,38 @@ The thread (track A; tenancy ORG_OR_USER through the engagement, like every trac
   ``redacted_at = app_clock_now()`` and ``redacted_by = app_user_id()``.
 - ``created_at`` is the database's clock (default ``app_clock_now()``; bridge_app's INSERT is column-scoped without
   it). The thread reads by ``ix_engagement_messages_thread (engagement_id, created_at, id)``.
-- ``engagement_message_attachments`` (bridge_app: SELECT, INSERT without ``message_id`` and ``created_at``, UPDATE of
-  ``message_id`` and ``av_status``, DELETE): an upload is staged first, then joins its message. A party who may post
-  inserts it as themselves (``uploader_user_id = app_user_id()``) with ``message_id`` NULL while the thread is open
-  (the same gate); a staged upload is read, scanned (``av_status`` from ``pending_upload``/``pending_scan`` to a
-  verdict, which is final) and deleted by its uploader only. ``engagement_message_attachments_guard`` (BEFORE UPDATE
-  OR DELETE, SECURITY INVOKER, every role): an upload joins only its uploader's own message, in the transaction that
-  inserted the message (``app_xid_is_current(m.xmin)``, so a sent message never gains a file later), and only clean
-  (CHECK ``attached_only_when_clean``); its file, keys and time never change; once sent nothing changes and nothing is
-  deleted, but by the owner (room for D-54's erasure). Every party reads a sent attachment. At most 5 per message
+- ``engagement_message_attachments`` (bridge_app: SELECT, INSERT without ``message_id``, ``av_status`` and
+  ``created_at``, UPDATE of ``message_id`` and ``av_status``, DELETE): an upload is staged first, then joins its
+  message. A party who may post inserts it as themselves (``uploader_user_id = app_user_id()``) with ``message_id``
+  NULL while the thread is open (the same gate), always pending (``av_status`` takes its default, ``pending_scan``);
+  only a later UPDATE gives it a scan verdict (``clean``, ``infected`` or ``failed``), which is final. A staged
+  upload is read, scanned and deleted by its uploader only (the scan, too, runs bound to the uploader). The verdict
+  itself is the API's responsibility: the database checks who writes it, when and that it is final, not that
+  ``storage/scanner.py`` ran, so the API writes the scanner's result and never a value from the client.
+  ``engagement_message_attachments_guard`` (BEFORE UPDATE OR DELETE, SECURITY INVOKER, every role): an upload joins
+  only its uploader's own message, in the transaction that inserted the message (``app_xid_is_current(m.xmin)``, so a
+  sent message never gains a file later), only clean (CHECK ``attached_only_when_clean``) and within 24 hours of its
+  upload; its file, keys and time never change; once sent nothing changes and nothing is deleted, but by the owner
+  (room for D-54's erasure). Every party reads a sent attachment. At most 5 per message
   (``engagement_message_attachments_cap``, AFTER INSERT OR UPDATE OF message_id, every role; check_violation with
   constraint name ``engagement_message_attachments_at_most_5``). Each is 1 byte to 20 MB with its SHA-256; the object
-  key holds ids only (``[a-z0-9/_-]``, no file name); the file name is 1 to 255 characters without a control
-  character or a path separator.
+  key is the row's own, ``messages/<engagement_id>/<id>`` in the uuid text form (CHECK ``object_key_is_its_own``: ids
+  only, no file name, and never another object of the bucket, such as a proposal's Tier-2 file under
+  ``attachments/``); the file name is 1 to 255 characters without a control character or a path separator.
+- ``app_purge_stale_message_uploads(now)`` (SECURITY DEFINER, EXECUTE bridge_app, with no user bound only, as
+  ``app_saved_searches_due``): deletes the staged uploads that can never be sent, those of an ended engagement or
+  older than 24 hours at ``now``, and returns their object keys for the job to delete the objects; never a sent one.
 - ``engagement_message_reads`` (USER; bridge_app: SELECT, INSERT, UPDATE of ``last_read_at``): one row per party
   and engagement, the user's own, on an engagement they are a party of.
-- The report (D-57 (4)): ``app_report_message(message, reasons, daily_limit)`` (SECURITY DEFINER, EXECUTE bridge_app)
-  files a ``moderation_cases`` row (``subject_type = 'message'``, ``source = 'report'``, the caller as
-  ``reporter_id``) for a message the caller reads as a party (insufficient_privilege, "no message of the caller's
-  with that id", otherwise), once per reporter and message (a repeat returns the same case, ``created`` false; the
-  partial unique index ``uq_moderation_cases_message_report`` backs it), and at most ``daily_limit`` message reports
-  per reporter in 24 hours (SQLSTATE 54000, program_limit_exceeded). bridge_app's direct INSERT of a report is
-  narrowed to every other subject type, so every message case has been filed by a party.
+- The report (D-57 (4)): ``app_report_message(message, reasons)`` (SECURITY DEFINER, EXECUTE bridge_app) files a
+  ``moderation_cases`` row (``subject_type = 'message'``, ``source = 'report'``, the caller as ``reporter_id``) for a
+  message the caller reads as a party (insufficient_privilege, "no message of the caller's with that id",
+  otherwise), once per reporter and message (a repeat returns the same case, ``created`` false; the partial unique
+  index ``uq_moderation_cases_message_report`` backs it), with reasons that are one or more of the fixed codes
+  ``spam``, ``abuse``, ``contact_details``, ``confidential`` and ``other`` (never free text; each kept once; SQLSTATE
+  22023, invalid_parameter_value, otherwise), and at most 10 message reports per reporter in 24 hours, a limit fixed
+  in the function that no caller can raise (SQLSTATE 54000, program_limit_exceeded). bridge_app's direct INSERT of a
+  report is narrowed to every other subject type, so every message case has been filed by a party.
   ``app_reported_message(case)`` (SECURITY DEFINER, EXECUTE bridge_app, staff admin|moderator only) returns the one
   message of a message report (id, engagement, sender party, body, time): the only way staff read a message.
 
@@ -77,13 +95,16 @@ one row per (organisation, proposal). Every member reads (narrowed by ``app.org_
 the caller is a member of the organisation (narrowed by ``app.org_id``; false for anyone else, so it tells nobody
 what another organisation's Inbox holds) and the proposal is published and clear and is in the organisation's Inbox:
 pitched to it (a delivered tag), matched by its scout (``agent_matches``) or answering its Brief (the proposal's
-current version links a problem whose Brief is the organisation's).
+current version links a problem whose Brief is the organisation's). A row is ids and who added it when, nothing of the
+proposal: once its proposal is held or unpublished the row stays but leads nowhere (the proposals' RLS hides it from
+every member, the Inbox check is false, so it is not added back), and a Tier-2 member may remove it.
 
 Saved searches (track C; tenancy USER): ``saved_searches`` (bridge_app: SELECT, INSERT without ``last_alerted_at``
 and ``created_at``, UPDATE of ``name``, ``alerts`` and ``last_alerted_at``, DELETE), the owner's only. A name of 1
 to 60 characters, the Discover view (``problems`` or ``briefs``), an optional niche (``niches.slug``) and county
 (``regions.code``), optional words (1 to 100 characters), ``alerts`` (default on) and ``last_alerted_at``. At most 10
-per user (``saved_searches_cap``, AFTER INSERT, every role, serialised per user; check_violation with constraint name
+per user (``saved_searches_cap``, AFTER INSERT, every role, serialised per user by an advisory lock, after which the
+count reads every committed row at READ COMMITTED, the application's level; check_violation with constraint name
 ``saved_searches_at_most_10``). The daily alert job runs as bridge_app like every job: ``app_saved_searches_due(now)``
 (SECURITY DEFINER, EXECUTE bridge_app) lists, to a session with no user bound only, the (user, saved search) ids with
 alerts on, of active users, not alerted since 00:00 Africa/Nairobi of ``now``'s day; the job then binds to each user
@@ -93,17 +114,24 @@ Operating rules for the code that uses this schema:
 
 - Map the tracker's refusal for an engagement the caller cannot see ("no engagement of the caller's with that id",
   insufficient_privilege) to 404, and an RLS refusal of a message to 404 for a non-party (staff included) or 403 for a
-  viewer. Check the stage before writing (the organisation's 403 before ``INTEREST_CONFIRMED``, 409 after an end);
-  SQLSTATE 55000 from the gate is the race of the two.
+  viewer. Check the stage before writing with the gate's rule (the organisation's 403 before the thread opens: at
+  ``INTEREST_CONFIRMED``, or ``CONTACT_MADE`` on a procurement route; 409 after an end); SQLSTATE 55000 from the gate
+  is the race of the two.
 - Post a message as the sender, leaving ``created_at`` out (read it back), then attach the staged uploads in the same
   transaction: ``UPDATE engagement_message_attachments SET message_id = :m WHERE id = ANY(:ids) AND message_id IS
   NULL`` and check the row count (a missing, foreign, unclean or already-sent upload matches nothing or is refused).
+- Stage an upload leaving ``message_id`` and ``av_status`` out (it is ``pending_scan``), then scan it in a session
+  bound to its uploader and write ``storage/scanner.py``'s verdict (``clean``, ``infected``, ``failed``), never a
+  value the client sent: the database checks who sets the verdict and that it is final, not the scan itself.
 - A message is free text a party typed and is never deleted: keep it out of event payloads, logs, audit details and
   emails (N18 says who wrote, never the text). Its erasure is D-54 (a staff-only definer redaction, not written yet).
-- File a report only with ``SELECT * FROM app_report_message(:message, :reasons, :limit)``; staff read a reported
-  message only with ``app_reported_message(:case)``.
+- File a report only with ``SELECT * FROM app_report_message(:message, :reasons)`` (the codes of
+  ``bridge.engagements.models.MESSAGE_REPORT_REASONS``); staff read a reported message only with
+  ``app_reported_message(:case)``.
 - Call ``app_org_sees_proposal`` before adding to the shortlist (404 when false); a repeat add is a unique violation
   (or ``ON CONFLICT DO NOTHING``).
+- The purge job calls ``app_purge_stale_message_uploads(now)`` with no user bound and deletes the returned objects
+  after it commits; the API sends a staged upload within 24 hours (it stages files as the message is written).
 - The alert job calls ``app_saved_searches_due(now)`` with no user bound, then acts per user in a session bound to
   that user (``bind_tenant``), deciding again there; it advances ``last_alerted_at`` in the transaction that writes the
   notification.
@@ -137,12 +165,13 @@ NEW_TABLES = (
 RLS_TABLES = NEW_TABLES
 
 # Table privileges of bridge_app on this revision's tables; anything not listed is not granted. Column-scoped where the
-# database owns a column (times, redaction) or a column is written later (an upload's message, a search's last alert).
+# database owns a column (times, redaction) or a column is written later (an upload's message and scan verdict, a
+# search's last alert).
 APP_GRANTS: dict[str, str] = {
     "engagement_messages": "SELECT, INSERT (id, engagement_id, sender_user_id, sender_party, body)",
     "engagement_message_attachments": (
-        "SELECT, INSERT (id, engagement_id, uploader_user_id, file_name, content_type, size_bytes, sha256, object_key,"
-        " av_status), UPDATE (message_id, av_status), DELETE"
+        "SELECT, INSERT (id, engagement_id, uploader_user_id, file_name, content_type, size_bytes, sha256, object_key),"
+        " UPDATE (message_id, av_status), DELETE"
     ),
     "engagement_message_reads": "SELECT, INSERT (engagement_id, user_id, last_read_at), UPDATE (last_read_at)",
     "org_shortlist": "SELECT, INSERT (org_id, proposal_id, added_by), DELETE",
@@ -160,6 +189,8 @@ AV_STATUS = ("pending_upload", "pending_scan", "clean", "infected", "failed")
 REDACTED = "'[redacted]'"  # D-54: the one body a message may be changed to
 MESSAGE_BODY = "body ~ '[^[:space:]]' AND char_length(body) <= 4000"
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+# An upload's object is its own: messages/<engagement>/<id> (the uuid text form), never another object of the bucket.
+OBJECT_KEY = "object_key = 'messages/' || engagement_id::text || '/' || id::text"
 SAVED_SEARCH_VIEWS = ("problems", "briefs")
 
 # moderation_cases (revision 0002): bridge_app's INSERT policy, as it was and narrowed (restored on downgrade).
@@ -215,7 +246,7 @@ def _engagement(table: str, condition: str) -> str:
 MESSAGE_INSERT = "sender_user_id = app_user_id() AND " + _engagement(
     "engagement_messages",
     "CASE engagement_messages.sender_party WHEN 'developer' THEN e.developer_id = app_user_id()"
-    f" WHEN 'org' THEN {_ACTING_MEMBER} ELSE false END",
+    f" WHEN 'org' THEN e.developer_id <> app_user_id() AND {_ACTING_MEMBER} ELSE false END",
 )
 _UPLOADER = "uploader_user_id = app_user_id()"
 _UNSENT = "message_id IS NULL"
@@ -282,15 +313,17 @@ POLICIES: tuple[Policy, ...] = (
 # ---------------------------------------------------------------------------------------------------------------------
 
 FUNCTIONS_SQL = r"""
--- The thread's stage gate (REQ-ENG-11, D-57 (1)): a message, or an upload for one, is written only once the engagement
--- has reached INTEREST_CONFIRMED (an event of its chain entered it: the order of states is not linear, and the chain
--- never returns before stage 3 once it was entered) and only until it ends (DECLINED, WITHDRAWN, EXPIRED, TERMINATED,
--- CLOSED: the thread is read-only from then on). Locks the engagement's row FOR KEY SHARE first, so an append in
--- flight (the chain holds FOR UPDATE until commit) is waited for and its outcome read (each statement below takes a
--- new snapshot): no message is written once the engagement's end has committed, and concurrent messages do not wait
--- for each other. Fires right after tracker_engagement_visible() (<table>_1_open sorts second), so it locks and
--- reports only an engagement the caller can see. For every role. SECURITY DEFINER: reads the chain whatever the
--- caller's grants.
+-- The thread's stage gate (REQ-ENG-11, D-57 (1)): a message, or an upload for one, is written only once an event of the
+-- engagement's chain has entered stage 3 (INTEREST_CONFIRMED) or a later main-path stage (CONTACT_MADE to
+-- PAYMENT_FINAL), and only until it ends (DECLINED, WITHDRAWN, EXPIRED, TERMINATED, CLOSED: the thread is read-only
+-- from then on). 3b PROCUREMENT_ROUTE does not count (a public entity may enter it from UNDER_REVIEW, before any
+-- approval, and go on to CONTACT_MADE without INTEREST_CONFIRMED: the thread then opens at CONTACT_MADE). "Has
+-- entered", not "is in": the order of states is not linear and the side states resume where they were entered.
+-- Locks the engagement's row FOR KEY SHARE first, so an append in flight (the chain holds FOR UPDATE until commit) is
+-- waited for and its outcome read (each statement below takes a new snapshot): no message is written once the
+-- engagement's end has committed, and concurrent messages do not wait for each other. Fires right after
+-- tracker_engagement_visible() (<table>_1_open sorts second), so it locks and reports only an engagement the caller
+-- can see. For every role. SECURITY DEFINER: reads the chain whatever the caller's grants.
 CREATE FUNCTION engagement_thread_open() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -304,9 +337,12 @@ BEGIN
             USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.engagement_events ev
-                    WHERE ev.engagement_id = NEW.engagement_id AND ev.to_state = 'INTEREST_CONFIRMED') THEN
-        RAISE EXCEPTION '%: the thread opens at INTEREST_CONFIRMED', TG_TABLE_NAME
-            USING ERRCODE = 'object_not_in_prerequisite_state';
+                    WHERE ev.engagement_id = NEW.engagement_id
+                      AND ev.to_state IN ('INTEREST_CONFIRMED', 'CONTACT_MADE', 'NDA_PENDING', 'NDA_SIGNED',
+                                          'NEGOTIATION', 'AGREEMENT_SIGNING', 'IN_IMPLEMENTATION', 'DELIVERED',
+                                          'SIGN_OFF', 'PAYMENT_FINAL')) THEN
+        RAISE EXCEPTION '%: the thread opens at INTEREST_CONFIRMED (at CONTACT_MADE on a procurement route)',
+            TG_TABLE_NAME USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     RETURN NEW;
 END;
@@ -335,9 +371,11 @@ END;
 $$;
 
 -- An upload's life (REQ-ENG-11): its file (name, type, size, digest, object key), engagement, uploader and time never
--- change; its scan verdict (clean, infected, failed) is final once given; it joins only its uploader's own message, in
+-- change; it is inserted pending (bridge_app cannot name av_status) and its scan verdict (clean, infected, failed),
+-- given by an UPDATE, is final; it joins only its uploader's own message, in
 -- the transaction that inserted the message (app_xid_is_current(xmin): its own id or a savepoint's), so a sent message
--- never gains a file later (and only clean: CHECK attached_only_when_clean); once sent it never changes and is never
+-- never gains a file later (and only clean: CHECK attached_only_when_clean), and within 24 hours of its upload (an
+-- older staged upload is app_purge_stale_message_uploads()'s); once sent it never changes and is never
 -- deleted, but by the table's owner (room for D-54's erasure). A staged upload is deleted by its uploader (policy).
 -- For every role; RLS has already narrowed an UPDATE or DELETE to the caller's own staged uploads. SECURITY INVOKER:
 -- current_user is the writer, and the uploader reads their own message under their RLS.
@@ -376,6 +414,10 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'engagement_message_attachments: an upload joins only its uploader''s own message, in the'
             ' transaction that sends it' USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.message_id IS NOT NULL AND OLD.created_at < public.app_clock_now() - interval '24 hours' THEN
+        RAISE EXCEPTION 'engagement_message_attachments: an upload joins a message within 24 hours of its upload'
+            USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
 END;
@@ -467,14 +509,50 @@ BEGIN
 END;
 $$;
 
+-- Staged uploads that can never be sent (REQ-ENG-11): a staged upload joins a message only while the thread is open
+-- and within 24 hours of its upload (engagement_message_attachments_guard()), so one of an ended engagement or older
+-- than 24 hours at p_now is dead weight. The purge job, with no user bound (a signed-in request deletes nothing of
+-- anyone's), deletes those rows and gets their object keys back, then deletes the objects after it commits (an object
+-- whose deletion fails is unreferenced: nothing serves it, and its key names only ids). A sent attachment is never
+-- touched. A send in flight is waited for (the row lock) and the row re-checked, so an upload that joined its message
+-- stays. SECURITY DEFINER: deletes whatever the caller's RLS (bridge_app's own DELETE is the uploader's).
+CREATE FUNCTION app_purge_stale_message_uploads(p_now timestamptz)
+    RETURNS TABLE (object_key text)
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF public.app_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'app_purge_stale_message_uploads: the stale-upload purge job only, with no user bound'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_now IS NULL THEN
+        RAISE EXCEPTION 'app_purge_stale_message_uploads: name the time' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN QUERY
+    WITH gone AS (
+        DELETE FROM public.engagement_message_attachments a
+         USING public.engagements e
+         WHERE e.id = a.engagement_id AND a.message_id IS NULL
+           AND (a.created_at < p_now - interval '24 hours'
+                OR e.state IN ('DECLINED', 'WITHDRAWN', 'EXPIRED', 'TERMINATED', 'CLOSED'))
+        RETURNING a.object_key
+    )
+    SELECT g.object_key FROM gone g ORDER BY g.object_key;
+END;
+$$;
+
 -- A party reports a message (REQ-ENG-11, D-57 (4)): files one moderation case (subject_type 'message', source
--- 'report', the caller as reporter_id, the reasons given) for a message the caller reads as a party (its engagement's
--- developer, or a member of its organisation narrowed by app.org_id; anyone else gets one refusal, the same as for a
--- message that does not exist), once per reporter and message (a repeat returns the same case with created false), and
--- at most p_daily_limit message reports per reporter in 24 hours (program_limit_exceeded). Serialised per reporter.
--- The report is the reporter sharing that one message with staff (app_reported_message). SECURITY DEFINER: reads the
--- message and writes the case whatever the caller's RLS (bridge_app's own INSERT of a message report is refused).
-CREATE FUNCTION app_report_message(p_message uuid, p_reasons text[], p_daily_limit integer)
+-- 'report', the caller as reporter_id) for a message the caller reads as a party (its engagement's developer, or a
+-- member of its organisation narrowed by app.org_id; anyone else gets one refusal, the same as for a message that does
+-- not exist), once per reporter and message (a repeat returns the same case with created false). The reasons are one
+-- or more of the fixed codes spam, abuse, contact_details, confidential, other (never free text: the case is staff's
+-- to read; each kept once, in code order; invalid_parameter_value otherwise). At most 10 message reports per reporter
+-- in 24 hours, fixed here (no caller names the limit; program_limit_exceeded). Serialised per reporter (an advisory
+-- lock; the count then reads every committed report, at READ COMMITTED, the application's level). The report is the
+-- reporter sharing that one message with staff (app_reported_message). SECURITY DEFINER: reads the message and writes
+-- the case whatever the caller's RLS (bridge_app's own INSERT of a message report is refused).
+CREATE FUNCTION app_report_message(p_message uuid, p_reasons text[])
     RETURNS TABLE (case_id uuid, created boolean)
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -492,8 +570,11 @@ BEGIN
         RAISE EXCEPTION 'app_report_message: no message of the caller''s with that id'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
-    IF p_daily_limit IS NULL OR p_daily_limit < 1 THEN
-        RAISE EXCEPTION 'app_report_message: name the daily limit' USING ERRCODE = 'invalid_parameter_value';
+    IF p_reasons IS NULL OR cardinality(p_reasons) = 0 OR array_ndims(p_reasons) <> 1
+       OR array_position(p_reasons, NULL) IS NOT NULL
+       OR NOT (p_reasons <@ ARRAY['spam', 'abuse', 'contact_details', 'confidential', 'other']) THEN
+        RAISE EXCEPTION 'app_report_message: the reasons are one or more of spam, abuse, contact_details,'
+            ' confidential, other' USING ERRCODE = 'invalid_parameter_value';
     END IF;
     PERFORM pg_catalog.pg_advisory_xact_lock(
         pg_catalog.hashtextextended('moderation_cases:message_report:' || v_user::text, 0));
@@ -505,13 +586,16 @@ BEGIN
     END IF;
     IF (SELECT count(*) FROM public.moderation_cases c
          WHERE c.subject_type = 'message' AND c.source = 'report' AND c.reporter_id = v_user
-           AND c.created_at > now() - interval '1 day') >= p_daily_limit THEN
-        RAISE EXCEPTION 'app_report_message: at most % message reports a day', p_daily_limit
-            USING ERRCODE = 'program_limit_exceeded';
+           AND c.created_at > now() - interval '24 hours') >= 10 THEN
+        RAISE EXCEPTION 'app_report_message: at most 10 message reports a day' USING ERRCODE = 'program_limit_exceeded';
     END IF;
     v_case := public.uuid7();
     INSERT INTO public.moderation_cases (id, subject_type, subject_id, reasons, source, reporter_id)
-    VALUES (v_case, 'message', p_message, p_reasons, 'report', v_user);
+    VALUES (v_case, 'message', p_message,
+            ARRAY(SELECT r.code FROM unnest(ARRAY['spam', 'abuse', 'contact_details', 'confidential', 'other'])
+                                     WITH ORDINALITY AS r(code, n)
+                   WHERE r.code = ANY (p_reasons) ORDER BY r.n),
+            'report', v_user);
     RETURN QUERY SELECT v_case, true;
 END;
 $$;
@@ -542,7 +626,8 @@ $$;
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_org_sees_proposal(uuid, uuid)": ("bridge_app",),  # the shortlist's INSERT policy and the API's 404
     "app_saved_searches_due(timestamptz)": ("bridge_app",),  # the alert job, with no user bound (ids only)
-    "app_report_message(uuid, text[], integer)": ("bridge_app",),  # a party's report of one message
+    "app_purge_stale_message_uploads(timestamptz)": ("bridge_app",),  # the purge job, with no user bound
+    "app_report_message(uuid, text[])": ("bridge_app",),  # a party's report of one message
     "app_reported_message(uuid)": ("bridge_app",),  # staff admin|moderator read the reported message
 }
 TRIGGER_FUNCTIONS = (
@@ -717,10 +802,7 @@ def _create_tables() -> None:
             name=op.f("ck_engagement_message_attachments_size_limit"),
         ),
         sa.CheckConstraint("octet_length(sha256) = 32", name=op.f("ck_engagement_message_attachments_sha256_length")),
-        sa.CheckConstraint(
-            "object_key ~ '^[a-z0-9][a-z0-9/_-]*$' AND char_length(object_key) <= 200",
-            name=op.f("ck_engagement_message_attachments_object_key_ids_only"),
-        ),
+        sa.CheckConstraint(OBJECT_KEY, name=op.f("ck_engagement_message_attachments_object_key_is_its_own")),
         sa.CheckConstraint(
             "message_id IS NULL OR av_status = 'clean'",
             name=op.f("ck_engagement_message_attachments_attached_only_when_clean"),

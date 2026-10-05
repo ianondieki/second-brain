@@ -452,7 +452,8 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "saved_searches_cap()": (True, set()),
     "app_org_sees_proposal(uuid, uuid)": (True, {"bridge_app"}),  # the shortlist's INSERT policy and the API
     "app_saved_searches_due(timestamp with time zone)": (True, {"bridge_app"}),  # the alert job, no user bound
-    "app_report_message(uuid, text[], integer)": (True, {"bridge_app"}),  # a party's report of one message
+    "app_purge_stale_message_uploads(timestamp with time zone)": (True, {"bridge_app"}),  # the purge job, ditto
+    "app_report_message(uuid, text[])": (True, {"bridge_app"}),  # a party's report of one message (fixed limit)
     "app_reported_message(uuid)": (True, {"bridge_app"}),  # staff admin|moderator read the reported message
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
@@ -687,7 +688,7 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0007[kind]}
     assert changed == set(SNAPSHOT) - {"enums"}, "0008 adds tables, functions and policies; no enum type"
     assert set(at_0007["policies"]) - set(at_head["policies"]), "0008 narrows the app's report INSERT policy"
-    assert "app_report_message(uuid,text[],integer) bridge_app EXECUTE" in at_head["function_acl"]
+    assert "app_report_message(uuid,text[]) bridge_app EXECUTE" in at_head["function_acl"]
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0007"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0008 leaves every object of 0007 exactly as it found it (the report policy included)
@@ -1262,13 +1263,17 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             await expect_error(  # revision 0007: the expiry job's list, refused to a signed-in session
                 conn, "SELECT count(*) FROM app_engagements_due_for_expiry(now())", "the engagements.expire job only"
             )
-            # revision 0008: the shortlist's Inbox check (false: no such proposal), the alert job's list (refused to a
-            # signed-in session), a report (refused: no such message) and the staff reader (refused: not staff)
+            # revision 0008: the shortlist's Inbox check (false: no such proposal), the alert job's list and the
+            # purge (refused to a signed-in session), a report (refused: no such message) and the staff reader
+            # (refused: not staff)
             inbox = sa.text("SELECT app_org_sees_proposal(:org, uuid7())")
             assert (await conn.execute(inbox, {"org": org_id})).scalar_one() is False
             await expect_error(conn, "SELECT count(*) FROM app_saved_searches_due(now())", "the saved-search alert job")
             await expect_error(
-                conn, "SELECT * FROM app_report_message(uuid7(), ARRAY['spam'], 10)", "no message of the caller's"
+                conn, "SELECT count(*) FROM app_purge_stale_message_uploads(now())", "the stale-upload purge job"
+            )
+            await expect_error(
+                conn, "SELECT * FROM app_report_message(uuid7(), ARRAY['spam'])", "no message of the caller's"
             )
             await expect_error(conn, "SELECT * FROM app_reported_message(uuid7())", "staff admin or moderator only")
             # revision 0005: the definers and CHECK helpers bridge_app may call
@@ -1889,7 +1894,8 @@ async def test_bridge_app_inserts_every_column_but_the_databases_ones(
 # Revision 0008: columns bridge_app inserts on the tables whose other columns it writes later (an upload's message and
 # verdict, a search's last alert) or never (the database's times). The UPDATE side is APP_COLUMN_UPDATES.
 V6_INSERT_EXCLUDED: dict[str, set[str]] = {
-    "engagement_message_attachments": {"message_id", "created_at"},  # staged first, sent by an UPDATE
+    # staged first and pending: sent and scanned by an UPDATE (the verdict is the API's: storage/scanner.py)
+    "engagement_message_attachments": {"message_id", "av_status", "created_at"},
     "engagement_message_reads": set(),
     "saved_searches": {"last_alerted_at", "created_at"},  # the alert job's, the database's
 }
