@@ -2,7 +2,7 @@
 
 REQ-DEV-01 (D-59). Design: ``docs/platform/tasks/P22.md`` section "A — Today's five". Additive: five new tables
 (``quiz_sets``, ``quiz_questions``, ``quiz_attempts``, ``quiz_flags``, ``quiz_profiles``) with their policies, triggers
-and grants, and sixteen new functions (four of them trigger functions); one new tenancy class in the ORM
+and grants, and seventeen new functions (four of them trigger functions); one new tenancy class in the ORM
 (``Tenancy.CURATED``: the sets and questions, which have no owner). No enum type (text columns with CHECKs). Nothing
 of revisions 0001 to 0008 is changed or dropped; the triggers reuse ``block_mutation()`` (revision 0002) and the clock
 ``app_clock_now()`` (revision 0003). The upgrade is additive; the downgrade is destructive (it drops the quiz: see
@@ -30,7 +30,8 @@ revisions 0007 and 0008's jobs; a "developer" is an active user with a developer
   120, the answer 0 to 3, a why of 1 to 600 (none of them with a control character), a source id, title (160) and
   https URL (400), a topic (60), a 32-byte prompt hash, and a pull complete with its moment and reason (1 to 300).
 - ``quiz_attempts`` (USER; bridge_app: SELECT, INSERT of ``id``, ``set_id``, ``user_id``, ``started_at``,
-  ``answers``, ``time_ms``). The developer reads their own; staff admin every attempt (the queue). A developer inserts
+  ``answers``, ``time_ms``). The developer reads their own and nobody else any (minimisation: staff admin reads a
+  set's attempts in aggregate only, through ``app_quiz_set_stats``). A developer inserts
   as themselves on the approved set of the current Nairobi day only (``app_nairobi_today()``, the shared clock at
   Africa/Nairobi), once per set (UNIQUE (set_id, user_id)). ``answers`` are five values indexed from 1 (``answers[p]``
   answers position p), each NULL or 0 to 3. ``score`` is the database's: ``quiz_attempts_score`` (BEFORE INSERT, every
@@ -66,10 +67,12 @@ listed in ``FUNCTION_GRANTS``):
   (``pulled`` with a reason of 1 to 300 characters) or restore (``live`` with no reason); an unknown question
   no_data_found; the same status again object_not_in_prerequisite_state. Locks the set FOR UPDATE, changes the
   question and rescores the set in the same transaction.
-- ``app_flag_question(question, reason, note)`` -> (flag_id, pulled): a developer only (insufficient_privilege), a
-  reason of ``wrong_answer``, ``unclear``, ``outdated``, ``other`` and an optional note of 1 to 300 characters
-  (invalid_parameter_value), on a question of an approved set (no_data_found otherwise) that is live
-  (object_not_in_prerequisite_state); once per developer and question (unique_violation, constraint
+- ``app_flag_question(question, reason, note)`` -> (flag_id, pulled): a developer (anyone else, like an unknown
+  question or one of a set not approved, gets no_data_found: they read no question), a reason of ``wrong_answer``,
+  ``unclear``, ``outdated``, ``other`` and an optional note of 1 to 300 characters (invalid_parameter_value), who
+  played the set (a finished attempt on it; insufficient_privilege, "play the set first", otherwise: accounts that
+  never played cannot brigade a question out), on a live question (object_not_in_prerequisite_state when it was
+  pulled); once per developer and question (unique_violation, constraint
   ``uq_quiz_flags_question_id_user_id``); at most 10 a Nairobi day per developer (program_limit_exceeded; serialised
   per developer by an advisory lock). Locks the set FOR UPDATE, inserts the flag and, when it is the question's third
   (from 3 distinct developers: one flag per developer), pulls it (``pulled_reason = 'three_flags'``) and rescores the
@@ -79,12 +82,16 @@ listed in ``FUNCTION_GRANTS``):
   (INVOKER, no EXECUTE grant), which locks the set FOR UPDATE and sets every attempt's score to
   ``quiz_attempt_score(set, answers)`` (INVOKER, no EXECUTE grant: the live questions answered correctly, a pulled one
   counting for nobody).
+- ``app_quiz_set_stats(set)`` -> (attempts, average_score, per_question_correct): staff admin only; a set's attempts in
+  aggregate (their number, the average score to 2 decimals, and by position how many answered correctly).
 - ``app_quiz_board()`` -> (rank, handle, points, time_ms, is_caller): a developer only. The ISO week (Monday to Sunday)
   of the current Nairobi day; the points and total time of each developer's attempts on that week's approved sets;
-  ranked (``rank()``: more points first, then less time; equal points and time share a rank) among developers who opted
-  in, are active, are not demo accounts (``users.demo_account``) and played this week; the first 20 rows by rank and
-  handle, plus the caller's own row when it is not among them (``is_caller``): their points and time (0 when they did
-  not play), and the rank they would have (NULL when they did not play or are a demo account). Nothing of past weeks.
+  ranked (``rank()``: more points first, then less time; equal points and time share a rank) among active developers
+  who opted in and played this week and are of the caller's kind: real accounts for a real caller (demo accounts never
+  show to one), demo accounts (``users.demo_account``) for a demo caller (the local demo shows its own people); the
+  first 20 rows by rank and handle, plus the caller's own row when it is not among them (``is_caller``): their points
+  and time (0 when they did not play), and the rank they would have among their kind (NULL when they did not play).
+  Nothing of past weeks.
 - ``app_quiz_day_taken(day)`` and ``app_quiz_recent_prompt_hashes(since)``: the quiz job only, with no user bound
   (insufficient_privilege otherwise; invalid_parameter_value for a NULL argument). Whether the day has a draft or
   approved set; the distinct prompt hashes of draft and approved sets dated ``since`` or later.
@@ -103,7 +110,8 @@ Operating rules for the code that uses this schema:
   the trigger's object_not_in_prerequisite_state (no approved set with that id) cannot follow a served set.
 - Staff decisions and pulls only through ``app_decide_quiz_set`` and ``app_set_quiz_question_status``; the app writes
   the audit events (``quiz.set_decided`` and the pull's) in the same transaction. Flags only through
-  ``SELECT * FROM app_flag_question(:question, :reason, :note)``. The board only through ``app_quiz_board()``.
+  ``SELECT * FROM app_flag_question(:question, :reason, :note)`` (insufficient_privilege is 403 ``play_first``). The
+  board only through ``app_quiz_board()``; the staff set page's numbers only through ``app_quiz_set_stats(set)``.
 - The seed writes ``seeded`` sets as the owner (it may date them in the past, approve them directly with
   ``decided_at`` and leave ``decided_by`` NULL); questions go into a draft before it is approved, attempts onto an
   approved set (their scores are computed by the database).
@@ -224,7 +232,7 @@ POLICIES: tuple[Policy, ...] = (
     ),
     Policy("quiz_questions", "INSERT", check=_JOB),
     # --- quiz_attempts (USER): the developer's own (staff admin reads all); today's approved set only ---
-    Policy("quiz_attempts", "SELECT", f"{_OWN} OR {_STAFF_ADMIN}"),
+    Policy("quiz_attempts", "SELECT", _OWN),  # nobody else reads an attempt (staff: app_quiz_set_stats)
     Policy(
         "quiz_attempts",
         "INSERT",
@@ -384,11 +392,13 @@ BEGIN
 END;
 $$;
 
--- A developer flags a live question of an approved set (D-59): once per question, at most 10 a Nairobi day (fixed
--- here: no caller names the limit), a reason code and an optional note. The question's third flag (one per developer,
--- so three distinct developers) pulls it with the reason 'three_flags' and rescores the set in the same transaction;
--- a question staff restored afterwards is not pulled again by later flags. Serialised per set (FOR UPDATE) and per
--- developer (an advisory lock; the count then reads every committed flag at READ COMMITTED, the application's level).
+-- A developer flags a live question of an approved set (D-59) they played (a finished attempt on its set: accounts
+-- that never played cannot brigade a question out), once per question, at most 10 a Nairobi day (fixed here: no caller
+-- names the limit), a reason code and an optional note. A caller who is not a developer reads no question, so for them
+-- the question does not exist. The question's third flag (one per developer, so three distinct developers who played)
+-- pulls it with the reason 'three_flags' and rescores the set in the same transaction; a question staff restored
+-- afterwards is not pulled again by later flags. Serialised per set (FOR UPDATE) and per developer (an advisory lock;
+-- the count then reads every committed flag at READ COMMITTED, the application's level).
 CREATE FUNCTION app_flag_question(p_question uuid, p_reason text, p_note text)
     RETURNS TABLE (flag_id uuid, pulled boolean)
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -400,7 +410,8 @@ DECLARE
     v_flag uuid;
 BEGIN
     IF v_user IS NULL OR NOT public.app_is_developer() THEN
-        RAISE EXCEPTION 'app_flag_question: developers only' USING ERRCODE = 'insufficient_privilege';
+        RAISE EXCEPTION 'app_flag_question: no question of an approved set with that id'
+            USING ERRCODE = 'no_data_found';
     END IF;
     IF p_reason IS NULL OR p_reason NOT IN ('wrong_answer', 'unclear', 'outdated', 'other')
        OR (p_note IS NOT NULL AND (p_note !~ '[^[:space:]]' OR char_length(p_note) > 300)) THEN
@@ -412,6 +423,9 @@ BEGIN
     IF NOT FOUND THEN
         RAISE EXCEPTION 'app_flag_question: no question of an approved set with that id'
             USING ERRCODE = 'no_data_found';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.quiz_attempts a WHERE a.set_id = v_set AND a.user_id = v_user) THEN
+        RAISE EXCEPTION 'app_flag_question: play the set first' USING ERRCODE = 'insufficient_privilege';
     END IF;
     PERFORM 1 FROM public.quiz_sets s WHERE s.id = v_set FOR UPDATE;
     IF (SELECT q.status FROM public.quiz_questions q WHERE q.id = p_question) <> 'live' THEN
@@ -460,10 +474,12 @@ $$;
 
 -- This week's board (D-59): the ISO week (Monday to Sunday) of the current Nairobi day, the points and total time of
 -- each developer's attempts on the week's approved sets, ranked (more points first, then less time; equal points and
--- time share a rank) among active, non-demo developers who opted in and played this week: the first 20 rows by rank
--- and handle, plus the caller's own row when it is not among them (their points and time, 0 when they did not play,
--- and the rank they would have: NULL when they did not play or are a demo account). Developers only. SECURITY DEFINER:
--- reads every developer's attempts, opt-in and handle, and returns handles and sums only.
+-- time share a rank) among active developers who opted in and played this week and are of the caller's kind: real
+-- accounts for a real caller (a demo account never shows to one), demo accounts (users.demo_account) for a demo
+-- caller (the local demo shows its own people). The first 20 rows by rank and handle, plus the caller's own row when
+-- it is not among them (their points and time, 0 when they did not play, and the rank they would have among their
+-- kind: NULL when they did not play). Developers only. SECURITY DEFINER: reads every developer's attempts, opt-in and
+-- handle, and returns handles and sums only.
 CREATE FUNCTION app_quiz_board()
     RETURNS TABLE (rank integer, handle text, points integer, time_ms bigint, is_caller boolean)
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -471,12 +487,14 @@ CREATE FUNCTION app_quiz_board()
 AS $$
 DECLARE
     v_user uuid := public.app_user_id();
+    v_demo boolean;
     v_today date;
     v_monday date;
 BEGIN
     IF v_user IS NULL OR NOT public.app_is_developer() THEN
         RAISE EXCEPTION 'app_quiz_board: developers only' USING ERRCODE = 'insufficient_privilege';
     END IF;
+    SELECT u.demo_account INTO v_demo FROM public.users u WHERE u.id = v_user;
     v_today := public.app_nairobi_today();
     v_monday := v_today - (extract(isodow FROM v_today)::integer - 1);
     RETURN QUERY
@@ -490,7 +508,7 @@ BEGIN
                (pg_catalog.rank() OVER (ORDER BY w.pts DESC, w.ms))::integer AS pos
           FROM week w
           JOIN public.quiz_profiles p ON p.user_id = w.user_id AND p.leaderboard_opt_in
-          JOIN public.users u ON u.id = w.user_id AND u.status = 'active' AND NOT u.demo_account
+          JOIN public.users u ON u.id = w.user_id AND u.status = 'active' AND u.demo_account = v_demo
           JOIN public.developer_profiles d ON d.user_id = w.user_id
     ), leaders AS (
         SELECT b.user_id, b.who, b.pts, b.ms, b.pos FROM board b ORDER BY b.pos, b.who LIMIT 20
@@ -500,17 +518,41 @@ BEGIN
     )
     SELECT l.pos, l.who, l.pts, l.ms, l.user_id = v_user FROM leaders l
     UNION ALL
-    SELECT CASE WHEN m.played AND NOT u.demo_account THEN
+    SELECT CASE WHEN m.played THEN
                 coalesce((SELECT b.pos FROM board b WHERE b.user_id = v_user),
                          1 + (SELECT count(*) FROM board b
                                WHERE b.pts > m.pts OR (b.pts = m.pts AND b.ms < m.ms))::integer)
            END,
            d.handle::text, m.pts, m.ms, true
       FROM mine m
-      JOIN public.users u ON u.id = v_user
       JOIN public.developer_profiles d ON d.user_id = v_user
      WHERE NOT EXISTS (SELECT 1 FROM leaders l WHERE l.user_id = v_user)
      ORDER BY 1 NULLS LAST, 2;
+END;
+$$;
+
+-- A set's attempts in aggregate, for the staff queue (D-59; minimisation: no role but the owner reads another
+-- developer's attempt row): how many, their average score (2 decimals; NULL with none) and, by position, how many
+-- answered the question correctly (pulled ones included, against their answer). Staff admin only; an unknown set
+-- no_data_found. SECURITY DEFINER: reads the attempts and answers, returns counts only.
+CREATE FUNCTION app_quiz_set_stats(p_set uuid)
+    RETURNS TABLE (attempts integer, average_score numeric, per_question_correct integer[])
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NOT public.app_is_staff('{admin}') THEN
+        RAISE EXCEPTION 'app_quiz_set_stats: staff admin only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.quiz_sets s WHERE s.id = p_set) THEN
+        RAISE EXCEPTION 'app_quiz_set_stats: no quiz set with that id' USING ERRCODE = 'no_data_found';
+    END IF;
+    RETURN QUERY
+    SELECT (SELECT count(*)::integer FROM public.quiz_attempts a WHERE a.set_id = p_set),
+           (SELECT round(avg(a.score), 2) FROM public.quiz_attempts a WHERE a.set_id = p_set),
+           ARRAY(SELECT (SELECT count(*)::integer FROM public.quiz_attempts a
+                          WHERE a.set_id = p_set AND a.answers[q.position] = q.answer)
+                   FROM public.quiz_questions q WHERE q.set_id = p_set ORDER BY q.position);
 END;
 $$;
 
@@ -654,6 +696,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_set_quiz_question_status(uuid, text, text)": ("bridge_app",),  # staff admin
     "app_flag_question(uuid, text, text)": ("bridge_app",),  # a developer
     "app_quiz_answers(uuid)": ("bridge_app",),  # after the caller's attempt, or staff admin
+    "app_quiz_set_stats(uuid)": ("bridge_app",),  # staff admin: a set's attempts in aggregate
     "app_quiz_board()": ("bridge_app",),  # a developer
     "app_quiz_day_taken(date)": ("bridge_app",),  # the job, with no user bound
     "app_quiz_recent_prompt_hashes(date)": ("bridge_app",),  # the job, with no user bound

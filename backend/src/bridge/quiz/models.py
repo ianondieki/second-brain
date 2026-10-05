@@ -17,12 +17,15 @@ One set of five multiple-choice questions per Nairobi day, drafted by the nightl
   shared clock), once per set; its ``answers`` are five values, each NULL or 0 to 3. Its ``score`` is the database's:
   the number of live questions answered correctly, computed at insert whatever is sent (bridge_app cannot name the
   column; read it back) and again on every pull and restore (``app_rescore_quiz_set``). ``finished_at`` and
-  ``created_at`` are the database's clock. Append-only for the app.
-- A flag is filed only through ``app_flag_question(question, reason, note)``: once per developer per question, at most
-  10 a Nairobi day, on a live question of an approved set; the third distinct developer's flag pulls the question
-  (reason ``three_flags``) and rescores the set.
+  ``created_at`` are the database's clock. Append-only for the app. Nobody but its developer reads an attempt row:
+  staff admin reads a set's attempts in aggregate through ``app_quiz_set_stats(set)``.
+- A flag is filed only through ``app_flag_question(question, reason, note)``: by a developer who played the set
+  (insufficient_privilege otherwise: 403 ``play_first``), once per developer per question, at most 10 a Nairobi day,
+  on a live question of an approved set; the third distinct developer's flag pulls the question (reason
+  ``three_flags``) and rescores the set.
 - ``quiz_profiles`` is the developer's own row (leaderboard opt-in and the streak, kept in code at finish time). The
-  weekly board reads other developers only through ``app_quiz_board()``.
+  weekly board reads other developers only through ``app_quiz_board()``, and only of the caller's kind: real accounts
+  for a real caller, demo accounts for a demo caller.
 
 The nightly job (no user bound) asks ``app_quiz_day_taken(day)`` and ``app_quiz_recent_prompt_hashes(since)`` (it
 reads no quiz row itself), then inserts the set and its five questions without RETURNING (``eager_defaults`` is off on
@@ -200,7 +203,8 @@ class QuizAttempt(IdMixin, Base):
     """A developer's one finished attempt on a set: the app inserts ``id``, ``set_id``, ``user_id`` (the caller),
     ``started_at`` (optional, not after the finish), ``answers`` (five, each NULL or 0 to 3) and ``time_ms``, on the
     approved set of the current Nairobi day only. ``score`` is the database's (computed at insert whatever is sent and
-    on every rescore: read it back), as are ``finished_at`` and ``created_at``. Never updated or deleted by the app."""
+    on every rescore: read it back), as are ``finished_at`` and ``created_at``. Never updated or deleted by the app;
+    read by its developer only (staff: ``app_quiz_set_stats``)."""
 
     __tablename__ = "quiz_attempts"
     __table_args__ = (
@@ -224,8 +228,8 @@ class QuizAttempt(IdMixin, Base):
 
 
 class QuizFlag(IdMixin, Base):
-    """A developer's flag on a question, written only by ``app_flag_question`` (bridge_app reads its own and staff
-    admin every flag; no direct write). ``created_at`` is the database's clock."""
+    """A developer's flag on a question of a set they played, written only by ``app_flag_question`` (bridge_app reads
+    its own and staff admin every flag; no direct write). ``created_at`` is the database's clock."""
 
     __tablename__ = "quiz_flags"
     __table_args__ = (

@@ -22,10 +22,14 @@ session's other tests (``free_day``).
 from __future__ import annotations
 
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+import psycopg
+import pytest
 import sqlalchemy as sa
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.ids import uuid7
@@ -46,11 +50,14 @@ from tests.integration.quiz.schema_world import (
     draft,
     flag,
     free_day,
+    owner_attempt,
     owner_set,
     people,
     question,
     scores,
 )
+
+STATS = "SELECT attempts, average_score, per_question_correct FROM app_quiz_set_stats(:s)"
 
 
 async def test_the_job_drafts_reads_only_through_its_functions_and_decides_nothing(owner_engine: AsyncEngine) -> None:
@@ -323,6 +330,14 @@ async def test_three_developers_flags_pull_a_question_and_every_attempt_is_resco
             await t.expect(conn, FLAG, refusal, question=questions[0], reason=reason, note=note)
         for unknown in (uuid7(), later[0]):  # no such question; a draft's
             await t.expect(conn, FLAG, "no question of an approved set", question=unknown, reason="other", note=None)
+        await t.act(conn, p.fourth)  # a developer who has not played the set
+        savepoint = await conn.begin_nested()
+        with pytest.raises(DBAPIError, match="play the set first") as refused:
+            await conn.execute(sa.text(FLAG), {"question": questions[0], "reason": "other", "note": None})
+        await savepoint.rollback()
+        assert isinstance(refused.value.orig, psycopg.Error)
+        assert refused.value.orig.sqlstate == "42501"  # insufficient_privilege: the API's 403 play_first
+        await t.act(conn, p.developer)
         first = (
             await conn.execute(
                 sa.text(FLAG), {"question": questions[0], "reason": "wrong_answer", "note": "The answer is Alpha."}
@@ -330,9 +345,10 @@ async def test_three_developers_flags_pull_a_question_and_every_attempt_is_resco
         ).one()
         assert first.pulled is False
         await t.expect(conn, FLAG, "already flagged by the caller", question=questions[0], reason="other", note=None)
-        for user in (p.org_only, p.admin, None):
+        for user in (p.org_only, p.admin, None):  # they read no question: for them it does not exist
             await t.act(conn, user)
-            await t.expect(conn, FLAG, "developers only", question=questions[0], reason="other", note=None)
+            unseen = {"question": questions[0], "reason": "other", "note": None}
+            await t.expect(conn, FLAG, "no question of an approved set", **unseen)
         assert await flag(conn, p.other, questions[0], "outdated") is False
         assert await scores(conn, set_id) == {p.developer: 5, p.other: 4, p.third: 0}
         assert await flag(conn, p.third, questions[0], "unclear") is True
@@ -344,6 +360,8 @@ async def test_three_developers_flags_pull_a_question_and_every_attempt_is_resco
             True,
         )
         await t.act(conn, p.fourth)
+        await t.expect(conn, FLAG, "play the set first", question=questions[0], reason="other", note=None)
+        assert await attempt(conn, set_id, p.fourth, [None] * 5) == 0
         await t.expect(conn, FLAG, "the question was pulled", question=questions[0], reason="other", note=None)
         assert await t.run(conn, "SELECT count(*) FROM quiz_flags") == 0  # their own: none
         await t.act(conn, p.developer)
@@ -371,10 +389,10 @@ async def test_three_developers_flags_pull_a_question_and_every_attempt_is_resco
         await t.expect(conn, SET_STATUS, "no quiz question", question=uuid7(), status="live", reason=None)
         assert await t.run(conn, SET_STATUS, question=questions[0], status="live", reason=None) == 1
         await t.expect(conn, SET_STATUS, "already live", question=questions[0], status="live", reason=None)
-        assert await scores(conn, set_id) == {p.developer: 5, p.other: 4, p.third: 0}
+        assert await scores(conn, set_id) == {p.developer: 5, p.other: 4, p.third: 0, p.fourth: 0}
         await t.act(conn, p.admin)
         assert await t.run(conn, SET_STATUS, question=questions[1], status="pulled", reason="Two answers fit.") == 2
-        assert await scores(conn, set_id) == {p.developer: 4, p.other: 3, p.third: 0}
+        assert await scores(conn, set_id) == {p.developer: 4, p.other: 3, p.third: 0, p.fourth: 0}
         assert await flag(conn, p.fourth, questions[0]) is False  # a fourth flag: staff restored it, it stays live
         await t.as_owner(conn)
         assert await t.run(conn, "SELECT status FROM quiz_questions WHERE id = :q", q=questions[0]) == "live"
@@ -389,13 +407,19 @@ async def test_three_developers_flags_pull_a_question_and_every_attempt_is_resco
 
 async def test_at_most_ten_flags_a_nairobi_day_per_developer(owner_engine: AsyncEngine) -> None:
     """Ten flags in a Nairobi day, then the eleventh is refused (a fixed limit); the next day, flags are taken again;
-    another developer has their own ten."""
+    another developer has their own ten. Each flags questions of sets they played."""
     async with t.as_app(owner_engine) as conn:
         p = await people(conn)
         today = await free_day(conn)
-        questions = (await approved(conn, today, p.admin))[1]
+        set_id, questions = await approved(conn, today, p.admin)
+        sets = [set_id]
         for back in (1, 2):
-            questions += (await owner_set(conn, today - timedelta(days=back)))[1]
+            past, ids = await owner_set(conn, today - timedelta(days=back))
+            sets.append(past)
+            questions += ids
+        for played in sets:
+            await owner_attempt(conn, played, p.developer)
+        await owner_attempt(conn, sets[2], p.other)
         for question_id in questions[:10]:
             assert await flag(conn, p.developer, question_id) is False
         await t.expect(conn, FLAG, "at most 10 flags a day", question=questions[10], reason="other", note=None)
@@ -409,9 +433,10 @@ async def test_at_most_ten_flags_a_nairobi_day_per_developer(owner_engine: Async
 async def test_a_developer_reads_and_writes_only_their_own_attempts_flags_and_profile(
     owner_engine: AsyncEngine,
 ) -> None:
-    """Developers read only their own attempts, flags and quiz profile; staff admin reads attempts and flags (the
-    queue), never profiles; a profile is inserted and updated by its developer only, its streak checked, its key and
-    time never written; an organisation-only account cannot create one."""
+    """Developers read only their own attempts, flags and quiz profile; staff admin reads flags (the queue), a set's
+    attempts only in aggregate (``app_quiz_set_stats``) and never a profile; a profile is inserted and updated by its
+    developer only, its streak checked, its key and time never written; an organisation-only account cannot create
+    one."""
     async with t.as_app(owner_engine) as conn:
         p = await people(conn)
         today = await free_day(conn)
@@ -451,8 +476,20 @@ async def test_a_developer_reads_and_writes_only_their_own_attempts_flags_and_pr
         await t.act(conn, p.org_only)
         await t.expect(conn, profile, RLS, u=p.org_only, opt=False, streak=0, best=0, day=None)
         await t.act(conn, p.admin)
-        assert await t.run(conn, "SELECT count(*) FROM quiz_attempts WHERE set_id = :s", s=set_id) == 2
+        assert await t.run(conn, "SELECT count(*) FROM quiz_attempts") == 0  # no attempt row but one's own
         assert await t.run(conn, "SELECT count(*) FROM quiz_flags WHERE question_id = :q", q=questions[0]) == 2
+        await attempt(conn, set_id, p.third, [1, 0, 3, None, 1])
+        await t.act(conn, p.admin)
+        stats = (await conn.execute(sa.text(STATS), {"s": set_id})).one()
+        assert tuple(stats) == (3, Decimal("4.33"), [3, 2, 3, 2, 3])
+        empty, _ = await draft(conn, today + timedelta(days=1))
+        await t.act(conn, p.admin)
+        assert tuple((await conn.execute(sa.text(STATS), {"s": empty})).one()) == (0, None, [0, 0, 0, 0, 0])
+        await t.expect(conn, STATS, "no quiz set with that id", s=uuid7())
+        for caller in (p.developer, p.moderator, p.org_only, None):
+            await t.act(conn, caller)
+            await t.expect(conn, STATS, "staff admin only", s=set_id)
+        await t.act(conn, p.admin)
         assert (
             await t.run(conn, "SELECT count(*) FROM quiz_profiles WHERE user_id IN (:a, :b)", a=p.developer, b=p.other)
             == 0
@@ -463,10 +500,11 @@ BOARD = "SELECT rank, handle, points, time_ms, is_caller FROM app_quiz_board()"
 
 
 async def test_the_board_is_this_weeks_opted_in_developers_by_points_then_time(owner_engine: AsyncEngine) -> None:
-    """The board sums this ISO week's attempts on approved sets (last week's do not count) of active, non-demo
-    developers who opted in; more points first, then less time, equal both sharing a rank; the first 20 rows by rank
-    and handle, plus the caller's own row: the rank they would have when not opted in, none when they did not play or
-    are a demo account. Developers only."""
+    """The board sums this ISO week's attempts on approved sets (last week's do not count) of active developers who
+    opted in and are of the caller's kind: a real caller never sees a demo account, a demo caller sees only demo
+    accounts (the local demo's people); more points first, then less time, equal both sharing a rank; the first 20
+    rows by rank and handle, plus the caller's own row: the rank they would have among their kind when not opted in,
+    none when they did not play. Developers only."""
     async with t.as_app(owner_engine) as conn:
         p = await people(conn)
         today = await free_day(conn)
@@ -474,7 +512,7 @@ async def test_the_board_is_this_weeks_opted_in_developers_by_points_then_time(o
         monday = today - timedelta(days=today.weekday())
         last_week, _ = await owner_set(conn, monday - timedelta(days=1))
         players: dict[str, UUID] = {}
-        for label in ("ann", "ben", "cat", "dee", "eve", "fay"):
+        for label in ("ann", "ben", "cat", "dee", "eve", "fay", "gus", "hal", "ivy"):
             players[label] = await developer(conn, label)
         extras = [await developer(conn, f"x{n:02d}") for n in range(22)]
         opted = "INSERT INTO quiz_profiles (user_id, leaderboard_opt_in) VALUES (:u, :opt)"
@@ -496,8 +534,11 @@ async def test_the_board_is_this_weeks_opted_in_developers_by_points_then_time(o
         await plays(players["ann"], four, 50000, True)
         await plays(players["ben"], four, 40000, True)
         await plays(players["fay"], four, 40000, True)  # ties ben
-        await plays(players["cat"], list(KEY), 10000, True)  # a demo account
-        await t.run(conn, "UPDATE users SET demo_account = true WHERE id = :u", u=players["cat"])
+        await plays(players["cat"], list(KEY), 10000, True)  # cat, gus, hal and ivy: demo accounts
+        await plays(players["gus"], [1, 2, 3, None, None], 20000, True)
+        await plays(players["hal"], four, 30000, False)  # not opted in
+        demo = [players[label] for label in ("cat", "gus", "hal", "ivy")]  # ivy did not play
+        await t.run(conn, "UPDATE users SET demo_account = true WHERE id = ANY(:u)", u=demo)
         await plays(players["dee"], list(KEY), 90000, False)  # not opted in
         await plays(players["ann"], list(KEY), 1000, True, set_id=last_week)  # last week: not counted
         for n, user in enumerate(extras):
@@ -513,7 +554,7 @@ async def test_the_board_is_this_weeks_opted_in_developers_by_points_then_time(o
         leaders = [(1, tied[0], 4, 40000), (1, tied[1], 4, 40000), (3, handle[players["ann"]], 4, 50000)]
         leaders += [(4 + n, handle[user], 1, 1000 + n) for n, user in enumerate(extras[:17])]
         seen = await board(players["ann"])
-        assert [row[:4] for row in seen] == leaders  # 20 rows: cat (demo) and dee (not opted in) left out
+        assert [row[:4] for row in seen] == leaders  # 20 rows: the demo accounts and dee (not opted in) left out
         assert [row[1] for row in seen if row[4]] == [handle[players["ann"]]]
         last = await board(extras[21])
         assert last[:20] == [(*row, False) for row in leaders]
@@ -521,9 +562,12 @@ async def test_the_board_is_this_weeks_opted_in_developers_by_points_then_time(o
         dee = await board(players["dee"])
         assert (1, handle[players["dee"]], 5, 90000, True) in dee
         assert len(dee) == 21
-        cat = await board(players["cat"])
-        assert cat[-1] == (None, handle[players["cat"]], 5, 10000, True)
         assert (await board(players["eve"]))[-1] == (None, handle[players["eve"]], 0, 0, True)  # did not play
+        cat, gus = (1, handle[players["cat"]], 5, 10000), (2, handle[players["gus"]], 3, 20000)
+        assert await board(players["cat"]) == [(*cat, True), (*gus, False)]  # demo accounts only
+        hal = (2, handle[players["hal"]], 4, 30000, True)  # the rank hal would have among the demo accounts
+        assert await board(players["hal"]) == [(*cat, False), (*gus, False), hal]
+        assert await board(players["ivy"]) == [(*cat, False), (*gus, False), (None, handle[players["ivy"]], 0, 0, True)]
         for caller in (p.org_only, p.admin, None):
             await t.act(conn, caller)
             await t.expect(conn, BOARD, "developers only")

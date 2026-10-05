@@ -32,6 +32,7 @@ from tests.integration.quiz.schema_world import (
     People,
     approved,
     flag,
+    owner_attempt,
     owner_set,
     people,
     scores,
@@ -110,10 +111,13 @@ async def test_a_pull_waits_for_an_attempt_in_flight_and_rescores_it(url: URL) -
 async def test_two_flags_racing_past_the_ninth_leave_exactly_ten(url: URL) -> None:
     owner, app = role_engine(url, "bridge_owner"), role_engine(url, "bridge_app")
     try:
-        p, today, _, questions = await _committed_set(owner)
+        p, today, set_id, questions = await _committed_set(owner)
         async with owner.begin() as conn:
+            await owner_attempt(conn, set_id, p.developer)
             for back in (1, 2):
-                questions += (await owner_set(conn, date.fromordinal(today.toordinal() - back)))[1]
+                past, ids = await owner_set(conn, date.fromordinal(today.toordinal() - back))
+                await owner_attempt(conn, past, p.developer)  # a developer flags only what they played
+                questions += ids
             for question_id in questions[:9]:
                 assert await flag(conn, p.developer, question_id) is False
         async with app.connect() as first, app.connect() as second:

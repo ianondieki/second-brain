@@ -477,6 +477,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_set_quiz_question_status(uuid, text, text)": (True, {"bridge_app"}),  # staff admin
     "app_flag_question(uuid, text, text)": (True, {"bridge_app"}),  # a developer (fixed limits)
     "app_quiz_answers(uuid)": (True, {"bridge_app"}),  # after the caller's attempt, or staff admin
+    "app_quiz_set_stats(uuid)": (True, {"bridge_app"}),  # staff admin: a set's attempts in aggregate only
     "app_quiz_board()": (True, {"bridge_app"}),  # a developer
     "app_quiz_day_taken(date)": (True, {"bridge_app"}),  # the quiz job, no user bound
     "app_quiz_recent_prompt_hashes(date)": (True, {"bridge_app"}),  # the quiz job, no user bound

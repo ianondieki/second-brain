@@ -148,6 +148,22 @@ async def attempt(conn: AsyncConnection, set_id: UUID, user: UUID, answers: list
     return score
 
 
+async def owner_attempt(
+    conn: AsyncConnection, set_id: UUID, user: UUID, answers: list[int | None] | None = None
+) -> None:
+    """As the owner (as the seed may): ``user``'s attempt on any approved set, of any day (all skipped by default)."""
+    await t.as_owner(conn)
+    await t.run(
+        conn,
+        "INSERT INTO quiz_attempts (id, set_id, user_id, answers, time_ms)"
+        " VALUES (:id, :set, :user, CAST(:answers AS smallint[]), 1000)",
+        id=uuid7(),
+        set=set_id,
+        user=user,
+        answers=answers or [None] * 5,
+    )
+
+
 async def scores(conn: AsyncConnection, set_id: UUID) -> dict[UUID, int]:
     await t.as_owner(conn)
     return {row.user_id: row.score for row in await conn.execute(sa.text(SCORES), {"set": set_id})}
