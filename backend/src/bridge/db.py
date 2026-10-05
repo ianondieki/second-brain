@@ -27,7 +27,18 @@ TENANT_KEY = "bridge.tenant"
 _SET_TENANT = text("select set_config('app.user_id', :user_id, true), set_config('app.org_id', :org_id, true)")
 
 
-def create_engine(url: str, **kwargs: Any) -> AsyncEngine:
+# The API's connections end a transaction left idle this long (the server closes the session): a request that stalls
+# while holding locks frees them. Above the longest transaction a request holds idle on purpose (an email sent inside
+# its transaction: three provider attempts of 30 s and the backoff). The worker's jobs keep the server default.
+API_IDLE_IN_TRANSACTION_MS: Final = 300_000
+
+
+def create_engine(url: str, *, idle_in_transaction_timeout_ms: int | None = None, **kwargs: Any) -> AsyncEngine:
+    """An async engine on ``url``; ``idle_in_transaction_timeout_ms`` sets the session's
+    ``idle_in_transaction_session_timeout`` on every connection (the API's engine)."""
+    if idle_in_transaction_timeout_ms is not None:
+        options = f"-c idle_in_transaction_session_timeout={int(idle_in_transaction_timeout_ms)}"
+        kwargs["connect_args"] = {**kwargs.get("connect_args", {}), "options": options}
     # hide_parameters: DB errors never echo bound values (emails, password hashes) into logs.
     return create_async_engine(url, pool_pre_ping=True, hide_parameters=True, **kwargs)
 

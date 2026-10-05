@@ -22,7 +22,7 @@ from datetime import date, datetime
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.audit.service import record as audit
@@ -36,6 +36,8 @@ from bridge.engagements.models import (
     Engagement,
     EngagementEndorsement,
     EngagementEvent,
+    EngagementMessage,
+    EngagementMessageRead,
     EngagementNote,
     Milestone,
     PaymentRecord,
@@ -52,6 +54,7 @@ from bridge.engagements.schemas import (
     EngagementDetail,
     EngagementSummary,
     HistoryEventOut,
+    HistoryMessageOut,
     HistoryOut,
     MilestoneOut,
     NoteOut,
@@ -86,6 +89,12 @@ async def _names(db: AsyncSession, ids: Iterable[UUID | None]) -> dict[UUID, str
 
 
 HANDLE_FALLBACK = "Developer"  # a version without a handle (never registered): the organisation sees this
+FORMER_MEMBER = "Former member"  # [[COPY-REVIEW]] a message's sender whose name the caller can no longer read
+
+
+def sender_name(names: dict[UUID, str], sender_user_id: UUID) -> str:
+    """A thread message's sender as the thread and the History tab both name them (``party_names``' names)."""
+    return names.get(sender_user_id) or FORMER_MEMBER
 
 
 async def developer_revealed(db: AsyncSession, engagement_id: UUID) -> bool:
@@ -108,6 +117,40 @@ async def developer_identity(
         return engagement.developer_id, name or HANDLE_FALLBACK, True
     handle = await db.scalar(select(ProposalVersion.owner_handle).where(ProposalVersion.id == engagement.version_id))
     return None, handle or HANDLE_FALLBACK, False
+
+
+async def party_names(
+    db: AsyncSession, engagement: Engagement, user_ids: Iterable[UUID], *, developer_caller: bool
+) -> dict[UUID, str]:
+    """The display names of the parties among ``user_ids`` as the tracker shows them to the caller: the developer by
+    ``developer_identity``'s rule (their handle for the organisation until named), everyone else by name."""
+    wanted = set(user_ids)
+    names = await _names(db, wanted - {engagement.developer_id})
+    if engagement.developer_id in wanted:
+        _, names[engagement.developer_id], _ = await developer_identity(
+            db, engagement, developer_caller=developer_caller
+        )
+    return names
+
+
+async def unread_counts(db: AsyncSession, reader_id: UUID, engagement_ids: Sequence[UUID]) -> dict[UUID, int]:
+    """Per engagement of ``engagement_ids``: the thread's messages by others that ``reader_id`` has not read (newer
+    than their read marker, or all of them without one), in one statement however many engagements (REQ-ENG-11)."""
+    if not engagement_ids:
+        return {}
+    m, r = EngagementMessage, EngagementMessageRead
+    rows = await db.execute(
+        select(m.engagement_id, func.count())
+        .select_from(m)
+        .outerjoin(r, and_(r.engagement_id == m.engagement_id, r.user_id == reader_id))
+        .where(
+            m.engagement_id.in_(list(engagement_ids)),
+            m.sender_user_id != reader_id,
+            or_(r.last_read_at.is_(None), m.created_at > r.last_read_at),
+        )
+        .group_by(m.engagement_id)
+    )
+    return {engagement_id: int(count) for engagement_id, count in rows.tuples()}
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +204,7 @@ def _summary(
     holidays: frozenset[date],
     *,
     developer_caller: bool,
+    unread: int = 0,
 ) -> EngagementSummary:
     title, handle = shown.versions.get(engagement.version_id, (None, None))
     named = developer_caller or engagement.id in shown.revealed
@@ -193,6 +237,7 @@ def _summary(
         whose_turn=list(sm.whose_turn(engagement.state, loaded.facts)),
         updated_at=engagement.updated_at,
         paused_from=loaded.facts.paused_from,
+        unread_messages=unread,
     )
 
 
@@ -204,22 +249,34 @@ async def summary(
     holidays: frozenset[date],
     *,
     developer_caller: bool,
+    reader_id: UUID | None = None,
 ) -> EngagementSummary:
     shown = await _shown(db, [engagement], developer_caller=developer_caller)
-    return _summary(engagement, loaded, shown, now, holidays, developer_caller=developer_caller)
+    unread = (await unread_counts(db, reader_id, [engagement.id])).get(engagement.id, 0) if reader_id else 0
+    return _summary(engagement, loaded, shown, now, holidays, developer_caller=developer_caller, unread=unread)
 
 
 async def summaries(
-    db: AsyncSession, engagements: Sequence[Engagement], *, deals_enabled: bool, developer_caller: bool
+    db: AsyncSession,
+    engagements: Sequence[Engagement],
+    *,
+    deals_enabled: bool,
+    developer_caller: bool,
+    reader_id: UUID | None = None,
 ) -> list[EngagementSummary]:
-    """The summary of each engagement (the lists), with one query per kind of row however many there are (P16-E1)."""
+    """The summary of each engagement (the lists), with one query per kind of row however many there are (P16-E1);
+    with ``reader_id``, each counts the thread's messages that reader has not read."""
     if not engagements:
         return []
     now = await app_now(db)
     holidays = await load_holidays(db, local_date(now))
     loaded = await load_many(db, engagements, deals_enabled=deals_enabled, developer_caller=developer_caller)
     shown = await _shown(db, engagements, developer_caller=developer_caller)
-    return [_summary(e, loaded[e.id], shown, now, holidays, developer_caller=developer_caller) for e in engagements]
+    unread = await unread_counts(db, reader_id, [e.id for e in engagements]) if reader_id else {}
+    return [
+        _summary(e, loaded[e.id], shown, now, holidays, developer_caller=developer_caller, unread=unread.get(e.id, 0))
+        for e in engagements
+    ]
 
 
 def _endorsement(row: EngagementEndorsement, names: dict[UUID, str], hidden: UUID | None = None) -> EndorsementOut:
@@ -254,7 +311,9 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
     loaded = await load(db, engagement, deals_enabled=deals_enabled, developer_caller=party.is_developer)
     now = await app_now(db)
     holidays = await load_holidays(db, local_date(now))
-    base = await summary(db, engagement, loaded, now, holidays, developer_caller=party.is_developer)
+    base = await summary(
+        db, engagement, loaded, now, holidays, developer_caller=party.is_developer, reader_id=party.user_id
+    )
     agreements = list(
         (
             await db.execute(
@@ -479,7 +538,22 @@ async def history(db: AsyncSession, engagement_id: UUID, *, developer_caller: bo
     connection = await db.connection()
     rows = await chain.load_chain(connection, engagement_id)
     endorsements = await _endorsements(db, engagement_id)
-    names = await _names(db, [*(r.actor_user_id for r in rows), *(e.user_id for e in endorsements)])
+    messages = (
+        await db.execute(
+            select(
+                EngagementMessage.id,
+                EngagementMessage.sender_party,
+                EngagementMessage.sender_user_id,
+                EngagementMessage.created_at,
+            )
+            .where(EngagementMessage.engagement_id == engagement_id)
+            .order_by(EngagementMessage.created_at, EngagementMessage.id)
+        )
+    ).all()
+    names = await _names(
+        db,
+        [*(r.actor_user_id for r in rows), *(e.user_id for e in endorsements), *(m.sender_user_id for m in messages)],
+    )
     _, handle, named = await developer_identity(db, engagement, developer_caller=developer_caller)
     hidden = None if named else engagement.developer_id
     if hidden is not None:
@@ -508,6 +582,15 @@ async def history(db: AsyncSession, engagement_id: UUID, *, developer_caller: bo
         chain_verified=bool(rows) and not chain.verify_rows(rows),
         events=events,
         endorsements=[_endorsement(e, names, hidden) for e in endorsements],
+        messages=[  # who wrote and when (AC-TRACK-9), never the text; the developer by handle until named
+            HistoryMessageOut(
+                id=m.id,
+                sender_party=m.sender_party,
+                sender_name=sender_name(names, m.sender_user_id),
+                created_at=m.created_at,
+            )
+            for m in messages
+        ],
     )
 
 

@@ -12,8 +12,10 @@
 - ``GET /moderation/cases/{case_id}``: one case as the queue shows it, open or decided, whatever its place in the
   queue (the case page; the lists stop at 200). 404 when there is no such case; the same staff gate as the queue.
 - ``POST /moderation/cases/{case_id}/decision``: approve or reject the version reviewed (``subject_version_id``;
-  409 ``case_changed`` when the author published another since) through ``bridge.admin.moderation``; audited as
-  ``moderation.case_decided``.
+  409 ``case_changed`` when the author published another since) through ``bridge.admin.moderation``, or dismiss or
+  uphold a message report (REQ-ENG-11; the message never changes), with an optional staff note; audited as
+  ``moderation.case_decided``. A message report's case read by its id carries the reported message (each read
+  audited as ``moderation.reported_message_read``).
 
 Other queues are sub-routers of their own: ``bridge.admin.research`` (``/research/*``, P11) and ``bridge.admin.claims``
 (``/claims``, read only, P15).
@@ -174,4 +176,5 @@ async def decide_case(
         case_id=case_id,
         decision=body.decision,
         subject_version_id=body.subject_version_id,
+        note=body.note,
     )

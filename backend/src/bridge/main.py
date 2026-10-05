@@ -24,10 +24,11 @@ from bridge.auth.router import router as auth_router
 from bridge.billing.router import plans_router
 from bridge.billing.router import router as billing_router
 from bridge.config import Settings, get_settings
-from bridge.db import create_engine, create_session_factory
+from bridge.db import API_IDLE_IN_TRANSACTION_MS, create_engine, create_session_factory
 from bridge.directory.responsiveness import NoResponsivenessData
 from bridge.directory.router import router as directory_router
 from bridge.engagements.interest_router import router as interest_router
+from bridge.engagements.messages_router import router as messages_router
 from bridge.engagements.router import router as engagements_router
 from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
@@ -82,7 +83,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.sms_provider = sms_provider_from_settings(settings)  # fails closed (production needs the vendor)
-        engine = create_engine(settings.database_url.get_secret_value())
+        engine = create_engine(
+            settings.database_url.get_secret_value(), idle_in_transaction_timeout_ms=API_IDLE_IN_TRANSACTION_MS
+        )
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
         app.state.email_provider = provider_from_settings(settings)
@@ -154,6 +157,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(problems_router)
     app.include_router(briefs_router)
     app.include_router(engagements_router)
+    app.include_router(messages_router)
     app.include_router(plans_router)
     app.include_router(billing_router)
     app.include_router(interest_router)

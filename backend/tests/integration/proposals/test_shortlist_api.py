@@ -133,6 +133,8 @@ async def test_p21_b1_tier2_members_add_and_remove_and_every_member_reads(
     assert (added["added_by_id"], added["added_by_name"]) == (str(s.reviewer), "Member")
     again = await ok(await signatory.put(shortlist_url(s.org, first)))  # idempotent: the first add stays
     assert again == added
+    assert await ok(await viewer.get(shortlist_url(s.org, first))) == added  # the one entry, for every member
+    assert code(await viewer.get(shortlist_url(s.org, second))) == (404, "not_found")
     await ok(await signatory.put(shortlist_url(s.org, s.matched)))
 
     for member in (viewer, finance, reviewer, signatory):
@@ -168,6 +170,7 @@ async def test_p21_b2_another_organisation_neither_reads_nor_adds(
     outsider = await member_client(pitch_orgs.airtel.member)  # type: ignore[arg-type]
     for response in (
         await outsider.get(shortlist_url(s.org)),
+        await outsider.get(shortlist_url(s.org, pitched)),
         await outsider.put(shortlist_url(s.org, pitched)),
         await outsider.delete(shortlist_url(s.org, pitched)),
         await outsider.get(f"{shortlist_url(s.org)}/compare", params={"ids": f"{pitched},{s.matched}"}),

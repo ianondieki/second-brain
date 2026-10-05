@@ -27,6 +27,7 @@ SAFE_FIELDS = frozenset(
         "scout_id", "seq", "snapshot_at", "source", "spent_usd", "sqlstate", "stage", "status", "step", "stop_reason",
         "table", "task", "today", "trace_id", "transient", "tsa_time", "user_id", "variable", "verification_id",
         "version", "will_retry_on",
+        "attachment_id", "message_id",  # P21: the engagement thread's row ids (REQ-ENG-11)
     }
 )  # fmt: skip
 # ``error`` is an exception's type name, or a provider's reply with every address redacted and its length capped

@@ -180,6 +180,14 @@ async def _entry_of(db: AsyncSession, org_id: UUID, proposal_id: UUID) -> Shortl
     return None if row is None else _entry(row)
 
 
+async def entry(db: AsyncSession, org_id: UUID, proposal_id: UUID) -> ShortlistEntry:
+    """The proposal's entry on the organisation's shortlist (404 when it is not on it)."""
+    found = await _entry_of(db, org_id, proposal_id)
+    if found is None:
+        raise not_found("This proposal is not on your organisation's shortlist.")
+    return found
+
+
 def _rowcount(result: Any) -> int:
     return int(cast(CursorResult[Any], result).rowcount)
 
