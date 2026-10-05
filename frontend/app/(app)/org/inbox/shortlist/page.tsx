@@ -37,7 +37,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 const CURSOR = /^[A-Za-z0-9_-]{1,500}$/;
-const PROBLEMS: readonly ShortlistProblem[] = ["code", "role", "gone", "network", "failed"];
+const PROBLEMS: readonly ShortlistProblem[] = ["code", "signedOut", "role", "gone", "network", "failed"];
 
 /**
  * Organisation › Inbox › Shortlist (REQ-REPO-02, P21 track B): the proposals the organisation's people starred, shared

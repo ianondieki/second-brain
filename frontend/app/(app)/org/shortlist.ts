@@ -52,11 +52,11 @@ export function parseCompareIds(value: string | string[] | undefined): CompareId
 }
 
 /** Why a shortlist change was refused, as one of the toggle's fixed sentences (`shortlist.problem.*`). */
-export type ShortlistProblem = "code" | "role" | "gone" | "network" | "failed";
+export type ShortlistProblem = "code" | "signedOut" | "role" | "gone" | "network" | "failed";
 
 export function shortlistProblem(status: number, body: unknown): ShortlistProblem {
   if (status === 0) return "network";
-  if (status === 401 && apiErrorCode(body) === "mfa_required") return "code";
+  if (status === 401) return apiErrorCode(body) === "mfa_required" ? "code" : "signedOut";
   if (status === 403) return "role";
   if (status === 404) return "gone";
   return "failed";

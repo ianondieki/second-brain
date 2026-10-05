@@ -5,7 +5,7 @@ import type { Membership } from "../membership";
 import { ShortlistStar } from "./ShortlistStar";
 import { StarIcon } from "./StarIcon";
 
-const PROBLEMS: readonly ShortlistProblem[] = ["code", "role", "gone", "network", "failed"];
+const PROBLEMS: readonly ShortlistProblem[] = ["code", "signedOut", "role", "gone", "network", "failed"];
 
 /**
  * A proposal's place on the shortlist (REQ-REPO-02, P21 B6): the star toggle for the roles that may change the

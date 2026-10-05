@@ -23,7 +23,7 @@
     "reviewP20pub": "[[COPY-REVIEW]] [[SW-REVIEW]] P20-5 (staff console, public pages; REQ-UX-01..04): adminModeration.summary.open; adminModeration.summary.hidden; adminModeration.summary.oldest; adminClaims.summary.waiting; adminClaims.summary.pressing; adminClaims.summary.next; help.contents",
     "reviewP20dev": "[[COPY-REVIEW]] [[SW-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (rasimu ya Kiswahili, kama discover.proposals)",
     "reviewP20org": "[[COPY-REVIEW]] [[SW-REVIEW]] P20-4 (REQ-UX-01..04), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.deadline.left na tracker.deadline.overdue (hesabu ya siku kwenye bango la zamu: nambari ni lebo n, huchorwa kubwa, maneno kando yake; mpangilio \"7 siku za kazi zimebaki\" unahitaji ukaguzi), tracker.deadline.due na tracker.deadline.was (tarehe chini yake); tracker.milestone.total (jumla ya hatua za kazi za makubaliano).",
-    "reviewP21f1": "[[COPY-REVIEW]] [[SW-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: shortlist.* (\"orodha fupi\" kwa shortlist), scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*"
+    "reviewP21f1": "[[COPY-REVIEW]] [[SW-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: shortlist.* (\"orodha fupi\" kwa shortlist), scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut"
   },
   "app": {
     "name": "Wazo",
@@ -2943,6 +2943,7 @@
       "role": "Ni mkaguzi, mtia sahihi au msimamizi pekee anayeweza kubadilisha orodha fupi.",
       "gone": "Pendekezo hili haliko tena kwenye Kikasha chako, kwa hiyo orodha fupi haikubadilika.",
       "network": "Orodha fupi haikubadilika kwa sababu muunganisho ulikatika; jaribu tena.",
+      "signedOut": "Muda wa kuingia kwako umeisha. Ingia tena, kisha ubadilishe orodha fupi.",
       "failed": "Orodha fupi haikubadilika; jaribu tena baada ya muda mfupi."
     },
     "lead": "Mapendekezo ambayo watu wa {org} waliyawekea nyota ili kuyaangalia tena, mapya kwanza. Chagua 2 hadi 4 ili kulinganisha taarifa zao za umma kando kwa kando.",

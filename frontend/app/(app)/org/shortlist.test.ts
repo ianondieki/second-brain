@@ -46,6 +46,8 @@ describe("the shortlist's rules", () => {
   it("words each refusal of a change and of compare", () => {
     expect(shortlistProblem(0, undefined)).toBe("network");
     expect(shortlistProblem(401, { detail: { code: "mfa_required" } })).toBe("code");
+    expect(shortlistProblem(401, { detail: { code: "not_authenticated" } })).toBe("signedOut");
+    expect(shortlistProblem(401, undefined)).toBe("signedOut");
     expect(shortlistProblem(403, { detail: { code: "role_not_permitted" } })).toBe("role");
     expect(shortlistProblem(404, undefined)).toBe("gone");
     expect(shortlistProblem(500, undefined)).toBe("failed");

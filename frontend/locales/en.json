@@ -23,7 +23,7 @@
     "reviewP20pub": "[[COPY-REVIEW]] P20-5 (staff console, public pages; REQ-UX-01..04): adminModeration.summary.open; adminModeration.summary.hidden; adminModeration.summary.oldest; adminClaims.summary.waiting; adminClaims.summary.pressing; adminClaims.summary.next; help.contents",
     "reviewP20dev": "[[COPY-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (a Discover card's foot: how many sources back the problem)",
     "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
-    "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*"
+    "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut"
   },
   "app": {
     "name": "Wazo",
@@ -2943,6 +2943,7 @@
       "role": "Only a reviewer, signatory or admin can change the shortlist.",
       "gone": "This proposal is no longer in your Inbox, so the shortlist did not change.",
       "network": "The shortlist did not change because the connection failed; try again.",
+      "signedOut": "You were signed out. Sign in again, then change the shortlist.",
       "failed": "The shortlist did not change; try again in a moment."
     },
     "lead": "Proposals the people of {org} starred to look at again, newest first. Choose 2 to 4 to compare their public facts side by side.",
