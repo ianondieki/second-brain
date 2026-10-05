@@ -384,6 +384,8 @@ async def test_three_developers_flags_pull_a_question_and_every_attempt_is_resco
             ("spam", None, "a reason of"),
             ("unclear", " ", "a reason of"),
             ("unclear", "n" * 301, "a reason of"),
+            ("unclear", "Line one\nline two", "a reason of"),
+            ("unclear", "Bell \x07", "a reason of"),
             (None, None, "a reason of"),
         ):
             await t.expect(conn, FLAG, refusal, question=questions[0], reason=reason, note=note)
@@ -436,12 +438,25 @@ async def test_three_developers_flags_pull_a_question_and_every_attempt_is_resco
         )
         await t.as_owner(conn)
         await t.expect(conn, "UPDATE quiz_flags SET reason = 'other'", "append-only")
+        flagged = (
+            "INSERT INTO quiz_flags (id, question_id, user_id, reason, note) VALUES (uuid7(), :q, :u, 'other', :n)"
+        )
+        await t.expect(conn, flagged, "ck_quiz_flags_note_length", q=questions[2], u=p.developer, n="Line\nbreak")
+        pull = "UPDATE quiz_questions SET status = 'pulled', pulled_at = now(), pulled_reason = :r WHERE id = :q"
+        await t.expect(conn, pull, "ck_quiz_questions_pull_complete", q=questions[2], r="Line\nbreak")
         for user in (p.developer, p.moderator, None):
             await t.act(conn, user)
             await t.expect(conn, SET_STATUS, "staff admin only", question=questions[0], status="live", reason=None)
         await t.act(conn, p.admin)
         assert await t.run(conn, "SELECT count(*) FROM quiz_flags WHERE question_id = :q", q=questions[0]) == 3
-        for status, reason in (("live", "Because"), ("pulled", None), ("pulled", " "), ("gone", None)):
+        for status, reason in (
+            ("live", "Because"),
+            ("pulled", None),
+            ("pulled", " "),
+            ("pulled", "Two\nlines"),
+            ("pulled", "Tab\there"),
+            ("gone", None),
+        ):
             await t.expect(
                 conn, SET_STATUS, "pulled with a reason", question=questions[0], status=status, reason=reason
             )

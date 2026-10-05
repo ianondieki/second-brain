@@ -179,7 +179,7 @@ class QuizQuestion(IdMixin, Base):
         CheckConstraint(
             "(status = 'pulled') = (pulled_at IS NOT NULL) AND (status = 'pulled') = (pulled_reason IS NOT NULL)"
             f" AND (pulled_reason IS NULL OR (pulled_reason ~ '[^[:space:]]'"
-            f" AND char_length(pulled_reason) <= {REASON_MAX_CHARS}))",
+            f" AND char_length(pulled_reason) <= {REASON_MAX_CHARS} AND pulled_reason !~ '[[:cntrl:]]'))",
             name="pull_complete",
         ),
         CURATED,
@@ -241,7 +241,9 @@ class QuizFlag(IdMixin, Base):
         Index("ix_quiz_flags_user_id_created_at", "user_id", "created_at"),
         CheckConstraint(_in("reason", FLAG_REASONS), name="reason_known"),
         CheckConstraint(
-            f"note IS NULL OR (note ~ '[^[:space:]]' AND char_length(note) <= {REASON_MAX_CHARS})", name="note_length"
+            f"note IS NULL OR (note ~ '[^[:space:]]' AND char_length(note) <= {REASON_MAX_CHARS}"
+            " AND note !~ '[[:cntrl:]]')",
+            name="note_length",
         ),
         USER,
     )

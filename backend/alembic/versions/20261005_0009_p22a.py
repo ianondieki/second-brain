@@ -34,7 +34,8 @@ revisions 0007 and 0008's jobs; a "developer" is an active user with a developer
   never cleared), which only the definer functions below write.
   CHECKs: position 1 to 5 (unique per set), a prompt of 1 to 300 characters, four pairwise distinct options of 1 to
   120, the answer 0 to 3, a why of 1 to 600 (none of them with a control character), a source id, title (160) and
-  https URL (400), a topic (60), a 32-byte prompt hash, and a pull complete with its moment and reason (1 to 300).
+  https URL (400), a topic (60), a 32-byte prompt hash, and a pull complete with its moment and reason (1 to 300, no
+  control character).
 - ``quiz_attempts`` (USER; bridge_app: SELECT, INSERT of ``id``, ``set_id``, ``user_id``, ``started_at``,
   ``answers``, ``time_ms``). The developer reads their own and nobody else any (minimisation: staff admin reads a
   set's attempts in aggregate only, through ``app_quiz_set_stats``). A developer inserts
@@ -70,13 +71,14 @@ listed in ``FUNCTION_GRANTS``):
   (invalid_parameter_value); the set locked FOR UPDATE; an unknown set no_data_found; a decided set
   object_not_in_prerequisite_state; approval without five questions check_violation (the guard).
 - ``app_set_quiz_question_status(question, status, reason)`` -> attempts whose score changed: staff admin only; pull
-  (``pulled`` with a reason of 1 to 300 characters) or restore (``live`` with no reason; sets ``restored_at``, after
-  which flags never pull the question again); an unknown question no_data_found; the same status again
-  object_not_in_prerequisite_state. Locks the set FOR UPDATE, changes the question and rescores the set in the same
-  transaction.
+  (``pulled`` with a reason of 1 to 300 characters, no control character) or restore (``live`` with no reason; sets
+  ``restored_at``, after which flags never pull the question again); an unknown question no_data_found; the same
+  status again object_not_in_prerequisite_state. Locks the set FOR UPDATE, changes the question and rescores the set
+  in the same transaction.
 - ``app_flag_question(question, reason, note)`` -> (flag_id, pulled): a developer (anyone else, like an unknown
   question or one of a set not approved, gets no_data_found: they read no question), a reason of ``wrong_answer``,
-  ``unclear``, ``outdated``, ``other`` and an optional note of 1 to 300 characters (invalid_parameter_value), who
+  ``unclear``, ``outdated``, ``other`` and an optional note of 1 to 300 characters without a control character
+  (invalid_parameter_value; the CHECK holds the same), who
   played the set (a finished attempt on it; insufficient_privilege, "play the set first", otherwise: accounts that
   never played cannot brigade a question out), on a live question (object_not_in_prerequisite_state when it was
   pulled); once per developer and question (unique_violation, constraint
@@ -390,10 +392,11 @@ BEGIN
         RAISE EXCEPTION 'app_set_quiz_question_status: staff admin only' USING ERRCODE = 'insufficient_privilege';
     END IF;
     IF p_status IS NULL OR p_status NOT IN ('live', 'pulled')
-       OR (p_status = 'pulled' AND (p_reason IS NULL OR p_reason !~ '[^[:space:]]' OR char_length(p_reason) > 300))
+       OR (p_status = 'pulled' AND (p_reason IS NULL OR p_reason !~ '[^[:space:]]' OR char_length(p_reason) > 300
+                                    OR p_reason ~ '[[:cntrl:]]'))
        OR (p_status = 'live' AND p_reason IS NOT NULL) THEN
-        RAISE EXCEPTION 'app_set_quiz_question_status: pulled with a reason of 1 to 300 characters, or live without one'
-            USING ERRCODE = 'invalid_parameter_value';
+        RAISE EXCEPTION 'app_set_quiz_question_status: pulled with a reason of 1 to 300 characters (no control'
+            ' character), or live without one' USING ERRCODE = 'invalid_parameter_value';
     END IF;
     SELECT q.set_id INTO v_set FROM public.quiz_questions q WHERE q.id = p_question;
     IF NOT FOUND THEN
@@ -442,9 +445,10 @@ BEGIN
             USING ERRCODE = 'no_data_found';
     END IF;
     IF p_reason IS NULL OR p_reason NOT IN ('wrong_answer', 'unclear', 'outdated', 'other')
-       OR (p_note IS NOT NULL AND (p_note !~ '[^[:space:]]' OR char_length(p_note) > 300)) THEN
+       OR (p_note IS NOT NULL AND (p_note !~ '[^[:space:]]' OR char_length(p_note) > 300 OR p_note ~ '[[:cntrl:]]'))
+    THEN
         RAISE EXCEPTION 'app_flag_question: a reason of wrong_answer, unclear, outdated or other, and a note of 1'
-            ' to 300 characters or none' USING ERRCODE = 'invalid_parameter_value';
+            ' to 300 characters without a control character, or none' USING ERRCODE = 'invalid_parameter_value';
     END IF;
     SELECT q.set_id, s.quiz_date INTO v_set, v_day
       FROM public.quiz_questions q JOIN public.quiz_sets s ON s.id = q.set_id
@@ -919,7 +923,8 @@ def _create_tables() -> None:
         sa.CheckConstraint(_in("status", QUESTION_STATUSES), name=op.f("ck_quiz_questions_status_known")),
         sa.CheckConstraint(
             "(status = 'pulled') = (pulled_at IS NOT NULL) AND (status = 'pulled') = (pulled_reason IS NOT NULL)"
-            " AND (pulled_reason IS NULL OR (pulled_reason ~ '[^[:space:]]' AND char_length(pulled_reason) <= 300))",
+            " AND (pulled_reason IS NULL OR (pulled_reason ~ '[^[:space:]]' AND char_length(pulled_reason) <= 300"
+            " AND pulled_reason !~ '[[:cntrl:]]'))",
             name=op.f("ck_quiz_questions_pull_complete"),
         ),
         sa.ForeignKeyConstraint(["set_id"], ["quiz_sets.id"], name=op.f("fk_quiz_questions_set_id_quiz_sets")),
@@ -962,7 +967,7 @@ def _create_tables() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.CheckConstraint(_in("reason", FLAG_REASONS), name=op.f("ck_quiz_flags_reason_known")),
         sa.CheckConstraint(
-            "note IS NULL OR (note ~ '[^[:space:]]' AND char_length(note) <= 300)",
+            "note IS NULL OR (note ~ '[^[:space:]]' AND char_length(note) <= 300 AND note !~ '[[:cntrl:]]')",
             name=op.f("ck_quiz_flags_note_length"),
         ),
         sa.ForeignKeyConstraint(
