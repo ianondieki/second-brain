@@ -24,7 +24,7 @@ from bridge.auth.router import router as auth_router
 from bridge.billing.router import plans_router
 from bridge.billing.router import router as billing_router
 from bridge.config import Settings, get_settings
-from bridge.db import create_engine, create_session_factory
+from bridge.db import API_IDLE_IN_TRANSACTION_MS, create_engine, create_session_factory
 from bridge.directory.responsiveness import NoResponsivenessData
 from bridge.directory.router import router as directory_router
 from bridge.engagements.interest_router import router as interest_router
@@ -80,7 +80,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.sms_provider = sms_provider_from_settings(settings)  # fails closed (production needs the vendor)
-        engine = create_engine(settings.database_url.get_secret_value())
+        engine = create_engine(
+            settings.database_url.get_secret_value(), idle_in_transaction_timeout_ms=API_IDLE_IN_TRANSACTION_MS
+        )
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
         app.state.email_provider = provider_from_settings(settings)
