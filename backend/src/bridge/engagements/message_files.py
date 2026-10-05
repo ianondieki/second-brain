@@ -7,9 +7,12 @@
   (ids only, never the name) and waits for the uploader's next message; an infected one is never stored, stays marked
   ``infected`` (it can never be sent; its uploader or the purge removes it) and is refused (422, naming its id), with an
   audit event either way. A user holds at most ``STAGED_PER_ENGAGEMENT`` unsent files per engagement, an infected one
-  included (so a refused file cannot be retried without bound), and makes at most ``UPLOADS_PER_HOUR`` uploads per
-  engagement in any hour, counted from those audit events so that removing a file does not free its place (429
-  ``too_many_uploads`` with ``Retry-After``, checked before the body is read).
+  included (so a refused file cannot be retried without bound); makes at most ``UPLOADS_PER_HOUR`` upload attempts per
+  engagement in any hour, refused ones included (429 ``too_many_uploads``), and has at most ``UPLOAD_BYTES_PER_DAY``
+  scanned per engagement in any 24 hours (429 ``upload_quota``), both counted from those audit events so that removing
+  a file frees nothing, each with ``Retry-After``. What needs no body (the gate, the posting role, the type, the
+  unsent cap, the limits) is checked before the body is read, and the transaction is ended while it streams in; the
+  limits are checked again, with the size, under a per-user lock once it is in.
 - **Remove.** The uploader removes a staged file (never a sent one); the row goes first, then its object.
 - **Download.** A sent (hence clean) file is read by the parties only: ``attachment_link`` signs a link for the caller
   (HMAC under ``SECRET_KEY`` over the engagement, message, file, user and expiry; ``LINK_TTL``) and
@@ -23,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import unicodedata
 from datetime import UTC, datetime, timedelta
 from typing import Final
@@ -38,22 +42,26 @@ from bridge.audit.models import AuditEvent
 from bridge.audit.service import record as audit
 from bridge.auth.crypto import keyed_digest
 from bridge.config import Settings
-from bridge.engagements.message_schemas import AttachmentLinkOut, StagedAttachmentOut
-from bridge.engagements.messages import gate, refusal, retry_after
+from bridge.engagements.message_schemas import AttachmentLinkOut, StagedAttachmentOut, ThreadStatus
+from bridge.engagements.messages import CANNOT_POST, NOT_OPEN, READ_ONLY, can_post, gate, refusal
 from bridge.engagements.models import MAX_FILE_NAME_CHARS, EngagementMessageAttachment, message_attachment_key
 from bridge.engagements.service import Party
 from bridge.errors import ApiError, forbidden, not_found
 from bridge.ids import uuid7
 from bridge.logging import get_logger
 from bridge.models.enums import AvStatus
-from bridge.proposals.editor import attachment_problem
+from bridge.proposals.editor import ACCEPTED_TYPES, attachment_problem
 from bridge.storage.objects import ObjectNotFoundError, ObjectStore
 from bridge.storage.scanner import Scanner, Verdict
 
 STAGED_PER_ENGAGEMENT: Final = 10  # unsent files a user may hold on one engagement (two messages' worth)
-UPLOADS_PER_HOUR: Final = 30  # uploads a user may make on one engagement in any hour, removed ones included
+UPLOADS_PER_HOUR: Final = 30  # upload attempts a user may make on one engagement in any hour, removed and refused ones
+UPLOAD_BYTES_PER_DAY: Final = 200 * 1024 * 1024  # bytes a user may have scanned on one engagement in any 24 hours
+HOUR: Final = timedelta(hours=1)
+DAY: Final = timedelta(hours=24)
 STAGED: Final = "engagement.message_attachment_staged"  # the audit events of an upload, whatever its verdict
 REJECTED: Final = "engagement.message_attachment_rejected"
+REFUSED: Final = "engagement.message_attachment_refused"  # refused before or without a scan (no file data)
 _LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
 LINK_TTL: Final = timedelta(minutes=5)
 UPLOADS: Final = "uploads"
@@ -65,34 +73,118 @@ def object_key(engagement_id: UUID, attachment_id: UUID) -> str:
     return message_attachment_key(engagement_id, attachment_id)
 
 
-async def check_upload_rate(db: AsyncSession, party: Party) -> None:
-    """429 ``too_many_uploads`` (with ``Retry-After``) once the caller made ``UPLOADS_PER_HOUR`` uploads on this
-    engagement within the hour (their staged and rejected audit events, which no removal or purge takes back; on the
-    database's clock). Serialises the caller's uploads on the engagement until the upload commits."""
-    await db.execute(_LOCK, {"key": f"engagement_uploads:{party.engagement_id}:{party.user_id}"})
+def _too_many(code: str, message: str, seconds: int) -> ApiError:
+    error = ApiError(429, code, message, retry_after_seconds=seconds)
+    error.headers = {"Retry-After": str(seconds)}
+    return error
+
+
+def _wait(at: datetime, window: timedelta, now: datetime) -> int:
+    """Whole seconds until ``at`` leaves a window of ``window`` ending ``now`` (at least 1)."""
+    return max(1, math.ceil((at + window - now).total_seconds()))
+
+
+async def check_limits(db: AsyncSession, party: Party, *, size: int) -> None:
+    """The caller's upload limits on this engagement, from their upload audit events (which no removal or purge takes
+    back; on the database's clock): 429 ``too_many_uploads`` after ``UPLOADS_PER_HOUR`` attempts within the hour
+    (refused ones included), 429 ``upload_quota`` when ``size`` more bytes would pass ``UPLOAD_BYTES_PER_DAY``
+    scanned within 24 hours; each with ``Retry-After``."""
     e = AuditEvent
-    count, oldest, now = (
+    now: datetime = (await db.execute(select(func.now()))).scalar_one()
+    rows = (
         await db.execute(
-            select(func.count(), func.min(e.occurred_at), func.now()).where(
+            select(e.action, e.occurred_at, e.payload["size_bytes"].astext)
+            .where(
                 e.actor_user_id == party.user_id,
                 e.subject_type == "engagement",
                 e.subject_id == party.engagement_id,
-                e.action.in_((STAGED, REJECTED)),
-                e.occurred_at > func.now() - timedelta(hours=1),
+                e.action.in_((STAGED, REJECTED, REFUSED)),
+                e.occurred_at > now - DAY,
             )
+            .order_by(e.occurred_at)
         )
-    ).one()
-    if int(count) < UPLOADS_PER_HOUR:
+    ).all()
+    hour = [at for _, at, _ in rows if at > now - HOUR]
+    if len(hour) >= UPLOADS_PER_HOUR:
+        raise _too_many(
+            "too_many_uploads",
+            f"You have uploaded {UPLOADS_PER_HOUR} files on this engagement in the last hour. Try again later.",
+            _wait(hour[0], HOUR, now),
+        )
+    scanned = [(at, int(n)) for action, at, n in rows if action in (STAGED, REJECTED) and n and n.isdigit()]
+    excess = sum(n for _, n in scanned) + max(size, 1) - UPLOAD_BYTES_PER_DAY
+    if excess <= 0:
         return
-    seconds = retry_after(oldest, now)
-    error = ApiError(
-        429,
-        "too_many_uploads",
-        f"You have uploaded {UPLOADS_PER_HOUR} files on this engagement in the last hour. Try again later.",
-        retry_after_seconds=seconds,
+    freed, wait = 0, int(DAY.total_seconds())
+    for at, n in scanned:  # the moment enough of the day's bytes have left the window
+        freed += n
+        if freed >= excess:
+            wait = _wait(at, DAY, now)
+            break
+    raise _too_many(
+        "upload_quota",
+        f"You have uploaded {UPLOAD_BYTES_PER_DAY // (1024 * 1024)} MB on this engagement in the last day. Try again"
+        " later.",
+        wait,
     )
-    error.headers = {"Retry-After": str(seconds)}
-    raise error
+
+
+async def precheck_upload(db: AsyncSession, party: Party, *, content_type: str) -> None:
+    """What an upload must pass before its body is read (the caller then ends the transaction, so nothing is held
+    while the file streams in): the thread is open and the caller may post (the database decides again at the
+    insert), the type is on the allow-list, fewer than ``STAGED_PER_ENGAGEMENT`` files wait unsent, and the limits
+    hold for at least one more byte."""
+    current = await gate(db, party)  # the organisation before the thread opens: 403 thread_not_open
+    if current.status is ThreadStatus.READ_ONLY:
+        raise ApiError(409, "thread_read_only", READ_ONLY)
+    if current.status is ThreadStatus.NOT_OPEN:
+        raise ApiError(409, "thread_not_open", NOT_OPEN)
+    if not can_post(party, current.status):
+        raise forbidden("cannot_post", CANNOT_POST)
+    if content_type not in ACCEPTED_TYPES:
+        raise ApiError(422, "unsupported_file", attachment_problem(content_type, b"") or "Attach a supported file.")
+    if await _unsent(db, party) >= STAGED_PER_ENGAGEMENT:
+        raise _too_many_staged()
+    await check_limits(db, party, size=0)
+
+
+async def record_refusal(db: AsyncSession, party: Party, refused: ApiError) -> None:
+    """An upload attempt refused with ``refused`` counts toward the hourly limit: its audit event (the refusal's code,
+    no file data), committed on a fresh transaction."""
+    # Read before the rollback, which expires the session's rows (the caller's user among them).
+    user_id, org_id = party.user_id, None if party.is_developer else party.org_id
+    await db.rollback()
+    code = refused.detail.get("code") if isinstance(refused.detail, dict) else None
+    await audit(
+        db,
+        REFUSED,
+        actor_user_id=user_id,
+        org_id=org_id,
+        subject_type="engagement",
+        subject_id=party.engagement_id,
+        payload={"code": str(code or "refused")[:64], "status": refused.status_code},
+    )
+    await db.commit()
+
+
+async def _unsent(db: AsyncSession, party: Party) -> int:
+    a = EngagementMessageAttachment
+    found = await db.scalar(
+        select(func.count()).where(
+            a.engagement_id == party.engagement_id,
+            a.uploader_user_id == party.user_id,
+            a.message_id.is_(None),  # whatever its verdict: an infected file holds its place until removed or purged
+        )
+    )
+    return int(found or 0)
+
+
+def _too_many_staged() -> ApiError:
+    return ApiError(
+        409,
+        "too_many_staged",
+        f"You have {STAGED_PER_ENGAGEMENT} files waiting to be sent here. Send or remove some first.",
+    )
 
 
 def file_name_of(raw: str | None) -> str:
@@ -114,9 +206,13 @@ async def stage_upload(
     content_type: str,
     file_name: str,
 ) -> StagedAttachmentOut:
-    """Insert the upload pending (the database decides whether the caller may), scan it, then record the verdict: a
-    clean file is stored and staged for the caller's next message; an infected one is never stored, stays marked
-    infected and is refused (422, committed with its audit event)."""
+    """After ``precheck_upload`` and the body: serialise the caller's uploads on the engagement (an advisory lock until
+    commit) and check the limits again with the file's size, then insert the upload pending (the database decides
+    whether the caller may), scan it and record the verdict: a clean file is stored and staged for the caller's next
+    message; an infected one is never stored, stays marked infected and is refused (422, committed with its audit
+    event)."""
+    await db.execute(_LOCK, {"key": f"engagement_uploads:{party.engagement_id}:{party.user_id}"})
+    await check_limits(db, party, size=len(data))
     reason = attachment_problem(content_type, data)
     if reason is not None:
         raise ApiError(422, "unsupported_file", reason)
@@ -141,19 +237,8 @@ async def stage_upload(
         if mapped is None:
             raise
         raise mapped from exc
-    staged = await db.scalar(
-        select(func.count()).where(
-            a.engagement_id == party.engagement_id,
-            a.uploader_user_id == party.user_id,
-            a.message_id.is_(None),  # whatever its verdict: an infected file holds its place until removed or purged
-        )
-    )
-    if int(staged or 0) > STAGED_PER_ENGAGEMENT:
-        raise ApiError(
-            409,
-            "too_many_staged",
-            f"You have {STAGED_PER_ENGAGEMENT} files waiting to be sent here. Send or remove some first.",
-        )
+    if await _unsent(db, party) > STAGED_PER_ENGAGEMENT:  # this one included: a race past the pre-check
+        raise _too_many_staged()
     verdict = await scanner.scan(data)
     clean = verdict.verdict is Verdict.CLEAN
     if clean:
