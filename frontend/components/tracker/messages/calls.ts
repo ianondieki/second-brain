@@ -180,3 +180,14 @@ export async function uploadFile(engagementId: string, file: Blob & { name: stri
     xhr.send(file);
   });
 }
+
+/** What the thread calls (its tests pass fakes). */
+export interface ThreadCalls {
+  postMessage: typeof postMessage;
+  olderPage: typeof olderPage;
+  markRead: typeof markRead;
+  reportMessage: typeof reportMessage;
+  fileLink: typeof fileLink;
+  removeStaged: typeof removeStaged;
+  uploadFile: typeof uploadFile;
+}
