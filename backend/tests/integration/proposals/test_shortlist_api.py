@@ -366,3 +366,41 @@ async def test_a_proposal_the_organisation_no_longer_sees_is_unavailable_and_lef
     await ok(await reviewer.delete(shortlist_url(s.org, held)), 204)
     listed = await ok(await viewer.get(shortlist_url(s.org)))
     assert held not in {item["proposal_id"] for item in listed["items"]}
+
+
+async def test_a_proposal_whose_author_joins_the_organisation_leaves_the_shortlist_view(
+    developers: Developers,
+    proposal_world: ProposalWorld,
+    pitch_orgs: PitchOrgs,
+    member_client: Members,
+    owner_engine: AsyncEngine,
+) -> None:
+    """P10's rule (as the scout matches): a member's own proposal is never shown to their organisation, so the
+    shortlist never tells who wrote it. Once the author is an active member, the entry is unavailable with no facts,
+    compare leaves it out and it cannot be added again (404); the matches view agrees."""
+    s = await scene(developers, proposal_world, pitch_orgs, owner_engine, pitched=2)
+    reviewer = await member_client(s.reviewer)
+    joined, kept = s.pitched
+    for proposal in (joined, kept, s.matched):
+        await ok(await reviewer.put(shortlist_url(s.org, proposal)))
+    async with owner_engine.begin() as conn:
+        for proposal in (joined, s.matched):  # each author joins the organisation as an active member
+            await conn.execute(
+                text(
+                    "INSERT INTO memberships (id, org_id, user_id, roles) SELECT :id, :org, owner_id,"
+                    " CAST('{viewer}' AS org_role[]) FROM proposals WHERE id = :p"
+                ),
+                {"id": uuid4(), "org": s.org.id, "p": UUID(proposal)},
+            )
+
+    listed = await ok(await reviewer.get(shortlist_url(s.org)))
+    by_id = {item["proposal_id"]: item for item in listed["items"]}
+    for proposal in (joined, s.matched):
+        assert (by_id[proposal]["available"], by_id[proposal]["title"], by_id[proposal]["niche"]) == (False, None, None)
+    assert by_id[kept]["available"] is True
+    assert code(await reviewer.put(shortlist_url(s.org, joined))) == (404, "not_found")
+    body = await ok(await reviewer.get(f"{shortlist_url(s.org)}/compare", params={"ids": f"{joined},{kept}"}))
+    assert [item["proposal_id"] for item in body["items"]] == [kept]
+    [match] = (await ok(await reviewer.get(f"/api/orgs/{s.org.id}/matches")))["items"]
+    assert (match["proposal_id"], match["available"]) == (s.matched, False)  # the same answer as the matches view
+    await ok(await reviewer.delete(shortlist_url(s.org, joined)), 204)  # still removable
