@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 import { SettingsTabs } from "../SettingsTabs";
-import { notificationChoices, type ConsentItem } from "./choices";
+import { notificationChoices, preferenceChoices, type ConsentItem, type PreferenceItem } from "./choices";
 import { NotificationChoices } from "./NotificationChoices";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -36,14 +36,37 @@ async function myConsents(): Promise<ConsentItem[]> {
 }
 
 /**
+ * The signed-in person's notification preferences (GET /api/me/notification-preferences): a store apart from the
+ * consents, listing only what this person may set (the saved-search digest for developers, P21).
+ */
+async function myPreferences(): Promise<PreferenceItem[]> {
+  const { data, response } = await serverApi().GET("/api/me/notification-preferences", {
+    headers: await forwardHeaders(),
+    signal: AbortSignal.timeout(5000),
+    cache: "no-store",
+  });
+  if (response.status === 401) redirect("/login");
+  if (!data) throw new Error(`GET /api/me/notification-preferences answered ${response.status}`);
+  return data.items;
+}
+
+/**
  * Notification settings (docs/spec/07 item 1, the avatar menu; every email footer's "Manage notifications"): the
- * consents that decide which messages are sent, for anyone signed in, on either side (REQ-CON-01, REQ-NOT-03).
+ * consents that decide which messages are sent, for anyone signed in, on either side (REQ-CON-01, REQ-NOT-03), and
+ * the notification preferences beside them in their channel's group (REQ-NOT-06; P21: the saved-search digest).
  */
 export default async function NotificationSettingsPage() {
   const me = await requireMe();
   const home = homeOf(me);
   const t = await getTranslations("notificationSettings");
-  const choices = notificationChoices(await myConsents());
+  const [consents, preferenceItems] = await Promise.all([myConsents(), myPreferences()]);
+  const choices = notificationChoices(consents);
+  // A kind the page has words for reads in the page's language; any other keeps the API's own label.
+  const preferences = preferenceChoices(preferenceItems, (item) =>
+    t.has(`preference.${item.kind}` as "preference.saved_search_digest")
+      ? t(`preference.${item.kind}` as "preference.saved_search_digest")
+      : item.label,
+  );
   const [tNav, tSecurity] = await Promise.all([getTranslations("settingsNav"), getTranslations("security")]);
   return (
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
@@ -52,13 +75,13 @@ export default async function NotificationSettingsPage() {
         <PageHeader title={tNav("label")} back={{ href: home, label: tSecurity("back") }} />
         <SettingsTabs current="notifications" />
         <div>
-          {choices.length === 0 ? (
+          {choices.length === 0 && preferences.length === 0 ? (
             <EmptyState sentence={t("empty")} action={t("action.home")} href={home} />
           ) : (
             <Card variant="flat" className="p-5 sm:p-6">
               <Section title={t("pageTitle")} headingId="notifications-heading" description={t("lead")} headingStyle="card">
                 <ClientStrings strings={await clientStrings(["notificationSettings"])}>
-                  <NotificationChoices initial={choices} />
+                  <NotificationChoices initial={choices} preferences={preferences} />
                 </ClientStrings>
               </Section>
             </Card>
