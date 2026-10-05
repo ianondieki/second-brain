@@ -31,8 +31,9 @@ its id carries the one reported message (its engagement, sender side, text and t
 ``app_reported_message``, the only way staff read a message, and each such read writes an audit event (ids only).
 Staff never read the rest of the thread. A report is decided ``dismiss`` (nothing wrong: the case ends ``approved``)
 or ``uphold`` (the message broke the rules: ``rejected``), with an optional staff note kept in the decision's audit
-details; the message itself never changes (a staff redaction is D-54's later function). The reporter never decides
-their own report (``own_content``).
+details; the message itself never changes (a staff redaction is D-54's later function). Nobody decides a report they
+filed or one about an engagement they are a party of (``own_content``: its developer, any member of its
+organisation, the message's author among them, read under the staff member's own RLS).
 """
 
 from __future__ import annotations
@@ -167,7 +168,10 @@ _CASES_SELECT: Final = (
     " (p.id IS NOT NULL OR pr.id IS NOT NULL OR m.subject_type = 'message') AS found,"
     " coalesce(p.moderation_state, pr.moderation_state) AS subject_state, p.current_version_id AS subject_version_id,"
     " coalesce(p.owner_id = :staff, pr.created_by = :staff,"
-    " CASE WHEN m.subject_type = 'message' THEN m.reporter_id = :staff END, false) AS own,"
+    # A message report is the staff member's own when they filed it or are a party of the message's engagement: the
+    # thread's policy shows a message to its parties only (staff never), so it is visible here exactly then.
+    " CASE WHEN m.subject_type = 'message' THEN m.reporter_id = :staff"
+    " OR EXISTS (SELECT 1 FROM engagement_messages em WHERE em.id = m.subject_id) END, false) AS own,"
     " coalesce(p.title, pr.title) AS title, p.problem_statement, p.impact_claims, p.summary, pr.statement,"
     " pr.affected_group, bo.id AS brief_org_id, bo.slug::text AS brief_org_slug, bo.legal_name AS brief_org_name"
     " FROM moderation_cases m"
@@ -349,6 +353,16 @@ async def _subject_version(db: AsyncSession, subject_type: str, subject_id: UUID
     return version
 
 
+async def _is_party(db: AsyncSession, message_id: UUID) -> bool:
+    """Whether the caller is a party of the message's engagement (its developer, or a member of its organisation, the
+    message's author among them): the thread's policy lets exactly them read it, never staff as staff."""
+    found = await db.execute(_MESSAGE_VISIBLE, {"id": message_id})
+    return found.first() is not None
+
+
+_MESSAGE_VISIBLE = text("SELECT 1 FROM engagement_messages WHERE id = :id")
+
+
 async def _decide_message(
     db: AsyncSession, *, staff_id: UUID, case: Any, decision: Decision, note: str | None
 ) -> DecisionOut:
@@ -356,8 +370,8 @@ async def _decide_message(
     with the staff note in its details."""
     if decision not in MESSAGE_OUTCOMES:
         raise ApiError(422, "invalid_decision", "Dismiss or uphold a message report.")
-    if case.reporter_id == staff_id:
-        raise ApiError(403, "own_content", "You cannot decide your own report.")
+    if case.reporter_id == staff_id or await _is_party(db, case.subject_id):
+        raise ApiError(403, "own_content", "You cannot decide a report you filed or one about your own engagement.")
     outcome = MESSAGE_OUTCOMES[decision]
     await db.execute(_CLOSE, {"status": outcome.value, "staff": staff_id, "id": case.id})
     await audit(

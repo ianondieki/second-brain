@@ -17,6 +17,8 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.ids import uuid7
+from tests.integration.engagements.api_world import clients
 from tests.integration.engagements.thread_world import posted, read, thread_at, thread_path
 from tests.integration.proposals.helpers import Staff, user_of
 
@@ -137,3 +139,38 @@ async def test_a_non_staff_party_cannot_read_the_case(owner_engine: AsyncEngine,
             assert (await client.get(f"{CASES}/{case_id}")).status_code == 404
         assert await _audits(owner_engine, "moderation.reported_message_read", case_id) == []
         assert UUID(case_id)
+
+
+async def test_a_party_of_the_engagement_never_decides_a_report_about_it(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, moderators: Staff
+) -> None:
+    """Given a report about the organisation's message, When a moderator who is a member of that organisation (a
+    viewer) or the engagement's developer turned moderator opens the queue, Then the case is own_content for them and
+    their decision is 403; a moderator from outside decides it."""
+    async with thread_at(owner_engine, app_engine) as thread:
+        s, e, world = thread.seats, thread.engagement, thread.world
+        sent = await posted(s.owner, e, TEXT)
+        case_id = (await s.reviewer.post(thread_path(e, f"/{sent['id']}/report"), json={"reasons": ["abuse"]})).json()[
+            "case_id"
+        ]
+        member = await moderators()
+        async with owner_engine.begin() as conn:
+            await conn.execute(
+                text("INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :o, :u, '{viewer}')"),
+                {"id": uuid7(), "o": world.org, "u": user_of(member)},
+            )
+            await conn.execute(text("UPDATE users SET staff_role = 'moderator' WHERE id = :u"), {"u": world.developer})
+        async with clients(app_engine, thread.settings, world.developer) as [developer]:
+            for party in (member, developer):
+                listed = await _listed(party, case_id)
+                assert (listed["actions"], listed["blocked"]) == ([], "own_content")
+                refused = await party.post(
+                    f"{CASES}/{case_id}/decision", json={"decision": "dismiss", "subject_version_id": None}
+                )
+                assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "own_content")
+        outsider = await moderators()
+        assert (await _listed(outsider, case_id))["actions"] == ["dismiss", "uphold"]
+        decided = await outsider.post(
+            f"{CASES}/{case_id}/decision", json={"decision": "dismiss", "subject_version_id": None}
+        )
+        assert decided.status_code == 200, decided.text
