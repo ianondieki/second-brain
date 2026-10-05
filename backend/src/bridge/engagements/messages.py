@@ -64,7 +64,7 @@ from bridge.engagements.models import (
     EngagementMessageAttachment,
     EngagementMessageRead,
 )
-from bridge.engagements.service import Party, app_now, entering_event
+from bridge.engagements.service import Party, entering_event
 from bridge.errors import ApiError, forbidden, not_found
 from bridge.ids import uuid7
 from bridge.models.enums import AvStatus, EngagementState
@@ -264,7 +264,9 @@ async def post_message(db: AsyncSession, party: Party, body: MessageBody) -> Mes
     """Post as the caller on their side (the database decides whether the thread is open and whether they may post),
     then check the rate and the text, attach the staged uploads, audit and queue N18. Committed."""
     engagement_id, user_id = party.engagement_id, party.user_id
-    await db.execute(_LOCK, {"key": f"engagement_messages:{engagement_id}:{user_id}"})  # one post at a time per user
+    # One post at a time per engagement, until commit (the body is in memory: short): a message's created_at, taken
+    # after the lock, then follows the commit order, so a read marker never passes a message not yet committed.
+    await db.execute(_LOCK, {"key": post_lock_key(engagement_id)})
     message_id = uuid7()
     try:
         created_at: datetime = (
@@ -315,6 +317,11 @@ async def post_message(db: AsyncSession, party: Party, body: MessageBody) -> Mes
         created_at=created_at,
     )
     return _out(message, names, files, party)
+
+
+def post_lock_key(engagement_id: UUID) -> str:
+    """The advisory lock that serialises the posts of one engagement's thread."""
+    return f"engagement_messages:{engagement_id}"
 
 
 def retry_after(oldest: datetime, now: datetime) -> int:
@@ -407,11 +414,19 @@ async def _attach(
 
 
 async def mark_read(db: AsyncSession, party: Party, up_to: UUID | None) -> ReadOut:
-    """Move the caller's read marker to ``up_to``'s time (a message of this thread; 404 otherwise) or to now; it
-    never moves back. Committed."""
+    """Move the caller's read marker to ``up_to``'s time (a message of this thread; 404 otherwise) or, without it, to
+    the newest message committed now (never the clock: a post in flight, serialised by ``post_lock_key``, gets a later
+    time when it commits, so it stays unread); it never moves back, and an empty thread writes nothing. Committed."""
     current = await gate(db, party)
     if up_to is None:
-        at = await app_now(db)
+        newest = await db.scalar(
+            select(func.max(EngagementMessage.created_at)).where(
+                EngagementMessage.engagement_id == current.engagement.id
+            )
+        )
+        if newest is None:
+            return ReadOut(unread=0, last_read_at=await _marker(db, party))
+        at = newest
     else:
         found = await db.scalar(
             select(EngagementMessage.created_at).where(
@@ -431,6 +446,15 @@ async def mark_read(db: AsyncSession, party: Party, up_to: UUID | None) -> ReadO
     unread = (await unread_counts(db, party.user_id, [current.engagement.id])).get(current.engagement.id, 0)
     await db.commit()
     return ReadOut(unread=unread, last_read_at=marked)
+
+
+async def _marker(db: AsyncSession, party: Party) -> datetime | None:
+    found: datetime | None = await db.scalar(
+        select(EngagementMessageRead.last_read_at).where(
+            EngagementMessageRead.engagement_id == party.engagement_id, EngagementMessageRead.user_id == party.user_id
+        )
+    )
+    return found
 
 
 # ----------------------------------------------------------------------------------------------------------- report
