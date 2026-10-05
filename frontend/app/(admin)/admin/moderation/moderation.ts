@@ -28,11 +28,16 @@ export function caseHref(caseId: string): string {
   return `${MODERATION_PATH}/cases/${encodeURIComponent(caseId)}`;
 }
 
-/** What a case is about: the two subjects this queue decides, a claim dispute (decided from its own queue), or other. */
-export type CaseKind = "proposal" | "problem" | "org_claim" | "other";
+/**
+ * What a case is about: the two subjects this queue decides by approving or rejecting, a party's report of an
+ * engagement message (dismissed or upheld; REQ-ENG-11), a claim dispute (decided from its own queue), or other.
+ */
+export type CaseKind = "proposal" | "problem" | "message" | "org_claim" | "other";
 
 export function caseKind(subjectType: string): CaseKind {
-  return subjectType === "proposal" || subjectType === "problem" || subjectType === "org_claim" ? subjectType : "other";
+  return subjectType === "proposal" || subjectType === "problem" || subjectType === "message" || subjectType === "org_claim"
+    ? subjectType
+    : "other";
 }
 
 /**
@@ -139,6 +144,32 @@ export const VISIBILITY_CHIP = {
 /** A decided case's outcome, or null while it is unresolved (open, held or escalated). */
 export function outcome(item: Pick<Case, "status">): "approved" | "rejected" | null {
   return item.status === "approved" || item.status === "rejected" ? item.status : null;
+}
+
+/**
+ * A decided case's outcome as it is worded (`outcome.*`, `decidedBy.*`, `decidedOn.*`): a message report closes
+ * "approved" when it was dismissed (the message breaks no rule) and "rejected" when it was upheld.
+ */
+export type OutcomeKey = "approved" | "rejected" | "dismissed" | "upheld";
+
+export function outcomeKey(item: Pick<Case, "status" | "subject_type">): OutcomeKey | null {
+  const result = outcome(item);
+  if (!result || caseKind(item.subject_type) !== "message") return result;
+  return result === "approved" ? "dismissed" : "upheld";
+}
+
+/** The chip of an outcome: the message stands (or the subject is public) is "completed"; the rest "ended". */
+export function outcomeChip(key: OutcomeKey): "completed" | "ended" {
+  return key === "approved" || key === "dismissed" ? "completed" : "ended";
+}
+
+/** A message report's reasons (the reporter's codes; revision 0008), each once, in the reporter's order. */
+export const MESSAGE_REASONS = ["spam", "abuse", "contact_details", "confidential", "other"] as const;
+export type MessageReason = (typeof MESSAGE_REASONS)[number];
+
+export function messageReasons(reasons: readonly string[]): MessageReason[] {
+  const keys = reasons.map((r) => ((MESSAGE_REASONS as readonly string[]).includes(r) ? (r as MessageReason) : "other"));
+  return [...new Set(keys)];
 }
 
 /** Refusals of POST …/cases/{case_id}/decision, each with its own sentence (adminModeration.refusal.*). */

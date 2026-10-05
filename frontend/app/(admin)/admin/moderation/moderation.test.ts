@@ -40,7 +40,8 @@ describe("what a case is about", () => {
     expect(caseKind("proposal")).toBe("proposal");
     expect(caseKind("problem")).toBe("problem");
     expect(caseKind("org_claim")).toBe("org_claim");
-    expect(caseKind("message")).toBe("other");
+    expect(caseKind("message")).toBe("message"); // a party's report of an engagement message (REQ-ENG-11)
+    expect(caseKind("comment")).toBe("other");
   });
 
   it("reads the title from the current text first, then the preview", () => {
