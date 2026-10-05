@@ -99,7 +99,7 @@ test("AC-TRACK-9: the thread opens at Approve to proceed, then both sides write,
   const orgThread = `/org/engagements/${id}/messages`;
   try {
     // Before INTEREST_CONFIRMED: one sentence on each side, no composer; the organisation cannot read the thread.
-    // The N18 notices link to ?tab=messages: it lands on the Messages route.
+    // Links written before the Messages route (?tab=messages) still land on it.
     await orgPage.goto(`/org/engagements/${id}?tab=messages`);
     await expect(orgPage).toHaveURL(new RegExp(`${orgThread}#messages-heading$`), SERVER_STEP);
     await expect(tabs(orgPage).getByRole("link", { name: "Messages" })).toHaveAttribute("aria-current", "page");

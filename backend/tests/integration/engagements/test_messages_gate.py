@@ -97,7 +97,7 @@ async def test_after_approval_the_named_contact_messages_and_the_developer_is_to
         assert await run_message_jobs(owner_engine, app_engine, e, provider) == 1
 
         [notice] = await in_app(owner_engine, world.developer)
-        assert notice["link"] == f"/dev/engagements/{e}?tab=messages"
+        assert notice["link"] == f"/dev/engagements/{e}/messages#messages-heading"
         assert world.org_name in notice["title"]
         assert TEXT not in str(notice["body"])
         [email] = provider.outbox
@@ -106,7 +106,7 @@ async def test_after_approval_the_named_contact_messages_and_the_developer_is_to
         assert TEXT not in email.text
         assert TEXT not in (email.html or "")
         assert "Tuesday" not in email.text
-        assert f"/dev/engagements/{e}?tab=messages" in email.text
+        assert f"/dev/engagements/{e}/messages#messages-heading" in email.text
         assert email.tag == message_notify.KIND
 
         mine = await read(s.dev, e)

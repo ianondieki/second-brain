@@ -57,7 +57,7 @@ async def test_the_developers_message_tells_the_organisations_people_once_by_ema
         for person in people:
             notices = await in_app(owner_engine, person)
             assert len(notices) == 2
-            assert {n["link"] for n in notices} == {f"/org/engagements/{e}?tab=messages"}
+            assert {n["link"] for n in notices} == {f"/org/engagements/{e}/messages#messages-heading"}
             assert all(n["org_id"] == world.org for n in notices)
             assert all(SECRET not in f"{n['title']} {n['body']}" for n in notices)
         for nobody in (world.finance, world.viewer, world.developer):
@@ -88,7 +88,7 @@ async def test_the_organisations_message_tells_the_developer_and_a_muted_email_s
         await run_message_jobs(owner_engine, app_engine, e, provider)
         [notice] = await in_app(owner_engine, world.developer)
         assert notice["title"].startswith(f"New message from {world.org_name}")
-        assert notice["link"] == f"/dev/engagements/{e}?tab=messages"
+        assert notice["link"] == f"/dev/engagements/{e}/messages#messages-heading"
         assert provider.outbox == []
         for colleague in (world.signatory, world.reviewer, world.owner):
             assert await in_app(owner_engine, colleague) == []
