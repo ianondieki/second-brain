@@ -46,7 +46,7 @@ from bridge.models.enums import DeliveryStatus, NotificationChannel
 from bridge.notifications import saved_search_digest as digest
 from bridge.notifications.deliveries import MAX_ATTEMPTS, send_email
 from bridge.notifications.email import EmailMessage, EmailProvider
-from bridge.notifications.in_app import MAX_LINK_CHARS, post_in_app
+from bridge.notifications.in_app import post_in_app
 from bridge.notifications.preferences import SAVED_SEARCH_DIGEST, SAVED_SEARCH_MATCH, channel_enabled
 from bridge.profiles.models import SavedSearch
 from bridge.web_paths import discover_path
@@ -100,14 +100,6 @@ def title(count: int, view: str, name: str) -> str:
     return f"{digest.new_items(count, view)} {'matches' if count == 1 else 'match'} {name}"
 
 
-def link(search: SavedSearch) -> str:
-    """Discover with the search's view and filters; without the words when they would not fit a notification's link."""
-    path = discover_path(search.view, niche=search.niche_slug, county=search.county_code, words=search.words)
-    if len(path) > MAX_LINK_CHARS:
-        path = discover_path(search.view, niche=search.niche_slug, county=search.county_code, words=None)
-    return path
-
-
 def in_app_key(search_id: UUID, day: date) -> str:
     return f"{SAVED_SEARCH_MATCH}:{search_id}:{day.isoformat()}"
 
@@ -148,7 +140,9 @@ async def alert_user(deps: AlertDeps, user_id: UUID, search_ids: Sequence[UUID],
                     kind=SAVED_SEARCH_MATCH,
                     title=title(count, search.view, search.name),
                     body=None,
-                    link=link(search),
+                    link=discover_path(
+                        search.view, niche=search.niche_slug, county=search.county_code, words=search.words
+                    ),
                     dedupe_key=in_app_key(search.id, today),
                     local_date=today,
                 )
@@ -213,10 +207,9 @@ async def run_alerts(deps: AlertDeps, *, now: datetime | None = None, user_ids: 
     report = Report(clock, tuple(outcomes))
     log.info(
         "saved_searches.alerted",
-        people=len(outcomes),
-        searches=sum(len(o.alerts) for o in outcomes),
-        notified=sum(a.notified for o in outcomes for a in o.alerts),
-        emailed=sum(o.email is DeliveryStatus.SENT for o in outcomes),
+        recipients=len(outcomes),
+        items=sum(len(o.alerts) for o in outcomes),
+        matched=sum(a.notified for o in outcomes for a in o.alerts),
         failed=sum(o.error for o in outcomes),
     )
     return report

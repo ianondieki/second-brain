@@ -24,15 +24,9 @@ from bridge.notifications.preferences import (
     catalogued,
     default_for,
 )
-from bridge.profiles.models import SavedSearch
-from bridge.web_paths import discover_path
+from bridge.web_paths import MAX_PATH_CHARS, discover_path
 
 SEARCH = UUID("01a10000-0000-7000-8000-000000000001")
-
-
-def search(**values: Any) -> SavedSearch:
-    base: dict[str, Any] = {"id": SEARCH, "name": "Agriculture in Nakuru", "view": "problems"}
-    return SavedSearch(**(base | values))
 
 
 def test_the_job_runs_daily_at_0705_nairobi_one_run_at_a_time() -> None:
@@ -79,15 +73,18 @@ def test_the_title_counts_and_names_the_search(count: int, view: str, expected: 
 
 
 def test_the_link_is_discover_with_the_saved_filters() -> None:
-    assert alerts.link(search()) == "/dev/discover"
-    assert alerts.link(search(view="briefs")) == "/dev/discover?view=briefs"
-    full = search(niche_slug="agriculture", county_code="KE-32", words="cold chain & 100%")
-    assert alerts.link(full) == "/dev/discover?niche=agriculture&county=KE-32&words=cold+chain+%26+100%25"
-    assert is_platform_path(alerts.link(full))
-    long_words = search(view="briefs", niche_slug="agriculture", words="\U0001f33e" * 100)  # 1,200 characters encoded
-    assert alerts.link(long_words) == "/dev/discover?view=briefs&niche=agriculture"  # the words do not fit a link
-    assert discover_path("problems", niche=None, county=None, words="mbolea") == "/dev/discover?words=mbolea"
-    assert len(alerts.link(long_words)) <= MAX_LINK_CHARS
+    def link(view: str, **filters: str | None) -> str:
+        return discover_path(view, **({"niche": None, "county": None, "words": None} | filters))
+
+    assert link("problems") == "/dev/discover"
+    assert link("briefs") == "/dev/discover?view=briefs"
+    full = link("problems", niche="agriculture", county="KE-32", words="cold chain & 100%")
+    assert full == "/dev/discover?niche=agriculture&county=KE-32&words=cold+chain+%26+100%25"
+    assert is_platform_path(full)
+    assert link("problems", words="mbolea") == "/dev/discover?words=mbolea"
+    too_long = link("briefs", niche="agriculture", words="\U0001f33e" * 100)  # 1,200 characters once encoded
+    assert too_long == "/dev/discover?view=briefs&niche=agriculture"  # the words do not fit a notification's link
+    assert MAX_PATH_CHARS == MAX_LINK_CHARS
 
 
 def test_the_in_app_key_is_per_search_and_nairobi_day() -> None:

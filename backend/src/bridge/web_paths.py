@@ -20,6 +20,7 @@ from bridge.models.enums import EngagementParty
 DEV_ENGAGEMENTS: Final = "/dev/engagements"
 ORG_ENGAGEMENTS: Final = "/org/engagements"
 DEV_DISCOVER: Final = "/dev/discover"
+MAX_PATH_CHARS: Final = 500  # in_app_notifications.link (bridge.notifications.in_app.MAX_LINK_CHARS)
 
 
 def engagement_path(party: EngagementParty, engagement_id: UUID) -> str:
@@ -35,8 +36,12 @@ def org_engagements_path(org_id: UUID) -> str:
 
 def discover_path(view: str, *, niche: str | None, county: str | None, words: str | None) -> str:
     """Discover on ``view`` with the filters applied, as the web app's ``discoverHref`` writes it (the default view,
-    ``problems``, left out; ``view``, ``niche``, ``county``, then ``words``)."""
+    ``problems``, left out; ``view``, ``niche``, ``county``, then ``words``). Words that would take the path over
+    ``MAX_PATH_CHARS`` (an in-app notification's link) are left out: the view and the other filters still apply."""
     params = [("view", view)] if view != "problems" else []
-    params += [(key, value) for key, value in (("niche", niche), ("county", county), ("words", words)) if value]
-    query = urlencode(params)
-    return f"{DEV_DISCOVER}?{query}" if query else DEV_DISCOVER
+    params += [(key, value) for key, value in (("niche", niche), ("county", county)) if value]
+    if words:
+        with_words = f"{DEV_DISCOVER}?{urlencode([*params, ('words', words)])}"
+        if len(with_words) <= MAX_PATH_CHARS:
+            return with_words
+    return f"{DEV_DISCOVER}?{urlencode(params)}" if params else DEV_DISCOVER
