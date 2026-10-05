@@ -67,6 +67,7 @@ describe("a saved search's rules", () => {
     expect(savedProblem(422, { detail: { code: "unknown_niche" } })).toBe("unknown");
     expect(savedProblem(422, { detail: { code: "unknown_county" } })).toBe("unknown");
     expect(savedProblem(401, undefined)).toBe("signedOut");
+    expect(savedProblem(404, undefined)).toBe("gone");
     expect(savedProblem(0, undefined)).toBe("network");
     expect(savedProblem(500, undefined)).toBe("failed");
   });
@@ -207,5 +208,52 @@ describe("the saved searches strip", () => {
     expect(calls.remove).toHaveBeenCalledWith("s1");
     expect(screen.queryByRole("link", { name: "Health Briefs" })).toBeNull();
     expect(document.querySelector("[data-saved-empty]")).not.toBeNull();
+  });
+
+  const ROWS: SavedSearchRow[] = ["First", "Middle", "Last"].map((name, i) => ({ ...ROW, id: `s${i}`, name }));
+
+  async function deleteRow(name: string) {
+    fireEvent.click(screen.getByRole("button", { name: `Delete ${name}` }));
+    await act(async () => fireEvent.click(document.querySelector("dialog [data-dialog-confirm]")!));
+  }
+
+  it("keeps focus on the list's toggle after deleting a middle search", async () => {
+    renderPanel({ initial: ROWS });
+    fireEvent.click(screen.getByRole("button", { name: "Saved searches (3)" }));
+    await deleteRow("Middle");
+    expect(screen.queryByRole("link", { name: "Middle" })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Saved searches (2)" }));
+  });
+
+  it("moves focus to the strip's heading after deleting the last search, even on a list that cannot be saved", async () => {
+    renderPanel({ initial: [ROW], current: null });
+    fireEvent.click(screen.getByRole("button", { name: "Saved searches (1)" }));
+    await deleteRow("Health Briefs");
+    const heading = screen.getByRole("heading", { name: en.savedSearches.heading });
+    expect(document.activeElement).toBe(heading);
+    expect(document.querySelector("[data-saved-searches]")).not.toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Deleted: Health Briefs.");
+  });
+
+  it("counts a delete the API no longer finds (404) as done", async () => {
+    const remove = vi.fn(async () => ({ ok: false as const, problem: "gone" as const }));
+    renderPanel({ initial: ROWS, calls: fakeCalls({ remove }) });
+    fireEvent.click(screen.getByRole("button", { name: "Saved searches (3)" }));
+    await deleteRow("First");
+    expect(remove).toHaveBeenCalledWith("s0");
+    expect(screen.queryByRole("link", { name: "First" })).toBeNull();
+    expect(document.querySelector("dialog")?.hasAttribute("open")).toBe(false);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("drops a search deleted elsewhere when its alerts change, and says so", async () => {
+    const setAlerts = vi.fn(async () => ({ ok: false as const, problem: "gone" as const }));
+    renderPanel({ initial: ROWS, calls: fakeCalls({ setAlerts }) });
+    fireEvent.click(screen.getByRole("button", { name: "Saved searches (3)" }));
+    await act(async () => fireEvent.click(screen.getByRole("switch", { name: "Alerts Middle" })));
+    expect(screen.queryByRole("link", { name: "Middle" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Middle was already deleted.");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Saved searches (2)" }));
   });
 });

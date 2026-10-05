@@ -47,9 +47,11 @@ export function SavedSearches({ initial, max, current, settingsHref, calls: give
   const t = useStrings("savedSearches");
   const calls = useRef(given ?? savedSearchCalls()).current;
   const [rows, setRows] = useState(initial);
+  // Once it has listed searches the strip stays (its heading keeps focus) even on a list that cannot be saved.
+  const [listed] = useState(initial.length > 0);
   const [mode, setMode] = useState<Mode>("closed");
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<SavedProblem | null>(null);
+  const [problem, setProblem] = useState<Exclude<SavedProblem, "gone"> | null>(null);
   const [alerts, setAlerts] = useState(true);
   const [status, setStatus] = useState("");
   const [rowProblem, setRowProblem] = useState<{ id: string; text: string } | null>(null);
@@ -59,18 +61,29 @@ export function SavedSearches({ initial, max, current, settingsHref, calls: give
   const dialog = useRef<HTMLDialogElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
-  const focusAfter = useRef<"toggle" | "save" | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const focusAfter = useRef<"toggle" | "save" | "heading" | null>(null);
 
   const full = rows.length >= max;
 
   // Focus goes to a control that is still there once the form closes or a row leaves.
   useEffect(() => {
-    const target = focusAfter.current === "toggle" ? toggle.current : focusAfter.current === "save" ? saveButton.current : null;
+    const target = { toggle: toggle.current, save: saveButton.current, heading: heading.current, none: null }[
+      focusAfter.current ?? "none"
+    ];
     focusAfter.current = null;
     target?.focus();
   }, [mode, rows]);
 
-  if (rows.length === 0 && !current) return null;
+  if (rows.length === 0 && !current && !listed) return null;
+
+  /** Takes a row off the list; focus stays in the strip (the toggle, or the heading once the list is empty). */
+  function drop(id: string) {
+    const left = rows.filter((row) => row.id !== id);
+    focusAfter.current = left.length > 0 ? "toggle" : "heading";
+    setRows(left);
+    if (left.length === 0) setMode("closed");
+  }
 
   function openForm() {
     if (full) return;
@@ -94,7 +107,7 @@ export function SavedSearches({ initial, max, current, settingsHref, calls: give
     const outcome = await calls.save(saveBody(current.query, name, alerts));
     setBusy(false);
     if (!outcome.ok) {
-      setProblem(outcome.problem);
+      setProblem(outcome.problem === "gone" ? "failed" : outcome.problem);
       return;
     }
     const saved = outcome.value;
@@ -112,6 +125,12 @@ export function SavedSearches({ initial, max, current, settingsHref, calls: give
     setRowProblem(null);
     setStatus("");
     const outcome = await calls.setAlerts(row.id, next);
+    if (!outcome.ok && outcome.problem === "gone") {
+      // Deleted elsewhere (another tab or device): the row goes, and the strip says why.
+      drop(row.id);
+      setStatus(t("alreadyDeleted", { name: row.name }));
+      return;
+    }
     if (!outcome.ok) {
       set(!next);
       setRowProblem({ id: row.id, text: t("alertsProblem") });
@@ -124,20 +143,21 @@ export function SavedSearches({ initial, max, current, settingsHref, calls: give
     setDeleteProblem(false);
     const outcome = await calls.remove(deleting.id);
     setDeleteBusy(false);
-    if (!outcome.ok) {
+    // Already gone (404) is what a delete wants: done.
+    if (!outcome.ok && outcome.problem !== "gone") {
       setDeleteProblem(true);
       return;
     }
-    const left = rows.filter((row) => row.id !== deleting.id);
-    focusAfter.current = left.length > 0 ? "toggle" : "save";
     setStatus(t("deleted", { name: deleting.name }));
-    setRows(left);
-    if (left.length === 0) setMode("closed");
+    drop(deleting.id);
     dialog.current?.close();
   }
 
   return (
     <div data-saved-searches="" className="border-t border-line px-4 py-2 sm:px-5">
+      <h2 ref={heading} tabIndex={-1} className="sr-only">
+        {t("heading")}
+      </h2>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6">
         {rows.length > 0 ? (
           <button

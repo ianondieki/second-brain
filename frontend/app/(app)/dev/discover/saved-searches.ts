@@ -53,11 +53,13 @@ export function nameProblem(name: string): "nameMissing" | "nameLong" | null {
 }
 
 /** Why a save, a change or a delete was refused (`savedSearches.problem.*`); a thrown fetch is "network". */
-export type SavedProblem = "nameMissing" | "nameLong" | "limit" | "unknown" | "signedOut" | "network" | "failed";
+/** "gone": the saved search no longer exists (404, deleted elsewhere); the panel drops its row rather than wording it. */
+export type SavedProblem = "nameMissing" | "nameLong" | "limit" | "unknown" | "signedOut" | "gone" | "network" | "failed";
 
 export function savedProblem(status: number, body: unknown): SavedProblem {
   if (status === 0) return "network";
   if (status === 401) return "signedOut";
+  if (status === 404) return "gone";
   const code = apiErrorCode(body);
   if (status === 409 && code === "saved_searches_limit") return "limit";
   if (status === 422 && (code === "unknown_niche" || code === "unknown_county")) return "unknown";
