@@ -150,7 +150,8 @@ class QuizQuestion(IdMixin, Base):
     and a ``why``, a source of the curated list (``source_id``, its title and https URL copied at generation), a topic
     and ``prompt_hash`` (SHA-256 of the NFKC- and whitespace-collapsed prompt, written by the app, for the 60-day
     no-repeat check). Added only to a draft set; never changed but by its pull (``status`` ``pulled`` with
-    ``pulled_at`` and ``pulled_reason``) or restore (``live``), which rescore the set's attempts. bridge_app reads every
+    ``pulled_at`` and ``pulled_reason``) or restore (``live``, with ``restored_at``: flags never pull a question staff
+    restored), which rescore the set's attempts. bridge_app reads every
     column but ``answer`` and ``why`` (``app_quiz_answers``): both are deferred with raiseload."""
 
     __tablename__ = "quiz_questions"
@@ -196,6 +197,7 @@ class QuizQuestion(IdMixin, Base):
     status: Mapped[str] = mapped_column(Text, server_default=text("'live'"))  # QUESTION_STATUSES
     pulled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pulled_reason: Mapped[str | None] = mapped_column(Text)
+    restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # flags never re-pull after it
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
 
 

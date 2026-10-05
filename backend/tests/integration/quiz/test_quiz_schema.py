@@ -405,6 +405,41 @@ async def test_three_developers_flags_pull_a_question_and_every_attempt_is_resco
         await t.expect(conn, "SELECT app_rescore_quiz_set(:s)", "no quiz set", s=uuid7())
 
 
+async def test_a_staff_restore_is_never_overturned_by_flags(owner_engine: AsyncEngine) -> None:
+    """A question staff pulled and restored with two flags is not pulled by a third or a fourth; a question the flags
+    pulled and staff restored is not pulled again when a flagger's account is deleted (their flags go with it) and a
+    new flag brings the count back to three. A restore is never undone, for the owner too."""
+    async with t.as_app(owner_engine) as conn:
+        p = await people(conn)
+        today = await free_day(conn)
+        set_id, questions = await approved(conn, today, p.admin)
+        for user in (p.developer, p.other, p.third, p.fourth):
+            await attempt(conn, set_id, user, list(KEY))
+        status = "SELECT status, restored_at IS NOT NULL AS restored FROM quiz_questions WHERE id = :q"
+        assert await flag(conn, p.developer, questions[0]) is False
+        assert await flag(conn, p.other, questions[0]) is False
+        await t.act(conn, p.admin)
+        await t.run(conn, SET_STATUS, question=questions[0], status="pulled", reason="Checking the key.")
+        await t.run(conn, SET_STATUS, question=questions[0], status="live", reason=None)
+        assert await flag(conn, p.third, questions[0]) is False
+        assert await flag(conn, p.fourth, questions[0]) is False
+        assert tuple((await conn.execute(sa.text(status), {"q": questions[0]})).one()) == ("live", True)
+        for user in (p.developer, p.other):
+            assert await flag(conn, user, questions[1]) is False
+        assert await flag(conn, p.third, questions[1]) is True
+        await t.act(conn, p.admin)
+        await t.run(conn, SET_STATUS, question=questions[1], status="live", reason=None)
+        await t.as_owner(conn)
+        await t.run(conn, "DELETE FROM users WHERE id = :u", u=p.third)  # their attempt and flags go with them
+        assert await t.run(conn, "SELECT count(*) FROM quiz_flags WHERE question_id = :q", q=questions[1]) == 2
+        assert await flag(conn, p.fourth, questions[1]) is False  # three flags again: staff restored it
+        assert tuple((await conn.execute(sa.text(status), {"q": questions[1]})).one()) == ("live", True)
+        await t.as_owner(conn)
+        await t.expect(
+            conn, "UPDATE quiz_questions SET restored_at = NULL WHERE id = :q", "never undone", q=questions[1]
+        )
+
+
 async def test_at_most_ten_flags_a_nairobi_day_per_developer(owner_engine: AsyncEngine) -> None:
     """Ten flags in a Nairobi day, then the eleventh is refused (a fixed limit); the next day, flags are taken again;
     another developer has their own ten. Each flags questions of sets they played."""

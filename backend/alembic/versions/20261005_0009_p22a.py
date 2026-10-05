@@ -25,7 +25,8 @@ revisions 0007 and 0008's jobs; a "developer" is an active user with a developer
   ``why`` are read only through ``app_quiz_answers(set)``: rows only for a caller with an attempt on the set (attempts
   are inserted finished) or staff admin. The job (no user bound) inserts them; ``quiz_questions_guard`` (every role)
   admits a question only into a draft set (locked FOR SHARE, so a concurrent decision waits) and changes nothing but
-  the pull columns (``status``, ``pulled_at``, ``pulled_reason``), which only the definer functions below write.
+  the pull columns (``status``, ``pulled_at``, ``pulled_reason``, ``restored_at``: a staff restore's last moment,
+  never cleared), which only the definer functions below write.
   CHECKs: position 1 to 5 (unique per set), a prompt of 1 to 300 characters, four pairwise distinct options of 1 to
   120, the answer 0 to 3, a why of 1 to 600 (none of them with a control character), a source id, title (160) and
   https URL (400), a topic (60), a 32-byte prompt hash, and a pull complete with its moment and reason (1 to 300).
@@ -64,9 +65,10 @@ listed in ``FUNCTION_GRANTS``):
   (invalid_parameter_value); the set locked FOR UPDATE; an unknown set no_data_found; a decided set
   object_not_in_prerequisite_state; approval without five questions check_violation (the guard).
 - ``app_set_quiz_question_status(question, status, reason)`` -> attempts whose score changed: staff admin only; pull
-  (``pulled`` with a reason of 1 to 300 characters) or restore (``live`` with no reason); an unknown question
-  no_data_found; the same status again object_not_in_prerequisite_state. Locks the set FOR UPDATE, changes the
-  question and rescores the set in the same transaction.
+  (``pulled`` with a reason of 1 to 300 characters) or restore (``live`` with no reason; sets ``restored_at``, after
+  which flags never pull the question again); an unknown question no_data_found; the same status again
+  object_not_in_prerequisite_state. Locks the set FOR UPDATE, changes the question and rescores the set in the same
+  transaction.
 - ``app_flag_question(question, reason, note)`` -> (flag_id, pulled): a developer (anyone else, like an unknown
   question or one of a set not approved, gets no_data_found: they read no question), a reason of ``wrong_answer``,
   ``unclear``, ``outdated``, ``other`` and an optional note of 1 to 300 characters (invalid_parameter_value), who
@@ -74,9 +76,10 @@ listed in ``FUNCTION_GRANTS``):
   never played cannot brigade a question out), on a live question (object_not_in_prerequisite_state when it was
   pulled); once per developer and question (unique_violation, constraint
   ``uq_quiz_flags_question_id_user_id``); at most 10 a Nairobi day per developer (program_limit_exceeded; serialised
-  per developer by an advisory lock). Locks the set FOR UPDATE, inserts the flag and, when it is the question's third
-  (from 3 distinct developers: one flag per developer), pulls it (``pulled_reason = 'three_flags'``) and rescores the
-  set; ``pulled`` says so. Later flags on a question staff restored do not pull it again (the count passes 3 once).
+  per developer by an advisory lock). Locks the set FOR UPDATE, inserts the flag and, when the question then has 3
+  flags or more (from distinct developers: one flag per developer) and staff never restored it (``restored_at`` is
+  NULL), pulls it (``pulled_reason = 'three_flags'``) and rescores the set; ``pulled`` says so. A staff restore is
+  final for the flags: neither later flags nor a count that falls (a deleted account's flags) and rises again pull it.
 - ``app_rescore_quiz_set(set)`` -> attempts whose score changed: staff admin, or a job with no user bound (a repair);
   an unknown set no_data_found. The flag and staff paths rescore through the internal ``quiz_rescore_set(set)``
   (INVOKER, no EXECUTE grant), which locks the set FOR UPDATE and sets every attempt's score to
@@ -143,7 +146,7 @@ RLS_TABLES = NEW_TABLES
 # database owns a column (status, decisions, pulls, scores, times) or the app must never read one (answer, why).
 QUESTION_READABLE = (
     "id, set_id, position, prompt, options, source_id, source_title, source_url, topic, prompt_hash, status,"
-    " pulled_at, pulled_reason, created_at"
+    " pulled_at, pulled_reason, restored_at, created_at"
 )
 APP_GRANTS: dict[str, str] = {
     "quiz_sets": "SELECT, INSERT (id, quiz_date, origin, llm_trace_id)",
@@ -386,7 +389,8 @@ BEGIN
     UPDATE public.quiz_questions
        SET status = p_status,
            pulled_at = CASE WHEN p_status = 'pulled' THEN public.app_clock_now() END,
-           pulled_reason = CASE WHEN p_status = 'pulled' THEN p_reason END
+           pulled_reason = CASE WHEN p_status = 'pulled' THEN p_reason END,
+           restored_at = CASE WHEN p_status = 'live' THEN public.app_clock_now() ELSE restored_at END
      WHERE id = p_question;
     RETURN public.quiz_rescore_set(v_set);
 END;
@@ -395,10 +399,11 @@ $$;
 -- A developer flags a live question of an approved set (D-59) they played (a finished attempt on its set: accounts
 -- that never played cannot brigade a question out), once per question, at most 10 a Nairobi day (fixed here: no caller
 -- names the limit), a reason code and an optional note. A caller who is not a developer reads no question, so for them
--- the question does not exist. The question's third flag (one per developer, so three distinct developers who played)
--- pulls it with the reason 'three_flags' and rescores the set in the same transaction; a question staff restored
--- afterwards is not pulled again by later flags. Serialised per set (FOR UPDATE) and per developer (an advisory lock;
--- the count then reads every committed flag at READ COMMITTED, the application's level).
+-- the question does not exist. Once a question has 3 flags (one per developer, so three distinct developers who
+-- played) it is pulled with the reason 'three_flags' and the set rescored in the same transaction, unless staff ever
+-- restored it (restored_at): a staff decision is not overturned by flags, however many come or go (a deleted account's
+-- flags go with it, so a count may fall and rise again). Serialised per set (FOR UPDATE) and per developer (an
+-- advisory lock; the count then reads every committed flag at READ COMMITTED, the application's level).
 CREATE FUNCTION app_flag_question(p_question uuid, p_reason text, p_note text)
     RETURNS TABLE (flag_id uuid, pulled boolean)
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -408,6 +413,7 @@ DECLARE
     v_user uuid := public.app_user_id();
     v_set uuid;
     v_flag uuid;
+    v_question public.quiz_questions%ROWTYPE;
 BEGIN
     IF v_user IS NULL OR NOT public.app_is_developer() THEN
         RAISE EXCEPTION 'app_flag_question: no question of an approved set with that id'
@@ -428,7 +434,8 @@ BEGIN
         RAISE EXCEPTION 'app_flag_question: play the set first' USING ERRCODE = 'insufficient_privilege';
     END IF;
     PERFORM 1 FROM public.quiz_sets s WHERE s.id = v_set FOR UPDATE;
-    IF (SELECT q.status FROM public.quiz_questions q WHERE q.id = p_question) <> 'live' THEN
+    SELECT * INTO v_question FROM public.quiz_questions q WHERE q.id = p_question;
+    IF v_question.status <> 'live' THEN
         RAISE EXCEPTION 'app_flag_question: the question was pulled' USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     PERFORM pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('quiz_flags:' || v_user::text, 0));
@@ -444,7 +451,8 @@ BEGIN
     v_flag := public.uuid7();
     INSERT INTO public.quiz_flags (id, question_id, user_id, reason, note)
     VALUES (v_flag, p_question, v_user, p_reason, p_note);
-    IF (SELECT count(*) FROM public.quiz_flags f WHERE f.question_id = p_question) = 3 THEN
+    IF v_question.restored_at IS NULL
+       AND (SELECT count(*) FROM public.quiz_flags f WHERE f.question_id = p_question) >= 3 THEN
         UPDATE public.quiz_questions
            SET status = 'pulled', pulled_at = public.app_clock_now(), pulled_reason = 'three_flags'
          WHERE id = p_question;
@@ -640,8 +648,9 @@ BEGIN
     IF (NEW.id, NEW.set_id, NEW.position, NEW.prompt, NEW.options, NEW.answer, NEW.why, NEW.source_id,
         NEW.source_title, NEW.source_url, NEW.topic, NEW.prompt_hash, NEW.created_at)
        IS DISTINCT FROM (OLD.id, OLD.set_id, OLD.position, OLD.prompt, OLD.options, OLD.answer, OLD.why, OLD.source_id,
-                         OLD.source_title, OLD.source_url, OLD.topic, OLD.prompt_hash, OLD.created_at) THEN
-        RAISE EXCEPTION 'quiz_questions: a question changes only by its pull or restore'
+                         OLD.source_title, OLD.source_url, OLD.topic, OLD.prompt_hash, OLD.created_at)
+       OR (OLD.restored_at IS NOT NULL AND NEW.restored_at IS NULL) THEN
+        RAISE EXCEPTION 'quiz_questions: a question changes only by its pull or restore (a restore is never undone)'
             USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
@@ -835,6 +844,7 @@ def _create_tables() -> None:
         sa.Column("status", sa.Text(), server_default=sa.text("'live'"), nullable=False),
         sa.Column("pulled_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("pulled_reason", sa.Text(), nullable=True),
+        sa.Column("restored_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("app_clock_now()"), nullable=False),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.CheckConstraint("position BETWEEN 1 AND 5", name=op.f("ck_quiz_questions_position_range")),
