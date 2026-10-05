@@ -7,7 +7,9 @@ owner, then the connection switches to ``bridge_app`` acting for a user (``act``
 
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -60,6 +62,22 @@ async def act(conn: AsyncConnection, user_id: UUID | None, org_id: UUID | None =
 
 async def as_owner(conn: AsyncConnection) -> None:
     await conn.execute(sa.text("SET LOCAL ROLE bridge_owner"))
+
+
+async def backend_pid(conn: AsyncConnection) -> int:
+    return int(await run(conn, "SELECT pg_backend_pid()"))
+
+
+async def wait_until_blocked(observer: AsyncConnection, pid: int, statement: asyncio.Task[Any]) -> None:
+    """Wait until the backend ``pid``, running ``statement``, waits for a lock (pg_locks shows a lock it asked for and
+    was not granted; pg_locks is read live, not from a snapshot). Fails if the statement finishes first (it did not
+    wait) or nothing waits within 30 seconds."""
+    blocked = sa.text("SELECT count(*) FROM pg_locks WHERE pid = :pid AND NOT granted")
+    deadline = time.monotonic() + 30
+    while not (await observer.execute(blocked, {"pid": pid})).scalar_one():
+        assert not statement.done(), "the statement did not wait for the lock"
+        assert time.monotonic() < deadline, "the statement never waited for the lock"
+        await asyncio.sleep(0.01)  # a poll interval: the order comes from the lock, not from a delay
 
 
 async def expect(conn: AsyncConnection, sql: str, match: str, **params: object) -> None:
