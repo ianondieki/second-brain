@@ -6,7 +6,7 @@ import { LinkPending } from "@/components/ui/LinkPending";
 
 import { engagementHistory, engagementThread } from "./data";
 import { MessagesTab } from "./MessagesTab";
-import type { Detail } from "./model";
+import { turnOf, type Detail } from "./model";
 import { engagementHref, needsHistory, tabHref, TrackerHeader, TrackerSpine, TrackerTabs, TurnCard } from "./TrackerFrame";
 
 /**
@@ -22,13 +22,17 @@ export async function MessagesScreen({ detail, basePath, query = "" }: { detail:
     engagementThread(detail.id),
   ]);
   const href = engagementHref(basePath, detail.id);
+  const trackerHref = tabHref(href, query, "tracker");
+  // The way to the turn card's buttons, only when the next step is the viewer's.
+  const turn = turnOf(detail, detail.my_party);
+  const yours = turn.kind === "you" || turn.kind === "both";
   return (
     <>
       <TrackerHeader detail={detail} basePath={basePath} query={query} />
       <TurnCard detail={detail}>
-        {detail.actions.length > 0 ? (
+        {yours ? (
           <div>
-            <Link href={tabHref(href, query, "tracker")} data-to-tracker="" className={buttonClass("secondary", "no-underline")}>
+            <Link href={trackerHref} data-to-tracker="" className={buttonClass("secondary", "no-underline")}>
               {t("messages.toTracker")}
               <LinkPending className="ml-2" />
             </Link>
@@ -38,7 +42,7 @@ export async function MessagesScreen({ detail, basePath, query = "" }: { detail:
       <TrackerSpine detail={detail} history={history} />
       <TrackerTabs detail={detail} current="messages" basePath={basePath} query={query} />
       <div className="mt-6 flex max-w-3xl flex-col gap-10">
-        <MessagesTab detail={detail} read={read} />
+        <MessagesTab detail={detail} read={read} trackerHref={trackerHref} />
       </div>
     </>
   );

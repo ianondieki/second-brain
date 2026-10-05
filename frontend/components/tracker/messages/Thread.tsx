@@ -39,8 +39,8 @@ export interface ThreadProps {
   locale: string;
   /** The organisation's name: what an organisation member's message says beside the sender. */
   orgName: string;
-  /** The sentence of an empty thread (formatted on the server: it differs for an open and a closed thread). */
-  empty: string;
+  /** The sentence of an empty thread (formatted on the server: it differs by who reads it), or null for none. */
+  empty: string | null;
   /** Tests pass fakes; the real calls otherwise. */
   calls?: Partial<ThreadCalls>;
 }
@@ -106,7 +106,7 @@ export function Thread({ engagementId, initial, today, locale, orgName, empty, c
       ) : null}
 
       {groups.length === 0 ? (
-        <p className="text-ink-soft" data-thread-empty="">
+        empty === null ? null : <p className="text-ink-soft" data-thread-empty="">
           {empty}
         </p>
       ) : (
@@ -197,7 +197,7 @@ function MessageItem({
       aria-labelledby={headId}
       data-message={message.id}
       data-mine={mine ? "true" : "false"}
-      className={cn("flex gap-3 focus:outline-none", mine ? "ml-8 justify-end sm:ml-24" : "mr-8 sm:mr-24")}
+      className={cn("flex scroll-mt-6 gap-3 focus:outline-none", mine ? "ml-8 justify-end sm:ml-24" : "mr-8 sm:mr-24")}
     >
       {mine ? null : <Avatar name={message.sender_name} kind={message.sender_party === "org" ? "org" : "person"} size="sm" className="mt-0.5" />}
       <div className={cn("flex min-w-0 flex-col gap-1.5", mine && "items-end")}>

@@ -26,9 +26,25 @@ export function engagementHref(basePath: string, id: string): string {
   return `${basePath}/${encodeURIComponent(id)}`;
 }
 
+/** The thread's heading on the Messages route: where its links land (MessagesTab's MESSAGES_HEADING). */
+export const MESSAGES_FRAGMENT = "messages-heading";
+
+/**
+ * One engagement's Messages route, landing on the thread ("/org/engagements/<id>/messages?org=…#messages-heading"):
+ * the tab bar's link, and the redirect of the old ?tab=messages (the N18 notices' links).
+ */
+export function messagesHref(basePath: string, id: string, query = ""): string {
+  return `${withQuery(`${engagementHref(basePath, id)}/messages`, query)}#${MESSAGES_FRAGMENT}`;
+}
+
+/** One message in the thread ("…/messages#message-<id>"): where the History tab's entry for it links. */
+export function messageHref(basePath: string, id: string, query: string, messageId: string): string {
+  return `${withQuery(`${engagementHref(basePath, id)}/messages`, query)}#message-${encodeURIComponent(messageId)}`;
+}
+
 /** Where each tab lives: the tracker's own page with ?tab=, or the Messages route; the org's ?org= kept. */
 export function tabHref(href: string, query: string, tab: TabLink): string {
-  if (tab === "messages") return withQuery(`${href}/messages`, query);
+  if (tab === "messages") return `${withQuery(`${href}/messages`, query)}#${MESSAGES_FRAGMENT}`;
   return withQuery(href, query, tab === "tracker" ? {} : { tab });
 }
 
@@ -130,13 +146,15 @@ export async function TrackerTabs({
           name === "messages" && unread > 0 && current !== "messages" ? (
             <>
               {t("tabs.messages")}
+              {/* The figure from 640 px; a dot below it, so the strip fits 360 px (the words stay for screen readers). */}
               <span
                 aria-hidden="true"
                 data-unread={unread}
-                className="ml-1.5 inline-grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1.5 text-xs font-bold text-on-accent tabular-nums"
+                className="ml-1.5 hidden h-5 min-w-5 place-items-center rounded-full bg-accent px-1.5 text-xs font-bold text-on-accent tabular-nums sm:inline-grid"
               >
                 {unread}
-              </span>{" "}
+              </span>
+              <span aria-hidden="true" data-unread-dot="" className="ml-1 inline-block size-2 self-start rounded-full bg-accent sm:hidden" />{" "}
               <span className="sr-only">{t("unread", { count: unread })}</span>
             </>
           ) : (

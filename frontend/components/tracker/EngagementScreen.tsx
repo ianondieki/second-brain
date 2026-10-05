@@ -36,7 +36,7 @@ import {
   type DocumentKind,
   withQuery,
 } from "./model";
-import { engagementHref, needsHistory, TrackerHeader, TrackerSpine, TrackerTabs, TurnCard } from "./TrackerFrame";
+import { engagementHref, messageHref, needsHistory, TrackerHeader, TrackerSpine, TrackerTabs, TurnCard } from "./TrackerFrame";
 import { Tier2Section } from "./Tier2Section";
 
 /** The tracker page's own tabs (?tab=); Messages is its own route (MessagesScreen). */
@@ -137,7 +137,13 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
       <div className="mt-6 flex max-w-3xl flex-col gap-10">
         {tab === "tracker" ? <TrackerTab detail={detail} me={me} /> : null}
         {tab === "documents" ? <DocumentsTab detail={detail} doc={doc} href={href} query={query} /> : null}
-        {tab === "history" && history ? <HistoryList history={history} notes={detail.notes} /> : null}
+        {tab === "history" && history ? (
+          <HistoryList
+            history={history}
+            notes={detail.notes}
+            messageLink={(messageId) => messageHref(basePath, detail.id, query, messageId)}
+          />
+        ) : null}
       </div>
     </ClientStrings>
   );

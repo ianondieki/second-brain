@@ -101,9 +101,9 @@ test("AC-TRACK-9: the thread opens at Approve to proceed, then both sides write,
     // Before INTEREST_CONFIRMED: one sentence on each side, no composer; the organisation cannot read the thread.
     // The N18 notices link to ?tab=messages: it lands on the Messages route.
     await orgPage.goto(`/org/engagements/${id}?tab=messages`);
-    await expect(orgPage).toHaveURL(new RegExp(`${orgThread}$`), SERVER_STEP);
+    await expect(orgPage).toHaveURL(new RegExp(`${orgThread}#messages-heading$`), SERVER_STEP);
     await expect(tabs(orgPage).getByRole("link", { name: "Messages" })).toHaveAttribute("aria-current", "page");
-    await expect(orgPage.locator("[data-thread-closed='not_open']")).toHaveText(
+    await expect(orgPage.locator("[data-thread-closed='not_open'] p")).toHaveText(
       "Messages open when your organisation approves to proceed, a non-binding step.",
     );
     await expect(orgPage.locator("[data-composer], [data-thread]")).toHaveCount(0);
@@ -114,7 +114,7 @@ test("AC-TRACK-9: the thread opens at Approve to proceed, then both sides write,
     await shot(orgPage, info, "messages-org-not-open");
 
     await devPage.goto(devThread);
-    await expect(devPage.locator("[data-thread-closed='not_open']")).toHaveText(
+    await expect(devPage.locator("[data-thread-closed='not_open'] p")).toHaveText(
       `Messages open when ${org.orgName} approves to proceed, a non-binding step.`,
     );
     await expect(devPage.locator("[data-composer]")).toHaveCount(0);
@@ -171,8 +171,10 @@ test("AC-TRACK-9: the thread opens at Approve to proceed, then both sides write,
     await expect(messagesTab.locator("[data-unread='1']")).toHaveText("1");
     await expect(messagesTab).toHaveAccessibleName("Messages 1 unread message");
     await messagesTab.click();
-    await expect(orgPage).toHaveURL(new RegExp(`${orgThread}$`), SERVER_STEP);
+    await expect(orgPage).toHaveURL(new RegExp(`${orgThread}#messages-heading$`), SERVER_STEP);
     await threadReady(orgPage);
+    // The route lands on the thread: its heading is on screen (at 360 x 780 too), below the turn card and the spine.
+    await expect(orgPage.locator("#messages-heading")).toBeInViewport();
     const fromDev = orgPage.locator("[data-message][data-mine='false']");
     await expect(fromDev).toContainText(dev.name);
     await expect(fromDev).toContainText("Developer");

@@ -6,8 +6,8 @@ import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { engagement } from "@/components/tracker/data";
 import { asDocumentKind, asTab, EngagementScreen } from "@/components/tracker/EngagementScreen";
-import { withQuery } from "@/components/tracker/model";
 import { Refused } from "@/components/tracker/Refused";
+import { messagesHref } from "@/components/tracker/TrackerFrame";
 
 import { orgContext } from "../../data";
 import { ENGAGEMENTS_PATH, orgQuery } from "../../membership";
@@ -28,8 +28,7 @@ export default async function OrganisationEngagementPage({ params, searchParams 
   const { id } = await params;
   // The Messages tab is its own route; old links and the N18 notices (?tab=messages) land there, ?org= kept.
   if (query.tab === "messages") {
-    const org: Record<string, string> = typeof query.org === "string" ? { org: query.org } : {};
-    redirect(withQuery(`${ENGAGEMENTS_PATH}/${encodeURIComponent(id)}/messages`, "", org));
+    redirect(messagesHref(ENGAGEMENTS_PATH, id, typeof query.org === "string" ? `?${new URLSearchParams({ org: query.org })}` : ""));
   }
   const { me, query: requested } = await orgContext(query.org);
   const found = await engagement(id);

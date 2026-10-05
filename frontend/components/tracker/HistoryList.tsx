@@ -1,6 +1,9 @@
 import { useLocale, useTranslations } from "next-intl";
 
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/Badge";
+import { titleLinkClass } from "@/components/ui/Button";
 import { Section } from "@/components/ui/Section";
 import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
 
@@ -48,7 +51,16 @@ const EVENT_KEYS = new Set<string>([
  * the answer, a hold's reason and date: the engagement's `notes`), as plain text. The thread's messages are entries
  * too ("Message from …", the side and the time; never the text, which stays on the Messages tab; REQ-ENG-11).
  */
-export function HistoryList({ history, notes = [] }: { history: History; notes?: readonly Note[] }) {
+export function HistoryList({
+  history,
+  notes = [],
+  messageLink,
+}: {
+  history: History;
+  notes?: readonly Note[];
+  /** Where a message's entry links: that message in the thread (the Messages route, "#message-<id>"). */
+  messageLink?: (messageId: string) => string;
+}) {
   const t = useTranslations("tracker");
   const locale = useLocale();
   const entries = timeline(history);
@@ -94,7 +106,15 @@ export function HistoryList({ history, notes = [] }: { history: History; notes?:
                 {rail}
                 {mark}
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold [overflow-wrap:anywhere] text-ink">{t("history.message", { name: message.sender_name })}</h3>
+                  <h3 className="font-semibold [overflow-wrap:anywhere] text-ink">
+                    {messageLink ? (
+                      <Link href={messageLink(message.id)} className={titleLinkClass}>
+                        {t("history.message", { name: message.sender_name })}
+                      </Link>
+                    ) : (
+                      t("history.message", { name: message.sender_name })
+                    )}
+                  </h3>
                   <p className="mt-0.5 flex flex-wrap gap-x-3 text-sm text-ink-soft">
                     <span className="text-ink">{t(`history.messageSide.${message.sender_party}`)}</span>
                     <Eat iso={message.created_at} />

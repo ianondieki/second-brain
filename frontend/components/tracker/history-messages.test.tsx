@@ -44,6 +44,13 @@ describe("the History tab", () => {
     expect([...document.querySelectorAll("[data-event]")].map((e) => e.getAttribute("data-event"))).toEqual(["start_review", "create"]);
   });
 
+  it("links each message's entry to that message in the thread", () => {
+    renderWithIntl(<HistoryList history={history({ messages })} messageLink={(id) => `/dev/engagements/e/messages#message-${id}`} />);
+    const link = document.querySelector("[data-history-message='org'] h3 a")!;
+    expect(link.textContent).toBe("Message from Rita Wanjiru");
+    expect(link.getAttribute("href")).toBe("/dev/engagements/e/messages#message-msg-2");
+  });
+
   it("reads as before without messages", () => {
     renderWithIntl(<HistoryList history={history()} />);
     expect(document.querySelectorAll("[data-history-message]")).toHaveLength(0);

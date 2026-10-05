@@ -79,25 +79,28 @@ export const engagementHistory = cache(async function engagementHistory(id: stri
   return null;
 });
 
-export type ThreadRead = { open: true; thread: Thread } | { open: false };
+export type ThreadRead =
+  | { kind: "open"; thread: Thread }
+  | { kind: "notOpen" }
+  | { kind: "refused"; refusal: ReadRefusal };
 
 /**
  * The Messages tab's first page (REQ-ENG-11; GET …/messages): the latest messages, the thread's state and what the
  * caller may do. The organisation is refused (403 thread_not_open) until the engagement reaches INTEREST_CONFIRMED
- * (AC-TRACK-9): the tab then says when it opens, as it does for the developer's not-yet-open thread.
+ * (AC-TRACK-9): the tab then says when it opens, as it does for the developer's not-yet-open thread. Any other
+ * refusal (the engagement is gone or no longer the caller's: 404) is said as the tracker says it.
  */
 export async function engagementThread(id: string): Promise<ThreadRead> {
   const { data, error, response } = await serverApi().GET("/api/engagements/{engagement_id}/messages", {
     params: { path: { engagement_id: id } },
     ...(await options()),
   });
-  if (data) return data.status === "not_open" ? { open: false } : { open: true, thread: data };
-  if (response.status === 403 && apiErrorCode(error) === "thread_not_open") return { open: false };
-  refused(response.status, error, "GET /api/engagements/{engagement_id}/messages");
-  return { open: false };
+  if (data) return data.status === "not_open" ? { kind: "notOpen" } : { kind: "open", thread: data };
+  if (response.status === 403 && apiErrorCode(error) === "thread_not_open") return { kind: "notOpen" };
+  return { kind: "refused", refusal: refused(response.status, error, "GET /api/engagements/{engagement_id}/messages") };
 }
 
-export type DocumentText ={ kind: DocumentKind; ref: string; sha256: string; text: string; intact: boolean };
+export type DocumentText = { kind: DocumentKind; ref: string; sha256: string; text: string; intact: boolean };
 
 /** The exact text of a document of the engagement (the NDA, the agreement, the acceptance certificate). */
 export async function engagementDocument(id: string, kind: DocumentKind): Promise<DocumentText | null> {
