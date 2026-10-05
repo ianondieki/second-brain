@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { orgContext } from "../../../data";
 import { OrgRefusal } from "../../../OrgRefusal";
 import { getCounties } from "../../../scout-data";
-import { COMPARE_MAX, COMPARE_MIN, parseCompareIds, shortlistHref } from "../../../shortlist";
+import { COMPARE_MAX, COMPARE_MIN, compareShows, parseCompareIds, shortlistHref } from "../../../shortlist";
 import { getCompare } from "../../../shortlist-data";
 import { CompareView } from "./CompareView";
 
@@ -69,8 +69,13 @@ export default async function CompareScreen({ searchParams }: PageProps<"/org/in
         href={back}
       />
     );
-  } else if (read.value.items.length === 0) {
+  } else if (compareShows(read.value.items.length) === "none") {
     body = <EmptyState sentence={t("noneAvailable")} action={t("backToShortlist")} href={back} />;
+  } else if (compareShows(read.value.items.length) === "count") {
+    // Only one of those asked is still available: nothing to compare it with.
+    body = (
+      <EmptyState sentence={t("refusal.count", { min: COMPARE_MIN, max: COMPARE_MAX })} action={t("backToShortlist")} href={back} />
+    );
   } else {
     const left = asked.ids.length - read.value.items.length;
     body = (

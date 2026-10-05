@@ -4,6 +4,7 @@ import type { Membership } from "./membership";
 import {
   compareAction,
   compareProblem,
+  compareShows,
   editsShortlist,
   parseCompareIds,
   shortlistHref,
@@ -54,5 +55,14 @@ describe("the shortlist's rules", () => {
     expect(compareProblem({ detail: { code: "not_shortlisted" } })).toBe("notShortlisted");
     expect(compareProblem({ detail: { code: "compare_count" } })).toBe("count");
     expect(compareProblem({ detail: { code: "compare_repeated" } })).toBe("count");
+  });
+});
+
+describe("what the compare page shows for the proposals still available", () => {
+  it("compares 2 to 4, asks for 2 to 4 when only 1 is left, and says none are left for 0", () => {
+    expect(compareShows(4)).toBe("compare");
+    expect(compareShows(2)).toBe("compare");
+    expect(compareShows(1)).toBe("count");
+    expect(compareShows(0)).toBe("none");
   });
 });

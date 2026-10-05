@@ -53,6 +53,15 @@ export function parseCompareIds(value: string | string[] | undefined): CompareId
   return ids.length >= COMPARE_MIN && ids.length <= COMPARE_MAX ? { kind: "ok", ids } : { kind: "count", ids };
 }
 
+/**
+ * What the compare page shows for the proposals the API returned (it leaves out any no longer available): the side by
+ * side view from 2, the "choose 2 to 4" sentence for 1 (a one-column compare compares nothing), "none" for 0.
+ */
+export function compareShows(available: number): "compare" | "count" | "none" {
+  if (available >= COMPARE_MIN) return "compare";
+  return available === 0 ? "none" : "count";
+}
+
 /** Why a shortlist change was refused, as one of the toggle's fixed sentences (`shortlist.problem.*`). */
 export type ShortlistProblem = "code" | "signedOut" | "role" | "gone" | "network" | "failed";
 
