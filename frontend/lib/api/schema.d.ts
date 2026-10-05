@@ -3358,7 +3358,7 @@ export interface components {
              * Actions
              * @description The decisions the decision route accepts from you now
              */
-            actions: ("approve" | "reject")[];
+            actions: ("approve" | "reject" | "dismiss" | "uphold")[];
             /**
              * Blocked
              * @description Why a decision is refused (the route's code); null when both are open
@@ -3389,6 +3389,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** @description A message report's message, on the case read by its id only (each read is audited); null in the lists and for every other subject */
+            message?: components["schemas"]["ReportedMessageOut"] | null;
             preview: components["schemas"]["CasePreview"];
             /** Reasons */
             reasons: string[];
@@ -6227,6 +6229,33 @@ export interface components {
             created: boolean;
         };
         /**
+         * ReportedMessageOut
+         * @description The one message a report shared with staff (``app_reported_message``): never the rest of its thread.
+         */
+        ReportedMessageOut: {
+            /**
+             * Body
+             * @description The message's plain text as the party typed it: render it as text
+             */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Engagement Id
+             * Format: uuid
+             */
+            engagement_id: string;
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+            sender_party: components["schemas"]["EngagementParty"];
+        };
+        /**
          * RequestInfoBody
          * @description The organisation's question (stages 1-2): the review clock pauses until the developer answers.
          */
@@ -7093,7 +7122,12 @@ export interface components {
              * Decision
              * @enum {string}
              */
-            decision: "approve" | "reject";
+            decision: "approve" | "reject" | "dismiss" | "uphold";
+            /**
+             * Note
+             * @description A staff note on the decision, kept in its audit details (never shown to the parties)
+             */
+            note?: string | null;
             /**
              * Subject Version Id
              * @description The case's subject_version_id as reviewed (required)
@@ -7108,7 +7142,8 @@ export interface components {
              */
             id: string;
             status: components["schemas"]["ModerationCaseStatus"];
-            subject_state: components["schemas"]["ModerationState"];
+            /** @description The subject's state now; null for a message report */
+            subject_state: components["schemas"]["ModerationState"] | null;
         };
         /** DecisionIn */
         bridge__admin__research__DecisionIn: {
