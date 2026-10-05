@@ -130,6 +130,33 @@ class DemoEngagement:
     payment_reference: str = "DEMO-PAYMENT-0001"
 
 
+@dataclass(frozen=True, slots=True)
+class DemoMessage:
+    who: str  # "developer" (the proposal's owner) or an organisation role (OrgRole value): the seat holding it writes
+    body: str  # plain text; never contact details or links (refused before first contact, D-57 (8))
+
+
+@dataclass(frozen=True, slots=True)
+class DemoThread:
+    """Messages on an engagement's thread (P21; REQ-ENG-11), each posted in order through the API by its writer."""
+
+    proposal: str  # proposal key
+    org: str  # organisation legal name
+    messages: tuple[DemoMessage, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DemoSavedSearch:
+    """A developer's saved Discover search (P21; REQ-PERS-03), saved through the API with alerts on."""
+
+    owner: str  # the developer's address
+    name: str
+    view: str  # "problems" or "briefs"
+    niche: str | None = None  # niche slug
+    county: str | None = None  # ISO 3166-2:KE code
+    words: str | None = None
+
+
 AMINA = DemoDeveloper("amina@developers.example", "Amina Wanjiru", DevVerification.D2, "+254700000101")
 BRIAN = DemoDeveloper("brian@developers.example", "Brian Otieno", DevVerification.D1, "+254700000102")
 DEVELOPERS: Final = (AMINA, BRIAN)
@@ -348,6 +375,36 @@ ENGAGEMENTS: Final = (
         ),
         payment_reference="DEMO-MPESA-QK12AB34CD",
     ),
+)
+
+# P21's thread, on Amina's engagement with SACCO B (P1, in NEGOTIATION; CONTACT_MADE without FEATURE_DEALS_ENABLED):
+# SACCO B's owner, its named contact, writes first and last, so Amina finds a reply waiting. Fixture text: short,
+# plain, about the pilot, and free of contact details and links at every stage.
+THREAD: Final = DemoThread(
+    proposal=P1.key,
+    org=SACCO_B.legal_name,
+    messages=(
+        DemoMessage(
+            OrgRole.OWNER,
+            "Thank you for the pilot plan. Our members asked whether the reminders can come in Kiswahili as well as"
+            " English. Can the pilot do both?",
+        ),
+        DemoMessage(
+            "developer",
+            "Yes. Each member gets the reminders in the language they choose, and both pilot branches can start with"
+            " English and Kiswahili.",
+        ),
+        DemoMessage(
+            OrgRole.OWNER,
+            "Good. Our loan officers would also like the daily call list ready before the branches open in the"
+            " morning.",
+        ),
+    ),
+)
+# P21's saved search: Amina's Problems view of a niche she likes, which the seed gives problems (P1's, and the research
+# card). No county: developer-reported problems and national research cards carry none, so a county would empty it.
+SAVED_SEARCH: Final = DemoSavedSearch(
+    owner=AMINA.email, name="Microfinance & SACCOs", view="problems", niche="microfinance-saccos"
 )
 
 # The certificate exported for the end-to-end tests (E2E_VERIFY_CERT_ID; python -m bridge.demo cert-id).
