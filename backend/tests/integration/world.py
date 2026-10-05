@@ -4,14 +4,17 @@ Users A and B each own an organisation and rows in every tenant-scoped table; a 
 tables. Rows are written as the owner role (RLS does not apply to the table owner), so the tests can then read as
 ``bridge_app`` (or the table's ``db_role``) and check isolation.
 
-``TENANT_ROWS`` must cover every table whose tenancy is org, user, org_or_user or published, and ``STAFF_ROWS`` every
-staff table; the RLS tests fail otherwise, so a new tenant table cannot ship without a fixture and a policy. For the
+``TENANT_ROWS`` must cover every table whose tenancy is org, user, org_or_user or published, ``STAFF_ROWS`` every
+staff table and ``CURATED_ROWS`` every curated one (the quiz's sets and questions, revision 0009: approved rows that
+developers read, rejected ones they do not); the RLS tests fail otherwise, so a new tenant table cannot ship without a
+fixture and a policy. For the
 PUBLISHED tables each tenant has rows every signed-in user may read (published, clear) and rows only its owner may
 read (drafts, held, hidden, candidate), so the tests prove both halves of the rule.
 """
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -24,6 +27,7 @@ from bridge.ids import uuid7
 FIXTURE = "rls-fixture"  # marks the fixture rows of tables with no tenant column (staff tables)
 STAFF_CODE = "rls_fixture"  # the same, where the marker column holds a code (research_runs.stop_reason)
 VECTOR_1024 = "CAST(array_fill(CAST(0.001 AS real), ARRAY[1024]) AS vector)"
+QUIZ_TRACE = "rls-fixture"  # marks the quiz fixture sets (llm_trace_id: CURATED tables have no tenant column)
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,6 +347,73 @@ async def add_thread_rows(conn: AsyncConnection, engagement_id: UUID, developer_
         engagement=engagement_id,
         user=member_id,
     )
+
+
+_QUIZ_QUESTION = (
+    "INSERT INTO quiz_questions (id, set_id, position, prompt, options, answer, why, source_id, source_title,"
+    " source_url, topic, prompt_hash) VALUES (:id, :set, :position, :prompt, :options, 1, 'Because it is so.',"
+    " 'rls-doc', 'RLS documentation', 'https://docs.example.test/rls', 'rls', :hash)"
+)
+
+
+async def add_quiz_rows(conn: AsyncConnection, staff_id: UUID, developers: list[UUID]) -> None:
+    """Revision 0009: a rejected and an approved quiz set of five questions on one past day (each world takes the day
+    after the last one, before 2000, so worlds never share a day), each developer's attempt on the approved set, a flag
+    on its first question and their quiz profile. Rejected, not draft: a committed draft would sit in the staff queue
+    of every later test."""
+    day = (
+        await conn.execute(
+            text("SELECT coalesce(max(quiz_date) + 1, DATE '1990-01-01') FROM quiz_sets WHERE quiz_date < '2000-01-01'")
+        )
+    ).scalar_one()
+    approved, first = uuid7(), uuid7()
+    for status in ("rejected", "approved"):  # a rejected set leaves its day free for the next draft
+        set_id = approved if status == "approved" else uuid7()
+        await _insert(
+            conn,
+            "INSERT INTO quiz_sets (id, quiz_date, origin, llm_trace_id) VALUES (:id, :day, 'model', :trace)",
+            id=set_id,
+            day=day,
+            trace=QUIZ_TRACE,
+        )
+        for position in range(1, 6):
+            await _insert(
+                conn,
+                _QUIZ_QUESTION,
+                id=first if (status, position) == ("approved", 1) else uuid7(),
+                set=set_id,
+                position=position,
+                prompt=f"RLS question {position}?",
+                options=["One", "Two", "Three", "Four"],
+                hash=hashlib.sha256(f"{set_id} {position}".encode()).digest(),
+            )
+        await _insert(
+            conn,
+            "UPDATE quiz_sets SET status = :status, decided_by = :staff, decided_at = now() WHERE id = :id",
+            status=status,
+            staff=staff_id,
+            id=set_id,
+        )
+    for user_id in developers:
+        await _insert(
+            conn,
+            "INSERT INTO quiz_attempts (id, set_id, user_id, answers, time_ms)"
+            " VALUES (:id, :set, :user, CAST(:answers AS smallint[]), 42000)",
+            id=uuid7(),
+            set=approved,
+            user=user_id,
+            answers=[1, 0, None, 1, 1],
+        )
+        await _insert(
+            conn,
+            "INSERT INTO quiz_flags (id, question_id, user_id, reason) VALUES (:id, :question, :user, 'unclear')",
+            id=uuid7(),
+            question=first,
+            user=user_id,
+        )
+        await _insert(
+            conn, "INSERT INTO quiz_profiles (user_id, leaderboard_opt_in) VALUES (:user, true)", user=user_id
+        )
 
 
 async def build(conn: AsyncConnection, tag: str) -> World:
@@ -685,6 +756,9 @@ async def build(conn: AsyncConnection, tag: str) -> World:
             staff=staff_id,
         )
         tenants.append(Tenant(user_id, org_id, email, published, draft, held, hidden, published_version, draft_version))
+    # --- Schema v7 (revision 0009): the quiz; absent when the world is built at an older revision ---
+    if await has_table(conn, "quiz_sets"):
+        await add_quiz_rows(conn, staff_id, [tenant.user_id for tenant in tenants])
     # A system LLM call (no user, no organisation): readable by staff admin only.
     await _insert(
         conn,
@@ -843,6 +917,10 @@ TENANT_ROWS: dict[str, Rows] = {
     ),
     "org_shortlist": _rows("org_shortlist", "t.org_id::text || t.proposal_id::text", "t.org_id", NO_USER),
     "saved_searches": _rows("saved_searches", "t.id::text", NO_ORG, "t.user_id"),
+    # revision 0009: a developer's quiz attempts, flags and profile are theirs only
+    "quiz_attempts": _rows("quiz_attempts", "t.id::text", NO_ORG, "t.user_id"),
+    "quiz_flags": _rows("quiz_flags", "t.id::text", NO_ORG, "t.user_id"),
+    "quiz_profiles": _rows("quiz_profiles", "t.user_id::text", NO_ORG, "t.user_id"),
 }
 
 # STAFF tables: (key expression, owner query returning the keys of the fixture rows).
@@ -862,5 +940,18 @@ STAFF_ROWS: dict[str, Rows] = {
     "research_runs": Rows(
         key="research_runs.id::text",
         owners=f"SELECT id::text AS key FROM research_runs WHERE stop_reason = '{STAFF_CODE}'",
+    ),
+}
+
+# CURATED tables (revision 0009): the fixture sets' rows; ``pub`` marks the rows a developer reads (approved sets).
+CURATED_ROWS: dict[str, Rows] = {
+    "quiz_sets": Rows(
+        key="quiz_sets.id::text",
+        owners=f"SELECT id::text AS key, status = 'approved' AS pub FROM quiz_sets WHERE llm_trace_id = '{QUIZ_TRACE}'",
+    ),
+    "quiz_questions": Rows(
+        key="quiz_questions.id::text",
+        owners="SELECT q.id::text AS key, s.status = 'approved' AS pub FROM quiz_questions q"
+        f" JOIN quiz_sets s ON s.id = q.set_id WHERE s.llm_trace_id = '{QUIZ_TRACE}'",
     ),
 }
