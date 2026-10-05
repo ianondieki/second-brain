@@ -4,9 +4,9 @@ Given a demo seeded with the feature flags off (as CI's stack once ran it) and t
 (the Telco A reviewer starts review of Brian's P3 and the signatory declines it, Amina changes her password, Brian
 turns two-step sign-in off) and the demo starts again, then the seed step (``python -m bridge.seed --demo``) exits 0,
 adds nothing and changes nothing they did: each engagement it did not open in that run is left where it is, with one
-line in the report. P21's beats keep the rule: a shortlist entry people removed and a saved search they renamed are not
-made again, a saved search is not added past the cap, a thread whose engagement ended is left with one line, and a
-thread one of whose writers cannot sign in is not half written. Own database: the actions end engagements for good.
+line in the report. P21's beats keep the rule: a shortlist entry people removed is not made again, no saved search is
+added while Amina keeps one of her own, a thread whose engagement ended is left with one line, and a thread one of whose
+writers cannot sign in is not half written. Own database: the actions end engagements for good.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
 
@@ -29,7 +30,6 @@ from bridge.config import Settings, get_settings
 from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.integrations.sms import FakeSmsProvider
 from bridge.notifications.email import FakeEmailProvider
-from bridge.profiles.models import MAX_SAVED_SEARCHES
 from bridge.seed import __main__ as seed_command
 from bridge.seed.demo import DemoReport, DemoRuntime, follow_ups, seed_demo
 from bridge.seed.demo.data import (
@@ -241,12 +241,11 @@ async def test_a_scout_people_deleted_is_not_made_again(
     assert len(created) == 1  # the first seed's, made through the API by the owner
 
 
-async def test_a_removed_shortlist_entry_and_a_renamed_saved_search_are_not_made_again(
+async def test_a_shortlist_entry_people_removed_is_not_made_again(
     seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
 ) -> None:
-    """P21's beats keep P9's rule: the shortlist step runs only while Telco A never shortlisted the scout's match (its
-    ``shortlist.added`` event), and the saved search is looked for by its name and by its view and filters (renaming
-    one changes only its name), so what people changed in the app stays as they left it."""
+    """P21's shortlist step keeps P9's rule: it runs only while Telco A never shortlisted the scout's match (no row and
+    no ``shortlist.added`` event), so an entry its reviewer removed in the app stays removed."""
     report = seeded[1]
     org = report.orgs[TELCO_A.legal_name]
     [entry] = await rows(owner, "SELECT proposal_id FROM org_shortlist WHERE org_id = :o", o=org)
@@ -255,15 +254,65 @@ async def test_a_removed_shortlist_entry_and_a_renamed_saved_search_are_not_made
         signed_in(demo_app, owner, TELCO_REVIEWER) as rita,
     ):
         await rita.call("DELETE", f"/api/orgs/{org}/shortlist/{entry.proposal_id}", expect=(204,))
-    # Amina renames her saved search (PATCH changes the name only; her password was changed in the app above).
-    async with owner.begin() as conn:
-        rename = text("UPDATE saved_searches SET name = 'SACCO problems' WHERE name = :n")
-        await conn.execute(rename, {"n": SAVED_SEARCH.name})
     again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
     assert again.created == []
     assert await rows(owner, "SELECT proposal_id FROM org_shortlist WHERE org_id = :o", o=org) == []
-    names = await rows(owner, "SELECT name FROM saved_searches WHERE user_id = :u", u=report.users[AMINA.email])
-    assert [n.name for n in names] == ["SACCO problems"]
+
+
+SAVED_COLUMNS = "id, user_id, name, view, niche_slug, county_code, words, alerts, last_alerted_at, created_at"
+
+
+@asynccontextmanager
+async def saved_searches_restored(owner: AsyncEngine, user_id: object) -> AsyncIterator[None]:
+    """Puts the person's saved searches back as they were when the test is done, so the tests run in any order."""
+    kept = await rows(owner, f"SELECT {SAVED_COLUMNS} FROM saved_searches WHERE user_id = :u", u=user_id)
+    values = ", ".join(f":{column.strip()}" for column in SAVED_COLUMNS.split(","))
+    insert = text(f"INSERT INTO saved_searches ({SAVED_COLUMNS}) VALUES ({values})")
+    try:
+        yield
+    finally:
+        async with owner.begin() as conn:
+            await conn.execute(text("DELETE FROM saved_searches WHERE user_id = :u"), {"u": user_id})
+            for row in kept:
+                await conn.execute(insert, dict(row._mapping))
+
+
+# Test data, as Amina's own changes in the app (her password was changed there, so the owner role writes them).
+RENAME = "UPDATE saved_searches SET name = 'SACCO problems' WHERE user_id = :u"
+REPLACE = (
+    "DELETE FROM saved_searches WHERE user_id = :u;"
+    " INSERT INTO saved_searches (id, user_id, name, view, niche_slug, county_code)"
+    " VALUES (gen_random_uuid(), :u, 'Agriculture in Nakuru', 'problems', 'agriculture', 'KE-31')"
+)
+
+
+@pytest.mark.parametrize(
+    ("change", "left"),
+    [(RENAME, "SACCO problems"), (REPLACE, "Agriculture in Nakuru")],
+    ids=["renamed", "replaced"],
+)
+async def test_no_saved_search_is_added_while_amina_keeps_one(
+    seeded: tuple[DemoReport, DemoReport],
+    owner: AsyncEngine,
+    app: AsyncEngine,
+    runtime: DemoRuntime,
+    change: str,
+    left: str,
+) -> None:
+    """P21's saved-search step saves only while Amina has no saved search at all (as the liked niches are set only
+    for a developer with none): the one she renamed, or her own in place of the seed's, stays as she left it, and
+    nobody is signed in."""
+    amina = seeded[1].users[AMINA.email]
+    async with saved_searches_restored(owner, amina):
+        async with owner.begin() as conn:
+            for statement in change.split(";"):
+                await conn.execute(text(statement), {"u": amina})
+        audit_before = await rows(owner, "SELECT count(*) FROM audit_events")
+        again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+        assert again.created == []
+        names = await rows(owner, "SELECT name FROM saved_searches WHERE user_id = :u", u=amina)
+        assert [n.name for n in names] == [left]
+        assert await rows(owner, "SELECT count(*) FROM audit_events") == audit_before
 
 
 async def test_a_thread_whose_engagement_ended_is_left_with_one_line(
@@ -285,30 +334,6 @@ async def test_a_thread_whose_engagement_ended_is_left_with_one_line(
     assert f"thread of {P3.key} with {TELCO_A.legal_name} left as it is: the engagement is DECLINED" in again.notes
     assert await rows(owner, "SELECT id FROM engagement_messages WHERE engagement_id = :e", e=p3.id) == []
     assert await rows(owner, "SELECT count(*) FROM audit_events") == audit_before  # nobody was signed in
-
-
-async def test_no_saved_search_is_added_past_the_cap(
-    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
-) -> None:
-    """The saved-search step keeps the cap of ten (``MAX_SAVED_SEARCHES``): when Amina keeps ten other searches (none
-    by its name or its filters), it adds nothing, signs nobody in and says so in one line of the report."""
-    report = seeded[1]
-    amina = report.users[AMINA.email]
-    insert = text(
-        "INSERT INTO saved_searches (id, user_id, name, view, words) VALUES (gen_random_uuid(), :u, :name, 'briefs',"
-        " :words)"
-    )
-    async with owner.begin() as conn:  # test data: ten searches of her own, as the app would have saved them
-        await conn.execute(text("DELETE FROM saved_searches WHERE user_id = :u"), {"u": amina})
-        for n in range(MAX_SAVED_SEARCHES):
-            await conn.execute(insert, {"u": amina, "name": f"Briefs {n}", "words": f"pilot {n}"})
-    audit_before = await rows(owner, "SELECT count(*) FROM audit_events")
-    again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
-    assert again.created == []
-    assert f"saved search of {AMINA.email} not added: they keep {MAX_SAVED_SEARCHES} already" in again.notes
-    kept = await rows(owner, "SELECT count(*) FROM saved_searches WHERE user_id = :u", u=amina)
-    assert kept[0][0] == MAX_SAVED_SEARCHES
-    assert await rows(owner, "SELECT count(*) FROM audit_events") == audit_before
 
 
 async def test_a_thread_is_not_half_written_when_a_writer_cannot_sign_in(

@@ -19,10 +19,10 @@ signs nobody in. The thread step writes only into an empty thread (one people wr
 engagement has not ended (one that ended is left with one line in the report); every writer signs in before the first
 post, so a sign-in refused on a used demo (a password changed) writes nothing rather than half a thread, which, being
 append-only, a later run could never complete. The shortlist step runs only while Telco A never shortlisted the match
-(no row and no ``shortlist.added`` event), so an entry people removed stays removed. The saved search is looked for by
-its name and by its view and filters (renaming changes only the name), and is not added when Amina keeps the most a
-developer may (``MAX_SAVED_SEARCHES``, one line in the report); a deleted saved search leaves no trace, so the next
-start saves it again. A refusal of the app (a thread that is not open, a proposal no longer in the Inbox, a password
+(no row and no ``shortlist.added`` event), so an entry people removed stays removed. The saved search is saved only
+while Amina has none at all, as the liked niches are set only for a developer with none (``trending``): one she
+renamed, replaced or deleted beside others of her own stays as she left it (deleting every search she has brings it
+back at the next start). A refusal of the app (a thread that is not open, a proposal no longer in the Inbox, a password
 changed) is left to ``guarded``. Dev and test only (``demo_refusal``, checked by the seed before any step).
 """
 
@@ -34,7 +34,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.engagements import state_machine as sm
 from bridge.models.enums import EngagementState
-from bridge.profiles.models import MAX_SAVED_SEARCHES
 from bridge.seed.demo.data import SAVED_SEARCH, TELCO_A, THREAD
 from bridge.seed.demo.engagements import party_email
 from bridge.seed.demo.runtime import Actors, DemoReport, DemoSeedError, _one
@@ -52,12 +51,7 @@ _EVER_SHORTLISTED = (
     "SELECT EXISTS (SELECT 1 FROM org_shortlist WHERE org_id = :org AND proposal_id = :p) OR EXISTS (SELECT 1 FROM"
     " audit_events WHERE org_id = :org AND action = 'shortlist.added' AND subject_id = :p) AS ever"
 )
-_SAVED = (
-    "SELECT count(*) AS kept, count(*) FILTER (WHERE name = :name OR (view = :view"
-    " AND niche_slug IS NOT DISTINCT FROM CAST(:niche AS text)"
-    " AND county_code IS NOT DISTINCT FROM CAST(:county AS text)"
-    " AND words IS NOT DISTINCT FROM CAST(:words AS text))) AS found FROM saved_searches WHERE user_id = :u"
-)
+_HAS_SAVED = "SELECT 1 FROM saved_searches WHERE user_id = :u LIMIT 1"
 
 
 async def ensure_thread(owner: AsyncEngine, actors: Actors, report: DemoReport) -> None:
@@ -97,18 +91,14 @@ async def ensure_shortlisted(owner: AsyncEngine, actors: Actors, report: DemoRep
 
 
 async def ensure_saved_search(owner: AsyncEngine, actors: Actors, report: DemoReport) -> None:
-    """``SAVED_SEARCH``, saved by its developer through the API, unless found by name or by its view and filters."""
+    """``SAVED_SEARCH``, saved by its developer through the API while they have no saved search at all."""
     plan = SAVED_SEARCH
     user_id = report.users.get(plan.owner)
     if user_id is None:
         raise DemoSeedError(f"{plan.owner} is not there to save a search")
-    filters = {"view": plan.view, "niche": plan.niche, "county": plan.county, "words": plan.words}
-    row = await _one(owner, _SAVED, u=user_id, name=plan.name, **filters)
-    if row.found:
-        return
-    if row.kept >= MAX_SAVED_SEARCHES:
-        report.notes.append(f"saved search of {plan.owner} not added: they keep {MAX_SAVED_SEARCHES} already")
+    if await _one(owner, _HAS_SAVED, u=user_id) is not None:
         return
     actor = await actors.get(plan.owner)
-    await actor.call("POST", "/api/me/saved-searches", json={"name": plan.name, **filters}, expect=(201,))
+    body = {"name": plan.name, "view": plan.view, "niche": plan.niche, "county": plan.county, "words": plan.words}
+    await actor.call("POST", "/api/me/saved-searches", json=body, expect=(201,))
     report.did(f"saved search of {plan.owner}: {plan.name}")
