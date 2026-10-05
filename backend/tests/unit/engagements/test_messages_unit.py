@@ -233,3 +233,10 @@ async def test_the_purge_deletes_only_keys_under_the_threads_prefix() -> None:
     assert await message_files.purge_stale_uploads(lambda: session, store) == 2  # type: ignore[arg-type]
     assert session.committed
     assert set(store.objects) == {("uploads", "proposals/p/a")}
+
+
+def test_the_thread_and_the_history_name_an_unreadable_sender_alike() -> None:
+    from bridge.engagements.history import FORMER_MEMBER, sender_name
+
+    assert sender_name({USER: "Amina Otieno"}, USER) == "Amina Otieno"
+    assert sender_name({}, OTHER) == FORMER_MEMBER == "Former member"

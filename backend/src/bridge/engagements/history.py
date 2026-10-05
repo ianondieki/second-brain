@@ -89,6 +89,12 @@ async def _names(db: AsyncSession, ids: Iterable[UUID | None]) -> dict[UUID, str
 
 
 HANDLE_FALLBACK = "Developer"  # a version without a handle (never registered): the organisation sees this
+FORMER_MEMBER = "Former member"  # [[COPY-REVIEW]] a message's sender whose name the caller can no longer read
+
+
+def sender_name(names: dict[UUID, str], sender_user_id: UUID) -> str:
+    """A thread message's sender as the thread and the History tab both name them (``party_names``' names)."""
+    return names.get(sender_user_id) or FORMER_MEMBER
 
 
 async def developer_revealed(db: AsyncSession, engagement_id: UUID) -> bool:
@@ -580,7 +586,7 @@ async def history(db: AsyncSession, engagement_id: UUID, *, developer_caller: bo
             HistoryMessageOut(
                 id=m.id,
                 sender_party=m.sender_party,
-                sender_name=names.get(m.sender_user_id) or HANDLE_FALLBACK,
+                sender_name=sender_name(names, m.sender_user_id),
                 created_at=m.created_at,
             )
             for m in messages

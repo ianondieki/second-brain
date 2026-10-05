@@ -45,7 +45,7 @@ from bridge import pagination
 from bridge.audit.service import record as audit
 from bridge.engagements import message_notify
 from bridge.engagements import state_machine as sm
-from bridge.engagements.history import party_names, unread_counts
+from bridge.engagements.history import party_names, sender_name, unread_counts
 from bridge.engagements.message_schemas import (
     MessageAttachmentOut,
     MessageBody,
@@ -248,7 +248,7 @@ def _out(
     return MessageOut(
         id=message.id,
         sender_party=message.sender_party,
-        sender_name=names.get(message.sender_user_id) or "Former member",  # [[COPY-REVIEW]]
+        sender_name=sender_name(names, message.sender_user_id),
         mine=message.sender_user_id == party.user_id,
         body=message.body,
         redacted=message.redacted_at is not None,
