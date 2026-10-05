@@ -15,9 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.db import bind_tenant, create_session_factory
 from bridge.engagements import message_files
-from bridge.storage.objects import InMemoryObjectStore
 from tests.integration.engagements.api_world import moved_clock
-from tests.integration.engagements.thread_world import end, posted, thread_at, uploaded
+from tests.integration.engagements.thread_world import end, posted, thread_at, thread_path, uploaded
 
 
 def key(engagement: UUID, attachment: UUID) -> tuple[str, str]:
@@ -70,32 +69,53 @@ async def test_a_signed_in_session_purges_nothing(owner_engine: AsyncEngine, app
                 await db.execute(text("SELECT * FROM app_purge_stale_message_uploads(app_clock_now())"))
 
 
-async def test_a_key_outside_the_thread_or_a_failed_delete_does_not_stop_the_purge(
+async def test_a_failed_object_delete_rolls_the_purge_back_for_the_next_run(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The objects go after the rows are committed: a delete that fails is logged and the next key still goes."""
+    """Given two unsendable uploads and a store that refuses one file, When the purge runs, Then nothing commits (the
+    rows stay, the refused file too) and the next run, with the store back, deletes both rows and both files."""
     async with thread_at(owner_engine, app_engine) as thread:
         s, e, world = thread.seats, thread.engagement, thread.world
         first, second = await uploaded(s.dev, e), await uploaded(s.dev, e)
         await end(owner_engine, world, e, "WITHDRAWN")
-        failing = InMemoryObjectStore()
-        failing.objects = dict(thread.store.objects)
-        calls: list[str] = []
-        original = failing.delete
+        store = thread.store
+        original = store.delete
+        refused = message_files.object_key(e, first)
 
-        async def delete(bucket: str, object_key: str) -> None:  # the first delete fails, the second goes
-            calls.append(object_key)
-            if len(calls) == 1:
+        async def delete(bucket: str, object_key: str) -> None:
+            if object_key == refused:
                 raise OSError("object store unavailable")
             await original(bucket, object_key)  # type: ignore[arg-type]
 
-        monkeypatch.setattr(failing, "delete", delete)
+        monkeypatch.setattr(store, "delete", delete)
         factory = create_session_factory(app_engine)
-        assert await message_files.purge_stale_uploads(factory, failing) >= 2
-        ours = {message_files.object_key(e, a) for a in (first, second)}
-        assert ours <= set(calls)
-        assert len(calls) >= 2
-        left = {object_key for _, object_key in failing.objects}
-        assert calls[0] in left or calls[0] not in ours  # the failed delete left its object behind
-        assert not left & set(calls[1:])  # every later one went
+        assert await message_files.purge_stale_uploads(factory, store) == 0
+        assert await staged_ids(owner_engine, e) == {first, second}  # kept for the next run
+        assert key(e, first) in store.objects
+        monkeypatch.undo()
+        assert await message_files.purge_stale_uploads(factory, store) >= 2
         assert await staged_ids(owner_engine, e) == set()
+        assert key(e, first) not in store.objects
+        assert key(e, second) not in store.objects
+
+
+async def test_a_staged_file_whose_object_cannot_be_deleted_stays_staged(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Given a staged file and a store that refuses to delete, When its uploader removes it, Then 503
+    storage_unavailable, and the row and its file both stay (removable again once the store is back)."""
+    async with thread_at(owner_engine, app_engine) as thread:
+        s, e = thread.seats, thread.engagement
+        file_id = await uploaded(s.dev, e)
+
+        async def refuse(bucket: str, object_key: str) -> None:
+            raise OSError("object store unavailable")
+
+        monkeypatch.setattr(thread.store, "delete", refuse)
+        refused = await s.dev.delete(thread_path(e, f"/attachments/{file_id}"))
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (503, "storage_unavailable")
+        assert await staged_ids(owner_engine, e) == {file_id}
+        assert key(e, file_id) in thread.store.objects
+        monkeypatch.undo()
+        assert (await s.dev.delete(thread_path(e, f"/attachments/{file_id}"))).status_code == 204
+        assert key(e, file_id) not in thread.store.objects

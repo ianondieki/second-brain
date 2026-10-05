@@ -221,6 +221,9 @@ class _Session:
     async def commit(self) -> None:
         self.committed = True
 
+    async def rollback(self) -> None:
+        self.committed = False
+
 
 async def test_the_purge_deletes_only_keys_under_the_threads_prefix() -> None:
     store = InMemoryObjectStore()

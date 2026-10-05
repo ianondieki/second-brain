@@ -199,8 +199,9 @@ async def remove_staged(db: AsyncSession, store: ObjectStore, party: Party, atta
     """Delete one of the caller's own staged uploads (404 for anything else: a sent file, someone else's). One
     ``DELETE ... RETURNING`` under the caller's RLS, staged rows only: a send of the same file in flight holds its row
     lock, so the delete waits and, once the send commits, matches nothing (404), and the object of the now-sent
-    attachment is never touched. Committed before its object goes, so no row is ever left pointing at a missing
-    file."""
+    attachment is never touched. The object goes before the row's deletion commits: when the store refuses, the
+    deletion rolls back (503 ``storage_unavailable``; the file stays staged and whole, to remove again), so no object
+    is left without its row."""
     a = EngagementMessageAttachment
     mine = (
         a.id == attachment_id,
@@ -215,11 +216,13 @@ async def remove_staged(db: AsyncSession, store: ObjectStore, party: Party, atta
     if key is None:
         await db.rollback()
         raise not_found("No such file waiting to be sent.")
-    await db.commit()
     try:
         await store.delete(UPLOADS, key)
-    except Exception:  # an unreferenced object (ids only) is harmless; the row is gone
+    except Exception as exc:  # the store's own failure, whatever its type: keep the row, try again later
+        await db.rollback()
         get_logger(__name__).warning("message_attachment.object_not_deleted", attachment_id=str(attachment_id))
+        raise ApiError(503, "storage_unavailable", "The file could not be removed just now. Try again.") from exc
+    await db.commit()
 
 
 def sign_link(settings: Settings, party: Party, message_id: UUID, attachment_id: UUID, expires: int) -> str:
@@ -290,19 +293,26 @@ _PURGE = text("SELECT * FROM app_purge_stale_message_uploads(app_clock_now())")
 
 async def purge_stale_uploads(factory: async_sessionmaker[AsyncSession], store: ObjectStore) -> int:
     """Delete the staged uploads that can never be sent (``app_purge_stale_message_uploads``, revision 0008: called
-    with no user bound, on the shared clock), committed, then their files from the object store (an object that is
-    already gone, or a key outside the thread's prefix, is skipped). Returns how many uploads went."""
+    with no user bound, on the shared clock) and their files. The rows' deletion commits only once every file went
+    (deleting a file that is already gone succeeds; a key outside the thread's prefix is never touched): when the
+    store refuses any of them the whole run rolls back and the next one retries every key, so no object is left
+    without its row. Returns how many uploads went (0 after a rollback)."""
+    log = get_logger(__name__)
     async with factory() as db:
         keys = [str(row[0]) for row in (await db.execute(_PURGE)).all()]
+        failed = 0
+        for key in keys:
+            if not key.startswith("messages/"):
+                log.warning("message_attachment.purge_key_refused")
+                continue
+            try:
+                await store.delete(UPLOADS, key)
+            except Exception:  # the store's own failure, whatever its type: retried with every key next run
+                failed += 1
+        if failed:
+            await db.rollback()
+            log.warning("message_attachment.purge_rolled_back", failed=failed, count=len(keys))
+            return 0
         await db.commit()
-    log = get_logger(__name__)
-    for key in keys:
-        if not key.startswith("messages/"):
-            log.warning("message_attachment.purge_key_refused")
-            continue
-        try:
-            await store.delete(UPLOADS, key)
-        except Exception:  # the row is gone; an unreferenced object (ids only) is harmless and retried by nobody
-            log.warning("message_attachment.object_not_deleted")
     log.info("message_attachment.purged", count=len(keys))
     return len(keys)
