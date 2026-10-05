@@ -91,7 +91,8 @@ test.describe("a new developer", () => {
     await expect(page).toHaveURL(/\/dev\/discover$/, SERVER_STEP);
     await expect(nav.getByRole("link", { name: "Discover" })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Discover");
-    await expect(page.getByRole("heading", { level: 2 })).toHaveText("Trending problems");
+    // The list's own heading (the Saved searches strip has its own, P21).
+    await expect(page.getByRole("heading", { level: 2, name: "Trending problems", exact: true })).toBeVisible();
     const problems = page.locator("article[data-problem]");
     expect(await problems.count()).toBeGreaterThan(0);
     expect(await problems.count()).toBeLessThanOrEqual(20);
@@ -115,7 +116,7 @@ test.describe("a new developer", () => {
     // Trending projects, each beside the problem it solves (AC-TREND-2), never counting organisations.
     await page.getByRole("navigation", { name: "Lists" }).getByRole("link", { name: "Projects" }).click();
     await expect(page).toHaveURL(/view=projects/, SERVER_STEP);
-    await expect(page.getByRole("heading", { level: 2 })).toHaveText("Trending projects");
+    await expect(page.getByRole("heading", { level: 2, name: "Trending projects", exact: true })).toBeVisible();
     const projects = page.locator("article[data-project]");
     expect(await projects.count()).toBeGreaterThan(0);
     for (const project of await projects.all()) {
@@ -131,7 +132,7 @@ test.describe("a new developer", () => {
     // The opportunity gap: under-served rising problems only.
     await page.getByRole("navigation", { name: "Lists" }).getByRole("link", { name: "Gap" }).click();
     await expect(page).toHaveURL(/view=gap/, SERVER_STEP);
-    await expect(page.getByRole("heading", { level: 2 })).toHaveText("Opportunity gap");
+    await expect(page.getByRole("heading", { level: 2, name: "Opportunity gap", exact: true })).toBeVisible();
     for (const count of await page.locator("article[data-problem] [data-proposals]").all()) {
       expect(Number(await count.getAttribute("data-proposals"))).toBeLessThan(3);
     }
