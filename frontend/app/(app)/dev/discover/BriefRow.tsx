@@ -3,10 +3,13 @@ import { useLocale, useTranslations } from "next-intl";
 import { problemHref } from "@/components/problem/problem";
 import { Badge } from "@/components/ui/Badge";
 import { CompaniesIcon } from "@/components/ui/icons";
-import { Row } from "@/components/ui/RowList";
+import { LinkPending } from "@/components/ui/LinkPending";
+import Link from "next/link";
+import { titleLinkClass } from "@/components/ui/Button";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 import { formatCalendarDate } from "@/lib/format";
 
+import { CardFoot, discoverCardClass, discoverTitleClass } from "./CardList";
 import { countryName, countyName, problemAnchor, startProposalHref, type CountyRef, type DiscoverBrief } from "./discover";
 
 /**
@@ -26,43 +29,38 @@ export function BriefRow({ item, counties }: { item: DiscoverBrief; counties: re
   const titleId = `${problemAnchor(problem.id)}-title`;
 
   return (
-    <Row
-      id={problemAnchor(problem.id)}
-      aria-labelledby={titleId}
-      data-brief={problem.id}
-      title={problem.title}
-      titleId={titleId}
-      href={problemHref(problem.id)}
-      stretch={false}
-      meta={
-        <span className="flex flex-wrap gap-x-4">
-          {problem.niche ? <span>{problem.niche.label}</span> : null}
-          <span>{place}</span>
-        </span>
-      }
-      badges={
-        org
-          ? [
-              <Badge key="org" data-label="org_brief" tone="neutral" icon={<CompaniesIcon />}>
-                {tp("label.org_brief", { org: org.name })}
-              </Badge>,
-            ]
-          : undefined
-      }
-    >
-      <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink" data-brief-terms="">
+    <article id={problemAnchor(problem.id)} aria-labelledby={titleId} data-brief={problem.id} className={discoverCardClass}>
+      <h3 id={titleId} className={discoverTitleClass}>
+        <Link href={problemHref(problem.id)} className={titleLinkClass}>
+          {problem.title}
+          <LinkPending className="absolute -top-px left-4 sm:left-5" />
+        </Link>
+      </h3>
+      <p className="mt-1 flex flex-wrap gap-x-4 text-sm text-ink-soft">
+        {problem.niche ? <span>{problem.niche.label}</span> : null}
+        <span>{place}</span>
+      </p>
+      {org ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Badge data-label="org_brief" tone="neutral" icon={<CompaniesIcon />}>
+            {tp("label.org_brief", { org: org.name })}
+          </Badge>
+        </div>
+      ) : null}
+      <p className="mt-3 line-clamp-3 max-w-[65ch] [overflow-wrap:anywhere] text-ink">{problem.statement}</p>
+      {/* The organisation's terms, the figures a developer weighs first. */}
+      <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-ink tabular-nums" data-brief-terms="">
         <span>{brief.budget_band ? t("briefBudget", { band: brief.budget_band.label }) : t("briefNoBudget")}</span>
         <span>
           {brief.deadline ? t("briefDeadline", { date: formatCalendarDate(locale, brief.deadline) }) : t("briefNoDeadline")}
         </span>
       </p>
-      <p className="mt-1 line-clamp-3 max-w-[65ch] [overflow-wrap:anywhere] text-ink">{problem.statement}</p>
-      <p className="mt-2 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-sm text-ink-soft">
+      <CardFoot>
         <span data-proposals={item.proposal_count}>{t("proposals", { count: item.proposal_count })}</span>
         <StandaloneLink href={startProposalHref(problem.id)} className="text-sm" data-start-brief="">
           {t("startBrief")}
         </StandaloneLink>
-      </p>
-    </Row>
+      </CardFoot>
+    </article>
   );
 }

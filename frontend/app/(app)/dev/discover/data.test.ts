@@ -16,7 +16,7 @@ vi.mock("@/lib/api/server", () => ({
   serverApi: () => ({ GET }),
 }));
 
-const { recommendations } = await import("./data");
+const { recommendations, savedSearches } = await import("./data");
 const { linkableProblem } = await import("../ideas/data");
 
 const status = (code: number, body?: unknown) => ({
@@ -56,6 +56,32 @@ describe("Home's recommendations call", () => {
     GET.mockResolvedValueOnce(status(401));
     await expect(recommendations()).rejects.toThrow("NEXT_REDIRECT /login");
     expect(redirect).toHaveBeenCalledWith("/login");
+  });
+});
+
+describe("Discover's saved searches read (REQ-PERS-03)", () => {
+  it("gives the list when the API answers", async () => {
+    const body = { items: [], max: 10 };
+    GET.mockResolvedValueOnce({ data: body, response: new Response(null, { status: 200 }) });
+    await expect(savedSearches()).resolves.toBe(body);
+    expect(GET).toHaveBeenCalledWith("/api/me/saved-searches", expect.objectContaining({ cache: "no-store" }));
+  });
+
+  it("is no strip (null), never a failed page, on 404, 500, 503, a timeout and offline", async () => {
+    for (const code of [404, 500, 503]) {
+      GET.mockResolvedValueOnce(status(code));
+      await expect(savedSearches()).resolves.toBeNull();
+    }
+    GET.mockImplementationOnce(timeout);
+    await expect(savedSearches()).resolves.toBeNull();
+    GET.mockRejectedValueOnce(new TypeError("fetch failed"));
+    await expect(savedSearches()).resolves.toBeNull();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("signs in again on 401", async () => {
+    GET.mockResolvedValueOnce(status(401));
+    await expect(savedSearches()).rejects.toThrow("NEXT_REDIRECT /login");
   });
 });
 

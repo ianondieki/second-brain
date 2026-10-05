@@ -18,7 +18,13 @@
     "reviewP16b": "[[COPY-REVIEW]] P16-B (REQ-UX-01..04): notFound.* (the not-found page: one sentence and one link home)",
     "reviewP16c1": "[[COPY-REVIEW]] P16-C1 (REQ-UX-01, REQ-NOT-03): settingsNav.* (the settings tabs), devEngagements.* (engagements grouped by proposal); fix round 1: shell.security, problem.backToDiscover, tracker.devLead, adminModeration.case.textLeadDecided",
     "reviewP18": "[[COPY-REVIEW]] P18 (REQ-UX-01..04, D-52): app.name, shell.workingName, shell.prototypeBadge, shell.theme.*, landing.* (sample.*, how.*, who.*, proof.*, cta.*, footer.*), devHome.stats.*, devHome.openTracker, devHome.otherLead, tracker.nextBoth, tracker.since, tracker.parties, tracker.progress, ideas.sheet.*, problem.label.demoBadge; landing.how.review.body and landing.proof.who.body use the docs/spec/04 4.2 approved access phrasing; the seal's ring text \"WAZO · REGISTERED\" (components/brand/Seal.tsx) uses the product's own word for a registered version and is for the owner's sign-off, tour.*; checkout.phone.* (the drawn handset beside the steps; decorative); adminModeration.columns.*, adminClaims.columns.*, adminResearch.columns.* (the staff tables' headings); tracker.closed.* (the one-time celebration); checkout.phone.*; round 2: tour.title, tour.showAgainLead, tour.showAgain, tour.showAgainDone (Help), checkout.phone.idle, checkout.stepFailed, orgHome.stats.unknown, orgHome.stats.unavailable, ideaEditor.detailsSectionsLabel, detailsFilesLabel, detailsLinksLabel, detailsNone, ideaFields.problems (\"Problem cards it answers\"), problem.confidenceValue and problem.confidenceBand.* (\"High (85%)\"), discover.trendingShort (the trend badge's short form on a card; the API's sentence stays in its title), checkout.step.notPaid (the third step after a failed or cancelled payment)",
-    "reviewP19": "[[COPY-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B): nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers); ux round: Brief capitalised in briefs.newTitle, briefs.post, briefForm.submit, briefForm.close.open, briefForm.close.confirm, discover.startBrief, discover.noSources.org_brief; problem.briefEnded.closed and problem.briefEnded.pastDeadline (in place of problem.briefEnded); briefs.anywhere reads Kenya; briefs.capFull, briefs.capFullTop, briefs.upgradeTo; orgHome.stats.briefsValue; adminModeration.visibility.briefHidden, adminModeration.case.leadBrief, adminModeration.decision.approvedBrief, adminModeration.decision.rejectConfirmBrief; ideaChecks.disclosure.flaggedOne and flaggedMany (in place of flagged), ideaChecks.disclosure.demo, ideaChecks.problem.originality_limit (still no number: policy.yaml sets the daily limit); notifications.emptyStaff, notifications.emptyOrg; (4) P19-F F-A (REQ-ENG-10 tracker side states): tracker.event.request_info, .answer_info, .cancel_request, .pause, .resume, .expire; tracker.turn.onHold; tracker.side.*; tracker.expired.*; tracker.history.note.*; trackerActions.command.request_info, .answer_info, .cancel_request, .pause, .resume; trackerActions.sheet.*; trackerActions.refusal.containsContact, .invalidNote, .invalidResumeAt, .questionLimit, .holdLimit. refusal.containsContact is the orchestrator's sentence verbatim; the numbers (60 days, two questions, ten business days) follow policy.yaml and are pinned by state-machine-parity.test.ts; round 2: trackerActions.refusal.containsContact reworded to end at first contact (as sheet.noContact), trackerActions.refusal.tooMany (429 too_many_actions), trackerActions.sheet.questionsLeft, .holdsLeft, .holdDaysLeft (the API's side_limits, shown only when sent), trackerActions.sheet.pause.dateRange; reviewer round: ideaChecks.disclosure.flagged (in place of flaggedOne and flaggedMany: the fields after the sentence, so a label with an article reads); briefs.capFullUnknown, briefs.billing (plans not loaded: never the top-of-ladder sentence); problem.briefEnded.notOpen (an API without brief.ended: no guess); round 3: trackerActions.sheet.pause.dateHintNoDay (no platform day from the API: no range drawn); ux round: tracker.due.resumes, .answerBy, .answerLate (list rows: a hold resumes, the organisation waits on the developer's answer), tracker.chip.awaitingAnswer (the stepper while a question is open), tracker.side.info, .hold, .holdYou, .holdNoNote, .answered (the date kept on one line), inbox.stage.INFO_REQUESTED reworded and inbox.stage.ON_HOLD added (the tracker's stage labels); ux round 2: trackerActions.refusal.generic and .network say nothing was sent"
+    "reviewP19": "[[COPY-REVIEW]] P19: (1) P19-F: ideaChecks.* (P19-F, REQ-PROP-04 and REQ-REPO-01: the editor's teaser checks; the overlap answer is a band in words, never a score; ideaChecks.problem.originality_limit names no number (policy.yaml sets the daily limit, 1 to 1000)); (2) P19-B (REQ-DIR-05 Problem Briefs, frontend F-B): nav.problems; orgHome.stats.briefs, orgHome.stats.briefsMetaReview, orgHome.stats.briefsMetaProposals; briefs.*; briefForm.*; discover.views.briefs, discover.briefsTitle, discover.briefsLead, discover.briefsEmpty, discover.briefBudget, discover.briefNoBudget, discover.briefDeadline, discover.briefNoDeadline, discover.startBrief; problem.label.org_brief, problem.budget, problem.budgetOpen, problem.deadline, problem.noDeadline; pitch.preselected; adminModeration.reason.new_org_brief, adminModeration.field.affected_group, adminModeration.kind.brief. briefForm.fieldError.contains_* follow the backend's own sentences (bridge/problems/brief_rules.py MESSAGES); fix round: briefForm.meter (words of 120), briefForm.error.tooManyWords, briefForm.refusal.dailyLimit, briefForm.refusal.orgUnavailable, briefForm.refusal.notPublished, briefForm.refusal.frozen, adminModeration.kind.briefBy, discover.views.gap shortened so the four Discover tabs fit 360 px; review round: problem.briefEnded; (3) P19-C (REQ-NOT-03, spec 07 item 1): notifications.bell.* (the top bar's bell; not under shell, whose client strings take no plurals, so Swahili can say one/other), shell.notifications renamed \"Notification settings\" (spec 07's avatar menu item, so the menu and the bell never share a name), notifications.* (the Notifications page); the notification titles and bodies come from the API in English (bridge/engagements/notify.py and the other in-app writers); ux round: Brief capitalised in briefs.newTitle, briefs.post, briefForm.submit, briefForm.close.open, briefForm.close.confirm, discover.startBrief, discover.noSources.org_brief; problem.briefEnded.closed and problem.briefEnded.pastDeadline (in place of problem.briefEnded); briefs.anywhere reads Kenya; briefs.capFull, briefs.capFullTop, briefs.upgradeTo; orgHome.stats.briefsValue; adminModeration.visibility.briefHidden, adminModeration.case.leadBrief, adminModeration.decision.approvedBrief, adminModeration.decision.rejectConfirmBrief; ideaChecks.disclosure.flaggedOne and flaggedMany (in place of flagged), ideaChecks.disclosure.demo, ideaChecks.problem.originality_limit (still no number: policy.yaml sets the daily limit); notifications.emptyStaff, notifications.emptyOrg; (4) P19-F F-A (REQ-ENG-10 tracker side states): tracker.event.request_info, .answer_info, .cancel_request, .pause, .resume, .expire; tracker.turn.onHold; tracker.side.*; tracker.expired.*; tracker.history.note.*; trackerActions.command.request_info, .answer_info, .cancel_request, .pause, .resume; trackerActions.sheet.*; trackerActions.refusal.containsContact, .invalidNote, .invalidResumeAt, .questionLimit, .holdLimit. refusal.containsContact is the orchestrator's sentence verbatim; the numbers (60 days, two questions, ten business days) follow policy.yaml and are pinned by state-machine-parity.test.ts; round 2: trackerActions.refusal.containsContact reworded to end at first contact (as sheet.noContact), trackerActions.refusal.tooMany (429 too_many_actions), trackerActions.sheet.questionsLeft, .holdsLeft, .holdDaysLeft (the API's side_limits, shown only when sent), trackerActions.sheet.pause.dateRange; reviewer round: ideaChecks.disclosure.flagged (in place of flaggedOne and flaggedMany: the fields after the sentence, so a label with an article reads); briefs.capFullUnknown, briefs.billing (plans not loaded: never the top-of-ladder sentence); problem.briefEnded.notOpen (an API without brief.ended: no guess); round 3: trackerActions.sheet.pause.dateHintNoDay (no platform day from the API: no range drawn); ux round: tracker.due.resumes, .answerBy, .answerLate (list rows: a hold resumes, the organisation waits on the developer's answer), tracker.chip.awaitingAnswer (the stepper while a question is open), tracker.side.info, .hold, .holdYou, .holdNoNote, .answered (the date kept on one line), inbox.stage.INFO_REQUESTED reworded and inbox.stage.ON_HOLD added (the tracker's stage labels); ux round 2: trackerActions.refusal.generic and .network say nothing was sent",
+    "reviewP20": "[[COPY-REVIEW]] P20 (D-55, the landing rebuilt): landing.nav.*, landing.hero.check, landing.how.lead (reworded), landing.how.stagesTitle, landing.how.stagesLead, landing.how.stages.*, landing.features.* (the samples are example data, labelled), landing.proof.checkLabel, landing.proof.checkHint, landing.proof.checkAction, landing.faq.* (answers follow the product's own rules: the NDA and who looked, the certificate's scope, verified organisations only, phone first, the prototype's honesty), landing.footer.product, .start, .about, .features, .faq, .signUp, .logIn, .verify, ideaEditor.linkAnother, orgHome.stats.briefsMetaNone",
+    "reviewP20pub": "[[COPY-REVIEW]] P20-5 (staff console, public pages; REQ-UX-01..04): adminModeration.summary.open; adminModeration.summary.hidden; adminModeration.summary.oldest; adminClaims.summary.waiting; adminClaims.summary.pressing; adminClaims.summary.next; help.contents",
+    "reviewP20dev": "[[COPY-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (a Discover card's foot: how many sources back the problem)",
+    "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
+    "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
+    "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\")."
   },
   "app": {
     "name": "Wazo",
@@ -74,7 +80,7 @@
     },
     "how": {
       "title": "How it works",
-      "lead": "Three steps, one shared tracker.",
+      "lead": "Publish once. Then one tracker carries both sides from the first look to a closed project.",
       "publish": {
         "title": "Publish an idea",
         "body": "Write a public teaser and the confidential details. Each version is registered with a timestamp and a fingerprint."
@@ -86,6 +92,30 @@
       "track": {
         "title": "Agree the next step",
         "body": "Interest, contact, agreement, implementation and close: both sides follow the same five stages, with deadlines and reminders."
+      },
+      "stagesTitle": "One tracker, both sides",
+      "stagesLead": "The same five stages on both screens, with whose turn it is and what is due.",
+      "stages": {
+        "review": {
+          "title": "Review",
+          "body": "The organisation reads the teaser and decides whether to go further."
+        },
+        "contact": {
+          "title": "Contact and NDA",
+          "body": "Both sides accept the NDA; the full proposal opens, and each opening is recorded."
+        },
+        "agreement": {
+          "title": "Agreement",
+          "body": "Terms and milestones are drafted, marked final and signed in the tracker."
+        },
+        "implementation": {
+          "title": "Implementation",
+          "body": "Milestones are delivered and accepted, each with its own record."
+        },
+        "close": {
+          "title": "Close",
+          "body": "The project closes and the history stays with both sides."
+        }
       }
     },
     "who": {
@@ -120,7 +150,10 @@
         "title": "Who looked",
         "body": "Full proposals are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass. You see who opened yours, and when."
       },
-      "note": "Anyone can check a certificate on the <verify>verify page</verify> without an account."
+      "note": "Anyone can check a certificate on the <verify>verify page</verify> without an account.",
+      "checkLabel": "Certificate ID",
+      "checkHint": "Sixteen letters and digits, as printed on the certificate.",
+      "checkAction": "Check certificate"
     },
     "cta": {
       "title": "Ready when you are",
@@ -130,7 +163,88 @@
     "footer": {
       "note": "A prototype: every figure on this site is seeded example data.",
       "help": "Help",
-      "terms": "Terms"
+      "terms": "Terms",
+      "product": "Product",
+      "start": "Get started",
+      "about": "About",
+      "features": "What you can do",
+      "faq": "Questions",
+      "signUp": "Create an account",
+      "logIn": "Log in",
+      "verify": "Check a certificate"
+    },
+    "nav": {
+      "label": "On this page",
+      "how": "How it works",
+      "organisations": "For organisations",
+      "verify": "Check a certificate"
+    },
+    "hero": {
+      "check": "Check a certificate"
+    },
+    "features": {
+      "title": "What you can do",
+      "lead": "Each of these is a screen in the product, shown here with example data.",
+      "discover": {
+        "title": "See which problems are rising",
+        "body": "Discover ranks the problems people raise this week, with their sources and why each one trends."
+      },
+      "briefs": {
+        "title": "Answer an organisation's brief",
+        "body": "Verified organisations post the problems they want solved, with a budget band and a deadline."
+      },
+      "checks": {
+        "title": "Check your teaser before you publish",
+        "body": "See whether it overlaps other published ideas, and whether it gives away how it works."
+      },
+      "bell": {
+        "title": "Know when it is your turn",
+        "body": "Every step on a tracker lands in your notifications and in a daily email."
+      },
+      "sample": {
+        "trend1": "Late diesel deliveries darken tower sites",
+        "trend1Niche": "Telecommunications",
+        "trend2": "SACCO members miss repayment dates",
+        "trend2Niche": "Microfinance and SACCOs",
+        "trend3": "Milk spoils before the morning collection",
+        "trend3Niche": "Agriculture",
+        "rising": "Rising",
+        "briefTitle": "Tower sites go dark when the diesel runs out",
+        "briefOrg": "Posted by Telco A (example)",
+        "briefBudget": "Budget: under KES 500,000",
+        "briefDeadline": "Proposals by 1 Nov 2026",
+        "checkOverlap": "No overlap with other published ideas",
+        "checkDisclosure": "Reads like what it does, not how it works",
+        "bell1": "Telco A asked you a question",
+        "bell2": "SACCO B approved your proposal to proceed",
+        "bell3": "Your idea was registered with a timestamp",
+        "bellTime1": "09:12",
+        "bellTime2": "Yesterday",
+        "bellTime3": "Mon"
+      }
+    },
+    "faq": {
+      "title": "Questions",
+      "public": {
+        "q": "Who can read my idea?",
+        "a": "Everyone can read the teaser you write for the public. The full details open only to verified people at organisations that accepted the NDA, and you can see who opened them and when."
+      },
+      "certificate": {
+        "q": "What does the certificate prove?",
+        "a": "What you submitted and when: a fingerprint of the exact text and files, and the time an independent timestamp authority signed. It does not make an idea anyone's property."
+      },
+      "verified": {
+        "q": "Which organisations can send me proposals or read them?",
+        "a": "Only organisations verified with their registration documents can receive proposals and open full details."
+      },
+      "phone": {
+        "q": "Does it work on my phone?",
+        "a": "Yes. Every screen is designed for a phone first, and for slow connections."
+      },
+      "demo": {
+        "q": "Is this the live service?",
+        "a": "Not yet. This is a prototype with seeded example data: nothing is paid for, and no email leaves the demo."
+      }
     }
   },
   "fields": {
@@ -342,6 +456,12 @@
       "reload": "Reload the page",
       "logIn": "Log in",
       "home": "Go to your home page"
+    },
+    "preference": {
+      "saved_search_digest": "Send me a daily email with how many new problems or Briefs match my saved searches.",
+      "engagement": {
+        "n18": "Email me when someone writes to me on an engagement (at most one email per engagement every 30 minutes)."
+      }
     }
   },
   "notifications": {
@@ -395,7 +515,8 @@
     "support": {
       "title": "Contact support",
       "body": "Support contact to be set."
-    }
+    },
+    "contents": "On this page"
   },
   "errors": {
     "invalid_email": "Enter an email address like name@example.com.",
@@ -449,7 +570,8 @@
       "briefs": "Problem Briefs",
       "briefsMetaReview": "{count, plural, one {# in review} other {# in review}}",
       "briefsMetaProposals": "{count, plural, one {# proposal} other {# proposals}}",
-      "briefsValue": "{count} open"
+      "briefsValue": "{count} open",
+      "briefsMetaNone": "None open yet"
     }
   },
   "inbox": {
@@ -602,7 +724,8 @@
     "unavailableTitle": "A proposal that is no longer available",
     "unavailableNote": "It was unpublished or is held for review, so its teaser is hidden.",
     "nicheNotGiven": "Niche not given",
-    "changeNamed": "Change the scout that looks for {niches}"
+    "changeNamed": "Change the scout that looks for {niches}",
+    "tabShortlist": "Shortlist"
   },
   "scoutMatch": {
     "pageTitle": "Scout match",
@@ -1042,13 +1165,15 @@
       "org_claim": "Claim dispute",
       "other": "Other case",
       "brief": "Problem Brief",
-      "briefBy": "Brief by {org}"
+      "briefBy": "Brief by {org}",
+      "message": "Message"
     },
     "untitled": {
       "proposal": "Untitled proposal",
       "problem": "Untitled problem",
       "org_claim": "Competing claim on an organisation",
-      "other": "Case without a title"
+      "other": "Case without a title",
+      "message": "Reported message"
     },
     "filed": "Filed {date}",
     "source": {
@@ -1067,15 +1192,21 @@
     },
     "outcome": {
       "approved": "Approved",
-      "rejected": "Rejected"
+      "rejected": "Rejected",
+      "dismissed": "Dismissed",
+      "upheld": "Upheld"
     },
     "decidedBy": {
       "approved": "Approved by {name} on {date}.",
-      "rejected": "Rejected by {name} on {date}."
+      "rejected": "Rejected by {name} on {date}.",
+      "dismissed": "Dismissed by {name} on {date}.",
+      "upheld": "Upheld by {name} on {date}."
     },
     "decidedOn": {
       "approved": "Approved on {date}.",
-      "rejected": "Rejected on {date}."
+      "rejected": "Rejected on {date}.",
+      "dismissed": "Dismissed on {date}.",
+      "upheld": "Upheld on {date}."
     },
     "reason": {
       "names_real_org_negative": "Speaks negatively of a named organisation",
@@ -1156,6 +1287,42 @@
       "kind": "Kind",
       "when": "Filed or decided",
       "status": "Status"
+    },
+    "summary": {
+      "open": "Open cases",
+      "hidden": "Hidden until decided",
+      "oldest": "Oldest filed"
+    },
+    "message": {
+      "heading": "What was written",
+      "lead": "The one message this report shares. The rest of the thread stays with the engagement's parties.",
+      "fromDeveloper": "Sent by the developer",
+      "fromOrg": "Sent by the organisation",
+      "sentAt": "{date} EAT",
+      "engagement": "Engagement {id}",
+      "reason": {
+        "spam": "Spam",
+        "abuse": "Abusive or threatening",
+        "contact_details": "Shares contact details too early",
+        "confidential": "Shares confidential information",
+        "other": "Something else"
+      },
+      "decisionLead": "Dismiss if the message breaks no rule, or uphold if it does. The message stays in the thread either way.",
+      "dismiss": "Dismiss",
+      "dismissing": "Dismissing…",
+      "uphold": "Uphold",
+      "upholding": "Upholding…",
+      "noteLabel": "Note for the record (optional)",
+      "noteHint": "Kept with the decision. The parties never see it.",
+      "dismissTitle": "Dismiss this report?",
+      "dismissBody": "The case closes and nothing changes for the parties.",
+      "upholdTitle": "Uphold this report?",
+      "upholdBody": "The case closes as a breach of the rules. The message stays in the thread.",
+      "dismissYes": "Yes, dismiss",
+      "upholdYes": "Yes, uphold",
+      "dismissed": "Dismissed. The case is closed.",
+      "upheld": "Upheld. The case is closed.",
+      "own": "You filed this report or are a party of its engagement, so another moderator decides it."
     }
   },
   "adminClaims": {
@@ -1283,6 +1450,11 @@
       "claimant": "Claimant",
       "filed": "Filed",
       "status": "Status"
+    },
+    "summary": {
+      "waiting": "Waiting for review",
+      "pressing": "Due today or overdue",
+      "next": "Next due"
     }
   },
   "problem": {
@@ -1304,7 +1476,11 @@
     "country": "{country, select, KE {Kenya} UG {Uganda} other {{country}}}",
     "confidence": "Confidence",
     "confidenceValue": "{band} ({value})",
-    "confidenceBand": { "high": "High", "medium": "Medium", "low": "Low" },
+    "confidenceBand": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
     "namedOrgs": "Organisations named",
     "sourcesHeading": "Sources",
     "sourcesCount": "{count, plural, one {# source, quoted as published} other {# sources, quoted as published}}",
@@ -1618,6 +1794,7 @@
     "resultsLabel": "Problems found",
     "linkedLabel": "Linked problems",
     "linkedCount": "{count} of {max} linked",
+    "linkAnother": "Link another problem",
     "link": "Link",
     "linkName": "Link {title}",
     "unlink": "Remove",
@@ -1881,6 +2058,7 @@
     "moreProject": "More about this project",
     "whyTitle": "Why it is here",
     "sourcesTitle": "Newest sources",
+    "sourcesCount": "{count, plural, one {# source} other {# sources}}",
     "noSources": {
       "developer": "No cited sources: a developer described this problem.",
       "org_brief": "No cited sources: a verified organisation described this problem in its Brief.",
@@ -1903,7 +2081,16 @@
     "briefNoBudget": "Budget open",
     "briefDeadline": "Proposals by {date}",
     "briefNoDeadline": "No deadline",
-    "startBrief": "Start a proposal from this Brief"
+    "startBrief": "Start a proposal from this Brief",
+    "wordsLabel": "Words in a problem",
+    "wordsLabelBriefs": "Words in a Brief",
+    "wordsQuoted": "“{words}”",
+    "filteredEmptyWords": "Nothing here matches “{words}” with these filters yet.",
+    "saveName": {
+      "nicheCounty": "{niche} in {county}",
+      "viewCounty": "{view} in {county}",
+      "all": "All {view}"
+    }
   },
   "recommendations": {
     "title": "Recommended for you",
@@ -2135,7 +2322,8 @@
       "due": "Due {date}",
       "window": "{count, plural, one {# business day to review} other {# business days to review}}",
       "reviewDue": "Review due by {date}",
-      "endorsed": "{party}: {name}, {method}, {when}"
+      "endorsed": "{party}: {name}, {method}, {when}",
+      "total": "Total"
     },
     "signature": {
       "title": "Signatures",
@@ -2188,6 +2376,11 @@
         "info_answer": "Answer",
         "hold": "Reason, until {date}",
         "resume": "Reason for resuming early"
+      },
+      "message": "Message from {name}",
+      "messageSide": {
+        "developer": "Developer",
+        "org": "Organisation"
       }
     },
     "event": {
@@ -2227,6 +2420,7 @@
       "label": "Engagement sections",
       "tracker": "Tracker",
       "documents": "Documents",
+      "messages": "Messages",
       "history": "History"
     },
     "documents": {
@@ -2256,6 +2450,28 @@
       "title": "Closed and done",
       "body": "Both sides finished this engagement. Everything stays here for the record.",
       "dismiss": "Got it"
+    },
+    "deadline": {
+      "left": "{count, plural, one {<n>#</n> business day left} other {<n>#</n> business days left}}",
+      "overdue": "{count, plural, one {<n>#</n> business day overdue} other {<n>#</n> business days overdue}}",
+      "due": "Due {date}",
+      "was": "Was due {date}"
+    },
+    "unread": "{count, plural, one {# unread message} other {# unread messages}}",
+    "messages": {
+      "title": "Messages",
+      "leadDev": "Write to {org} about this engagement.",
+      "leadOrg": "Write to {name} about this engagement.",
+      "notOpenDev": "Messages open when {org} approves to proceed, a non-binding step.",
+      "notOpenOrg": "Messages open when your organisation approves to proceed, a non-binding step.",
+      "readOnly": "This engagement has ended, so the thread stays here to read and no new messages can be sent.",
+      "readOnlyEmpty": "This engagement has ended, so no new messages can be sent.",
+      "viewer": "Your role lets you read this thread but not write in it.",
+      "empty": "No messages yet: write the first one below.",
+      "toTracker": "Open the Tracker tab",
+      "pageTitle": "Messages: {title}",
+      "endedBeforeOpen": "This engagement ended before messages opened, so there is no thread.",
+      "emptyViewer": "No messages yet."
     }
   },
   "trackerActions": {
@@ -2464,6 +2680,94 @@
       "name": "Name",
       "email": "Email",
       "noEmail": "The developer has no verified email address yet."
+    }
+  },
+  "trackerMessages": {
+    "you": "You",
+    "developer": "Developer",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "newDivider": "New",
+    "redacted": "A moderator removed the text of this message.",
+    "loadEarlier": "Load earlier messages",
+    "loadingEarlier": "Loading earlier messages…",
+    "earlierFailed": "Earlier messages could not be loaded. Try again.",
+    "report": "Report",
+    "reportTitle": "Report this message",
+    "reportLead": "A moderator reads this one message, not the rest of the thread. It stays visible to both sides while they look.",
+    "reasonsLegend": "Why are you reporting it?",
+    "reason": {
+      "spam": "Spam",
+      "abuse": "Abusive or threatening",
+      "contact_details": "Shares contact details too early",
+      "confidential": "Shares confidential information",
+      "other": "Something else"
+    },
+    "reportConfirm": "Send the report",
+    "reportBusy": "Sending…",
+    "cancel": "Cancel",
+    "reportNeedsReason": "Choose at least one reason.",
+    "reported": "Reported. A moderator will review this message; it stays in the thread meanwhile.",
+    "reportedAgain": "You already reported this message. A moderator will review it.",
+    "reportOwn": "You cannot report your own message.",
+    "reportLimit": "You have reported the most messages allowed in a day. Try again tomorrow.",
+    "reportFailed": "The report was not sent. Try again.",
+    "files": "Files",
+    "download": "Download",
+    "downloadFailed": "This file could not be opened. Try again.",
+    "downloadChanged": "This file does not match what was sent, so it cannot be opened.",
+    "status": {
+      "uploading": "Uploading {value}%",
+      "scanning": "Scanning…",
+      "ready": "Ready",
+      "blocked": "Blocked"
+    },
+    "label": "Your message",
+    "meterLeft": "Characters left: {count}",
+    "meterOver": "Characters over the limit: {count}",
+    "attach": "Attach files",
+    "attachHint": "PDF, PNG, JPEG, Markdown or plain text, up to {value} MB each and {max} per message.",
+    "remove": "Remove",
+    "send": "Send",
+    "sending": "Sending…",
+    "sent": "Message sent.",
+    "fileStatus": "{name}: {value}",
+    "file": {
+      "type": "This kind of file cannot be sent. Attach a PDF, PNG, JPEG, Markdown or plain-text file.",
+      "size": "This file is larger than {value} MB.",
+      "empty": "This file is empty.",
+      "infected": "This file did not pass the malware scan, so it was not kept.",
+      "tooMany": "A message can carry up to {max} files.",
+      "staged": "Too many files are waiting to be sent here. Send or remove some first.",
+      "limit": {
+        "one": "You have uploaded many files here recently. Try again in {count} minute.",
+        "other": "You have uploaded many files here recently. Try again in {count} minutes."
+      },
+      "storage": "Files cannot be uploaded just now. Try again in a moment.",
+      "failed": "The upload did not finish. Remove the file and attach it again."
+    },
+    "refusal": {
+      "blank": "Write a message first.",
+      "tooLong": "Shorten your message to {max} characters or fewer.",
+      "invalid": "This message could not be sent as written. Check it and try again.",
+      "containsContact": "Remove phone numbers, email addresses and links from your message and file names: before first contact is made, contact details are shared only through the tracker's contact step.",
+      "waitUploads": "Wait until every file shows Ready, or remove it.",
+      "blockedFiles": "Remove the blocked files before you send.",
+      "pending": "A file is still being scanned. Send once it shows Ready.",
+      "unknownFile": "A file is no longer waiting to be sent. Remove it and attach it again.",
+      "infected": "A file did not pass the malware scan. Remove it to send your message.",
+      "expired": "A file waited more than 24 hours. Remove it and attach it again.",
+      "tooManyFiles": "A message can carry up to {max} files.",
+      "notOpen": "The thread is not open yet.",
+      "readOnly": "This engagement has ended, so no new messages can be sent.",
+      "cannotPost": "Your role lets you read this thread but not write in it.",
+      "tooMany": {
+        "one": "You have sent many messages here in the last hour. Try again in {count} minute.",
+        "other": "You have sent many messages here in the last hour. Try again in {count} minutes."
+      },
+      "conflict": "Something changed. Reload the page and try again.",
+      "network": "The message was not sent. Check your connection and try again.",
+      "generic": "The message was not sent. Try again."
     }
   },
   "billing": {
@@ -2781,5 +3085,103 @@
       "closing": "Closing…",
       "cancel": "Keep it open"
     }
+  },
+  "shortlist": {
+    "pageTitle": "Shortlist",
+    "add": "Add to shortlist",
+    "remove": "Remove from shortlist",
+    "marked": "Shortlisted",
+    "problem": {
+      "code": "Enter the code from your authenticator app, then try again.",
+      "role": "Only a reviewer, signatory or admin can change the shortlist.",
+      "gone": "This proposal is no longer in your Inbox, so the shortlist did not change.",
+      "network": "The shortlist did not change because the connection failed; try again.",
+      "signedOut": "You were signed out. Sign in again, then change the shortlist.",
+      "failed": "The shortlist did not change; try again in a moment."
+    },
+    "lead": "Proposals the people of {org} starred to look at again, newest first. Choose 2 to 4 to compare their public facts side by side.",
+    "formLabel": "Choose proposals to compare",
+    "listLabel": "Shortlist of {org}",
+    "choose": "Compare {title}",
+    "addedBy": "Added by {name} on {date}",
+    "unavailable": "No longer available",
+    "unavailableNote": "The developer unpublished it or it left your Inbox, so its details are not shown.",
+    "removeEntry": "Remove",
+    "removeNamed": "Remove {title} from the shortlist",
+    "removing": "Removing…",
+    "compare": "Compare",
+    "chosen": "{count} of {max} chosen",
+    "compareHint": "Choose {min} to {max} proposals to compare.",
+    "tooFew": "Choose at least {min} proposals to compare.",
+    "tooMany": "Choose at most {max} proposals to compare.",
+    "needTwo": "Compare opens once the shortlist holds 2 proposals that are still available.",
+    "pages": "Shortlist pages",
+    "older": "Older entries",
+    "staleCursor": "This page of the shortlist is no longer available.",
+    "empty": "Nothing is on the shortlist yet: star a proposal in the Inbox to keep it here.",
+    "emptyReader": "Nothing is on the shortlist of {org} yet.",
+    "emptyAction": "Open the Inbox",
+    "compareTitle": "Compare proposals",
+    "backToShortlist": "Back to the shortlist",
+    "tier1Note": "Compare shows each proposal's public teaser facts only. Open a title to read the full proposal, behind its Evaluation NDA as usual.",
+    "refusal": {
+      "count": "Choose {min} to {max} proposals from the shortlist to compare.",
+      "notShortlisted": "One of these proposals is no longer on the shortlist, so they cannot be compared."
+    },
+    "noneAvailable": "None of these proposals is available any more.",
+    "leftOut": "{count, plural, one {# proposal you chose is no longer available, so it is left out.} other {# proposals you chose are no longer available, so they are left out.}}",
+    "tableCaption": "{count, plural, one {# proposal} other {# proposals}} side by side",
+    "fact": {
+      "niche": "Niche",
+      "place": "County",
+      "maturity": "Stage",
+      "ask": "Looking for",
+      "registered": "Registered",
+      "engagement": "Engagement",
+      "fit": "Scout fit"
+    },
+    "certificate": "Check certificate",
+    "certificateNamed": "Check certificate: {title}",
+    "noEngagement": "None yet",
+    "notMatched": "Not matched by your scout"
+  },
+  "savedSearches": {
+    "toggle": "Saved searches ({count})",
+    "save": "Save this search",
+    "empty": "Save the list and filters you use, to come back in one tap and hear about new matches.",
+    "limit": "You have {max} saved searches, the most you can keep. Delete one to save this search.",
+    "nameLabel": "Name",
+    "nameHint": "Up to {max} characters, for example Agriculture in Nakuru.",
+    "keeps": "This keeps",
+    "alertsLabel": "Tell me each morning when something new matches",
+    "submit": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "saved": "Saved: {name}.",
+    "deleted": "Deleted: {name}.",
+    "lead": "With alerts on, new matches reach you once a day in the app; a daily email can be turned on as well.",
+    "settingsLink": "Notification settings",
+    "listLabel": "Your saved searches",
+    "alerts": "Alerts",
+    "on": "On",
+    "off": "Off",
+    "alertsProblem": "The alerts did not change; try again.",
+    "delete": "Delete",
+    "deleteNamed": "Delete {name}",
+    "deleting": "Deleting…",
+    "confirmTitle": "Delete this saved search?",
+    "confirmBody": "{name} goes, and so do its alerts. Discover itself stays as it is.",
+    "deleteProblem": "The search was not deleted; try again.",
+    "problem": {
+      "nameMissing": "Give the search a name.",
+      "nameLong": "Keep the name to 60 characters or fewer.",
+      "limit": "You have {max} saved searches, the most you can keep. Delete one to save this search.",
+      "unknown": "This niche or county is no longer on the list; choose another and save again.",
+      "signedOut": "You are signed out, so nothing was saved.",
+      "network": "Nothing was saved because the connection failed; try again.",
+      "failed": "Nothing was saved; try again in a moment."
+    },
+    "heading": "Saved searches",
+    "alreadyDeleted": "{name} was already deleted."
   }
 }

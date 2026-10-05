@@ -46,7 +46,9 @@ _MATCHES: Final = (
     "SELECT m.id, m.scout_id, m.proposal_id, m.score, m.rationale, m.rationale_demo_fallback, m.injection_suspected,"
     " m.rule_breakdown, m.created_at, m.digest_sent_at, m.feedback, m.feedback_reason, (p.id IS NOT NULL) AS available,"
     " v.title, v.country, v.county_code, v.maturity, v.ask, v.problem_statement, v.impact_claims, v.summary,"
-    " v.owner_handle, n.id AS niche_id, n.slug AS niche_slug, n.name_en AS niche_name, pn.name_en AS parent_name"
+    " v.owner_handle, n.id AS niche_id, n.slug AS niche_slug, n.name_en AS niche_name, pn.name_en AS parent_name,"
+    " EXISTS (SELECT 1 FROM org_shortlist s WHERE s.org_id = m.org_id AND s.proposal_id = m.proposal_id)"
+    " AS shortlisted"
     " FROM agent_matches m"
     " LEFT JOIN proposals p ON p.id = m.proposal_id AND p.status = 'published' AND p.moderation_state = 'clear'"
     " AND NOT EXISTS (SELECT 1 FROM memberships om WHERE om.org_id = m.org_id AND om.user_id = p.owner_id"
@@ -99,6 +101,7 @@ def _out(row: Any) -> dict[str, Any]:
         "digest_sent_at": row.digest_sent_at,
         "feedback": row.feedback,
         "feedback_reason": row.feedback_reason,
+        "shortlisted": row.shortlisted,
     }
 
 

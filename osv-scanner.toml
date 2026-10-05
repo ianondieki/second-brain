@@ -4,3 +4,8 @@
 # id = "GHSA-xxxx-xxxx-xxxx"
 # ignoreUntil = 2026-12-31
 # reason = "..."
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2026-11-03
+reason = "braces 3.0.3 (every release is affected; none fixed yet) reaches the frontend only through eslint-config-next > @next/eslint-plugin-next > fast-glob > micromatch, a lint-time dev dependency: the patterns it expands come from our own config, never from users, and it is not in any bundle or image. Recheck at expiry; D-56."

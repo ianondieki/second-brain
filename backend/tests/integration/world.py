@@ -297,6 +297,54 @@ async def add_scout_rows(
     return scout_id
 
 
+async def has_table(conn: AsyncConnection, table: str) -> bool:
+    """Whether the database is at a revision that has ``table`` (a downgrade test builds the world on an older one)."""
+    found = await conn.execute(text("SELECT to_regclass(:t) IS NOT NULL"), {"t": f"public.{table}"})
+    return bool(found.scalar_one())
+
+
+async def add_thread_rows(conn: AsyncConnection, engagement_id: UUID, developer_id: UUID, member_id: UUID) -> None:
+    """Revision 0008: a message from each side of the engagement, a sent attachment of the developer's and the member's
+    read marker, written as the owner. The world's engagement is in SUBMITTED, before the thread opens, so the stage
+    gate (``<table>_1_open``, for every role) is switched off for these rows inside the world's transaction; the gate
+    itself is tested in ``integration/engagements/test_messages_schema.py``."""
+    gated = ("engagement_messages", "engagement_message_attachments")
+    for table in gated:
+        await _insert(conn, f"ALTER TABLE {table} DISABLE TRIGGER {table}_1_open")
+    developer_message = uuid7()
+    for message_id, sender, party in ((developer_message, developer_id, "developer"), (uuid7(), member_id, "org")):
+        await _insert(
+            conn,
+            "INSERT INTO engagement_messages (id, engagement_id, sender_user_id, sender_party, body)"
+            " VALUES (:id, :engagement, :sender, CAST(:party AS engagement_party), 'When can we meet?')",
+            id=message_id,
+            engagement=engagement_id,
+            sender=sender,
+            party=party,
+        )
+    attachment_id = uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO engagement_message_attachments (id, engagement_id, message_id, uploader_user_id, file_name,"
+        " content_type, size_bytes, sha256, object_key, av_status) VALUES (:id, :engagement, :message, :uploader,"
+        " 'pilot-plan.pdf', 'application/pdf', 1024, :sha, :key, 'clean')",
+        id=attachment_id,
+        engagement=engagement_id,
+        message=developer_message,
+        uploader=developer_id,
+        sha=bytes(32),
+        key=f"messages/{engagement_id}/{attachment_id}",
+    )
+    for table in gated:
+        await _insert(conn, f"ALTER TABLE {table} ENABLE TRIGGER {table}_1_open")
+    await _insert(
+        conn,
+        "INSERT INTO engagement_message_reads (engagement_id, user_id) VALUES (:engagement, :user)",
+        engagement=engagement_id,
+        user=member_id,
+    )
+
+
 async def build(conn: AsyncConnection, tag: str) -> World:
     """Create the world inside ``conn`` (owner role). ``tag`` keeps emails and slugs unique per test session."""
     niche_id, plan_id = uuid7(), uuid7()
@@ -581,6 +629,25 @@ async def build(conn: AsyncConnection, tag: str) -> World:
         await _insert(conn, "INSERT INTO kyc_reviews (id, user_id) VALUES (:id, :user)", id=uuid7(), user=user_id)
         # --- Schema v4 (revision 0005): a scout with one run and one match, and a pending payment per subject ---
         await add_scout_rows(conn, org_id, user_id, niche_id, pitched, pitched_version)
+        # --- Schema v6 (revision 0008): the engagement's thread, a shortlist entry (the proposal its scout matched) and
+        # a saved search; absent when the world is built at an older revision (a downgrade test) ---
+        if await has_table(conn, "engagement_messages"):
+            await add_thread_rows(conn, engagement_id, pitcher, user_id)
+            await _insert(
+                conn,
+                "INSERT INTO org_shortlist (org_id, proposal_id, added_by) VALUES (:org, :proposal, :user)",
+                org=org_id,
+                proposal=pitched,
+                user=user_id,
+            )
+            await _insert(
+                conn,
+                "INSERT INTO saved_searches (id, user_id, name, view, niche_slug) VALUES (:id, :user, 'RLS search',"
+                " 'problems', :niche)",
+                id=uuid7(),
+                user=user_id,
+                niche=f"rls-{tag}",
+            )
         for scope in ("user", "org"):
             await _insert(
                 conn,
@@ -761,6 +828,21 @@ TENANT_ROWS: dict[str, Rows] = {
     "agent_runs": _rows("agent_runs", "t.id::text", "t.org_id", NO_USER),
     "agent_matches": _rows("agent_matches", "t.id::text", "t.org_id", NO_USER),
     "payments": _rows("payments", "t.id::text", "t.org_id", "t.user_id"),
+    # revision 0008: the thread is its engagement's parties' (as the tracker's rows); a read marker, a saved search
+    # its user's only; the shortlist its organisation's
+    **{
+        table: Rows(
+            key=f"{table}.id::text",
+            owners="SELECT t.id::text AS key, e.org_id AS org, e.developer_id AS usr, false AS pub"
+            f" FROM {table} t JOIN engagements e ON e.id = t.engagement_id",
+        )
+        for table in ("engagement_messages", "engagement_message_attachments")
+    },
+    "engagement_message_reads": _rows(
+        "engagement_message_reads", "t.engagement_id::text || t.user_id::text", NO_ORG, "t.user_id"
+    ),
+    "org_shortlist": _rows("org_shortlist", "t.org_id::text || t.proposal_id::text", "t.org_id", NO_USER),
+    "saved_searches": _rows("saved_searches", "t.id::text", NO_ORG, "t.user_id"),
 }
 
 # STAFF tables: (key expression, owner query returning the keys of the fixture rows).

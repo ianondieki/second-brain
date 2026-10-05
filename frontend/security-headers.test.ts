@@ -62,13 +62,13 @@ describe("web security headers", () => {
   });
 
   it("cache the versioned fonts for a year, with nosniff and none of the page headers", () => {
-    expect(headersFor("/fonts/newsreader-latin-v2.woff2")).toEqual({
+    expect(headersFor("/fonts/bricolage-grotesque-v1.woff2")).toEqual({
       "X-Content-Type-Options": "nosniff",
       "Cache-Control": "public, max-age=31536000, immutable",
     });
   });
 
-  it.each(["/fonts/LICENCES.md", "/fonts/missing", "/fonts/newsreader-latin.woff2"])("treat %s under /fonts as a page (not cached, with the page headers)", (path) => {
+  it.each(["/fonts/LICENCES.md", "/fonts/missing", "/fonts/bricolage-grotesque.woff2"])("treat %s under /fonts as a page (not cached, with the page headers)", (path) => {
     const sent = headersFor(path);
     expect(sent["Cache-Control"]).toBeUndefined();
     expect(sent["X-Frame-Options"]).toBe("DENY");

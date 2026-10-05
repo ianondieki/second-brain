@@ -24,10 +24,11 @@ from bridge.auth.router import router as auth_router
 from bridge.billing.router import plans_router
 from bridge.billing.router import router as billing_router
 from bridge.config import Settings, get_settings
-from bridge.db import create_engine, create_session_factory
+from bridge.db import API_IDLE_IN_TRANSACTION_MS, create_engine, create_session_factory
 from bridge.directory.responsiveness import NoResponsivenessData
 from bridge.directory.router import router as directory_router
 from bridge.engagements.interest_router import router as interest_router
+from bridge.engagements.messages_router import router as messages_router
 from bridge.engagements.router import router as engagements_router
 from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
@@ -38,15 +39,18 @@ from bridge.matching.router import router as discover_router
 from bridge.matching.scouts import router as scouts_router
 from bridge.notifications.email import provider_from_settings
 from bridge.notifications.in_app_router import router as notifications_router
+from bridge.notifications.preferences_router import router as preferences_router
 from bridge.problems.briefs_router import router as briefs_router
 from bridge.problems.router import router as problems_router
 from bridge.profiles.router import public_router as consents_router
 from bridge.profiles.router import router as me_router
+from bridge.profiles.saved_searches import router as saved_searches_router
 from bridge.proposals.assistant_router import router as assistant_router
 from bridge.proposals.disclosure_router import router as disclosure_router
 from bridge.proposals.originality_router import router as originality_router
 from bridge.proposals.pitch_router import router as pitch_router
 from bridge.proposals.router import router as proposals_router
+from bridge.proposals.shortlist_router import router as shortlist_router
 from bridge.provenance.router import router as provenance_router
 from bridge.tenancy.router import router as orgs_router
 
@@ -79,7 +83,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.sms_provider = sms_provider_from_settings(settings)  # fails closed (production needs the vendor)
-        engine = create_engine(settings.database_url.get_secret_value())
+        engine = create_engine(
+            settings.database_url.get_secret_value(), idle_in_transaction_timeout_ms=API_IDLE_IN_TRANSACTION_MS
+        )
         app.state.engine = engine
         app.state.session_factory = create_session_factory(engine)
         app.state.email_provider = provider_from_settings(settings)
@@ -147,16 +153,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(assistant_router)
     app.include_router(originality_router)
     app.include_router(disclosure_router)
+    app.include_router(shortlist_router)
     app.include_router(problems_router)
     app.include_router(briefs_router)
     app.include_router(engagements_router)
+    app.include_router(messages_router)
     app.include_router(plans_router)
     app.include_router(billing_router)
     app.include_router(interest_router)
     app.include_router(scouts_router)
     app.include_router(matches_router)
     app.include_router(discover_router)
+    app.include_router(saved_searches_router)
     app.include_router(notifications_router)
+    app.include_router(preferences_router)
     clock_router = dev_clock_router(settings)
     if clock_router is not None:
         app.include_router(clock_router)

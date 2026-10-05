@@ -239,7 +239,8 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
       ) : null}
 
       {/* Groups are set apart by space, not rules (the hairline belongs to lists: p16-design-system.md). */}
-      <div className="pt-4">
+      {/* The optional choices in a quiet well, apart from what the account needs. */}
+      <div className="rounded-panel bg-paper p-4 sm:p-5">
         <fieldset aria-describedby="consents-hint" className="flex flex-col">
           <legend className="font-medium text-ink">{t("signup.consentsLegend")}</legend>
           <p id="consents-hint" className="mt-1 mb-1 text-sm text-ink-soft">

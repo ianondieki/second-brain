@@ -171,7 +171,8 @@ type NicheNode = Awaited<ReturnType<typeof nicheTree>>[number];
 async function Filters({ query, niches }: { query: PickerQuery; niches: NicheNode[] }) {
   const t = await getTranslations("pitch");
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+    // One control surface, as Discover's and Companies' (P20): the search sits on a white panel above the rows.
+    <div className="flex flex-col gap-3 rounded-panel border border-line bg-field p-4 sm:flex-row sm:items-end sm:p-5">
       <div className="min-w-0 flex-1">
         <TextField
           id="pitch-q"

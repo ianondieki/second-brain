@@ -41,8 +41,8 @@ export function TabNav({ label, items, current, className }: TabNavProps) {
                   "relative inline-flex min-h-11 items-center border-b-2 px-2 whitespace-nowrap no-underline [--focus-offset:-3px] sm:px-3",
                   "transition-colors duration-150 ease-out",
                   active
-                    ? "border-accent font-semibold text-accent"
-                    : "border-transparent font-medium text-ink-soft hover:border-line hover:text-ink",
+                    ? "border-accent font-bold text-ink"
+                    : "border-transparent font-semibold text-ink-soft hover:border-accent-line hover:text-ink",
                 )}
               >
                 {text}

@@ -28,8 +28,8 @@ describe("TabNav", () => {
     const links = screen.getAllByRole("link");
     expect(links.map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null]);
     const current = links[1].className.split(" ");
-    expect(current).toEqual(expect.arrayContaining(["border-b-2", "border-accent", "text-accent", "font-semibold"]));
-    expect(links[0].className.split(" ")).toEqual(expect.arrayContaining(["border-transparent", "font-medium"]));
+    expect(current).toEqual(expect.arrayContaining(["border-b-2", "border-accent", "text-ink", "font-bold"]));
+    expect(links[0].className.split(" ")).toEqual(expect.arrayContaining(["border-transparent", "font-semibold", "text-ink-soft"]));
   });
 
   it("gives every tab a 44 px target and scrolls sideways inside itself", () => {

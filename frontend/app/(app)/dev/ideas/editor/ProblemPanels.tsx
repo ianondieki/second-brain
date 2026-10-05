@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 
@@ -28,6 +28,8 @@ export interface ProblemPanelsProps {
   onNewTitle: (value: string) => void;
   onNewStatement: (value: string) => void;
   searchImpl?: typeof searchProblems;
+  /** Focus the search box once the panels open (they replaced the "Link another problem" button that had focus). */
+  focusSearch?: boolean;
 }
 
 type Search = { kind: "idle" } | { kind: "busy" } | { kind: "failed" };
@@ -36,7 +38,7 @@ type Search = { kind: "idle" } | { kind: "busy" } | { kind: "failed" };
 const loadSearch: typeof searchProblems = (filters) => import("../calls").then((m) => m.searchProblems(filters));
 
 /**
- * The chosen way of naming the problem, loaded once a choice is made: link up to five published problems (GET
+ * The chosen way of naming the problem, loaded once it is needed (ProblemPicker): search and link up to five published problems (GET
  * /api/problems, by words and niche) or describe a new one, which becomes a developer-reported problem when the idea
  * is published (AC-PROP-5).
  */
@@ -52,6 +54,11 @@ export function ProblemPanels(props: ProblemPanelsProps) {
   const [searched, setSearched] = useState(false);
   const linkedIds = new Set(linked.map((problem) => problem.id));
   const full = linked.length >= MAX_PROBLEMS;
+  const focusSearch = props.focusSearch;
+
+  useEffect(() => {
+    if (focusSearch) document.getElementById(`${id}-q`)?.focus();
+  }, [focusSearch, id]);
 
   async function runSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,40 +84,6 @@ export function ProblemPanels(props: ProblemPanelsProps) {
     <div className="flex flex-col gap-5">
       {mode === "pick" ? (
         <div className="flex flex-col gap-5">
-          {linked.length > 0 ? (
-            <section aria-labelledby={`${id}-linked`}>
-              <h3 id={`${id}-linked`} className="flex flex-wrap items-baseline gap-x-3 font-semibold text-ink">
-                {t("linkedLabel")}
-                <span className="text-sm font-normal text-ink-soft tabular-nums">
-                  {t("linkedCount", { count: linked.length, max: MAX_PROBLEMS })}
-                </span>
-              </h3>
-              <ul className="mt-2 flex flex-col">
-                {linked.map((problem) => (
-                  <li
-                    key={problem.id}
-                    className="flex items-start justify-between gap-3 border-t border-line py-2 last:border-b"
-                  >
-                    <span className="min-w-0 pt-2.5 [overflow-wrap:anywhere]">
-                      {problem.title}
-                      {problem.source === "developer" ? (
-                        <span className="ml-2 text-sm text-ink-soft">{f("developerReported")}</span>
-                      ) : null}
-                    </span>
-                    <Button
-                      variant="link"
-                      className="shrink-0"
-                      aria-label={t("unlinkName", { title: problem.title })}
-                      onClick={() => onLinked(linked.filter((item) => item.id !== problem.id))}
-                    >
-                      {t("unlink")}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
           <form role="search" onSubmit={runSearch} aria-label={t("searchLabel")} className="flex flex-col gap-3">
             <div className="grid gap-3 sm:grid-cols-[1fr_minmax(10rem,14rem)]">
               <TextField

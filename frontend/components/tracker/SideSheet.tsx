@@ -9,7 +9,8 @@ import { TextAreaField } from "@/components/ui/TextAreaField";
 import { TextField } from "@/components/ui/TextField";
 
 import type { Refusal } from "./calls";
-import { formatDate, type SheetCommand, type SheetInput, type SideLimits } from "./model";
+import { formatDate } from "./input";
+import type { SheetCommand, SheetInput, SideLimits } from "./model";
 import { addDays, HOLD_MAX_DAYS, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
 
 // The side states' sheets (REQ-ENG-10 part; docs/spec/06 6.9 side branches): a question, its answer, a hold, an early

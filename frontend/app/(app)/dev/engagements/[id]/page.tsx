@@ -7,6 +7,7 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { engagement } from "@/components/tracker/data";
 import { asDocumentKind, asTab, EngagementScreen } from "@/components/tracker/EngagementScreen";
 import { Refused } from "@/components/tracker/Refused";
+import { messagesHref } from "@/components/tracker/TrackerFrame";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -23,8 +24,11 @@ export default async function DeveloperEngagementPage({ params, searchParams }: 
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const found = await engagement((await params).id);
+  const { id } = await params;
   const query = await searchParams;
+  // The Messages tab is its own route; old links and the N18 notices (?tab=messages) land there.
+  if (query.tab === "messages") redirect(messagesHref(BASE_PATH, id));
+  const found = await engagement(id);
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="engagements" />} wide>
       {found.ok ? (

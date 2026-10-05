@@ -10,6 +10,11 @@
  * closed at the end; one draft idea of Brian's for the teaser checks, deleted at the end; and two new test accounts
  * (an organisation and a developer who pitched to it, reviewed and approved to proceed) whose notifications the bell
  * and the Notifications page show. The test accounts need E2E_DATABASE_OWNER_URL (frontend/.env.e2e), as the e2e does.
+ *
+ * The P21 shots (docs/platform/tasks/P21.md) read the demo seed's thread, shortlist entry and saved search; Compare needs
+ * a second shortlisted proposal, so Telco A's reviewer stars one more Inbox proposal and the end of the run takes the
+ * star off again (SHOT_KEEP=1 leaves it). They post no message and report none: the moderation shot is skipped unless
+ * a reported message is already in the queue.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -41,7 +46,7 @@ interface Shot {
   path: string;
   who: Who;
   /** The screenshots folder under docs/demo/screenshots/ (default p18). */
-  set?: "p19";
+  set?: "p19" | "p21";
   /** Only these widths (default SHOT_WIDTHS). */
   widths?: number[];
   /** Shoot this element only (the top bar), not the page. */
@@ -153,7 +158,7 @@ async function approveInQueue(browser: Browser, title: string) {
     await page.waitForURL(/\/admin\/moderation\/cases\//);
     await page.locator('main [data-hydrated="true"]').first().waitFor();
     await page.getByRole("button", { name: "Approve" }).click();
-    await page.getByRole("status").filter({ hasText: "Approved. The problem is published." }).waitFor();
+    await page.getByRole("status").filter({ hasText: "Approved. The Brief is published to developers." }).waitFor();
   });
 }
 
@@ -294,6 +299,15 @@ function bellScene(browser: Browser): Promise<BellScene> {
 /** Closes the Brief and deletes the draft this run made (the new test accounts stay, as the e2e's do). */
 async function tidyUp(browser: Browser) {
   if (KEEP) return;
+  const starred = shortlisted ? await shortlisted.catch(() => null) : null;
+  if (starred?.added) {
+    const added = starred.added;
+    await asPerson(browser, "org", async ({ request }) => {
+      const { csrf_token } = await getJson<{ csrf_token: string }>(request, "/api/auth/csrf");
+      const response = await request.delete(`/api/orgs/${starred.orgId}/shortlist/${added}`, { headers: { "X-CSRF-Token": csrf_token } });
+      expect(response.ok(), `take the shot's star off: ${response.status()}`).toBeTruthy();
+    });
+  }
   const brief = briefPublished ? await briefPublished.catch(() => null) : null;
   if (brief?.ours) {
     await asPerson(browser, "org", ({ request }) => post(request, `/api/orgs/${brief.orgId}/briefs/${brief.id}/close`, {}));
@@ -396,6 +410,65 @@ async function openSideSheet(page: Page, name: string) {
   const sheet = page.locator("dialog[open][data-side-sheet]");
   await sheet.waitFor();
   return sheet;
+}
+
+
+// --- The P21 scenes: the demo seed's thread, shortlist and saved search (docs/platform/tasks/P21.md) -----------------
+
+const SACCO_B = "SACCO B (fixture)";
+const ENDED = new Set(["CLOSED", "DECLINED", "WITHDRAWN", "EXPIRED", "TERMINATED"]);
+
+/** The engagement whose thread the shot shows, from `who`'s own list (Amina's open one with SACCO B, Telco A's SUBMITTED one). */
+async function engagementOf(page: Page, org: string, pick: (state: string) => boolean): Promise<string | null> {
+  const { items } = await getJson<{ items: Array<{ id: string; org_name: string; state: string }> }>(page.request, "/api/me/engagements");
+  return items.find((e) => e.org_name === org && pick(e.state))?.id ?? null;
+}
+
+/** Telco A's engagement at SUBMITTED, read from its organisation's list (the thread is not open yet). */
+async function submittedAtTelcoA(page: Page): Promise<string | null> {
+  const me = await getJson<{ memberships: Array<{ org_id: string; org_name: string }> }>(page.request, "/api/auth/me");
+  const orgId = me.memberships.find((m) => m.org_name === TELCO_A)?.org_id;
+  if (!orgId) return null;
+  const { items } = await getJson<{ items: Array<{ id: string; state: string }> }>(page.request, `/api/orgs/${orgId}/engagements`);
+  return items.find((e) => e.state === "SUBMITTED")?.id ?? null;
+}
+
+interface ShortlistScene {
+  orgId: string;
+  ids: string[];
+  /** The proposal this run starred (taken off at the end), if the seed's one entry was alone. */
+  added: string | null;
+}
+let shortlisted: Promise<ShortlistScene> | null = null;
+
+/** Telco A's shortlist with at least two entries: the seed's one, and one more Inbox proposal starred by its reviewer. */
+function shortlistScene(browser: Browser): Promise<ShortlistScene> {
+  shortlisted ??= asPerson(browser, "org", async ({ request }) => {
+    const me = await getJson<{ memberships: Array<{ org_id: string; org_name: string }> }>(request, "/api/auth/me");
+    const orgId = me.memberships.find((m) => m.org_name === TELCO_A)?.org_id;
+    expect(orgId, `${TELCO_A} from the demo seed`).toBeTruthy();
+    const read = async () =>
+      (await getJson<{ items: Array<{ proposal_id: string }> }>(request, `/api/orgs/${orgId}/shortlist`)).items.map((i) => i.proposal_id);
+    let ids = await read();
+    let added: string | null = null;
+    if (ids.length < 2) {
+      const inbox = await getJson<{ items: Array<{ proposal: { id: string }; shortlisted: boolean }> }>(request, `/api/orgs/${orgId}/inbox`);
+      const next = inbox.items.find((item) => !item.shortlisted && !ids.includes(item.proposal.id));
+      expect(next, "an Inbox proposal to star for Compare").toBeTruthy();
+      const { csrf_token } = await getJson<{ csrf_token: string }>(request, "/api/auth/csrf");
+      const response = await request.put(`/api/orgs/${orgId}/shortlist/${next!.proposal.id}`, { headers: { "X-CSRF-Token": csrf_token } });
+      expect(response.ok(), `star an Inbox proposal: ${response.status()}`).toBeTruthy();
+      added = next!.proposal.id;
+      ids = await read();
+    }
+    return { orgId: orgId!, ids, added };
+  });
+  return shortlisted;
+}
+
+/** A thread's island, hydrated. */
+async function threadShown(page: Page) {
+  await page.locator("[data-thread][data-hydrated='true']").waitFor();
 }
 
 const SHOTS: Shot[] = [
@@ -640,7 +713,11 @@ const SHOTS: Shot[] = [
   // A refusal: the plan's open Briefs are in use (402, with the next plan), else the form's own check of an empty form.
   { name: "org-brief-new-refused", set: "p19", path: "/org/problems/new", who: "org", prepare: async (page, browser) => {
       const brief = await publishedBrief(browser);
-      await page.locator("form[data-brief-form][data-hydrated='true']").waitFor();
+      // A page opened with the plan's Briefs in use shows that in place of the form: that is the refusal to shoot.
+      const form = page.locator("form[data-brief-form][data-hydrated='true']");
+      const capFull = page.getByText(/Every open Brief your plan allows is in use/);
+      await form.or(capFull).first().waitFor();
+      if (await capFull.isVisible()) return;
       const { plan } = await getJson<{ plan: { problem_briefs: number | null; used: number } }>(page.request, `/api/orgs/${brief.orgId}/briefs`);
       if (plan.problem_briefs !== null && plan.used >= plan.problem_briefs) {
         await page.getByLabel("Title").fill("Refuelling trips are planned from guesswork");
@@ -712,6 +789,99 @@ const SHOTS: Shot[] = [
       const scene = await resumedSide(browser);
       await page.goto(`/dev/engagements/${scene.id}?tab=history`, { waitUntil: "networkidle" });
       await page.locator("[data-event='resume'] [data-note='resume']").waitFor();
+    } },
+
+  // --- P21 (docs/platform/tasks/P21.md), into docs/demo/screenshots/p21/ ------------------------------------------
+  // The seed's thread on Amina's engagement with SACCO B, from both sides.
+  { name: "messages-dev", set: "p21", path: "/dev/engagements", who: "dev", prepare: async (page) => {
+      const id = await engagementOf(page, SACCO_B, (state) => !ENDED.has(state));
+      if (!id) return false;
+      await page.goto(`/dev/engagements/${id}/messages`, { waitUntil: "networkidle" });
+      await threadShown(page);
+      await page.locator("[data-message]").first().waitFor();
+    } },
+  { name: "messages-org", set: "p21", path: "/org/engagements", who: "orgSacco", prepare: async (page) => {
+      const me = await getJson<{ memberships: Array<{ org_id: string; org_name: string }> }>(page.request, "/api/auth/me");
+      const orgId = me.memberships.find((m) => m.org_name === SACCO_B)?.org_id;
+      if (!orgId) return false;
+      const { items } = await getJson<{ items: Array<{ id: string; state: string; developer_name: string }> }>(
+        page.request,
+        `/api/orgs/${orgId}/engagements`,
+      );
+      const id = items.find((e) => e.developer_name === PEOPLE.dev.name && !ENDED.has(e.state))?.id;
+      if (!id) return false;
+      await page.goto(`/org/engagements/${id}/messages`, { waitUntil: "networkidle" });
+      await threadShown(page);
+      await page.locator("[data-message]").first().waitFor();
+    } },
+  // Before Approve to proceed: Brian's pitch to Telco A, at SUBMITTED, from both sides.
+  { name: "messages-not-open-org", set: "p21", path: "/org/engagements", who: "org", prepare: async (page) => {
+      const id = await submittedAtTelcoA(page);
+      if (!id) return false;
+      await page.goto(`/org/engagements/${id}/messages`, { waitUntil: "networkidle" });
+      await page.locator("[data-thread-closed='not_open']").waitFor();
+    } },
+  { name: "messages-not-open-dev", set: "p21", path: "/dev/engagements", who: "devBrian", prepare: async (page) => {
+      const id = await engagementOf(page, TELCO_A, (state) => state === "SUBMITTED");
+      if (!id) return false;
+      await page.goto(`/dev/engagements/${id}/messages`, { waitUntil: "networkidle" });
+      await page.locator("[data-thread-closed='not_open']").waitFor();
+    } },
+  { name: "history-messages", set: "p21", path: "/dev/engagements", who: "dev", prepare: async (page) => {
+      const id = await engagementOf(page, SACCO_B, (state) => !ENDED.has(state));
+      if (!id) return false;
+      await page.goto(`/dev/engagements/${id}?tab=history`, { waitUntil: "networkidle" });
+      await page.locator("[data-history-message]").first().waitFor();
+    } },
+  // The Inbox's stars, the proposal page's star, the Shortlist and Compare, as Telco A's reviewer.
+  { name: "org-inbox-star", set: "p21", path: "/org/inbox", who: "org", prepare: async (page, browser) => {
+      await shortlistScene(browser);
+      await page.reload({ waitUntil: "networkidle" });
+      await page.locator("[data-shortlist='on'], [data-shortlisted]").first().waitFor();
+    } },
+  { name: "org-proposal-star", set: "p21", path: "/org/inbox", who: "org", viewportOnly: true, prepare: async (page, browser) => {
+      const scene = await shortlistScene(browser);
+      const inbox = await getJson<{ items: Array<{ proposal: { id: string } }> }>(page.request, `/api/orgs/${scene.orgId}/inbox`);
+      const id = scene.ids.find((pid) => inbox.items.some((item) => item.proposal.id === pid));
+      if (!id) return false;
+      await page.goto(`/org/inbox/${id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-shortlist='on']").waitFor();
+    } },
+  { name: "org-shortlist", set: "p21", path: "/org/inbox/shortlist", who: "org", prepare: async (page, browser) => {
+      await shortlistScene(browser);
+      await page.reload({ waitUntil: "networkidle" });
+      await page.locator("[data-shortlist-entry]").nth(1).waitFor();
+    } },
+  { name: "org-compare", set: "p21", path: "/org/inbox/shortlist", who: "org", prepare: async (page, browser) => {
+      const scene = await shortlistScene(browser);
+      await page.goto(`/org/inbox/shortlist/compare?ids=${scene.ids.slice(0, 4).join(",")}`, { waitUntil: "networkidle" });
+      await page.locator("[data-tier1-note]").waitFor();
+    } },
+  // Discover with Amina's saved search: the list open, then the save form.
+  { name: "discover-saved", set: "p21", path: "/dev/discover", who: "dev", prepare: async (page) => {
+      const strip = page.locator("[data-saved-searches]");
+      await strip.getByRole("button", { name: /^Saved searches \(\d+\)$/ }).click();
+      await strip.getByRole("listitem").first().waitFor();
+    } },
+  { name: "discover-save-form", set: "p21", path: "/dev/discover?niche=agriculture&county=KE-32", who: "dev", prepare: async (page) => {
+      const strip = page.locator("[data-saved-searches]");
+      await strip.getByRole("button", { name: "Save this search" }).click();
+      await strip.getByRole("textbox", { name: "Name" }).waitFor();
+    } },
+  // The two new rows: N18 (a new message) and the saved-search email, on both sides.
+  { name: "settings-notifications-dev", set: "p21", path: "/settings/notifications", who: "dev", prepare: async (page) => {
+      await page.locator('[data-hydrated="true"]').first().waitFor().catch(() => undefined);
+    } },
+  { name: "settings-notifications-org", set: "p21", path: "/settings/notifications", who: "orgSacco", prepare: async (page) => {
+      await page.locator('[data-hydrated="true"]').first().waitFor().catch(() => undefined);
+    } },
+  // A reported message in the moderation console: only one a party already reported (the shots report nothing).
+  { name: "admin-moderation-message", set: "p21", path: "/admin/moderation", who: "moderator", prepare: async (page) => {
+      const cases = await getJson<{ items: Array<{ id: string; subject_type: string; status: string }> }>(page.request, "/api/admin/moderation/cases");
+      const open = cases.items.find((c) => c.subject_type === "message" && c.status === "open");
+      if (!open) return false;
+      await page.goto(`/admin/moderation/cases/${open.id}`, { waitUntil: "networkidle" });
+      await page.locator("[data-message-body]").waitFor();
     } },
 ];
 

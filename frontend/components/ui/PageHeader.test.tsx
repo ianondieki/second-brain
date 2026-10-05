@@ -13,7 +13,7 @@ describe("PageHeader", () => {
   it("renders the page's one h1 with the title recipe, and its lead", () => {
     render(<PageHeader title="My ideas" lead="Draft, publish and pitch your ideas." />);
     const h1 = screen.getByRole("heading", { level: 1, name: "My ideas" });
-    expect(h1.className.split(" ")).toEqual(expect.arrayContaining(["text-xl", "lg:text-2xl", "text-ink"]));
+    expect(h1.className.split(" ")).toEqual(expect.arrayContaining(["text-2xl", "lg:text-3xl", "text-ink"]));
     expect(h1.hasAttribute("tabindex")).toBe(false);
     expect(screen.getByText("Draft, publish and pitch your ideas.").tagName).toBe("P");
     expect(document.querySelectorAll("h1")).toHaveLength(1);

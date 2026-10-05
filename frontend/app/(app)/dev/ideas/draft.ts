@@ -1,4 +1,5 @@
-import { linkLines, linksProblem, type DraftBody, type EditorState } from "./ideas";
+import { linkLines, linksProblem } from "./checklist";
+import type { DraftBody, EditorState } from "./ideas";
 
 // The save body, built only when saving: it loads with the editor's calls, not with the page.
 

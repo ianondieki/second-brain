@@ -21,13 +21,11 @@ export function DemoBadge({ label, sentence, ...data }: { label: string; sentenc
         onClick={() => setOpen((was) => !was)}
         title={sentence}
         // A 44 px hit area around a small pill (negative margins keep the meta line's height).
-        className="-my-2.5 inline-flex min-h-11 items-center text-ink-soft hover:text-ink"
+        className="group -my-2.5 inline-flex min-h-11 items-center"
       >
-        <span className="inline-flex items-center rounded-full border border-line px-2 py-0.5 hover:border-accent-line">
-          <Badge tone="neutral" icon={<InfoIcon />} className="text-xs">
-            {label}
-          </Badge>
-        </span>
+        <Badge tone="neutral" icon={<InfoIcon />} className="text-xs group-hover:text-ink group-hover:ring-accent-line">
+          {label}
+        </Badge>
       </button>
       <span id={id} className={open ? "text-sm text-ink-soft" : "sr-only"}>
         {sentence}

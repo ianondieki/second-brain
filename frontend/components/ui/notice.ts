@@ -3,18 +3,18 @@
 
 export type NoticeTone = "error" | "info" | "ok" | "neutral";
 
-export const noticeBox = "flex items-start gap-3 rounded-control border px-4 py-3 text-ink";
+export const noticeBox = "flex items-start gap-3 rounded-panel border px-4 py-3.5 text-ink";
 
 export const noticeTone: Record<NoticeTone, string> = {
   error: "border-error-line bg-error-wash",
   info: "border-accent-line bg-accent-wash",
-  ok: "border-warm-line bg-warm-wash",
+  ok: "border-ok-line bg-ok-wash",
   neutral: "border-line bg-transparent",
 };
 
 export const noticeIconTone: Record<NoticeTone, string> = {
   error: "text-error",
   info: "text-accent",
-  ok: "text-warm",
+  ok: "text-ok",
   neutral: "text-ink-soft",
 };

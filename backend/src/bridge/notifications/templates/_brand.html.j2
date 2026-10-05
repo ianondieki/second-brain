@@ -1,19 +1,21 @@
-{# The branded email frame (D-52, the P18 system): paper background, the lattice echo as an accent band over an ochre
-   hairline, the wordmark in a serif, a white sheet with the message, and a quiet footer. Children fill `body` (the
+{# The branded email frame (D-52, the P20 Jacaranda system): the canvas, the lattice echo as a bloom band over a
+   saffron hairline (saffron's only use), the wordmark (the mark's bloom tile and the name in a bold sans), a white
+   sheet with the message, and a quiet footer. Mail clients cannot load the app's fonts reliably, so the text names
+   Hanken Grotesk first and falls back to the system sans; the headings a bold system sans. Children fill `body` (the
    message) and `footer_line` (the small print's first line). Every value is autoescaped. #}
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no"><title>{% block title %}{{ product }}{% endblock %}</title></head>
-<body style="margin:0;padding:0;background:#fbfaf6;font-family:'IBM Plex Sans',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1916">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>{% block title %}{{ product }}{% endblock %}</title></head>
+<body style="margin:0;padding:0;background:#f7f6fb;font-family:'Hanken Grotesk',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1b1730">
 {% block preheader %}{% endblock %}
 <div style="max-width:560px;margin:0 auto;padding:24px 16px 32px">
-<div style="height:4px;background:#1f5e49;border-radius:2px 2px 0 0"></div>
-<div style="height:2px;background:#b89a4a;margin:0 0 18px"></div>
-<p style="margin:0 0 14px;font-family:Newsreader,'Iowan Old Style',Georgia,'Times New Roman',serif;font-size:22px;font-weight:500;letter-spacing:-0.01em;color:#1a1916">{{ product }}</p>
-<div style="background:#ffffff;border:1px solid #dedacf;border-radius:12px;padding:24px;font-size:16px;line-height:1.6">
+<div style="height:4px;background:#5a3fc0;border-radius:2px 2px 0 0"></div>
+<div style="height:2px;background:#f4b53f;margin:0 0 20px"></div>
+<p style="margin:0 0 16px;font-family:'Bricolage Grotesque',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:28px;font-weight:800;letter-spacing:-0.03em;color:#1b1730"><span style="display:inline-block;width:28px;height:28px;margin:0 8px 0 0;border-radius:8px;background:#5a3fc0;color:#ffffff;font-size:17px;line-height:28px;text-align:center;letter-spacing:0;vertical-align:top" aria-hidden="true">{{ product[:1] | upper }}</span>{{ product }}</p>
+<div style="background:#ffffff;border:1px solid #e4e1ee;border-radius:16px;padding:24px;font-size:16px;line-height:1.6;color:#1b1730">
 {% block body %}{% endblock %}
 </div>
-<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#5c5a53;text-align:center">{% block footer_line %}{{ product }}{% endblock %}<br>{% if settings_url %}<a href="{{ settings_url }}" style="color:#5c5a53">Manage notifications</a> · {% endif %}{% if help_url %}<a href="{{ help_url }}" style="color:#5c5a53">Help</a> · {% endif %}Nairobi, Kenya</p>
+<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#5e5873;text-align:center">{% block footer_line %}{{ product }}{% endblock %}<br>{% if settings_url %}<a href="{{ settings_url }}" style="color:#5e5873">Manage notifications</a> · {% endif %}{% if help_url %}<a href="{{ help_url }}" style="color:#5e5873">Help</a> · {% endif %}Nairobi, Kenya</p>
 </div>
 </body>
 </html>

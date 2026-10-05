@@ -1,5 +1,5 @@
 import { Seal } from "@/components/brand/Seal";
-import { Card } from "@/components/ui/Card";
+import { Lattice } from "@/components/ui/Lattice";
 import { CheckIcon } from "@/components/ui/status-icons";
 
 import { dismissCelebration } from "./celebration-store";
@@ -26,12 +26,9 @@ export interface ClosedCelebrationProps {
 export function ClosedCelebration({ engagementId, initialSeen = true, title, body, dismiss }: ClosedCelebrationProps) {
   return (
     <CelebrationShell engagementId={engagementId} initialSeen={initialSeen} dismiss={dismiss}>
-      <Card
-        as="section"
-        aria-labelledby="closed-celebration-title"
-        data-celebration={engagementId}
-        className="relative mt-6 max-w-3xl overflow-hidden"
-      >
+      {/* Unframed: EngagementScreen draws the card around this and its button, so "Got it" sits inside the card. */}
+      <section aria-labelledby="closed-celebration-title" data-celebration={engagementId}>
+        <Lattice className="-mx-5 -mt-5 mb-5 w-auto! sm:-mx-7 sm:-mt-7 sm:mb-6" />
         <span aria-hidden="true" className="confetti pointer-events-none absolute inset-x-0 top-0 h-full">
           {Array.from({ length: 12 }, (_, index) => (
             <i key={index} style={{ left: `${6 + index * 7.8}%`, animationDelay: `${(index % 4) * 120}ms` }} />
@@ -49,7 +46,7 @@ export function ClosedCelebration({ engagementId, initialSeen = true, title, bod
             <p className="mt-2 max-w-[60ch] text-ink-soft">{body}</p>
           </div>
         </div>
-      </Card>
+      </section>
     </CelebrationShell>
   );
 }

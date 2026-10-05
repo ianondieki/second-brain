@@ -426,6 +426,17 @@ pre-existing editor-with-problem variant) and the merge into the integration bra
 is up at the end; `demo.py reset --yes` before showing it: the gate's runs moved its clock). Decisions for the owner:
 D-54 (erasure of free-text engagement notes), the "Gap" tab label, the responsiveness score deferred.
 
+**Session 6 (2026-10-04, the same container; P20 "Jacaranda", the owner's redesign request).** The plan and design
+system (D-55), the foundation, kit and landing by the orchestrator, three impl-frontend passes in worktrees (developer,
+organisation and tracker, staff and public with the emails), the editor's budget fix, the reviews (reviewer,
+security-reviewer, ux-reviewer: PASS), the design shots and walkthrough. The merge into the integration branch was
+refused by this session's permission rules and waits for the owner.
+The report is "P20 report" below. Linux setup unchanged (worktrees need a real or hard-linked `node_modules`:
+Turbopack refuses the symlink). The stack is up at the end; `demo.py reset --yes` before showing it.
+P21 (2026-10-05, the same session after a context summary): the owner asked for feature ideas and said "Go ahead and
+implement"; three tracks (Messages, shortlist and compare, saved searches) on the same branch, reviewed to PASS and
+gated; the report is "P21 report" below. Same merge situation as P20.
+
 **Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
 come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for
 db-migrations (below, plus the index needs on `tasks/P16-E1.md`), the Phase 7 UX pass (with D-51's splits) and Phase 8
@@ -456,6 +467,129 @@ set by P7 and repeated in the M1 report; the existing ones are `ANTHROPIC_API_KE
 
 **Research.** Anthropic prices confirmed on 2026-09-29 from the official price page
 (`docs/platform/research/anthropic-prices-2026-09.md`, verdict "verified").
+
+### P21 report (final, 2026-10-05): talk, compare, come back (D-57)
+
+**Why.** After P20 the owner asked which features would most improve the product experience; the orchestrator
+recommended three and the owner answered "Go ahead and implement". Card: `tasks/P21.md`; decisions: D-57 (1)–(9).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`, on top of P20):
+
+- **Revision 0008** (db-migrations): `engagement_messages` (parties-only RLS, staff excluded; open from
+  `INTEREST_CONFIRMED`, read-only after an ending; append-only), staged `engagement_message_attachments` (keys pinned
+  by CHECK, scan status not insertable, five per message, 24-hour staging), per-member reads, the report function (reason
+  codes, ten a day), `org_shortlist` with `app_org_sees_proposal`, `saved_searches` (ten each) and the due-alerts function.
+- **A — Messages** (REQ-ENG-11, AC-TRACK-9, N18): the API (thread, post, scanned attachments with signed downloads,
+  report, read marks, 60 posts an hour), N18 in-app always and by email at most once per 30 minutes per engagement and
+  never with the text, the hourly purge of stale uploads; on screen, Messages as its own tracker route on both sides
+  (`/{dev|org}/engagements/<id>/messages`, landing on the thread; `?tab=messages` redirects), the thread (plain text,
+  never linked), the composer with upload and scan states, Report with five reasons, History entries, unread lines in the
+  lists, message cases in the moderation console, and the N18 row in notification settings.
+- **B — Shortlist and compare** (REQ-REPO-02): the star on Inbox rows and the proposal page (reviewer, signatory,
+  admin), the shared Shortlist with who added each entry and when, Compare of 2–4 on Tier-1 facts only; one more
+  endpoint, `GET /api/orgs/{org}/shortlist/{proposal}`, so the proposal page sets its star in one request.
+- **C — Saved searches and alerts** (REQ-PERS-03, REQ-TREND-02): "Save this search" on Discover (ten), the Saved
+  searches strip with alerts on/off and Delete, the daily job at 07:05 Nairobi (in-app per search; the opt-in daily
+  status email with counts only).
+- **Demo beats** (REQ-FND-02): a three-message thread on Amina's engagement with SACCO B (P1: Amina's only engagement
+  with SACCO B; the card said P4, which is Brian's), a Telco A shortlist entry (Rita, P5), Amina's saved search
+  "Microfinance & SACCOs" (no county: no seeded problem has one); idempotent and safe on a used demo.
+
+**Reviews.** 0008: reviewer and security-reviewer PASS after fixes (gate rule, keys, purge, report codes). A and BC:
+reviewer and security-reviewer PASS. F1 (shortlist, compare, saved searches): reviewer CHANGES_REQUIRED (a broken
+e2e count, Discover erroring on a failed saved-search read, seven MINORs), then PASS. F2 (Messages): reviewer
+CHANGES_REQUIRED (no test failed when a body rendered as HTML, nine MINORs), then PASS; every mutation probe now fails a
+test but one, closed by a page-level redirect test afterwards. ux-reviewer over every P21 screen: CHANGES_REQUIRED (the
+Messages route opened above the fold; the turn card's link contradicted the banner; focus lost after Remove; ten
+MINORs), then PASS; its four last MINORs were fixed before the merge. The demo beats: reviewer CHANGES_REQUIRED (a
+half-written thread on a used demo), then PASS.
+
+**Budget.** The Messages tab was first 158,552 B on the tracker route; as its own route, with the report sheet and the
+upload code loaded on use, it reads 149,627 B, and the tracker 149,570 B. A test walks both routes' import trees so
+neither pulls the other's code. Every one of 58 measured routes is under 150,000 B (scorecard "P21 measurements").
+
+**Gate.** Playwright on a fresh `demo.py reset --yes` (mobile 360 and desktop, axe): 198 passed, 4 skipped, 2 failed
+in one test (`discover.spec.ts` read "the one level-2 heading"; the Saved searches strip now has its own), fixed in the
+spec (`bc70121`) and 10/10 on re-run; the test-clock scenarios ran in the same run. Design shots
+`docs/demo/screenshots/p21/` (14 screens, 1440 and 375, light and dark, strict axe 0). Lighthouse 12.8.2: performance
+92–100 and accessibility 100, light and dark, on the five new screens; the Messages routes' LCP reaches 2.6–2.8 s in some
+runs (the page title, as the tracker's in P20; D-53 (d) measures on the laptop and the host). CodeQL: exactly the eight
+D-42 findings. `pr.yml` run 328 on `a1467b1`: Playwright with the clock scenarios, the demo story, frontend, legacy
+(Windows and Ubuntu) and hygiene green; the backend job (full suite, coverage gate) was still running when this was written (result in the line below); scanners red on `npm audit` only (D-56); the informational
+no-skip-list legacy job red as before. The first run (326) found what local runs had not: mypy over `tests/` (CI
+checks them, the implementers ran `mypy src`), fixed in `a1467b1`.
+
+**Deviations.** (1) security-reviewer runs on 0008, A and BC used Opus at xhigh instead of the configured model, which
+had hit its usage limit. (2) Ten commits are over ~300 lines (F1: four, F2: six); the later ones are small. (3)
+`icu-minify` 4.14.7 is now a declared devDependency (the compiler next-intl already ships; one lockfile line, no new
+package in the tree), for a test that compiles every locale message: a stray `<` in `_meta` had broken every page.
+
+**Residuals (on the card and THREAT_MODEL §5).** The contact-details check before `CONTACT_MADE` is a pattern check
+(meaning, split numbers, look-alikes and file contents pass). A store that always refuses one staged key blocks later
+purge passes until someone looks (logged as an error). The Messages route has 373 B of budget left. A saved search
+Amina deletes, with no other kept, comes back at the next demo start (as the liked niches do).
+`profiles/test_verification.py` failed once in a full local run under load and passed alone three times; not P21's
+code, not seen in CI.
+
+**Decisions for the owner.** D-57 (the nine defaults), the new strings under `_meta.reviewP21*` (`[[COPY-REVIEW]]`,
+Swahili `[[SW-REVIEW]]`), and the merge of P20 and P21 into the integration branch (refused by this session's
+permission rules; it waits for the owner). D-56 still open.
+
+### P20 report (final, 2026-10-04): Jacaranda, the visual redesign (D-55)
+
+**Why.** The owner found the P18 roll-out changed too little in type, colour, the landing page and the section
+layouts, and asked for a world-class redesign, with authority to add features that improve the taste as long as
+nothing becomes inconsistent or breaks (D-55). Design authority: `docs/platform/design/p20-design-system.md`; card:
+`tasks/P20.md`.
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`, 46 commits plus three worktree merges):
+
+- **Foundation** (orchestrator): Bricolage Grotesque for display and Hanken Grotesk for text, self-hosted and
+  instanced (34 KB and 20 KB, OFL, size-adjusted fallbacks; Newsreader and IBM Plex Sans removed, Plex Mono kept); the
+  bloom violet, saffron and night palette in light and dark with the P18 token names kept (every pair AA; night pairs
+  ≥ 6.3:1); a type scale up to 80 px; the kanga lattice recoloured; tinted shadows; a `.on-night` token scope for night
+  bands.
+- **Kit**: buttons and links as CSS component classes (`.btn`, `.btn-primary/secondary/danger`), status badges as soft
+  pills with one solid saffron "Your turn", card grids without orphans, page and section titles in the display face,
+  stat-tile figures, the new mark and wordmark, the pill nav rail, the top bar, the night auth panel (sticky on long
+  forms), staff tables with sentence-case headers.
+- **Landing** (rebuilt): a night hero with the product's own cards (tracker, scout match, certificate) that slide into
+  place once; how it works with the five-stage line; who it is for; four feature miniatures in an asymmetric grid;
+  a night proof band with the seal and a certificate check that works without an account (a GET form to `/verify`);
+  questions (`<details>`, no script); a bloom closing call; a full night footer with the theme switch.
+- **Developer portal** (P20-3, impl-frontend): Home with a raised "Needs you" card and a deadline figure, Discover
+  cards with a clear hierarchy, the editor as a two-column page with its tools rail, the idea page's certificate
+  beside pitches and views, Companies, engagements, billing figures, notifications by day, settings, niches.
+- **Organisation portal and tracker** (P20-4): the tracker's turn card (whose turn, next step, a countdown figure, the
+  actions), the bloom stepper, the agreement as a document with a milestone total, history as a timeline, the
+  proposal's facts strip and raised NDA step, "Needs us" cards, facts rows on scout and Brief pages.
+- **Staff and public** (P20-5): moderation and claims queues on their own sheet with a summary line, the case page's
+  sticky decision panel, `/verify` as an official certificate sheet, help with contents, terms as a reading column,
+  the error screen; every email and the marked full-proposal page in the new palette and fonts.
+- **Taste additions** (no new data or API): the landing's certificate check and questions; "Link another problem" in
+  the editor (also the budget fix below); figures in the display face across the portals.
+
+**Budget fix.** The editor of an idea with a chosen problem, over 150 KB since P18 (152,206 B), now reads 149,713 B:
+the linked problems are a plain list and the search loads on "Link another problem"; the publish checklist moved to
+`dev/ideas/checklist.ts`, loaded with the review step, which hands it to the editor.
+
+**Gate.** `reviewer` PASS (two MINORs: the lazily read checklist could suspend the editor on a slow chunk, fixed by
+handing it over from the review step; one commit over 300 lines, noted), `security-reviewer` PASS on the touched
+sensitive files (watermark render, emails, magic-link page, billing UI, fonts, the checklist split), `ux-reviewer`
+CHANGES_REQUIRED (two MAJORs: a pill inside a pill on "Demo data", the hero's cards colliding at 1024 px; six MINORs)
+then PASS after one round. Design shots `docs/demo/screenshots/p20/` (every screen, 1440 and 375, light and dark,
+strict axe 0), the walkthrough re-recorded on a fresh reset (demo story 1/1), Lighthouse 96–99 performance and 100
+accessibility light and dark, every measured route under 150 KB (scorecard "P20 measurements"). Playwright on the
+compose stack: 184 passed, 4 skipped (mobile 360 and desktop, axe, on a fresh `demo.py reset --yes`); the test-clock scenarios: 4/4. CI: `pr.yml` run 325 on `646b086`: backend (the full suite with coverage), frontend, Playwright with the clock scenarios, the demo story, the legacy suites (Windows and Ubuntu) and hygiene green; the scanners job red on its `npm audit` step only (D-56, red on every branch since the advisory; osv-scanner green with its listed entry); the informational no-skip-list legacy job red as on the P18 and P19 runs. CodeQL: exactly the eight D-42 findings.
+
+**Found on the way (not P20's).** `test_expiry.py`'s holiday case assumed no real holiday in its 10-business-day
+window; from 9 October Mashujaa Day (20 October) falls inside it, so the test now counts the seeded holidays (it would
+have turned the integration branch red the same day). A new advisory against `braces` (GHSA-vfj7-8cjw-p6xm, every
+release, dev-only through `eslint-config-next`) turned the scanners job red on every branch: listed in
+`osv-scanner.toml` with a reason and an expiry (3 November); `npm audit` has no such list, so D-56 asks the owner.
+
+**Decisions for the owner.** D-55 (the redesign itself; G5 reviews this world), D-56 (npm audit on dev-only advisories
+without a fix), and the new strings in `_meta.reviewP20*` (`[[COPY-REVIEW]]`, Swahili `[[SW-REVIEW]]`).
 
 ### P19 report (final, 2026-10-02): side states, Problem Briefs, the bell, the teaser checks
 

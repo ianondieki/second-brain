@@ -345,9 +345,9 @@ async def test_the_e2e_sequence_a_question_on_a_friday_before_a_holiday(
 ) -> None:
     """The flaky e2e's sequence (frontend/e2e/tracker-branches.spec.ts, AC-TRACK-4): a question, the shared clock
     moved sixteen days through the test clock, one job pass. Asked on a Friday with a holiday the next Tuesday, the
-    answer-by date is seventeen days on, so that pass rightly finds nothing due on the platform clock (the job reads
-    the same clock as the API and the test clock); moved to the day after the answer-by date the API sends, one pass
-    expires it."""
+    answer-by date is at least seventeen days on, so that pass rightly finds nothing due on the platform clock (the
+    job reads the same clock as the API and the test clock); moved to the day after the answer-by date the API
+    sends, one pass expires it."""
     world = await build(owner_engine)
     holiday = uuid7()
     async with seats(app_engine, deals_on(), world) as s, moved_clock(owner_engine) as advance:
@@ -367,7 +367,10 @@ async def test_the_e2e_sequence_a_question_on_a_friday_before_a_holiday(
         try:
             asked = await t.ok(s.reviewer, "request-info", {"question": "Which co-ops ran the pilot?"})
             answer_by = date.fromisoformat(asked["due"]["due_on"])
-            assert answer_by == friday + timedelta(days=17)  # a Monday: 10 BD past a Friday, one a holiday
+            # 10 BD past the Friday, the fixture's Tuesday off and any real holiday in the window (Mashujaa Day,
+            # 20 October, falls inside it when the run's Friday is 9 October): at least seventeen days on.
+            assert answer_by == add_business_days(friday, 10, await holidays_of(owner_engine))
+            assert answer_by >= friday + timedelta(days=17)
             await advance(16)
             assert (await tick(app_engine, world)).outcomes == ()  # rightly not due yet
             assert (await t.detail(s.dev))["state"] == "INFO_REQUESTED"

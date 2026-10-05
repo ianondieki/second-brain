@@ -92,3 +92,21 @@ async def test_start_up_keeps_the_fake_embedder_in_dev_and_test() -> None:
     app = create_app(get_settings())
     async with app.router.lifespan_context(app):
         assert isinstance(app.state.embedder, FakeEmbedder)
+
+
+async def test_the_apis_engine_ends_transactions_left_idle(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The API's engine is built with the idle-in-transaction timeout (the worker's engines are not)."""
+    from bridge.db import API_IDLE_IN_TRANSACTION_MS
+    from bridge.db import create_engine as real
+
+    seen: list[dict[str, Any]] = []
+
+    def spy(url: str, **kwargs: Any) -> Any:
+        seen.append(kwargs)
+        return real(url, **kwargs)
+
+    monkeypatch.setattr("bridge.main.create_engine", spy)
+    app = create_app(get_settings())
+    async with app.router.lifespan_context(app):
+        pass
+    assert seen == [{"idle_in_transaction_timeout_ms": API_IDLE_IN_TRANSACTION_MS}]

@@ -42,49 +42,74 @@ async function signedIn(): Promise<{ me: Me; home: Home } | null> {
 export default async function HelpPage() {
   const t = await getTranslations("help");
   const person = await signedIn();
+  // The first-login tour, on request, for the two sides that have one (the staff console has none).
+  const hasTour = person !== null && (person.home === "/dev" || person.home === "/org");
+  const tTour = hasTour ? await getTranslations("tour") : null;
+  const entries = [
+    ...HELP_SECTIONS.map(({ id }) => ({ id: `help-${id}`, label: t(`${id}.title`) })),
+    ...(tTour ? [{ id: "help-tour", label: tTour("title") }] : []),
+  ];
   const content = (
     <>
       <PageHeader title={t("pageTitle")} lead={t("lead")} />
-      <div className="mt-10 flex flex-col gap-12">
-        {HELP_SECTIONS.map(({ id, paragraphs }) => (
-          <Section key={id} title={t(`${id}.title`)} headingId={`help-${id}`} data-help-section={id}>
-            <div className="flex max-w-[65ch] flex-col gap-3 text-ink">
-              {paragraphs.map((key) => (
-                <p key={key} data-support-placeholder={key === "support.body" ? "" : undefined}>
-                  {key === "reminders.manage"
-                    ? t.rich(key, {
-                        link: (chunks: ReactNode) => (
-                          <Link href={NOTIFICATIONS_HREF} className={textLinkClass}>
-                            {chunks}
-                          </Link>
-                        ),
-                      })
-                    : t(key)}
-                </p>
-              ))}
-            </div>
-          </Section>
-        ))}
-      </div>
-    </>
-  );
-
-  if (person) {
-    // The first-login tour, on request, for the two sides that have one (the staff console has none).
-    const hasTour = person.home === "/dev" || person.home === "/org";
-    const tTour = await getTranslations("tour");
-    return (
-      <SignedInShell homeHref={person.home} nav={<PortalNavFor me={person.me} />} wide>
-        <div className="max-w-xl">
-          {content}
-          {hasTour ? (
-            <Section title={tTour("title")} headingId="help-tour" className="mt-12" data-help-section="tour">
+      {/* A reading page: the answers at a comfortable measure, and a contents list that stays beside them from
+          1024 px (under the header on a phone). The list is a navigation, not a heading, so the page's h2s are
+          only its sections. */}
+      <div className="mt-8 grid grid-cols-1 gap-10 lg:mt-10 lg:grid-cols-[minmax(0,1fr)_13rem] lg:gap-12">
+        <nav
+          aria-label={t("contents")}
+          className="self-start border-l border-line pl-4 lg:sticky lg:top-8 lg:col-start-2 lg:row-start-1"
+        >
+          <p className="text-sm font-semibold text-ink-soft">{t("contents")}</p>
+          <ul className="mt-1 flex flex-col">
+            {entries.map((entry) => (
+              <li key={entry.id}>
+                <a
+                  href={`#${entry.id}`}
+                  className="inline-flex min-h-11 items-center text-ink no-underline hover:text-accent hover:underline lg:min-h-9"
+                >
+                  {entry.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        <div className="flex max-w-[65ch] flex-col gap-12 lg:col-start-1 lg:row-start-1 lg:gap-14">
+          {HELP_SECTIONS.map(({ id, paragraphs }) => (
+            <Section key={id} title={t(`${id}.title`)} headingId={`help-${id}`} data-help-section={id}>
+              <div className="flex flex-col gap-3 text-ink">
+                {paragraphs.map((key) => (
+                  <p key={key} data-support-placeholder={key === "support.body" ? "" : undefined}>
+                    {key === "reminders.manage"
+                      ? t.rich(key, {
+                          link: (chunks: ReactNode) => (
+                            <Link href={NOTIFICATIONS_HREF} className={textLinkClass}>
+                              {chunks}
+                            </Link>
+                          ),
+                        })
+                      : t(key)}
+                  </p>
+                ))}
+              </div>
+            </Section>
+          ))}
+          {person && tTour ? (
+            <Section title={tTour("title")} headingId="help-tour" data-help-section="tour">
               <ClientStrings strings={await clientStrings(["tour"])}>
                 <ShowTourAgain side={person.home === "/org" ? "org" : "developer"} />
               </ClientStrings>
             </Section>
           ) : null}
         </div>
+      </div>
+    </>
+  );
+
+  if (person) {
+    return (
+      <SignedInShell homeHref={person.home} nav={<PortalNavFor me={person.me} />} wide>
+        {content}
       </SignedInShell>
     );
   }
@@ -96,7 +121,7 @@ export default async function HelpPage() {
         </Link>
       </TopBar>
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 pt-8 pb-16 focus:outline-none sm:px-6 lg:pt-16">
-        <div className="max-w-xl">{content}</div>
+        <div className="max-w-4xl">{content}</div>
       </main>
     </>
   );

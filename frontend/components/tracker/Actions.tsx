@@ -200,30 +200,23 @@ export function Actions(props: ActionsProps) {
       {listNotice}
       {props.items.length === 0 && listed ? null : (
     <section aria-labelledby="actions-heading" aria-busy={busy} data-actions="" data-hydrated={hydrated ? "true" : "false"} className="flex flex-col gap-4">
-      <h2 id="actions-heading" ref={heading} tabIndex={-1} className="text-lg text-ink">
+      {/* Listing, the turn card's next-step sentence already names the step: the heading is for screen readers. A
+          form or sheet shows its own name. */}
+      <h2 id="actions-heading" ref={heading} tabIndex={-1} className={listed ? "sr-only" : "text-lg text-ink"}>
         {listed ? t("title") : label(mode.item)}
       </h2>
 
       {listed ? (
         <>
           <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            {props.items.map((item) => (
-              <li key={`${item.command}-${item.milestone?.id ?? ""}`}>
-                {/* Ending steps (withdraw, decline) are the danger variant: outlined in the error colour, never filled. */}
-                {isEndingCommand(item.command) ? (
+            {props.items.map((item) => {
+              // Ending steps (withdraw, decline) are the danger variant: outlined in the error colour, never filled,
+              // and set apart at the row's end from 640 px.
+              const ending = isEndingCommand(item.command);
+              return (
+                <li key={`${item.command}-${item.milestone?.id ?? ""}`} className={ending ? "sm:ml-auto" : undefined}>
                   <Button
-                    variant="danger"
-                    busy={busy}
-                    className="w-full sm:w-auto"
-                    onClick={() => press(item)}
-                    data-command={item.command}
-                    data-action-key={keyOf(item)}
-                  >
-                    {label(item)}
-                  </Button>
-                ) : (
-                  <Button
-                    variant={item.primary ? "primary" : "secondary"}
+                    variant={ending ? "danger" : item.primary ? "primary" : "secondary"}
                     busy={busy}
                     className="w-full sm:w-auto"
                     onClick={() => press(item)}
@@ -233,9 +226,9 @@ export function Actions(props: ActionsProps) {
                   >
                     {busy && keyOf(item) === pressed ? t("busy") : label(item)}
                   </Button>
-                )}
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         </>
       ) : null}

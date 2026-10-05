@@ -320,7 +320,7 @@ test("an organisation owner turns on two-step sign-in and needs a code at the ne
   const cancel = page.getByRole("button", { name: "Cancel setup" });
   await expect(cancel).toHaveAttribute("aria-disabled", "true");
   await expect(cancel).toHaveCSS("cursor", "progress");
-  await expect(cancel).toHaveCSS("color", "rgb(92, 90, 83)"); // --ink-soft: 6.6:1 on paper (D-52 tokens)
+  await expect(cancel).toHaveCSS("color", "rgb(94, 88, 115)"); // --ink-soft: 6.3:1 on paper (D-55 tokens)
   await expect(cancel).toHaveCSS("text-decoration-style", "dotted");
   release();
   await expect(page.getByTestId("recovery-codes").getByRole("listitem")).toHaveCount(10, SERVER_STEP);

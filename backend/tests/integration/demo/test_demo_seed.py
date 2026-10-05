@@ -5,9 +5,10 @@ is flagged ``demo_account`` (D-37) with the reminders consent and TOTP on its fi
 verify; the developers are D1 and D2; the fixture organisations carry their levels, seats and (E2) the signatory's
 Master Enterprise Terms; the proposals are published with a certificate id each, their problems described or linked,
 their registration queued and completed by the real T2.4 steps; E2 fixtures get delivered tags (a ``SUBMITTED``
-engagement each), E1 and E0 held ones; the exported certificate id is P1's. Staging, production and an unset
-``APP_ENV`` write nothing. The database is the module's own (the seed's rows would disturb the directory tests'
-counts in the shared session database).
+engagement each), E1 and E0 held ones; the exported certificate id is P1's; P21's beats (a thread on Amina's
+engagement with SACCO B, a shortlist entry at Telco A, a saved search of Amina's) are made through the API once.
+Staging, production and an unset ``APP_ENV`` write nothing. The database is the module's own (the seed's rows would
+disturb the directory tests' counts in the shared session database).
 """
 
 from __future__ import annotations
@@ -34,10 +35,11 @@ from bridge.config import Settings, get_settings
 from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.db import create_session_factory
 from bridge.demo import __main__ as demo_command
-from bridge.engagements import notify
+from bridge.engagements import message_notify, notify
 from bridge.integrations.sms import FakeSmsProvider
 from bridge.models.enums import EngagementState
 from bridge.notifications.email import FakeEmailProvider
+from bridge.proposals.sanitise import contact_codes
 from bridge.provenance import service as provenance
 from bridge.provenance.signing import LocalSigner, register_public_key
 from bridge.provenance.tsa import TsaClient
@@ -65,17 +67,21 @@ from bridge.seed.demo.data import (
     P4,
     PROPOSALS,
     SACCO_B,
+    SAVED_SEARCH,
     STAFF_ADMIN,
     STAFF_MODERATOR,
     TELCO_A,
+    THREAD,
     VIEWED,
     all_accounts,
     totp_secret,
 )
+from bridge.seed.demo.follow_ups import SHORTLISTED
 from bridge.seed.demo.queues import CLAIMED, HELD
 from bridge.seed.demo.research import SEEDED_ANSWERS
 from bridge.seed.demo.runtime import in_process_app, signed_in
 from bridge.seed.demo.scouts import SCOUT_KEYWORDS, SCOUT_NICHE, SCOUTED
+from bridge.seed.demo.trending import LIKED
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
@@ -100,6 +106,9 @@ TABLES = (
     "procrastinate_jobs",
     "signal_events",
     "developer_niches",
+    "engagement_messages",
+    "org_shortlist",
+    "saved_searches",
 )
 
 
@@ -175,6 +184,11 @@ async def test_running_the_demo_seed_again_changes_nothing(
 ) -> None:
     first, second, third = seeded
     assert first.created, "the first run seeds"
+    assert first.created[-3:] == [  # P21's beats, last
+        f"thread of {THREAD.proposal} with {THREAD.org}: {len(THREAD.messages)} messages",
+        f"shortlist of {SHORTLISTED[1].legal_name}: {SHORTLISTED[0].key} by {SHORTLISTED[2].email}",
+        f"saved search of {SAVED_SEARCH.owner}: {SAVED_SEARCH.name}",
+    ]
     assert first.notes == []
     assert (second.created, second.notes, third.created, third.notes) == ([], [], [], [])
     assert (third.users, third.orgs, third.proposals, third.cert_ids) == (
@@ -732,6 +746,123 @@ async def test_each_staff_queue_has_an_item_for_the_demo_moderator_and_admin(
     assert 0 < claim["sla"]["business_days_left"] <= 2  # filed today (2 left), or yesterday if midnight passed
     [filed] = await rows(owner, "SELECT count(*) FROM org_claims")
     assert filed[0] == 1  # the re-runs filed nothing more
+
+
+# ------------------------------------------------------------------------------------------------------ P21 beats
+
+
+async def test_amina_and_sacco_b_have_an_open_thread_with_a_reply_waiting(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P21 (REQ-ENG-11): SACCO B's owner, its named contact, and Amina wrote on the thread of her P1 engagement through
+    the API, alternating and in order, once however often the seed ran; each post was audited and queued its N18 job
+    (the worker writes the bell rows and the email). Amina reads the thread open, the owner's two messages unread."""
+    report = seeded[0]
+    assert SACCO_B.owner is not None
+    assert (THREAD.proposal, THREAD.org, P1.owner) == (P1.key, SACCO_B.legal_name, AMINA.email)
+    [engagement] = await rows(
+        owner,
+        "SELECT id, state::text AS state FROM engagements WHERE proposal_id = :p AND org_id = :o",
+        p=report.proposals[THREAD.proposal],
+        o=report.orgs[THREAD.org],
+    )
+    assert engagement.state == EngagementState.NEGOTIATION.value
+    david, amina = report.users[SACCO_B.owner.email], report.users[AMINA.email]
+    posted = await rows(
+        owner,
+        "SELECT sender_user_id, sender_party::text AS party, body FROM engagement_messages WHERE engagement_id = :e"
+        " ORDER BY created_at, id",
+        e=engagement.id,
+    )
+    bodies = [message.body for message in THREAD.messages]
+    assert [tuple(m) for m in posted] == [
+        (david, "org", bodies[0]),
+        (amina, "developer", bodies[1]),
+        (david, "org", bodies[2]),
+    ]
+    assert all(contact_codes(body) == [] for body in bodies)  # D-57 (8) holds at every stage
+    others = await rows(owner, "SELECT count(*) FROM engagement_messages WHERE engagement_id <> :e", e=engagement.id)
+    assert others[0][0] == 0
+    audited = await rows(
+        owner,
+        "SELECT actor_user_id FROM audit_events WHERE action = 'engagement.message_posted' AND subject_id = :e",
+        e=engagement.id,
+    )
+    assert sorted(str(a.actor_user_id) for a in audited) == sorted(str(u) for u in (david, amina, david))
+    queued = await rows(
+        owner,
+        "SELECT count(*) FROM procrastinate_jobs WHERE task_name = :t AND args->>'engagement_id' = :e",
+        t=message_notify.TASK,
+        e=str(engagement.id),
+    )
+    assert queued[0][0] == len(bodies)
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, AMINA.email) as developer,
+    ):
+        thread = (await developer.call("GET", f"/api/engagements/{engagement.id}/messages")).json()
+    assert (thread["status"], thread["can_post"], thread["unread"]) == ("open", True, 2)
+    assert [(item["mine"], item["body"]) for item in thread["items"]] == [
+        (False, bodies[0]),
+        (True, bodies[1]),
+        (False, bodies[2]),
+    ]
+
+
+async def test_telco_a_reviewer_shortlisted_the_scouts_match(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P21 (REQ-REPO-02): Telco A's reviewer, who gets the scout's digest, put its match on the organisation's
+    shortlist through the API, once (one row, one ``shortlist.added`` event); every member reads who added it."""
+    report = seeded[0]
+    proposal, org, reviewer = SHORTLISTED
+    assert (proposal, org, reviewer) == (SCOUTED, TELCO_A, TELCO_A.seats[1])
+    org_id, proposal_id, reviewer_id = (
+        report.orgs[org.legal_name],
+        report.proposals[proposal.key],
+        report.users[reviewer.email],
+    )
+    entries = await rows(owner, "SELECT org_id, proposal_id, added_by FROM org_shortlist")
+    assert [tuple(e) for e in entries] == [(org_id, proposal_id, reviewer_id)]
+    audited = await rows(
+        owner, "SELECT org_id, actor_user_id, subject_id FROM audit_events WHERE action = 'shortlist.added'"
+    )
+    assert [tuple(a) for a in audited] == [(org_id, reviewer_id, proposal_id)]
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, TELCO_A.seats[2].email) as finance,  # a member without a Tier-2 role reads it
+    ):
+        listed = (await finance.call("GET", f"/api/orgs/{org_id}/shortlist")).json()
+    [item] = listed["items"]
+    assert (item["proposal_id"], item["available"], item["title"]) == (str(proposal_id), True, proposal.title)
+    assert (item["added_by_id"], item["added_by_name"]) == (str(reviewer_id), reviewer.display_name)
+
+
+async def test_amina_has_a_saved_search_whose_view_lists_seeded_problems(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P21 (REQ-PERS-03): Amina saved, through the API and once, a Problems search of a niche she likes, alerts on and
+    never alerted yet; Discover lists seeded problems for it (P1's among them), so opening it is never empty."""
+    report = seeded[0]
+    assert SAVED_SEARCH.owner == AMINA.email
+    assert SAVED_SEARCH.niche in LIKED[AMINA.email]
+    found = await rows(
+        owner, "SELECT user_id, name, view, niche_slug, county_code, words, alerts, last_alerted_at FROM saved_searches"
+    )
+    assert [tuple(f) for f in found] == [
+        (report.users[AMINA.email], SAVED_SEARCH.name, "problems", SAVED_SEARCH.niche, None, None, True, None)
+    ]
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, AMINA.email) as amina,
+    ):
+        saved = (await amina.call("GET", "/api/me/saved-searches")).json()
+        shown = (await amina.call("GET", "/api/discover/trending", params={"niche": SAVED_SEARCH.niche})).json()
+    assert [(s["name"], s["view"], s["niche"], s["alerts"]) for s in saved["items"]] == [
+        (SAVED_SEARCH.name, SAVED_SEARCH.view, SAVED_SEARCH.niche, True)
+    ]
+    assert P1.new_problem is not None
+    assert P1.new_problem.title in {p["problem"]["title"] for p in shown["problems"]}
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:

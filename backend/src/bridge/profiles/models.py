@@ -1,5 +1,5 @@
-"""Developer profiles, niche interests, consents and developer verification (REQ-CON-01, REQ-PROV-04).
-Tenancy USER: RLS by ``app.user_id``."""
+"""Developer profiles, niche interests, consents, developer verification and saved searches (REQ-CON-01, REQ-PROV-04,
+REQ-PERS-03). Tenancy USER: RLS by ``app.user_id``."""
 
 from __future__ import annotations
 
@@ -116,3 +116,42 @@ class KycReview(IdMixin, TimestampsMixin, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     purge_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     images_purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# P21 track C (revision 0008): a developer's saved Discover searches.
+SAVED_SEARCH_VIEWS = ("problems", "briefs")
+MAX_SAVED_SEARCHES = 10  # per user (saved_searches_cap)
+SAVED_SEARCH_NAME_CHARS = 60
+SAVED_SEARCH_WORDS_CHARS = 100
+
+
+class SavedSearch(IdMixin, Base):
+    """A saved Discover search (P21 track C, REQ-PERS-03 and REQ-TREND-02; revision 0008), its owner's only: a name
+    (1 to 60 characters), the view (``problems`` or ``briefs``), an optional niche and county and optional words
+    (1 to 100 characters). ``alerts`` (on by default) lets the daily job tell the owner about new matches since
+    ``last_alerted_at`` (or since ``created_at``); the job lists due searches with ``app_saved_searches_due(now)``
+    (no user bound) and advances ``last_alerted_at`` bound to the owner. At most 10 per user (``saved_searches_cap``:
+    check_violation, constraint ``saved_searches_at_most_10``). ``created_at`` is the database's clock."""
+
+    __tablename__ = "saved_searches"
+    __table_args__ = (
+        CheckConstraint(
+            f"name ~ '[^[:space:]]' AND char_length(name) <= {SAVED_SEARCH_NAME_CHARS}", name="name_length"
+        ),
+        CheckConstraint(f"view IN ({', '.join(repr(view) for view in SAVED_SEARCH_VIEWS)})", name="view_known"),
+        CheckConstraint(
+            f"words IS NULL OR (words ~ '[^[:space:]]' AND char_length(words) <= {SAVED_SEARCH_WORDS_CHARS})",
+            name="words_length",
+        ),
+        USER,
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(Text)
+    view: Mapped[str] = mapped_column(Text)  # SAVED_SEARCH_VIEWS
+    niche_slug: Mapped[str | None] = mapped_column(ForeignKey("niches.slug"))
+    county_code: Mapped[str | None] = mapped_column(ForeignKey("regions.code"))
+    words: Mapped[str | None] = mapped_column(Text)
+    alerts: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    last_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))

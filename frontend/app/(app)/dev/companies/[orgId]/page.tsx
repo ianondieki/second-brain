@@ -13,6 +13,7 @@ import { homeFor } from "@/lib/auth/routing";
 import { getOrgCard } from "../directory";
 import { filtersHref, parseFilters } from "../filters";
 import { VerificationBadge } from "../VerificationBadge";
+import { Card } from "@/components/ui/Card";
 
 export async function generateMetadata({ params }: PageProps<"/dev/companies/[orgId]">): Promise<Metadata> {
   const t = await getTranslations("companies");
@@ -43,7 +44,9 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
               <VerificationBadge badge={org.badge} />
             </p>
           </PageHeader>
-          <DescriptionList className="mt-10">
+          {/* The facts as one white card on the canvas: a record to read, set apart from the page's chrome. */}
+          <Card variant="flat" className="mt-8 sm:p-6">
+          <DescriptionList>
             <Description label={t("detailType")}>{kinds(org.kind)}</Description>
             <Description label={t("detailCounty")}>{org.county?.name ?? t("detailNone")}</Description>
             <Description label={t("detailNiches")}>
@@ -61,6 +64,7 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
               <Description label={t("detailResponse")}>{org.responsiveness.text}</Description>
             ) : null}
           </DescriptionList>
+          </Card>
         </>
       ) : (
         <>

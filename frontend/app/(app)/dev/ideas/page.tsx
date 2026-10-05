@@ -8,7 +8,7 @@ import { Alert } from "@/components/ui/Alert";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { CardGrid } from "@/components/ui/Card";
+import { RowList } from "@/components/ui/RowList";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -56,15 +56,13 @@ export default async function MyIdeasPage({ searchParams }: PageProps<"/dev/idea
         </Alert>
       ) : null}
 
-      <div className="mt-10 max-w-3xl">
+      <div className="mt-8 max-w-3xl lg:mt-10">
         {items.length > 0 ? (
-          <CardGrid aria-label={t("listLabel")}>
+          <RowList aria-label={t("listLabel")}>
             {items.map((item) => (
-              <li key={item.id}>
-                <IdeaCard item={item} />
-              </li>
+              <IdeaCard key={item.id} item={item} version />
             ))}
-          </CardGrid>
+          </RowList>
         ) : (
           <EmptyState sentence={t("empty")} action={t("newIdea")} href={NEW_PATH} primary />
         )}

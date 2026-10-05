@@ -157,6 +157,12 @@ class EngagementSummary(BaseModel):
     paused_from: EngagementState | None = Field(
         description="In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
     )
+    # Always sent; optional in the generated web types (no default in the schema), so a client reads an older API as 0.
+    unread_messages: int = Field(
+        default_factory=int,
+        ge=0,
+        description="Messages of the engagement's thread by others that the caller has not read",
+    )
 
 
 class EngagementList(BaseModel):
@@ -307,14 +313,25 @@ class HistoryEventOut(BaseModel):
     hash: str
 
 
+class HistoryMessageOut(BaseModel):
+    """A message of the thread as the History tab lists it (AC-TRACK-9): who wrote and when, never the text."""
+
+    id: UUID
+    sender_party: EngagementParty
+    sender_name: str
+    created_at: datetime
+
+
 class HistoryOut(BaseModel):
-    """The engagement's History tab: every event of the hash chain and every endorsement, identical for both
-    parties; ``chain_verified`` is the independent verifier's result over the events read."""
+    """The engagement's History tab: every event of the hash chain, every endorsement and every message of the
+    thread (who and when; REQ-ENG-11), identical for both parties; ``chain_verified`` is the independent verifier's
+    result over the events read (messages are not part of the chain)."""
 
     engagement_id: UUID
     chain_verified: bool
     events: list[HistoryEventOut]
     endorsements: list[EndorsementOut]
+    messages: list[HistoryMessageOut] = Field(default_factory=list, description="The thread's messages, oldest first")
 
 
 class DocumentOut(BaseModel):

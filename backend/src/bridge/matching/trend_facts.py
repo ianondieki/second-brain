@@ -26,14 +26,15 @@ the routes carries them.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Final
+from typing import Any, Final
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from sqlalchemy import text
+from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.matching.ranking_config import RankingConfig
@@ -176,11 +177,17 @@ async def _aggregates(db: AsyncSession, since: datetime, now: datetime) -> list[
     ]
 
 
+async def visible_problems(db: AsyncSession, now: datetime) -> Sequence[Row[Any]]:
+    """The problems every signed-in reader may see at ``now`` (published, clear, a Brief open and its organisation
+    listed), under the caller's RLS: the set Discover's problem lists draw from."""
+    return (await db.execute(_PROBLEMS, {"today": nairobi_day(now)})).all()
+
+
 async def load(db: AsyncSession, cfg: RankingConfig) -> Facts:
     now: datetime = (await db.execute(_NOW)).scalar_one()
     aggregates = await _aggregates(db, _window(now, cfg.trending.window_days), now)
     recent_aggregates = await _aggregates(db, _window(now, cfg.trending.badge_days), now)
-    problem_rows = (await db.execute(_PROBLEMS, {"today": nairobi_day(now)})).all()
+    problem_rows = await visible_problems(db, now)
     source_rows = (await db.execute(_SOURCES, {"ids": [r.id for r in problem_rows]})).all()
     refs: dict[UUID, list[str | None]] = defaultdict(list)
     sources = []

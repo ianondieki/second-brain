@@ -160,6 +160,11 @@ def _baselines(samples: Mapping[UUID | None, list[float]], cfg: TrendConfig) -> 
     return out
 
 
+def new_this_week(published_at: datetime | None, today: date, new_days: int) -> bool:
+    """Published on one of the last ``new_days`` Nairobi days, today included ("New this week")."""
+    return published_at is not None and (today - nairobi_day(published_at)).days < new_days
+
+
 def trends(subjects: Iterable[Subject], decay: Decay, cfg: TrendConfig, now: datetime) -> dict[UUID, Trend]:
     """Every subject's trend at ``now``: score, z-score against its niche's baseline, Trending and New this week."""
     today = nairobi_day(now)
@@ -186,6 +191,6 @@ def trends(subjects: Iterable[Subject], decay: Decay, cfg: TrendConfig, now: dat
         base = baselines.get(subject.niche_id)
         z = None if base is None else round((score - base.mean) / base.sd, 3) + 0.0  # never -0.0
         trending = z is not None and z >= cfg.z_trending and score >= cfg.min_score and subject.actors >= cfg.min_actors
-        new = subject.published_at is not None and (today - nairobi_day(subject.published_at)).days < cfg.new_days
+        new = new_this_week(subject.published_at, today, cfg.new_days)
         out[subject.id] = Trend(round(score, 3), z, trending, new, subject.actors)
     return out

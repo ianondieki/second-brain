@@ -136,7 +136,13 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
         </Panel>
       ) : null}
 
-      <Section title={t("review.decisionHeading")} headingId="decision" description={t("review.decisionLead")}>
+      {/* The decision is what the card needs from the admin now: raised, as on a moderation case. */}
+      <Section
+        title={t("review.decisionHeading")}
+        headingId="decision"
+        description={t("review.decisionLead")}
+        className="rounded-panel border border-line bg-field p-5 shadow-card sm:p-6"
+      >
         <ClientStrings strings={strings}>
           <Decision
             problemId={candidate.id}

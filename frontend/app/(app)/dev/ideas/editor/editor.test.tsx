@@ -298,6 +298,47 @@ describe("the problem picker", () => {
     fireEvent.click(within(empty as HTMLElement).getByRole("button", { name: "Describe a new problem" }));
   });
 
+  it("shows linked problems as a plain list and opens the search only on request (the 150 KB budget)", async () => {
+    const linked = [
+      {
+        id: PROBLEM.id,
+        title: PROBLEM.title,
+        source: "developer" as const,
+        label: "Developer-reported",
+        niche: null,
+        seeded_example: false,
+        published_at: PROBLEM.published_at,
+      },
+    ];
+    const props = await renderPicker({ linked });
+    const region = screen.getByRole("region", { name: /Linked problems/ });
+    expect(within(region).getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    fireEvent.click(within(region).getByRole("button", { name: `Remove ${PROBLEM.title}` }));
+    expect(props.onLinked).toHaveBeenCalledWith([]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Link another problem" }));
+    });
+    const search = screen.getByRole("searchbox", { name: "Search problems" });
+    expect(document.activeElement).toBe(search);
+    expect(screen.queryByRole("button", { name: "Link another problem" })).toBeNull();
+  });
+
+  it("offers no further link once five problems are linked", async () => {
+    const linked = Array.from({ length: 5 }, (_, i) => ({
+      id: `p${i}`,
+      title: `Problem ${i}`,
+      source: "developer" as const,
+      label: "Developer-reported",
+      niche: null,
+      seeded_example: false,
+      published_at: PROBLEM.published_at,
+    }));
+    await renderPicker({ linked });
+    expect(screen.queryByRole("button", { name: "Link another problem" })).toBeNull();
+    expect(screen.getByText("You can link up to 5 problems.")).toBeTruthy();
+  });
+
   it("describes a new problem instead", async () => {
     const props = await renderPicker({ mode: "new", errors: { newTitle: "Give the problem a title." } });
     expect(screen.getByLabelText("Problem title").getAttribute("aria-invalid")).toBe("true");

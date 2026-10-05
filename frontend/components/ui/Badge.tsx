@@ -11,18 +11,20 @@ export type BadgeTone = "accent" | "warm" | "ok" | "error" | "neutral";
 export const badgeBase =
   "inline-flex items-start gap-1.5 text-sm font-semibold [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0";
 
+// P20 (D-55): a status is a soft pill in its tone's wash (words and icon in the tone, at least 5:1 on the wash), so a
+// list of rows reads in a rhythm; only the row's one "Your turn" / "Needs you" marker is a solid fill (saffron).
 const tones: Record<BadgeTone, string> = {
-  accent: "text-accent",
-  warm: "text-warm",
-  ok: "text-ok",
-  error: "text-error",
-  neutral: "text-ink-soft",
+  accent: "bg-accent-wash text-accent",
+  warm: "bg-warm-wash text-warm",
+  ok: "bg-ok-wash text-ok",
+  error: "bg-error-wash text-error",
+  neutral: "bg-paper text-ink-soft ring-1 ring-line ring-inset",
 };
 
-// Filled only for the one "Your turn" / "Needs you" marker of a row (the warm accent, D-52); rounded-full is kept for it and the avatar.
+// Filled only for the one "Your turn" / "Needs you" marker of a row: the solid tone, never a wash.
 const solidTones: Record<BadgeTone, string> = {
   accent: "bg-accent text-on-accent",
-  warm: "bg-warm text-on-warm",
+  warm: "bg-flourish text-on-warm",
   ok: "bg-ok text-on-ok",
   error: "bg-error text-on-accent",
   neutral: "bg-ink text-paper",
@@ -48,7 +50,7 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 export function Badge({ tone = "neutral", solid = false, icon, className, children, ...rest }: BadgeProps) {
   return (
     <span
-      className={cn(badgeBase, solid ? cn("rounded-full px-2.5 py-0.5", solidTones[tone]) : tones[tone], className)}
+      className={cn(badgeBase, "rounded-full px-2.5 py-0.5", solid ? solidTones[tone] : tones[tone], className)}
       {...rest}
     >
       {icon}

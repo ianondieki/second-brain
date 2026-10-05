@@ -3,7 +3,6 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { Chip } from "@/components/tracker/Chip";
 import { standaloneLinkClass } from "@/components/ui/Button";
-import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { Panel } from "@/components/ui/Panel";
 import { RowList } from "@/components/ui/RowList";
 
@@ -81,15 +80,15 @@ async function Body({
         <h2 id="scout-heading" className="text-lg text-ink">
           {t("scoutTitle")}
         </h2>
-        <ul className="mt-3 flex flex-col gap-4">
+        <ul className="mt-4 flex flex-col">
           {list.items.map((scout) => (
-            <li key={scout.id} data-scout={scout.id}>
+            <li key={scout.id} data-scout={scout.id} className="border-t border-line py-4 first:border-t-0 first:pt-0 last:pb-0">
               <ScoutSummary scout={scout} href={admin ? scoutHref(memberships, org.org_id, scout.id) : undefined} />
             </li>
           ))}
         </ul>
         {admin && room ? (
-          <p className="mt-1">
+          <p className="mt-3">
             <StandaloneLink href={scoutHref(memberships, org.org_id)}>
               {t("add")}
             </StandaloneLink>
@@ -97,7 +96,7 @@ async function Body({
         ) : null}
       </Panel>
 
-      <div className="mt-10">
+      <div className="mt-12">
         {matches.length === 0 ? (
           admin ? (
             <EmptyState
@@ -111,7 +110,7 @@ async function Body({
         ) : (
           <RowList aria-label={t("listLabel", { org: org.org_name })}>
             {matches.map((match) => (
-              <MatchRow key={match.id} match={match} href={matchHref(memberships, org.org_id, match.id)} />
+              <MatchRow key={match.id} match={match} href={matchHref(memberships, org.org_id, match.id)} org={org} />
             ))}
           </RowList>
         )}
@@ -124,25 +123,37 @@ async function ScoutSummary({ scout, href }: { scout: Scout; href?: string }) {
   const t = await getTranslations("scoutMatches");
   // Each "Change the scout" link names its scout by what it looks for (several scouts, several links).
   const niches = new Intl.ListFormat(await getLocale(), { type: "conjunction" }).format(scout.niches.map((n) => n.label));
+  const label = "text-sm text-ink-soft";
+  // One line of facts, as the proposal page's: what it looks for (the widest), how often, whether it runs; the link ends
+  // the row from 640 px.
   return (
-    <div className="flex flex-col gap-2">
-      <DescriptionList dense>
-        <Description label={t("looksFor")}>
-          <ul>
-            {scout.niches.map((niche) => (
-              <li key={niche.id} className="[overflow-wrap:anywhere]">
-                {niche.label}
-              </li>
-            ))}
-          </ul>
-        </Description>
-        <Description label={t("runs")}>{t(`frequency.${scout.frequency}`)}</Description>
-        <Description label={t("status")}>
-          <Chip kind={scout.paused ? "onHold" : "current"}>{scout.paused ? t("paused") : t("active")}</Chip>
-        </Description>
-      </DescriptionList>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
+      <dl className="grid flex-1 grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="col-span-2 flex min-w-0 flex-col gap-0.5 sm:col-span-1">
+          <dt className={label}>{t("looksFor")}</dt>
+          <dd className="font-semibold text-ink">
+            <ul>
+              {scout.niches.map((niche) => (
+                <li key={niche.id} className="[overflow-wrap:anywhere]">
+                  {niche.label}
+                </li>
+              ))}
+            </ul>
+          </dd>
+        </div>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <dt className={label}>{t("runs")}</dt>
+          <dd className="font-semibold text-ink">{t(`frequency.${scout.frequency}`)}</dd>
+        </div>
+        <div className="flex min-w-0 flex-col gap-1">
+          <dt className={label}>{t("status")}</dt>
+          <dd>
+            <Chip kind={scout.paused ? "onHold" : "current"}>{scout.paused ? t("paused") : t("active")}</Chip>
+          </dd>
+        </div>
+      </dl>
       {href ? (
-        <p>
+        <p className="shrink-0">
           <Link href={href} className={standaloneLinkClass} aria-label={t("changeNamed", { niches })}>
             {t("change")}
           </Link>

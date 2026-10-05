@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, Suspense, use, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { cloneElement, Component, Suspense, use, useEffect, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 
@@ -25,7 +25,6 @@ import {
   MATURITIES,
   MATURITY_KEY,
   MAX_SUMMARY_WORDS,
-  publishChecklist,
   wordCount,
   type Attachment,
   type AttestationText,
@@ -130,6 +129,9 @@ export interface EditorProps {
   lastOverlap?: ReactNode;
 }
 
+/** The screen's publish checklist (../checklist publishChecklist), handed over by the review step. */
+type Checklist = (state: EditorState) => FieldIssue[];
+
 type Save =
   | { kind: "clean" }
   | { kind: "dirty" }
@@ -181,7 +183,9 @@ export function Editor(props: EditorProps) {
   const [attachments, setAttachments] = useState<Attachment[]>(props.attachments);
   const [save, setSave] = useState<Save>({ kind: "clean" });
   const [issues, setIssues] = useState<FieldIssue[]>([]);
-  const [showRequired, setShowRequired] = useState(false);
+  // From the first publish attempt on, the fields show what is missing too: the review step hands over its checklist
+  // (its code came with that step, not with the editor's first load).
+  const [required, setRequired] = useState<{ check: Checklist } | null>(null);
   const [created, setCreated] = useState(props.id !== null);
   const [publishing, setPublishing] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -369,10 +373,10 @@ export function Editor(props: EditorProps) {
 
   // --- issues shown by the fields ---------------------------------------------------------------------------------
 
-  const checklist = publishChecklist(state);
+  const checklist = required ? required.check(state) : [];
   const shown: FieldIssue[] = [
     ...issues,
-    ...(showRequired ? checklist.filter((c) => !issues.some((i) => i.field === c.field)) : []),
+    ...checklist.filter((c) => !issues.some((i) => i.field === c.field)),
   ];
   /** Every finding for the field, one per line (the sanitiser can find a link and a phone number at once). */
   const errorFor = (field: FieldName) => {
@@ -414,7 +418,7 @@ export function Editor(props: EditorProps) {
   return (
     <>
     {/* "Edit idea" from the moment the first save made the draft. */}
-    <h1 className="mb-6 text-xl [overflow-wrap:anywhere] text-ink lg:text-2xl">
+    <h1 className="mb-6 text-2xl [overflow-wrap:anywhere] text-ink lg:text-3xl">
       {created ? t("pageTitleEdit") : t("pageTitleNew")}
     </h1>
     {/* Disabled until React runs: anything typed into the server-rendered fields before then would be lost (slow
@@ -492,13 +496,7 @@ export function Editor(props: EditorProps) {
           </Card>
 
           <Card as="section" variant="flat" aria-labelledby="teaser-title" className="flex flex-col gap-6">
-            <div>
-              <h3 id="teaser-title" className="flex items-center gap-2 font-semibold text-ink">
-                <EyeIcon className="size-5 shrink-0 text-accent" />
-                {f("teaserTitle")}
-              </h3>
-              <p className="mt-1 text-sm text-ink-soft">{t("teaserHint")}</p>
-            </div>
+            <CardHead id="teaser-title" icon={<EyeIcon />} title={f("teaserTitle")} hint={t("teaserHint")} />
             <TextAreaField
               id="idea-problem-statement"
               label={f("problemStatement")}
@@ -578,14 +576,8 @@ export function Editor(props: EditorProps) {
           </Card>
 
           <Card as="section" variant="flat" aria-labelledby="checks-title" className="flex flex-col gap-4">
-            <div>
-              <h3 id="checks-title" className="flex items-center gap-2 font-semibold text-ink">
-                {/* A magnifier, not a tick: before any check has run nothing has "passed". */}
-                <LookIcon className="size-5 shrink-0 text-accent" data-icon="look" />
-                {checksT("title")}
-              </h3>
-              <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{checksT("hint")}</p>
-            </div>
+            {/* A magnifier, not a tick: before any check has run nothing has "passed". */}
+            <CardHead id="checks-title" icon={<LookIcon data-icon="look" />} title={checksT("title")} hint={checksT("hint")} />
             {checksPressed ? (
               <PanelBoundary
                 onError={() => {
@@ -615,13 +607,7 @@ export function Editor(props: EditorProps) {
           </Card>
 
           <Card as="section" variant="flat" aria-labelledby="assistant-title" className="flex flex-col gap-4">
-            <div>
-              <h3 id="assistant-title" className="flex items-center gap-2 font-semibold text-ink">
-                <SparkIcon className="size-5 shrink-0 text-accent" />
-                {t("assistantTitle")}
-              </h3>
-              <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{t("assistantHint")}</p>
-            </div>
+            <CardHead id="assistant-title" icon={<SparkIcon />} title={t("assistantTitle")} hint={t("assistantHint")} />
             {assistantOpen ? (
               <PanelBoundary
                 onError={() => {
@@ -686,10 +672,9 @@ export function Editor(props: EditorProps) {
             state={state}
             niches={props.niches}
             attachments={attachments.length}
-            checklist={checklist}
             issues={issues}
             onIssues={setIssues}
-            onShowRequired={() => setShowRequired(true)}
+            onShowRequired={(check) => setRequired({ check })}
             initialText={props.attestations}
             saveAll={saveDraft}
             getId={() => idRef.current}
@@ -714,6 +699,19 @@ export function Editor(props: EditorProps) {
       )}
     </fieldset>
     </>
+  );
+}
+
+/** A step-one card's heading: its icon, the title and a one-line hint. */
+function CardHead({ id, icon, title, hint }: { id: string; icon: ReactElement<{ className?: string }>; title: string; hint: string }) {
+  return (
+    <div>
+      <h3 id={id} className="flex items-center gap-2 font-semibold text-ink">
+        {cloneElement(icon, { className: "size-5 shrink-0 text-accent" })}
+        {title}
+      </h3>
+      <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{hint}</p>
+    </div>
   );
 }
 

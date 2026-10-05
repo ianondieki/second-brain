@@ -1,4 +1,5 @@
-import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Badge, badgeBase, type BadgeTone } from "@/components/ui/Badge";
+import { cn } from "@/components/ui/cn";
 import { CheckIcon, InfoIcon, ListedIcon } from "@/components/ui/icons";
 
 import type { OrgCard } from "./filters";
@@ -17,6 +18,16 @@ const LOOK = {
  */
 export function VerificationBadge({ badge, className }: { badge: OrgCard["badge"]; className?: string }) {
   const { Icon, tone } = LOOK[badge.level];
+  // E0's sentence is long ("Listed from public information · not on the platform · not affiliated"): as a pill it
+  // wraps into a ragged box, so it is the same mark and words without the fill, quieter than a verified level (P20).
+  if (badge.level === "e0") {
+    return (
+      <span data-badge="e0" className={cn(badgeBase, "font-medium text-ink-soft", className)}>
+        <Icon />
+        <span className="min-w-0">{badge.text}</span>
+      </span>
+    );
+  }
   return (
     <Badge data-badge={badge.level} tone={tone} icon={<Icon />} className={className}>
       {badge.text}

@@ -4,28 +4,18 @@ import { cn } from "./cn";
 
 export type ButtonVariant = "primary" | "secondary" | "danger" | "link";
 
-const base =
-  // py-2 and text-center: a label that wraps at 360 px ("Start a proposal from this problem") keeps breathing room and
-  // stays centred; a one-line button is still 48 px (min-h-12).
-  "inline-flex min-h-12 items-center justify-center gap-2 rounded-control py-2 text-center text-base font-semibold " +
-  "transition-colors duration-150 ease-out aria-disabled:cursor-progress";
-
+// The button styles live in app/globals.css (@layer components: .btn and its variants), not in class strings here:
+// every client component that renders a button would otherwise ship the same long string in its bundle (the 150 KB
+// budget, D-28). Utilities a caller passes (w-auto, px-4, shrink-0) still win: Tailwind's utilities layer comes later.
 const variants: Record<ButtonVariant, string> = {
   // The one primary action per screen (docs/spec/07 AC-UX-2): full width at 360 px, natural width from 640 px.
-  primary:
-    "w-full px-6 sm:w-auto bg-accent text-on-accent hover:bg-accent-strong " +
-    "aria-disabled:bg-accent-strong",
-  secondary: "px-5 border border-ink-soft bg-transparent text-ink hover:bg-accent-wash",
+  primary: "btn btn-primary",
+  secondary: "btn btn-secondary",
   // Destructive or ending steps (delete, withdraw, decline): error-coloured words and border, never filled, and never
   // the screen's primary action. Status is still carried by the words, not the colour.
-  danger: "px-5 border border-error bg-transparent text-error hover:bg-error-wash",
-  link:
-    "min-h-11 min-w-11 px-0 font-medium text-accent underline decoration-1 hover:decoration-2 " +
-    "hover:text-accent-strong " +
-    // Busy: quieter but still readable (--ink-soft, 6.8:1 on paper) with a dotted underline, and hover changes
-    // nothing, so a press that would be ignored does not look available.
-    "aria-disabled:text-ink-soft aria-disabled:decoration-dotted " +
-    "aria-disabled:hover:text-ink-soft aria-disabled:hover:decoration-1",
+  danger: "btn btn-danger",
+  // Busy: quieter but still readable with a dotted underline, and hover changes nothing (globals.css).
+  link: "btn btn-link",
 };
 
 /**
@@ -51,7 +41,7 @@ export const standaloneLinkClass =
 export const titleLinkClass = "underline decoration-line decoration-1 underline-offset-4 hover:decoration-accent";
 
 export function buttonClass(variant: ButtonVariant, className?: string) {
-  return cn(base, variants[variant], className);
+  return cn(variants[variant], className);
 }
 
 /** `data-primary` marks the screen's single primary action; Playwright asserts at most one per page. */

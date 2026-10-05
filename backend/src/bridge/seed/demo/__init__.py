@@ -19,7 +19,9 @@ staff admin (P11) starts one research run per saved-excerpt niche and approves i
 (``bridge.seed.demo.research``): the cards come from a fixed answer written in code through the real checks and
 approval, and are labelled seeded examples, never live AI results. Then every demo subject gets its side's free
 plan (P14, ``bridge.seed.demo.subscriptions``), and Telco A gets a scout whose first scan matches Brian's untagged
-fifth proposal (P10, ``bridge.seed.demo.scouts``).
+fifth proposal (P10, ``bridge.seed.demo.scouts``). Last come P21's three beats (``bridge.seed.demo.follow_ups``), each
+through the API: SACCO B's owner and Amina write three messages on the thread of her engagement with SACCO B, Telco A's
+reviewer puts the scout's match on its shortlist, and Amina saves a Discover search of a niche she likes.
 
 Idempotent, and safe on a demo that was used (``make demo`` runs it on every start): every step looks for what it
 would create (by address, organisation name, a proposal's first title) and skips what exists, so running it twice
@@ -58,6 +60,7 @@ from bridge.seed.demo.data import (
     all_accounts,
 )
 from bridge.seed.demo.engagements import drive
+from bridge.seed.demo.follow_ups import ensure_saved_search, ensure_shortlisted, ensure_thread
 from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
 from bridge.seed.demo.queues import seed_queues
 from bridge.seed.demo.research import ensure_staff, seed_research_card, seeded_niches
@@ -98,7 +101,10 @@ __all__ = [
 async def seed_demo(
     settings: Settings, *, owner_engine: AsyncEngine, app_engine: AsyncEngine, runtime: DemoRuntime | None = None
 ) -> DemoReport:
-    """Load the demo dataset (idempotent). ``owner_engine`` logs in as bridge_owner, ``app_engine`` as bridge_app."""
+    """Load the demo dataset (idempotent). ``owner_engine`` logs in as bridge_owner, ``app_engine`` as bridge_app.
+
+    The steps run in the order the module docstring tells, ending with P21's beats: the message thread on Amina's
+    engagement with SACCO B, Telco A's shortlist entry (after its scout, whose match it is) and Amina's saved search."""
     ensure_demo_allowed(settings)
     runtime = runtime or DemoRuntime.from_settings(settings)
     report = DemoReport()
@@ -146,6 +152,9 @@ async def seed_demo(
         mail = runtime.email_provider
         await step("Telco A scout", ensure_scout(owner_engine, actors, factory, settings, mail, niches, report))
         await step("staff queues", seed_queues(owner_engine, actors, factory, niches, report))
+        await step("message thread", ensure_thread(owner_engine, actors, report))
+        await step("Telco A shortlist", ensure_shortlisted(owner_engine, actors, report))
+        await step("saved search", ensure_saved_search(owner_engine, actors, report))
     return report
 
 

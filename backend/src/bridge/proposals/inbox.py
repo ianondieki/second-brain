@@ -5,7 +5,8 @@ Only ``delivered`` tags of the organisation the request is scoped to are read (t
 ``app.org_id``; Row-Level Security admits members to delivered tags only). Held tags stay invisible: an E1
 organisation sees only how many wait for its verification (``app_held_tag_count``, AC-PROP-1/a). Nothing names
 another organisation a proposal was pitched to (AC-REPO-6/a): an item is the tag, the engagement and the teaser.
-A proposal hidden or held after it was pitched drops out of the list (its teaser is no longer readable).
+A proposal hidden or held after it was pitched drops out of the list (its teaser is no longer readable). Each item
+says whether the proposal is on the organisation's shortlist (``shortlisted``, the Inbox's star; P21 track B).
 """
 
 from __future__ import annotations
@@ -24,6 +25,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.models.enums import EngagementState, OrgVerification
 from bridge.proposals.serializers import TeaserItem, teaser_items
+from bridge.proposals.shortlist import starred
+
+
+def _without_default(schema: dict[str, Any]) -> None:
+    """Leave a field's default out of the OpenAPI document: always sent, it stays optional in the generated web types,
+    so a client reads an older API as "not sent" (as ``matching.schemas``)."""
+    schema.pop("default", None)
 
 
 class InboxEngagement(BaseModel):
@@ -37,6 +45,11 @@ class InboxItem(BaseModel):
     pitched_at: datetime
     engagement: InboxEngagement | None = Field(description="Null until the engagement is opened")
     proposal: TeaserItem
+    shortlisted: bool = Field(
+        default=False,
+        description="Whether the proposal is on this organisation's shortlist (the Inbox's star)",
+        json_schema_extra=_without_default,
+    )
 
 
 class InboxPage(BaseModel):
@@ -100,9 +113,14 @@ async def inbox(db: AsyncSession, *, org_id: UUID, cursor: Cursor | None, limit:
     more = len(rows) > limit
     rows = rows[:limit]
     teasers = await teaser_items(db, [row.proposal_id for row in rows])
+    stars = await starred(db, org_id, list(teasers))
     items = [
         InboxItem(
-            tag_id=row.id, pitched_at=row.created_at, engagement=_engagement(row), proposal=teasers[row.proposal_id]
+            tag_id=row.id,
+            pitched_at=row.created_at,
+            engagement=_engagement(row),
+            proposal=teasers[row.proposal_id],
+            shortlisted=row.proposal_id in stars,
         )
         for row in rows
         if row.proposal_id in teasers

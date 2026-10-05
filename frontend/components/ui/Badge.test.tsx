@@ -32,9 +32,11 @@ describe("Badge", () => {
     expect(badge.textContent).toBe("Published");
   });
 
-  it("is filled and fully rounded only when solid (the one 'Your turn' marker)", () => {
+  it("is a soft pill in its tone's wash, and a solid fill only when solid (the one 'Your turn' marker)", () => {
     const { container, rerender } = render(<Badge tone="accent">Your turn</Badge>);
-    expect(container.firstElementChild!.className).not.toMatch(/\bbg-|rounded-full/);
+    const soft = container.firstElementChild!.className.split(" ");
+    expect(soft).toEqual(expect.arrayContaining(["bg-accent-wash", "text-accent", "rounded-full"]));
+    expect(soft).not.toContain("bg-accent");
     rerender(
       <Badge tone="accent" solid>
         Your turn

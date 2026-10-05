@@ -125,7 +125,7 @@ export async function SavedExcerpts({
         >
           <path d="m7.5 4.75 5.25 5.25-5.25 5.25" />
         </svg>
-        <h2 className="text-lg text-ink">{t("sources.summary", { count: total })}</h2>
+        <h2 className="text-xl text-ink">{t("sources.summary", { count: total })}</h2>
       </summary>
       <p className="mt-3 max-w-[60ch] text-ink-soft">{t("sources.lead", { date: formatDate(locale, asOf) })}</p>
       <div className="mt-6 flex flex-col gap-8">

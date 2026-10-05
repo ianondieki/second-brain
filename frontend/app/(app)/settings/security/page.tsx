@@ -35,34 +35,37 @@ export default async function SecurityPage() {
   const tNav = await getTranslations("settingsNav");
   return (
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
-      <PageHeader title={tNav("label")} back={{ href: home, label: t("back") }} />
-      <SettingsTabs current="security" />
-      {/* Server-formatted strings, not next-intl's client runtime (about 3.5 KB of the budget; P16-D). */}
-      <ClientStrings
-        strings={{
-          ...(await clientStrings(["security", "password", "fields", "validation", "errors"])),
-          ...(await pickedStrings("signup", ["passwordHint"])),
-        }}
-      >
-        <PasswordStateProvider initial={me.user.password_set}>
-          <div className="mt-10 flex max-w-3xl flex-col gap-6">
-            <Card variant="flat" className="p-5 sm:p-6">
-              <Section title={t("title")} headingId="two-step-heading" description={t("lead")} headingStyle="card">
-                <SecuritySettings
-                  enrolled={me.mfa.enrolled}
-                  required={me.mfa.required}
-                  homeHref={home}
-                  email={me.user.email}
-                  productName={tApp("name")}
-                />
-              </Section>
-            </Card>
-            <Card variant="flat" className="p-5 sm:p-6">
-              <PasswordSettings email={me.user.email} />
-            </Card>
-          </div>
-        </PasswordStateProvider>
-      </ClientStrings>
+      {/* One 48 rem column: the tab strip ends where the cards end. */}
+      <div className="max-w-3xl">
+        <PageHeader title={tNav("label")} back={{ href: home, label: t("back") }} />
+        <SettingsTabs current="security" />
+        {/* Server-formatted strings, not next-intl's client runtime (about 3.5 KB of the budget; P16-D). */}
+        <ClientStrings
+          strings={{
+            ...(await clientStrings(["security", "password", "fields", "validation", "errors"])),
+            ...(await pickedStrings("signup", ["passwordHint"])),
+          }}
+        >
+          <PasswordStateProvider initial={me.user.password_set}>
+            <div className="flex flex-col gap-6">
+              <Card variant="flat" className="p-5 sm:p-6">
+                <Section title={t("title")} headingId="two-step-heading" description={t("lead")} headingStyle="card">
+                  <SecuritySettings
+                    enrolled={me.mfa.enrolled}
+                    required={me.mfa.required}
+                    homeHref={home}
+                    email={me.user.email}
+                    productName={tApp("name")}
+                  />
+                </Section>
+              </Card>
+              <Card variant="flat" className="p-5 sm:p-6">
+                <PasswordSettings email={me.user.email} />
+              </Card>
+            </div>
+          </PasswordStateProvider>
+        </ClientStrings>
+      </div>
     </SignedInShell>
   );
 }

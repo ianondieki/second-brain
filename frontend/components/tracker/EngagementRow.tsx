@@ -5,6 +5,7 @@ import { Row } from "@/components/ui/RowList";
 
 import { Chip, ChipMark } from "./Chip";
 import { awaitsMe, stageChip, type Party, type Summary } from "./model";
+import { UnreadLine } from "./UnreadLine";
 import { DueLine } from "./When";
 
 /**
@@ -53,6 +54,7 @@ export function EngagementRow({
       }
     >
       <DueLine item={item} mine={mine} />
+      <UnreadLine count={item.unread_messages} />
     </Row>
   );
 }

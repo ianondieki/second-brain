@@ -23,7 +23,7 @@ export interface SectionProps extends Omit<HTMLAttributes<HTMLElement>, "title">
 }
 
 /**
- * A titled part of a page: h2 at 20 px, an optional one-line description and an optional secondary link beside the
+ * A titled part of a page: h2 at 24 px in the display face, an optional one-line description and an optional secondary link beside the
  * heading, then its content 16 px below. No rule under the heading: the rule belongs to the rows of a list
  * (docs/platform/design/p16-design-system.md, Sections).
  */
@@ -48,7 +48,7 @@ export function Section({
       tabIndex={focusable ? -1 : undefined}
       className={cn(
         "text-ink sm:col-start-1 sm:row-start-1",
-        headingStyle === "card" ? cardHeadingClass : headingLevel === 3 ? "text-base" : "text-lg",
+        headingStyle === "card" ? cardHeadingClass : headingLevel === 3 ? "text-lg" : "text-xl",
         focusable && "focus:outline-none",
       )}
     >

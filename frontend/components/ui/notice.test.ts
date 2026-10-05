@@ -18,7 +18,7 @@ describe("notice tones", () => {
   });
 
   it("draws the box the same way for every tone: a 1 px border, rounded, the icon beside the words", () => {
-    expect(noticeBox.split(" ")).toEqual(expect.arrayContaining(["flex", "items-start", "border", "rounded-control"]));
+    expect(noticeBox.split(" ")).toEqual(expect.arrayContaining(["flex", "items-start", "border", "rounded-panel"]));
     expect(noticeBox).not.toMatch(/\bborder-l\b/);
   });
 

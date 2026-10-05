@@ -1,6 +1,7 @@
 import { apiErrorCode } from "@/lib/api/error-code";
 
-import { isFieldName, type FieldIssue } from "./ideas";
+import { isFieldName } from "./checklist";
+import type { FieldIssue } from "./ideas";
 
 // What the editor's calls can answer, as the screen words it (REQ-PROP-01). The API's `detail.message` is never shown:
 // every case below has its own [[COPY-REVIEW]] string under `ideaEditor.*`, so it can be translated and reviewed.

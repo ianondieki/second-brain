@@ -10,12 +10,12 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 import "./globals.css";
 
-// Self-hosted faces (public/fonts/LICENCES.md; D-52; the @font-face rules in globals.css): the two faces that paint
+// Self-hosted faces (public/fonts/LICENCES.md; D-55; the @font-face rules in globals.css): the two faces that paint
 // above the fold are preloaded at high priority, ahead of the async scripts, so the headline swaps in early (mobile
-// LCP, AC-UX-3). The display face is instanced to the one weight the headings use (500) over optical sizes 18–72
-// (42 KB, from 132); the text face to the weights in use (400–600; 35 KB, from 45); the mono face (fingerprints and
-// codes, below the fold) is not preloaded.
-const PRELOADED_FONTS = ["/fonts/newsreader-latin-v2.woff2", "/fonts/ibm-plex-sans-latin-v2.woff2"] as const;
+// LCP, AC-UX-3). The display face (Bricolage Grotesque) is instanced to one width and optical size over weights
+// 500–800 (34 KB, from 132); the text face (Hanken Grotesk) to the weights in use (400–700; 20 KB); the mono face
+// (fingerprints and codes, below the fold) is not preloaded.
+const PRELOADED_FONTS = ["/fonts/bricolage-grotesque-v1.woff2", "/fonts/hanken-grotesk-v1.woff2"] as const;
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("app");

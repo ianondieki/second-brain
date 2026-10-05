@@ -1,6 +1,5 @@
 import { useLocale, useTranslations } from "next-intl";
 
-import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { Section } from "@/components/ui/Section";
 
 import type { TeaserCard } from "../../data";
@@ -24,34 +23,55 @@ export function TeaserDetails({ card }: { card: TeaserCard }) {
     { key: "summary", text: teaser.summary },
     { key: "impact", text: teaser.impact_claims },
   ] as const;
-  // Sections only (no outer spacing): the page places them in its own column with its own gaps.
+  // The facts first, as one flat strip under the title (what it is, what the developer wants, who and when, the
+  // certificate), then the teaser's own words as plain reading sections. The page places them with its own gaps.
+  const fact = "flex min-w-0 flex-col gap-0.5";
+  const label = "text-sm text-ink-soft";
+  const value = "font-semibold text-ink [overflow-wrap:anywhere]";
   return (
     <>
+      <section aria-labelledby="teaser-details" data-teaser-facts="">
+        <h2 id="teaser-details" className="sr-only">
+          {t("details")}
+        </h2>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-5 rounded-panel border border-line bg-field p-5 sm:grid-cols-3 sm:p-6">
+          <div className={fact}>
+            <dt className={label}>{t("maturityLabel")}</dt>
+            <dd className={value}>{teaser.maturity ? tf(MATURITY_KEY[teaser.maturity]) : ti("notStated")}</dd>
+          </div>
+          <div className={fact}>
+            <dt className={label}>{t("askLabel")}</dt>
+            <dd className={value}>{teaser.ask ? ti(`ask.${teaser.ask}`) : ti("notStated")}</dd>
+          </div>
+          <div className={fact}>
+            <dt className={label}>{t("from")}</dt>
+            <dd className={value}>{card.owner_handle}</dd>
+          </div>
+          <div className={fact}>
+            <dt className={label}>{t("registered")}</dt>
+            <dd className={value}>
+              <time dateTime={card.registered_at} className="tabular-nums">
+                {formatDay(locale, card.registered_at)}
+              </time>
+            </dd>
+          </div>
+          <div className={`${fact} col-span-2`}>
+            <dt className={label}>{t("certificate")}</dt>
+            <dd>
+              <StandaloneLink href={`/verify/${encodeURIComponent(card.cert_id)}`} className="-my-2.5 [overflow-wrap:anywhere]">
+                {t("certificateLink", { id: card.cert_id })}
+              </StandaloneLink>
+            </dd>
+          </div>
+        </dl>
+      </section>
       {sections.map(({ key, text }) =>
         text ? (
           <Section key={key} title={t(key)} headingId={`teaser-${key}`}>
-            <p className="max-w-[64ch] whitespace-pre-line [overflow-wrap:anywhere] text-ink">{text}</p>
+            <p className="max-w-[64ch] whitespace-pre-line lg:text-[1.0625rem] [overflow-wrap:anywhere] text-ink">{text}</p>
           </Section>
         ) : null,
       )}
-      <Section title={t("details")} headingId="teaser-details">
-        <DescriptionList>
-          <Description label={t("maturityLabel")}>
-            {teaser.maturity ? tf(MATURITY_KEY[teaser.maturity]) : ti("notStated")}
-          </Description>
-          <Description label={t("askLabel")}>{teaser.ask ? ti(`ask.${teaser.ask}`) : ti("notStated")}</Description>
-          <Description label={t("from")}>{card.owner_handle}</Description>
-          <Description label={t("registered")}>
-            <time dateTime={card.registered_at}>{formatDay(locale, card.registered_at)}</time>
-          </Description>
-          <Description label={t("certificate")}>
-            <StandaloneLink
-              href={`/verify/${encodeURIComponent(card.cert_id)}`} className="-my-2.5">
-              {t("certificateLink", { id: card.cert_id })}
-            </StandaloneLink>
-          </Description>
-        </DescriptionList>
-      </Section>
     </>
   );
 }

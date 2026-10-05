@@ -4,11 +4,14 @@ import { buttonClass } from "@/components/ui/Button";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/SelectField";
 import { TabNav } from "@/components/ui/TabNav";
+import { TextField } from "@/components/ui/TextField";
 
 import {
   DISCOVER_PATH,
   discoverHref,
   isNarrowed,
+  MAX_WORDS,
+  takesWords,
   VIEWS,
   type CountyRef,
   type DiscoverQuery,
@@ -20,13 +23,19 @@ import { StandaloneLink } from "@/components/ui/StandaloneLink";
  * Discover's four lists as link tabs (TabNav: one at a time; the address holds the choice, so each list is
  * server-rendered and shareable).
  */
-export function ViewSwitch({ query }: { query: DiscoverQuery }) {
+export function ViewSwitch({ query, className }: { query: DiscoverQuery; className?: string }) {
   const t = useTranslations("discover");
   return (
     <TabNav
+      className={className}
       label={t("viewsLabel")}
       current={query.view}
-      items={VIEWS.map((view) => ({ key: view, label: t(`views.${view}`), href: discoverHref({ ...query, view }) }))}
+      // The words travel to every list that takes them (not the gap's).
+      items={VIEWS.map((view) => ({
+        key: view,
+        label: t(`views.${view}`),
+        href: discoverHref({ ...query, view, words: takesWords(view) ? query.words : undefined }),
+      }))}
     />
   );
 }
@@ -40,15 +49,37 @@ export interface DiscoverFiltersProps {
 }
 
 /**
- * Niche and county as a plain GET form (works before JavaScript loads; the list stays on the chosen view). The
- * selects sit in a disclosure that starts open when one is set. "Show" is secondary: Discover's work is on the cards.
+ * Words, niche and county as a plain GET form (works before JavaScript loads; the list stays on the chosen view). The
+ * words box is always in view on the lists that take it (P21); the selects sit in a disclosure that starts open when
+ * one is set. "Show" is secondary: Discover's work is on the cards.
  */
 export function DiscoverFilters({ query, niches, counties, showClear = true }: DiscoverFiltersProps) {
   const t = useTranslations("discover");
   const active = [query.niche, query.county].filter(Boolean).length;
+  const words = takesWords(query.view);
+  const submit = (
+    <button type="submit" className={buttonClass("secondary", "sm:mb-0")}>
+      {t("submit")}
+    </button>
+  );
   return (
     <form method="get" action={DISCOVER_PATH} role="search" aria-label={t("filters")}>
       {query.view !== "problems" ? <input type="hidden" name="view" value={query.view} /> : null}
+      {words ? (
+        <div className="grid grid-cols-1 gap-3 pt-3 pb-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <TextField
+            id="discover-words"
+            name="words"
+            type="search"
+            label={t(query.view === "briefs" ? "wordsLabelBriefs" : "wordsLabel")}
+            defaultValue={query.words ?? ""}
+            maxLength={MAX_WORDS}
+            autoComplete="off"
+            enterKeyHint="search"
+          />
+          {submit}
+        </div>
+      ) : null}
       <details open={active > 0} className="group">
         <summary
           className={
@@ -59,7 +90,13 @@ export function DiscoverFilters({ query, niches, counties, showClear = true }: D
           {active > 0 ? t("filtersChosen", { count: active }) : t("filters")}
           <ChevronDownIcon className="size-5 transition-transform duration-150 group-open:rotate-180 motion-reduce:transition-none" />
         </summary>
-        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <div
+          className={
+            words
+              ? "mt-1 mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-end"
+              : "mt-1 mb-4 grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
+          }
+        >
           <SelectField id="discover-niche" name="niche" label={t("nicheLabel")} defaultValue={query.niche ?? ""}>
             <option value="">{t("nicheAll")}</option>
             {niches.map((parent) =>
@@ -87,12 +124,10 @@ export function DiscoverFilters({ query, niches, counties, showClear = true }: D
               </option>
             ))}
           </SelectField>
-          <button type="submit" className={buttonClass("secondary", "sm:mb-0")}>
-            {t("submit")}
-          </button>
+          {words ? null : submit}
         </div>
         {showClear && isNarrowed(query) ? (
-          <p className="mt-2">
+          <p className="-mt-1 mb-3">
             <StandaloneLink href={discoverHref({ view: query.view })}>
               {t("clear")}
             </StandaloneLink>

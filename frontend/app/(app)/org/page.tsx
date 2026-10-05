@@ -152,7 +152,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
   return (
     <>
       <section aria-label={t("stats.label")} data-home="stats">
-        <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 [&>li>*]:h-full">
           <li>
             <StatTile
               data-stat="inbox"
@@ -189,7 +189,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="briefs"
               label={t("stats.briefs")}
-              value={briefs === null ? unknown.value : t("stats.briefsValue", { count: briefs.open })}
+              value={briefs === null ? unknown.value : briefs.open}
               meta={
                 briefs === null
                   ? unknown.meta
@@ -197,7 +197,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
                     ? t("stats.briefsMetaReview", { count: briefs.inReview })
                     : briefs.open > 0
                       ? t("stats.briefsMetaProposals", { count: briefs.proposals })
-                      : undefined
+                      : t("stats.briefsMetaNone")
               }
               href={problemsHref(memberships, org.org_id)}
             />
