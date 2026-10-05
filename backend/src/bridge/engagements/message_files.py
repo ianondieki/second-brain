@@ -397,7 +397,9 @@ async def purge_stale_uploads(factory: async_sessionmaker[AsyncSession], store: 
                 failed += 1
         if failed:
             await db.rollback()
-            log.warning("message_attachment.purge_rolled_back", failed=failed, count=len(keys))
+            # A store that keeps refusing a key holds every later purge back too: an operator's fault to clear, so
+            # it is logged as an error each hour (counts only) rather than left as a warning (P21 card, residual).
+            log.error("message_attachment.purge_rolled_back", failed=failed, count=len(keys))
             return 0
         await db.commit()
     log.info("message_attachment.purged", count=len(keys))
