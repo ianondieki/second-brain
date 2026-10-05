@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any, Final
+from typing import Any, Final, Protocol
 from uuid import UUID
 
 from sqlalchemy import text
@@ -94,8 +94,19 @@ def _org(name: str) -> DemoOrg:
     return next(org for org in ORGS if org.legal_name == name)
 
 
-def _email(plan: DemoEngagement, who: str) -> str:
-    """The address of the person who acts as ``who`` in ``plan``: the developer, or the fixture's seat."""
+class OnEngagement(Protocol):
+    """A plan naming one engagement by its proposal key and organisation (``DemoEngagement``, ``DemoThread``)."""
+
+    @property
+    def proposal(self) -> str: ...
+
+    @property
+    def org(self) -> str: ...
+
+
+def party_email(plan: OnEngagement, who: str) -> str:
+    """The address of the person who acts as ``who`` (``DEVELOPER`` or an ``OrgRole`` value) on ``plan``'s engagement:
+    the proposal's owner, or the fixture's first seat with that role (its owner first)."""
     if who == DEVELOPER:
         return next(p.owner for p in PROPOSALS if p.key == plan.proposal)
     org = _org(plan.org)
@@ -136,7 +147,7 @@ class Driver:
                 )
                 holidays = frozenset(r[0] for r in rows)
             return {
-                "contact_user_id": str(self.report.users[_email(self.plan, OrgRole.OWNER)]),
+                "contact_user_id": str(self.report.users[party_email(self.plan, OrgRole.OWNER)]),
                 "contact_channel": "email",
                 "contact_by": str(add_business_days(today, CONTACT_BY_BD, holidays)),
             }
@@ -172,16 +183,16 @@ class Driver:
         if not deals and steps and all(step.command in DEAL_COMMANDS for step in steps):
             return None
         if state == S.IN_IMPLEMENTATION:
-            developer = await self.actors.get(_email(self.plan, DEVELOPER))
+            developer = await self.actors.get(party_email(self.plan, DEVELOPER))
             agreements = (await self.detail(developer))["agreements"]
             signed = next(a for a in agreements if a["status"] == "signed")
             for milestone in signed["milestones"]:
                 if milestone["state"] in MILESTONE_STEPS:
                     who, segment = MILESTONE_STEPS[milestone["state"]]
-                    return await self.actors.get(_email(self.plan, who)), f"milestones/{milestone['id']}/{segment}"
+                    return await self.actors.get(party_email(self.plan, who)), f"milestones/{milestone['id']}/{segment}"
         offered: list[str] = []
         for step in steps:
-            actor = await self.actors.get(_email(self.plan, step.who))
+            actor = await self.actors.get(party_email(self.plan, step.who))
             actions = (await self.detail(actor))["actions"]
             if step.command.replace("-", "_") in actions:
                 return actor, step.command
