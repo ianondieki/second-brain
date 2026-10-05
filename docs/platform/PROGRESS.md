@@ -520,7 +520,9 @@ D-42 findings. `pr.yml` run 328 on `a1467b1`: Playwright with the clock scenario
 (Windows and Ubuntu) and hygiene green; the backend job (full suite, coverage gate) hit its 35-minute limit twice on 2026-10-05, at about twice P20's
 per-file times; a comparison run on the integration branch (P19-era code, run 329) took 32.5 minutes for 4,570 tests the same hour
 (failing only `test_expiry.py`'s holiday case, which P20 fixed), so the runners were slow that day, not P21's code (locally the same files run at P20's speed with coverage on, and the
-full backend suite passes, 4,764); a re-run on normal runners is the open item; scanners red on `npm audit` only (D-56); the informational
+full backend suite passes, 4,764); two more runs on the merged tree the same day (332 on the push, 333 dispatched 17:35 UTC) timed out the same way, the
+common files 2.1× P20's times; a re-run on normal runners, or a sharded backend job, is the open item (the owner's
+call, below); scanners red on `npm audit` only (D-56); the informational
 no-skip-list legacy job red as before. The first run (326) found what local runs had not: mypy over `tests/` (CI
 checks them, the implementers ran `mypy src`), fixed in `a1467b1`.
 
