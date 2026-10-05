@@ -15,6 +15,12 @@
  * a second shortlisted proposal, so Telco A's reviewer stars one more Inbox proposal and the end of the run takes the
  * star off again (SHOT_KEEP=1 leaves it). They post no message and report none: the moderation shot is skipped unless
  * a reported message is already in the queue.
+ *
+ * The P22-A shots (docs/platform/tasks/P22.md A, Today's five) read the demo seed's quiz: Amina has played today's set
+ * (a 2-day streak, on the board), Brian has played and is off the board. The not-played states are a new test developer's,
+ * signed up through the emailed link (as e2e/quiz.spec.ts does), who opens the play form and answers nothing, or two
+ * questions, and never sends it. The flag sheet is opened, never sent; the staff admin's shots decide, pull and restore
+ * nothing.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -22,6 +28,7 @@ import { join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
+import { signUpDeveloper } from "../e2e/support/accounts";
 import { DEMO_PASSWORD, DemoStaff } from "../e2e/support/moderation-scene";
 import { settled } from "../e2e/support/screen";
 import { demoTotpSecret, totp } from "../e2e/support/totp";
@@ -40,13 +47,13 @@ const FILTER = process.env.SHOT_FILTER ? new RegExp(process.env.SHOT_FILTER) : n
 
 type Demo = "dev" | "devBrian" | "org" | "orgOwner" | "orgSacco" | "staff" | "moderator";
 /** A demo person, a session that owes its second factor, or a new test account of the bell's or the side states' scene. */
-type Who = "none" | "pendingMfa" | Demo | "freshDev" | "freshOrg" | "sideDev" | "sideOrg";
+type Who = "none" | "pendingMfa" | Demo | "freshDev" | "freshOrg" | "sideDev" | "sideOrg" | "quizDev";
 interface Shot {
   name: string;
   path: string;
   who: Who;
   /** The screenshots folder under docs/demo/screenshots/ (default p18). */
-  set?: "p19" | "p21";
+  set?: "p19" | "p21" | "p22a";
   /** Only these widths (default SHOT_WIDTHS). */
   widths?: number[];
   /** Shoot this element only (the top bar), not the page. */
@@ -98,7 +105,9 @@ function stateOf(browser: Browser, who: Exclude<Who, "none">): Promise<string> {
         ? bellScene(browser).then((scene) => scene[who])
         : who === "sideDev" || who === "sideOrg"
           ? sideScene(browser).then((scene) => scene[who])
-          : signIn(browser, who);
+          : who === "quizDev"
+            ? quizNewcomer(browser)
+            : signIn(browser, who);
     states.set(who, state);
   }
   return state;
@@ -464,6 +473,36 @@ function shortlistScene(browser: Browser): Promise<ShortlistScene> {
     return { orgId: orgId!, ids, added };
   });
   return shortlisted;
+}
+
+// --- The P22-A scene: a developer who has not played today's five (docs/platform/tasks/P22.md A) ------------------
+
+/** A new test developer, signed in through the emailed link; the demo accounts have all played today's set. */
+async function quizNewcomer(browser: Browser): Promise<string> {
+  const context = await browser.newContext({ baseURL: baseUrl() });
+  try {
+    const page = await context.newPage();
+    await signUpDeveloper(page, "Wanjiku Mwangi");
+    const dir = join(__dirname, "..", "test-results", "design-shots");
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, "state-quizDev.json");
+    await context.storageState({ path: file });
+    return file;
+  } finally {
+    await context.close();
+  }
+}
+
+/** The play form, hydrated (a radio answered on the server's HTML would be lost). */
+async function quizForm(page: Page) {
+  const today = await page.request.get("/api/me/quiz/today");
+  if (!today.ok()) return false;
+  const { attempt } = (await today.json()) as { attempt: unknown };
+  if (attempt) return false;
+  await page.locator("form[data-quiz-play]").waitFor();
+  await expect(page.getByRole("group")).toHaveCount(5);
+  await page.waitForLoadState("networkidle");
+  return true;
 }
 
 /** A thread's island, hydrated. */
@@ -882,6 +921,63 @@ const SHOTS: Shot[] = [
       if (!open) return false;
       await page.goto(`/admin/moderation/cases/${open.id}`, { waitUntil: "networkidle" });
       await page.locator("[data-message-body]").waitFor();
+    } },
+
+  // --- P22-A (docs/platform/tasks/P22.md A, Today's five), into docs/demo/screenshots/p22a/ -------------------------
+  // Home's card: played (Amina's score, streak and marks), then not played (a new developer: one sentence and Play).
+  { name: "home-quiz-played", set: "p22a", path: "/dev", who: "dev", prepare: async (page) => {
+      if (!(await page.locator("[data-home=quiz] [data-quiz-card=played]").isVisible())) return false;
+    } },
+  { name: "home-quiz-play", set: "p22a", path: "/dev", who: "quizDev", prepare: async (page) => {
+      if (!(await page.locator("[data-home=quiz] [data-quiz-card=play]").isVisible())) return false;
+    } },
+  // The five questions, none answered, then two (the "Check 2, skip 3" line appears); never sent.
+  { name: "quiz-play", set: "p22a", path: "/dev/quiz", who: "quizDev", prepare: async (page) => {
+      if (!(await quizForm(page))) return false;
+    } },
+  { name: "quiz-play-partial", set: "p22a", path: "/dev/quiz", who: "quizDev", prepare: async (page) => {
+      if (!(await quizForm(page))) return false;
+      const groups = page.getByRole("group");
+      await expect(async () => {
+        await groups.nth(0).getByRole("radio").nth(1).check();
+        await groups.nth(1).getByRole("radio").nth(2).check();
+        await expect(page.locator("[data-quiz-progress]")).toHaveText("2 of 5 answered", { timeout: 2_000 });
+      }).toPass({ timeout: 20_000 });
+      await page.locator("[data-quiz-skip]").waitFor();
+      await page.mouse.move(0, 0);
+    } },
+  // Amina's results: the score, the streak, every why with its source and Flag; then one question's flag sheet (not sent).
+  { name: "quiz-results", set: "p22a", path: "/dev/quiz", who: "dev", prepare: async (page) => {
+      if ((await page.locator("[data-why]").count()) === 0) return false;
+      await expect(page.locator("[data-why]")).toHaveCount(5);
+    } },
+  { name: "quiz-flag", set: "p22a", path: "/dev/quiz", who: "dev", viewportOnly: true, prepare: async (page) => {
+      const open = page.locator("[data-flag-open]").first();
+      if (!(await open.isVisible())) return false;
+      const sheet = page.locator("dialog[open][data-sheet]");
+      await expect(async () => {
+        await open.click();
+        await expect(sheet).toBeVisible({ timeout: 2_000 });
+      }).toPass({ timeout: 20_000 });
+      await page.mouse.move(0, 0);
+    } },
+  // This week's board: Brian, off it (his own row only); Amina, on it.
+  { name: "quiz-board-out", set: "p22a", path: "/dev/quiz/board", who: "devBrian", prepare: async (page) => {
+      if (!(await page.locator("[data-opt-in=off]").isVisible())) return false;
+    } },
+  { name: "quiz-board-in", set: "p22a", path: "/dev/quiz/board", who: "dev", prepare: async (page) => {
+      if (!(await page.locator("[data-opt-in=on]").isVisible())) return false;
+    } },
+  // The staff admin's queue, then an approved set's page (nothing is decided, pulled or restored).
+  { name: "admin-quiz", set: "p22a", path: "/admin/quiz", who: "staff", prepare: async (page) => {
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  { name: "admin-quiz-set", set: "p22a", path: "/admin/quiz", who: "staff", prepare: async (page) => {
+      const row = page.locator("[data-quiz-set][data-status=approved]").first();
+      if (!(await row.isVisible())) return false;
+      await row.getByRole("link").first().click();
+      await page.waitForURL(/\/admin\/quiz\/[^/]+$/);
+      await page.locator("[data-admin-question]").first().waitFor();
     } },
 ];
 
