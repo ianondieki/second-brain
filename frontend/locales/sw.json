@@ -2689,7 +2689,7 @@
     "reported": "Imeripotiwa. Mdhibiti atakagua ujumbe huu; unabaki kwenye mazungumzo kwa sasa.",
     "reportedAgain": "Tayari uliripoti ujumbe huu. Mdhibiti ataukagua.",
     "reportOwn": "Huwezi kuripoti ujumbe wako mwenyewe.",
-    "reportLimit": "Umeripoti jumbe {count} katika siku iliyopita. Jaribu tena kesho.",
+    "reportLimit": "Umeripoti idadi ya juu ya jumbe zinazoruhusiwa kwa siku. Jaribu tena kesho.",
     "reportFailed": "Ripoti haikutumwa. Jaribu tena.",
     "files": "Faili",
     "download": "Pakua",

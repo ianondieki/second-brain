@@ -2689,7 +2689,7 @@
     "reported": "Reported. A moderator will review this message; it stays in the thread meanwhile.",
     "reportedAgain": "You already reported this message. A moderator will review it.",
     "reportOwn": "You cannot report your own message.",
-    "reportLimit": "You have reported {count} messages in the last day. Try again tomorrow.",
+    "reportLimit": "You have reported the most messages allowed in a day. Try again tomorrow.",
     "reportFailed": "The report was not sent. Try again.",
     "files": "Files",
     "download": "Download",
