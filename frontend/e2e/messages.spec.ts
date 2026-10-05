@@ -95,11 +95,13 @@ test("AC-TRACK-9: the thread opens at Approve to proceed, then both sides write,
   test.setTimeout(300_000);
   const { dev, org, devPage, orgPage, close } = await scene(page, browser, info);
   const id = dev.engagementId;
-  const devThread = `/dev/engagements/${id}?tab=messages`;
-  const orgThread = `/org/engagements/${id}?tab=messages`;
+  const devThread = `/dev/engagements/${id}/messages`;
+  const orgThread = `/org/engagements/${id}/messages`;
   try {
     // Before INTEREST_CONFIRMED: one sentence on each side, no composer; the organisation cannot read the thread.
-    await orgPage.goto(orgThread);
+    // The N18 notices link to ?tab=messages: it lands on the Messages route.
+    await orgPage.goto(`/org/engagements/${id}?tab=messages`);
+    await expect(orgPage).toHaveURL(new RegExp(`${orgThread}$`), SERVER_STEP);
     await expect(tabs(orgPage).getByRole("link", { name: "Messages" })).toHaveAttribute("aria-current", "page");
     await expect(orgPage.locator("[data-thread-closed='not_open']")).toHaveText(
       "Messages open when your organisation approves to proceed, a non-binding step.",
@@ -169,7 +171,7 @@ test("AC-TRACK-9: the thread opens at Approve to proceed, then both sides write,
     await expect(messagesTab.locator("[data-unread='1']")).toHaveText("1");
     await expect(messagesTab).toHaveAccessibleName("Messages 1 unread message");
     await messagesTab.click();
-    await expect(orgPage).toHaveURL(/\?tab=messages$/, SERVER_STEP);
+    await expect(orgPage).toHaveURL(new RegExp(`${orgThread}$`), SERVER_STEP);
     await threadReady(orgPage);
     const fromDev = orgPage.locator("[data-message][data-mine='false']");
     await expect(fromDev).toContainText(dev.name);
@@ -236,7 +238,7 @@ test("an ended engagement keeps its thread to read, without the composer", async
       ["dev", devPage],
       ["org", orgPage],
     ] as const) {
-      await view.goto(`/${side}/engagements/${id}?tab=messages`);
+      await view.goto(`/${side}/engagements/${id}/messages`);
       await threadReady(view);
       await expect(view.locator("[data-message] [data-body]")).toHaveText("Welcome aboard.\nWe start the review of terms next week.");
       await expect(view.locator("[data-composer]")).toHaveCount(0);
