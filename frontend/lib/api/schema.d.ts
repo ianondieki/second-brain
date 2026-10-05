@@ -232,7 +232,9 @@ export interface paths {
         put?: never;
         /**
          * Decide Quiz Set
-         * @description Approve or reject a draft set, once (see the module docstring).
+         * @description Approve or reject a draft set, once (see the module docstring). A set of a day that is over on the shared clock
+         *     may be rejected but not approved (409 ``day_over``): nobody could play it any more, and an approved set nobody
+         *     played would end every streak.
          */
         post: operations["decide_quiz_set_api_admin_quiz_sets__set_id__decision_post"];
         delete?: never;
@@ -9557,7 +9559,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorBody"];
                 };
             };
-            /** @description Conflict */
+            /** @description already_decided, incomplete_set (an approval without five questions) or day_over (approving a set of a past day) */
             409: {
                 headers: {
                     [name: string]: unknown;

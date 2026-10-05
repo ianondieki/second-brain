@@ -23,8 +23,8 @@ fifth proposal (P10, ``bridge.seed.demo.scouts``). Last come P21's three beats (
 through the API: SACCO B's owner and Amina write three messages on the thread of her engagement with SACCO B, Telco A's
 reviewer puts the scout's match on its shortlist, and Amina saves a Discover search of a niche she likes. Last, P22's
 Today's five (``bridge.seed.demo.quiz``): two hand-written sets for yesterday and today, checked and stored as a model's
-would be and approved by the demo staff admin, with Amina's attempts on both (a streak of 2, on the board) and Brian's
-on today's; no model is called.
+would be, today's approved by the demo staff admin (yesterday's by the owner role), with Amina's attempts on both (a
+streak of 2, on the board) and Brian's on today's; no model is called.
 
 Idempotent, and safe on a demo that was used (``make demo`` runs it on every start): every step looks for what it
 would create (by address, organisation name, a proposal's first title) and skips what exists, so running it twice

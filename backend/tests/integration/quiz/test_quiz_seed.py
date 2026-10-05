@@ -2,8 +2,9 @@
 module's own database with a staff admin of its own approving through the API.
 
 The hand-written sets pass the checks in code and are stored for yesterday and today as seeded drafts, then
-approved; a second run adds nothing; a seeded draft a run left behind is approved; a day that has any other set gets
-nothing; a later day inside the 60-day window of the hand-written prompts gets no set and one line."""
+approved (today's through the admin API, yesterday's by the owner role); a second run adds nothing; a seeded draft a
+run left behind is approved; a day that has any other set gets nothing; a later day inside the 60-day window of the
+hand-written prompts gets no set and one line."""
 
 from __future__ import annotations
 
@@ -60,7 +61,7 @@ async def test_the_seeded_sets_are_stored_approved_once_and_later_days_get_one_l
     await ensure_sets(quiz.owner, admin, report)  # type: ignore[arg-type]
     assert report.created == [
         f"quiz set {monday} (seeded)",
-        f"quiz set {monday} approved by {STAFF_ADMIN.email}",
+        f"quiz set {monday} approved (a past day, by the owner role)",
         f"quiz set {tuesday} (seeded)",
         f"quiz set {tuesday} approved by {STAFF_ADMIN.email}",
     ]
@@ -71,12 +72,12 @@ async def test_the_seeded_sets_are_stored_approved_once_and_later_days_get_one_l
         b=tuesday,
     )
     assert [tuple(s) for s in sets] == [
-        (monday, "approved", "seeded", p.admin),
+        (monday, "approved", "seeded", None),  # a past day's set: the owner role approves it
         (tuesday, "approved", "seeded", p.admin),
     ]
     again = DemoReport(users=report.users)
     await ensure_sets(quiz.owner, admin, again)  # type: ignore[arg-type]
-    assert (again.created, again.notes, admin.calls) == ([], [], 2)
+    assert (again.created, again.notes, admin.calls) == ([], [], 1)  # today's set only
     wednesday = tuesday + timedelta(days=1)
     await at(quiz, wednesday)
     later = DemoReport(users=report.users)

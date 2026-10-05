@@ -184,7 +184,7 @@ def quiz_lines(today: date) -> list[str]:
     yesterday = (today - timedelta(days=1)).isoformat()
     return [
         f"quiz set {yesterday} (seeded)",
-        f"quiz set {yesterday} approved by {STAFF_ADMIN.email}",
+        f"quiz set {yesterday} approved (a past day, by the owner role)",
         f"quiz set {today.isoformat()} (seeded)",
         f"quiz set {today.isoformat()} approved by {STAFF_ADMIN.email}",
         f"quiz attempt of {AMINA.email} on {yesterday}",
@@ -891,7 +891,8 @@ async def test_todays_five_has_two_seeded_sets_and_three_attempts(
     seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
 ) -> None:
     """P22 (REQ-DEV-01; card test A8): yesterday's and today's sets are seeded, hand-written (the checks in code
-    passed), approved by the demo staff admin through the API (audited), once however often the seed ran; Amina
+    passed), today's approved by the demo staff admin through the API (audited) and yesterday's by the owner role
+    (the API approves no set of a past day), once however often the seed ran; Amina
     finished both (4 and 5 of 5: a streak of 2, on the board), Brian today's (3 of 5, not on the board); no model was
     called."""
     report = seeded[0]
@@ -902,7 +903,7 @@ async def test_todays_five_has_two_seeded_sets_and_three_attempts(
         owner, "SELECT id, quiz_date, status, origin, decided_by, llm_trace_id FROM quiz_sets ORDER BY quiz_date"
     )
     assert [tuple(s)[1:] for s in sets] == [
-        (yesterday, "approved", "seeded", admin, None),
+        (yesterday, "approved", "seeded", None, None),  # a past day's set: the owner role approves it
         (today, "approved", "seeded", admin, None),
     ]
     for found, written in zip(sets, (SEEDED_SETS["yesterday"], SEEDED_SETS["today"]), strict=True):
@@ -913,7 +914,7 @@ async def test_todays_five_has_two_seeded_sets_and_three_attempts(
         )
         assert [tuple(q) for q in questions] == [(q.prompt, q.answer, q.source_id) for q in written]
     decided = await rows(owner, "SELECT actor_user_id FROM audit_events WHERE action = 'quiz.set_decided'")
-    assert [d.actor_user_id for d in decided] == [admin, admin]
+    assert [d.actor_user_id for d in decided] == [admin]
     attempts = await rows(
         owner,
         "SELECT a.user_id, s.quiz_date, a.score FROM quiz_attempts a JOIN quiz_sets s ON s.id = a.set_id"

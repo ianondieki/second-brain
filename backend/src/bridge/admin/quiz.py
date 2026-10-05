@@ -10,8 +10,9 @@ functions, which refuse anyone else).
   attempts in aggregate (``app_quiz_set_stats``: counts from 3 attempts on), each question with its answer and why
   (``app_quiz_answers``), source, pull state and flags (reason counts and the notes, never who flagged).
 - ``POST /sets/{id}/decision`` ``{decision: approve|reject}``: one decision per set through ``app_decide_quiz_set``
-  (409 ``already_decided`` after; 409 ``incomplete_set`` for an approval without five questions), audited
-  ``quiz.set_decided``.
+  (409 ``already_decided`` after; 409 ``incomplete_set`` for an approval without five questions; 409 ``day_over`` for
+  an approval of a set whose day is over on the shared clock, which may only be rejected: an approved set nobody could
+  play would end every streak), audited ``quiz.set_decided``.
 - ``POST /questions/{id}/pull`` ``{reason}`` and ``POST /questions/{id}/restore``: through
   ``app_set_quiz_question_status``, which rescores the set's attempts in the same transaction (409 ``already_pulled``
   or ``already_live``); audited ``quiz.question_pulled`` (reason ``staff``) and ``quiz.question_restored``, with the
@@ -36,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge.admin.deps import StaffAdmin
 from bridge.audit.service import record as audit
 from bridge.auth.deps import Db
-from bridge.errors import ERROR_RESPONSES, ApiError, not_found
+from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, not_found
 from bridge.models.enums import AuditActor
 from bridge.quiz.models import FLAG_REASONS, REASON_MAX_CHARS, QuizFlag, QuizQuestion, QuizSet
 
@@ -45,6 +46,8 @@ SetStatus = Literal["draft", "approved", "rejected"]
 Q, F, S = QuizQuestion, QuizFlag, QuizSet
 
 _DECIDE: Final = text("SELECT app_decide_quiz_set(:s, :d)")
+_DAY_OVER: Final = text("SELECT quiz_date < app_nairobi_today() FROM quiz_sets WHERE id = :s")
+DECISION_CONFLICTS: Final = "already_decided, incomplete_set (an approval without five questions) or day_over"
 _SET_STATUS: Final = text("SELECT app_set_quiz_question_status(:q, :status, :reason)")
 _ANSWERS: Final = text("SELECT question_id, answer, why FROM app_quiz_answers(:s)")
 _FIGURES: Final = text(
@@ -239,9 +242,14 @@ def _sqlstate(exc: DBAPIError) -> str:
     return str(getattr(exc.orig, "sqlstate", None))
 
 
-@router.post("/sets/{set_id}/decision")
+@router.post(
+    "/sets/{set_id}/decision",
+    responses={409: {"model": ApiErrorBody, "description": f"{DECISION_CONFLICTS} (approving a set of a past day)"}},
+)
 async def decide_quiz_set(set_id: UUID, body: QuizDecisionIn, staff: StaffAdmin, db: Db) -> QuizSetSummaryOut:
-    """Approve or reject a draft set, once (see the module docstring)."""
+    """Approve or reject a draft set, once (see the module docstring). A set of a day that is over on the shared clock
+    may be rejected but not approved (409 ``day_over``): nobody could play it any more, and an approved set nobody
+    played would end every streak."""
     decision = "approved" if body.decision == "approve" else "rejected"
     try:
         await db.execute(_DECIDE, {"s": set_id, "d": decision})
@@ -255,6 +263,9 @@ async def decide_quiz_set(set_id: UUID, body: QuizDecisionIn, staff: StaffAdmin,
         if sqlstate == "23514":
             raise ApiError(409, "incomplete_set", "A set is approved only with its five questions.") from None
         raise
+    if decision == "approved" and await db.scalar(_DAY_OVER, {"s": set_id}):  # read after the set's lock: the day now
+        await db.rollback()
+        raise ApiError(409, "day_over", "This set's day is over. It can be rejected, not approved.")
     [summary] = await _summaries(db, set_id=set_id)
     await audit(
         db,

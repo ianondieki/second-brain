@@ -5,7 +5,8 @@
 - The queue lists sets newest day first with their flag and pull counts (``status`` filters); a set's page has the
   answers, whys, sources, the flags by reason with their notes (never who flagged), who decided it and when, its
   generating call, and its attempts in aggregate only from three attempts on.
-- One decision per set (409 ``already_decided``), an approval needs five questions (409 ``incomplete_set``), audited
+- One decision per set (409 ``already_decided``), an approval needs five questions (409 ``incomplete_set``) and a day
+  that is not over (409 ``day_over``: rejecting stays allowed, and nobody's streak is touched), audited
   ``quiz.set_decided``; a rejected set is never served.
 - Pull and restore rescore the set's attempts, each audited with the number of scores changed; the same state again
   is 409; a reason is one line of 1 to 300 characters.
@@ -195,3 +196,28 @@ async def test_pull_and_restore_rescore_and_are_audited(quiz: QuizDb, as_user: C
     [first, *_] = await question_ids(quiz, draft)
     held = await admin.post(f"{ADMIN}/questions/{first}/pull", json={"reason": "Check it first"})
     assert (held.json()["status"], held.json()["rescored"]) == ("pulled", 0)  # a draft's question, before approval
+
+
+async def test_a_set_whose_day_is_over_is_never_approved_and_streaks_stay(quiz: QuizDb, as_user: Clients) -> None:
+    """Monday played; Tuesday's draft left overnight is not approved on Wednesday (409 ``day_over``: an approved set
+    nobody could play would end every streak); it may still be rejected; the streak stays."""
+    monday = quiz.monday()
+    tuesday, wednesday = monday + timedelta(days=1), monday + timedelta(days=2)
+    await at(quiz, monday)
+    p = await cast(quiz)
+    monday_set, _ = await approved_set(quiz, monday, p.admin)
+    dev = await as_user(p.developer)
+    assert (await play(dev, monday_set, list(KEY))).json()["streak"] == {"current": 1, "best": 1}
+    left = await draft_set(quiz, tuesday, role="job")
+    await approved_set(quiz, wednesday, p.admin)
+    await at(quiz, wednesday)
+    admin = await as_user(p.admin)
+    assert code(await admin.post(f"{ADMIN}/sets/{left}/decision", json={"decision": "approve"})) == (409, "day_over")
+    [row] = await owner_rows(quiz, "SELECT status, decided_at FROM quiz_sets WHERE id = :s", s=left)
+    assert tuple(row) == ("draft", None)
+    assert await audit_actions(quiz, left) == []
+    assert (await dev.get(TODAY)).json()["streak"] == {"current": 1, "best": 1}  # Tuesday had no approved set
+    rejected = await admin.post(f"{ADMIN}/sets/{left}/decision", json={"decision": "reject"})
+    assert rejected.json()["status"] == "rejected"
+    decision = admin.app.openapi()["paths"][f"{ADMIN}/sets/{{set_id}}/decision"]["post"]  # type: ignore[attr-defined]
+    assert "day_over" in decision["responses"]["409"]["description"]

@@ -14282,7 +14282,7 @@
     },
     "/api/admin/quiz/sets/{set_id}/decision": {
       "post": {
-        "description": "Approve or reject a draft set, once (see the module docstring).",
+        "description": "Approve or reject a draft set, once (see the module docstring). A set of a day that is over on the shared clock\nmay be rejected but not approved (409 ``day_over``): nobody could play it any more, and an approved set nobody\nplayed would end every streak.",
         "operationId": "decide_quiz_set_api_admin_quiz_sets__set_id__decision_post",
         "parameters": [
           {
@@ -14375,7 +14375,7 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "already_decided, incomplete_set (an approval without five questions) or day_over (approving a set of a past day)"
           },
           "422": {
             "content": {

@@ -6,8 +6,9 @@
   each answer checkable on its page. No model is called. They go through the real path: the checks in code
   (``bridge.quiz.checks.check_draft``: counts, text rules, distinct options, one answer, a known source, no person
   named), ``store_draft`` as the owner role (which may date a seeded set in the past; it refuses a taken day and a
-  prompt of the last 60 days), then the demo staff admin's approval through ``POST /api/admin/quiz/sets/{id}/decision``
-  (``app_decide_quiz_set``, audited).
+  prompt of the last 60 days). Today's is approved by the demo staff admin through ``POST
+  /api/admin/quiz/sets/{id}/decision`` (``app_decide_quiz_set``, audited); yesterday's by the owner role (revision
+  0009's seed path: ``decided_by`` left empty), since the API refuses to approve a set whose day is over.
 - **Three attempts** (``PLAYS``): Amina's on yesterday's set, written as the owner role (the API takes only today's set;
   her streak is kept by the same code, ``bridge.quiz.streaks``), and Amina's and Brian's on today's set through
   ``POST /api/me/quiz/today/answers``, each signed in as themselves, so Amina has a streak of 2. Amina opts in to the
@@ -36,7 +37,7 @@ from bridge.quiz.sources import get_sources
 from bridge.quiz.store import Stored, store_draft
 from bridge.quiz.streaks import Streak, after_playing, missed_sets
 from bridge.seed.demo.data import AMINA, BRIAN, STAFF_ADMIN
-from bridge.seed.demo.runtime import Actors, DemoReport, DemoSeedError, _one
+from bridge.seed.demo.runtime import Actors, DemoReport, DemoSeedError, _execute, _one
 
 Day = Literal["yesterday", "today"]
 
@@ -170,6 +171,9 @@ _ANY_SET: Final = "SELECT id, status, origin FROM quiz_sets WHERE quiz_date = :d
 _SEEDED_SET: Final = (
     "SELECT id, status FROM quiz_sets WHERE quiz_date = :d AND origin = 'seeded' AND status <> 'rejected' LIMIT 1"
 )
+_APPROVE_PAST: Final = (
+    "UPDATE quiz_sets SET status = 'approved', decided_at = app_clock_now() WHERE id = :s AND status = 'draft'"
+)
 _ATTEMPT: Final = "SELECT 1 FROM quiz_attempts WHERE set_id = :s AND user_id = :u"
 _PROFILE: Final = "SELECT current_streak, best_streak, last_played_on FROM quiz_profiles WHERE user_id = :u"
 
@@ -200,7 +204,8 @@ def checked(questions: tuple[SeededQuestion, ...]) -> Draft:
 
 
 async def ensure_sets(owner: AsyncEngine, actors: Actors, report: DemoReport) -> None:
-    """Yesterday's and today's seeded sets, approved by the demo staff admin (module docstring)."""
+    """Yesterday's and today's seeded sets: today's approved by the demo staff admin through the API, yesterday's by
+    the owner role (module docstring)."""
     if STAFF_ADMIN.email not in report.users:
         raise DemoSeedError(f"no demo staff admin {STAFF_ADMIN.email} to approve the quiz")
     today = await nairobi_today(owner)
@@ -213,6 +218,10 @@ async def ensure_sets(owner: AsyncEngine, actors: Actors, report: DemoReport) ->
         elif (found.origin, found.status) == ("seeded", "draft"):  # a run stopped before approving it
             set_id = UUID(str(found.id))
         else:
+            continue
+        if day < today:  # the API approves no set of a past day (409 day_over)
+            await _execute(owner, _APPROVE_PAST, s=set_id)
+            report.did(f"quiz set {day.isoformat()} approved (a past day, by the owner role)")
             continue
         admin = await actors.get(STAFF_ADMIN.email)
         await admin.call("POST", f"/api/admin/quiz/sets/{set_id}/decision", json={"decision": "approve"})
