@@ -55,6 +55,7 @@ from bridge.quiz.models import (
     MAX_TIME_MS,
     OPTIONS_PER_QUESTION,
     QUESTIONS_PER_SET,
+    RAW_TEXT_MAX_CHARS,
     REASON_MAX_CHARS,
     QuizAttempt,
     QuizProfile,
@@ -171,7 +172,11 @@ class QuizFlagIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: FlagReason
-    note: str | None = Field(default=None, description="For staff only: at most 300 characters on one line")
+    note: str | None = Field(
+        default=None,
+        max_length=RAW_TEXT_MAX_CHARS,  # before the collapsing: a huge body is refused unread
+        description="For staff only: at most 300 characters on one line (whitespace collapsed)",
+    )
 
     @field_validator("note")
     @classmethod

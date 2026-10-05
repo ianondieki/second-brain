@@ -6746,7 +6746,7 @@ export interface components {
         QuizFlagIn: {
             /**
              * Note
-             * @description For staff only: at most 300 characters on one line
+             * @description For staff only: at most 300 characters on one line (whitespace collapsed)
              */
             note?: string | null;
             /**
@@ -6784,7 +6784,7 @@ export interface components {
         QuizPullIn: {
             /**
              * Reason
-             * @description Why it is withdrawn: one line, at most 300 characters
+             * @description Why it is withdrawn: one line, at most 300 characters (whitespace collapsed)
              */
             reason: string;
         };

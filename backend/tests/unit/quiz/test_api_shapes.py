@@ -1,6 +1,6 @@
 """REQ-DEV-01 (D-59; P22 card A test A3, the code half): the quiz API's mapping of the database's refusals of an
 attempt, and the one-line notes and reasons of flags and pulls (whitespace collapsed, no control character, at most
-300 characters)."""
+300 characters; a raw value above 8 times that is refused before it is collapsed)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import DBAPIError
 
 from bridge.admin.quiz import QuizPullIn
+from bridge.quiz.models import RAW_TEXT_MAX_CHARS, REASON_MAX_CHARS
 from bridge.quiz.router import ATTEMPT_UNIQUE, QuizFlagIn, _attempt_refusal
 
 
@@ -51,3 +52,19 @@ def test_a_pulls_reason_is_one_line_of_1_to_300_characters() -> None:
     for reason in ("", "   ", "x" * 301, "a\u0001b"):
         with pytest.raises(ValidationError):
             QuizPullIn(reason=reason)
+
+
+def test_a_raw_note_or_reason_is_refused_above_eight_times_the_limit_before_it_is_collapsed() -> None:
+    """A multi-megabyte body is refused by the field's length bound before the whitespace is collapsed; up to the
+    bound, spaces that collapse away are fine."""
+    assert RAW_TEXT_MAX_CHARS == 8 * REASON_MAX_CHARS
+    spaced = "a" + " " * (RAW_TEXT_MAX_CHARS - 2) + "b"
+    assert QuizFlagIn(reason="other", note=spaced).note == "a b"
+    assert QuizPullIn(reason=spaced).reason == "a b"
+    for too_long in (spaced + " ", " " * (2 * 1024 * 1024)):
+        with pytest.raises(ValidationError) as flag:
+            QuizFlagIn(reason="other", note=too_long)
+        assert [e["type"] for e in flag.value.errors()] == ["string_too_long"]
+        with pytest.raises(ValidationError) as pull:
+            QuizPullIn(reason=too_long)
+        assert [e["type"] for e in pull.value.errors()] == ["string_too_long"]

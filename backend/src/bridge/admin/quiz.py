@@ -40,7 +40,7 @@ from bridge.audit.service import record as audit
 from bridge.auth.deps import Db
 from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, not_found
 from bridge.models.enums import AuditActor
-from bridge.quiz.models import FLAG_REASONS, REASON_MAX_CHARS, QuizFlag, QuizQuestion, QuizSet
+from bridge.quiz.models import FLAG_REASONS, RAW_TEXT_MAX_CHARS, REASON_MAX_CHARS, QuizFlag, QuizQuestion, QuizSet
 
 router = APIRouter(prefix="/api/admin/quiz", tags=["admin"], responses=ERROR_RESPONSES)
 SetStatus = Literal["draft", "approved", "rejected"]
@@ -120,7 +120,10 @@ class QuizDecisionIn(BaseModel):
 class QuizPullIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    reason: str = Field(description="Why it is withdrawn: one line, at most 300 characters")
+    reason: str = Field(
+        max_length=RAW_TEXT_MAX_CHARS,  # before the collapsing: a huge body is refused unread
+        description="Why it is withdrawn: one line, at most 300 characters (whitespace collapsed)",
+    )
 
     @field_validator("reason")
     @classmethod

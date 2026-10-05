@@ -8992,13 +8992,14 @@
           "note": {
             "anyOf": [
               {
+                "maxLength": 2400,
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "For staff only: at most 300 characters on one line",
+            "description": "For staff only: at most 300 characters on one line (whitespace collapsed)",
             "title": "Note"
           },
           "reason": {
@@ -9066,7 +9067,8 @@
         "additionalProperties": false,
         "properties": {
           "reason": {
-            "description": "Why it is withdrawn: one line, at most 300 characters",
+            "description": "Why it is withdrawn: one line, at most 300 characters (whitespace collapsed)",
+            "maxLength": 2400,
             "title": "Reason",
             "type": "string"
           }
