@@ -3,11 +3,12 @@
 Parties only (``service.resolve_party``: 404 for anyone else, staff included; 403 ``both_parties`` for a developer who
 is also a member of the organisation). Under the caller's RLS throughout.
 
-- **When.** The thread opens once the engagement's chain has entered ``INTEREST_CONFIRMED`` (or ``CONTACT_MADE``,
-  the public-entity path) and is read-only once the engagement ends. Writes leave that rule to the database
-  (``engagement_thread_open()``, SQLSTATE 55000, read back here: the organisation's 403 ``thread_not_open``, the
-  developer's 409, and 409 ``thread_read_only`` for both); reads mirror it (``OPENING_STATES``): before it opens the
-  organisation's reads are 403 (AC-TRACK-9), and the developer reads an empty thread saying where it opens.
+- **When.** The thread opens once the engagement's chain has entered ``INTEREST_CONFIRMED`` or a later main-path
+  stage (a public entity's procurement route opens it at ``CONTACT_MADE``) and is read-only once it ends. Writes
+  leave that rule to the database (``engagement_thread_open()``, SQLSTATE 55000, read back here: the organisation's
+  403 ``thread_not_open``, the developer's 409, and 409 ``thread_read_only`` for both); reads mirror it
+  (``OPENING_STATES``): before it opens the organisation's reads are 403 (AC-TRACK-9), and the developer reads an
+  empty thread saying where it opens.
 - **Who posts.** The developer, and the organisation's members who act on the tracker (never a viewer: the database's
   row-level security refuses them, 403 ``cannot_post``); every member reads.
 - **What.** Plain text, 1 to 4,000 characters (``message_schemas.MessageBody``); before first contact (the stage, or
@@ -67,9 +68,24 @@ from bridge.proposals.editor import ACCEPTED_TYPES
 from bridge.proposals.sanitise import contact_codes
 
 S = EngagementState
-# revision 0008's engagement_thread_open(): the thread opens once the chain has entered one of these.
-OPENING_STATES: Final = frozenset({S.INTEREST_CONFIRMED, S.CONTACT_MADE})
+# revision 0008's engagement_thread_open(): the thread opens once the chain has entered stage 3 or a later main-path
+# stage (a public entity's procurement route skips stage 3 and opens it at CONTACT_MADE); mirrored for reads only.
+OPENING_STATES: Final = frozenset(
+    {
+        S.INTEREST_CONFIRMED,
+        S.CONTACT_MADE,
+        S.NDA_PENDING,
+        S.NDA_SIGNED,
+        S.NEGOTIATION,
+        S.AGREEMENT_SIGNING,
+        S.IN_IMPLEMENTATION,
+        S.DELIVERED,
+        S.SIGN_OFF,
+        S.PAYMENT_FINAL,
+    }
+)
 POSTS_PER_HOUR: Final = 60  # D-57 / P21 card: per user, per engagement
+STAGED_TTL: Final = timedelta(hours=24)  # revision 0008: a staged upload joins a message within a day of its upload
 PAGE: Final = 30
 MAX_PAGE: Final = 100
 _LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
@@ -80,6 +96,7 @@ PENDING: Final = frozenset({AvStatus.PENDING_UPLOAD, AvStatus.PENDING_SCAN})
 NOT_OPEN = "The thread opens once the organisation approves to proceed (Approved to proceed)."
 READ_ONLY = "This engagement has ended, so its thread is read-only."
 CANNOT_POST = "Viewers read the thread; ask a colleague who acts on this engagement to reply."
+STAGED_EXPIRED = "A file waited more than a day to be sent. Upload it again."
 CONTAINS_CONTACT = "Contact details and links are shared once first contact is made. Remove them from the message."
 
 
@@ -137,6 +154,10 @@ def refusal(exc: DBAPIError, party: Party) -> ApiError | None:
         return forbidden("cannot_post", CANNOT_POST)
     if sqlstate == "54000":
         return ApiError(429, "too_many_reports", "You have reported 10 messages today. Try again tomorrow.")
+    if sqlstate == "23514" and "within 24 hours" in message:
+        return ApiError(422, "attachment_expired", STAGED_EXPIRED)
+    if sqlstate == "22023":
+        return ApiError(422, "invalid", "This request is not valid.")
     if sqlstate == "23514" and constraint.endswith("at_most_5"):
         return ApiError(422, "too_many_attachments", "A message can carry up to 5 files.")
     if sqlstate == "23514" and constraint.endswith("attached_only_when_clean"):
@@ -257,7 +278,7 @@ async def post_message(db: AsyncSession, party: Party, body: MessageBody) -> Mes
     if engagement is None:  # it was visible a moment ago (the insert's check)
         raise not_found()
     await _no_contact_details(db, engagement, body.body)
-    files = await _attach(db, party, message_id, body.attachment_ids)
+    files = await _attach(db, party, message_id, body.attachment_ids, sent_at=created_at)
     await audit(
         db,
         "engagement.message_posted",
@@ -322,8 +343,11 @@ async def _no_contact_details(db: AsyncSession, engagement: Engagement, body: st
         raise ApiError(422, "contains_contact", CONTAINS_CONTACT)
 
 
-async def _attach(db: AsyncSession, party: Party, message_id: UUID, ids: list[UUID]) -> list[MessageAttachmentOut]:
-    """Join the caller's staged uploads to the message (in its transaction, as revision 0008 requires)."""
+async def _attach(
+    db: AsyncSession, party: Party, message_id: UUID, ids: list[UUID], *, sent_at: datetime
+) -> list[MessageAttachmentOut]:
+    """Join the caller's staged uploads to the message (in its transaction, and within ``STAGED_TTL`` of each upload,
+    as revision 0008 requires)."""
     if not ids:
         return []
     a = EngagementMessageAttachment
@@ -340,6 +364,8 @@ async def _attach(db: AsyncSession, party: Party, message_id: UUID, ids: list[UU
         raise ApiError(409, "attachment_pending", "A file is still being scanned. Send it once the scan is done.")
     if any(row.av_status is not AvStatus.CLEAN for row in rows.values()):
         raise ApiError(422, "attachment_infected", "A file did not pass the malware scan, so it cannot be sent.")
+    if any(row.created_at < sent_at - STAGED_TTL for row in rows.values()):
+        raise ApiError(422, "attachment_expired", STAGED_EXPIRED)
     try:
         result = await db.execute(
             update(a).where(*mine).values(message_id=message_id).execution_options(synchronize_session=False)

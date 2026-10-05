@@ -117,6 +117,9 @@ def test_the_databases_refusals_become_api_errors() -> None:
     assert refused("42501", "no engagement of the caller's with that id") == (404, "not_found")
     assert refused("42501", "new row violates row-level security policy", developer=False) == (403, "cannot_post")
     assert refused("54000") == (429, "too_many_reports")
+    joins = "engagement_message_attachments: an upload joins a message within 24 hours of its upload"
+    assert refused("23514", joins) == (422, "attachment_expired")
+    assert refused("22023", "app_report_message: the reasons are one or more of spam, abuse") == (422, "invalid")
     assert refused("23514", "", "engagement_message_attachments_at_most_5") == (422, "too_many_attachments")
     assert refused("23514", "", "ck_engagement_message_attachments_attached_only_when_clean") == (
         409,
@@ -190,3 +193,38 @@ async def test_the_purge_task_runs_on_the_installed_runtime(monkeypatch: pytest.
     assert message_uploads.runtime() is message_uploads.runtime()
     message_uploads.use_runtime(None)
     assert message_uploads.PurgeRuntime().settings is get_settings()
+
+
+class _Rows:
+    def __init__(self, rows: list[tuple[str]]) -> None:
+        self._rows = rows
+
+    def all(self) -> list[tuple[str]]:
+        return self._rows
+
+
+class _Session:
+    def __init__(self, rows: list[tuple[str]]) -> None:
+        self.rows, self.committed = rows, False
+
+    async def __aenter__(self) -> _Session:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    async def execute(self, statement: object) -> _Rows:
+        return _Rows(self.rows)
+
+    async def commit(self) -> None:
+        self.committed = True
+
+
+async def test_the_purge_deletes_only_keys_under_the_threads_prefix() -> None:
+    store = InMemoryObjectStore()
+    for object_key in ("messages/e/a", "proposals/p/a"):
+        await store.put("uploads", object_key, b"x", content_type="application/pdf")
+    session = _Session([("messages/e/a",), ("proposals/p/a",)])
+    assert await message_files.purge_stale_uploads(lambda: session, store) == 2  # type: ignore[arg-type]
+    assert session.committed
+    assert set(store.objects) == {("uploads", "proposals/p/a")}
