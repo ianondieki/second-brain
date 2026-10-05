@@ -17,7 +17,7 @@ an attempt on the set), and their own attempts, flags and quiz profile only.
   written first and the attempt last, outside any savepoint, and nothing of the score or key is returned before the
   commit succeeded (revision 0009's operating rules: no rolled-back insert can be an oracle for the key).
 - ``POST /questions/{id}/flag`` ``{reason, note?}``: 201 ``{flag_id, pulled}`` through ``app_flag_question``: 404
-  (no question of an approved set of the caller's), 403 ``play_first``, 409 ``already_flagged`` or
+  (a question the caller cannot read: read under their policy first), 403 ``play_first``, 409 ``already_flagged`` or
   ``question_pulled``, 429 ``flag_limit`` (10 a Nairobi day). When the flag pulled the question (three counted flags),
   the audit event ``quiz.question_pulled`` (system actor, reason ``flags``). The note is for staff only: never logged
   or audited.
@@ -426,7 +426,12 @@ _FLAG_REFUSALS: Final[Mapping[str, tuple[int, str, str]]] = {
 
 @router.post("/questions/{question_id}/flag", status_code=201)
 async def flag_question(question_id: UUID, body: QuizFlagIn, live: Developer, db: Db) -> QuizFlagOut:
-    """Flag a question of a set the caller played, through ``app_flag_question`` (see the module docstring)."""
+    """Flag a question of a set the caller played, through ``app_flag_question`` (see the module docstring). The
+    question is read under the caller's own policy first, so one they cannot read (of a draft, or of a set approved
+    ahead of its day) answers 404 like an unknown id, never 403 ``play_first``."""
+    set_id = await db.scalar(select(Q.set_id).where(Q.id == question_id))
+    if set_id is None:
+        raise not_found("No such question.")
     try:
         row = (await db.execute(_FLAG, {"q": question_id, "r": body.reason, "n": body.note})).one()
     except DBAPIError as exc:
@@ -441,7 +446,6 @@ async def flag_question(question_id: UUID, body: QuizFlagIn, live: Developer, db
             raise forbidden(code, message) from None
         raise ApiError(status, code, message) from None
     if row.pulled:
-        set_id = await db.scalar(select(Q.set_id).where(Q.id == question_id))
         await audit(
             db,
             "quiz.question_pulled",

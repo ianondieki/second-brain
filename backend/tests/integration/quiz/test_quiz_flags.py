@@ -1,8 +1,9 @@
 """REQ-DEV-01 (D-59; P22 card A test A4): flags on Today's five.
 
 - A developer flags a question of a set they played (403 ``play_first`` before), once (409 ``already_flagged``), with
-  a reason and an optional one-line note of at most 300 characters (422 otherwise); a question of no approved set is
-  404; at most 10 flags a Nairobi day (429 ``flag_limit``), the next day's are open again.
+  a reason and an optional one-line note of at most 300 characters (422 otherwise); a question the caller cannot read
+  (of a draft, of a set approved ahead of its day, or none) is 404, never 403; at most 10 flags a Nairobi day (429
+  ``flag_limit``), the next day's are open again.
 - Three flags from new accounts never pull a question; three from established accounts (a verified email and three
   attempts on earlier days) pull it: every attempt of the set is rescored (those who had it right lose a point), the
   question's row says ``three_flags``, the developer sees it withdrawn, and the audit trail has
@@ -15,6 +16,7 @@ from __future__ import annotations
 from datetime import time, timedelta
 from uuid import UUID
 
+from bridge.ids import uuid7
 from tests.integration.quiz.api_world import (
     ADMIN,
     KEY,
@@ -62,6 +64,9 @@ async def test_a_flag_needs_a_played_set_and_is_taken_once(quiz: QuizDb, as_user
     assert taken.json()["pulled"] is False
     assert code(await dev.post(flag_path(ids[0]), json={"reason": "outdated"})) == (409, "already_flagged")
     assert code(await dev.post(flag_path(draft_question), json={"reason": "unclear"})) == (404, "not_found")
+    _, ahead_ids = await approved_set(quiz, monday + timedelta(days=2), p.admin)  # approved, not yet served
+    assert code(await dev.post(flag_path(ahead_ids[0]), json={"reason": "unclear"})) == (404, "not_found")
+    assert code(await dev.post(flag_path(uuid7()), json={"reason": "unclear"})) == (404, "not_found")
     flags = await owner_rows(
         quiz, "SELECT id, question_id, reason, note FROM quiz_flags WHERE user_id = :u", u=p.developer
     )

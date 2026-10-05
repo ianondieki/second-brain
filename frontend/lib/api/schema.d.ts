@@ -2253,7 +2253,9 @@ export interface paths {
         put?: never;
         /**
          * Flag Question
-         * @description Flag a question of a set the caller played, through ``app_flag_question`` (see the module docstring).
+         * @description Flag a question of a set the caller played, through ``app_flag_question`` (see the module docstring). The
+         *     question is read under the caller's own policy first, so one they cannot read (of a draft, or of a set approved
+         *     ahead of its day) answers 404 like an unknown id, never 403 ``play_first``.
          */
         post: operations["flag_question_api_me_quiz_questions__question_id__flag_post"];
         delete?: never;
