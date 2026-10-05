@@ -140,9 +140,10 @@ class QuizSet(IdMixin, Base):
     quiz_date: Mapped[date] = mapped_column(Date)
     status: Mapped[str] = mapped_column(Text, server_default=text("'draft'"))  # SET_STATUSES
     origin: Mapped[str] = mapped_column(Text)  # SET_ORIGINS
-    llm_trace_id: Mapped[str | None] = mapped_column(String(64))
-    decided_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
-    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Written by the job, read by staff only (app_quiz_set_detail): bridge_app holds no SELECT on the three.
+    llm_trace_id: Mapped[str | None] = mapped_column(String(64), deferred=True, deferred_raiseload=True)
+    decided_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), deferred=True, deferred_raiseload=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), deferred=True, deferred_raiseload=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
 
 

@@ -110,8 +110,9 @@ async def test_the_job_drafts_reads_only_through_its_functions_and_decides_nothi
 
 async def test_a_set_is_decided_once_by_a_staff_admin_and_its_questions_are_fixed(owner_engine: AsyncEngine) -> None:
     """A draft is approved only by a staff admin and only with its five questions, or rejected; then nothing of it
-    changes, for the owner too; a rejected day is free for a new draft; a question joins only a draft and changes only
-    by its pull or restore."""
+    changes, for the owner too; a rejected day is free for a new draft; who decided it, when and its generating call
+    are staff admin's to read (``app_quiz_set_detail``), never a developer's; a question joins only a draft and
+    changes only by its pull or restore."""
     async with t.as_app(owner_engine) as conn:
         p = await people(conn)
         today = await free_day(conn)
@@ -142,6 +143,22 @@ async def test_a_set_is_decided_once_by_a_staff_admin_and_its_questions_are_fixe
             s=set_id,
         )
         assert decided is True  # by the admin, on the shared clock
+        detail = "SELECT decided_by, llm_trace_id FROM app_quiz_set_detail(:s)"
+        await t.act(conn, p.admin)
+        assert tuple((await conn.execute(sa.text(detail), {"s": set_id})).one()) == (p.admin, f"quiz-{set_id.hex}")
+        await t.expect(conn, detail, "no quiz set with that id", s=uuid7())
+        for column in ("decided_by", "decided_at", "llm_trace_id", "*"):  # staff too: the function only
+            await t.expect(conn, f"SELECT {column} FROM quiz_sets WHERE id = :s", DENIED, s=set_id)
+        await t.act(conn, p.developer)
+        assert await t.run(conn, "SELECT count(*) FROM quiz_sets WHERE id = :s", s=set_id) == 1
+        for column in ("decided_by", "decided_at", "llm_trace_id"):
+            await t.expect(conn, f"SELECT {column} FROM quiz_sets WHERE id = :s", DENIED, s=set_id)
+        visible = "SELECT id, quiz_date, status, origin, created_at FROM quiz_sets WHERE id = :s"
+        assert (await conn.execute(sa.text(visible), {"s": set_id})).one().status == "approved"
+        for user in (p.developer, p.moderator, None):
+            await t.act(conn, user)
+            await t.expect(conn, detail, "staff admin only", s=set_id)
+        await t.as_owner(conn)
         for assignment in ("status = 'draft'", "status = 'rejected'", "quiz_date = quiz_date + 1", "origin = 'seeded'"):
             await t.expect(conn, f"UPDATE quiz_sets SET {assignment} WHERE id = :s", "quiz_sets: a ", s=set_id)
         await t.expect(conn, JOB_QUESTION, "only to a draft set", **question(set_id, 5))
@@ -589,13 +606,14 @@ async def test_a_developer_reads_and_writes_only_their_own_attempts_flags_and_pr
         await t.act(conn, p.admin)
         assert await t.run(conn, "SELECT count(*) FROM quiz_attempts") == 0  # no attempt row but one's own
         assert await t.run(conn, "SELECT count(*) FROM quiz_flags WHERE question_id = :q", q=questions[0]) == 2
+        assert tuple((await conn.execute(sa.text(STATS), {"s": set_id})).one()) == (2, None, None)  # below 3: a count
         await attempt(conn, set_id, p.third, [1, 0, 3, None, 1])
         await t.act(conn, p.admin)
         stats = (await conn.execute(sa.text(STATS), {"s": set_id})).one()
         assert tuple(stats) == (3, Decimal("4.33"), [3, 2, 3, 2, 3])
         empty, _ = await draft(conn, today + timedelta(days=1))
         await t.act(conn, p.admin)
-        assert tuple((await conn.execute(sa.text(STATS), {"s": empty})).one()) == (0, None, [0, 0, 0, 0, 0])
+        assert tuple((await conn.execute(sa.text(STATS), {"s": empty})).one()) == (0, None, None)
         await t.expect(conn, STATS, "no quiz set with that id", s=uuid7())
         for caller in (p.developer, p.moderator, p.org_only, None):
             await t.act(conn, caller)

@@ -2,7 +2,7 @@
 
 REQ-DEV-01 (D-59). Design: ``docs/platform/tasks/P22.md`` section "A — Today's five". Additive: five new tables
 (``quiz_sets``, ``quiz_questions``, ``quiz_attempts``, ``quiz_flags``, ``quiz_profiles``) with their policies, triggers
-and grants, and seventeen new functions (four of them trigger functions); one new tenancy class in the ORM
+and grants, and eighteen new functions (four of them trigger functions); one new tenancy class in the ORM
 (``Tenancy.CURATED``: the sets and questions, which have no owner). No enum type (text columns with CHECKs). Nothing
 of revisions 0001 to 0008 is changed or dropped; the triggers reuse ``block_mutation()`` (revision 0002) and the clock
 ``app_clock_now()`` (revision 0003). The upgrade is additive; the downgrade is destructive (it drops the quiz: see
@@ -12,7 +12,9 @@ Who reads and writes what (bridge_app; there is no worker role: the nightly job 
 revisions 0007 and 0008's jobs; a "developer" is an active user with a developer profile and no staff role,
 ``app_is_developer()``: staff approve the sets, so they never play or rank):
 
-- ``quiz_sets`` (CURATED; bridge_app: SELECT, INSERT of ``id``, ``quiz_date``, ``origin``, ``llm_trace_id``). Staff
+- ``quiz_sets`` (CURATED; bridge_app: SELECT of ``id``, ``quiz_date``, ``status``, ``origin``, ``created_at``, INSERT
+  of ``id``, ``quiz_date``, ``origin``, ``llm_trace_id``; staff admin reads ``decided_by``, ``decided_at`` and
+  ``llm_trace_id`` through ``app_quiz_set_detail(set)``). Staff
   admin reads every set, a developer the approved ones dated today or earlier (never tomorrow's ahead of time), nobody
   else any. The job (no user bound) inserts a draft for
   today or a later Nairobi day. ``status`` moves once, ``draft`` to ``approved`` (only with its five questions) or
@@ -91,7 +93,9 @@ listed in ``FUNCTION_GRANTS``):
   ``quiz_attempt_score(set, answers)`` (INVOKER, no EXECUTE grant: the live questions answered correctly, a pulled one
   counting for nobody).
 - ``app_quiz_set_stats(set)`` -> (attempts, average_score, per_question_correct): staff admin only; a set's attempts in
-  aggregate (their number, the average score to 2 decimals, and by position how many answered correctly).
+  aggregate (their number and, from 3 attempts on, the average score to 2 decimals and by position how many answered
+  correctly; both NULL below 3). ``app_quiz_set_detail(set)`` -> (decided_by, decided_at, llm_trace_id): staff admin
+  only; an unknown set no_data_found for both.
 - ``app_quiz_board()`` -> (rank, handle, points, time_ms, is_caller): a developer only. The ISO week (Monday to Sunday)
   of the current Nairobi day; the points and total time of each developer's attempts on that week's approved sets;
   ranked (``rank()``: more points first, then less time; equal points and time share a rank) among active,
@@ -119,7 +123,9 @@ Operating rules for the code that uses this schema:
 - Staff decisions and pulls only through ``app_decide_quiz_set`` and ``app_set_quiz_question_status``; the app writes
   the audit events (``quiz.set_decided`` and the pull's) in the same transaction. Flags only through
   ``SELECT * FROM app_flag_question(:question, :reason, :note)`` (insufficient_privilege is 403 ``play_first``). The
-  board only through ``app_quiz_board()``; the staff set page's numbers only through ``app_quiz_set_stats(set)``.
+  board only through ``app_quiz_board()``; the staff set page's numbers and decision only through
+  ``app_quiz_set_stats(set)`` and ``app_quiz_set_detail(set)`` (the QuizSet mapper defers ``decided_by``,
+  ``decided_at`` and ``llm_trace_id`` with raiseload: never select them).
 - The seed writes ``seeded`` sets as the owner (it may date them in the past, approve them directly with
   ``decided_at`` and leave ``decided_by`` NULL); questions go into a draft before it is approved, attempts onto an
   approved set (their scores are computed by the database).
@@ -154,7 +160,8 @@ QUESTION_READABLE = (
     " pulled_at, pulled_reason, restored_at, created_at"
 )
 APP_GRANTS: dict[str, str] = {
-    "quiz_sets": "SELECT, INSERT (id, quiz_date, origin, llm_trace_id)",
+    # The decision's author and time and the generating call are staff's (app_quiz_set_detail), not the app's to read.
+    "quiz_sets": "SELECT (id, quiz_date, status, origin, created_at), INSERT (id, quiz_date, origin, llm_trace_id)",
     "quiz_questions": (
         f"SELECT ({QUESTION_READABLE}), INSERT (id, set_id, position, prompt, options, answer, why, source_id,"
         " source_title, source_url, topic, prompt_hash)"
@@ -560,9 +567,10 @@ END;
 $$;
 
 -- A set's attempts in aggregate, for the staff queue (D-59; minimisation: no role but the owner reads another
--- developer's attempt row): how many, their average score (2 decimals; NULL with none) and, by position, how many
--- answered the question correctly (pulled ones included, against their answer). Staff admin only; an unknown set
--- no_data_found. SECURITY DEFINER: reads the attempts and answers, returns counts only.
+-- developer's attempt row): how many and, once there are at least 3 (so that no figure describes one or two people),
+-- their average score (2 decimals) and, by position, how many answered the question correctly (pulled ones included,
+-- against their answer); both NULL below 3. Staff admin only; an unknown set no_data_found. SECURITY DEFINER: reads
+-- the attempts and answers, returns counts only.
 CREATE FUNCTION app_quiz_set_stats(p_set uuid)
     RETURNS TABLE (attempts integer, average_score numeric, per_question_correct integer[])
     LANGUAGE plpgsql STABLE SECURITY DEFINER
@@ -576,11 +584,35 @@ BEGIN
         RAISE EXCEPTION 'app_quiz_set_stats: no quiz set with that id' USING ERRCODE = 'no_data_found';
     END IF;
     RETURN QUERY
-    SELECT (SELECT count(*)::integer FROM public.quiz_attempts a WHERE a.set_id = p_set),
-           (SELECT round(avg(a.score), 2) FROM public.quiz_attempts a WHERE a.set_id = p_set),
-           ARRAY(SELECT (SELECT count(*)::integer FROM public.quiz_attempts a
-                          WHERE a.set_id = p_set AND a.answers[q.position] = q.answer)
-                   FROM public.quiz_questions q WHERE q.set_id = p_set ORDER BY q.position);
+    WITH counted AS (SELECT count(*)::integer AS n FROM public.quiz_attempts a WHERE a.set_id = p_set)
+    SELECT c.n,
+           CASE WHEN c.n >= 3 THEN (SELECT round(avg(a.score), 2) FROM public.quiz_attempts a WHERE a.set_id = p_set)
+           END,
+           CASE WHEN c.n >= 3 THEN
+               ARRAY(SELECT (SELECT count(*)::integer FROM public.quiz_attempts a
+                              WHERE a.set_id = p_set AND a.answers[q.position] = q.answer)
+                       FROM public.quiz_questions q WHERE q.set_id = p_set ORDER BY q.position)
+           END
+      FROM counted c;
+END;
+$$;
+
+-- A set's decision and origin for the staff set page: who decided it and when, and the generating call's trace id
+-- (bridge_app holds no SELECT on these columns: a developer never learns which staff member approved a set). Staff
+-- admin only; an unknown set no_data_found.
+CREATE FUNCTION app_quiz_set_detail(p_set uuid)
+    RETURNS TABLE (decided_by uuid, decided_at timestamptz, llm_trace_id character varying)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NOT public.app_is_staff('{admin}') THEN
+        RAISE EXCEPTION 'app_quiz_set_detail: staff admin only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN QUERY SELECT s.decided_by, s.decided_at, s.llm_trace_id FROM public.quiz_sets s WHERE s.id = p_set;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'app_quiz_set_detail: no quiz set with that id' USING ERRCODE = 'no_data_found';
+    END IF;
 END;
 $$;
 
@@ -726,6 +758,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_flag_question(uuid, text, text)": ("bridge_app",),  # a developer
     "app_quiz_answers(uuid)": ("bridge_app",),  # after the caller's attempt, or staff admin
     "app_quiz_set_stats(uuid)": ("bridge_app",),  # staff admin: a set's attempts in aggregate
+    "app_quiz_set_detail(uuid)": ("bridge_app",),  # staff admin: who decided a set, when, and its generating call
     "app_quiz_board()": ("bridge_app",),  # a developer
     "app_quiz_day_taken(date)": ("bridge_app",),  # the job, with no user bound
     "app_quiz_recent_prompt_hashes(date)": ("bridge_app",),  # the job, with no user bound
