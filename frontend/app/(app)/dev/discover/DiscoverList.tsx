@@ -10,6 +10,7 @@ import {
   isNarrowed,
   MAX_ITEMS,
   projectsById,
+  takesWords,
   type CountyRef,
   type DiscoverBriefsOut,
   type DiscoverQuery,
@@ -38,7 +39,13 @@ export function DiscoverList(props: DiscoverListProps) {
   const t = useTranslations("discover");
   const { query, counties } = props;
   const narrowed = isNarrowed(query);
-  const clear = { sentence: t("filteredEmpty"), action: t("clear"), href: discoverHref({ view: query.view }) };
+  // Words narrow every list but the gap's: the sentence then names them, not only the niche and county.
+  const byWords = Boolean(query.words) && takesWords(query.view);
+  const clear = {
+    sentence: byWords ? t("filteredEmptyWords", { words: query.words! }) : t("filteredEmpty"),
+    action: t("clear"),
+    href: discoverHref({ view: query.view }),
+  };
 
   if (props.kind === "briefs") {
     const items = props.briefs.items.slice(0, MAX_ITEMS);
