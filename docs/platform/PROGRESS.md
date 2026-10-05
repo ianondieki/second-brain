@@ -437,7 +437,9 @@ The report is "P20 report" below. Linux setup unchanged (worktrees need a real o
 Turbopack refuses the symlink). The stack is up at the end; `demo.py reset --yes` before showing it.
 P21 (2026-10-05, the same session after a context summary): the owner asked for feature ideas and said "Go ahead and
 implement"; three tracks (Messages, shortlist and compare, saved searches) on the same branch, reviewed to PASS and
-gated; the report is "P21 report" below. Same merge situation as P20.
+gated; the report is "P21 report" below. P20 and P21 merged into the integration branch as `429a7aa` on the owner's
+instruction. **P22 (2026-10-05, the same session; the owner's three developer-space features, critiqued and cut, the
+cuts accepted):** `tasks/P22.md`, D-58 to D-62, REQ-DEV-01..03; P22-A (Today's five) started with revision 0009.
 
 **Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
 come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for
