@@ -3153,7 +3153,7 @@
     "nameHint": "Up to {max} characters, for example Agriculture in Nakuru.",
     "keeps": "This keeps",
     "alertsLabel": "Tell me each morning when something new matches",
-    "submit": "Save search",
+    "submit": "Save",
     "saving": "Saving…",
     "cancel": "Cancel",
     "saved": "Saved: {name}.",

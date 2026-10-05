@@ -93,6 +93,11 @@ export function SavedSearches({ initial, max, current, settingsHref, calls: give
     setMode(mode === "form" ? "closed" : "form");
   }
 
+  /** A refused name: focus goes to the box, whose error it reads (aria-describedby, from the field). */
+  function nameFocus() {
+    requestAnimationFrame(() => document.getElementById("saved-name")?.focus());
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !current) return;
@@ -100,6 +105,7 @@ export function SavedSearches({ initial, max, current, settingsHref, calls: give
     const wrong = nameProblem(name);
     if (wrong) {
       setProblem(wrong);
+      nameFocus();
       return;
     }
     setBusy(true);
@@ -108,6 +114,7 @@ export function SavedSearches({ initial, max, current, settingsHref, calls: give
     setBusy(false);
     if (!outcome.ok) {
       setProblem(outcome.problem === "gone" ? "failed" : outcome.problem);
+      if (outcome.problem === "nameMissing" || outcome.problem === "nameLong") nameFocus();
       return;
     }
     const saved = outcome.value;

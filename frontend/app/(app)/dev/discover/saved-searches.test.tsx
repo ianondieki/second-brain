@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
@@ -139,7 +139,7 @@ describe("the saved searches strip", () => {
     expect(name.value).toBe("Agriculture in Nakuru");
     expect(screen.getByRole("checkbox", { name: en.savedSearches.alertsLabel })).toHaveProperty("checked", true);
     fireEvent.change(name, { target: { value: "Cold chain, Nakuru" } });
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save search" })));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
     expect(calls.save).toHaveBeenCalledWith({
       name: "Cold chain, Nakuru",
       view: "problems",
@@ -161,9 +161,23 @@ describe("the saved searches strip", () => {
     const calls = renderPanel({});
     fireEvent.click(screen.getByRole("button", { name: "Save this search" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "  " } });
-    fireEvent.click(screen.getByRole("button", { name: "Save search" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(calls.save).not.toHaveBeenCalled();
     expect(screen.getByText(en.savedSearches.problem.nameMissing)).toBeTruthy();
+  });
+
+  it("puts focus on a refused name, whose error the box reads", async () => {
+    renderPanel({});
+    fireEvent.click(screen.getByRole("button", { name: "Save this search" }));
+    const box = screen.getByRole("textbox", { name: "Name" });
+    fireEvent.change(box, { target: { value: "  " } });
+    screen.getByRole("button", { name: "Save" }).focus();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(document.activeElement).toBe(box));
+    expect(box.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(box.getAttribute("aria-describedby")!.split(" ").at(-1)!)?.textContent).toBe(
+      en.savedSearches.problem.nameMissing,
+    );
   });
 
   it("explains the cap and keeps Save from opening at 10", () => {
@@ -181,7 +195,7 @@ describe("the saved searches strip", () => {
     const calls = fakeCalls({ save: vi.fn(async () => ({ ok: false as const, problem: "limit" as const })) });
     renderPanel({ initial: [ROW], calls });
     fireEvent.click(screen.getByRole("button", { name: "Save this search" }));
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save search" })));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
     expect(screen.getByRole("alert").textContent).toContain("You have 10 saved searches");
   });
 
