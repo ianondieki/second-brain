@@ -15,8 +15,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 import { SettingsTabs } from "../SettingsTabs";
-import { notificationChoices, preferenceChoices, type ConsentItem, type PreferenceItem } from "./choices";
+import { notificationChoices, preferenceChoices, type ConsentItem } from "./choices";
 import { NotificationChoices } from "./NotificationChoices";
+import { myPreferences } from "./preferences-data";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("notificationSettings");
@@ -33,21 +34,6 @@ async function myConsents(): Promise<ConsentItem[]> {
   if (response.status === 401) redirect("/login"); // the session ended between the page's /me check and this call
   if (!data) throw new Error(`GET /api/me/consents answered ${response.status}`);
   return data;
-}
-
-/**
- * The signed-in person's notification preferences (GET /api/me/notification-preferences): a store apart from the
- * consents, listing only what this person may set (the saved-search digest for developers, P21).
- */
-async function myPreferences(): Promise<PreferenceItem[]> {
-  const { data, response } = await serverApi().GET("/api/me/notification-preferences", {
-    headers: await forwardHeaders(),
-    signal: AbortSignal.timeout(5000),
-    cache: "no-store",
-  });
-  if (response.status === 401) redirect("/login");
-  if (!data) throw new Error(`GET /api/me/notification-preferences answered ${response.status}`);
-  return data.items;
 }
 
 /**
