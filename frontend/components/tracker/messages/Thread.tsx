@@ -1,14 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
-import { ConfirmDialog, openConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/components/ui/cn";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { useHydrated } from "@/lib/hooks/useHydrated";
@@ -18,19 +16,19 @@ import type { ThreadCalls } from "./calls";
 import { Composer } from "./Composer";
 import { FileIcon } from "./FileIcon";
 import {
-  REPORT_REASONS,
   fileSize,
   firstUnread,
   groupByDay,
   messageTime,
   prependOlder,
   type Message,
-  type ReportReason,
-  type ReportRefusal,
   type Thread as ThreadPage,
 } from "./thread";
 
 export type { ThreadCalls };
+
+// The report sheet loads on the first press of a Report (docs/spec/07 item 5: the route sits near its 150 KB).
+const ReportSheet = lazy(() => import("./ReportSheet").then((m) => ({ default: m.ReportSheet })));
 
 export interface ThreadProps {
   engagementId: string;
@@ -64,8 +62,7 @@ export function Thread({ engagementId, initial, today, locale, orgName, empty, c
   const [newFrom] = useState(() => firstUnread(initial.items, initial.last_read_at));
   const [reported, setReported] = useState<Record<string, "reported" | "reportedAgain">>({});
   const [focusId, setFocusId] = useState<string | null>(null);
-  const [reportTarget, setReportTarget] = useState<Message | null>(null);
-  const reportDialog = useRef<HTMLDialogElement>(null);
+  const [reportTarget, setReportTarget] = useState<{ message: Message } | null>(null);
 
   // Seen: the read marker moves up to the newest message shown (once; a refusal changes nothing on the page).
   const marked = useRef(false);
@@ -136,8 +133,7 @@ export function Thread({ engagementId, initial, today, locale, orgName, empty, c
                     orgName={orgName}
                     reported={reported[message.id]}
                     onReport={() => {
-                      setReportTarget(message);
-                      openConfirm(reportDialog.current);
+                      setReportTarget({ message });
                     }}
                     calls={call}
                   />
@@ -148,13 +144,16 @@ export function Thread({ engagementId, initial, today, locale, orgName, empty, c
         ))
       )}
 
-      <ReportSheet
-        dialog={reportDialog}
-        engagementId={engagementId}
-        target={reportTarget}
-        calls={call}
-        onReported={(message, created) => setReported((now) => ({ ...now, [message.id]: created ? "reported" : "reportedAgain" }))}
-      />
+      {reportTarget ? (
+        <Suspense fallback={null}>
+          <ReportSheet
+            engagementId={engagementId}
+            target={reportTarget}
+            calls={call}
+            onReported={(message, created) => setReported((now) => ({ ...now, [message.id]: created ? "reported" : "reportedAgain" }))}
+          />
+        </Suspense>
+      ) : null}
 
       {initial.can_post ? (
         <Composer
@@ -316,81 +315,5 @@ function ReportControl({
     <Button variant="link" className="self-start text-sm" aria-describedby={describedBy} onClick={onOpen} data-report="">
       {t("report")}
     </Button>
-  );
-}
-
-/**
- * The report sheet (one for the thread): the five reasons as checkboxes, at least one, and a confirm. The report shares
- * that one message with the moderators; it stays in the thread for both sides.
- */
-function ReportSheet({
-  dialog,
-  engagementId,
-  target,
-  onReported,
-  calls,
-}: {
-  dialog: RefObject<HTMLDialogElement | null>;
-  engagementId: string;
-  target: Message | null;
-  onReported: (message: Message, created: boolean) => void;
-  calls: ThreadCalls;
-}) {
-  const t = useStrings("trackerMessages");
-  const [reasons, setReasons] = useState<ReportReason[]>([]);
-  const [problem, setProblem] = useState<ReportRefusal | "reportNeedsReason" | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function send() {
-    if (!target) return;
-    if (reasons.length === 0) {
-      setProblem("reportNeedsReason");
-      return;
-    }
-    setBusy(true);
-    setProblem(null);
-    const outcome = await calls.reportMessage(engagementId, target.id, reasons);
-    setBusy(false);
-    if (!outcome.ok) {
-      setProblem(outcome.refusal);
-      return;
-    }
-    dialog.current?.close();
-    onReported(target, outcome.created);
-  }
-
-  return (
-    <ConfirmDialog
-      ref={dialog}
-      title={t("reportTitle")}
-      confirmLabel={t("reportConfirm")}
-      busyLabel={t("reportBusy")}
-      busy={busy}
-      onConfirm={() => void send()}
-      cancelLabel={t("cancel")}
-      problem={problem ? <Alert>{t(problem)}</Alert> : null}
-      onClose={() => {
-        setReasons([]);
-        setProblem(null);
-      }}
-    >
-      <p className="text-ink-soft">{t("reportLead")}</p>
-      <fieldset className="mt-4" data-report-reasons="">
-        <legend className="font-semibold text-ink">{t("reasonsLegend")}</legend>
-        {REPORT_REASONS.map((reason) => (
-          <Checkbox
-            key={reason}
-            id={`report-reason-${reason}`}
-            label={t(`reason.${reason}`)}
-            checked={reasons.includes(reason)}
-            onChange={(event) => {
-              const on = event.currentTarget.checked;
-              setReasons((now) => (on ? [...now, reason] : now.filter((r) => r !== reason)));
-              setProblem(null);
-            }}
-          />
-        ))}
-      </fieldset>
-    </ConfirmDialog>
   );
 }

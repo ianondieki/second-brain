@@ -1,48 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
-import { ProgressBar } from "@/components/ui/ProgressBar";
-import { AlertIcon, CheckIcon, ClockIcon } from "@/components/ui/status-icons";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 
 import type { ThreadCalls } from "./calls";
-import { ClipIcon, FileIcon } from "./FileIcon";
+import { ClipIcon } from "./FileIcon";
+import type { Pending } from "./PendingRows";
 import {
   METER_FROM,
   REFRESH_REFUSALS,
   TEXT_REFUSALS,
   contentTypeOf,
   fileProblem,
-  fileSize,
   maxMegabytes,
-  type FileProblem,
   type Limits,
   type Message,
   type PostRefusal,
 } from "./thread";
 
-type Status = "uploading" | "scanning" | "ready" | "blocked";
-
-/** A file chosen for the next message: uploading, being scanned, staged (ready) or refused (blocked). */
-interface Pending {
-  key: string;
-  name: string;
-  size: number;
-  status: Status;
-  progress: number;
-  /** The staged upload's id (ready), or a refused upload's record (blocked by the scan), which Remove deletes. */
-  id: string | null;
-  problem: FileProblem | PostRefusal | null;
-  minutes?: number;
-}
-
-const STATUS_ICON = { uploading: ClockIcon, scanning: ClockIcon, ready: CheckIcon, blocked: AlertIcon } as const;
-const STATUS_TONE = { uploading: "text-ink-soft", scanning: "text-ink-soft", ready: "text-ok", blocked: "text-error" } as const;
+// The file rows load with the first file chosen (the Messages route sits near its 150 KB; docs/spec/07 item 5).
+const PendingRows = lazy(() => import("./PendingRows").then((m) => ({ default: m.PendingRows })));
 
 const BODY_ID = "message-body";
 
@@ -205,9 +187,9 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
 
       {files.length > 0 ? (
         <ul aria-label={t("files")} className="flex flex-col gap-2" data-pending-files="">
-          {files.map((file) => (
-            <PendingRow key={file.key} file={file} locale={locale} limits={limits} onRemove={() => remove(file)} />
-          ))}
+          <Suspense fallback={null}>
+            <PendingRows files={files} locale={locale} limits={limits} onRemove={remove} />
+          </Suspense>
         </ul>
       ) : null}
 
@@ -244,60 +226,3 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
     </form>
   );
 }
-
-function PendingRow({ file, locale, limits, onRemove }: { file: Pending; locale: string; limits: Limits; onRemove: () => void }) {
-  const t = useStrings("trackerMessages");
-  const Icon = STATUS_ICON[file.status];
-  const status =
-    file.status === "uploading" ? t("status.uploading", { value: file.progress }) : t(`status.${file.status}`);
-  const problem = file.problem
-    ? (file.problem in FILE_KEYS
-        ? t(`file.${file.problem as FileProblem}`, { value: maxMegabytes(limits), max: limits.max_attachments, count: file.minutes ?? 1 })
-        : t(`refusal.${file.problem as PostRefusal}`, { count: file.minutes ?? 1, max: limits.max_attachments }))
-    : null;
-  const nameId = `${file.key}-name`;
-  return (
-    <li data-pending-file={file.name} data-status={file.status} className="flex flex-col gap-1.5">
-      <div
-        className={cn(
-          "flex min-h-11 items-center gap-3 rounded-control border py-1 pr-1 pl-3",
-          file.status === "blocked" ? "border-error-line bg-error-wash" : "border-line bg-paper",
-        )}
-      >
-        <FileIcon className="size-5 shrink-0 text-accent" />
-        <span className="min-w-0 flex-1">
-          <span id={nameId} className="block truncate text-sm font-semibold text-ink">
-            {file.name}
-          </span>
-          {/* Ink, not ink-soft, on the blocked row's error wash (never grey text on a coloured surface). */}
-          <span className={cn("flex flex-wrap gap-x-3 text-xs tabular-nums", file.status === "blocked" ? "text-ink" : "text-ink-soft")}>
-            <span>{fileSize(file.size, locale)}</span>
-            <span className={cn("inline-flex items-center gap-1 font-semibold", STATUS_TONE[file.status])} data-file-status={file.status}>
-              <Icon className="size-3.5" />
-              {status}
-            </span>
-          </span>
-        </span>
-        <Button variant="link" className="shrink-0" aria-describedby={nameId} onClick={onRemove}>
-          {t("remove")}
-        </Button>
-      </div>
-      {file.status === "uploading" ? (
-        <ProgressBar value={file.progress} max={100} segments={false} label={status} />
-      ) : null}
-      {problem ? <p className="text-sm text-error">{problem}</p> : null}
-    </li>
-  );
-}
-
-const FILE_KEYS: Record<FileProblem, true> = {
-  type: true,
-  size: true,
-  empty: true,
-  infected: true,
-  tooMany: true,
-  staged: true,
-  limit: true,
-  storage: true,
-  failed: true,
-};
