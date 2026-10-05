@@ -4,7 +4,9 @@ Given a demo seeded with the feature flags off (as CI's stack once ran it) and t
 (the Telco A reviewer starts review of Brian's P3 and the signatory declines it, Amina changes her password, Brian
 turns two-step sign-in off) and the demo starts again, then the seed step (``python -m bridge.seed --demo``) exits 0,
 adds nothing and changes nothing they did: each engagement it did not open in that run is left where it is, with one
-line in the report. Own database: the actions end engagements for good.
+line in the report. P21's beats keep the rule: a shortlist entry people removed and a saved search they renamed are not
+made again, a saved search is not added past the cap, and a thread whose engagement ended is left with one line. Own
+database: the actions end engagements for good.
 """
 
 from __future__ import annotations
@@ -27,10 +29,12 @@ from bridge.config import Settings, get_settings
 from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.integrations.sms import FakeSmsProvider
 from bridge.notifications.email import FakeEmailProvider
+from bridge.profiles.models import MAX_SAVED_SEARCHES
 from bridge.seed import __main__ as seed_command
-from bridge.seed.demo import DemoReport, DemoRuntime, seed_demo
-from bridge.seed.demo.data import AMINA, BRIAN, P1, P2, P3, SACCO_B, TELCO_A, VIEWED
+from bridge.seed.demo import DemoReport, DemoRuntime, follow_ups, seed_demo
+from bridge.seed.demo.data import AMINA, BRIAN, P1, P2, P3, SACCO_B, SAVED_SEARCH, TELCO_A, THREAD, VIEWED, DemoThread
 from bridge.seed.demo.runtime import in_process_app, signed_in
+from bridge.seed.demo.scouts import SCOUTED
 from bridge.seed.reference import SEED_TABLES, seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
@@ -109,6 +113,11 @@ async def test_with_the_flags_off_the_seed_stops_before_deal_steps_and_says_so(
     seeded: tuple[DemoReport, DemoReport],
 ) -> None:
     off, _ = seeded
+    assert off.created[-3:] == [  # P21's beats: P1's thread is open at CONTACT_MADE too
+        f"thread of {P1.key} with {SACCO_B.legal_name}: {len(THREAD.messages)} messages",
+        f"shortlist of {TELCO_A.legal_name}: {SCOUTED.key} by {TELCO_REVIEWER}",
+        f"saved search of {AMINA.email}: {SAVED_SEARCH.name}",
+    ]
     assert off.notes == [
         "Tier-2 view skipped: FEATURE_TIER2_ENABLED is off",
         f"{P1.key} with {SACCO_B.legal_name} stopped at CONTACT_MADE: FEATURE_DEALS_ENABLED is off",
@@ -217,3 +226,73 @@ async def test_a_scout_people_deleted_is_not_made_again(
     assert await rows(owner, "SELECT id FROM scout_agents WHERE org_id = :o", o=org) == []
     created = await rows(owner, "SELECT id FROM audit_events WHERE org_id = :o AND action = 'scout.created'", o=org)
     assert len(created) == 1  # the first seed's, made through the API by the owner
+
+
+async def test_a_removed_shortlist_entry_and_a_renamed_saved_search_are_not_made_again(
+    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P21's beats keep P9's rule: the shortlist step runs only while Telco A never shortlisted the scout's match (its
+    ``shortlist.added`` event), and the saved search is looked for by its name and by its view and filters (renaming
+    one changes only its name), so what people changed in the app stays as they left it."""
+    report = seeded[1]
+    org = report.orgs[TELCO_A.legal_name]
+    [entry] = await rows(owner, "SELECT proposal_id FROM org_shortlist WHERE org_id = :o", o=org)
+    async with (
+        in_process_app(flags(True), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, TELCO_REVIEWER) as rita,
+    ):
+        await rita.call("DELETE", f"/api/orgs/{org}/shortlist/{entry.proposal_id}", expect=(204,))
+    # Amina renames her saved search (PATCH changes the name only; her password was changed in the app above).
+    async with owner.begin() as conn:
+        rename = text("UPDATE saved_searches SET name = 'SACCO problems' WHERE name = :n")
+        await conn.execute(rename, {"n": SAVED_SEARCH.name})
+    again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+    assert again.created == []
+    assert await rows(owner, "SELECT proposal_id FROM org_shortlist WHERE org_id = :o", o=org) == []
+    names = await rows(owner, "SELECT name FROM saved_searches WHERE user_id = :u", u=report.users[AMINA.email])
+    assert [n.name for n in names] == ["SACCO problems"]
+
+
+async def test_a_thread_whose_engagement_ended_is_left_with_one_line(
+    seeded: tuple[DemoReport, DemoReport],
+    owner: AsyncEngine,
+    app: AsyncEngine,
+    runtime: DemoRuntime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The thread step posts only on an engagement that has not ended: on Brian's P3 with Telco A, declined in the app
+    above and with an empty thread, it signs nobody in, posts nothing and says so in one line of the report."""
+    report = seeded[1]
+    p3 = await engagement(owner, report, P3.key, TELCO_A.legal_name)
+    assert p3.state == "DECLINED"
+    monkeypatch.setattr(follow_ups, "THREAD", DemoThread(P3.key, TELCO_A.legal_name, THREAD.messages))
+    audit_before = await rows(owner, "SELECT count(*) FROM audit_events")
+    again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+    assert again.created == []
+    assert f"thread of {P3.key} with {TELCO_A.legal_name} left as it is: the engagement is DECLINED" in again.notes
+    assert await rows(owner, "SELECT id FROM engagement_messages WHERE engagement_id = :e", e=p3.id) == []
+    assert await rows(owner, "SELECT count(*) FROM audit_events") == audit_before  # nobody was signed in
+
+
+async def test_no_saved_search_is_added_past_the_cap(
+    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """The saved-search step keeps the cap of ten (``MAX_SAVED_SEARCHES``): when Amina keeps ten other searches (none
+    by its name or its filters), it adds nothing, signs nobody in and says so in one line of the report."""
+    report = seeded[1]
+    amina = report.users[AMINA.email]
+    insert = text(
+        "INSERT INTO saved_searches (id, user_id, name, view, words) VALUES (gen_random_uuid(), :u, :name, 'briefs',"
+        " :words)"
+    )
+    async with owner.begin() as conn:  # test data: ten searches of her own, as the app would have saved them
+        await conn.execute(text("DELETE FROM saved_searches WHERE user_id = :u"), {"u": amina})
+        for n in range(MAX_SAVED_SEARCHES):
+            await conn.execute(insert, {"u": amina, "name": f"Briefs {n}", "words": f"pilot {n}"})
+    audit_before = await rows(owner, "SELECT count(*) FROM audit_events")
+    again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+    assert again.created == []
+    assert f"saved search of {AMINA.email} not added: they keep {MAX_SAVED_SEARCHES} already" in again.notes
+    kept = await rows(owner, "SELECT count(*) FROM saved_searches WHERE user_id = :u", u=amina)
+    assert kept[0][0] == MAX_SAVED_SEARCHES
+    assert await rows(owner, "SELECT count(*) FROM audit_events") == audit_before
