@@ -20,9 +20,10 @@ them, ignoring case: ``problems.service.words_match``; a project matches through
 baselines are the whole platform's. Chips and badges are code-written copy ([[COPY-REVIEW]]).
 
 Saved searches (P21 track C): ``NewMatches`` counts, for a saved view and filters, what this module's own queries list
-that was published in a window: the visible problems Trending Problems draws from (``trend_facts.visible_problems``,
-in the filters' scope), or the open Briefs of the Briefs view. A problem published since the last alert is New this
-week, so the count is what the Discover page now shows for those filters (bar its 20-item cut).
+that was published in a window. The Problems view lists a problem only while it is Trending or New this week, so the
+window is capped there at the New-this-week days (``ranking.trending.new_days``, the same rule): every problem counted
+is one the Discover page lists for those filters (bar its 20-item cut). The Briefs view lists every open Brief with no
+time window, so its count has no cap.
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ from bridge.matching.discover_schemas import (
 )
 from bridge.matching.ranking_config import RankingConfig
 from bridge.matching.trend_facts import Board, ProblemFact, ProblemSignals, board, load, visible_problems
-from bridge.matching.trending import Trend, nairobi_day
+from bridge.matching.trending import Trend, nairobi_day, new_this_week
 from bridge.models.enums import BriefStatus, BriefVisibility, ModerationState, ProblemSource, ProblemStatus
 from bridge.problems import brief_rules, briefs
 from bridge.problems.brief_schemas import BriefFacts
@@ -433,11 +434,13 @@ class SavedQuery:
 
 class NewMatches:
     """How many items Discover lists for a saved query that were published after ``since`` and at or before ``now``,
-    read under the session's RLS (bind it to the person first). The visible problems and the niche tree are read once
-    per instance (one person's searches)."""
+    read under the session's RLS (bind it to the person first): open Briefs for the Briefs view; for the Problems view,
+    visible problems that are also New this week at ``now`` (the page lists no older one unless it trends, and an old
+    problem that trends is not new). The visible problems and the niche tree are read once per instance (one person's
+    searches)."""
 
-    def __init__(self, db: AsyncSession, now: datetime) -> None:
-        self._db, self._now = db, now
+    def __init__(self, db: AsyncSession, now: datetime, cfg: RankingConfig) -> None:
+        self._db, self._now, self._new_days = db, now, cfg.trending.new_days
         self._problems: tuple[Sequence[Row[Any]], Niches] | None = None
 
     async def _visible(self) -> tuple[Sequence[Row[Any]], Niches]:
@@ -458,6 +461,7 @@ class NewMatches:
             for row in rows
             if row.published_at is not None
             and since < row.published_at <= self._now
+            and new_this_week(row.published_at, nairobi_day(self._now), self._new_days)
             and _in_scope(row.niche_id, row.county_code, scope, query.county)
         ]
         if query.words is not None:

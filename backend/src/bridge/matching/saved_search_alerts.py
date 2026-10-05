@@ -9,11 +9,13 @@ Nairobi). "Now" is the shared clock (``app_clock_now()``: the dev/test clock mov
 2. Per user, in a session bound to them and one transaction: their listed searches are locked (``FOR UPDATE``) and
    decided again (still theirs, alerts still on, still not alerted today), then each is matched under their own RLS
    (``discover.NewMatches``: what Discover lists for the saved view and filters, published after ``last_alerted_at``,
-   or after the search was saved, and at or before ``now``). A count above zero writes one in-app notification
-   (``saved_search_match``: "3 new problems match Agriculture in Nakuru", linking to Discover with the filters;
-   dedupe key ``saved_search_match:<search>:<Nairobi date>``). Every decided search's ``last_alerted_at`` becomes
-   ``now`` in the same transaction, matches or not, so an item is never counted twice and a re-run the same day finds
-   nothing due.
+   or after the search was saved, and at or before ``now``; for the Problems view, only problems still New this week,
+   as the page lists them). Turning alerts back on moves ``last_alerted_at`` to that moment
+   (``bridge.profiles.saved_searches``), so nothing published while they were off is counted. A count above zero
+   writes one in-app notification (``saved_search_match``: "3 new problems match Agriculture in Nakuru", linking to
+   Discover with the filters; dedupe key ``saved_search_match:<search>:<Nairobi date>``). Every decided search's
+   ``last_alerted_at`` becomes ``now`` in the same transaction, matches or not, so an item is never counted twice and
+   a re-run the same day finds nothing due.
 3. Then, when the day had matches and the person turned the digest on (``saved_search_digest`` email, off by default)
    with a verified address: one status email listing the searches' names and counts, never an item's text
    (``bridge.notifications.saved_search_digest``; once per person and Nairobi day, ``daily_key``; at most 3 attempts,
@@ -41,6 +43,7 @@ from bridge.db import bind_tenant
 from bridge.engagements.service import app_now
 from bridge.logging import get_logger
 from bridge.matching.discover import NewMatches, SavedQuery
+from bridge.matching.ranking_config import get_ranking
 from bridge.matching.trending import NAIROBI, nairobi_day
 from bridge.models.enums import DeliveryStatus, NotificationChannel
 from bridge.notifications import saved_search_digest as digest
@@ -128,7 +131,7 @@ async def alert_user(deps: AlertDeps, user_id: UUID, search_ids: Sequence[UUID],
     alerts: list[Alert] = []
     async with deps.factory() as db:
         await bind_tenant(db, user_id=user_id)
-        matches = NewMatches(db, now)
+        matches = NewMatches(db, now, get_ranking())
         for search in await _due(db, user_id, search_ids, now):
             query = SavedQuery(search.view, search.niche_slug, search.county_code, search.words)
             count = await matches.count(query, search.last_alerted_at or search.created_at)
