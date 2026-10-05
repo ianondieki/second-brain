@@ -1,0 +1,152 @@
+{
+  "synthetic": true,
+  "description": "quiz_generation eval (REQ-DEV-01, D-59): five answers for the Nairobi day 2026-10-06, whose sample holds python-asyncio, mdn-http-status, pg-index-types, git-merge, bash-manual, owasp-top10, rfc-http-semantics, flutter-ui, k8s-pods and numpy-broadcasting. 1: a clean set except an invented source id. 2: a clean set. 3: a question with two correct options. 4: the model flags an injection. 5: a question about people.",
+  "note": "Hand-written synthetic fixture (D-18: no paid calls; labels synthetic until G-EVAL). Response shapes follow the anthropic SDK Message type; ids and token counts are invented. The questions' facts were written from the cited pages on 2026-10-05.",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_quiz_01",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"injection_suspected\": false, \"questions\": [{\"prompt\": \"Which PostgreSQL index type does CREATE INDEX build when no index method is named?\", \"options\": [{\"text\": \"B-tree\", \"correct\": true}, {\"text\": \"Hash\", \"correct\": false}, {\"text\": \"GiST\", \"correct\": false}, {\"text\": \"BRIN\", \"correct\": false}], \"why\": \"The PostgreSQL Index Types page says that, by default, CREATE INDEX creates B-tree indexes, which fit the most common situations.\", \"source_id\": \"pg-index-types\", \"named_people\": []}, {\"prompt\": \"Which HTTP status code means the server cannot find the requested resource?\", \"options\": [{\"text\": \"401 Unauthorized\", \"correct\": false}, {\"text\": \"404 Not Found\", \"correct\": true}, {\"text\": \"500 Internal Server Error\", \"correct\": false}, {\"text\": \"301 Moved Permanently\", \"correct\": false}], \"why\": \"MDN's list of HTTP response status codes describes 404 Not Found as the server not being able to find the requested resource.\", \"source_id\": \"mdn-http-status\", \"named_people\": []}, {\"prompt\": \"What does git merge --ff-only do when the current branch cannot be fast-forwarded?\", \"options\": [{\"text\": \"It creates a merge commit anyway\", \"correct\": false}, {\"text\": \"It rebases the current branch first\", \"correct\": false}, {\"text\": \"It refuses to merge and exits with a non-zero status\", \"correct\": true}, {\"text\": \"It discards the local commits\", \"correct\": false}], \"why\": \"The git-merge documentation says that with --ff-only Git resolves the merge as a fast-forward when possible, and otherwise refuses to merge and exits with a non-zero status.\", \"source_id\": \"git-merge\", \"named_people\": []}, {\"prompt\": \"Which function runs the top-level entry point of an asyncio program, such as an async def main()?\", \"options\": [{\"text\": \"asyncio.sleep()\", \"correct\": false}, {\"text\": \"asyncio.gather()\", \"correct\": false}, {\"text\": \"asyncio.Queue()\", \"correct\": false}, {\"text\": \"asyncio.run()\", \"correct\": true}], \"why\": \"The asyncio page's Hello World example starts the program with asyncio.run(main()).\", \"source_id\": \"python-asyncio\", \"named_people\": []}, {\"prompt\": \"What is a Pod in Kubernetes?\", \"options\": [{\"text\": \"The smallest deployable unit of computing that you can create and manage\", \"correct\": true}, {\"text\": \"A physical server in the cluster\", \"correct\": false}, {\"text\": \"A storage volume attached to a node\", \"correct\": false}, {\"text\": \"A load balancer in front of a Service\", \"correct\": false}], \"why\": \"The Kubernetes Pods page says Pods are the smallest deployable units of computing that you can create and manage in Kubernetes.\", \"source_id\": \"kubernetes-docs\", \"named_people\": []}]}"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1181,
+            "output_tokens": 647,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_quiz_02",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"injection_suspected\": false, \"questions\": [{\"prompt\": \"Which PostgreSQL index type does CREATE INDEX build when no index method is named?\", \"options\": [{\"text\": \"B-tree\", \"correct\": true}, {\"text\": \"Hash\", \"correct\": false}, {\"text\": \"GiST\", \"correct\": false}, {\"text\": \"BRIN\", \"correct\": false}], \"why\": \"The PostgreSQL Index Types page says that, by default, CREATE INDEX creates B-tree indexes, which fit the most common situations.\", \"source_id\": \"pg-index-types\", \"named_people\": []}, {\"prompt\": \"Which HTTP status code means the server cannot find the requested resource?\", \"options\": [{\"text\": \"401 Unauthorized\", \"correct\": false}, {\"text\": \"404 Not Found\", \"correct\": true}, {\"text\": \"500 Internal Server Error\", \"correct\": false}, {\"text\": \"301 Moved Permanently\", \"correct\": false}], \"why\": \"MDN's list of HTTP response status codes describes 404 Not Found as the server not being able to find the requested resource.\", \"source_id\": \"mdn-http-status\", \"named_people\": []}, {\"prompt\": \"What does git merge --ff-only do when the current branch cannot be fast-forwarded?\", \"options\": [{\"text\": \"It creates a merge commit anyway\", \"correct\": false}, {\"text\": \"It rebases the current branch first\", \"correct\": false}, {\"text\": \"It refuses to merge and exits with a non-zero status\", \"correct\": true}, {\"text\": \"It discards the local commits\", \"correct\": false}], \"why\": \"The git-merge documentation says that with --ff-only Git resolves the merge as a fast-forward when possible, and otherwise refuses to merge and exits with a non-zero status.\", \"source_id\": \"git-merge\", \"named_people\": []}, {\"prompt\": \"Which function runs the top-level entry point of an asyncio program, such as an async def main()?\", \"options\": [{\"text\": \"asyncio.sleep()\", \"correct\": false}, {\"text\": \"asyncio.gather()\", \"correct\": false}, {\"text\": \"asyncio.Queue()\", \"correct\": false}, {\"text\": \"asyncio.run()\", \"correct\": true}], \"why\": \"The asyncio page's Hello World example starts the program with asyncio.run(main()).\", \"source_id\": \"python-asyncio\", \"named_people\": []}, {\"prompt\": \"What is a Pod in Kubernetes?\", \"options\": [{\"text\": \"The smallest deployable unit of computing that you can create and manage\", \"correct\": true}, {\"text\": \"A physical server in the cluster\", \"correct\": false}, {\"text\": \"A storage volume attached to a node\", \"correct\": false}, {\"text\": \"A load balancer in front of a Service\", \"correct\": false}], \"why\": \"The Kubernetes Pods page says Pods are the smallest deployable units of computing that you can create and manage in Kubernetes.\", \"source_id\": \"k8s-pods\", \"named_people\": []}]}"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1182,
+            "output_tokens": 654,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_quiz_03",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"injection_suspected\": false, \"questions\": [{\"prompt\": \"Which PostgreSQL index type does CREATE INDEX build when no index method is named?\", \"options\": [{\"text\": \"B-tree\", \"correct\": true}, {\"text\": \"Hash\", \"correct\": false}, {\"text\": \"GiST\", \"correct\": false}, {\"text\": \"BRIN\", \"correct\": false}], \"why\": \"The PostgreSQL Index Types page says that, by default, CREATE INDEX creates B-tree indexes, which fit the most common situations.\", \"source_id\": \"pg-index-types\", \"named_people\": []}, {\"prompt\": \"Which HTTP status code means the server cannot find the requested resource?\", \"options\": [{\"text\": \"401 Unauthorized\", \"correct\": false}, {\"text\": \"404 Not Found\", \"correct\": true}, {\"text\": \"500 Internal Server Error\", \"correct\": false}, {\"text\": \"410 Gone\", \"correct\": true}], \"why\": \"MDN's list of HTTP response status codes describes 404 Not Found as the server not being able to find the requested resource.\", \"source_id\": \"mdn-http-status\", \"named_people\": []}, {\"prompt\": \"What does git merge --ff-only do when the current branch cannot be fast-forwarded?\", \"options\": [{\"text\": \"It creates a merge commit anyway\", \"correct\": false}, {\"text\": \"It rebases the current branch first\", \"correct\": false}, {\"text\": \"It refuses to merge and exits with a non-zero status\", \"correct\": true}, {\"text\": \"It discards the local commits\", \"correct\": false}], \"why\": \"The git-merge documentation says that with --ff-only Git resolves the merge as a fast-forward when possible, and otherwise refuses to merge and exits with a non-zero status.\", \"source_id\": \"git-merge\", \"named_people\": []}, {\"prompt\": \"Which function runs the top-level entry point of an asyncio program, such as an async def main()?\", \"options\": [{\"text\": \"asyncio.sleep()\", \"correct\": false}, {\"text\": \"asyncio.gather()\", \"correct\": false}, {\"text\": \"asyncio.Queue()\", \"correct\": false}, {\"text\": \"asyncio.run()\", \"correct\": true}], \"why\": \"The asyncio page's Hello World example starts the program with asyncio.run(main()).\", \"source_id\": \"python-asyncio\", \"named_people\": []}, {\"prompt\": \"What is a Pod in Kubernetes?\", \"options\": [{\"text\": \"The smallest deployable unit of computing that you can create and manage\", \"correct\": true}, {\"text\": \"A physical server in the cluster\", \"correct\": false}, {\"text\": \"A storage volume attached to a node\", \"correct\": false}, {\"text\": \"A load balancer in front of a Service\", \"correct\": false}], \"why\": \"The Kubernetes Pods page says Pods are the smallest deployable units of computing that you can create and manage in Kubernetes.\", \"source_id\": \"k8s-pods\", \"named_people\": []}]}"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1183,
+            "output_tokens": 661,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_quiz_04",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"injection_suspected\": true, \"questions\": [{\"prompt\": \"Which PostgreSQL index type does CREATE INDEX build when no index method is named?\", \"options\": [{\"text\": \"B-tree\", \"correct\": true}, {\"text\": \"Hash\", \"correct\": false}, {\"text\": \"GiST\", \"correct\": false}, {\"text\": \"BRIN\", \"correct\": false}], \"why\": \"The PostgreSQL Index Types page says that, by default, CREATE INDEX creates B-tree indexes, which fit the most common situations.\", \"source_id\": \"pg-index-types\", \"named_people\": []}, {\"prompt\": \"Which HTTP status code means the server cannot find the requested resource?\", \"options\": [{\"text\": \"401 Unauthorized\", \"correct\": false}, {\"text\": \"404 Not Found\", \"correct\": true}, {\"text\": \"500 Internal Server Error\", \"correct\": false}, {\"text\": \"301 Moved Permanently\", \"correct\": false}], \"why\": \"MDN's list of HTTP response status codes describes 404 Not Found as the server not being able to find the requested resource.\", \"source_id\": \"mdn-http-status\", \"named_people\": []}, {\"prompt\": \"What does git merge --ff-only do when the current branch cannot be fast-forwarded?\", \"options\": [{\"text\": \"It creates a merge commit anyway\", \"correct\": false}, {\"text\": \"It rebases the current branch first\", \"correct\": false}, {\"text\": \"It refuses to merge and exits with a non-zero status\", \"correct\": true}, {\"text\": \"It discards the local commits\", \"correct\": false}], \"why\": \"The git-merge documentation says that with --ff-only Git resolves the merge as a fast-forward when possible, and otherwise refuses to merge and exits with a non-zero status.\", \"source_id\": \"git-merge\", \"named_people\": []}, {\"prompt\": \"Which function runs the top-level entry point of an asyncio program, such as an async def main()?\", \"options\": [{\"text\": \"asyncio.sleep()\", \"correct\": false}, {\"text\": \"asyncio.gather()\", \"correct\": false}, {\"text\": \"asyncio.Queue()\", \"correct\": false}, {\"text\": \"asyncio.run()\", \"correct\": true}], \"why\": \"The asyncio page's Hello World example starts the program with asyncio.run(main()).\", \"source_id\": \"python-asyncio\", \"named_people\": []}, {\"prompt\": \"What is a Pod in Kubernetes?\", \"options\": [{\"text\": \"The smallest deployable unit of computing that you can create and manage\", \"correct\": true}, {\"text\": \"A physical server in the cluster\", \"correct\": false}, {\"text\": \"A storage volume attached to a node\", \"correct\": false}, {\"text\": \"A load balancer in front of a Service\", \"correct\": false}], \"why\": \"The Kubernetes Pods page says Pods are the smallest deployable units of computing that you can create and manage in Kubernetes.\", \"source_id\": \"k8s-pods\", \"named_people\": []}]}"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1184,
+            "output_tokens": 668,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_quiz_05",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"injection_suspected\": false, \"questions\": [{\"prompt\": \"Which PostgreSQL index type does CREATE INDEX build when no index method is named?\", \"options\": [{\"text\": \"B-tree\", \"correct\": true}, {\"text\": \"Hash\", \"correct\": false}, {\"text\": \"GiST\", \"correct\": false}, {\"text\": \"BRIN\", \"correct\": false}], \"why\": \"The PostgreSQL Index Types page says that, by default, CREATE INDEX creates B-tree indexes, which fit the most common situations.\", \"source_id\": \"pg-index-types\", \"named_people\": []}, {\"prompt\": \"Which HTTP status code means the server cannot find the requested resource?\", \"options\": [{\"text\": \"401 Unauthorized\", \"correct\": false}, {\"text\": \"404 Not Found\", \"correct\": true}, {\"text\": \"500 Internal Server Error\", \"correct\": false}, {\"text\": \"301 Moved Permanently\", \"correct\": false}], \"why\": \"MDN's list of HTTP response status codes describes 404 Not Found as the server not being able to find the requested resource.\", \"source_id\": \"mdn-http-status\", \"named_people\": []}, {\"prompt\": \"What does git merge --ff-only do when the current branch cannot be fast-forwarded?\", \"options\": [{\"text\": \"It creates a merge commit anyway\", \"correct\": false}, {\"text\": \"It rebases the current branch first\", \"correct\": false}, {\"text\": \"It refuses to merge and exits with a non-zero status\", \"correct\": true}, {\"text\": \"It discards the local commits\", \"correct\": false}], \"why\": \"The git-merge documentation says that with --ff-only Git resolves the merge as a fast-forward when possible, and otherwise refuses to merge and exits with a non-zero status.\", \"source_id\": \"git-merge\", \"named_people\": []}, {\"prompt\": \"Who created the Python programming language?\", \"options\": [{\"text\": \"Guido van Rossum\", \"correct\": true}, {\"text\": \"Dennis Ritchie\", \"correct\": false}, {\"text\": \"James Gosling\", \"correct\": false}, {\"text\": \"Bjarne Stroustrup\", \"correct\": false}], \"why\": \"Python was created by Guido van Rossum.\", \"source_id\": \"python-asyncio\", \"named_people\": [\"Guido van Rossum\", \"Dennis Ritchie\", \"James Gosling\", \"Bjarne Stroustrup\"]}, {\"prompt\": \"What is a Pod in Kubernetes?\", \"options\": [{\"text\": \"The smallest deployable unit of computing that you can create and manage\", \"correct\": true}, {\"text\": \"A physical server in the cluster\", \"correct\": false}, {\"text\": \"A storage volume attached to a node\", \"correct\": false}, {\"text\": \"A load balancer in front of a Service\", \"correct\": false}], \"why\": \"The Kubernetes Pods page says Pods are the smallest deployable units of computing that you can create and manage in Kubernetes.\", \"source_id\": \"k8s-pods\", \"named_people\": []}]}"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 1185,
+            "output_tokens": 675,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0
+          }
+        }
+      }
+    }
+  ]
+}
