@@ -196,8 +196,11 @@ async def stage_upload(
 
 
 async def remove_staged(db: AsyncSession, store: ObjectStore, party: Party, attachment_id: UUID) -> None:
-    """Delete one of the caller's own staged uploads (404 for anything else: a sent file, someone else's). Committed
-    before its object goes, so no row is ever left pointing at a missing file."""
+    """Delete one of the caller's own staged uploads (404 for anything else: a sent file, someone else's). One
+    ``DELETE ... RETURNING`` under the caller's RLS, staged rows only: a send of the same file in flight holds its row
+    lock, so the delete waits and, once the send commits, matches nothing (404), and the object of the now-sent
+    attachment is never touched. Committed before its object goes, so no row is ever left pointing at a missing
+    file."""
     a = EngagementMessageAttachment
     mine = (
         a.id == attachment_id,
@@ -205,10 +208,13 @@ async def remove_staged(db: AsyncSession, store: ObjectStore, party: Party, atta
         a.uploader_user_id == party.user_id,
         a.message_id.is_(None),
     )
-    key = await db.scalar(select(a.object_key).where(*mine))
+    deleted = await db.execute(
+        delete(a).where(*mine).returning(a.object_key).execution_options(synchronize_session=False)
+    )
+    key = deleted.scalar_one_or_none()
     if key is None:
+        await db.rollback()
         raise not_found("No such file waiting to be sent.")
-    await db.execute(delete(a).where(*mine).execution_options(synchronize_session=False))
     await db.commit()
     try:
         await store.delete(UPLOADS, key)
