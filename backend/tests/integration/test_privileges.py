@@ -14,6 +14,8 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
 - Registration: the database sets ``registered_at``; only ``provenance_worker`` bound to the owner fills the hashes.
 - A tag expires (revision 0007, AC-PROP-3) only through ``app_close_tag(tag, 'expired')``: by its developer, once the
   engagement made from it has expired, once per engagement; a closed tag keeps its status (the owner may relabel one).
+- A quiz question's answer and why (revision 0009, REQ-DEV-01) are readable by no role but the owner: only through
+  ``app_quiz_answers``.
 """
 
 from __future__ import annotations
@@ -83,6 +85,27 @@ async def test_bridge_app_holds_no_privilege_on_tier2_tables(
     owner_engine: AsyncEngine, table: str, privilege: str
 ) -> None:
     assert "bridge_app" not in await roles_holding(owner_engine, table, privilege)
+
+
+@pytest.mark.parametrize("column", ["answer", "why"])
+async def test_no_role_reads_a_quiz_answer_but_through_app_quiz_answers(owner_engine: AsyncEngine, column: str) -> None:
+    """Revision 0009 (REQ-DEV-01, D-59): a question's answer and why are never readable by any role of the cluster but
+    the owner (the definer ``app_quiz_answers`` returns them after the caller's attempt, or to staff admin); bridge_app
+    reads every other column of the question and writes both (the nightly job)."""
+    async with owner_engine.connect() as conn:
+        readers = await conn.execute(
+            text(
+                "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                " AND r.rolname NOT LIKE 'pg\\_%'"
+                " AND has_column_privilege(r.oid, 'public.quiz_questions', :c, 'SELECT')"
+            ),
+            {"c": column},
+        )
+        assert list(readers.scalars()) == []
+        writes = "SELECT has_column_privilege('bridge_app', 'public.quiz_questions', :c, 'INSERT')"
+        assert (await conn.execute(text(writes), {"c": column})).scalar_one() is True
+        reads = "SELECT has_column_privilege('bridge_app', 'public.quiz_questions', 'prompt', 'SELECT')"
+        assert (await conn.execute(text(reads))).scalar_one() is True
 
 
 async def test_no_role_reads_or_writes_all_data(owner_engine: AsyncEngine) -> None:
