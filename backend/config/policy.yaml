@@ -154,3 +154,11 @@ briefs:
   # moderation case for staff, so an organisation posts at most this many Briefs per Nairobi day (database clock),
   # whatever its plan allows open at once; the next post answers 429 briefs_daily_limit.
   daily_posts: 20
+
+quiz:
+  # Today's five (REQ-DEV-01; D-59; docs/platform/tasks/P22.md section A). Read by bridge/quiz/policy.py. The nightly
+  # quiz_generation call reads a sample of backend/ai/quiz_sources.yaml; the checks in code (bridge/quiz/checks.py)
+  # decide whether its draft becomes a set; staff approve every set before anyone sees it.
+  sources_per_prompt: 10             # curated pages sent per call (8 to 12), spread over the topics, rotated by date
+  draft_attempts: 2                  # calls per night: a discarded draft is retried once, then the day has no draft
+  no_repeat_days: 60                 # a prompt hash drafted in this many days before refuses the draft (repeated_prompt)
