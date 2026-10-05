@@ -26,9 +26,9 @@ from typing import Final
 from urllib.parse import unquote, urlencode
 from uuid import UUID
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, func, insert, select, text, update
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge import clock
 from bridge.audit.service import record as audit
@@ -235,3 +235,26 @@ async def attachment_file(
     if hashlib.sha256(data).digest() != row.sha256:
         raise ApiError(409, "file_changed", "This file does not match what was sent, so it is not served.")
     return row, data
+
+
+_PURGE = text("SELECT * FROM app_purge_stale_message_uploads(app_clock_now())")
+
+
+async def purge_stale_uploads(factory: async_sessionmaker[AsyncSession], store: ObjectStore) -> int:
+    """Delete the staged uploads that can never be sent (``app_purge_stale_message_uploads``, revision 0008: called
+    with no user bound, on the shared clock), committed, then their files from the object store (an object that is
+    already gone, or a key outside the thread's prefix, is skipped). Returns how many uploads went."""
+    async with factory() as db:
+        keys = [str(row[0]) for row in (await db.execute(_PURGE)).all()]
+        await db.commit()
+    log = get_logger(__name__)
+    for key in keys:
+        if not key.startswith("messages/"):
+            log.warning("message_attachment.purge_key_refused")
+            continue
+        try:
+            await store.delete(UPLOADS, key)
+        except Exception:  # the row is gone; an unreferenced object (ids only) is harmless and retried by nobody
+            log.warning("message_attachment.object_not_deleted")
+    log.info("message_attachment.purged", count=len(keys))
+    return len(keys)
