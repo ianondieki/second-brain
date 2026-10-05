@@ -11,8 +11,9 @@ import { ShortlistControl } from "./ShortlistControl";
 import type { ShortlistOutcome } from "./shortlist-calls";
 import { ShortlistStar } from "./ShortlistStar";
 
-// REQ-REPO-02 (P21 B1, B6): the Inbox star. Reviewers, signatories and admins toggle it (aria-pressed, named by what
-// a press does), at once and back again with one sentence when the API refuses; other members see a read-only mark.
+// REQ-REPO-02 (P21 B1, B6): the Inbox star. Reviewers, signatories and admins toggle it (named by what a press does,
+// the state in data-shortlist), at once and back again with one sentence when the API refuses; other members see a
+// read-only mark.
 
 afterEach(cleanup);
 
@@ -32,13 +33,13 @@ describe("the shortlist star", () => {
     const setImpl = vi.fn(() => answer.promise);
     renderWithIntl(<ShortlistStar orgId="o1" proposalId="p1" initial={false} labels={labels} setImpl={setImpl} />);
     const star = screen.getByRole("button", { name: "Add to shortlist" });
-    expect(star.getAttribute("aria-pressed")).toBe("false");
+    expect(star.getAttribute("data-shortlist")).toBe("off");
     fireEvent.click(star);
     expect(setImpl).toHaveBeenCalledWith("o1", "p1", true);
     const on = screen.getByRole("button", { name: "Remove from shortlist" });
-    expect(on.getAttribute("aria-pressed")).toBe("true");
+    expect(on.getAttribute("data-shortlist")).toBe("on");
     await act(async () => answer.resolve({ ok: true }));
-    expect(screen.getByRole("button", { name: "Remove from shortlist" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Remove from shortlist" }).getAttribute("data-shortlist")).toBe("on");
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -48,7 +49,7 @@ describe("the shortlist star", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove from shortlist" }));
     expect(setImpl).toHaveBeenCalledWith("o1", "p1", false);
     expect((await screen.findByRole("alert")).textContent).toBe(en.shortlist.problem.gone);
-    expect(screen.getByRole("button", { name: "Remove from shortlist" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Remove from shortlist" }).getAttribute("data-shortlist")).toBe("on");
   });
 
   it("shows its words beside the star on a proposal's page", () => {
@@ -80,7 +81,7 @@ describe("an Inbox row", () => {
 
   it("carries the star state for the reviewer (P21 B6) and at most two chips", () => {
     renderWithIntl(<InboxRow item={item} href="/org/inbox/p1" org={reviewer} />);
-    expect(screen.getByRole("button", { name: "Remove from shortlist" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Remove from shortlist" }).getAttribute("data-shortlist")).toBe("on");
     expect(document.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2);
   });
 

@@ -19,8 +19,9 @@ export interface ShortlistStarProps {
 }
 
 /**
- * Add a proposal to the organisation's shortlist, or take it off (REQ-REPO-02): a toggle button (aria-pressed) named
- * by what a press does. It changes at once and goes back, with one sentence saying why, when the API refuses.
+ * Add a proposal to the organisation's shortlist, or take it off (REQ-REPO-02): a button named by what a press does
+ * ("Add to shortlist" / "Remove from shortlist"), so the name carries the state; no aria-pressed, since a toggle's
+ * name must not change with its state (WAI-ARIA APG, Button). It changes at once and goes back, with one sentence saying why, when the API refuses.
  * Shown only to the roles that may change the shortlist (reviewer, signatory, admin); others see ShortlistMark.
  */
 export function ShortlistStar({
@@ -55,15 +56,14 @@ export function ShortlistStar({
     <span className={icon ? "relative -mt-2.5 -mr-2.5 flex flex-col items-end" : "flex flex-col items-start gap-2"}>
       <button
         type="button"
-        aria-pressed={on}
         aria-label={icon ? name : undefined}
         aria-disabled={busy || undefined}
         onClick={press}
         data-shortlist={on ? "on" : "off"}
         className={
           icon
-            ? "relative inline-flex size-11 items-center justify-center rounded-full text-ink-soft hover:bg-accent-wash aria-pressed:text-accent"
-            : "btn btn-secondary gap-2 aria-pressed:[&>svg]:text-accent"
+            ? "relative inline-flex size-11 items-center justify-center rounded-full text-ink-soft hover:bg-accent-wash data-[shortlist=on]:text-accent"
+            : "btn btn-secondary gap-2 data-[shortlist=on]:[&>svg]:text-accent"
         }
       >
         <StarIcon on={on} className={icon ? "size-6" : "size-5"} />

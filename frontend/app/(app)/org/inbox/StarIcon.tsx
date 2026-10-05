@@ -1,4 +1,4 @@
-/** The star: an outline when off, filled in the accent when on (decorative; the name and aria-pressed say it). */
+/** The star: an outline when off, filled in the accent when on (decorative; the button's name says it). */
 export function StarIcon({ on, className }: { on: boolean; className?: string }) {
   return (
     <svg aria-hidden="true" focusable="false" viewBox="0 0 20 20" className={className}>
