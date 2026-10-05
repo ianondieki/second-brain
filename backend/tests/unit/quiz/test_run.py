@@ -78,12 +78,14 @@ async def test_a_repeated_prompt_is_refused_through_recent_hashes() -> None:
     assert (outcome.reason, outcome.discarded) == ("repeated_prompt", (Reason.REPEATED_PROMPT,) * 2)
 
 
-async def test_the_attempts_come_from_the_policy() -> None:
+async def test_the_day_gets_exactly_two_calls() -> None:
+    """The card: a discarded draft is retried once, then the day gives up (``quiz.draft_attempts`` is pinned to 2)."""
+    assert get_quiz_policy().draft_attempts == 2
     client = fakes.FakeQuizClient(DAY, "question_count", "question_count", "valid")
-    policy = QuizPolicy(sources_per_prompt=10, draft_attempts=3, no_repeat_days=60)
-    outcome = await draft_set(deps(client, policy), DAY)
-    assert isinstance(outcome, Accepted)
-    assert outcome.attempts == 3
+    outcome = await draft_set(deps(client), DAY)
+    assert isinstance(outcome, Refused)
+    assert (outcome.attempts, outcome.reason) == (2, "question_count")
+    assert len(client.requests) == 2
 
 
 async def test_the_kill_switch_refuses_without_a_call() -> None:

@@ -160,5 +160,5 @@ quiz:
   # quiz_generation call reads a sample of backend/ai/quiz_sources.yaml; the checks in code (bridge/quiz/checks.py)
   # decide whether its draft becomes a set; staff approve every set before anyone sees it.
   sources_per_prompt: 10             # curated pages sent per call (8 to 12), spread over the topics, rotated by date
-  draft_attempts: 2                  # calls per night: a discarded draft is retried once, then the day has no draft
+  draft_attempts: 2                  # calls per night, exactly 2 (the card): one retry, then the day has no draft
   no_repeat_days: 60                 # a prompt hash drafted in this many days before refuses the draft (repeated_prompt)

@@ -30,8 +30,9 @@ def test_the_real_policy() -> None:
         (lambda d: d["quiz"].pop("draft_attempts"), "exactly"),
         (lambda d: d["quiz"].update(sources_per_prompt=7), "8 to 12"),
         (lambda d: d["quiz"].update(sources_per_prompt=13), "8 to 12"),
-        (lambda d: d["quiz"].update(draft_attempts=0), "1 to 3"),
-        (lambda d: d["quiz"].update(draft_attempts=True), "1 to 3"),
+        (lambda d: d["quiz"].update(draft_attempts=1), "2 to 2"),
+        (lambda d: d["quiz"].update(draft_attempts=3), "2 to 2"),
+        (lambda d: d["quiz"].update(draft_attempts=True), "2 to 2"),
         (lambda d: d["quiz"].update(no_repeat_days="60"), "1 to 365"),
     ],
 )

@@ -20,15 +20,15 @@ from bridge.engagements.policy import POLICY_FILE, PolicyError
 
 _RANGES: Final[Mapping[str, tuple[int, int]]] = {
     "sources_per_prompt": (8, 12),  # the card: a sample of 8 to 12 pages per call
-    "draft_attempts": (1, 3),  # the card: one retry; never more than two retries a night
+    "draft_attempts": (2, 2),  # the card: "tries once more, then gives up": exactly two calls a night
     "no_repeat_days": (1, 365),
 }
 
 
 @dataclass(frozen=True, slots=True)
 class QuizPolicy:
-    """``sources_per_prompt``: curated pages sent per call; ``draft_attempts``: calls per night (a discarded draft is
-    retried until they are spent); ``no_repeat_days``: the window of the prompt-hash no-repeat rule."""
+    """``sources_per_prompt``: curated pages sent per call; ``draft_attempts``: calls per night, pinned to 2 by the
+    card (a discarded draft is retried once); ``no_repeat_days``: the window of the prompt-hash no-repeat rule."""
 
     sources_per_prompt: int
     draft_attempts: int
