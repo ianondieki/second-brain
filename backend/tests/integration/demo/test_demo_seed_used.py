@@ -310,6 +310,8 @@ async def test_no_saved_search_is_added_while_amina_keeps_one(
         audit_before = await rows(owner, "SELECT count(*) FROM audit_events")
         again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
         assert again.created == []
+        # Skipped by the check, not refused at sign-in (an earlier test of this module changes Amina's password).
+        assert not [note for note in again.notes if note.startswith("saved search")]
         names = await rows(owner, "SELECT name FROM saved_searches WHERE user_id = :u", u=amina)
         assert [n.name for n in names] == [left]
         assert await rows(owner, "SELECT count(*) FROM audit_events") == audit_before
