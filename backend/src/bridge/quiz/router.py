@@ -11,7 +11,8 @@ an attempt on the set), and their own attempts, flags and quiz profile only.
   when the day has no approved set (a draft is never served).
 - ``POST /today/answers`` ``{set_id, answers, time_ms}``: 201, the one finished attempt on that set, scored by the
   database from the live questions (a pulled question counts for nobody), with the answer key, whys and sources and the
-  streak after it (kept in code: ``bridge.quiz.streaks``). 404 ``no_quiz`` (no approved set with that id), 409
+  streak after it (kept in code: ``bridge.quiz.streaks``: consecutive days that had an approved set played; a day
+  without one breaks nobody's streak). 404 ``no_quiz`` (no approved set with that id), 409
   ``set_closed`` (the set's day is over on the shared clock), 409 ``already_played``, 422 on shape. The profile is
   written first and the attempt last, outside any savepoint, and nothing of the score or key is returned before the
   commit succeeded (revision 0009's operating rules: no rolled-back insert can be an oracle for the key).
@@ -60,7 +61,7 @@ from bridge.quiz.models import (
     QuizQuestion,
     QuizSet,
 )
-from bridge.quiz.streaks import Streak, after_playing, shown
+from bridge.quiz.streaks import Streak, after_playing, missed_sets, shown
 
 router = APIRouter(prefix="/api/me/quiz", tags=["developer"], responses=ERROR_RESPONSES)
 BOARD_SIZE: Final = 20
@@ -140,7 +141,10 @@ class QuizAttemptOut(BaseModel):
 
 
 class QuizStreakOut(BaseModel):
-    current: int = Field(description="Consecutive Nairobi days played up to today or yesterday; else 0")
+    current: int = Field(
+        description="Consecutive days with an approved set played (a day without a set is skipped); 0 once a set"
+        " was missed"
+    )
     best: int
 
 
@@ -263,6 +267,7 @@ def _today_out(
     played: Played | None,
     key: Mapping[UUID, tuple[int, str]],
     profile: Profile | None,
+    missed: int,
 ) -> QuizTodayOut:
     out = []
     for q in questions:
@@ -291,7 +296,7 @@ def _today_out(
             time_ms=played.time_ms,
             finished_at=played.finished_at,
         )
-    current, best = shown(profile.streak if profile else None, today)
+    current, best = shown(profile.streak if profile else None, today, missed=missed)
     return QuizTodayOut(
         set_id=set_id,
         quiz_date=quiz_date,
@@ -329,6 +334,8 @@ async def quiz_today(live: Developer, db: Db) -> QuizTodayOut:
         None if attempt is None else Played(list(attempt.answers), attempt.score, attempt.time_ms, attempt.finished_at)
     )
     key = await _key(db, today_set.id) if played else {}
+    profile = await _profile(db, me)
+    missed = await missed_sets(db, profile.streak if profile else None, today_set.quiz_date)
     return _today_out(
         today_set.id,
         today_set.quiz_date,
@@ -336,7 +343,8 @@ async def quiz_today(live: Developer, db: Db) -> QuizTodayOut:
         await _questions(db, today_set.id),
         played,
         key,
-        await _profile(db, me),
+        profile,
+        missed,
     )
 
 
@@ -377,7 +385,8 @@ async def finish_today(body: QuizAnswersIn, live: Developer, db: Db) -> QuizToda
     if await db.scalar(select(A.id).where(A.set_id == found.id, A.user_id == me)) is not None:
         raise ApiError(409, "already_played", ALREADY_PLAYED)
     before = await _profile(db, me, lock=True)
-    streak = after_playing(before.streak if before else None, found.today)
+    stored = before.streak if before else None
+    streak = after_playing(stored, found.today, missed=await missed_sets(db, stored, found.today))
     kept = {"current_streak": streak.current, "best_streak": streak.best, "last_played_on": streak.last_played_on}
     await db.execute(
         pg_insert(QuizProfile)
@@ -403,7 +412,7 @@ async def finish_today(body: QuizAnswersIn, live: Developer, db: Db) -> QuizToda
     await db.commit()  # nothing of the score or the key leaves before this succeeded
     profile = Profile(streak, before.opted_in if before else False)
     played = Played(list(body.answers), attempt.score, body.time_ms, attempt.finished_at)
-    return _today_out(found.id, found.quiz_date, found.today, questions, played, key, profile)
+    return _today_out(found.id, found.quiz_date, found.today, questions, played, key, profile, missed=0)
 
 
 _FLAG_REFUSALS: Final[Mapping[str, tuple[int, str, str]]] = {

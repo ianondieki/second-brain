@@ -257,8 +257,9 @@ class QuizFlag(IdMixin, Base):
 
 class QuizProfile(Base):
     """A developer's quiz settings and streak, their own row only (bridge_app: read, insert, update every column but
-    the key and ``created_at``). ``current_streak`` counts consecutive Nairobi days played up to ``last_played_on``;
-    ``best_streak`` is never below it. Kept in code when an attempt finishes."""
+    the key and ``created_at``). ``current_streak`` counts consecutive days that had an approved set played, up to
+    ``last_played_on`` (a day without a set is skipped); ``best_streak`` is never below it. Kept in code when an attempt
+    finishes (``bridge.quiz.streaks``)."""
 
     __tablename__ = "quiz_profiles"
     __table_args__ = (

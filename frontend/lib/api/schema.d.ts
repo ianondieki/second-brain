@@ -6980,7 +6980,7 @@ export interface components {
             best: number;
             /**
              * Current
-             * @description Consecutive Nairobi days played up to today or yesterday; else 0
+             * @description Consecutive days with an approved set played (a day without a set is skipped); 0 once a set was missed
              */
             current: number;
         };

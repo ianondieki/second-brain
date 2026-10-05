@@ -34,7 +34,7 @@ from bridge.quiz.checks import Discarded, Draft, DraftOption, DraftQuestion, che
 from bridge.quiz.policy import get_quiz_policy
 from bridge.quiz.sources import get_sources
 from bridge.quiz.store import Stored, store_draft
-from bridge.quiz.streaks import Streak, after_playing
+from bridge.quiz.streaks import Streak, after_playing, missed_sets
 from bridge.seed.demo.data import AMINA, BRIAN, STAFF_ADMIN
 from bridge.seed.demo.runtime import Actors, DemoReport, DemoSeedError, _one
 
@@ -264,7 +264,7 @@ async def _past_attempt(owner: AsyncEngine, set_id: UUID, user_id: UUID, day: da
     async with owner.begin() as conn:
         row = (await conn.execute(text(_PROFILE + " FOR UPDATE"), {"u": user_id})).one_or_none()
         before = None if row is None else Streak(row.current_streak, row.best_streak, row.last_played_on)
-        streak = after_playing(before, day)
+        streak = after_playing(before, day, missed=await missed_sets(conn, before, day))
         await conn.execute(
             text(
                 "INSERT INTO quiz_profiles (user_id, current_streak, best_streak, last_played_on)"
