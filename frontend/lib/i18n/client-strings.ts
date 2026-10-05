@@ -55,6 +55,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "tier2Share",
   "adminResearch",
   "likedNiches",
+  "savedSearches",
   "security",
   "password",
   "fields",

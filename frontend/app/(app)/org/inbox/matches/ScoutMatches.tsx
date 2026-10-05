@@ -110,7 +110,7 @@ async function Body({
         ) : (
           <RowList aria-label={t("listLabel", { org: org.org_name })}>
             {matches.map((match) => (
-              <MatchRow key={match.id} match={match} href={matchHref(memberships, org.org_id, match.id)} />
+              <MatchRow key={match.id} match={match} href={matchHref(memberships, org.org_id, match.id)} org={org} />
             ))}
           </RowList>
         )}

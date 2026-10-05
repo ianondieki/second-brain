@@ -23,6 +23,7 @@
     "reviewP20pub": "[[COPY-REVIEW]] [[SW-REVIEW]] P20-5 (staff console, public pages; REQ-UX-01..04): adminModeration.summary.open; adminModeration.summary.hidden; adminModeration.summary.oldest; adminClaims.summary.waiting; adminClaims.summary.pressing; adminClaims.summary.next; help.contents",
     "reviewP20dev": "[[COPY-REVIEW]] [[SW-REVIEW]] P20-3 (developer portal layout pass, REQ-UX-01..04): discover.sourcesCount (rasimu ya Kiswahili, kama discover.proposals)",
     "reviewP20org": "[[COPY-REVIEW]] [[SW-REVIEW]] P20-4 (REQ-UX-01..04), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.deadline.left na tracker.deadline.overdue (hesabu ya siku kwenye bango la zamu: nambari ni lebo n, huchorwa kubwa, maneno kando yake; mpangilio \"7 siku za kazi zimebaki\" unahitaji ukaguzi), tracker.deadline.due na tracker.deadline.was (tarehe chini yake); tracker.milestone.total (jumla ya hatua za kazi za makubaliano).",
+    "reviewP21f1": "[[COPY-REVIEW]] [[SW-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: shortlist.* (\"orodha fupi\" kwa shortlist), scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
     "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.*, tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) [[SW-REVIEW]] draft Swahili"
   },
   "app": {
@@ -457,6 +458,7 @@
       "home": "Nenda kwenye ukurasa wako wa mwanzo"
     },
     "preference": {
+      "saved_search_digest": "Nitumie barua pepe ya kila siku inayoeleza ni matatizo au Maelezo mangapi mapya yanayolingana na utafutaji wangu uliohifadhiwa.",
       "engagement": {
         "n18": "Nitumie barua pepe mtu anaponiandikia kwenye ushirikiano (si zaidi ya barua pepe moja kwa kila ushirikiano kila dakika 30)."
       }
@@ -722,7 +724,8 @@
     "unavailableTitle": "Pendekezo ambalo halipatikani tena",
     "unavailableNote": "Liliondolewa au limezuiliwa kwa ukaguzi, kwa hiyo muhtasari wake umefichwa.",
     "nicheNotGiven": "Fani haijatajwa",
-    "changeNamed": "Badilisha skauti anayetafuta {niches}"
+    "changeNamed": "Badilisha skauti anayetafuta {niches}",
+    "tabShortlist": "Orodha fupi"
   },
   "scoutMatch": {
     "pageTitle": "Lililopatikana na skauti",
@@ -2078,7 +2081,16 @@
     "briefNoBudget": "Bajeti iko wazi",
     "briefDeadline": "Mapendekezo kufikia {date}",
     "briefNoDeadline": "Hakuna tarehe ya mwisho",
-    "startBrief": "Anza pendekezo kutoka maelezo haya"
+    "startBrief": "Anza pendekezo kutoka maelezo haya",
+    "wordsLabel": "Maneno katika tatizo",
+    "wordsLabelBriefs": "Maneno katika Maelezo",
+    "wordsQuoted": "“{words}”",
+    "filteredEmptyWords": "Hakuna kinacholingana na “{words}” pamoja na vichujio hivi bado.",
+    "saveName": {
+      "nicheCounty": "{niche} katika {county}",
+      "viewCounty": "{view} katika {county}",
+      "all": "{view}: yote"
+    }
   },
   "recommendations": {
     "title": "Yanayopendekezwa kwako",
@@ -3063,5 +3075,103 @@
       "closing": "Inafunga…",
       "cancel": "Yaache wazi"
     }
+  },
+  "shortlist": {
+    "pageTitle": "Orodha fupi",
+    "add": "Weka kwenye orodha fupi",
+    "remove": "Ondoa kwenye orodha fupi",
+    "marked": "Kwenye orodha fupi",
+    "problem": {
+      "code": "Weka msimbo kutoka programu yako ya uthibitishaji, kisha ujaribu tena.",
+      "role": "Ni mkaguzi, mtia sahihi au msimamizi pekee anayeweza kubadilisha orodha fupi.",
+      "gone": "Pendekezo hili haliko tena kwenye Kikasha chako, kwa hiyo orodha fupi haikubadilika.",
+      "network": "Orodha fupi haikubadilika kwa sababu muunganisho ulikatika; jaribu tena.",
+      "signedOut": "Muda wa kuingia kwako umeisha. Ingia tena, kisha ubadilishe orodha fupi.",
+      "failed": "Orodha fupi haikubadilika; jaribu tena baada ya muda mfupi."
+    },
+    "lead": "Mapendekezo ambayo watu wa {org} waliyawekea nyota ili kuyaangalia tena, mapya kwanza. Chagua 2 hadi 4 ili kulinganisha taarifa zao za umma kando kwa kando.",
+    "formLabel": "Chagua mapendekezo ya kulinganisha",
+    "listLabel": "Orodha fupi ya {org}",
+    "choose": "Linganisha {title}",
+    "addedBy": "Liliwekwa na {name} tarehe {date}",
+    "unavailable": "Halipatikani tena",
+    "unavailableNote": "Msanidi programu aliliondoa kwenye uchapishaji au liliondoka kwenye Kikasha chako, kwa hiyo maelezo yake hayaonyeshwi.",
+    "removeEntry": "Ondoa",
+    "removeNamed": "Ondoa {title} kwenye orodha fupi",
+    "removing": "Inaondoa…",
+    "compare": "Linganisha",
+    "chosen": "Yamechaguliwa {count} kati ya {max}",
+    "compareHint": "Chagua mapendekezo {min} hadi {max} ili kuyalinganisha.",
+    "tooFew": "Chagua angalau mapendekezo {min} ili kuyalinganisha.",
+    "tooMany": "Chagua mapendekezo yasiyozidi {max} ili kuyalinganisha.",
+    "needTwo": "Ulinganisho unafunguka orodha fupi ikiwa na mapendekezo 2 yanayopatikana bado.",
+    "pages": "Kurasa za orodha fupi",
+    "older": "Yaliyotangulia",
+    "staleCursor": "Ukurasa huu wa orodha fupi haupatikani tena.",
+    "empty": "Hakuna kitu kwenye orodha fupi bado: wekea pendekezo nyota kwenye Kikasha ili kulihifadhi hapa.",
+    "emptyReader": "Hakuna kitu kwenye orodha fupi ya {org} bado.",
+    "emptyAction": "Fungua Kikasha",
+    "compareTitle": "Linganisha mapendekezo",
+    "backToShortlist": "Rudi kwenye orodha fupi",
+    "tier1Note": "Ulinganisho unaonyesha taarifa za umma za muhtasari wa kila pendekezo pekee. Fungua jina ili kusoma pendekezo kamili, nyuma ya NDA yake ya Tathmini kama kawaida.",
+    "refusal": {
+      "count": "Chagua mapendekezo {min} hadi {max} kutoka orodha fupi ili kuyalinganisha.",
+      "notShortlisted": "Mojawapo ya mapendekezo haya haliko tena kwenye orodha fupi, kwa hiyo hayawezi kulinganishwa."
+    },
+    "noneAvailable": "Hakuna pendekezo kati ya haya linalopatikana tena.",
+    "leftOut": "Mapendekezo uliyochagua ambayo hayapatikani tena, kwa hiyo yameachwa nje: {count}.",
+    "tableCaption": "Mapendekezo kando kwa kando: {count}",
+    "fact": {
+      "niche": "Nyanja",
+      "place": "Kaunti",
+      "maturity": "Hatua",
+      "ask": "Anatafuta",
+      "registered": "Lilisajiliwa",
+      "engagement": "Ushirikiano",
+      "fit": "Ulinganifu wa skauti"
+    },
+    "certificate": "Kagua cheti",
+    "certificateNamed": "Kagua cheti: {title}",
+    "noEngagement": "Bado hakuna",
+    "notMatched": "Halikupatikana na skauti wako"
+  },
+  "savedSearches": {
+    "toggle": "Utafutaji uliohifadhiwa ({count})",
+    "save": "Hifadhi utafutaji huu",
+    "empty": "Hifadhi orodha na vichujio unavyotumia, ili urudi kwa mguso mmoja na upate habari za vipya vinavyolingana.",
+    "limit": "Una utafutaji {max} uliohifadhiwa, kiwango cha juu unachoweza kuweka. Futa mmoja ili kuhifadhi huu.",
+    "nameLabel": "Jina",
+    "nameHint": "Hadi herufi {max}, kwa mfano Kilimo katika Nakuru.",
+    "keeps": "Hii inahifadhi",
+    "alertsLabel": "Niambie kila asubuhi kitu kipya kinapolingana",
+    "submit": "Hifadhi utafutaji",
+    "saving": "Inahifadhi…",
+    "cancel": "Ghairi",
+    "saved": "Umehifadhiwa: {name}.",
+    "deleted": "Umefutwa: {name}.",
+    "lead": "Arifa zikiwa zimewashwa, vipya vinavyolingana vinakufikia mara moja kwa siku ndani ya programu; barua pepe ya kila siku inaweza kuwashwa pia.",
+    "settingsLink": "Mipangilio ya arifa",
+    "listLabel": "Utafutaji wako uliohifadhiwa",
+    "alerts": "Arifa",
+    "on": "Zimewashwa",
+    "off": "Zimezimwa",
+    "alertsProblem": "Arifa hazikubadilika; jaribu tena.",
+    "delete": "Futa",
+    "deleteNamed": "Futa {name}",
+    "deleting": "Inafuta…",
+    "confirmTitle": "Ufute utafutaji huu uliohifadhiwa?",
+    "confirmBody": "{name} unaondoka, pamoja na arifa zake. Gundua yenyewe inabaki ilivyo.",
+    "deleteProblem": "Utafutaji haukufutwa; jaribu tena.",
+    "problem": {
+      "nameMissing": "Upe utafutaji jina.",
+      "nameLong": "Jina lisizidi herufi 60.",
+      "limit": "Una utafutaji {max} uliohifadhiwa, kiwango cha juu unachoweza kuweka. Futa mmoja ili kuhifadhi huu.",
+      "unknown": "Nyanja au kaunti hii haiko tena kwenye orodha; chagua nyingine na uhifadhi tena.",
+      "signedOut": "Umetoka kwenye akaunti, kwa hiyo hakuna kilichohifadhiwa.",
+      "network": "Hakuna kilichohifadhiwa kwa sababu muunganisho ulikatika; jaribu tena.",
+      "failed": "Hakuna kilichohifadhiwa; jaribu tena baada ya muda mfupi."
+    },
+    "heading": "Utafutaji uliohifadhiwa",
+    "alreadyDeleted": "{name} ilikuwa imeshafutwa."
   }
 }

@@ -3,6 +3,8 @@ non-member gets 404 (the organisation is not confirmed), a member without the ro
 
 - ``GET /api/orgs/{org_id}/shortlist``: every member; newest first, ``limit`` and ``cursor``; each entry says who added
   it and when (a proposal the organisation can no longer see is ``available`` false, with no Tier-1 facts).
+- ``GET /api/orgs/{org_id}/shortlist/{proposal_id}``: every member; the one entry (the proposal page's star), 404 when
+  the proposal is not on the list.
 - ``PUT /api/orgs/{org_id}/shortlist/{proposal_id}``: reviewer, signatory or admin; a proposal of the organisation's
   Inbox (else 404); idempotent (the first add keeps its author and time). Audited when it adds.
 - ``DELETE /api/orgs/{org_id}/shortlist/{proposal_id}``: reviewer, signatory or admin; 204 whether or not it was on
@@ -52,6 +54,12 @@ async def compare_shortlisted(
 ) -> shortlist.CompareOut:
     """Shortlisted proposals side by side, on their Tier-1 facts only."""
     return await shortlist.compare(db, org.org_id, shortlist.compare_ids(ids))
+
+
+@router.get("/{proposal_id}")
+async def get_shortlisted(proposal_id: UUID, org: OrgMember, db: Db) -> shortlist.ShortlistEntry:
+    """The proposal's entry on the shortlist; 404 when it is not on it."""
+    return await shortlist.entry(db, org.org_id, proposal_id)
 
 
 @router.put("/{proposal_id}")

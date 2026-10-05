@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 
 import { forwardHeaders, serverApi } from "@/lib/api/server";
 
-import { MAX_ITEMS, trendQuery, type DiscoverBriefsOut, type DiscoverQuery, type OpportunityGapOut, type TrendingOut } from "./discover";
+import { MAX_ITEMS, searchQuery, trendQuery, type DiscoverBriefsOut, type DiscoverQuery, type OpportunityGapOut, type TrendingOut } from "./discover";
 import type { LikedNiches, Recommendations } from "./recommendations";
+import type { SavedSearchList } from "./saved-searches";
 
 // Server-side calls for Discover, "Recommended for you" and the liked-niches page (REQ-TREND-02, REQ-PERS-01; signed
 // in only). Each call is bounded, so a hung API ends in the route's error page instead of a page that never renders.
@@ -22,7 +23,7 @@ function failed(path: string, status: number): never {
 /** Trending and new problems and projects, filtered by niche and county. */
 export async function trending(query: DiscoverQuery): Promise<TrendingOut> {
   const { data, response } = await serverApi().GET("/api/discover/trending", {
-    params: { query: trendQuery(query) },
+    params: { query: searchQuery(query) },
     ...(await options()),
   });
   if (!data) failed("GET /api/discover/trending", response.status);
@@ -42,7 +43,7 @@ export async function opportunityGap(query: DiscoverQuery): Promise<OpportunityG
 /** Verified organisations' published, open Problem Briefs, newest first (REQ-DIR-05). */
 export async function briefs(query: DiscoverQuery): Promise<DiscoverBriefsOut> {
   const { data, response } = await serverApi().GET("/api/discover/briefs", {
-    params: { query: { ...trendQuery(query), limit: MAX_ITEMS } },
+    params: { query: { ...searchQuery(query), limit: MAX_ITEMS } },
     ...(await options()),
   });
   if (!data) failed("GET /api/discover/briefs", response.status);
@@ -81,4 +82,21 @@ export async function profilingConsent(): Promise<ConsentItem | null> {
   const { data, response } = await serverApi().GET("/api/me/consents", await options());
   if (!data) failed("GET /api/me/consents", response.status);
   return data.find((item) => item.purpose === "profiling") ?? null;
+}
+
+/**
+ * The developer's saved Discover searches with the cap, or null when they cannot be shown (no developer profile, a
+ * failing API, no answer in time, the network): only the Saved searches strip is missing, Discover itself stands.
+ * Only a lost session (401) leaves, to sign in again.
+ */
+export async function savedSearches(): Promise<SavedSearchList | null> {
+  let answer;
+  try {
+    answer = await serverApi().GET("/api/me/saved-searches", await options());
+  } catch {
+    return null;
+  }
+  if (answer.data) return answer.data;
+  if (answer.response.status === 401) redirect("/login");
+  return null;
 }

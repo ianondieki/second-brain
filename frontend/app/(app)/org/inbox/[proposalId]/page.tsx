@@ -10,6 +10,8 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 import { getNda, getTeaser, orgContext } from "../../data";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { first, inboxHref, proposalHref } from "../../membership";
+import { isShortlisted } from "../../shortlist-data";
+import { ShortlistControl } from "../ShortlistControl";
 import { FullProposal } from "./FullProposal";
 import { TeaserDetails } from "./TeaserDetails";
 
@@ -57,14 +59,20 @@ export default async function OrgProposalScreen({ params, searchParams }: PagePr
     );
   }
 
-  const nda = await getNda(org.org_id, card.id);
+  const [nda, shortlisted] = await Promise.all([getNda(org.org_id, card.id), isShortlisted(org.org_id, card.id)]);
   const title = card.teaser.title ?? ti("untitled");
   return (
     <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
       <article className="flex max-w-3xl flex-col gap-12">
         {/* One flex item: the back link sits on the title, not a column gap away. */}
         <div>
-          <PageHeader back={back} title={title} lead={card.teaser.niche?.label}>
+          <PageHeader
+            back={back}
+            title={title}
+            lead={card.teaser.niche?.label}
+            // The star beside the title (secondary; the page's one primary action stays in the NDA step).
+            action={<ShortlistControl org={org} proposalId={card.id} shortlisted={shortlisted} variant="button" />}
+          >
             <p className="mt-4 max-w-[62ch] text-sm text-ink-soft">{t("teaserNote")}</p>
           </PageHeader>
         </div>
