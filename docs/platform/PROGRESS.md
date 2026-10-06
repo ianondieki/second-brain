@@ -1271,7 +1271,9 @@ of the Security settings' recovery-codes test (a `pagehide` state update read be
 runner; it passes locally and passed on every earlier run; the assertion now waits for the flush); scanners red on
 `npm audit` (D-56) and, new, on osv-scanner and Trivy for `sharp` 0.35.4 (GHSA-wq5f-xc86-pv6w, a fixed release: bumped
 to 0.35.5); the backend job cancelled at its 35-minute limit (the eighth time on these runners). Run 342 on the corrected head `4e530cb`: frontend green, scanners red on `npm audit` only (osv-scanner and Trivy green
-after the bump), hygiene and legacy green; Playwright, the demo story and the backend job [[CI-342-REST]]. Design shots
+after the bump), hygiene and legacy green; Playwright with the clock scenarios and the demo story green; the backend job cancelled at its 35-minute limit
+again (the ninth time; 5,508 tests pass locally in 39 min under load, 26 min alone: the shard-or-raise question of
+`tasks/P23.md` item 10 stays the owner's). Design shots
 `docs/demo/screenshots/p22c/` (8 screens, 1440 and 375, light and dark, strict axe 0 on all 32, ≤ 1 primary, no
 sideways scroll). JS budget on the new routes and every route the shared composer touches, and Lighthouse:
 scorecard "P22-C measurements" (every route under 150,000 B; the Messages route 1,130 B lighter; performance 96–99,
