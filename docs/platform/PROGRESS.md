@@ -1261,7 +1261,20 @@ thread page with the error page; the invitations screen went stale after an answ
 overflow menu opened off-screen at 360 and pushed the page sideways; one MAJOR: a lead sentence overclaiming
 privacy) then CHANGES_REQUIRED (a focus regression after Block → Cancel) then PASS. Two MINORs stay open on the card.
 
-**Gate.** [[GATE]]
+**Gate.** Playwright on the compose stack rebuilt and reset from the merged branch (mobile 360 and desktop, axe):
+211 passed, 5 skipped, 0 failed (22.5 min); the test-clock scenarios 4/4. Backend suite on the merged backend head
+`0a8d552`: 5,508 passed (39 min alongside the stack rebuild). CodeQL run 277 on `ff505a9`: exactly the eight D-42
+findings (one JavaScript, seven Python). `pr.yml` run 341 on `ff505a9`: Playwright with the clock scenarios, the demo
+story, hygiene and legacy green (the informational legacy job red as before); the frontend job red on one assertion
+of the Security settings' recovery-codes test (a `pagehide` state update read before React flushed it, on a slow
+runner; it passes locally and passed on every earlier run; the assertion now waits for the flush); scanners red on
+`npm audit` (D-56) and, new, on osv-scanner and Trivy for `sharp` 0.35.4 (GHSA-wq5f-xc86-pv6w, a fixed release: bumped
+to 0.35.5); the backend job [[CI-341-BACKEND]]. Run 342 on the corrected head: [[CI-342]]. Design shots
+`docs/demo/screenshots/p22c/` (8 screens, 1440 and 375, light and dark, strict axe 0 on all 32, ≤ 1 primary, no
+sideways scroll). JS budget on the new routes and every route the shared composer touches, and Lighthouse:
+scorecard "P22-C measurements" (every route under 150,000 B; the Messages route 1,130 B lighter; performance 96–99,
+accessibility 100). Demo seed check: Amina, Brian and Zawadi opted in, Juma not; the accepted thread with four
+messages; Brian credited on one of Amina's ideas; the pending Zawadi→Amina invitation. Traceability PASS.
 
 **Deviations.** (1) The sub-agents sign their commits as the model that wrote them (Opus 5.5), the orchestrator's
 carry the session's attribution (Fable 5.1); every commit carries the session line. (2) Commits over ~300 lines:
