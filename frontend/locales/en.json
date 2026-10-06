@@ -3790,7 +3790,7 @@
       "on": "Teaming up on <link>{title}</link>",
       "onGone": "Teaming up on a problem that is no longer published",
       "title": "Messages",
-      "lead": "Only the two of you read this thread. Report a message if something is wrong.",
+      "lead": "Only the two of you read this thread; a moderator reads a message only if one of you reports it.",
       "empty": "No messages yet. Say what you would like to work on together.",
       "closed": {
         "left": "This thread is closed: one of you left it. You can still read it.",
@@ -3859,7 +3859,7 @@
       "peersOff": "Turn on Visible to peers in Settings before you invite anyone.",
       "peerUnavailable": "This developer can no longer be invited.",
       "problemUnavailable": "That problem is no longer open to team up. Choose another.",
-      "alreadyInvited": "There is already an invitation between you on this problem.",
+      "alreadyInvited": "An invitation between you on this problem is already open or was answered recently.",
       "tooMany": "You have sent many invitations today. Try again tomorrow.",
       "noteTooLong": "Keep the note to 300 characters.",
       "invalid": "The note has characters that cannot be sent. Remove them and try again.",
@@ -3895,7 +3895,8 @@
       "leaving": "Leaving…",
       "block": "Block {name}",
       "failed": "Could not do that. Try again.",
-      "left": "You left the thread. You can still read it."
+      "left": "You left the thread. You can still read it.",
+      "loadFailed": "Could not open that step. Check your connection and try again."
     },
     "credit": {
       "add": "Add as contributor on an idea",

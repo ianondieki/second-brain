@@ -3790,7 +3790,7 @@
       "on": "Mnashirikiana kwenye <link>{title}</link>",
       "onGone": "Mnashirikiana kwenye tatizo ambalo halijachapishwa tena",
       "title": "Ujumbe",
-      "lead": "Ni nyinyi wawili tu mnaosoma mazungumzo haya. Ripoti ujumbe ikiwa kuna tatizo.",
+      "lead": "Ni nyinyi wawili tu mnaosoma mazungumzo haya; msimamizi husoma ujumbe tu ikiwa mmoja wenu ameuripoti.",
       "empty": "Bado hakuna ujumbe. Eleza ungependa mfanye kazi gani pamoja.",
       "closed": {
         "left": "Mazungumzo haya yamefungwa: mmoja wenu ameondoka. Bado unaweza kuyasoma.",
@@ -3859,7 +3859,7 @@
       "peersOff": "Washa Onekana kwa wenzako katika Mipangilio kabla ya kumwalika mtu.",
       "peerUnavailable": "Msanidi huyu hawezi kualikwa tena.",
       "problemUnavailable": "Tatizo hilo halipo wazi tena kwa kushirikiana. Chagua jingine.",
-      "alreadyInvited": "Tayari kuna mwaliko kati yenu kuhusu tatizo hili.",
+      "alreadyInvited": "Mwaliko kati yenu kuhusu tatizo hili tayari uko wazi au ulijibiwa hivi karibuni.",
       "tooMany": "Umetuma mialiko mingi leo. Jaribu tena kesho.",
       "noteTooLong": "Ujumbe mfupi usizidi herufi 300.",
       "invalid": "Ujumbe mfupi una herufi zisizoweza kutumwa. Ziondoe ujaribu tena.",
@@ -3895,7 +3895,8 @@
       "leaving": "Inaondoka…",
       "block": "Mzuie {name}",
       "failed": "Imeshindikana. Jaribu tena.",
-      "left": "Umeondoka kwenye mazungumzo. Bado unaweza kuyasoma."
+      "left": "Umeondoka kwenye mazungumzo. Bado unaweza kuyasoma.",
+      "loadFailed": "Imeshindikana kufungua hatua hiyo. Angalia muunganisho wako ujaribu tena."
     },
     "credit": {
       "add": "Mwongeze kama mchangiaji kwenye wazo",
