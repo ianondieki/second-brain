@@ -21,12 +21,15 @@ from tests.integration.engagements import tracker as t
 from tests.integration.teams.schema_world import (
     BLOCK,
     DENIED,
+    INVITE,
     PEERS,
     UNBLOCK,
     card,
     county,
+    decide,
     developer,
     handle,
+    invitation_params,
     invite,
     niche,
     org_only,
@@ -35,9 +38,11 @@ from tests.integration.teams.schema_world import (
     problem,
     refused,
     slug,
+    team,
 )
 
 OPTED_IN = "SELECT peers_visible, peers_opted_in_at FROM developer_profiles WHERE user_id = :u"
+NOT_REACHABLE = "the recipient is neither a peer nor a counterpart of the sender"
 SWITCH = "UPDATE developer_profiles SET peers_visible = :on WHERE user_id = :u"
 
 
@@ -246,11 +251,13 @@ async def test_demo_accounts_are_peers_of_demo_accounts_only(owner_engine: Async
 
 
 async def test_a_card_reaches_a_counterpart_or_a_peer_and_never_across_a_block(owner_engine: AsyncEngine) -> None:
-    """Given a developer's peer, the counterpart of their invitation (not a peer) and a stranger, When the developer
-    asks for each one's card, Then the peer and the counterpart (both ways, whatever the invitation's status and even
-    after the counterpart opts out) get one row of user id, handle and headline, and the stranger, oneself, a user who
-    is no developer, anyone across a block, and every caller who is not a developer get none. ``app_blocked_developers``
-    lists the caller's own blocks with the handles, never another's."""
+    """Given a developer's peer, the counterpart of their pending invitation (no peer any more) and a stranger, When the
+    developer asks for each one's card, Then the peer and the counterpart (both ways, even after the counterpart opts
+    out) get one row of user id, handle and headline, and the stranger, oneself, a user who is no developer, anyone
+    across a block, and every caller who is not a developer get none. A declined or withdrawn invitation makes nobody
+    a counterpart: once the other opts out, neither a card nor an invitation (P0002). A thread does: its counterpart's
+    card stays when they opt out, but a new invitation to them is refused. ``app_blocked_developers`` lists the
+    caller's own blocks with the handles, never another's."""
     async with t.as_app(owner_engine) as conn:
         shared = await niche(conn, "logistics")
         dev = await developer(conn, "dev", liked=(shared,))
@@ -268,8 +275,29 @@ async def test_a_card_reaches_a_counterpart_or_a_peer_and_never_across_a_block(o
         assert [row.user_id for row in await card(conn, counterpart, dev)] == [dev]  # not a peer: the invitation
         await t.as_owner(conn)
         await t.run(conn, "UPDATE developer_profiles SET peers_visible = false WHERE user_id = :u", u=counterpart)
-        assert [row.user_id for row in await card(conn, dev, counterpart)] == [counterpart]
+        assert [row.user_id for row in await card(conn, dev, counterpart)] == [counterpart]  # still pending
         assert await card(conn, dev, stranger) == []
+        opt_out = "UPDATE developer_profiles SET peers_visible = false WHERE user_id = :u"
+        for decision in ("decline", "withdraw"):  # a decided invitation counts for nothing
+            former = await developer(conn, f"former{decision}", liked=(shared,))
+            invitation = await invite(conn, dev, former, await problem(conn, dev))
+            await decide(conn, former if decision == "decline" else dev, invitation, decision)
+            await t.as_owner(conn)
+            await t.run(conn, opt_out, u=former)
+            assert await card(conn, dev, former) == []
+            assert await card(conn, former, dev) == []
+            params = invitation_params(dev, former, await problem(conn, dev))
+            await t.act(conn, dev)
+            await refused(conn, INVITE, NOT_REACHABLE, "P0002", **params)
+        teammate = await developer(conn, "teammate", liked=(shared,))  # a thread does count, for the card only
+        await team(conn, dev, teammate, await problem(conn, dev))
+        await t.as_owner(conn)
+        await t.run(conn, opt_out, u=teammate)
+        assert [row.user_id for row in await card(conn, dev, teammate)] == [teammate]
+        assert [row.user_id for row in await card(conn, teammate, dev)] == [dev]
+        params = invitation_params(dev, teammate, await problem(conn, dev))
+        await t.act(conn, dev)
+        await refused(conn, INVITE, NOT_REACHABLE, "P0002", **params)
         hidden = await developer(conn, "hidden", peers=False, liked=(shared,))  # not opted in: no peer's card
         assert await card(conn, hidden, peer) == []
         await t.as_owner(conn)

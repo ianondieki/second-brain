@@ -549,6 +549,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "team_pair_lock(uuid, uuid)": (False, set()),
     "team_end_pair(uuid, uuid)": (False, set()),
     "team_peers_of(uuid)": (False, set()),
+    "team_counterparts(uuid, uuid)": (False, set()),
     "developer_profiles_peers_opt_in()": (False, set()),
     "developer_blocks_pair()": (True, set()),  # ends the pair's invitations and threads
     "team_invitations_open()": (True, set()),  # reads the pair's blocks

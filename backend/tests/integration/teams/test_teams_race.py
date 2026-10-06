@@ -2,7 +2,8 @@
 
 - A block and an invitation between the same two never pass each other: both take the pair's advisory lock
   (``team_invitations_open``; ``developer_blocks_0_lock`` and ``app_block_developer``), so an invitation racing a block
-  is refused once the block commits, and a block racing an invitation ends it once the invitation commits.
+  is refused once the block commits (as any recipient who may not be invited: no block oracle), and a block racing an
+  invitation ends it once the invitation commits.
 - A message waits for a close or a block in flight: ``team_messages_1_open`` reads the thread FOR SHARE (a close's FOR
   UPDATE and a block's UPDATE both conflict with it), so a message racing either is refused once it commits.
 - At most 10 team message reports per reporter in 24 hours holds for concurrent sessions (the per-reporter lock).
@@ -72,7 +73,7 @@ async def test_an_invitation_racing_a_block_is_refused_once_the_block_commits(ur
             sent = asyncio.create_task(inviter.execute(sa.text(INVITE), invitation_params(brian, amina, issue)))
             await t.wait_until_blocked(blocker, pid, sent)  # the invitation waits for the pair's lock
             await blocker.commit()
-            with pytest.raises(DBAPIError, match="a block stands between the two developers"):
+            with pytest.raises(DBAPIError, match="the recipient is neither a peer nor a counterpart of the sender"):
                 await sent
             await inviter.rollback()
     finally:

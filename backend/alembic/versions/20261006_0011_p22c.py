@@ -13,12 +13,13 @@ strings, so ``'team_message'`` needs no type change. Nothing else of revisions 0
 triggers reuse ``block_mutation()`` (revision 0002) and the clock ``app_clock_now()`` (revision 0003), the policies
 ``app_is_developer()`` (revision 0009). The upgrade is additive; the downgrade is destructive (see ``downgrade()``).
 
-A "developer" is ``app_is_developer()`` (revision 0009): an active user with a developer profile and no staff role. A
-"visible peer" of the caller is ``app_is_visible_peer(user)`` (answered only to a caller who is a developer): the caller
-themselves when they opted in (``peers_visible``); anyone else when they are one of the caller's peers (both opted in,
-the caller's county or a shared liked niche, no block) or an existing counterpart of the caller's (an invitation between
-the two in any state) still active and not staff, with no block. Organisation-only accounts and staff read nothing of
-the new tables (every policy needs ``app_is_developer()``); staff read one reported team message through
+A "developer" is ``app_is_developer()`` (revision 0009): an active user with a developer profile and no staff role.
+"Counterparts" are the two parties of a team thread or of a pending invitation (``team_counterparts``); a declined,
+withdrawn or ended invitation makes nobody a counterpart. Whom the caller may invite is ``app_is_visible_peer(user)``
+(answered only to a caller who is a developer): the caller themselves when they opted in (``peers_visible``); anyone
+else who opted in now and is one of the caller's peers (both opted in, the caller's county or a shared liked niche, no
+block) or a counterpart of the caller's, active and not staff, with no block. Organisation-only accounts and staff read
+nothing of the new tables (every policy needs ``app_is_developer()``); staff read one reported team message through
 ``app_reported_team_message`` only.
 
 - ``developer_profiles`` (revision 0001): ``peers_visible`` (default false; bridge_app UPDATE, own row by 0001's
@@ -35,20 +36,20 @@ the new tables (every policy needs ``app_is_developer()``); staff read one repor
   closes every open thread (``blocked``); contributor credit already given stays (D-62). Unblocking deletes the row
   only: threads stay closed, ended invitations ended.
 - ``team_invitations`` (USER; bridge_app: SELECT, INSERT of ``id``, ``from_user_id``, ``to_user_id``, ``problem_id``,
-  ``note``): read by its two parties (developers). Sent by a developer who opted in, as themselves, to one of their
-  visible peers (a peer or an existing counterpart: never a developer outside their county and liked niches whom they
-  never teamed up with) on a problem every signed-in user reads that is published and clear (``app_team_problem_open``:
-  a developer's problem, or a public published Brief; an invited or closed Brief is not), with no block either way; a
-  note of 1 to 300 characters (line breaks allowed, no other control character) or none. The contact-details rule does
-  not apply between developers (the API's). One pending invitation per pair and problem, in either direction: the
-  partial unique index ``uq_team_invitations_pending_pair`` on (LEAST, GREATEST of the two, problem) WHERE pending.
-  ``team_invitations_open`` (BEFORE INSERT, SECURITY DEFINER) answers the sender of their own invitation, when they
-  opted in, with a precise refusal before the policy's generic one: the problem is not open to teams (no_data_found), a
-  block stands between them (insufficient_privilege, read under the pair's lock so a block in flight is waited for), the
-  recipient is neither a peer nor a counterpart of theirs (no_data_found); it says nothing to anyone else. ``status``
-  moves once, from ``pending`` to ``accepted``, ``declined`` or ``withdrawn`` (``app_decide_team_invitation``) or
-  ``ended`` (a block), with ``decided_at``; ``team_invitations_guard`` (every role): its parties, problem, note and
-  creation time never change, a decided invitation never changes.
+  ``note``): read by its two parties (developers). Sent by a developer who opted in, as themselves, to a developer who
+  opted in and is their peer or counterpart (never one outside their county and liked niches with no thread or pending
+  invitation between them, never one who turned the switch off) on a problem every signed-in user reads that is
+  published and clear (``app_team_problem_open``: a developer's problem, or a public published Brief; an invited or
+  closed Brief is not), with no block either way; a note of 1 to 300 characters (line breaks allowed, no other control
+  character) or none. The contact-details rule does not apply between developers (the API's). One pending invitation per
+  pair and problem, in either direction: the partial unique index ``uq_team_invitations_pending_pair`` on (LEAST,
+  GREATEST of the two, problem) WHERE pending. ``team_invitations_open`` (BEFORE INSERT, SECURITY DEFINER) answers the
+  sender of their own invitation, when they opted in, with a precise refusal before the policy's generic one: the
+  problem is not open to teams (no_data_found), the recipient may not be invited by them (no_data_found, read under the
+  pair's lock so a block in flight is waited for; a blocked recipient gets the same refusal, so nothing tells the sender
+  of a block); it says nothing to anyone else. ``status`` moves once, from ``pending`` to ``accepted``, ``declined`` or
+  ``withdrawn`` (``app_decide_team_invitation``) or ``ended`` (a block), with ``decided_at``; ``team_invitations_guard``
+  (every role): its parties, problem, note and creation time never change, a decided invitation never changes.
 - ``team_threads`` (USER; bridge_app: SELECT only): one per accepted invitation (``invitation_id`` unique), between
   ``a_user_id < b_user_id`` (the canonical pair), on the invitation's problem; read by its two parties (developers);
   written only by ``app_decide_team_invitation`` (accept), ``app_close_team_thread`` (``left``) and a block
@@ -88,9 +89,9 @@ message).
 Functions (SECURITY DEFINER unless noted; pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_app where
 listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself):
 
-- ``app_is_visible_peer(user)`` -> boolean: ``user`` is the caller who opted in, or one of the caller's peers, or an
-  existing counterpart of the caller's (active, not staff) with no block either way; false to a caller who is not a
-  developer. ``app_blocked_either_way(a, b)`` -> boolean: a block stands between ``a`` and ``b``
+- ``app_is_visible_peer(user)`` -> boolean: ``user`` is the caller who opted in, or opted in now and is one of the
+  caller's peers or a counterpart of theirs (active, not staff), with no block either way; false to a caller who is not
+  a developer. ``app_blocked_either_way(a, b)`` -> boolean: a block stands between ``a`` and ``b``
   either way; NULL unless the caller is ``a`` or ``b``. ``app_team_problem_open(problem)`` -> boolean: published,
   clear and readable by every signed-in user (see ``team_invitations``).
 - ``app_peers(limit, offset)`` -> (user_id, handle, headline, county_code, county_name, shared_niches, same_county,
@@ -102,9 +103,9 @@ listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself):
   niches, then same county first, then the newest opt-in, then handle (the profile embedding is never computed in the
   prototype; its order replaces this one behind the same function when it is). Nothing else of a profile.
 - ``app_developer_card(user)`` -> (user_id, handle, headline): one row when the caller is a developer, ``user`` is
-  another developer, no block stands between them either way, and ``user`` is the other party of an invitation of the
-  caller's (any status: every thread comes from one) or one of the caller's peers (``app_peers``' rule); no row
-  otherwise. ``app_blocked_developers()`` -> (user_id, handle, blocked_at): the caller's own blocks with the blocked
+  another developer, no block stands between them either way, and ``user`` is a counterpart of the caller's (a thread
+  or a pending invitation, whatever ``user``'s switch says now) or one of the caller's peers (``app_peers``' rule); no
+  row otherwise. ``app_blocked_developers()`` -> (user_id, handle, blocked_at): the caller's own blocks with the blocked
   developers' handles, newest first (developers only).
 - ``app_decide_team_invitation(invitation, decision)`` -> the new thread's id for ``accept``, NULL otherwise:
   ``accept`` or ``decline`` by the recipient, ``withdraw`` by the sender (invalid_parameter_value for another word;
@@ -125,8 +126,9 @@ listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself):
   ``added_at``, for a caller who may read the proposal (its owner, any signed-in user when it is published and clear,
   staff admin or moderator: the proposals' SELECT policy of revision 0002, restated); NULL for anyone else.
 - Internal (no EXECUTE grant; called as the owner): ``team_pair_lock(a, b)`` (the pair's transaction advisory lock),
-  ``team_end_pair(a, b)`` (ends the pair's pending invitations and closes its open threads; returns the count) and
-  ``team_peers_of(caller)`` (the peer set, unordered).
+  ``team_end_pair(a, b)`` (ends the pair's pending invitations and closes its open threads; returns the count),
+  ``team_peers_of(caller)`` (the peer set, unordered) and ``team_counterparts(a, b)`` (a thread or a pending
+  invitation between the two).
 
 Lock order: the pair's advisory lock first (an invitation's insert, a block by either path), then rows: an invitation
 FOR UPDATE (a decision; a block's ending), a thread FOR UPDATE (a close; a block's closing) or FOR SHARE (a message).
@@ -138,7 +140,7 @@ Operating rules for the code that uses this schema:
   the caller's own profile (read ``peers_opted_in_at`` back: it is the database's).
 - Invite: INSERT the invitation as the sender leaving ``status``, ``created_at`` and ``decided_at`` out (read them
   back). Map ``team_invitations_open``'s refusals: "the recipient is neither a peer nor a counterpart of the sender"
-  (404), "no published problem with that id" (404), "a block stands between the two developers" (403); a unique
+  (404, a blocked recipient included), "no published problem with that id" (404); a unique
   violation on ``uq_team_invitations_pending_pair`` (409); any other row-level security refusal (404). Decisions only
   through ``app_decide_team_invitation`` (insufficient_privilege "no invitation of the caller's" is 404, the wrong party
   403, object_not_in_prerequisite_state 409).
@@ -429,14 +431,29 @@ AS $$
      WHERE cardinality(o.shared) > 0 OR o.same
 $$;
 
--- Whether p_user is visible to the caller for team-up (D-58), answered only to a caller who is a developer (anyone
--- else always gets false, so an organisation-only account or an unbound session learns nothing): the caller themselves
--- when they opted in to peers; anyone else when they are one of the caller's peers (team_peers_of: both opted in, the
--- same kind, the caller's county or a shared liked niche, no block either way), or an existing counterpart of the
--- caller's (an invitation between the two in any state: every thread comes from one) who is still an active, non-staff
--- developer, with no block either way. So a developer reaches by an invitation only those the peers page shows them or
--- those they already teamed up with, never anyone whose id they learned elsewhere. The invitations' INSERT policy and
--- trigger, app_peers and the API call it. SECURITY DEFINER: reads other developers' profiles, niches and invitations.
+-- Whether p_a and p_b are counterparts (REQ-DEV-03): the two parties of a team thread (an accepted invitation) or of a
+-- pending invitation between them, either way round; a declined, withdrawn or ended invitation counts for nothing.
+-- Internal (no EXECUTE grant): app_is_visible_peer and app_developer_card, as the owner.
+CREATE FUNCTION team_counterparts(p_a uuid, p_b uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT EXISTS (SELECT 1 FROM public.team_threads t
+                    WHERE t.a_user_id = least(p_a, p_b) AND t.b_user_id = greatest(p_a, p_b))
+        OR EXISTS (SELECT 1 FROM public.team_invitations i
+                    WHERE i.status = 'pending' AND least(i.from_user_id, i.to_user_id) = least(p_a, p_b)
+                      AND greatest(i.from_user_id, i.to_user_id) = greatest(p_a, p_b))
+$$;
+
+-- Whether p_user may be invited by the caller (D-58), answered only to a caller who is a developer (anyone else always
+-- gets false, so an organisation-only account or an unbound session learns nothing): the caller themselves when they
+-- opted in to peers; anyone else who opted in now and is either one of the caller's peers (team_peers_of: both opted
+-- in, the same kind, the caller's county or a shared liked niche, no block either way) or a counterpart of the caller's
+-- (team_counterparts: a team thread or a pending invitation between the two; a declined, withdrawn or ended invitation
+-- counts for nothing) who is an active, non-staff developer, with no block either way. So a developer invites only
+-- those the peers page shows them or those they team up with now, never anyone whose id they learned elsewhere, and
+-- never anyone who turned the switch off. The invitations' INSERT policy and trigger, app_peers and the API call it.
+-- SECURITY DEFINER: reads other developers' profiles, niches, invitations and threads.
 CREATE FUNCTION app_is_visible_peer(p_user uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -446,10 +463,8 @@ AS $$
     ELSE
         EXISTS (SELECT 1 FROM public.team_peers_of(public.app_user_id()) p WHERE p.user_id = p_user)
         OR (EXISTS (SELECT 1 FROM public.developer_profiles d JOIN public.users u ON u.id = d.user_id
-                     WHERE d.user_id = p_user AND u.status = 'active' AND u.staff_role IS NULL)
-            AND EXISTS (SELECT 1 FROM public.team_invitations i
-                         WHERE (i.from_user_id = public.app_user_id() AND i.to_user_id = p_user)
-                            OR (i.from_user_id = p_user AND i.to_user_id = public.app_user_id()))
+                     WHERE d.user_id = p_user AND d.peers_visible AND u.status = 'active' AND u.staff_role IS NULL)
+            AND public.team_counterparts(public.app_user_id(), p_user)
             AND NOT EXISTS (SELECT 1 FROM public.developer_blocks b
                              WHERE (b.blocker_user_id = public.app_user_id() AND b.blocked_user_id = p_user)
                                 OR (b.blocker_user_id = p_user AND b.blocked_user_id = public.app_user_id())))
@@ -488,8 +503,9 @@ $$;
 
 -- Another developer's card for the caller (D-58): their handle and headline, never anything else, when the caller is a
 -- developer, p_user is another user with a developer profile, no block stands between the two either way, and p_user
--- is the other party of an invitation of the caller's (any status; every thread comes from an accepted one) or one of
--- the caller's peers (team_peers_of). No row otherwise. SECURITY DEFINER: reads the profile and the pair's rows.
+-- is a counterpart of the caller's (team_counterparts: a team thread or a pending invitation between the two, whatever
+-- p_user's switch now says; a declined, withdrawn or ended invitation counts for nothing) or one of the caller's peers
+-- (team_peers_of). No row otherwise. SECURITY DEFINER: reads the profile and the pair's rows.
 CREATE FUNCTION app_developer_card(p_user uuid)
     RETURNS TABLE (user_id uuid, handle citext, headline text)
     LANGUAGE sql STABLE SECURITY DEFINER
@@ -501,9 +517,7 @@ AS $$
        AND NOT EXISTS (SELECT 1 FROM public.developer_blocks b
                         WHERE (b.blocker_user_id = public.app_user_id() AND b.blocked_user_id = p_user)
                            OR (b.blocker_user_id = p_user AND b.blocked_user_id = public.app_user_id()))
-       AND (EXISTS (SELECT 1 FROM public.team_invitations i
-                     WHERE (i.from_user_id = public.app_user_id() AND i.to_user_id = p_user)
-                        OR (i.from_user_id = p_user AND i.to_user_id = public.app_user_id()))
+       AND (public.team_counterparts(public.app_user_id(), p_user)
             OR EXISTS (SELECT 1 FROM public.team_peers_of(public.app_user_id()) p WHERE p.user_id = p_user))
 $$;
 
@@ -821,10 +835,10 @@ $$;
 -- The sender's precise refusals of their own invitation (the API's 404 and 403), ahead of the INSERT policy's generic
 -- one: only when the row is the caller's own (from_user_id = app.user_id) and the caller opted in to peers; anything
 -- else passes to the policy, which refuses it, so nothing is said here about anyone else's pair, opt-in or problem.
--- Then: the problem is open to teams; under the pair's lock, read afresh (a block in flight is waited for), no block
--- stands between the two (checked before the recipient, so a blocked pair hears of the block); and the recipient is
--- visible to the sender (app_is_visible_peer: a peer or an existing counterpart). SECURITY DEFINER: reads the pair's
--- blocks.
+-- Then: the problem is open to teams; and, under the pair's lock, read afresh (a block in flight is waited for), the
+-- recipient may be invited by the sender (app_is_visible_peer: opted in, a peer or a counterpart, no block either
+-- way). A blocked recipient hears the same refusal as any other one who may not be invited: nothing tells the sender
+-- that a block stands. SECURITY DEFINER: reads the pair's rows.
 CREATE FUNCTION team_invitations_open() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -837,12 +851,6 @@ BEGIN
         RAISE EXCEPTION 'team_invitations: no published problem with that id' USING ERRCODE = 'no_data_found';
     END IF;
     PERFORM public.team_pair_lock(NEW.from_user_id, NEW.to_user_id);
-    IF EXISTS (SELECT 1 FROM public.developer_blocks b
-                WHERE (b.blocker_user_id = NEW.from_user_id AND b.blocked_user_id = NEW.to_user_id)
-                   OR (b.blocker_user_id = NEW.to_user_id AND b.blocked_user_id = NEW.from_user_id)) THEN
-        RAISE EXCEPTION 'team_invitations: a block stands between the two developers'
-            USING ERRCODE = 'insufficient_privilege';
-    END IF;
     IF NOT public.app_is_visible_peer(NEW.to_user_id) THEN
         RAISE EXCEPTION 'team_invitations: the recipient is neither a peer nor a counterpart of the sender'
             USING ERRCODE = 'no_data_found';
@@ -999,7 +1007,12 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_reported_team_message(uuid)": ("bridge_app",),  # staff admin|moderator read the reported team message
     "app_contributor_handles(uuid)": ("bridge_app",),  # anyone who reads the proposal
 }
-INTERNAL_FUNCTIONS = ("team_pair_lock(uuid, uuid)", "team_end_pair(uuid, uuid)", "team_peers_of(uuid)")
+INTERNAL_FUNCTIONS = (
+    "team_pair_lock(uuid, uuid)",
+    "team_end_pair(uuid, uuid)",
+    "team_peers_of(uuid)",
+    "team_counterparts(uuid, uuid)",
+)
 TRIGGER_FUNCTIONS = (
     "developer_profiles_peers_opt_in()",
     "developer_blocks_pair()",

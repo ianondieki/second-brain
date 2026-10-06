@@ -125,80 +125,79 @@ async def test_an_invitation_names_an_open_problem_and_a_visible_peer(owner_engi
         )
 
 
-async def test_an_invitation_reaches_a_peer_or_a_counterpart_only(owner_engine: AsyncEngine) -> None:
+async def test_an_invitation_reaches_a_peer_or_a_counterpart_who_opted_in(owner_engine: AsyncEngine) -> None:
     """Given developers who opted in, When one invites another, Then a peer (the sender's county, or a shared liked
     niche) is reached, and an opted-in developer in another county with no shared niche and no history is refused
-    (P0002 from the trigger; the policy alone refuses it too); an existing counterpart is reached even once no peer
-    (their niche dropped, then their switch off), but not once suspended or across a block; ``app_is_visible_peer``
-    answers the same to the sender."""
+    (P0002 from the trigger; the policy alone refuses it too). A counterpart (the other party of a pending invitation or
+    of a team thread) is reached while they stay opted in, even once no peer; a declined, withdrawn or ended invitation
+    makes nobody a counterpart; nobody who turned the switch off is reached, a thread's counterpart included, nor a
+    suspended counterpart, nor anyone across a block (the same P0002: nothing tells the sender of a block).
+    ``app_is_visible_peer`` answers the same to the sender."""
     async with t.as_app(owner_engine) as conn:
         kisumu, nakuru = await county(conn, "Kisumu"), await county(conn, "Nakuru")
         agri, health = await niche(conn, "agri"), await niche(conn, "health")
         sender = await developer(conn, "sender", county_code=kisumu, liked=(agri,))
         neighbour = await developer(conn, "neighbour", county_code=kisumu)
-        colleague = await developer(conn, "colleague", county_code=nakuru, liked=(agri,))
+        pending = await developer(conn, "pending", county_code=nakuru, liked=(agri,))
+        teammate = await developer(conn, "teammate", county_code=nakuru, liked=(agri,))
         outsider = await developer(conn, "outsider", county_code=nakuru, liked=(health,))
-        issues = [await problem(conn, sender) for _ in range(6)]
+        issues = [await problem(conn, sender) for _ in range(7)]
         visible = "SELECT app_is_visible_peer(:u)"
-        await t.act(conn, sender)
-        assert [await t.run(conn, visible, u=u) for u in (sender, neighbour, colleague, outsider)] == [
-            True,
-            True,
-            True,
-            False,
-        ]
-        await refused(conn, INVITE, NOT_REACHABLE, "P0002", **invitation_params(sender, outsider, issues[0]))
-        await invite(conn, sender, neighbour, issues[0])  # the same county
-        await invite(conn, sender, colleague, issues[0])  # a shared liked niche
-        await t.as_owner(conn)  # the policy alone, without the trigger's precise refusal
-        await t.run(conn, "ALTER TABLE team_invitations DISABLE TRIGGER team_invitations_open")
+
+        async def reachable(user: UUID) -> bool:
+            await t.act(conn, sender)
+            found: bool = await t.run(conn, visible, u=user)
+            return found
+
+        async def unreachable(user: UUID, issue: UUID) -> None:
+            assert await reachable(user) is False
+            await refused(conn, INVITE, NOT_REACHABLE, "P0002", **invitation_params(sender, user, issue))
+
+        async def owner(sql: str, **params: object) -> None:
+            await t.as_owner(conn)
+            await t.run(conn, sql, **params)
+
+        assert [await reachable(u) for u in (sender, neighbour, pending, teammate)] == [True] * 4
+        await unreachable(outsider, issues[0])
+        await owner("ALTER TABLE team_invitations DISABLE TRIGGER team_invitations_open")  # the policy alone
         await t.act(conn, sender)
         await refused(conn, INVITE, RLS, "42501", **invitation_params(sender, outsider, issues[0]))
-        await t.as_owner(conn)
-        await t.run(conn, "ALTER TABLE team_invitations ENABLE TRIGGER team_invitations_open")
-        await t.run(conn, "DELETE FROM developer_niches WHERE user_id = :u", u=colleague)  # no peer any more
-        await t.act(conn, sender)
-        assert await t.run(conn, visible, u=colleague) is True  # a counterpart
-        await invite(conn, sender, colleague, issues[1])
-        await invite(conn, colleague, sender, issues[2])
-        await t.as_owner(conn)
-        await t.run(conn, "UPDATE developer_profiles SET peers_visible = false WHERE user_id = :u", u=colleague)
-        await invite(conn, sender, colleague, issues[3])  # a counterpart who turned the switch off
-        await t.as_owner(conn)
-        await t.run(conn, "UPDATE users SET status = 'suspended' WHERE id = :u", u=colleague)
-        await t.act(conn, sender)
-        assert await t.run(conn, visible, u=colleague) is False
-        await refused(conn, INVITE, NOT_REACHABLE, "P0002", **invitation_params(sender, colleague, issues[4]))
-        await t.as_owner(conn)
-        await t.run(conn, "UPDATE users SET status = 'active' WHERE id = :u", u=colleague)
+        await owner("ALTER TABLE team_invitations ENABLE TRIGGER team_invitations_open")
+        await invite(conn, sender, neighbour, issues[0])  # the same county
+        # A pending invitation's counterpart, no peer any more (their niche dropped), is reached both ways.
+        first = await invite(conn, sender, pending, issues[0])  # a shared liked niche
+        await owner("DELETE FROM developer_niches WHERE user_id = :u", u=pending)
+        assert await reachable(pending) is True
+        second = await invite(conn, sender, pending, issues[1])
+        third = await invite(conn, pending, sender, issues[2])
+        # Declined, withdrawn: nobody's counterpart any more.
+        await decide(conn, pending, first, "decline")
+        await decide(conn, sender, second, "withdraw")
+        await decide(conn, sender, third, "decline")
+        await unreachable(pending, issues[3])
+        # A thread's counterpart, no peer any more, is reached while opted in; never once the switch is off.
+        await team(conn, sender, teammate, issues[0])
+        await owner("DELETE FROM developer_niches WHERE user_id = :u", u=teammate)
+        await invite(conn, sender, teammate, issues[1])
+        await owner("UPDATE developer_profiles SET peers_visible = false WHERE user_id = :u", u=teammate)
+        await unreachable(teammate, issues[2])
+        await owner("UPDATE developer_profiles SET peers_visible = true WHERE user_id = :u", u=teammate)
+        await owner("UPDATE users SET status = 'suspended' WHERE id = :u", u=teammate)
+        await unreachable(teammate, issues[2])
+        await owner("UPDATE users SET status = 'active' WHERE id = :u", u=teammate)
+        assert await reachable(teammate) is True
+        # A block, either way, answers as any other refusal; lifting it restores a thread's counterpart.
         await t.act(conn, neighbour)
         assert await t.run(conn, BLOCK, blocked=sender) == 2  # the block and the pending invitation it ended
-        await t.act(conn, sender)
-        assert await t.run(conn, visible, u=neighbour) is False
-        await refused(
-            conn, INVITE, "a block stands between", "42501", **invitation_params(sender, neighbour, issues[5])
-        )
-        await t.as_owner(conn)
-        await t.run(
-            conn,
-            "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:a, :b)",
-            a=colleague,
-            b=sender,
-        )
-        await t.act(conn, sender)
-        assert await t.run(conn, visible, u=colleague) is False  # a counterpart across a block
-        assert await t.run(conn, visible, u=outsider) is False
-        await t.as_owner(conn)  # the other way round: the sender's own block
-        await t.run(conn, "DELETE FROM developer_blocks WHERE blocker_user_id = :a", a=colleague)
-        await t.act(conn, sender)
-        assert await t.run(conn, visible, u=colleague) is True
-        await t.run(
-            conn,
-            "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:a, :b)",
-            a=sender,
-            b=colleague,
-        )
-        assert await t.run(conn, visible, u=colleague) is False
+        await unreachable(neighbour, issues[4])
+        insert_block = "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:a, :b)"
+        await owner(insert_block, a=teammate, b=sender)
+        await unreachable(teammate, issues[5])
+        await owner("DELETE FROM developer_blocks WHERE blocker_user_id = :a", a=teammate)
+        assert await reachable(teammate) is True  # the thread, closed by the block, still makes them counterparts
+        await owner(insert_block, a=sender, b=teammate)
+        await unreachable(teammate, issues[6])
+        assert await reachable(outsider) is False
 
 
 async def test_one_pending_invitation_per_pair_and_problem_either_way(owner_engine: AsyncEngine) -> None:
@@ -502,7 +501,7 @@ async def test_a_block_ends_pending_invitations_and_closes_threads(owner_engine:
         for sender, to in ((amina, brian), (brian, amina)):
             await t.act(conn, sender)
             params = invitation_params(sender, to, first)
-            await refused(conn, INVITE, "a block stands between the two developers", "42501", **params)
+            await refused(conn, INVITE, NOT_REACHABLE, "P0002", **params)  # no block oracle
         await t.act(conn, brian)
         await refused(conn, POST, "the thread is closed", "55000", id=uuid7(), thread=thread, sender=brian, body="Why?")
         assert await count(conn, brian, "SELECT count(*) FROM developer_blocks") == 0
