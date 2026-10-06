@@ -67,7 +67,7 @@ export default async function WeekPage() {
           <Section title={t("page.trendHeading")} headingId="week-trend">
             <div className="rounded-panel border border-line bg-field px-4 sm:px-6">
               <RowList rule={false}>
-                <TrendRow trend={trend} />
+                <TrendRow trend={trend} lines={2} />
               </RowList>
             </div>
           </Section>
