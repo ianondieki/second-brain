@@ -42,6 +42,7 @@ from bridge.auth.sessions import LiveSession
 from bridge.errors import ERROR_RESPONSES, json_errors, not_found
 from bridge.events import calendar, service, week
 from bridge.events.models import EventReminder
+from bridge.events.reminders import withdraw_n26
 from bridge.events.schemas import (
     EventIn,
     EventList,
@@ -158,10 +159,12 @@ async def remind_me(event_id: UUID, live: Developer, db: Db) -> ReminderOut:
 
 @router.delete("/api/me/events/{event_id}/reminder", status_code=204, response_class=Response)
 async def decline_reminder(event_id: UUID, live: Developer, db: Db) -> None:
-    """Decline: neither the email nor the in-app notice comes. Declining again changes nothing."""
+    """Decline: neither the email nor the in-app notice comes (a day-before email waiting for a retry ends now).
+    Declining again changes nothing."""
     await db.execute(
         delete(EventReminder).where(EventReminder.user_id == live.user.id, EventReminder.event_id == event_id)
     )
+    await withdraw_n26(db, live.user.id, event_id)
     await db.commit()
 
 

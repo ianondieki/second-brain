@@ -19,6 +19,12 @@ event cancelled before the moment means nothing is sent. Per reminder:
   event's title and "Today at HH:MM · <place>", linking to the event's page, keyed ``n27:in_app:<user>:<event>``
   (once). It needs only the Remind me (in-app is always on).
 
+A queued N26 email (a transient failure, retried by the next runs within the window) never goes out after its
+moment, as EM7's ``_sweep``: it ends ``failed`` ("expired") when the developer declines (``withdraw_n26``, in the
+Decline's transaction), when a run handling the developer finds it outside an open window (its reminder declined, its
+event cancelled, or its window closed), and, as the backstop for developers no run handles any more, in the first
+run after midnight in Nairobi, when every N26 window has closed, for every active user.
+
 One developer's failure is logged and never stops the run; the next run picks them up. A run with nothing due writes
 nothing and logs nothing.
 """
@@ -26,14 +32,14 @@ nothing and logs nothing.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any, Final, Literal, NamedTuple
 from uuid import UUID
 
 from jinja2 import Environment, PackageLoader, StrictUndefined, select_autoescape
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.auth.models import User
@@ -59,6 +65,8 @@ EARLY_LEAD: Final = timedelta(hours=2)  # an event before 10:00 is announced thi
 ONLINE: Final = "Online"  # [[COPY-REVIEW]]
 SUBJECT: Final = "Tomorrow: {title}"  # [[COPY-REVIEW]]
 TODAY_AT: Final = "Today at {at} · {place}"  # [[COPY-REVIEW]] the N27 body; the title is the event's
+EXPIRED: Final = "expired: the reminder was declined, the event cancelled or its moment passed"
+SWEEP_UNTIL: Final = time(0, 15)  # the first run of a Nairobi day sweeps every active user's queued N26 emails
 _DUE: Final = text("SELECT user_id, event_id FROM app_event_reminders_due(:now)")
 _CLOCK: Final = text("SELECT app_clock_now()")
 # The caller's reminders on the listed events, as they stand now under the caller's policies: a reminder deleted, or
@@ -130,6 +138,7 @@ class Report:
     now: datetime
     due: int
     outcomes: tuple[Outcome, ...] = ()
+    expired: int = 0  # queued N26 emails this run ended
 
 
 def _midnight(day: date) -> datetime:
@@ -229,22 +238,75 @@ async def run_event_reminders(deps: Deps, *, now: datetime | None = None) -> Rep
     async with deps.factory() as db:
         now = now or await clock_now(db)
         due = (await db.execute(_DUE, {"now": now})).all()
-    if not due:
-        return Report(now, 0)
     by_user: dict[UUID, list[UUID]] = defaultdict(list)
     for row in due:
         by_user[row.user_id].append(row.event_id)
     outcomes: list[Outcome] = []
+    expired = 0
     for user_id, event_ids in by_user.items():
         try:
-            outcomes += await remind_one(deps, user_id, event_ids, now)
+            handled, ended = await remind_one(deps, user_id, event_ids, now)
+            outcomes += handled
+            expired += ended
         except Exception as exc:  # one developer never stops the run; the next run retries them
             log.error("events.remind_failed", user_id=str(user_id), error_type=type(exc).__name__)
             outcomes.append(Outcome(user_id, None, None, "error"))
+    if now.astimezone(NAIROBI).time() < SWEEP_UNTIL:
+        expired += await sweep_all(deps, skip=frozenset(by_user))
     acted = [o for o in outcomes if o.status not in ("already",)]
     if acted:
         log.info("events.reminded", count=len(acted), recipients=len(by_user))
-    return Report(now, len(due), tuple(outcomes))
+    return Report(now, len(due), tuple(outcomes), expired)
+
+
+async def expire_n26(db: AsyncSession, user_id: UUID, *, keep: Collection[str] = (), only: str | None = None) -> int:
+    """End ``user_id``'s queued N26 emails ``failed`` ("expired"), but those keyed ``keep`` (``only``: that key's
+    alone), on a session bound to them; the caller commits. Returns how many ended."""
+    query = update(NotificationDelivery).where(
+        NotificationDelivery.user_id == user_id,
+        NotificationDelivery.kind == N26,
+        NotificationDelivery.channel == NotificationChannel.EMAIL,
+        NotificationDelivery.status == DeliveryStatus.QUEUED,
+        NotificationDelivery.dedupe_key.not_in(list(keep)),
+    )
+    if only is not None:
+        query = query.where(NotificationDelivery.dedupe_key == only)
+    ended = (
+        (
+            await db.execute(
+                query.values(status=DeliveryStatus.FAILED, last_error=EXPIRED).returning(NotificationDelivery.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if ended:
+        log.warning("email.dead_letter", kind=N26, reason="expired", delivery_ids=[str(i) for i in ended])
+    return len(ended)
+
+
+async def withdraw_n26(db: AsyncSession, user_id: UUID, event_id: UUID) -> int:
+    """Decline: the event's queued N26 email of ``user_id`` ends at once (the caller's transaction)."""
+    return await expire_n26(db, user_id, only=n26_key(user_id, event_id))
+
+
+async def sweep_all(deps: Deps, *, skip: frozenset[UUID] = frozenset()) -> int:
+    """The backstop after midnight: every active user's queued N26 emails end (every N26 window closes at midnight),
+    each user in a session bound to them; ``skip``: the users this run handled already."""
+    async with deps.factory() as db:
+        users = (await db.scalars(select(User.id).where(User.status == UserStatus.ACTIVE).order_by(User.id))).all()
+    expired = 0
+    for user_id in users:
+        if user_id in skip:
+            continue
+        try:
+            async with deps.factory() as db:
+                await bind_tenant(db, user_id=user_id)
+                expired += await expire_n26(db, user_id)
+                await db.commit()
+        except Exception as exc:  # one user never stops the sweep; the next day's sweep retries them
+            log.error("events.sweep_failed", user_id=str(user_id), error_type=type(exc).__name__)
+    return expired
 
 
 async def _recipient(db: AsyncSession, user_id: UUID) -> Recipient | None:
@@ -257,27 +319,33 @@ async def _recipient(db: AsyncSession, user_id: UUID) -> Recipient | None:
     return None if row is None else Recipient(user_id, row.email, row.email_verified_at is not None)
 
 
-async def remind_one(deps: Deps, user_id: UUID, event_ids: Sequence[UUID], now: datetime) -> list[Outcome]:
-    """One developer's due reminders, in a session bound to them and one transaction."""
+async def remind_one(deps: Deps, user_id: UUID, event_ids: Sequence[UUID], now: datetime) -> tuple[list[Outcome], int]:
+    """One developer's due reminders, in a session bound to them and one transaction: first their queued N26 emails
+    outside an open window end, then what is due is sent. Returns the outcomes and how many emails ended."""
     outcomes: list[Outcome] = []
     async with deps.factory() as db:
         recipient = await _recipient(db, user_id)
         if recipient is None:
-            return outcomes
+            return outcomes, 0
         await bind_tenant(db, user_id=user_id)
+        rows = (await db.execute(_MINE, {"ids": list(event_ids)})).all()
+        open_keys = [n26_key(user_id, row.id) for row in rows if _within(now, n26_window(row.starts_at))]
+        expired = await expire_n26(db, user_id, keep=open_keys)
         block: str | None = None
         gate_read = False
-        for row in (await db.execute(_MINE, {"ids": list(event_ids)})).all():
-            start, end = n26_window(row.starts_at)
-            if start <= now < end:
+        for row in rows:
+            if _within(now, n26_window(row.starts_at)):
                 if not gate_read:
                     block, gate_read = await email_block(db, recipient, N26), True
                 outcomes.append(await _email(deps, db, recipient, row, now, block))
-            start, end = n27_window(row.starts_at, row.ends_at)
-            if start <= now < end:
+            if _within(now, n27_window(row.starts_at, row.ends_at)):
                 outcomes.append(await _notice(db, user_id, row, now))
         await db.commit()
-    return outcomes
+    return outcomes, expired
+
+
+def _within(now: datetime, window: tuple[datetime, datetime]) -> bool:
+    return window[0] <= now < window[1]
 
 
 async def _email(deps: Deps, db: AsyncSession, r: Recipient, row: Any, now: datetime, block: str | None) -> Outcome:

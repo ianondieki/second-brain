@@ -17,10 +17,11 @@ from sqlalchemy import text
 
 from bridge.config import get_settings
 from bridge.db import bind_tenant, create_session_factory
-from bridge.events.reminders import Deps, EventReminderRuntime, run_event_reminders
-from bridge.notifications.email import FakeEmailProvider
+from bridge.events.reminders import EXPIRED, Deps, EventReminderRuntime, run_event_reminders
+from bridge.notifications.email import DeliveryError, FakeEmailProvider
 from tests.integration.events.api_world import (
     NAIROBI_CITY,
+    Clients,
     People,
     WeekDb,
     at,
@@ -196,6 +197,63 @@ async def test_an_early_event_is_announced_before_it_starts_even_when_it_ends_be
         ("Dawn run", "Today at 05:00 · Online"),
         ("Early standup", "Today at 07:00 · Online"),
     ]
+
+
+async def n26_rows(week: WeekDb, user: UUID) -> list[tuple[str, str | None, int]]:
+    rows = await owner_rows(
+        week,
+        "SELECT status::text AS status, last_error, attempts FROM notification_deliveries"
+        " WHERE user_id = :u AND kind = 'n26' ORDER BY created_at",
+        u=user,
+    )
+    return [(r.status, r.last_error, r.attempts) for r in rows]
+
+
+async def queued_at_six(week: WeekDb) -> tuple[People, UUID, Any, FakeEmailProvider]:
+    """``scene``, and Tuesday 18:00's email failing once on a transient error: the row stays queued for a retry."""
+    p, event_id, monday = await scene(week)
+    mail = FakeEmailProvider([DeliveryError("try later", transient=True)])
+    await at(week, monday + timedelta(days=1), time(18, 0))
+    await run_event_reminders(deps(week, mail))
+    assert (await n26_rows(week, p.developer), mail.outbox) == ([("queued", "try later", 1)], [])
+    return p, event_id, monday, mail
+
+
+async def test_a_declined_reminder_ends_its_queued_email_at_once(week: WeekDb, as_user: Clients) -> None:
+    """Review MINOR 2: Decline ends the queued day-before email in its own transaction; no later run sends it."""
+    p, event_id, monday, mail = await queued_at_six(week)
+    developer = await as_user(p.developer)
+    assert (await developer.delete(f"/api/me/events/{event_id}/reminder")).status_code == 204
+    assert await n26_rows(week, p.developer) == [("failed", EXPIRED, 1)]
+    await at(week, monday + timedelta(days=1), time(18, 15))
+    await run_event_reminders(deps(week, mail))
+    assert (mail.outbox, mail.attempts) == ([], 1)
+
+
+async def test_a_queued_email_ends_when_its_window_closes(week: WeekDb) -> None:
+    """Review MINOR 2: after midnight the day-before email is never sent; the run handling the developer ends it."""
+    p, _, monday, mail = await queued_at_six(week)
+    await at(week, monday + timedelta(days=2), time(0, 5))  # Wednesday: the event is today, still due
+    report = await run_event_reminders(deps(week, mail))
+    assert (report.due, report.expired) == (1, 1)
+    assert await n26_rows(week, p.developer) == [("failed", EXPIRED, 1)]
+    assert (mail.outbox, mail.attempts) == ([], 1)
+
+
+async def test_a_queued_email_of_a_cancelled_event_ends_by_midnight(week: WeekDb) -> None:
+    """Review MINOR 2: once the event is cancelled no run lists the developer, so nothing is sent; the first run after
+    midnight sweeps every active user's queued day-before emails (every window has closed by then)."""
+    p, event_id, monday, mail = await queued_at_six(week)
+    await cancel(week, event_id, p.org.owner)
+    await at(week, monday + timedelta(days=1), time(18, 15))
+    assert (await run_event_reminders(deps(week, mail))).due == 0
+    assert (mail.outbox, mail.attempts) == ([], 1)
+    await at(week, monday + timedelta(days=1), time(23, 45))
+    assert (await run_event_reminders(deps(week, mail))).expired == 0  # not the first run of a day
+    await at(week, monday + timedelta(days=2), time(0, 5))
+    swept = await run_event_reminders(deps(week, mail))
+    assert (swept.due, swept.expired) == (0, 1)
+    assert await n26_rows(week, p.developer) == [("failed", EXPIRED, 1)]
 
 
 async def test_the_job_is_silent_when_nothing_is_due_and_runs_as_the_worker_wires_it(week: WeekDb) -> None:
