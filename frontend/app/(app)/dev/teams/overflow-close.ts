@@ -5,18 +5,11 @@
  * keydown.
  */
 export function closeOverflows(event: Event) {
+  const target = event.target as Element;
+  const escape = (event as KeyboardEvent).key === "Escape";
   for (const menu of document.querySelectorAll<HTMLDetailsElement>("details[data-overflow][open]")) {
-    const summary = menu.querySelector("summary");
-    if (event.type === "keydown") {
-      if ((event as KeyboardEvent).key !== "Escape") continue;
-      if (menu.contains(document.activeElement)) summary?.focus();
-    } else {
-      const target = event.target as Element;
-      if (menu.contains(target)) {
-        if (!target.closest("button")) continue;
-        summary?.focus();
-      }
-    }
+    if (event.type === "keydown" ? !escape : menu.contains(target) && !target.closest("button")) continue;
+    if (menu.contains(escape ? document.activeElement : target)) menu.querySelector("summary")?.focus();
     menu.open = false;
   }
 }
