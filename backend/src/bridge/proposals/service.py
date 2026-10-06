@@ -159,7 +159,8 @@ async def _version_out(db: AsyncSession, wrapper: KeyWrapper, proposal_id: UUID,
 
 
 _MINE = text(
-    "SELECT id, status, moderation_state, published_at, hidden_at, current_version_id, draft_version_id"
+    "SELECT id, status, moderation_state, published_at, hidden_at, current_version_id, draft_version_id,"
+    " coalesce(app_contributor_handles(id), '{}') AS contributors"  # D-62 (a), REQ-DEV-03: never the manifest's
     " FROM proposals WHERE id = :id AND owner_id = :user"
 )
 
@@ -191,6 +192,7 @@ async def my_proposal(db: AsyncSession, wrapper: KeyWrapper, user_id: UUID, prop
         hidden_at=row.hidden_at,
         current=current,
         draft=draft,
+        contributors=list(row.contributors),
     )
 
 
@@ -229,15 +231,17 @@ async def my_proposals(db: AsyncSession, user_id: UUID) -> MyProposals:
 
 
 _PUBLIC = text(
-    "SELECT current_version_id FROM proposals WHERE id = :id AND status = 'published' AND moderation_state = 'clear'"
+    "SELECT current_version_id, coalesce(app_contributor_handles(id), '{}') AS contributors"  # D-62 (a)
+    " FROM proposals WHERE id = :id AND status = 'published' AND moderation_state = 'clear'"
 )
 
 
 async def teaser_card(db: AsyncSession, proposal_id: UUID) -> TeaserCard:
     """A published, clear proposal's current teaser (Tier 1 only); 404 for anything else, the owner included."""
-    version_id = (await db.execute(_PUBLIC, {"id": proposal_id})).scalar_one_or_none()
-    if version_id is None:
+    found = (await db.execute(_PUBLIC, {"id": proposal_id})).one_or_none()
+    if found is None or found.current_version_id is None:
         raise not_found()
+    version_id = found.current_version_id
     row = await _version_row(db, version_id)
     return TeaserCard(
         id=proposal_id,
@@ -248,6 +252,7 @@ async def teaser_card(db: AsyncSession, proposal_id: UUID) -> TeaserCard:
         provenance=provenance_out(row.cert_id, row.provenance_status),
         teaser=teaser_out(row),
         problems=await problems.refs_for_version(db, version_id, public=True),
+        contributors=list(found.contributors),
     )
 
 

@@ -13,7 +13,9 @@
 - ``GET /api/me/recommendations``: the developer's ranked cards with score, label, pursuit decision, Why chips and
   the feature vector; ``personalised`` is false without the ``profiling`` consent (404 without a developer profile).
 - ``GET|PUT /api/me/niches``: the developer's liked niches (PUT sets all of them: 3 to 5 active niche ids; 422
-  ``liked_niches_count`` or ``unknown_niche``).
+  ``liked_niches_count`` or ``unknown_niche``). A PUT that changes the set counts toward
+  ``teams.profile_changes_per_day`` with the county's changes (429 ``too_many_profile_changes``; REQ-DEV-03: the peers
+  set cannot be harvested by rotating niches); the same set sent again is no change.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from bridge import pagination
-from bridge.auth.deps import CurrentSession, Db
+from bridge.auth.deps import CurrentSession, Db, SettingsDep
 from bridge.errors import ERROR_RESPONSES, not_found
 from bridge.matching import discover
 from bridge.matching.discover_schemas import (
@@ -39,6 +41,7 @@ from bridge.matching.ranking_config import get_ranking
 from bridge.matching.recommendations import recommendations
 from bridge.profiles import niches as liked_niches
 from bridge.profiles.models import DeveloperProfile
+from bridge.teams.limits import spend_profile_change
 
 router = APIRouter(tags=["discover"], responses=ERROR_RESPONSES)
 
@@ -118,10 +121,12 @@ async def my_niches(live: CurrentSession, db: Db) -> LikedNichesOut:
 
 
 @router.put("/api/me/niches")
-async def set_my_niches(body: LikedNichesIn, live: CurrentSession, db: Db) -> LikedNichesOut:
+async def set_my_niches(body: LikedNichesIn, live: CurrentSession, db: Db, settings: SettingsDep) -> LikedNichesOut:
     """Set your liked niches: 3 to 5 niche ids from ``GET /api/directory/niches``."""
     if await db.get(DeveloperProfile, live.user.id) is None:
         raise not_found("No developer profile.")
+    if set(body.liked) != set(await liked_niches.liked(db, live.user.id)):
+        await spend_profile_change(db, settings, live.user.id)
     cfg = get_ranking()
     await liked_niches.replace_liked(db, live.user.id, body.liked, least=cfg.liked_min, most=cfg.liked_max)
     await db.commit()

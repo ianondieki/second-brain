@@ -160,6 +160,11 @@ class DemoSavedSearch:
 AMINA = DemoDeveloper("amina@developers.example", "Amina Wanjiru", DevVerification.D2, "+254700000101")
 BRIAN = DemoDeveloper("brian@developers.example", "Brian Otieno", DevVerification.D1, "+254700000102")
 DEVELOPERS: Final = (AMINA, BRIAN)
+# P22's Peers and team up (REQ-DEV-03): two more developers, signed up like the others and left at D0 (no phone flow),
+# so the peers page has someone in another county and someone who never turned Peers on (bridge.seed.demo.teams).
+ZAWADI = DemoDeveloper("zawadi@developers.example", "Zawadi Mohamed", DevVerification.D0, "+254700000103")
+JUMA = DemoDeveloper("juma@developers.example", "Juma Kariuki", DevVerification.D0, "+254700000104")
+PEER_DEVELOPERS: Final = (ZAWADI, JUMA)
 
 
 def _seat(domain: str, local: str, name: str, *roles: OrgRole) -> DemoSeat:
@@ -415,7 +420,8 @@ VIEWED: Final = (P1, SACCO_B, SACCO_B.seats[1])
 
 def all_accounts() -> list[tuple[str, str, str]]:
     """Every demo login as (address, name, what it is), in the order the banner and the README list them."""
-    accounts = [(dev.email, dev.display_name, f"developer, {dev.level.value.upper()}") for dev in DEVELOPERS]
+    developers = (*DEVELOPERS, *PEER_DEVELOPERS)
+    accounts = [(dev.email, dev.display_name, f"developer, {dev.level.value.upper()}") for dev in developers]
     for org in ORGS:
         people = ([org.owner] if org.owner else []) + list(org.seats)
         for seat in people:

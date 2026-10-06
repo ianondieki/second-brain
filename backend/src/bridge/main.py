@@ -56,6 +56,10 @@ from bridge.proposals.router import router as proposals_router
 from bridge.proposals.shortlist_router import router as shortlist_router
 from bridge.provenance.router import router as provenance_router
 from bridge.quiz.router import router as quiz_router
+from bridge.teams.contributors import router as contributors_router
+from bridge.teams.peers import router as peers_router
+from bridge.teams.router import blocks_router
+from bridge.teams.router import router as teams_router
 from bridge.tenancy.router import router as orgs_router
 
 API_PREFIX = "/api"
@@ -175,6 +179,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(preferences_router)
     app.include_router(quiz_router)
     app.include_router(events_router)
+    app.include_router(peers_router)
+    app.include_router(teams_router)
+    app.include_router(blocks_router)
+    app.include_router(contributors_router)
     clock_router = dev_clock_router(settings)
     if clock_router is not None:
         app.include_router(clock_router)

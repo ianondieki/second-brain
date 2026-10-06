@@ -676,10 +676,10 @@ async def test_the_owner_credits_a_counterpart_and_anyone_who_reads_the_proposal
         for caller in (owner, reader, member, admin, counterpart):
             await t.act(conn, caller)
             assert await t.run(conn, HANDLES, proposal=published) == names, caller
-        for caller in (reader, member, admin, None):
-            await t.act(conn, caller)
-            expected = names[:1] if caller == admin else None  # staff read every proposal
-            assert await t.run(conn, HANDLES, proposal=draft) == expected, caller
+        for anyone in (reader, member, admin, None):
+            await t.act(conn, anyone)
+            expected = names[:1] if anyone == admin else None  # staff read every proposal
+            assert await t.run(conn, HANDLES, proposal=draft) == expected, anyone
         await t.act(conn, None)
         assert await t.run(conn, HANDLES, proposal=published) is None
         # The owner reads all three; the counterpart their own two and the published proposal's other; another

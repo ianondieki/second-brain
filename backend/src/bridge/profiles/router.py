@@ -1,5 +1,10 @@
 """Own profile, consents, plan limits and D1 phone verification (/api/me); consent texts (/api/consents).
-REQ-CON-01, REQ-BIL-01, REQ-PROV-04."""
+REQ-CON-01, REQ-BIL-01, REQ-PROV-04.
+
+The profile carries the peers switch (REQ-DEV-03, D-58: ``peers_visible``, off until the developer turns it on; the
+time it turned on is the database's and never shown) and the county's name. A change of the county counts toward
+``teams.profile_changes_per_day`` with the liked niches' (429 ``too_many_profile_changes``; the 0011 security review's
+MINOR 5: the peers set cannot be harvested by rotating the county); the same county sent again is no change."""
 
 from __future__ import annotations
 
@@ -20,6 +25,7 @@ from bridge.models.enums import ConsentPurpose, DevVerification, PlanSide, Regio
 from bridge.profiles import consents, verification
 from bridge.profiles.models import DeveloperProfile
 from bridge.profiles.verification import SmsDep
+from bridge.teams import limits as team_limits
 
 router = APIRouter(prefix="/api/me", tags=["me"], responses=ERROR_RESPONSES)
 public_router = APIRouter(prefix="/api/consents", tags=["consents"], responses=ERROR_RESPONSES)
@@ -31,12 +37,17 @@ class ProfileOut(BaseModel):
     headline: str | None
     bio: str | None
     county_code: str | None
+    county_name: str | None = Field(description="The county's name, when the profile names one")
+    peers_visible: bool = Field(
+        description="Peers is on: developers in your county or niches see your handle, headline and shared niches"
+    )
 
 
 class ProfileUpdate(BaseModel):
     headline: str | None = Field(default=None, max_length=160)
     bio: str | None = Field(default=None, max_length=4000)
     county_code: str | None = Field(default=None, pattern=r"^KE-\d{2}$")
+    peers_visible: bool | None = Field(default=None, description="Turn Peers on or off (null: unchanged)")
 
 
 class ConsentItem(BaseModel):
@@ -90,14 +101,23 @@ class VerificationLevelOut(BaseModel):
     verification_level: DevVerification
 
 
-def _profile_out(p: DeveloperProfile) -> ProfileOut:
+def _profile_out(p: DeveloperProfile, county_name: str | None) -> ProfileOut:
     return ProfileOut(
         handle=p.handle,
         verification_level=p.verification_level,
         headline=p.headline,
         bio=p.bio,
         county_code=p.county_code,
+        county_name=county_name,
+        peers_visible=p.peers_visible,
     )
+
+
+async def _county_name(db: Db, code: str | None) -> str | None:
+    if code is None:
+        return None
+    name: str | None = await db.scalar(select(Region.name).where(Region.code == code))
+    return name
 
 
 @public_router.get("")
@@ -115,24 +135,29 @@ async def get_profile(live: CurrentSession, db: Db) -> ProfileOut:
     profile = await db.get(DeveloperProfile, live.user.id)
     if profile is None:
         raise not_found("No developer profile.")
-    return _profile_out(profile)
+    return _profile_out(profile, await _county_name(db, profile.county_code))
 
 
 @router.patch("/profile")
-async def update_profile(body: ProfileUpdate, live: CurrentSession, db: Db) -> ProfileOut:
+async def update_profile(body: ProfileUpdate, live: CurrentSession, db: Db, settings: SettingsDep) -> ProfileOut:
+    """Change your headline, bio, county or the Peers switch (only the fields sent)."""
     profile = await db.get(DeveloperProfile, live.user.id)
     if profile is None:
         raise not_found("No developer profile.")
     changes = body.model_dump(exclude_unset=True)
+    if changes.get("peers_visible", False) is None:
+        del changes["peers_visible"]  # null leaves the switch as it is
     county = changes.get("county_code")
     if county is not None:
         found = await db.execute(select(Region.code).where(Region.code == county, Region.kind == RegionKind.COUNTY))
         if found.scalar_one_or_none() is None:
             raise ApiError(422, "unknown_county", "Choose one of Kenya's 47 counties.")
+    if "county_code" in changes and changes["county_code"] != profile.county_code:
+        await team_limits.spend_profile_change(db, settings, live.user.id)
     for name, value in changes.items():
         setattr(profile, name, value)
     await db.commit()
-    return _profile_out(profile)
+    return _profile_out(profile, await _county_name(db, profile.county_code))
 
 
 @router.get("/consents")

@@ -60,6 +60,9 @@ stack with the demo data, without the video, and with its screenshots kept out o
 ## The story (about four minutes)
 
 Every login uses the password `bridge-demo-2026` and a code from `make demo-totp` (README, "Run the demo").
+Two more developer logins show Peers and team up (P22): `zawadi@developers.example` (Zawadi Mohamed, Peers on, in
+Mombasa; her invitation to team up waits for Amina) and `juma@developers.example` (Juma Kariuki, Peers off, so no
+peers list shows him).
 
 1. **Amina, developer** (`amina@developers.example`). Home shows what needs her now (her turn with SACCO B) and the
    problems recommended for her, each with how to pursue it and why it is there.

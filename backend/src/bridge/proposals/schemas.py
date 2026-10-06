@@ -207,6 +207,9 @@ class MyProposalOut(BaseModel):
     hidden_at: datetime | None
     current: VersionOut | None = Field(description="The latest registered version")
     draft: VersionOut | None = Field(description="The version being edited")
+    contributors: list[str] = Field(
+        description='D-62 (a): the handles credited as "Contributors: <handles>", by the time each was added'
+    )
 
 
 class MyProposalItem(BaseModel):
@@ -248,6 +251,9 @@ class TeaserCard(BaseModel):
     provenance: ProvenanceOut
     teaser: TeaserOut
     problems: list[ProblemRef]
+    contributors: list[str] = Field(
+        description='D-62 (a): the handles credited as "Contributors: <handles>"; the owner stays the registrant'
+    )
 
 
 class AttestationStatement(BaseModel):
