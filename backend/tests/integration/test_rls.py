@@ -24,8 +24,12 @@ tenant table without a fixture fails the run. Tables read on the request path by
   public Brief stays readable.
 - The expiry job's list (revision 0007, ``app_engagements_due_for_expiry``): only a session with no user bound reads
   it, and it learns only developer and engagement ids, of the engagements the clock may act on.
-- CURATED tables (revision 0009, the quiz's sets and questions, ``world.CURATED_ROWS``): staff admin reads every row,
-  a developer the approved ones, an account without a developer profile none.
+- CURATED tables (revision 0009, the quiz's sets and questions; revision 0010, the trend cards and their sources;
+  ``world.CURATED_ROWS``): staff admin reads every row, a developer the approved or published ones, an account without
+  a developer profile none.
+- Events (revision 0010, PUBLISHED with a narrower public half): a developer reads the other organisation's published
+  events and never its drafts; an organisation's members read its events in any status; a developer's reminders are
+  theirs only (``integration/events/test_events_schema.py`` has the rest).
 - A cross-tenant API access returns 404.
 """
 
