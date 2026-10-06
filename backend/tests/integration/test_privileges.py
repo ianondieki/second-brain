@@ -22,6 +22,9 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
 - Revision 0011 (REQ-DEV-03): only bridge_app touches the team tables (blocks, invitations, threads, messages, read
   markers, contributor rows), with exactly its matrix; no role but the owner sets a profile's opt-in time, and only
   bridge_app turns the peers switch; only bridge_app executes the peers and team definers.
+- Revision 0012 (REQ-PERS-02, REQ-EMB-01): no role but the owner updates a profile's or a problem's vector, model,
+  version or time, or inserts a problem's (the worker writes them through the definers); only bridge_app executes the
+  embedding definers, and nobody their internal helpers.
 """
 
 from __future__ import annotations
@@ -241,6 +244,72 @@ async def test_only_bridge_app_executes_the_team_definers(owner_engine: AsyncEng
         )
         expected = set() if "team_end_pair" in signature else {"bridge_app"}
         assert set(callers.scalars()) == expected
+        public = "SELECT has_function_privilege('public', :sig, 'EXECUTE')"
+        assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
+
+
+EMBEDDING_COLUMNS = {
+    "developer_profiles": ("profile_embedding", "embed_model", "embed_version", "profile_embedded_at"),
+    "problems": ("embedding", "embed_model", "embed_version", "embedded_at"),
+}
+
+
+@pytest.mark.parametrize(
+    ("table", "column"), [(table, column) for table, columns in EMBEDDING_COLUMNS.items() for column in columns]
+)
+async def test_no_role_writes_an_embedding_but_the_owners_definers(
+    owner_engine: AsyncEngine, table: str, column: str
+) -> None:
+    """Revision 0012: a vector, its model, version and time are written only by app_set_profile_embedding and
+    app_set_problem_embedding (and cleared by the profile's clearer and the consents trigger), all the owner's: no role
+    of the cluster updates one (revisions 0002 and 0005's UPDATE and INSERT of problems' are revoked), and none inserts
+    a problem's. A profile's are inserted NULL by the signup through revision 0001's table-wide INSERT."""
+    async with owner_engine.connect() as conn:
+        for privilege in ("UPDATE", "INSERT"):
+            writers = await conn.execute(
+                text(
+                    "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                    " AND r.rolname NOT LIKE 'pg\\_%'"
+                    " AND has_column_privilege(r.oid, CAST(:t AS regclass), :c, :p)"
+                ),
+                {"t": f"public.{table}", "c": column, "p": privilege},
+            )
+            expected = ["bridge_app"] if (table, privilege) == ("developer_profiles", "INSERT") else []
+            assert sorted(writers.scalars()) == expected, privilege
+        reads = "SELECT has_column_privilege('bridge_app', CAST(:t AS regclass), :c, 'SELECT')"
+        assert (await conn.execute(text(reads), {"t": f"public.{table}", "c": column})).scalar_one() is True
+
+
+@pytest.mark.parametrize(
+    ("signature", "callers"),
+    [
+        ("public.app_profiles_to_embed(text, text, integer)", {"bridge_app"}),
+        ("public.app_set_profile_embedding(uuid, vector, text, text)", {"bridge_app"}),
+        ("public.app_clear_profile_embedding(uuid)", {"bridge_app"}),
+        ("public.app_problems_to_embed(text, text, integer)", {"bridge_app"}),
+        ("public.app_set_problem_embedding(uuid, vector, text, text)", {"bridge_app"}),
+        ("public.app_stale_embedding_counts(text, text)", {"bridge_app"}),
+        ("public.profiles_to_embed(text, text)", set()),
+        ("public.profile_embedding_text(uuid)", set()),
+        ("public.profile_embedding_clear(uuid)", set()),
+        ("public.profile_consent_granted(uuid)", set()),
+    ],
+)
+async def test_only_bridge_app_executes_the_embedding_definers(
+    owner_engine: AsyncEngine, signature: str, callers: set[str]
+) -> None:
+    """Revision 0012: the embedding definers are executable by bridge_app alone of every role of the cluster, PUBLIC
+    included (each refuses a bound session but the clearer's own row); their internal helpers by nobody but the
+    owner."""
+    async with owner_engine.connect() as conn:
+        found = await conn.execute(
+            text(
+                "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                " AND r.rolname NOT LIKE 'pg\\_%' AND has_function_privilege(r.oid, :sig, 'EXECUTE')"
+            ),
+            {"sig": signature},
+        )
+        assert set(found.scalars()) == callers
         public = "SELECT has_function_privilege('public', :sig, 'EXECUTE')"
         assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
 
