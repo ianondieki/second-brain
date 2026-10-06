@@ -15,31 +15,45 @@ readable by staff only).
   placeholder.
 - ``POST /candidates/{problem_id}/decision`` ``{decision, checklist_confirmed}``: the publish checks in code, then
   ``app_moderate_problem`` (``bridge.problems.research.review``).
+
+Technology trend cards (REQ-DEV-02; D-60; P22 card B, default (5)):
+
+- ``GET /trends?status=candidate|published|rejected`` (newest first) and ``GET /trends/{id}`` (with its sources and
+  its generating call's trace id; never who decided: the audit event says).
+- ``POST /trends/{id}/decision`` ``{decision: publish|reject}``: publishing repeats the named-organisation rule on what
+  is stored first (``bridge.problems.trends.store.unsourced_names``: 409 ``unsourced_name``), then
+  ``app_decide_trend_card``, once (409 ``already_decided``); audited ``trend.card_decided`` on the admin's chain.
+- ``POST /trend-runs``: 202, the weekly task ``trends.draft`` queued now through the outbox with the admin's id (the job
+  binds them); it does nothing when a candidate or published card is less than 6 days old.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.admin.deps import StaffAdmin
+from bridge.audit.service import record as audit
 from bridge.auth.deps import Db
 from bridge.directory.models import Niche
-from bridge.errors import ERROR_RESPONSES, ApiError, not_found
-from bridge.models.enums import ModerationState, ProblemStatus, ResearchRunStatus
+from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, not_found
+from bridge.models.enums import AuditActor, ModerationState, ProblemStatus, ResearchRunStatus
 from bridge.problems.models import ResearchRun
 from bridge.problems.research import review
 from bridge.problems.research.pipeline import RunRefused, clock_now, nairobi_date, start_run
 from bridge.problems.research.policy import get_research_policy
 from bridge.problems.research.sources import Excerpt, Freshness, freshness, get_catalogue
 from bridge.problems.research.tasks import defer_run
+from bridge.problems.trends import store as trends
+from bridge.trends.models import TrendCard, TrendCardSource
 
 router = APIRouter(prefix="/api/admin/research", tags=["admin"], responses=ERROR_RESPONSES)
 
@@ -293,3 +307,164 @@ async def decide_research_candidate(problem_id: UUID, body: DecisionIn, staff: S
         policy=get_research_policy(),
     )
     return DecisionOut(id=result.id, status=result.status, moderation_state=result.moderation_state)
+
+
+# ------------------------------------------------------------------------------------------------------ trend cards
+
+TrendStatus = Literal["candidate", "published", "rejected"]
+_DECIDE_TREND: Final = text("SELECT app_decide_trend_card(:c, :d)")
+_NOW: Final = text("SELECT extract(epoch FROM app_clock_now())::bigint")
+NO_TREND: Final = "No such trend card."
+# [[COPY-REVIEW]] the trend decision's refusals.
+UNSOURCED: Final = "The card names an organisation that none of its sources names. Reject it."
+TREND_DECIDED: Final = "This trend card was already decided."
+
+
+class TrendSourceAdminOut(BaseModel):
+    position: int
+    url: str
+    publisher: str
+    published_date: date
+    retrieved_at: date
+    quote: str
+    excerpt_ref: str
+    support: str = Field(description="The phrase of the quote the citation was verified by")
+
+
+class TrendCardAdminOut(BaseModel):
+    id: UUID
+    title: str
+    summary: str
+    topic_slug: str
+    status: TrendStatus
+    confidence: Decimal | None
+    named_orgs: list[str]
+    llm_trace_id: str | None = Field(description="The generating call's trace id (llm_calls), null when seeded")
+    created_at: datetime
+    decided_at: datetime | None
+    published_at: datetime | None
+
+
+class TrendCardAdminDetailOut(TrendCardAdminOut):
+    sources: list[TrendSourceAdminOut]
+
+
+class TrendCardList(BaseModel):
+    items: list[TrendCardAdminOut]
+
+
+class TrendDecisionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: Literal["publish", "reject"]
+
+
+class TrendRunOut(BaseModel):
+    job_id: int
+    task: str
+
+
+_C, _S = TrendCard, TrendCardSource
+_CARD_COLUMNS = (
+    _C.id,
+    _C.title,
+    _C.summary,
+    _C.topic_slug,
+    _C.status,
+    _C.confidence,
+    _C.named_orgs,
+    _C.llm_trace_id,
+    _C.created_at,
+    _C.decided_at,
+    _C.published_at,
+)
+
+
+def _trend_out(row: object) -> TrendCardAdminOut:
+    return TrendCardAdminOut.model_validate(row, from_attributes=True)
+
+
+async def _trend_detail(db: AsyncSession, card_id: UUID) -> TrendCardAdminDetailOut | None:
+    row = (await db.execute(select(*_CARD_COLUMNS).where(_C.id == card_id))).one_or_none()
+    if row is None:
+        return None
+    columns = (_S.position, _S.url, _S.publisher, _S.published_date, _S.retrieved_at, _S.quote, _S.excerpt_ref)
+    sources = (await db.execute(select(*columns, _S.support).where(_S.card_id == card_id).order_by(_S.position))).all()
+    return TrendCardAdminDetailOut(
+        **_trend_out(row).model_dump(),
+        sources=[TrendSourceAdminOut.model_validate(s, from_attributes=True) for s in sources],
+    )
+
+
+@router.get("/trends")
+async def list_trend_cards(
+    staff: StaffAdmin,
+    db: Db,
+    status: TrendStatus | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> TrendCardList:
+    """Trend cards, newest first (``status`` filters)."""
+    stmt = select(*_CARD_COLUMNS)
+    if status is not None:
+        stmt = stmt.where(_C.status == status)
+    rows = (await db.execute(stmt.order_by(_C.created_at.desc(), _C.id.desc()).limit(limit))).all()
+    return TrendCardList(items=[_trend_out(row) for row in rows])
+
+
+@router.get("/trends/{card_id}")
+async def get_trend_card(card_id: UUID, staff: StaffAdmin, db: Db) -> TrendCardAdminDetailOut:
+    found = await _trend_detail(db, card_id)
+    if found is None:
+        raise not_found(NO_TREND)
+    return found
+
+
+@router.post(
+    "/trends/{card_id}/decision",
+    responses={409: {"model": ApiErrorBody, "description": "already_decided or unsourced_name"}},
+)
+async def decide_trend_card(card_id: UUID, body: TrendDecisionIn, staff: StaffAdmin, db: Db) -> TrendCardAdminDetailOut:
+    """Publish or reject a candidate, once; publishing first repeats the named-organisation rule on what is stored."""
+    found = await _trend_detail(db, card_id)
+    if found is None:
+        raise not_found(NO_TREND)
+    if body.decision == "publish" and found.status == "candidate":
+        sources = [
+            trends.StoredSource(s.url, s.publisher, s.published_date, s.retrieved_at, s.quote, s.excerpt_ref)
+            for s in found.sources
+        ]
+        if trends.unsourced_names(found.title, found.summary, found.topic_slug, found.named_orgs, sources):
+            raise ApiError(409, "unsourced_name", UNSOURCED)
+    try:
+        await db.execute(_DECIDE_TREND, {"c": card_id, "d": body.decision})
+    except DBAPIError as exc:
+        await db.rollback()
+        sqlstate = str(getattr(exc.orig, "sqlstate", None))
+        if sqlstate == "P0002":
+            raise not_found(NO_TREND) from None
+        if sqlstate == "55000":
+            raise ApiError(409, "already_decided", TREND_DECIDED) from None
+        raise
+    await audit(
+        db,
+        "trend.card_decided",
+        actor_user_id=staff.live.user.id,
+        actor_kind=AuditActor.STAFF,
+        subject_type="trend_card",
+        subject_id=card_id,
+        payload={"decision": body.decision, "topic_slug": found.topic_slug, "sources": len(found.sources)},
+    )
+    await db.commit()
+    decided = await _trend_detail(db, card_id)
+    assert decided is not None  # a staff admin reads every card
+    return decided
+
+
+@router.post("/trend-runs", status_code=202)
+async def start_trend_run(staff: StaffAdmin, db: Db) -> TrendRunOut:
+    """Draft this week's trends now (the weekly task, bound to you); nothing happens when a candidate or published
+    card is less than 6 days old."""
+    timestamp = int((await db.execute(_NOW)).scalar_one())
+    job_id = await trends.defer_run(db, user_id=staff.live.user.id, timestamp=timestamp)
+    await db.commit()
+    return TrendRunOut(job_id=job_id, task=trends.RUN_TASK)
