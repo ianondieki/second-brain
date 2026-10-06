@@ -153,8 +153,8 @@ export function EventForm({ counties, poster, target, doneBase, doneQuery = "", 
           <p className="mt-1 text-sm text-ink-soft">{t("whenHint")}</p>
         </div>
         {(["start", "end"] as const).map((edge) => (
-          <fieldset key={edge} className="grid grid-cols-2 gap-x-3 gap-y-4 sm:gap-x-4">
-            <legend className="col-span-2 mb-2 font-semibold text-ink">{t(`${edge}s`)}</legend>
+          <fieldset key={edge} className="grid grid-cols-1 gap-x-4 gap-y-4 min-[400px]:grid-cols-2">
+            <legend className="mb-2 font-semibold text-ink">{t(`${edge}s`)}</legend>
             <TextField
               id={id(`${edge}Date`)}
               type="date"
