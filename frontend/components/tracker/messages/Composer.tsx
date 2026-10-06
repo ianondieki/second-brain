@@ -224,26 +224,31 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
       {otherRefusal ? <Alert ref={alert}>{refusalText(otherRefusal.kind, otherRefusal.minutes)}</Alert> : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-col items-start gap-1">
-          <Button variant="secondary" aria-describedby="attach-hint" onClick={() => picker.current?.click()} data-attach="">
-            <ClipIcon className="mr-2 size-5" />
-            {t("attach")}
-          </Button>
-          <p id="attach-hint" className="max-w-[40ch] text-xs text-ink-soft">
-            {t("attachHint", { value: maxMegabytes(limits), max: limits.max_attachments })}
-          </p>
-          <input
-            ref={picker}
-            type="file"
-            multiple
-            hidden
-            accept={[...limits.accepted_types, ".md", ".markdown", ".txt"].join(",")}
-            onChange={(event) => {
-              choose(event.currentTarget.files);
-              event.currentTarget.value = "";
-            }}
-          />
-        </div>
+        {/* A thread without files (a team thread: max_attachments 0) has no Attach; Send keeps its place. */}
+        {limits.max_attachments ? (
+          <div className="flex flex-col items-start gap-1">
+            <Button variant="secondary" aria-describedby="attach-hint" onClick={() => picker.current?.click()} data-attach="">
+              <ClipIcon className="mr-2 size-5" />
+              {t("attach")}
+            </Button>
+            <p id="attach-hint" className="max-w-[40ch] text-xs text-ink-soft">
+              {t("attachHint", { value: maxMegabytes(limits), max: limits.max_attachments })}
+            </p>
+            <input
+              ref={picker}
+              type="file"
+              multiple
+              hidden
+              accept={[...limits.accepted_types, ".md", ".markdown", ".txt"].join(",")}
+              onChange={(event) => {
+                choose(event.currentTarget.files);
+                event.currentTarget.value = "";
+              }}
+            />
+          </div>
+        ) : (
+          <span />
+        )}
         <Button type="submit" variant="primary" busy={busy} data-send="">
           {busy ? t("sending") : t("send")}
         </Button>
