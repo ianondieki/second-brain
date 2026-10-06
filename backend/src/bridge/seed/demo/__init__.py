@@ -28,7 +28,11 @@ streak of 2, on the board) and Brian's on today's; no model is called. Then P22'
 (``bridge.seed.demo.events``): four events posted through the API by Telco A's and SACCO B's reviewers and the staff
 admin, three of them published by the staff admin on the queue (Nairobi City, online, Machakos) and one left a draft,
 Amina's county and her Remind me on the Nairobi one, and three hand-written trend cards through the checks and
-``app_create_trend_candidate``, two of them published by the staff admin; no model is called.
+``app_create_trend_candidate``, two of them published by the staff admin; no model is called. Last, P22's Peers and
+team up (``bridge.seed.demo.teams``): two more demo developers (Zawadi, Juma) signed up with the others; Amina, Brian
+(in her county, two shared niches) and Zawadi (Mombasa, one shared niche) turn Peers on and Juma does not; Amina's
+accepted invitation to Brian on P2's problem with a four-message thread, Brian credited on P2, and Zawadi's pending
+invitation to Amina, each through the API.
 
 Idempotent, and safe on a demo that was used (``make demo`` runs it on every start): every step looks for what it
 would create (by address, organisation name, a proposal's first title) and skips what exists, so running it twice
@@ -60,6 +64,7 @@ from bridge.seed.demo.data import (
     ENGAGEMENTS,
     EXPORTED_PROPOSAL,
     ORGS,
+    PEER_DEVELOPERS,
     PROPOSALS,
     STAFF,
     STAFF_ADMIN,
@@ -90,6 +95,7 @@ from bridge.seed.demo.runtime import (
 )
 from bridge.seed.demo.scouts import SCOUTED, ensure_scout
 from bridge.seed.demo.subscriptions import seed_demo_subscriptions
+from bridge.seed.demo.teams import ensure_contributor, ensure_peers, ensure_pending_invitation, ensure_team
 from bridge.seed.demo.trending import seed_trending
 
 __all__ = [
@@ -114,7 +120,8 @@ async def seed_demo(
 
     The steps run in the order the module docstring tells, ending with P21's beats (the message thread on Amina's
     engagement with SACCO B, Telco A's shortlist entry after its scout, whose match it is, and Amina's saved search)
-    and P22's Today's five (the two sets, then each attempt) and This week (the events, then the trend cards)."""
+    and P22's Today's five (the two sets, then each attempt), This week (the events, then the trend cards) and Peers
+    and team up (the profiles, the team, the contributor, the pending invitation)."""
     ensure_demo_allowed(settings)
     runtime = runtime or DemoRuntime.from_settings(settings)
     report = DemoReport()
@@ -128,7 +135,7 @@ async def seed_demo(
         async def step(what: str, awaitable: Awaitable[None]) -> None:
             await guarded(report, strict=strict, what=what, step=awaitable)
 
-        for dev in DEVELOPERS:
+        for dev in (*DEVELOPERS, *PEER_DEVELOPERS):
             await step(dev.email, ensure_developer(owner_engine, factory, settings, dev, report))
         for org in ORGS:
             await step(org.legal_name, ensure_org(owner_engine, factory, settings, org, report))
@@ -173,6 +180,10 @@ async def seed_demo(
         for event in DEMO_EVENTS:
             await step(f"event {event.key}", ensure_event(owner_engine, actors, event, report))
         await step("trend cards", ensure_trends(owner_engine, actors, report))
+        await step("peers", ensure_peers(owner_engine, actors, niches, report))
+        await step("team-up", ensure_team(owner_engine, actors, report))
+        await step("contributor", ensure_contributor(owner_engine, actors, report))
+        await step("pending team-up", ensure_pending_invitation(owner_engine, actors, report))
     return report
 
 
