@@ -1220,18 +1220,19 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
             assert not await scalar(owner_engine, held, t=table, p=privilege), f"{table} {privilege}"
     # revision 0011: team messages are append-only like the engagement thread's; invitations and threads change only
     # through the definers; a block is never updated; a contributor row is never deleted (removed_at instead)
-    for table, privileges in (
+    team_tables: tuple[tuple[str, tuple[str, ...]], ...] = (
         ("team_messages", ("UPDATE", "DELETE", "TRUNCATE")),
         ("team_invitations", ("UPDATE", "DELETE", "TRUNCATE")),
         ("team_threads", ("INSERT", "UPDATE", "DELETE", "TRUNCATE")),
         ("developer_blocks", ("INSERT", "UPDATE", "TRUNCATE")),
         ("team_thread_reads", ("DELETE", "TRUNCATE")),
         ("proposal_contributors", ("DELETE", "TRUNCATE")),
-    ):
-        for privilege in privileges:
+    )
+    for team_table, team_privileges in team_tables:
+        for privilege in team_privileges:
             held = "SELECT has_table_privilege('bridge_app', :t, :p) OR (:p IN ('INSERT', 'UPDATE')"
             held += " AND has_any_column_privilege('bridge_app', :t, :p))"
-            assert not await scalar(owner_engine, held, t=table, p=privilege), f"{table} {privilege}"
+            assert not await scalar(owner_engine, held, t=team_table, p=privilege), f"{team_table} {privilege}"
 
 
 async def test_schema_v5_policies_are_exactly_the_notes_and_the_in_app_ones(owner_engine: AsyncEngine) -> None:
