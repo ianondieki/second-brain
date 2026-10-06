@@ -78,6 +78,7 @@ from bridge.seed.demo.data import (
     all_accounts,
     totp_secret,
 )
+from bridge.seed.demo.events import DEMO_EVENTS, PUBLISHED_TRENDS, SEEDED_TRENDS
 from bridge.seed.demo.follow_ups import SHORTLISTED
 from bridge.seed.demo.queues import CLAIMED, HELD
 from bridge.seed.demo.quiz import SEEDED_SETS, nairobi_today
@@ -116,6 +117,10 @@ TABLES = (
     "quiz_questions",
     "quiz_attempts",
     "quiz_profiles",
+    "events",
+    "event_reminders",
+    "trend_cards",
+    "trend_card_sources",
 )
 
 
@@ -193,6 +198,24 @@ def quiz_lines(today: date) -> list[str]:
     ]
 
 
+def this_week_lines() -> list[str]:
+    """What the first run of This week's steps reports (P22 track B), after the quiz's."""
+    admin = STAFF_ADMIN.email
+    lines = []
+    for event in DEMO_EVENTS:
+        lines.append(f"event {event.key}: {event.title}")
+        if event.publish:
+            lines.append(f"event {event.key} published by {admin}")
+        if event.reminded_by is not None:
+            lines.append(f"county of {event.reminded_by}: {event.county}")
+            lines.append(f"reminder of {event.reminded_by} on {event.key}")
+    for trend in SEEDED_TRENDS:
+        lines.append(f"trend card {trend.topic_slug}: {trend.title}")
+        if trend.topic_slug in PUBLISHED_TRENDS:
+            lines.append(f"trend card {trend.topic_slug} published by {admin}")
+    return lines
+
+
 async def counts(engine: AsyncEngine) -> dict[str, int]:
     return {table: int((await rows(engine, f"SELECT count(*) FROM {table}"))[0][0]) for table in TABLES}
 
@@ -205,12 +228,14 @@ async def test_running_the_demo_seed_again_changes_nothing(
 ) -> None:
     first, second, third = seeded
     assert first.created, "the first run seeds"
-    assert first.created[-10:-7] == [  # P21's beats, then P22's quiz, last
+    week = len(this_week_lines())
+    assert first.created[-10 - week : -7 - week] == [  # P21's beats, then P22's quiz and This week, last
         f"thread of {THREAD.proposal} with {THREAD.org}: {len(THREAD.messages)} messages",
         f"shortlist of {SHORTLISTED[1].legal_name}: {SHORTLISTED[0].key} by {SHORTLISTED[2].email}",
         f"saved search of {SAVED_SEARCH.owner}: {SAVED_SEARCH.name}",
     ]
-    assert first.created[-7:] == quiz_lines(await nairobi_today(owner))
+    assert first.created[-7 - week : -week] == quiz_lines(await nairobi_today(owner))
+    assert first.created[-week:] == this_week_lines()
     assert first.notes == []
     assert (second.created, second.notes, third.created, third.notes) == ([], [], [], [])
     assert (third.users, third.orgs, third.proposals, third.cert_ids) == (
@@ -940,6 +965,65 @@ async def test_todays_five_has_two_seeded_sets_and_three_attempts(
     same_week = yesterday.isocalendar()[:2] == today.isocalendar()[:2]  # on a Monday, yesterday was last week's
     assert [(r["rank"], r["points"], r["you"]) for r in board["rows"]] == [(1, 9 if same_week else 5, True)]
     assert brians["me"] == {"points": 3, "rank": 2, "opted_in": False, "played": True}
+
+
+async def test_this_week_has_events_a_reminder_and_trend_cards(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P22 (REQ-DEV-02; card test B7's data): four events posted through the API (Telco A's in Nairobi City, the staff
+    admin's online one and SACCO B's in Machakos published by the demo staff admin on the version read, SACCO B's
+    online draft on the queue), once however often the seed ran; Amina in Nairobi City with her Remind me on the
+    Nairobi one; three hand-written trend cards stored through app_create_trend_candidate with no generating call,
+    two published by the staff admin; no model called. Amina's strip shows the Nairobi and online events, not
+    Machakos, and a trend labelled a seeded example; Brian (no county) sees the online one."""
+    report = seeded[0]
+    admin, amina = report.users[STAFF_ADMIN.email], report.users[AMINA.email]
+    events = await rows(
+        owner,
+        "SELECT e.id, e.title, e.org_id, e.status, e.county_code, e.online, e.created_by FROM events e ORDER BY title",
+    )
+    by_title = {event.title: event for event in events}
+    assert len(events) == len(DEMO_EVENTS)
+    for plan in DEMO_EVENTS:
+        found = by_title[plan.title]
+        assert (found.status, found.county_code, found.online) == (
+            "published" if plan.publish else "draft",
+            plan.county,
+            plan.county is None,
+        )
+        assert found.org_id == (None if plan.org is None else report.orgs[plan.org])
+        assert found.created_by == report.users[plan.poster]
+    decided = await rows(owner, "SELECT actor_user_id, payload FROM audit_events WHERE action = 'event.decided'")
+    assert [(d.actor_user_id, d.payload["decision"]) for d in decided] == [(admin, "publish")] * 3
+    nairobi = by_title[DEMO_EVENTS[0].title]
+    reminders = await rows(owner, "SELECT user_id, event_id FROM event_reminders")
+    assert [tuple(r) for r in reminders] == [(amina, nairobi.id)]
+    assert (await rows(owner, "SELECT county_code FROM developer_profiles WHERE user_id = :u", u=amina))[0][0] == (
+        "KE-30"
+    )
+    cards = await rows(owner, "SELECT id, title, topic_slug, status, llm_trace_id FROM trend_cards ORDER BY title")
+    assert sorted((c.topic_slug, c.status, c.llm_trace_id) for c in cards) == [
+        ("databases", "published", None),
+        ("kenya-ict", "candidate", None),
+        ("security", "published", None),
+    ]
+    refs = await rows(owner, "SELECT DISTINCT excerpt_ref FROM trend_card_sources ORDER BY excerpt_ref")
+    assert [r.excerpt_ref for r in refs] == ["tr-dat-002", "tr-ke-002", "tr-sec-001"]
+    trend_decisions = await rows(owner, "SELECT actor_user_id FROM audit_events WHERE action = 'trend.card_decided'")
+    assert [d.actor_user_id for d in trend_decisions] == [admin, admin]
+    assert await rows(owner, "SELECT id FROM llm_calls WHERE trace_id LIKE 'trends:%'") == []
+    async with in_process_app(demo_settings(), app, runtime) as (demo_app, _):
+        async with signed_in(demo_app, owner, AMINA.email) as developer:
+            strip = (await developer.call("GET", "/api/me/week")).json()
+        async with signed_in(demo_app, owner, BRIAN.email) as other:
+            his = (await other.call("GET", "/api/me/week")).json()
+    shown = {event["title"]: event for event in strip["events"]}
+    assert set(shown) == {DEMO_EVENTS[0].title, DEMO_EVENTS[1].title}
+    assert (shown[DEMO_EVENTS[0].title]["reminder"], shown[DEMO_EVENTS[1].title]["organiser"]) == (True, "Platform")
+    assert strip["reminders_email"] in {"on", "unverified"}
+    assert strip["trend"]["seeded_example"] is True
+    assert strip["trend"]["title"] in {t.title for t in SEEDED_TRENDS if t.topic_slug in PUBLISHED_TRENDS}
+    assert [event["title"] for event in his["events"]] == [DEMO_EVENTS[1].title]
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:
