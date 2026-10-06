@@ -129,3 +129,18 @@ export async function ideaContributors(proposalId: string): Promise<{ user_id: s
     return null;
   }
 }
+
+/**
+ * The caller's published ideas (id and title), which a team-thread counterpart can be credited on; empty when they
+ * cannot be read: the thread page then offers no credit step rather than failing.
+ */
+export async function myPublishedIdeas(): Promise<{ id: string; title: string }[]> {
+  try {
+    const { data } = await serverApi().GET("/api/me/proposals", await options());
+    return (data?.items ?? []).flatMap((idea) =>
+      idea.status === "published" && idea.moderation_state === "clear" && idea.title ? [{ id: idea.id, title: idea.title }] : [],
+    );
+  } catch {
+    return [];
+  }
+}

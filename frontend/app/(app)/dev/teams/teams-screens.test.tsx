@@ -58,8 +58,8 @@ vi.mock("./data", () => ({
   myThreads: async () => state.threads,
   myContributions: async () => state.credits,
   teamThread: async () => state.thread,
+  myPublishedIdeas: async () => state.ideas,
 }));
-vi.mock("../ideas/data", () => ({ myIdeas: async () => state.ideas }));
 
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal ??= function showModal(this: HTMLDialogElement) {
@@ -219,7 +219,7 @@ describe("a team thread's page", () => {
 
   it("open: the problem links, the messages are drawn, Send is the one primary action and there are no files", async () => {
     state.thread = read({ unread: 0 }, MESSAGES);
-    state.ideas = [{ id: "i1", status: "published", moderation_state: "clear", title: "Fuel-level alerts" }];
+    state.ideas = [{ id: "i1", title: "Fuel-level alerts" }];
     await open();
     expect(screen.getByRole("heading", { level: 1, name: "dev-kb3dysnk" })).toBeTruthy();
     expect(screen.getByRole("link", { name: PROBLEM.title }).getAttribute("href")).toBe(`/problems/${PROBLEM.id}`);

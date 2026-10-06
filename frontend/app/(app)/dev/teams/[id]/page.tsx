@@ -16,13 +16,11 @@ import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
-import { myIdeas } from "../../ideas/data";
-import { teamThread } from "../data";
+import { myPublishedIdeas, teamThread } from "../data";
 import { closedReason, TEAMS_PATH, toThreadPage } from "../teams";
 import { StepButtons } from "./StepButtons";
 import { TeamThread } from "./TeamThread";
 import { STEP_STATUS_ID, STEPS_ID } from "./ids";
-import type { IdeaChoice } from "./ThreadSheets";
 
 export async function generateMetadata({ params }: PageProps<"/dev/teams/[id]">): Promise<Metadata> {
   const t = await getTranslations("teams");
@@ -42,12 +40,12 @@ export default async function TeamThreadPage({ params }: PageProps<"/dev/teams/[
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
   const id = (await params).id;
-  const [t, tu, locale, read, ideas] = await Promise.all([
+  const [t, tu, locale, read, published] = await Promise.all([
     getTranslations("teams"),
     getTranslations("teamUp"),
     getLocale(),
     teamThread(id),
-    myIdeas(),
+    myPublishedIdeas(),
   ]);
   const { thread } = read;
   const name = thread.counterpart?.handle ?? t("list.someone");
@@ -55,10 +53,7 @@ export default async function TeamThreadPage({ params }: PageProps<"/dev/teams/[
   const counterpart = thread.counterpart ? { user_id: thread.counterpart.user_id, handle: thread.counterpart.handle } : null;
   const page = toThreadPage(read, name);
   const empty = page.items.length === 0 && !page.next_cursor;
-  // The ideas the other developer can be credited on: the caller's published ones, by their registered title.
-  const published: IdeaChoice[] = ideas.flatMap((idea) =>
-    idea.status === "published" && idea.moderation_state === "clear" && idea.title ? [{ id: idea.id, title: idea.title }] : [],
-  );
+  // The ideas the other developer can be credited on: the caller's published ones ([] when they cannot be read).
 
   // The composer's refusal for a thread that closed meanwhile says "thread", not "engagement" (same parts, own words).
   const strings = await clientStrings(["trackerMessages", "teamUp"]);
@@ -89,7 +84,8 @@ export default async function TeamThreadPage({ params }: PageProps<"/dev/teams/[
               in the first box (nothing of the steps ships with the page: docs/spec/07 item 5). */}
           <div className="-mt-4 flex flex-col gap-4" data-thread-actions="">
             <div id={STEP_STATUS_ID} className="contents" />
-            <div id={STEPS_ID} className="flex flex-wrap items-center gap-3 empty:hidden">
+            {/* Inert (and dimmed) until the thread's script answers the steps: a press before then does nothing. */}
+            <div id={STEPS_ID} inert className="flex flex-wrap items-center gap-3 empty:hidden [&[inert]]:opacity-60">
               <StepButtons
                 credit={counterpart && published.length > 0 ? tu("credit.add") : null}
                 more={tu("thread.more")}

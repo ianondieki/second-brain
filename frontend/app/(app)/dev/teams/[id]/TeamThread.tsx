@@ -1,19 +1,21 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 
+import { useStrings } from "@/components/ClientStrings";
 import { lazyCalls } from "@/components/tracker/messages/lazy-calls";
 import { Thread } from "@/components/tracker/messages/Thread";
 import type { Thread as ThreadPage } from "@/components/tracker/messages/thread";
+import { Alert } from "@/components/ui/Alert";
 import { api } from "@/lib/api/client";
 
 import type { TeamCalls } from "../calls";
+import { closeOverflows } from "../overflow-close";
 import { STEP_STATUS_ID, STEPS_ID } from "./ids";
-import type { IdeaChoice, Sheet } from "./ThreadSheets";
+import type { IdeaChoice, Sheet, ThreadSheets as Sheets } from "./ThreadSheets";
 
 const load = () => import("./later");
-const ThreadSheets = lazy(() => load().then((m) => ({ default: m.ThreadSheets })));
 
 async function markRead(threadId: string, upTo: string) {
   try {
@@ -59,16 +61,30 @@ export function TeamThread({
 }) {
   // The team calls (./thread-calls.ts) load with the first that needs them; marking read runs as the thread opens.
   const threadCalls = useMemo(() => lazyCalls(async () => (await load()).teamThreadCalls(counterpart), markRead), [counterpart]);
-  const [sheet, setSheet] = useState<{ step: Sheet; n: number } | null>(null);
+  const t = useStrings("teamUp");
+  // The step pressed (a new n each press), and the dialogs' component once loaded, or "failed".
+  const [sheet, setSheet] = useState<{ step: Sheet; n: number; Sheets: ComponentType<Parameters<typeof Sheets>[0]> | "failed" } | null>(null);
 
   useEffect(() => {
+    // The steps answer from now on (before hydration they are inert), and their overflow menu closes as menus do.
     const steps = document.getElementById(STEPS_ID);
+    steps?.removeAttribute("inert");
     const press = (event: Event) => {
-      const step = (event.target as Element).closest<HTMLElement>("[data-step]")?.dataset.step as Sheet | undefined;
-      if (step) setSheet((now) => ({ step, n: (now?.n ?? 0) + 1 }));
+      closeOverflows(event);
+      if (event.type !== "click") return;
+      const step = (event.target as Element).closest<HTMLElement>(`#${STEPS_ID} [data-step]`)?.dataset.step as Sheet | undefined;
+      if (!step) return;
+      load().then(
+        (m) => setSheet((now) => ({ step, n: (now?.n ?? 0) + 1, Sheets: m.ThreadSheets })),
+        () => setSheet((now) => ({ step, n: (now?.n ?? 0) + 1, Sheets: "failed" })),
+      );
     };
-    steps?.addEventListener("click", press);
-    return () => steps?.removeEventListener("click", press);
+    document.addEventListener("click", press);
+    document.addEventListener("keydown", press);
+    return () => {
+      document.removeEventListener("click", press);
+      document.removeEventListener("keydown", press);
+    };
   }, []);
 
   const host = sheet ? document.getElementById(STEP_STATUS_ID) : null;
@@ -76,9 +92,11 @@ export function TeamThread({
     <>
       {sheet && host
         ? createPortal(
-            <Suspense fallback={null}>
-              <ThreadSheets key={sheet.n} sheet={sheet.step} threadId={threadId} counterpart={person} ideas={ideas} calls={given} />
-            </Suspense>,
+            sheet.Sheets === "failed" ? (
+              <Alert key={sheet.n}>{t("thread.loadFailed")}</Alert>
+            ) : (
+              <sheet.Sheets key={sheet.n} sheet={sheet.step} threadId={threadId} counterpart={person} ideas={ideas} calls={given} />
+            ),
             host,
           )
         : null}
