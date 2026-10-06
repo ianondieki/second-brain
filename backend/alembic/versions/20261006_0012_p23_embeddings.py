@@ -7,10 +7,13 @@ narrowings of earlier objects, restored on downgrade (a grant on ``problems``, t
 ``developer_profiles``): four new columns (``developer_profiles.profile_embedded_at`` and
 ``profile_embedding_hash``, ``problems.embedded_at`` and ``embedding_hash``), two HNSW cosine indexes, sixteen new
 functions (six granted to bridge_app, nine internal, one trigger function) and one trigger. No new table, no enum
-type; nothing else of revisions 0001 to 0011 is changed or dropped. The downgrade drops the trigger, functions, indexes
-and the four new columns and restores the grant and the policy; the vectors themselves (revisions 0001 and 0002's
-columns) stay where they are. Every vector is derived data the worker recomputes from rows that stay, so the
-downgrade loses nothing anyone wrote and proceeds with rows: it needs no ``-x`` flag (unlike 0010 and 0011's).
+type; nothing else of revisions 0001 to 0011 is changed or dropped. The downgrade nulls every vector with its model
+and version on both tables, then drops the trigger, functions, indexes and the four new columns and restores the grant
+and the policy. Every vector is derived data the worker recomputes from rows that stay (the profiles, niches,
+proposals and problems), and without its hash nothing would say which text a vector came from, so the downgrade
+clears them rather than keep vectors 0011 cannot judge; it loses nothing anyone wrote and proceeds with rows, needing
+no ``-x`` flag (unlike 0010 and 0011's). After a re-upgrade every consented profile and published problem is listed
+again.
 
 Freshness is content-based: a vector is stored with the SHA-256 (hex) of the exact text it was computed from
 (``profile_embedding_hash``, ``embedding_hash``), and a row is stale when it has no vector, another model or version,
@@ -565,11 +568,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Not destructive: the vectors (revisions 0001 and 0002's columns) stay, and what goes (the times, the hashes, the
-    indexes, the functions and the trigger) is derived data and code. The worker recomputes every vector from rows that
-    stay, so the downgrade proceeds with rows. bridge_app's INSERT and UPDATE of problems' embedding columns (revisions
-    0002 and 0005) are granted again, and revision 0001's INSERT policy of developer_profiles is restored (first: it
-    names the columns that go)."""
+    """Derived data only, so it proceeds with rows: every profile's and problem's vector, model and version is nulled
+    (the worker recomputes them from rows that stay, after a re-upgrade; once the hashes go nothing would say which
+    text a vector came from), then the times, the hashes, the indexes, the functions and the trigger go. bridge_app's
+    INSERT and UPDATE of problems' embedding columns (revisions 0002 and 0005) are granted again, and revision 0001's
+    INSERT policy of developer_profiles is restored (first: it names the columns that go)."""
+    _run_sql(
+        "UPDATE developer_profiles SET profile_embedding = NULL, embed_model = NULL, embed_version = NULL"
+        " WHERE profile_embedding IS NOT NULL OR embed_model IS NOT NULL OR embed_version IS NOT NULL;"
+        " UPDATE problems SET embedding = NULL, embed_model = NULL, embed_version = NULL"
+        " WHERE embedding IS NOT NULL OR embed_model IS NOT NULL OR embed_version IS NOT NULL;"
+    )
     _run_sql(f"ALTER POLICY bridge_app_insert ON developer_profiles WITH CHECK ({PROFILE_INSERT_0001});")
     _run_sql("DROP TRIGGER consents_profiling_withdrawn ON consents;")
     _run_sql(
