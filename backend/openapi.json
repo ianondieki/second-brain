@@ -12701,6 +12701,11 @@
             "title": "Reviewed On",
             "type": "string"
           },
+          "seeded_example": {
+            "description": "Written by hand for the demo, not by the model: never labelled AI-drafted (no generating call)",
+            "title": "Seeded Example",
+            "type": "boolean"
+          },
           "sources": {
             "items": {
               "$ref": "#/components/schemas/TrendSourceOut"
@@ -12728,6 +12733,7 @@
           "topic_slug",
           "published_at",
           "reviewed_on",
+          "seeded_example",
           "named_orgs",
           "sources"
         ],
@@ -12769,6 +12775,11 @@
             "title": "Reviewed On",
             "type": "string"
           },
+          "seeded_example": {
+            "description": "Written by hand for the demo, not by the model: never labelled AI-drafted (no generating call)",
+            "title": "Seeded Example",
+            "type": "boolean"
+          },
           "summary": {
             "title": "Summary",
             "type": "string"
@@ -12788,7 +12799,8 @@
           "summary",
           "topic_slug",
           "published_at",
-          "reviewed_on"
+          "reviewed_on",
+          "seeded_example"
         ],
         "title": "TrendCardOut",
         "type": "object"

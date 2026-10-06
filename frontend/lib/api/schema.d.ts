@@ -8601,6 +8601,11 @@ export interface components {
              * @description The Nairobi day staff published it (the label's date)
              */
             reviewed_on: string;
+            /**
+             * Seeded Example
+             * @description Written by hand for the demo, not by the model: never labelled AI-drafted (no generating call)
+             */
+            seeded_example: boolean;
             /** Sources */
             sources: components["schemas"]["TrendSourceOut"][];
             /** Summary */
@@ -8636,6 +8641,11 @@ export interface components {
              * @description The Nairobi day staff published it (the label's date)
              */
             reviewed_on: string;
+            /**
+             * Seeded Example
+             * @description Written by hand for the demo, not by the model: never labelled AI-drafted (no generating call)
+             */
+            seeded_example: boolean;
             /** Summary */
             summary: string;
             /** Title */
