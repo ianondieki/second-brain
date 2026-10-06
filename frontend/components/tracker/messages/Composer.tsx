@@ -165,12 +165,18 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
     if (files.some((file) => file.status === "blocked")) return refuse("blockedFiles");
     setBusy(true);
     setRefusal(null);
-    const outcome = await calls.postMessage(
-      engagementId,
-      text,
-      files.flatMap((file) => (file.id ? [file.id] : [])),
-    );
-    setBusy(false);
+    let outcome: Awaited<ReturnType<ThreadCalls["postMessage"]>>;
+    try {
+      outcome = await calls.postMessage(
+        engagementId,
+        text,
+        files.flatMap((file) => (file.id ? [file.id] : [])),
+      );
+    } catch {
+      outcome = { ok: false, refusal: "network" };
+    } finally {
+      setBusy(false);
+    }
     if (!outcome.ok) return refuse(outcome.refusal, outcome.minutes);
     onSent(outcome.message);
     setText("");

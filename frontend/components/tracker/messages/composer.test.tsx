@@ -227,4 +227,19 @@ describe("the composer", () => {
     await act(async () => answer());
     expect(calls.removeStaged).toHaveBeenCalledWith(ENGAGEMENT_ID, "staged-left");
   });
+
+  // P22-CF review: a call that throws (its module failed to load) never leaves Send busy.
+  it("a send that throws says the network sentence and frees Send", async () => {
+    renderComposer(LIMITS, fakeCalls({ postMessage: vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))) }));
+    fireEvent.change(screen.getByLabelText("Your message"), { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("The message was not sent. Check your connection and try again."));
+    expect(screen.getByRole("button", { name: "Send" }).getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("a thread that takes no files offers no Attach", () => {
+    renderComposer({ ...LIMITS, max_attachments: 0 });
+    expect(document.querySelector("[data-attach]")).toBeNull();
+    expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
+  });
 });
