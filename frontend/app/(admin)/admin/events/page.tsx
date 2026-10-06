@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { first } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 import type { EventOut } from "@/components/events/event-draft";
-import { EVENT_CHIP, EVENT_STATUSES } from "@/components/events/status";
+import { EVENT_CHIP } from "@/components/events/status";
 import { eventDay } from "@/components/events/when";
 import { Chip } from "@/components/tracker/Chip";
 import { ButtonLink } from "@/components/ui/ButtonLink";
@@ -22,7 +22,7 @@ import { staffContext } from "../staff";
 import { stepUpStrings } from "../strings";
 import { ViewTabs } from "../ViewTabs";
 import { getAdminEvents } from "./data";
-import { adminEventHref, eventsView, eventsViewHref, queueOrder } from "./events";
+import { adminEventHref, EVENT_VIEWS, eventsView, eventsViewHref, queueOrder } from "./events";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminEvents");
@@ -33,7 +33,7 @@ const ROLES = new Set(["admin", "moderator"]);
 
 /**
  * Events (REQ-DEV-02, REQ-ADM-01; D-60; P22 card B default (1)): the events waiting for a decision, soonest first, with
- * their organiser and date; the published, rejected and cancelled ones under their own tabs. Staff admins and
+ * their organiser and date; the published ones, and the closed ones (rejected or cancelled), under their own tabs. Staff admins and
  * moderators decide; "Post a platform event" is the staff admin's one primary action. A stale second factor asks for a
  * fresh code first.
  */
@@ -74,7 +74,7 @@ export default async function AdminEventsPage({ searchParams }: PageProps<"/admi
   }
 
   const items = queueOrder(view, loaded.data);
-  const tabs = EVENT_STATUSES.map((status) => ({ key: status, label: t(`tabs.${status}`), href: eventsViewHref(status) }));
+  const tabs = EVENT_VIEWS.map((key) => ({ key, label: t(`tabs.${key}`), href: eventsViewHref(key) }));
   return shell(
     <div>
       <ViewTabs label={t("tabs.label")} tabs={tabs} current={view} />

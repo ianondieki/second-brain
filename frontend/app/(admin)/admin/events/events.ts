@@ -1,4 +1,3 @@
-import { EVENT_STATUSES } from "@/components/events/status";
 import type { EventOut, EventStatus } from "@/components/events/event-draft";
 import { apiErrorCode } from "@/lib/api/error-code";
 
@@ -7,12 +6,25 @@ import { apiErrorCode } from "@/lib/api/error-code";
 
 export const ADMIN_EVENTS_PATH = "/admin/events";
 
-/** The queue's views: waiting (drafts) first, then each decided status. */
-export function eventsView(value: string | undefined): EventStatus {
-  return (EVENT_STATUSES as readonly string[]).includes(value ?? "") ? (value as EventStatus) : "draft";
+/**
+ * The queue's views: in review (drafts) first, then published, then closed (rejected or cancelled, each with its own
+ * status mark). Three tabs, so the strip fits 360 px without scrolling.
+ */
+export const EVENT_VIEWS = ["draft", "published", "closed"] as const;
+export type EventsView = (typeof EVENT_VIEWS)[number];
+
+/** The statuses each view lists (the API filters by one status a call). */
+export const VIEW_STATUSES: Record<EventsView, readonly EventStatus[]> = {
+  draft: ["draft"],
+  published: ["published"],
+  closed: ["rejected", "cancelled"],
+};
+
+export function eventsView(value: string | undefined): EventsView {
+  return (EVENT_VIEWS as readonly string[]).includes(value ?? "") ? (value as EventsView) : "draft";
 }
 
-export function eventsViewHref(view: EventStatus): string {
+export function eventsViewHref(view: EventsView): string {
   return view === "draft" ? ADMIN_EVENTS_PATH : `${ADMIN_EVENTS_PATH}?view=${view}`;
 }
 
@@ -20,10 +32,15 @@ export function adminEventHref(id: string): string {
   return `${ADMIN_EVENTS_PATH}/${encodeURIComponent(id)}`;
 }
 
-/** Waiting events soonest first (the one starting next needs a decision first); the others as the API sends them. */
-export function queueOrder(view: EventStatus, items: readonly EventOut[]): EventOut[] {
-  const mine = items.filter((event) => event.status === view);
-  return view === "draft" ? [...mine].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)) : mine;
+/**
+ * Events in review soonest first (the one starting next needs a decision first); published ones as the API sends them
+ * (newest first); closed ones by their last change, newest first.
+ */
+export function queueOrder(view: EventsView, items: readonly EventOut[]): EventOut[] {
+  const mine = items.filter((event) => VIEW_STATUSES[view].includes(event.status));
+  if (view === "draft") return [...mine].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+  if (view === "closed") return [...mine].sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+  return mine;
 }
 
 export type Decision = "publish" | "reject";

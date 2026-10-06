@@ -3689,10 +3689,9 @@
     "post": "Post a platform event",
     "tabs": {
       "label": "Events by status",
-      "draft": "Waiting",
+      "draft": "In review",
       "published": "Published",
-      "rejected": "Not approved",
-      "cancelled": "Cancelled"
+      "closed": "Closed"
     },
     "columns": {
       "event": "Event",
@@ -3703,10 +3702,9 @@
     "empty": {
       "draft": "No event is waiting for review.",
       "published": "No published event.",
-      "rejected": "No event was rejected.",
-      "cancelled": "No event was cancelled."
+      "closed": "No event was rejected or cancelled."
     },
-    "emptyActionWaiting": "See the waiting events",
+    "emptyActionWaiting": "See the events in review",
     "emptyActionPublished": "See the published events",
     "platform": "Platform",
     "unlisted": "An organisation no longer listed",

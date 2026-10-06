@@ -69,15 +69,20 @@ async function decide(name: "Publish" | "Reject") {
 }
 
 describe("the events queue's rules", () => {
-  it("opens on the waiting events, soonest first; other views as the API sends them", () => {
+  it("opens on the events in review, soonest first; then published, then closed (rejected or cancelled)", () => {
     expect(eventsView(undefined)).toBe("draft");
     expect(eventsView("published")).toBe("published");
     expect(eventsView("nonsense")).toBe("draft");
     expect(eventsViewHref("draft")).toBe("/admin/events");
-    expect(eventsViewHref("cancelled")).toBe("/admin/events?view=cancelled");
+    expect(eventsView("cancelled")).toBe("draft");
+    expect(eventsViewHref("closed")).toBe("/admin/events?view=closed");
     const items = [event("late", "draft", "2026-11-28T10:00:00+03:00"), event("soon", "draft", "2026-11-22T10:00:00+03:00")];
     expect(queueOrder("draft", items).map((e) => e.id)).toEqual(["soon", "late"]);
     expect(queueOrder("published", items)).toEqual([]);
+    // Closed: rejected and cancelled together, the last changed first.
+    const rejected = { ...event("rejected", "rejected", "2026-11-22T10:00:00+03:00"), updated_at: "2026-11-21T10:00:00+03:00" };
+    const cancelled = { ...event("cancelled", "cancelled", "2026-11-22T10:00:00+03:00"), updated_at: "2026-11-21T12:00:00+03:00" };
+    expect(queueOrder("closed", [rejected, ...items, cancelled]).map((e) => e.id)).toEqual(["cancelled", "rejected"]);
   });
 
   it("words each refusal and says what it leaves", () => {

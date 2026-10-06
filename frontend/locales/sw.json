@@ -3689,10 +3689,9 @@
     "post": "Chapisha tukio la jukwaa",
     "tabs": {
       "label": "Matukio kwa hali",
-      "draft": "Yanasubiri",
+      "draft": "Linakaguliwa",
       "published": "Yamechapishwa",
-      "rejected": "Hayakuidhinishwa",
-      "cancelled": "Yameghairiwa"
+      "closed": "Yamefungwa"
     },
     "columns": {
       "event": "Tukio",
@@ -3703,10 +3702,9 @@
     "empty": {
       "draft": "Hakuna tukio linalosubiri ukaguzi.",
       "published": "Hakuna tukio lililochapishwa.",
-      "rejected": "Hakuna tukio lililokataliwa.",
-      "cancelled": "Hakuna tukio lililoghairiwa."
+      "closed": "Hakuna tukio lililokataliwa wala kughairiwa."
     },
-    "emptyActionWaiting": "Ona matukio yanayosubiri",
+    "emptyActionWaiting": "Ona matukio yanayokaguliwa",
     "emptyActionPublished": "Ona matukio yaliyochapishwa",
     "platform": "Jukwaa",
     "unlisted": "Shirika ambalo haliko tena kwenye orodha",
