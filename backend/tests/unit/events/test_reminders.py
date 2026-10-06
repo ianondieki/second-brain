@@ -53,6 +53,11 @@ def test_the_windows() -> None:
     assert reminders.n26_window(early) == (at(13, time(18, 0)), at(14, time(0, 0)))
     assert reminders.n27_window(starts, at(14, time(20, 30))) == (at(14, time(8, 0)), at(14, time(20, 30)))
     assert reminders.n27_window(starts, at(16, time(17, 0))) == (at(14, time(8, 0)), at(15, time(0, 0)))
+    # Early events: two hours before they start (from that day's midnight at the earliest), still until they end.
+    assert reminders.n27_window(at(14, time(5, 0)), at(14, time(7, 0))) == (at(14, time(3, 0)), at(14, time(7, 0)))
+    assert reminders.n27_window(at(14, time(7, 0)), at(14, time(9, 0))) == (at(14, time(5, 0)), at(14, time(9, 0)))
+    assert reminders.n27_window(at(14, time(1, 0)), at(14, time(2, 0))) == (at(14, time(0, 0)), at(14, time(2, 0)))
+    assert reminders.n27_window(at(14, time(10, 0)), at(14, time(11, 0)))[0] == at(14, time(8, 0))
 
 
 def test_when_and_where_for_people() -> None:

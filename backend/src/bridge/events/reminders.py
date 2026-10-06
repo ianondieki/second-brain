@@ -14,7 +14,8 @@ event cancelled before the moment means nothing is sent. Per reminder:
   the key ``n26:email:<user>:<event>`` (once; a transient failure is retried by the next runs, at most 3 attempts).
   Subject "Tomorrow: <title>"; the title, when (Nairobi time), where or "Online" and the two calendar links; never the
   description (``templates/n26.*.j2``).
-- **N27**, in the app, from 08:00 Nairobi on the event's start date until the earlier of its end and midnight: the
+- **N27**, in the app, from 08:00 Nairobi on the event's start date (or two hours before it starts when that is
+  earlier, from midnight at the earliest) until the earlier of its end and midnight: the
   event's title and "Today at HH:MM · <place>", linking to the event's page, keyed ``n27:in_app:<user>:<event>``
   (once). It needs only the Remind me (in-app is always on).
 
@@ -54,6 +55,7 @@ N26: Final = "n26"  # the day-before email
 N27: Final = "n27"  # the morning-of in-app notice
 EVENING: Final = time(18, 0)
 MORNING: Final = time(8, 0)
+EARLY_LEAD: Final = timedelta(hours=2)  # an event before 10:00 is announced this long before it starts
 ONLINE: Final = "Online"  # [[COPY-REVIEW]]
 SUBJECT: Final = "Tomorrow: {title}"  # [[COPY-REVIEW]]
 TODAY_AT: Final = "Today at {at} · {place}"  # [[COPY-REVIEW]] the N27 body; the title is the event's
@@ -141,9 +143,12 @@ def n26_window(starts_at: datetime) -> tuple[datetime, datetime]:
 
 
 def n27_window(starts_at: datetime, ends_at: datetime) -> tuple[datetime, datetime]:
-    """From 08:00 Nairobi on the event's start date until the earlier of its end and the next midnight."""
+    """From the earlier of 08:00 Nairobi on the event's start date and two hours before it starts (never before that
+    day's midnight: the notice says "Today"), until the earlier of its end and the next midnight. So an event of the
+    early morning is announced before it begins, and one that ends before 08:00 is announced at all."""
     day = starts_at.astimezone(NAIROBI).date()
-    return datetime.combine(day, MORNING, tzinfo=NAIROBI), min(ends_at, _midnight(day + timedelta(days=1)))
+    opens = max(_midnight(day), min(datetime.combine(day, MORNING, tzinfo=NAIROBI), starts_at - EARLY_LEAD))
+    return opens, min(ends_at, _midnight(day + timedelta(days=1)))
 
 
 def place(row: Any) -> str:

@@ -173,6 +173,31 @@ async def test_a_reminder_made_on_the_day_gets_the_notice_never_a_tomorrow_email
     assert (await run_event_reminders(deps(week, mail))).due == 0
 
 
+async def test_an_early_event_is_announced_before_it_starts_even_when_it_ends_before_eight(week: WeekDb) -> None:
+    """Review MINOR 1: the morning notice opens two hours before an event that starts before 10:00."""
+    monday = week.monday()
+    await at(week, monday)
+    p = await cast(week)
+    wednesday = monday + timedelta(days=2)
+    dawn = await published(week, p, nairobi(wednesday, time(5, 0)), title="Dawn run")  # 05:00 to 07:00
+    early = await published(week, p, nairobi(wednesday, time(7, 0)), title="Early standup")  # 07:00 to 09:00
+    for event_id in (dawn, early):
+        await remind(week, p.developer, event_id)
+    mail = FakeEmailProvider()
+    await at(week, wednesday, time(2, 59))
+    await run_event_reminders(deps(week, mail))
+    assert await notices(week, p.developer) == []
+    await at(week, wednesday, time(3, 0))
+    await run_event_reminders(deps(week, mail))
+    assert [(n.title, n.body) for n in await notices(week, p.developer)] == [("Dawn run", "Today at 05:00 · Online")]
+    await at(week, wednesday, time(5, 0))
+    await run_event_reminders(deps(week, mail))
+    assert [(n.title, n.body) for n in await notices(week, p.developer)] == [
+        ("Dawn run", "Today at 05:00 · Online"),
+        ("Early standup", "Today at 07:00 · Online"),
+    ]
+
+
 async def test_the_job_is_silent_when_nothing_is_due_and_runs_as_the_worker_wires_it(week: WeekDb) -> None:
     monday = week.monday()
     await at(week, monday, time(18, 0))
