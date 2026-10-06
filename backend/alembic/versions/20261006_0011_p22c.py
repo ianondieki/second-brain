@@ -115,8 +115,9 @@ listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself):
   still an active, non-staff developer and the problem still open to teams, and creates the thread.
 - ``app_close_team_thread(thread, reason)``: a party (developer) closes an open thread with ``left`` (the only reason
   it takes; ``blocked`` is a block's). ``app_block_developer(blocked)`` -> rows changed (the block inserted, 0 or 1,
-  plus invitations ended and threads closed): developers only, another user with a developer profile (no_data_found
-  otherwise); idempotent. ``app_unblock_developer(blocked)`` -> rows deleted (SECURITY INVOKER: the caller's own
+  plus invitations ended and threads closed): developers only; for an unknown id or a user who is no developer (staff,
+  an organisation-only account) it does nothing and returns 0, as for a repeat, so nothing tells the cases apart;
+  idempotent. ``app_unblock_developer(blocked)`` -> rows deleted (SECURITY INVOKER: the caller's own
   block, under its RLS).
 - ``app_report_team_message(message, reasons)`` -> (case_id, created) and ``app_reported_team_message(case)`` ->
   (message_id, thread_id, sender_user_id, sender_handle, body, created_at): 0008's message report pair for
@@ -643,8 +644,9 @@ $$;
 -- the blocks' own triggers find nothing left to end). Returns how many rows changed: the block (0 or 1) plus the
 -- invitations ended and threads closed. Contributor credit already given stays: proposal_contributors is untouched
 -- (D-62 is about credit given, and the owner or the contributor may remove it). A caller who is not a developer is
--- refused, so is naming nobody or oneself; a user without a developer profile is no_data_found. The app writes the
--- audit event in the same transaction.
+-- refused, so is naming nobody or oneself. An unknown id or a user who is no developer (no developer profile, or staff)
+-- changes nothing and returns 0, like a repeat: no error tells an unknown id from an existing account. The app writes
+-- the audit event in the same transaction.
 CREATE FUNCTION app_block_developer(p_blocked uuid) RETURNS integer
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -660,8 +662,9 @@ BEGIN
     IF p_blocked IS NULL OR p_blocked = v_user THEN
         RAISE EXCEPTION 'app_block_developer: name another developer' USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM public.developer_profiles d WHERE d.user_id = p_blocked) THEN
-        RAISE EXCEPTION 'app_block_developer: no developer with that id' USING ERRCODE = 'no_data_found';
+    IF NOT EXISTS (SELECT 1 FROM public.developer_profiles d JOIN public.users u ON u.id = d.user_id
+                    WHERE d.user_id = p_blocked AND u.staff_role IS NULL) THEN
+        RETURN 0;  -- nobody to block: an unknown id, staff, an organisation-only account
     END IF;
     PERFORM public.team_pair_lock(v_user, p_blocked);
     v_changed := public.team_end_pair(v_user, p_blocked);

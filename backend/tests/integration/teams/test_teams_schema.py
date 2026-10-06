@@ -477,7 +477,8 @@ async def test_a_block_ends_pending_invitations_and_closes_threads(owner_engine:
     Then every pending invitation between the two is ended and their thread closed (blocked), and the count says so;
     the other pair is untouched; a repeat changes nothing; neither invites nor posts across it; the blocked side reads
     no block. When the blocker lifts it, Then nothing reopens. A direct INSERT of a block ends everything the same
-    way. Blocking oneself, nobody, a user without a developer profile, or as a caller who is no developer is refused."""
+    way. Blocking oneself or nobody, or as a caller who is no developer, is refused; blocking an unknown id, staff or an
+    organisation-only account does nothing and returns 0, as a repeat does."""
     async with t.as_app(owner_engine) as conn:
         amina, brian, carol = (
             await peer(conn, "amina"),
@@ -524,9 +525,12 @@ async def test_a_block_ends_pending_invitations_and_closes_threads(owner_engine:
         await t.act(conn, amina)
         await refused(conn, BLOCK, "name another developer", "22023", blocked=amina)
         await refused(conn, BLOCK, "name another developer", "22023", blocked=None)
-        member = await org_only(conn)
+        member, admin = await org_only(conn), await peer(conn, "admin", staff="admin")
         await t.act(conn, amina)
-        await refused(conn, BLOCK, "no developer with that id", "P0002", blocked=member)
+        before = await t.run(conn, "SELECT count(*) FROM developer_blocks")
+        for nobody in (member, admin, uuid7()):  # no developer to block: nothing happens, nothing is said
+            assert await t.run(conn, BLOCK, blocked=nobody) == 0
+        assert await t.run(conn, "SELECT count(*) FROM developer_blocks") == before
         await t.act(conn, member)
         await refused(conn, BLOCK, "developers only", "42501", blocked=amina)
         await refused(conn, UNBLOCK, "developers only", "42501", blocked=amina)
