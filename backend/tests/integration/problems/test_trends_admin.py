@@ -19,9 +19,11 @@ from datetime import time
 from typing import Any
 from uuid import UUID
 
+from structlog.testing import capture_logs
+
 from bridge.db import create_session_factory
 from bridge.ids import uuid7
-from bridge.jobs.trends import Stored, WeeklyDeps, run_weekly
+from bridge.jobs.trends import Skipped, Stored, WeeklyDeps, run_weekly
 from bridge.problems.trends import fakes
 from tests.integration.api import make_client
 from tests.integration.events.api_world import (
@@ -153,11 +155,15 @@ async def test_a_manual_run_queues_the_weekly_task_and_its_cards_can_be_publishe
     assert (job.task_name, job.queue_name, job.lock) == ("trends.draft", "trends", "trends:draft")
     args = job.args if isinstance(job.args, dict) else json.loads(job.args)
     assert (args["user_id"], set(args)) == (str(p.admin), {"timestamp", "user_id"})
-    stored = await run_weekly(
-        WeeklyDeps(factory=create_session_factory(week.app), llm=lambda db: client("valid")),
-        user_id=UUID(args["user_id"]),
-    )
+    manual = WeeklyDeps(factory=create_session_factory(week.app), llm=lambda db: client("valid"))
+    with capture_logs() as logs:
+        stored = await run_weekly(manual, user_id=UUID(args["user_id"]))
+        again = await run_weekly(manual, user_id=UUID(args["user_id"]))  # the same week: nothing more
     assert isinstance(stored, Stored)
+    assert isinstance(again, Skipped)
+    named = [(e["event"], e.get("user_id"), e.get("reason")) for e in logs if e["event"].startswith("trends.")]
+    assert ("trends.stored", str(p.admin), None) in named  # the admin who asked, in the log line only
+    assert ("trends.draft_skipped", str(p.admin), "recent_card") in named
     assert stored.week_start == monday
     for card_id in stored.card_ids:  # the checks' cards pass the same rule on what is stored
         decided = await admin.post(f"{ADMIN}/trends/{card_id}/decision", json={"decision": "publish"})
