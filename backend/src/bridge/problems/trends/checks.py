@@ -29,7 +29,10 @@ flagged answer is used) or drafts no trend (``no_trends``); drafts beyond ``tren
    is official, so for trends the named-organisation rule is stricter: each organisation the card names (the
    allowlist's found in its text, as the research agent finds them, plus the model's ``named_orgs``) must be named by
    a cited source itself, in its quote or as its publisher (``named_org_without_official``). A vendor named in a quote
-   from its own site passes; one named only by the model fails.
+   from its own site passes; one named only by the model fails. A name off the allowlist that the model writes
+   without declaring it is caught as a capitalised token that no cited quote or publisher, no allowlist name and no
+   plain word (``PLAIN_CAPITALISED``: places, months, days, generic acronyms) carries (``unsourced_capitalised``;
+   residual: a lower-case brand, or a single-capital one starting a sentence).
 5. **Confidence** (``research.checks.confidence``: the research weights and quality tiers, with the trends' ages for
    freshness, ``TrendsPolicy.scoring``); below ``trends.discard_below`` the draft is discarded (``low_confidence``).
    With every source official the floor is source quality plus one publisher's corroboration (0.433 with the shipped
@@ -77,6 +80,21 @@ _SENTENCE_END: Final = re.compile(r"[.!?][\"'\u2019\u201d)]*(?:$|\s+(?=[A-Z0-9\"
 # "evil.example/login". A host-like token is allowed only when a cited quote carries it verbatim ("Node.js" in a
 # release note); "e.g.", "U.S.", "Inc." and version numbers such as "3.15.0rc3" are not host-like.
 _SCHEME_OR_WWW: Final = re.compile(r"://|(?<![\w.-])www\.", re.IGNORECASE)
+# A capitalised token: a word that starts with a capital letter ("IBM", "GitHub", "Kenya", "S3"); "iPhone" and "npm"
+# are not (the residual: an all-lower-case brand is matched only through the allowlist's aliases).
+_CAPITALISED: Final = re.compile(r"(?<![\w'\u2019-])[A-Z][A-Za-z0-9]*")
+_WORD: Final = re.compile(r"[A-Za-z0-9]+")
+# Capitalised words a trend may use without a source naming them: the reader's place, months and days, languages,
+# and generic technical acronyms. Not organisations, so not a claim about anyone.
+PLAIN_CAPITALISED: Final = frozenset(
+    {
+        "Kenya", "Kenyan", "Kenyans", "Nairobi", "Africa", "African", "East", "English", "Swahili",
+        "January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+        "November", "December", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+        "AI", "API", "APIs", "CLI", "SDK", "SDKs", "LLM", "LLMs", "HTTP", "HTTPS", "JSON", "SQL", "CPU", "GPU",
+        "IDE", "UI", "CI", "GA", "CVE", "RAG", "EU",
+    }
+)  # fmt: skip
 _HOST_LIKE: Final = re.compile(r"(?<![\w.@-])[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}(?![\w-])")
 
 
@@ -196,6 +214,38 @@ def unquoted_hosts(fields: Sequence[str], sources: Sequence[Excerpt]) -> tuple[s
     )
 
 
+def _sentence_starts(text: str) -> set[int]:
+    return {0, *(match.end() for match in _SENTENCE_END.finditer(text))}
+
+
+def unsourced_capitalised(
+    title: str, summary: str, sources: Sequence[Excerpt], allowlist: Allowlist
+) -> tuple[str, ...]:
+    """Capitalised tokens of the title and summary (``_CAPITALISED``) that may name someone no cited source names: not
+    a word of a cited quote or publisher, of an allowlist name, alias or publisher, or of ``PLAIN_CAPITALISED``
+    (case-sensitive). A token that starts a sentence (the title is one) counts only when it is shaped like a name
+    rather than an ordinary word, with a second capital or a digit ("IBM says", "GitHub now"); "Developers in" does
+    not. Residual: a brand written in lower case, or one with a single capital at the start of a sentence ("Oracle
+    says"), is caught only through the allowlist's aliases; the staff admin's approval is the backstop."""
+    known = set(PLAIN_CAPITALISED)
+    for text in (*(e.quote for e in sources), *(e.publisher for e in sources)):
+        known.update(_WORD.findall(text))
+    for org in allowlist.named():
+        known.update(_WORD.findall(org.name))
+        for alias in org.aliases:
+            known.update(_WORD.findall(alias.text))
+    found: list[str] = []
+    for text in (title, summary):
+        starts = _sentence_starts(text)
+        for match in _CAPITALISED.finditer(text):
+            token = match.group()
+            ordinary = not any(c.isupper() or c.isdigit() for c in token[1:])
+            if token in known or (match.start() in starts and ordinary):
+                continue
+            found.append(token)
+    return tuple(dict.fromkeys(found))
+
+
 def unsourced_names(names: Sequence[str], sources: Sequence[Excerpt], allowlist: Allowlist) -> tuple[str, ...]:
     """The names no cited source names itself: neither in its quote nor as its publisher, matched as the research
     agent matches a card (the allowlist's aliases, whole words, any case, any dash) or, for a name off the allowlist,
@@ -244,7 +294,7 @@ def check_trend(
     violation = rule_violation(CardText(title, summary, "", names), sources)
     if violation is not None:
         return Discarded(Reason(violation))
-    if unsourced_names(names, sources, allowlist):
+    if unsourced_names(names, sources, allowlist) or unsourced_capitalised(title, summary, sources, allowlist):
         return Discarded(Reason.NAMED_ORG_WITHOUT_OFFICIAL)
     agreement = Decimal(len(cited)) / Decimal(len(by_id))
     score = confidence(sources, agreement, as_of, scoring)

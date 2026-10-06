@@ -29,6 +29,7 @@ from bridge.problems.trends.checks import (
     check_answer,
     check_trend,
     sentence_count,
+    unsourced_capitalised,
 )
 from bridge.problems.trends.policy import get_trends_policy
 from bridge.problems.trends.synthesis import select_excerpts
@@ -223,3 +224,43 @@ def test_a_dotted_name_a_cited_quote_carries_is_not_a_link() -> None:
     )
     assert isinstance(check_trend(draft, sent, ALLOWLIST, SCORING, WEEK), KeptTrend)
     assert one(draft) == Discarded(Reason.LINK_IN_TEXT)  # the saved quote does not carry "Node.js"
+
+
+@pytest.mark.parametrize(
+    ("title", "summary"),
+    [
+        ("IBM says npm trusted publishing configurations now expire", fakes.SECURITY.summary),  # review MAJOR 1
+        (
+            fakes.SECURITY.title,
+            "Unvalidated npm trusted publishing configurations now expire 48 hours after creation. According to"
+            " Oracle, developers in Kenya should validate them.",
+        ),
+        (
+            fakes.SECURITY.title,
+            "Unvalidated npm trusted publishing configurations now expire 48 hours after creation. OpenAI tools and"
+            " developers in Kenya should validate them.",
+        ),
+    ],
+)
+def test_an_undeclared_name_off_the_allowlist_is_refused(title: str, summary: str) -> None:
+    draft = security(title=title, summary=summary, named_orgs=("GitHub",))
+    assert one(draft) == Discarded(Reason.NAMED_ORG_WITHOUT_OFFICIAL)
+
+
+def test_ordinary_capitals_places_months_and_quoted_names_pass() -> None:
+    kept = one(
+        security(
+            summary="Unvalidated npm trusted publishing configurations now expire 48 hours after creation. Since"
+            " October, developers in Kenya and across East Africa who publish npm packages should validate them."
+        )
+    )
+    assert isinstance(kept, KeptTrend)
+    assert unsourced_capitalised("Amazon Aurora DSQL adds partial indexes", "Storing rows.", (), ALLOWLIST) == ()
+    assert unsourced_capitalised("Kenya Gazette notice", "", (SENT["tr-ke-002"],), ALLOWLIST) == ()
+    assert unsourced_capitalised("Kenya Gazette notice", "", (), ALLOWLIST) == ("Gazette",)
+
+
+def test_the_residual_a_lower_case_or_sentence_initial_brand() -> None:
+    """Documented residual: a lower-case brand off the allowlist, or a single-capital one opening a sentence, passes
+    the code; the staff admin's approval of every card is the backstop."""
+    assert unsourced_capitalised("Oracle says hello", "acme tools say so. Oracle agrees.", (), ALLOWLIST) == ()
