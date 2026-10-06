@@ -1922,8 +1922,9 @@ export interface paths {
         put?: never;
         /**
          * Block
-         * @description Block a developer: pending invitations between you end, open threads close, and neither of you sees the other
-         *     as a peer or can invite the other. Blocking an id that is no developer changes nothing and answers the same.
+         * @description Block a peer or a developer you team up with: pending invitations between you end, open threads close, and
+         *     neither of you sees the other as a peer or can invite the other. Any other id changes nothing and answers the
+         *     same.
          */
         post: operations["block_api_me_blocks_post"];
         delete?: never;
@@ -5065,9 +5066,9 @@ export interface components {
             added_at: string;
             /**
              * Handle
-             * @description Null when a block stands between you (the credit still shows publicly)
+             * @description The handle the idea and its certificate show
              */
-            handle: string | null;
+            handle: string;
             /**
              * User Id
              * Format: uuid
@@ -22019,6 +22020,8 @@ export interface operations {
             query?: {
                 /** @description 1 for the first page */
                 page?: number;
+                /** @description Rows a page (a first page of 3 or fewer is not counted) */
+                limit?: number;
             };
             header?: never;
             path?: never;
