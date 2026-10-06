@@ -26,7 +26,8 @@
     "reviewP21f1": "[[COPY-REVIEW]] [[SW-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: shortlist.* (\"orodha fupi\" kwa shortlist), scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
     "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\"). [[SW-REVIEW]] draft Swahili",
     "reviewP22a": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-AF (REQ-DEV-01; D-59), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks",
-    "reviewP22b": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: week.*, nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; eventForm.fieldError.* follow the backend's own sentences (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed"
+    "reviewP22b": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: week.*, nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; eventForm.fieldError.* follow the backend's own sentences (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed",
+    "reviewP22c": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: teams.*, teamUp.*, profileSettings.*, settingsNav.profile, ideaContributors.*, ideas.contributorsLine, ideas.sheet.contributors; 'Shirikiana' for team up, 'mwaliko' for invitation, 'mchangiaji' for contributor, 'wenzako' for peers"
   },
   "app": {
     "name": "Wazo",
@@ -1671,8 +1672,10 @@
       "checkAt": "Mtu yeyote anaweza kukagua rekodi hii kwenye <id>{url}</id>",
       "print": "Chapisha au hifadhi kama PDF",
       "qrLabel": "Msimbo wa QR: ukurasa wa umma wa uthibitishaji wa cheti {id}",
-      "registeredAt": "{time} saa za Nairobi"
-    }
+      "registeredAt": "{time} saa za Nairobi",
+      "contributors": "Wachangiaji: {handles}"
+    },
+    "contributorsLine": "Wachangiaji: {handles}"
   },
   "ideaDelete": {
     "open": "Futa wazo",
@@ -2970,7 +2973,8 @@
   "settingsNav": {
     "label": "Mipangilio",
     "security": "Usalama",
-    "notifications": "Arifa"
+    "notifications": "Arifa",
+    "profile": "Wasifu"
   },
   "devEngagements": {
     "organisations": "Mashirika yaliyopokea: {count}",
@@ -3732,5 +3736,228 @@
     "notAdminAction": "Rudi kwenye Matukio",
     "gone": "Tukio hili halipo hapa.",
     "goneAction": "Rudi kwenye Matukio"
+  },
+  "teams": {
+    "home": {
+      "title": "Wenzako",
+      "seeAll": "Ona wote",
+      "listLabel": "Wasanidi katika kaunti au nyanja zako",
+      "off": "Washa Onekana kwa wenzako ili upate wasanidi katika kaunti au nyanja zako wa kushirikiana nao.",
+      "turnOn": "Washa katika Mipangilio",
+      "empty": "Bado hakuna mtu katika kaunti au nyanja zako anayeonekana kwa wenzake."
+    },
+    "facts": {
+      "sameCounty": "Kaunti moja",
+      "sharedNiches": "{count, plural, one {# nyanja mnayoshiriki} other {# nyanja mnazoshiriki}}"
+    },
+    "peers": {
+      "pageTitle": "Wenzako",
+      "title": "Wenzako",
+      "lead": "Wasanidi katika kaunti au nyanja zako wanaoonekana kwa wenzao. Mwalike mmoja mshirikiane kwenye tatizo.",
+      "back": "Nyumbani",
+      "teamsLink": "Mialiko na mazungumzo",
+      "off": "Washa Onekana kwa wenzako katika Mipangilio ili uone wasanidi katika kaunti au nyanja zako.",
+      "turnOn": "Washa katika Mipangilio",
+      "empty": "Bado hakuna mtu katika kaunti au nyanja zako anayeonekana kwa wenzake.",
+      "emptyAction": "Angalia kaunti yako katika Mipangilio",
+      "tooMany": "Umefungua kurasa nyingi za wenzako saa hii. Jaribu tena baadaye.",
+      "tooManyAction": "Rudi Nyumbani"
+    },
+    "list": {
+      "pageTitle": "Shirikiana",
+      "title": "Shirikiana",
+      "lead": "Mialiko ya kushirikiana kwenye tatizo, na mazungumzo yako na wasanidi wengine.",
+      "back": "Wenzako",
+      "invitations": "Mialiko",
+      "threads": "Mazungumzo",
+      "threadsLabel": "Mazungumzo yako ya kushirikiana",
+      "noThreads": "Bado hakuna mazungumzo. Kukubali mwaliko hufungua mazungumzo.",
+      "empty": "Bado hakuna mialiko wala mazungumzo.",
+      "emptyAction": "Tafuta wenzako",
+      "unread": "{count, plural, one {# haujasomwa} other {# hayajasomwa}}",
+      "lastMessage": "Ujumbe wa mwisho {time}",
+      "noMessages": "Bado hakuna ujumbe",
+      "closed": "Yamefungwa",
+      "credits": "Umetajwa kwenye",
+      "creditsLead": "Mawazo ambayo wamiliki wake wanakutaja kama mchangiaji.",
+      "on": "Kuhusu {title}",
+      "someone": "Msanidi",
+      "problemGone": "Tatizo ambalo halijachapishwa tena"
+    },
+    "thread": {
+      "pageTitle": "Mazungumzo ya kushirikiana",
+      "back": "Shirikiana",
+      "on": "Mnashirikiana kwenye <link>{title}</link>",
+      "onGone": "Mnashirikiana kwenye tatizo ambalo halijachapishwa tena",
+      "title": "Ujumbe",
+      "lead": "Ni nyinyi wawili tu mnaosoma mazungumzo haya. Ripoti ujumbe ikiwa kuna tatizo.",
+      "empty": "Bado hakuna ujumbe. Eleza ungependa mfanye kazi gani pamoja.",
+      "closed": {
+        "left": "Mazungumzo haya yamefungwa: mmoja wenu ameondoka. Bado unaweza kuyasoma.",
+        "blocked": "Mazungumzo haya yamefungwa kwa sababu umemzuia msanidi huyu. Bado unaweza kuyasoma.",
+        "ended": "Mazungumzo haya yameisha. Bado unaweza kuyasoma."
+      },
+      "closedEmpty": "Mazungumzo haya yamefungwa na hayana ujumbe.",
+      "notFound": "Mazungumzo haya hayapatikani.",
+      "notFoundAction": "Rudi kwenye Shirikiana",
+      "refusalClosed": "Mazungumzo haya yamefungwa, kwa hiyo hakuna ujumbe mpya unaoweza kutumwa.",
+      "actionsLabel": "Hatua za mazungumzo"
+    }
+  },
+  "teamUp": {
+    "row": {
+      "teamUp": "Shirikiana",
+      "invited": "Amealikwa",
+      "sent": "Mwaliko umetumwa kwa {name}.",
+      "more": "Chaguo zaidi",
+      "block": "Zuia",
+      "sameCounty": "Kaunti moja",
+      "sharedNiches": "Nyanja mnazoshiriki: {value}",
+      "noHeadline": "Bado hana kichwa"
+    },
+    "list": {
+      "more": "Zaidi",
+      "loading": "Inapakia…",
+      "moreFailed": "Imeshindikana kupakia wenzako zaidi. Jaribu tena.",
+      "moreTooMany": "Umefungua kurasa nyingi za wenzako saa hii. Jaribu tena baadaye.",
+      "blocked": "{name} amezuiwa. Hamwonani tena popote."
+    },
+    "block": {
+      "title": "Mzuie {name}?",
+      "body": "Hamtaonana tena popote. Mialiko kati yenu inaisha na mazungumzo yoyote kati yenu yanafungwa.",
+      "confirm": "Zuia",
+      "busy": "Inazuia…",
+      "cancel": "Ghairi",
+      "failed": "Imeshindikana kumzuia. Jaribu tena."
+    },
+    "sheet": {
+      "title": "Shirikiana na {name}",
+      "lead": "Chagua tatizo au Muhtasari mnaotaka kufanyia kazi pamoja.",
+      "search": "Tatizo au Muhtasari",
+      "searchHint": "Andika maneno machache ya kichwa chake.",
+      "suggested": "Yaliyochapishwa karibuni",
+      "results": "Matatizo yenye maneno hayo",
+      "searching": "Inatafuta…",
+      "none": "Hakuna tatizo lililochapishwa lenye maneno hayo. Jaribu mengine.",
+      "searchFailed": "Imeshindikana kutafuta matatizo. Jaribu tena.",
+      "note": "Ujumbe mfupi (si lazima)",
+      "noteHint": "Hadi herufi 300. Eleza utakacholeta.",
+      "meterLeft": {
+        "one": "Imebaki herufi {count}",
+        "other": "Zimebaki herufi {count}"
+      },
+      "meterOver": {
+        "one": "Herufi {count} zaidi ya kikomo",
+        "other": "Herufi {count} zaidi ya kikomo"
+      },
+      "send": "Tuma mwaliko",
+      "sending": "Inatuma…",
+      "cancel": "Ghairi",
+      "choose": "Chagua tatizo au Muhtasari kwanza."
+    },
+    "refusal": {
+      "peersOff": "Washa Onekana kwa wenzako katika Mipangilio kabla ya kumwalika mtu.",
+      "peerUnavailable": "Msanidi huyu hawezi kualikwa tena.",
+      "problemUnavailable": "Tatizo hilo halipo wazi tena kwa kushirikiana. Chagua jingine.",
+      "alreadyInvited": "Tayari kuna mwaliko kati yenu kuhusu tatizo hili.",
+      "tooMany": "Umetuma mialiko mingi leo. Jaribu tena kesho.",
+      "noteTooLong": "Ujumbe mfupi usizidi herufi 300.",
+      "invalid": "Ujumbe mfupi una herufi zisizoweza kutumwa. Ziondoe ujaribu tena.",
+      "failed": "Imeshindikana kutuma mwaliko. Jaribu tena."
+    },
+    "invitation": {
+      "accept": "Kubali",
+      "accepting": "Inakubali…",
+      "decline": "Kataa",
+      "declining": "Inakataa…",
+      "withdraw": "Ondoa",
+      "withdrawing": "Inaondoa…",
+      "accepted": "Mwaliko umekubaliwa. Mazungumzo yako na {name} yamefunguliwa.",
+      "openThread": "Fungua mazungumzo",
+      "declined": "Mwaliko umekataliwa.",
+      "withdrawn": "Mwaliko umeondolewa.",
+      "gone": "Mwaliko huu tayari umejibiwa au umeondolewa.",
+      "failed": "Imeshindikana. Jaribu tena.",
+      "received": "{name} amekualika",
+      "sent": "Umemwalika {name}",
+      "on": "Kuhusu {title}",
+      "someone": "Msanidi",
+      "problemGone": "Tatizo ambalo halijachapishwa tena",
+      "receivedLabel": "Mialiko kwako",
+      "sentLabel": "Mialiko uliyotuma"
+    },
+    "thread": {
+      "more": "Zaidi",
+      "leave": "Ondoka kwenye mazungumzo",
+      "leaveTitle": "Uondoke kwenye mazungumzo haya?",
+      "leaveBody": "Baada ya hapo hakuna kati yenu atakayeweza kutuma ujumbe hapa. Nyote bado mtaweza kuyasoma.",
+      "leaveConfirm": "Ondoka",
+      "leaving": "Inaondoka…",
+      "block": "Mzuie {name}",
+      "failed": "Imeshindikana. Jaribu tena.",
+      "left": "Umeondoka kwenye mazungumzo. Bado unaweza kuyasoma."
+    },
+    "credit": {
+      "add": "Mwongeze kama mchangiaji kwenye wazo",
+      "title": "Mwongeze {name} kama mchangiaji",
+      "lead": "Jina lake la mtumiaji linaonekana kwenye wazo na cheti chake. Wewe unabaki kuwa aliyelisajili.",
+      "legend": "Mawazo yako yaliyochapishwa",
+      "confirm": "Ongeza mchangiaji",
+      "adding": "Inaongeza…",
+      "choose": "Chagua wazo kwanza.",
+      "added": "Ameongezwa kama mchangiaji kwenye {title}.",
+      "already": "Tayari ametajwa, au aliwahi kutajwa, kwenye wazo hilo.",
+      "notCounterpart": "Huwezi tena kumtaja msanidi huyu.",
+      "failed": "Imeshindikana kumwongeza. Jaribu tena.",
+      "youAre": "Wewe ni mchangiaji kwenye {title}",
+      "unpublished": "Wazo ambalo halijachapishwa sasa",
+      "leave": "Ondoka",
+      "leaveTitle": "Uache kuwa mchangiaji kwenye {title}?",
+      "leaveBody": "Jina lako la mtumiaji linaondolewa kwenye wazo na cheti chake. Mmiliki hawezi kukuongeza tena kwenye wazo hilo.",
+      "leaveConfirm": "Ondoka",
+      "leaving": "Inaondoka…",
+      "left": "Wewe si mchangiaji tena kwenye {title}.",
+      "leaveFailed": "Imeshindikana. Jaribu tena."
+    }
+  },
+  "profileSettings": {
+    "pageTitle": "Mipangilio ya wasifu",
+    "title": "Wasifu",
+    "lead": "Kile wasanidi wengine wanachoona unapoonekana kwa wenzako.",
+    "handle": "Jina lako la mtumiaji: {name}",
+    "headline": "Kichwa",
+    "headlineHint": "Mstari mmoja kuhusu unachojenga. Hadi herufi 160.",
+    "county": "Kaunti",
+    "countyNone": "Haijatajwa",
+    "visible": "Onekana kwa wenzako",
+    "on": "Imewashwa",
+    "off": "Imezimwa",
+    "explain": "Wasanidi katika kaunti au nyanja zako wanaweza kuona jina lako la mtumiaji, kichwa chako na nyanja mnazoshiriki. Kamwe si mashirika.",
+    "save": "Hifadhi",
+    "saving": "Inahifadhi…",
+    "saved": "Wasifu umehifadhiwa.",
+    "tooMany": "Umebadilisha kaunti yako mara nyingi leo. Jaribu tena kesho.",
+    "invalid": "Kichwa kina herufi zisizoweza kuhifadhiwa. Ziondoe ujaribu tena.",
+    "failed": "Imeshindikana kuhifadhi wasifu wako. Jaribu tena.",
+    "signedOut": "Muda wako wa kuingia umeisha. Ingia tena ili uhifadhi.",
+    "blocked": {
+      "title": "Wasanidi uliowazuia",
+      "lead": "Wewe na wao hamwonani popote.",
+      "unblock": "Ondoa zuio",
+      "unblocking": "Inaondoa zuio…",
+      "unblocked": "Zuio la {name} limeondolewa. Mazungumzo yaliyofungwa yanabaki yamefungwa.",
+      "failed": "Imeshindikana kuondoa zuio. Jaribu tena."
+    }
+  },
+  "ideaContributors": {
+    "label": "Wachangiaji:",
+    "remove": "Ondoa",
+    "confirmTitle": "Umwondoe {name} kama mchangiaji?",
+    "confirmBody": "Jina lake la mtumiaji linaondolewa kwenye wazo hili na cheti chake. Huwezi kumwongeza tena kwenye wazo hili.",
+    "confirm": "Ondoa",
+    "removing": "Inaondoa…",
+    "cancel": "Ghairi",
+    "removed": "{name} si mchangiaji tena kwenye wazo hili.",
+    "failed": "Imeshindikana kumwondoa. Jaribu tena."
   }
 }
