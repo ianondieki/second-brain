@@ -391,8 +391,9 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-05, session 6): none. P20 and P21 merged together as `429a7aa` on the owner's
-instruction (merge commit of `claude/fervent-mccarthy-0zyqn2` at `9218fce`); integration head before it `5c3db9d`.
+**Open branches** (2026-10-06, session 6): none. P22-A and P22-B merged together as `ed0bff5` on the owner's
+instruction (merge commit of `claude/fervent-mccarthy-0zyqn2` at `2ace097`); integration head before it `feb01e9`.
+Earlier the same session: P20 and P21 merged together as `429a7aa` (at `9218fce`); integration head before it `5c3db9d`.
 Earlier (2026-10-02, session 5): P19 merged as `f839977` (merge commit of `claude/fervent-mccarthy-0zyqn2` at `fc19695`); integration head before it `42c6073` (D-53 recorded on `cf0da47`). P18 merged as `cf0da47` (at `dcf6de1`); integration head before it `9142360`.
 
 **Session 4 (2026-10-01, new container; P18 "fundable product" brief, D-52).** On `claude/fervent-mccarthy-0zyqn2`
