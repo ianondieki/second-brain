@@ -16790,7 +16790,7 @@
     },
     "/api/admin/research/trend-runs": {
       "post": {
-        "description": "Draft this week's trends now (the weekly task, bound to you); nothing happens when a candidate or published\ncard is less than 6 days old.",
+        "description": "Draft this week's trends now (the weekly task, run as the platform); nothing happens when a card that is not\nrejected is under 6 days old.",
         "operationId": "start_trend_run_api_admin_research_trend_runs_post",
         "responses": {
           "202": {
@@ -26873,7 +26873,7 @@
     },
     "/api/me/events/{event_id}/reminder": {
       "delete": {
-        "description": "Decline: neither the email nor the in-app notice comes. Declining again changes nothing.",
+        "description": "Decline: neither the email nor the in-app notice comes (a day-before email waiting for a retry ends now).\nDeclining again changes nothing.",
         "operationId": "decline_reminder_api_me_events__event_id__reminder_delete",
         "parameters": [
           {

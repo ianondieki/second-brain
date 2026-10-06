@@ -422,8 +422,8 @@ export interface paths {
         put?: never;
         /**
          * Start Trend Run
-         * @description Draft this week's trends now (the weekly task, bound to you); nothing happens when a candidate or published
-         *     card is less than 6 days old.
+         * @description Draft this week's trends now (the weekly task, run as the platform); nothing happens when a card that is not
+         *     rejected is under 6 days old.
          */
         post: operations["start_trend_run_api_admin_research_trend_runs_post"];
         delete?: never;
@@ -1987,7 +1987,8 @@ export interface paths {
         post: operations["remind_me_api_me_events__event_id__reminder_post"];
         /**
          * Decline Reminder
-         * @description Decline: neither the email nor the in-app notice comes. Declining again changes nothing.
+         * @description Decline: neither the email nor the in-app notice comes (a day-before email waiting for a retry ends now).
+         *     Declining again changes nothing.
          */
         delete: operations["decline_reminder_api_me_events__event_id__reminder_delete"];
         options?: never;
