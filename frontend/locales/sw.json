@@ -903,7 +903,8 @@
     "companies": "Makampuni",
     "ideas": "Mawazo yangu",
     "engagements": "Ushirikiano",
-    "problems": "Matatizo"
+    "problems": "Matatizo",
+    "events": "Matukio"
   },
   "companies": {
     "pageTitle": "Makampuni",
@@ -1001,7 +1002,8 @@
       "research": "Utafiti",
       "moderation": "Udhibiti",
       "claims": "Madai",
-      "quiz": "Maswali"
+      "quiz": "Maswali",
+      "events": "Matukio"
     },
     "noSection": "Jukumu lako la wafanyakazi bado halina sehemu kwenye dashibodi.",
     "noSectionAction": "Nenda kwenye ukurasa wako wa nyumbani"
@@ -1142,6 +1144,61 @@
       "started": "Ilianza",
       "status": "Hali",
       "result": "Matokeo"
+    },
+    "trends": {
+      "heading": "Mielekeo",
+      "lead": "Kadi za mielekeo ya teknolojia, zinazoandaliwa kila wiki kutoka kwa wachapishaji rasmi. Kadi iliyochapishwa hupata zamu yake kama mwelekeo wa leo Nyumbani.",
+      "empty": "Hakuna kadi ya mwelekeo inayosubiri ukaguzi.",
+      "draftNow": "Andaa mielekeo sasa",
+      "drafting": "Inaweka kwenye foleni…",
+      "queued": "Imewekwa kwenye foleni. Kadi mpya zitaonekana hapa baada ya dakika chache; hakuna inayoandaliwa kadi ikiwa na umri chini ya siku 6.",
+      "failed": "Uandaaji haukuweza kuwekwa kwenye foleni. Jaribu tena.",
+      "columns": {
+        "card": "Kadi",
+        "topic": "Mada",
+        "sources": "Vyanzo",
+        "drafted": "Iliandaliwa"
+      },
+      "aiDrafted": "Imeandaliwa na AI",
+      "seeded": "Mfano wa maonyesho",
+      "status": {
+        "candidate": "Inasubiri",
+        "published": "Imechapishwa",
+        "rejected": "Imekataliwa"
+      },
+      "review": {
+        "pageTitle": "Kadi ya mwelekeo",
+        "back": "Utafiti",
+        "sourcesHeading": "Vyanzo",
+        "sourcesLead": "Kila nukuu kama mchapishaji alivyoiandika, pamoja na kifungu ambacho kadi inakitegemea.",
+        "support": "Inaunga mkono: {value}",
+        "namedOrgs": "Mashirika inayoyataja",
+        "confidence": "Uhakika",
+        "drafted": "Iliandaliwa",
+        "topic": "Mada",
+        "decisionHeading": "Uamuzi",
+        "decisionLead": "Kuchapisha kunaiweka kwenye mzunguko wa mwelekeo wa leo Nyumbani. Kadi iliyokataliwa haichapishwi kamwe.",
+        "publish": "Chapisha",
+        "reject": "Kataa",
+        "publishing": "Inachapisha…",
+        "rejecting": "Inakataa…",
+        "rejectTitle": "Ukatae kadi hii?",
+        "rejectBody": "Kadi iliyokataliwa haichapishwi kamwe.",
+        "publishTitle": "Uchapishe kadi hii?",
+        "publishBody": "Wasanidi programu wataiona Nyumbani kwa zamu, pamoja na vyanzo vyake.",
+        "cancel": "Rudi",
+        "published": "Imechapishwa. Wasanidi programu wataiona Nyumbani kwa zamu.",
+        "rejected": "Imekataliwa.",
+        "decided": "Kadi hii iliamuliwa tarehe {date}.",
+        "gone": "Kadi hii ya mwelekeo haipo hapa.",
+        "goneAction": "Rudi kwenye Utafiti"
+      },
+      "refusal": {
+        "unsourced_name": "Kadi inataja shirika ambalo hakuna chanzo kinacholitaja, kwa hiyo haiwezi kuchapishwa. Ikatae.",
+        "already_decided": "Kadi hii imekwisha kuamuliwa. Ukurasa umesomwa upya.",
+        "not_found": "Kadi hii ya mwelekeo haipo tena.",
+        "generic": "Kuna kitu kilienda vibaya, kwa hiyo hakuna kilichobadilika. Jaribu tena."
+      }
     }
   },
   "adminModeration": {
@@ -3505,5 +3562,177 @@
       "open": "Kisome kwa {publisher}",
       "newTab": "(inafunguka katika kichupo kipya)"
     }
+  },
+  "eventForm": {
+    "group": {
+      "what": "Tukio",
+      "when": "Lini",
+      "where": "Wapi"
+    },
+    "title": "Kichwa",
+    "titleHint": "Mstari mmoja, usiozidi herufi {max}.",
+    "description": "Maelezo",
+    "descriptionHint": "Maandishi ya kawaida: kinachotokea, ni kwa ajili ya nani na cha kuleta. Wasanidi programu huyasoma kwenye ukurasa wa tukio.",
+    "meter": "Herufi {current} kati ya {max}",
+    "whenHint": "Saa za Nairobi. Tukio halizidi siku 3.",
+    "starts": "Linaanza",
+    "ends": "Linaisha",
+    "date": "Tarehe",
+    "time": "Saa",
+    "online": "Tukio la mtandaoni",
+    "onlineHint": "Likiwashwa: watu wanajiunga kupitia anwani badala ya ukumbi.",
+    "joinUrl": "Anwani ya kujiunga",
+    "joinUrlHint": "Anwani ya https:// ambayo watu hujiunga nayo.",
+    "venue": "Ukumbi",
+    "venueHint": "Jina la mahali na eneo, lisilozidi herufi {max}.",
+    "county": "Kaunti",
+    "countyChoose": "Chagua kaunti",
+    "link": "Ukurasa wa tukio lenyewe (si lazima)",
+    "linkHint": "Anwani ya https:// yenye maelezo zaidi.",
+    "reviewNote": "Wafanyakazi hukagua kila tukio kabla wasanidi programu hawajaliona. Kisha wasanidi programu wa kaunti yake, au wote kwa tukio la mtandaoni, wanaliona Nyumbani.",
+    "submit": "Tuma likaguliwe",
+    "posting": "Inatuma…",
+    "cancel": "Ghairi",
+    "fieldError": {
+      "blank": "Jaza sehemu hii.",
+      "too_long": "Isizidi herufi {max}.",
+      "control_character": "Ondoa herufi zilizofichwa au za udhibiti kwenye maandishi haya.",
+      "invalid_url": "Tumia anwani kamili ya https://, kama https://example.com/event.",
+      "unknown_county": "Chagua kaunti kutoka kwenye orodha.",
+      "start_past": "Chagua saa ya kuanza ambayo bado haijapita.",
+      "end_before_start": "Tukio lazima liishe baada ya kuanza.",
+      "span_too_long": "Tukio halizidi siku 3.",
+      "join_url_required": "Ongeza anwani ambayo watu hujiunga nayo kwenye tukio la mtandaoni.",
+      "venue_required": "Ongeza ukumbi wa tukio.",
+      "county_required": "Chagua kaunti ya ukumbi.",
+      "online_has_place": "Tukio la mtandaoni halina ukumbi wala kaunti.",
+      "venue_has_join_url": "Tukio la ukumbini halina anwani ya kujiunga.",
+      "other": "Angalia sehemu hii ya tukio."
+    },
+    "refusal": {
+      "verification": "{org} itaweza kuchapisha matukio uthibitisho wake wa kisheria ukikamilika.",
+      "orgUnavailable": "{org} haiwezi kuchapisha wala kughairi matukio ikiwa imesimamishwa au kuondolewa kwenye orodha.",
+      "notPoster": "Ni aliyechapisha tukio hili pekee anayeweza kulibadilisha.",
+      "dailyLimit": "{org} imechapisha matukio mengi kadiri inavyoweza leo. Jaribu tena kesho.",
+      "invalid": "Baadhi ya sehemu za tukio zinahitaji kurekebishwa. Angalia sehemu zilizowekwa alama.",
+      "notCancellable": "Tukio hili haliwezi kughairiwa tena.",
+      "alreadyDecided": "Tukio hili limekwisha kuamuliwa au kughairiwa. Ukurasa umesomwa upya.",
+      "changedSinceReview": "Tukio hili limebadilika tangu ulipolifungua. Ukurasa umesomwa upya: likague tena.",
+      "eventOver": "Tukio hili limekwisha, kwa hiyo linaweza kukataliwa lakini si kuchapishwa.",
+      "organisationUnavailable": "Shirika halijathibitishwa tena, au limesimamishwa au kuondolewa kwenye orodha. Kataa tukio.",
+      "stepUp": "Weka msimbo mpya kutoka kwenye programu yako ya uthibitishaji ili kuendelea.",
+      "mfaSetup": "Washa uthibitishaji wa hatua mbili ili kuchapisha au kughairi matukio.",
+      "mfaCode": "Weka msimbo kutoka kwenye programu yako ya uthibitishaji, kisha ujaribu tena.",
+      "notFound": "Tukio hili halipo tena.",
+      "forbidden": "Ni mmiliki, msimamizi, mtia saini au mkaguzi wa {org} pekee anayeweza kuchapisha au kughairi matukio yake.",
+      "signedOut": "Kipindi chako kimeisha. Ingia tena, kisha ujaribu tena.",
+      "network": "Hatukuweza kufikia seva. Angalia muunganisho wako na ujaribu tena.",
+      "generic": "Kuna kitu kilienda vibaya, kwa hiyo hakuna kilichobadilika. Jaribu tena."
+    },
+    "cancelEvent": {
+      "open": "Ghairi tukio hili",
+      "title": "Ughairi tukio hili?",
+      "body": "Wasanidi programu hawataliona tena na hakuna kikumbusho chake kitakachotumwa. Hili haliwezi kutenduliwa.",
+      "confirm": "Ghairi tukio",
+      "cancelling": "Inaghairi…",
+      "keep": "Liache"
+    }
+  },
+  "orgEvents": {
+    "pageTitle": "Matukio",
+    "title": "Matukio",
+    "lead": "Matukio ya {org} kwa wasanidi programu. Wafanyakazi hukagua kila moja kabla wasanidi programu hawajaliona.",
+    "post": "Chapisha tukio",
+    "listLabel": "Matukio ya shirika",
+    "empty": "{org} bado haijachapisha tukio. Chapisha moja na wasanidi programu walio karibu, au wote kwa tukio la mtandaoni, wataliona Nyumbani.",
+    "emptyViewer": "{org} bado haijachapisha tukio.",
+    "notEditor": "Ni mmiliki, msimamizi, mtia saini au mkaguzi wa {org} pekee anayeweza kuchapisha matukio.",
+    "notVerified": "{org} itaweza kuchapisha matukio uthibitisho wake wa kisheria ukikamilika.",
+    "home": "Nenda Nyumbani",
+    "back": "Matukio",
+    "notFound": "Tukio hili halipo hapa. Huenda ni la shirika jingine.",
+    "newTitle": "Chapisha tukio",
+    "newLead": "Wasanidi programu wataliona wafanyakazi wakiliidhinisha: Nyumbani katika kaunti yake, au kila mahali likiwa la mtandaoni.",
+    "status": {
+      "draft": "Linakaguliwa",
+      "published": "Limechapishwa",
+      "rejected": "Halikuidhinishwa",
+      "cancelled": "Limeghairiwa"
+    },
+    "when": "{day} · {time}",
+    "online": "Mtandaoni",
+    "posted": "Lilichapishwa {date}",
+    "stateNote": {
+      "draft": "Wafanyakazi wanalikagua. Wasanidi programu bado hawalioni.",
+      "published": "Wasanidi programu wa kaunti yake, au wote kwa tukio la mtandaoni, wanaliona Nyumbani na katika Wiki hii.",
+      "rejected": "Wafanyakazi hawakuliidhinisha. Wasanidi programu hawalioni.",
+      "cancelled": "Lilighairiwa. Wasanidi programu hawalioni tena."
+    },
+    "facts": {
+      "heading": "Maelezo ya tukio",
+      "when": "Lini",
+      "where": "Wapi",
+      "organiser": "Mwandaaji",
+      "link": "Ukurasa wake",
+      "description": "Maelezo",
+      "none": "Haijatolewa"
+    },
+    "venue": "{venue}, {county}",
+    "newTab": "(inafunguka katika kichupo kipya)",
+    "editNote": "Rasimu haiwezi kuhaririwa hapa bado: ighairi kisha uichapishe upya ili kuibadilisha.",
+    "range": "{start} hadi {end}"
+  },
+  "adminEvents": {
+    "pageTitle": "Matukio",
+    "title": "Matukio",
+    "lead": "Matukio ambayo mashirika na wafanyakazi huchapisha kwa wasanidi programu. Kila moja husubiri hapa hadi lichapishwe au likataliwe.",
+    "post": "Chapisha tukio la jukwaa",
+    "tabs": {
+      "label": "Matukio kwa hali",
+      "draft": "Yanasubiri",
+      "published": "Yamechapishwa",
+      "rejected": "Hayakuidhinishwa",
+      "cancelled": "Yameghairiwa"
+    },
+    "columns": {
+      "event": "Tukio",
+      "organiser": "Mwandaaji",
+      "when": "Lini",
+      "status": "Hali"
+    },
+    "empty": {
+      "draft": "Hakuna tukio linalosubiri ukaguzi.",
+      "published": "Hakuna tukio lililochapishwa.",
+      "rejected": "Hakuna tukio lililokataliwa.",
+      "cancelled": "Hakuna tukio lililoghairiwa."
+    },
+    "emptyActionWaiting": "Ona matukio yanayosubiri",
+    "emptyActionPublished": "Ona matukio yaliyochapishwa",
+    "platform": "Jukwaa",
+    "unlisted": "Shirika ambalo haliko tena kwenye orodha",
+    "back": "Matukio",
+    "detailTitle": "Tukio",
+    "decided": "Liliamuliwa {date}",
+    "decision": {
+      "heading": "Uamuzi",
+      "lead": "Kuchapisha kunalionyesha kwa wasanidi programu wa kaunti yake, au kwa wote likiwa la mtandaoni. Kukataa kunalizuia wasilione.",
+      "publish": "Chapisha",
+      "reject": "Kataa",
+      "publishTitle": "Uchapishe tukio hili?",
+      "publishBody": "Wasanidi programu wa kaunti yake, au wote kwa tukio la mtandaoni, wataliona Nyumbani kuanzia sasa.",
+      "rejectTitle": "Ukatae tukio hili?",
+      "rejectBody": "Wasanidi programu hawataliona kamwe. Shirika litaliona kama halikuidhinishwa.",
+      "publishing": "Inachapisha…",
+      "rejecting": "Inakataa…",
+      "cancel": "Rudi",
+      "published": "Limechapishwa. Wasanidi programu wanaliona sasa.",
+      "rejected": "Limekataliwa. Wasanidi programu hawalioni."
+    },
+    "newTitle": "Chapisha tukio la jukwaa",
+    "newLead": "Tukio la jukwaa huchapishwa kwa jina Jukwaa. Husubiri kwenye foleni hii kama mengine.",
+    "notAdmin": "Ni wasimamizi wa wafanyakazi pekee wanaochapisha matukio ya jukwaa.",
+    "notAdminAction": "Rudi kwenye Matukio",
+    "gone": "Tukio hili halipo hapa.",
+    "goneAction": "Rudi kwenye Matukio"
   }
 }

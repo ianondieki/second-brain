@@ -1,6 +1,9 @@
+import { nairobiDate } from "@/components/events/when";
 import { safeHttpsUrl } from "@/components/problem/problem";
 import type { components } from "@/lib/api/schema";
 import { NAIROBI } from "@/lib/format";
+
+export { eventDay, nairobiDate } from "@/components/events/when";
 
 // This week's pure parts (REQ-DEV-02; D-60, D-61; docs/platform/tasks/P22.md section B): the addresses, an event's
 // day and time in Nairobi, the week's events grouped by day, and which sentence says what a reminder will bring. The
@@ -24,24 +27,6 @@ export function eventHref(id: string): string {
 
 export function trendHref(id: string): string {
   return `/dev/trends/${encodeURIComponent(id)}`;
-}
-
-/** The Nairobi calendar day of a moment ("2026-11-22"), the key the week's page groups by. */
-export function nairobiDate(iso: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: NAIROBI }).format(new Date(iso));
-}
-
-/**
- * An event's day as a row writes it, in Nairobi: "Sun 22 Nov" (the short weekday, the day, the three-letter month as
- * lib/format.ts writes it; the language's own order, without the comma after the weekday).
- */
-export function eventDay(locale: string, iso: string): string {
-  const at = new Date(iso);
-  const month = new Intl.DateTimeFormat(locale === "en" ? "en-US" : `${locale}-KE`, { month: "short", timeZone: NAIROBI }).format(at);
-  return new Intl.DateTimeFormat(`${locale}-KE`, { weekday: "short", day: "numeric", month: "short", timeZone: NAIROBI })
-    .formatToParts(at)
-    .map((part) => (part.type === "month" ? month : part.type === "literal" ? part.value.replace(",", "") : part.value))
-    .join("");
 }
 
 /** A day heading on the week's page: "Sunday, 22 November" in Nairobi. */
