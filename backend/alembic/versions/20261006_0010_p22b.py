@@ -2,12 +2,17 @@
 
 REQ-DEV-02 (D-60, D-61). Design: ``docs/platform/tasks/P22.md`` section "B — This week" and its "Defaults taken"
 paragraph. Additive: four new tables (``events``, ``event_reminders``, ``trend_cards``, ``trend_card_sources``) with
-their policies, triggers and grants, and nine new functions (three of them trigger functions, one internal). No enum
+their policies, triggers and grants, and ten new functions (three of them trigger functions, one internal). No enum
 type (text columns with CHECKs); no new tenancy class (events are PUBLISHED, reminders USER, the trend tables
 CURATED). Nothing of revisions 0001 to 0009 is changed or dropped; the triggers reuse ``block_mutation()`` (revision
 0002), the clock ``app_clock_now()`` (revision 0003), ``app_text_set_is_valid`` (revision 0005) and
 ``app_is_developer()`` and ``app_nairobi_today()`` (revision 0009). The upgrade is additive; the downgrade is
 destructive (it drops the events, reminders and trend cards: see ``downgrade()``).
+
+Changelog: amended in place on 2026-10-06 (REQ-DEV-02, D-60) to add ``app_trend_job_state(since)``, the weekly trend
+job's only reader of the cards. Revision 0010 is merged on the P22 feature branch only and was deployed nowhere but
+reset demo stacks, so the function joins it instead of a revision 0011. A database migrated with the earlier 0010 (a
+demo stack) is recreated: ``alembic upgrade head`` sees 0010 as applied and never re-applies an edited revision.
 
 Who reads and writes what (bridge_app; there is no worker role: a job is bridge_app with no user bound, as revisions
 0007 to 0009's jobs; a "developer" is ``app_is_developer()``: an active user with a developer profile and no staff
@@ -45,12 +50,14 @@ role, so staff decide and never read as developers):
   due rows only through ``app_event_reminders_due(now)``.
 - ``trend_cards`` and ``trend_card_sources`` (CURATED; bridge_app: SELECT only, of every card column but
   ``decided_by``). Staff admin reads every card and source, a developer the published cards and their sources, nobody
-  else any (staff moderators, organisation-only accounts and unbound sessions included). Written only by
-  ``app_create_trend_candidate`` (a ``candidate`` with 1 to 5 sources at positions 1 to 5) and decided only by
-  ``app_decide_trend_card``. ``trend_cards_guard`` (every role): a card's content, trace id, named organisations and
-  creation time never change; its status moves once, ``candidate`` to ``published`` (only with a source) or
-  ``rejected``. ``trend_card_sources_guard`` (every role): a source is added only to a candidate card (read FOR SHARE:
-  a decision in flight is waited for); ``trend_card_sources_no_update`` (``block_mutation()``): never changed.
+  else any (staff moderators, organisation-only accounts and unbound sessions included); the weekly job (no user bound)
+  learns only whether a card that is not rejected is recent and which excerpts such cards cite, through
+  ``app_trend_job_state(since)``. Written only by ``app_create_trend_candidate`` (a ``candidate`` with 1 to 5 sources at
+  positions 1 to 5) and decided only by ``app_decide_trend_card``. ``trend_cards_guard`` (every role): a card's content,
+  trace id, named organisations and creation time never change; its status moves once, ``candidate`` to ``published``
+  (only with a source) or ``rejected``. ``trend_card_sources_guard`` (every role): a source is added only to a candidate
+  card (read FOR SHARE: a decision in flight is waited for); ``trend_card_sources_no_update`` (``block_mutation()``):
+  never changed.
   CHECKs: title 1 to 120, summary 1 to 600, a topic slug of lower-case words joined by hyphens (at most 40), a
   confidence of 0 to 1 (three decimals), a trace id ``^[A-Za-z0-9._:-]{1,80}$``, named organisations as
   ``problems.named_orgs`` (at most 10 distinct names of 1 to 200 characters, no control character), a decision
@@ -98,6 +105,12 @@ listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself):
   (invalid_parameter_value); an unknown card no_data_found; a decided card object_not_in_prerequisite_state. Locks the
   card FOR UPDATE; ``publish`` sets ``published``, ``published_at`` and the decision, ``reject`` sets ``rejected`` and
   the decision.
+- ``app_trend_job_state(since)`` -> one row (recent, cited_refs): the weekly trend job only, with no user bound
+  (insufficient_privilege otherwise; invalid_parameter_value for a NULL time), as ``app_event_reminders_due``.
+  ``recent``: a card that is not rejected (a candidate or a published one) was created at or after ``since`` (the
+  job's 6-day rule); ``cited_refs``: the distinct ``excerpt_ref`` of the sources of every card that is not rejected,
+  sorted (an empty array when there is none; the job leaves those excerpts out). Nothing else of any card: no id,
+  title, status or time.
 
 Operating rules for the code that uses this schema:
 
@@ -118,9 +131,11 @@ Operating rules for the code that uses this schema:
   (``bind_tenant``) that reads the reminder and the event again (a cancelled event is gone from a developer's view),
   the consent and preferences as EM7 does, and writes ``notification_deliveries`` and ``in_app_notifications`` under
   that binding, keyed once per kind, developer and event.
-- Trend cards: the job calls ``app_create_trend_candidate`` with no user bound (the manual run as the staff admin),
-  never with a model-written URL or excerpt id that the code did not take from the publisher list; the database checks
-  the shape, not the allowlist or the research checks.
+- Trend cards: the weekly job (no user bound) first reads ``app_trend_job_state(now - 6 days)`` (``recent``: nothing
+  is drafted; ``cited_refs``: the excerpts left out of the call; the manual run reads the cards as the staff admin
+  instead), then calls ``app_create_trend_candidate`` with no user bound (the manual run as the staff admin), never
+  with a model-written URL or excerpt id that the code did not take from the publisher list; the database checks the
+  shape, not the allowlist or the research checks.
 
 Revision ID: 0010
 Revises: 0009
@@ -577,6 +592,35 @@ BEGIN
 END;
 $$;
 
+-- The weekly trend job's state (REQ-DEV-02, D-60): a session with no user bound reads no trend card (the tables'
+-- SELECT policies), so the job asks here, as the reminder job asks app_event_reminders_due. One row: whether a
+-- card that is not rejected (a candidate or a published one) was created at or after p_since (the job's 6-day rule:
+-- then nothing is drafted), and the distinct excerpt ids the sources of every card that is not rejected cite, sorted
+-- (left out of the call; an empty array when there is none). Nothing else of any card: no id, title, status or time.
+-- A signed-in session (the manual run's staff admin reads the cards under RLS) is refused, and so is a NULL time.
+CREATE FUNCTION app_trend_job_state(p_since timestamptz)
+    RETURNS TABLE (recent boolean, cited_refs text[])
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF public.app_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'app_trend_job_state: the weekly trend job only, with no user bound'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_since IS NULL THEN
+        RAISE EXCEPTION 'app_trend_job_state: name the time' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN QUERY
+    SELECT EXISTS (SELECT 1 FROM public.trend_cards c WHERE c.status <> 'rejected' AND c.created_at >= p_since),
+           ARRAY(SELECT DISTINCT s.excerpt_ref
+                   FROM public.trend_card_sources s
+                   JOIN public.trend_cards c ON c.id = s.card_id
+                  WHERE c.status <> 'rejected'
+                  ORDER BY s.excerpt_ref);
+END;
+$$;
+
 -- An event's organisation, poster and creation time never change; its status moves only from draft to published,
 -- rejected or cancelled, or from published to cancelled, and a status change changes nothing else (a cancellation
 -- keeps the decision); the decision and cancellation columns change only with the status; only a draft's content
@@ -689,6 +733,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_event_reminders_due(timestamp with time zone)": ("bridge_app",),  # the reminder job, no user bound
     "app_create_trend_candidate(jsonb, jsonb)": ("bridge_app",),  # the trend job (no user bound) or staff admin
     "app_decide_trend_card(uuid, text)": ("bridge_app",),  # staff admin
+    "app_trend_job_state(timestamp with time zone)": ("bridge_app",),  # the weekly trend job, no user bound
 }
 INTERNAL_FUNCTIONS = ("trend_source_is_valid(jsonb)",)
 TRIGGER_FUNCTIONS = ("events_guard()", "trend_cards_guard()", "trend_card_sources_guard()")
