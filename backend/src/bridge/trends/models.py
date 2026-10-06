@@ -9,6 +9,8 @@ publisher allowlist, the research checks and the daily rotation are the applicat
 - ``trend_cards`` and ``trend_card_sources`` (tenancy CURATED): staff admin reads every row, a developer
   (``app_is_developer()``: never staff) the published cards and their sources; nobody else any. bridge_app writes
   neither table directly and never reads ``decided_by`` (who decided is the audit log's): deferred with raiseload.
+  The weekly job (no user bound) reads no row: ``app_trend_job_state(since)`` tells it only whether a card that is not
+  rejected was created at or after ``since`` and which excerpts such cards cite.
 - A card's title (120), summary (600), topic slug (lower-case words joined by hyphens, 40), optional confidence (0
   to 1, three decimals) and generating call's trace id, and named organisations (as ``problems.named_orgs``: at most
   10, each 1 to 200 characters, distinct) never change; its status moves once, ``candidate`` to ``published``

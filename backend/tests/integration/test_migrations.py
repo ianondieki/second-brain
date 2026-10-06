@@ -515,6 +515,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "trend_source_is_valid(jsonb)": (False, set()),  # app_create_trend_candidate
     "app_create_trend_candidate(jsonb, jsonb)": (True, {"bridge_app"}),  # the trend job (no user) or staff admin
     "app_decide_trend_card(uuid, text)": (True, {"bridge_app"}),  # staff admin
+    "app_trend_job_state(timestamp with time zone)": (True, {"bridge_app"}),  # the weekly trend job, no user bound
     "events_guard()": (False, set()),
     "trend_cards_guard()": (False, set()),
     "trend_card_sources_guard()": (False, set()),
@@ -766,6 +767,7 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     for kind in SNAPSHOT:  # additive: every object of 0009 is still there, unchanged
         assert set(at_0009[kind]) <= set(at_head[kind]), kind
     assert "app_create_trend_candidate(jsonb,jsonb) bridge_app EXECUTE" in at_head["function_acl"]
+    assert "app_trend_job_state(timestamp with time zone) bridge_app EXECUTE" in at_head["function_acl"]
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0009"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0010 leaves every object of 0009 exactly as it found it
@@ -1446,13 +1448,15 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
                 conn, "SELECT * FROM app_report_message(uuid7(), ARRAY['spam'])", "no message of the caller's"
             )
             await expect_error(conn, "SELECT * FROM app_reported_message(uuid7())", "staff admin or moderator only")
-            # revision 0010: the event and trend definers, each refused to a signed-in non-staff caller
+            # revision 0010: the event and trend definers, each refused to a signed-in non-staff caller (the job
+            # readers to any signed-in caller)
             for call, refusal in (
                 ("SELECT app_decide_event(uuid7(), 'publish', now())", "staff admin or moderator only"),
                 ("SELECT app_cancel_event(uuid7())", "no event the caller may cancel"),
                 ("SELECT count(*) FROM app_event_reminders_due(now())", "the event reminder job only"),
                 ("SELECT app_create_trend_candidate('{}', '[]')", "the trend job with no user bound"),
                 ("SELECT app_decide_trend_card(uuid7(), 'publish')", "staff admin only"),
+                ("SELECT * FROM app_trend_job_state(now())", "the weekly trend job only"),
             ):
                 await expect_error(conn, call, refusal)
             # revision 0005: the definers and CHECK helpers bridge_app may call
