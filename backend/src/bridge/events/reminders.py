@@ -48,6 +48,7 @@ from bridge.notifications.email import EmailMessage, EmailProvider, provider_fro
 from bridge.notifications.in_app import post_in_app
 from bridge.notifications.models import NotificationDelivery
 from bridge.reminders.dispatch import Recipient, email_block
+from bridge.web_paths import dev_event_path
 
 N26: Final = "n26"  # the day-before email
 N27: Final = "n27"  # the morning-of in-app notice
@@ -204,11 +205,6 @@ def render_n26(row: Any, *, base_url: str, product: str) -> Rendered:
     )
 
 
-def event_path(event_id: UUID) -> str:
-    """The event's page in the developer's portal (the N27 notice's link)."""
-    return f"/dev/events/{event_id}"
-
-
 def n26_key(user_id: UUID, event_id: UUID) -> str:
     return f"{N26}:{NotificationChannel.EMAIL.value}:{user_id}:{event_id}"
 
@@ -309,7 +305,7 @@ async def _notice(db: AsyncSession, user_id: UUID, row: Any, now: datetime) -> O
         kind=N27,
         title=row.title,
         body=TODAY_AT.format(at=f"{at:%H:%M}", place=place(row)),
-        link=event_path(row.id),
+        link=dev_event_path(row.id),
         dedupe_key=n27_key(user_id, row.id),
         local_date=now.astimezone(NAIROBI).date(),
     )

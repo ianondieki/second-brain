@@ -37,7 +37,7 @@ NOT_PAGES = {
 # (which built /settings/notifications and /help, every email footer) until P22-B's backend landed before its screens
 # (P22-BF). An entry that has become a page fails the test, so the list never goes stale.
 PAGES_NOT_BUILT: dict[str, str] = {
-    "/dev/events/{}": "the event page N27 links to; P22-BF builds it (REQ-DEV-02)",
+    "/dev/events/{}": "the event page N27 links to (web_paths.dev_event_path); P22-BF builds it (REQ-DEV-02)",
 }
 
 

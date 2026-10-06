@@ -17,6 +17,7 @@ from bridge.events import reminders
 from bridge.jobs import events as jobs
 from bridge.jobs.app import IMPORT_PATHS, app
 from bridge.notifications.email import FakeEmailProvider
+from bridge.web_paths import dev_event_path
 
 EVENT_ID = UUID("01927f00-0000-7000-8000-000000000002")
 
@@ -76,7 +77,7 @@ def test_the_n26_email_states_when_and_where_and_the_calendar_links_only() -> No
     assert 'data-cta="google-calendar"' in rendered.html
     assert reminders.n26_key(EVENT_ID, EVENT_ID).startswith("n26:email:")
     assert reminders.n27_key(EVENT_ID, EVENT_ID).startswith("n27:in_app:")
-    assert reminders.event_path(EVENT_ID) == f"/dev/events/{EVENT_ID}"
+    assert dev_event_path(EVENT_ID) == f"/dev/events/{EVENT_ID}"
 
 
 def test_the_job_runs_every_15_minutes_one_run_at_a_time() -> None:
