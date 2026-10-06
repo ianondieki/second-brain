@@ -18,6 +18,7 @@ from datetime import UTC, time, timedelta
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
+from bridge.ids import uuid7
 from tests.integration.events.api_world import (
     MOMBASA,
     NAIROBI_CITY,
@@ -74,6 +75,41 @@ async def test_nothing_unmoderated_or_unavailable_is_shown(week: WeekDb, as_user
             week, "UPDATE organizations SET suspended_at = NULL, delisted_at = NULL WHERE id = :o", o=p.org.id
         )
     assert ids((await developer.get(WEEK)).json()["events"]) == [str(live)]
+
+
+async def test_a_developer_who_is_a_member_never_sees_their_organisations_drafts(
+    week: WeekDb, as_user: Clients
+) -> None:
+    """B1 where Row-Level Security alone would not hide them: a developer who is also a member of the posting
+    organisation reads its drafts and cancelled events under the members' policy, so only the code's published-only
+    filter keeps them off the week, the event page and the .ics."""
+    monday = week.monday()
+    await at(week, monday)
+    p = await cast(week)
+    await owner_run(
+        week,
+        "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :o, :u, CAST('{viewer}' AS org_role[]))",
+        id=uuid7(),
+        o=p.org.id,
+        u=p.developer,
+    )
+    starts = nairobi(monday + timedelta(days=2), time(18, 0))
+    live = await published(week, p, starts)
+    draft = await post(week, p.org.reviewer, p.org.id, starts)
+    rejected = await post(week, p.org.reviewer, p.org.id, starts)
+    await decide(week, rejected, p.moderator, "reject")
+    cancelled = await published(week, p, starts)
+    await cancel(week, cancelled, p.org.owner)
+    developer = await as_user(p.developer)
+    readable = await developer.get(f"/api/orgs/{p.org.id}/events")  # the member does read them, in the portal
+    assert {item["id"] for item in readable.json()["items"]} == {str(live), str(draft), str(rejected), str(cancelled)}
+    assert ids((await developer.get(WEEK)).json()["events"]) == [str(live)]
+    assert ids((await developer.get(WEEK_EVENTS)).json()["items"]) == [str(live)]
+    for hidden in (draft, rejected, cancelled):
+        assert (await developer.get(f"/api/events/{hidden}")).status_code == 404
+        assert (await developer.get(f"/api/events/{hidden}/calendar.ics")).status_code == 404
+        assert (await developer.post(f"/api/me/events/{hidden}/reminder")).status_code == 404
+    assert (await developer.get(f"/api/events/{live}/calendar.ics")).status_code == 200
 
 
 async def test_the_strip_picks_the_county_or_online_soonest_first_this_week_and_next(
