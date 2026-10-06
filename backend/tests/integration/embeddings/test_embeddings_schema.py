@@ -606,6 +606,13 @@ async def test_problems_listed_are_published_and_clear_with_their_text(owner_eng
             ids["open"]: "M-Pesa float\nAgents run out of float"
         }
         assert found[ids["open"]].text_hash == sha("M-Pesa float\nAgents run out of float")
+        await t.as_owner(conn)
+        long = await w.add_problem(conn, author, topic)  # a statement longer than the cap
+        lengthen = "UPDATE problems SET title = 'Long', statement = :s WHERE id = :id"
+        await t.run(conn, lengthen, s="word " * 2000, id=long)
+        long_text = {row.id: row.text for row in await problems(conn)}[long]
+        assert len(long_text) == 8000
+        assert long_text.startswith("Long\nword word ")
         assert await set_problem(conn, ids["open"])
         assert not {row.id for row in await problems(conn)} & mine
         assert {row.id for row in await problems(conn, model="other")} & mine == {ids["open"]}
