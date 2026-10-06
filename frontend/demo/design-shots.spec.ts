@@ -53,7 +53,7 @@ interface Shot {
   path: string;
   who: Who;
   /** The screenshots folder under docs/demo/screenshots/ (default p18). */
-  set?: "p19" | "p21" | "p22a";
+  set?: "p19" | "p21" | "p22a" | "p22b";
   /** Only these widths (default SHOT_WIDTHS). */
   widths?: number[];
   /** Shoot this element only (the top bar), not the page. */
@@ -967,6 +967,69 @@ const SHOTS: Shot[] = [
     } },
   { name: "quiz-board-in", set: "p22a", path: "/dev/quiz/board", who: "dev", prepare: async (page) => {
       if (!(await page.locator("[data-opt-in=on]").isVisible())) return false;
+    } },
+  // P22-B "This week": the Home strip (Amina: a reminder set on the Nairobi event), the week, an event with the
+  // reminder on (Amina) and off (Brian), the trend of the day; the organisation's events, the form, one event; the
+  // staff queue, a draft's page, the research page's Trends section and a candidate. Nothing is sent or decided.
+  { name: "home-week", set: "p22b", path: "/dev", who: "dev", prepare: async (page) => {
+      if (!(await page.locator("[data-home=week] [data-week-event]").first().isVisible())) return false;
+    } },
+  { name: "week", set: "p22b", path: "/dev/week", who: "dev", prepare: async (page) => {
+      if (!(await page.locator("[data-week-event]").first().isVisible())) return false;
+    } },
+  { name: "event-reminder-on", set: "p22b", path: "/dev/week", who: "dev", prepare: async (page) => {
+      const row = page.locator("[data-week-event]:has([data-reminder-set])").first();
+      if (!(await row.isVisible())) return false;
+      await row.click();
+      await page.waitForURL(/\/dev\/events\/[^/]+$/);
+      await page.locator("[data-reminder=on]").waitFor();
+    } },
+  { name: "event-reminder-off", set: "p22b", path: "/dev/week", who: "devBrian", prepare: async (page) => {
+      const row = page.locator("[data-week-event]").first();
+      if (!(await row.isVisible())) return false;
+      await row.click();
+      await page.waitForURL(/\/dev\/events\/[^/]+$/);
+      await page.locator("[data-reminder=off]").waitFor();
+    } },
+  { name: "trend", set: "p22b", path: "/dev/week", who: "dev", prepare: async (page) => {
+      const row = page.locator("[data-week-trend]").first();
+      if (!(await row.isVisible())) return false;
+      await row.click();
+      await page.waitForURL(/\/dev\/trends\/[^/]+$/);
+      await page.locator("[data-trend]").waitFor();
+    } },
+  { name: "org-events", set: "p22b", path: "/org/events", who: "org", prepare: async (page) => {
+      if (!(await page.locator("[data-org-event]").first().isVisible())) return false;
+    } },
+  { name: "org-event-new", set: "p22b", path: "/org/events/new", who: "org", prepare: async (page) => {
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  { name: "org-event", set: "p22b", path: "/org/events", who: "org", prepare: async (page) => {
+      const row = page.locator("[data-org-event][data-status=published]").first();
+      if (!(await row.isVisible())) return false;
+      await row.click();
+      await page.waitForURL(/\/org\/events\/[^/]+/);
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  { name: "admin-events", set: "p22b", path: "/admin/events", who: "staff", prepare: async (page) => {
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  { name: "admin-event-draft", set: "p22b", path: "/admin/events", who: "staff", prepare: async (page) => {
+      const row = page.locator("[data-admin-event][data-status=draft]").first();
+      if (!(await row.isVisible())) return false;
+      await row.getByRole("link").first().click();
+      await page.waitForURL(/\/admin\/events\/[^/]+$/);
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  { name: "admin-trends", set: "p22b", path: "/admin/research", who: "staff", element: "[data-trends]", prepare: async (page) => {
+      if (!(await page.locator("[data-trend-candidate]").first().isVisible())) return false;
+    } },
+  { name: "admin-trend", set: "p22b", path: "/admin/research", who: "staff", prepare: async (page) => {
+      const row = page.locator("[data-trend-candidate]").first();
+      if (!(await row.isVisible())) return false;
+      await row.getByRole("link").first().click();
+      await page.waitForURL(/\/admin\/research\/trends\/[^/]+$/);
+      await page.locator("[data-trend-source]").first().waitFor();
     } },
   // The staff admin's queue, then an approved set's page (nothing is decided, pulled or restored).
   { name: "admin-quiz", set: "p22a", path: "/admin/quiz", who: "staff", prepare: async (page) => {
