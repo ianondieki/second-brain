@@ -1156,7 +1156,6 @@
       "columns": {
         "card": "Card",
         "topic": "Topic",
-        "sources": "Sources",
         "drafted": "Drafted"
       },
       "aiDrafted": "AI-drafted",
@@ -1191,7 +1190,8 @@
         "rejected": "Rejected.",
         "decided": "This card was decided on {date}.",
         "gone": "This trend card is not here.",
-        "goneAction": "Back to Research"
+        "goneAction": "Back to Research",
+        "newTab": "(opens in a new tab)"
       },
       "refusal": {
         "unsourced_name": "The card names an organisation that no source names, so it cannot be published. Reject it.",

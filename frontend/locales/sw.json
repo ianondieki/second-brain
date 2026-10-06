@@ -1156,7 +1156,6 @@
       "columns": {
         "card": "Kadi",
         "topic": "Mada",
-        "sources": "Vyanzo",
         "drafted": "Iliandaliwa"
       },
       "aiDrafted": "Imeandaliwa na AI",
@@ -1191,7 +1190,8 @@
         "rejected": "Imekataliwa.",
         "decided": "Kadi hii iliamuliwa tarehe {date}.",
         "gone": "Kadi hii ya mwelekeo haipo hapa.",
-        "goneAction": "Rudi kwenye Utafiti"
+        "goneAction": "Rudi kwenye Utafiti",
+        "newTab": "(inafunguka katika kichupo kipya)"
       },
       "refusal": {
         "unsourced_name": "Kadi inataja shirika ambalo hakuna chanzo kinacholitaja, kwa hiyo haiwezi kuchapishwa. Ikatae.",
