@@ -20,4 +20,16 @@ describe("SettingsTabs", () => {
     expect(links[1].getAttribute("aria-current")).toBe("page");
     expect(links[0].hasAttribute("aria-current")).toBe(false);
   });
+
+  // REQ-DEV-03: a developer has a third tab, Profile (the headline, the county and "Visible to peers").
+  it("adds Profile for a developer only", () => {
+    renderWithIntl(<SettingsTabs current="profile" developer />);
+    const links = within(screen.getByRole("navigation", { name: "Settings" })).getAllByRole("link");
+    expect(links.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+      ["Security", "/settings/security"],
+      ["Notifications", "/settings/notifications"],
+      ["Profile", "/settings/profile"],
+    ]);
+    expect(links[2].getAttribute("aria-current")).toBe("page");
+  });
 });
