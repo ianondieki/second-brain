@@ -158,3 +158,31 @@ async def test_c5_the_owner_removes_a_credit(teams: TeamsDb, as_user: Clients) -
     assert code(await other.delete(f"{path}/{second}")) == (404, "not_found")
     removed = await audits(teams, "proposal.contributor_removed", built.owner_id)
     assert removed[0].payload == {"user_id": str(first), "by_contributor": False}
+
+
+async def test_c5_a_block_never_hides_a_contributors_handle_from_the_owner(teams: TeamsDb, as_user: Clients) -> None:
+    """The owner's list takes each handle from the credit itself (app_contributor_handles), so a block between the two
+    (here the contributor blocks the owner) never shows as a missing handle; the credit stays (D-62)."""
+    wrapper = LocalKeyWrapper(os.urandom(32))
+    shared, _ = await niche(teams, "blocked")
+    built = await registered(teams, wrapper, shared)
+    first = await developer(teams, "kept", liked=(shared,))
+    second = await developer(teams, "blocks", liked=(shared,))
+    owner = await as_user(built.owner_id)
+    path = f"/api/me/ideas/{built.proposal_id}/contributors"
+    blocker = await as_user(second)
+    for client in (await as_user(first), blocker):
+        await team(owner, client, await problem(teams))
+        assert (await owner.post(path, json={"user_id": str(client.user_id)})).status_code == 201  # type: ignore[attr-defined]
+    assert (await blocker.post("/api/me/blocks", json={"user_id": str(built.owner_id)})).status_code == 204
+    [block] = await owner_rows(
+        teams, "SELECT blocked_user_id FROM developer_blocks WHERE blocker_user_id = :u", u=second
+    )
+    assert block.blocked_user_id == built.owner_id
+    listed = (await owner.get(path)).json()
+    handles = [await handle_of(teams, first), await handle_of(teams, second)]
+    assert listed["contributors"] == handles
+    assert [(i["user_id"], i["handle"]) for i in listed["items"]] == [
+        (str(first), handles[0]),
+        (str(second), handles[1]),
+    ]

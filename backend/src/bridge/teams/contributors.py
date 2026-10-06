@@ -7,9 +7,8 @@ data and PDF (``bridge.provenance.certificate``), always through ``app_contribut
 or its hash (``manifest_version`` stays "1"). Nothing about shares; the tracker's developer party and the originality
 check are unchanged. Developers only (``deps.Developer``).
 
-- ``GET /api/me/ideas/{proposal_id}/contributors``: the owner's view of the credit (each contributor's id and handle;
-  the handle is null while a block stands between the two, whose credit still shows publicly). 404 unless the caller
-  owns the idea.
+- ``GET /api/me/ideas/{proposal_id}/contributors``: the owner's view of the credit (each contributor's id and the
+  handle ``app_contributor_handles`` shows, a block between the two or not). 404 unless the caller owns the idea.
 - ``POST`` the same ``{user_id}``: 201. 404 ``not_a_counterpart`` unless the two have a team thread and no block stands
   (the database's policy); 409 ``already_contributor`` for a contributor credited before, removed ones included (a
   removed credit is never added back). Audited ``proposal.contributor_added``.
@@ -53,11 +52,13 @@ _THREAD: Final = text(
     " AND b_user_id = greatest(app_user_id(), CAST(:u AS uuid)) ORDER BY created_at DESC, id DESC LIMIT 1"
 )
 _ADD: Final = text("INSERT INTO proposal_contributors (proposal_id, user_id, thread_id) VALUES (:p, :u, :t)")
+# The handles come from app_contributor_handles (by added_at), the ids from the owner's own rows in the same order and
+# the same statement (one snapshot), zipped in code: never app_developer_card, which answers nothing across a block.
+# added_at is the database's clock_timestamp() per row, so two credits never share it and the two orders agree.
 _CREDIT: Final = text(
     "SELECT coalesce(app_contributor_handles(:p), '{}') AS handles, coalesce((SELECT json_agg(json_build_object("
-    "'user_id', c.user_id, 'handle', d.handle, 'added_at', c.added_at) ORDER BY c.added_at, c.user_id)"
-    " FROM proposal_contributors c LEFT JOIN LATERAL app_developer_card(c.user_id) d ON true"
-    " WHERE c.proposal_id = :p AND c.removed_at IS NULL), '[]') AS items"
+    "'user_id', c.user_id, 'added_at', c.added_at) ORDER BY c.added_at, c.user_id)"
+    " FROM proposal_contributors c WHERE c.proposal_id = :p AND c.removed_at IS NULL), '[]') AS items"
 )
 _REMOVE: Final = text(
     "UPDATE proposal_contributors SET removed_at = now() WHERE proposal_id = :p AND user_id = :u AND removed_at IS NULL"
@@ -75,11 +76,15 @@ async def _owned(db: AsyncSession, proposal_id: UUID) -> None:
 
 
 async def credit(db: AsyncSession, proposal_id: UUID) -> ContributorsOut:
-    """The idea's credit as its owner sees it (one statement)."""
+    """The idea's credit as its owner sees it (one statement): each contributor's id with the handle the idea and its
+    certificate show, whatever stands between the two now (a block included)."""
     row = (await db.execute(_CREDIT, {"p": proposal_id})).one()
-    return ContributorsOut(
-        contributors=list(row.handles), items=[ContributorOut.model_validate(item) for item in row.items]
-    )
+    handles = [str(handle) for handle in row.handles]
+    items = [
+        ContributorOut(user_id=item["user_id"], handle=handle, added_at=item["added_at"])
+        for item, handle in zip(row.items, handles, strict=True)
+    ]
+    return ContributorsOut(contributors=handles, items=items)
 
 
 async def _removed(db: AsyncSession, me: UUID, proposal_id: UUID, user_id: UUID) -> None:

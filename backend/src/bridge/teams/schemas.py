@@ -204,7 +204,7 @@ class ContributorIn(BaseModel):
 
 class ContributorOut(BaseModel):
     user_id: UUID
-    handle: str | None = Field(description="Null when a block stands between you (the credit still shows publicly)")
+    handle: str = Field(description="The handle the idea and its certificate show")
     added_at: datetime
 
 
