@@ -120,6 +120,234 @@ INDEXES = (
     ("ix_problems_embedding", "problems", "embedding"),
 )
 
+# ---------------------------------------------------------------------------------------------------------------------
+# SQL functions. As in 0001 to 0011: every function pins search_path = pg_catalog, public, pg_temp (pg_temp last),
+# EXECUTE is revoked from PUBLIC and granted explicitly (FUNCTION_GRANTS; internal and trigger functions to nobody).
+# SECURITY DEFINER functions run as bridge_owner, which bypasses RLS (ENABLED, not FORCED).
+# ---------------------------------------------------------------------------------------------------------------------
+
+FUNCTIONS_SQL = r"""
+-- A model or version label: 1 to p_max characters, not blank, without a control character. Internal (no EXECUTE
+-- grant): the definers below.
+CREATE FUNCTION embedding_label_is_valid(p_label text, p_max integer) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT coalesce(p_label ~ '[^[:space:]]' AND char_length(p_label) <= p_max AND p_label !~ '[[:cntrl:]]', false)
+$$;
+
+-- One part of an embedding's text: NFKC-normalised, every run of whitespace or control characters one space, trimmed;
+-- NULL when nothing is left. Internal (no EXECUTE grant).
+CREATE FUNCTION embedding_text_line(p_text text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT nullif(btrim(regexp_replace(normalize(p_text, NFKC), '[[:space:][:cntrl:]]+', ' ', 'g')), '')
+$$;
+
+-- Whether p_user's latest profiling decision (bridge.profiles.consents.latest's order: created_at, then id) is a
+-- grant; no decision is no consent. Internal (no EXECUTE grant).
+CREATE FUNCTION profile_consent_granted(p_user uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT coalesce((SELECT c.granted FROM public.consents c
+                      WHERE c.user_id = p_user AND c.purpose = 'profiling'
+                      ORDER BY c.created_at DESC, c.id DESC LIMIT 1), false)
+$$;
+
+-- The text p_user's profile vector is computed from: the headline, the bio, the liked niches' English names (in
+-- bridge.profiles.niches.liked's order), then the title and problem statement of the five latest published proposals
+-- (newest first; Tier-1 teaser columns only), each one embedding_text_line, empty parts left out, joined by newlines
+-- and cut at 8,000 characters; '' when there is nothing. Internal (no EXECUTE grant).
+CREATE FUNCTION profile_embedding_text(p_user uuid) RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT left(array_to_string(ARRAY(
+        SELECT public.embedding_text_line(part.body)
+          FROM (SELECT 1 AS kind, 0::bigint AS n, 0 AS k, d.headline::text AS body
+                  FROM public.developer_profiles d WHERE d.user_id = p_user
+                UNION ALL
+                SELECT 2, 0, 0, d.bio FROM public.developer_profiles d WHERE d.user_id = p_user
+                UNION ALL
+                SELECT 3, row_number() OVER (ORDER BY n.sort_order, n.name_en, n.id), 0, n.name_en::text
+                  FROM public.developer_niches l JOIN public.niches n ON n.id = l.niche_id
+                 WHERE l.user_id = p_user AND l.kind = 'liked'
+                UNION ALL
+                SELECT 4, q.n, v.k, v.body
+                  FROM (SELECT p.title, p.problem_statement,
+                               row_number() OVER (ORDER BY p.published_at DESC NULLS LAST, p.id DESC) AS n
+                          FROM public.proposals p
+                         WHERE p.owner_id = p_user AND p.status = 'published'
+                         ORDER BY p.published_at DESC NULLS LAST, p.id DESC
+                         LIMIT 5) q
+                 CROSS JOIN LATERAL (VALUES (1, q.title::text), (2, q.problem_statement)) AS v(k, body)) part
+         ORDER BY part.kind, part.n, part.k), E'\n'), 8000)
+$$;
+
+-- The developers whose profile vector is stale, with their vector's time and text: a profile whose user is active and
+-- not staff, whose latest profiling decision is a grant, with no vector, no time, another model or version (left out
+-- when p_model is NULL), an edit or a liked-niche change since (updated_at), or a proposal of theirs published, hidden
+-- or (while published) changed since; and a text that is not empty. Unordered. Internal (no EXECUTE grant).
+CREATE FUNCTION profiles_to_embed(p_model text, p_version text)
+    RETURNS TABLE (user_id uuid, embedded_at timestamptz, body text)
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    WITH stale AS MATERIALIZED (
+        SELECT d.user_id, d.profile_embedded_at
+          FROM public.developer_profiles d
+          JOIN public.users u ON u.id = d.user_id
+         WHERE u.status = 'active' AND u.staff_role IS NULL
+           AND public.profile_consent_granted(d.user_id)
+           AND (d.profile_embedding IS NULL OR d.profile_embedded_at IS NULL
+                OR (p_model IS NOT NULL
+                    AND (d.embed_model IS DISTINCT FROM p_model OR d.embed_version IS DISTINCT FROM p_version))
+                OR d.updated_at > d.profile_embedded_at
+                OR EXISTS (SELECT 1 FROM public.proposals p
+                            WHERE p.owner_id = d.user_id
+                              AND (p.published_at > d.profile_embedded_at OR p.hidden_at > d.profile_embedded_at
+                                   OR (p.status = 'published' AND p.updated_at > d.profile_embedded_at))))
+    )
+    SELECT s.user_id, s.profile_embedded_at, t.body
+      FROM stale s CROSS JOIN LATERAL (SELECT public.profile_embedding_text(s.user_id) AS body) t
+     WHERE t.body <> ''
+$$;
+
+-- The published and clear problems whose vector is stale (no vector, no time, another model or version (left out when
+-- p_model is NULL), or an edit since), with the vector's time and the text: title and statement, each
+-- embedding_text_line, joined by a newline and cut at 8,000 characters (an empty text is left out). Unordered.
+-- Internal (no EXECUTE grant).
+CREATE FUNCTION problems_to_embed(p_model text, p_version text)
+    RETURNS TABLE (problem_id uuid, embedded_at timestamptz, body text)
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT s.id, s.embedded_at, s.body
+      FROM (SELECT p.id, p.embedded_at,
+                   left(array_to_string(ARRAY[public.embedding_text_line(p.title),
+                                              public.embedding_text_line(p.statement)], E'\n'), 8000) AS body
+              FROM public.problems p
+             WHERE p.status = 'published' AND p.moderation_state = 'clear'
+               AND (p.embedding IS NULL OR p.embedded_at IS NULL
+                    OR (p_model IS NOT NULL
+                        AND (p.embed_model IS DISTINCT FROM p_model OR p.embed_version IS DISTINCT FROM p_version))
+                    OR p.updated_at > p.embedded_at)) s
+     WHERE s.body <> ''
+$$;
+
+-- A page of the developers whose profile vector the worker computes next (REQ-PERS-02; AC-PERS-3: only while the
+-- profiling consent is granted): profiles_to_embed's set, never embedded first, then the oldest vector, then user id.
+-- The worker only (no user bound): a signed-in session learns nothing of other developers' profiles.
+CREATE FUNCTION app_profiles_to_embed(p_model text, p_version text, p_limit integer)
+    RETURNS TABLE (user_id uuid, text text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF public.app_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'app_profiles_to_embed: the embedding worker only, with no user bound'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40))
+       OR p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 1000 THEN
+        RAISE EXCEPTION 'app_profiles_to_embed: a model (1 to 80 characters), a version (1 to 40) and a limit of 1 to'
+            ' 1000' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN QUERY
+    SELECT s.user_id, s.body
+      FROM public.profiles_to_embed(p_model, p_version) s
+     ORDER BY s.embedded_at ASC NULLS FIRST, s.user_id
+     LIMIT p_limit;
+END;
+$$;
+
+-- A page of the problems whose vector the worker computes next (REQ-EMB-01): problems_to_embed's set, never embedded
+-- first, then the oldest vector, then id. The worker only (no user bound).
+CREATE FUNCTION app_problems_to_embed(p_model text, p_version text, p_limit integer)
+    RETURNS TABLE (problem_id uuid, text text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF public.app_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'app_problems_to_embed: the embedding worker only, with no user bound'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40))
+       OR p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 1000 THEN
+        RAISE EXCEPTION 'app_problems_to_embed: a model (1 to 80 characters), a version (1 to 40) and a limit of 1 to'
+            ' 1000' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN QUERY
+    SELECT s.problem_id, s.body
+      FROM public.problems_to_embed(p_model, p_version) s
+     ORDER BY s.embedded_at ASC NULLS FIRST, s.problem_id
+     LIMIT p_limit;
+END;
+$$;
+
+-- How many rows the two readers would list (the embedding job's log line): the worker only. With a model and version
+-- (both or neither) the model rule applies; without, rows with no vector or changed since they were embedded.
+CREATE FUNCTION app_stale_embedding_counts(p_model text DEFAULT NULL, p_version text DEFAULT NULL)
+    RETURNS TABLE (profiles bigint, problems bigint)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF public.app_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'app_stale_embedding_counts: the embedding worker only, with no user bound'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF NOT ((p_model IS NULL AND p_version IS NULL)
+            OR (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40))) THEN
+        RAISE EXCEPTION 'app_stale_embedding_counts: a model (1 to 80 characters) and a version (1 to 40), or neither'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN QUERY
+    SELECT (SELECT count(*) FROM public.profiles_to_embed(p_model, p_version)),
+           (SELECT count(*) FROM public.problems_to_embed(p_model, p_version));
+END;
+$$;
+"""
+
+# EXECUTE grants (EXECUTE revoked from PUBLIC first).
+FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
+    "app_profiles_to_embed(text, text, integer)": ("bridge_app",),  # the worker, no user bound
+    "app_problems_to_embed(text, text, integer)": ("bridge_app",),  # the worker, no user bound
+    "app_stale_embedding_counts(text, text)": ("bridge_app",),  # the worker's log line, no user bound
+}
+INTERNAL_FUNCTIONS = (
+    "profiles_to_embed(text, text)",
+    "problems_to_embed(text, text)",
+    "profile_embedding_text(uuid)",
+    "profile_consent_granted(uuid)",
+    "embedding_text_line(text)",
+    "embedding_label_is_valid(text, integer)",
+)
+TRIGGER_FUNCTIONS: tuple[str, ...] = ()
+
+
+def _run_sql(script: str) -> None:
+    """Run a SQL script verbatim on the migration's connection (same transaction); see revision 0001."""
+    cursor = op.get_bind().connection.cursor()
+    try:
+        cursor.execute(script)
+    finally:
+        cursor.close()
+
+
+def _grant_sql() -> str:
+    grants: list[str] = []
+    grants += [
+        f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC;" for signature in (*INTERNAL_FUNCTIONS, *TRIGGER_FUNCTIONS)
+    ]
+    for signature, roles in FUNCTION_GRANTS.items():
+        grants.append(f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC;")
+        grants.append(f"GRANT EXECUTE ON FUNCTION {signature} TO {', '.join(roles)};")
+    return "\n".join(grants)
+
 
 def upgrade() -> None:
     op.add_column("developer_profiles", sa.Column("profile_embedded_at", sa.DateTime(timezone=True), nullable=True))
@@ -128,10 +356,20 @@ def upgrade() -> None:
         op.create_index(
             name, table, [column], unique=False, postgresql_using="hnsw", postgresql_ops={column: "vector_cosine_ops"}
         )
+    _run_sql(FUNCTIONS_SQL)
+    _run_sql(_grant_sql())
 
 
 def downgrade() -> None:
-    """Not destructive: the two times and the indexes are derived data; the vectors stay."""
+    """Not destructive: the vectors (revisions 0001 and 0002's columns) stay, and what goes (the two times, the indexes,
+    the functions and triggers) is derived data and code. The worker recomputes every vector from rows that stay, so
+    the downgrade proceeds with rows and nulls nothing. bridge_app's INSERT and UPDATE of problems' embedding columns
+    (revisions 0002 and 0005) are granted again."""
+    _run_sql(
+        "\n".join(
+            f"DROP FUNCTION {signature};" for signature in (*TRIGGER_FUNCTIONS, *FUNCTION_GRANTS, *INTERNAL_FUNCTIONS)
+        )
+    )
     for name, table, _column in reversed(INDEXES):
         op.drop_index(name, table_name=table)
     op.drop_column("problems", "embedded_at")
