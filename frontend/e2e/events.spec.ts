@@ -187,10 +187,22 @@ test.describe("This week", () => {
       await expect(page.locator("[data-primary]")).toHaveCount(0);
       await checkWidths(page, info);
       await shot(page, info, "events-reminded");
+      // The server holds it: after a reload the page offers to decline, and Home's row is marked.
+      await page.reload();
+      await expect(page.getByRole("button", { name: "Don't remind me" })).toBeVisible(SERVER_STEP);
+      await page.goto("/dev");
+      await expect(strip.locator(`[data-week-event="${eventId}"] [data-reminder-set]`)).toHaveText("Reminder set");
+      await page.goto(`/dev/events/${eventId}`);
       await page.getByRole("button", { name: "Don't remind me" }).click();
       await expect(line).toHaveText("Reminder removed. Nothing will be sent.", SERVER_STEP);
       await expect(page.getByRole("button", { name: "Remind me" })).toBeVisible();
       await checkWidths(page, info);
+      // Declined, it stays declined after a reload, and Home's row is no longer marked.
+      await page.reload();
+      await expect(page.getByRole("button", { name: "Remind me" })).toBeVisible(SERVER_STEP);
+      await page.goto("/dev");
+      await expect(strip.locator(`[data-week-event="${eventId}"]`)).toBeVisible();
+      await expect(strip.locator(`[data-week-event="${eventId}"] [data-reminder-set]`)).toHaveCount(0);
 
       // The trend of the day opens from Home (the demo seed publishes two hand-written cards).
       await page.goto("/dev");
@@ -217,8 +229,9 @@ test.describe("This week", () => {
   test("an organisation member has no This week and is sent home from it", async ({ page }, info) => {
     test.skip(!OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL is needed for the organisation's scene");
     await signUpOrgMember(page.request, "Viewer");
-    await page.goto("/org");
-    await expect(page.locator("[data-home=week]")).toHaveCount(0);
+    // Developer Home (and so its strip) is not theirs: /dev sends them to their own home.
+    await page.goto("/dev");
+    await expect(page).toHaveURL(/\/org$/, SERVER_STEP);
     await page.goto("/dev/week");
     await expect(page).toHaveURL(/\/org$/, SERVER_STEP);
     expect((await page.request.get("/api/me/week")).status()).toBe(404);
