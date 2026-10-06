@@ -72,11 +72,13 @@ nothing of the new tables (every policy needs ``app_is_developer()``); staff rea
 - ``proposal_contributors`` (USER through the proposal; bridge_app: SELECT, INSERT of ``proposal_id``, ``user_id``,
   ``thread_id``, UPDATE of ``removed_at``): D-62 (a): the registrant stays one person; the proposal's owner (a
   developer) adds the other party of one of their team threads, open or closed, naming that thread (never a stranger,
-  never themselves); the owner removes a contributor, or a contributor removes themselves, by setting ``removed_at``
-  (the database's clock, ``proposal_contributors_guard``), once and for good: a removed contributor is never listed
-  again and cannot be added back (the primary key). Read directly by a developer who reads the proposal (the proposals'
-  own SELECT policy, through the subquery) and by the contributor; organisations and staff read the credit only as
-  handles, through ``app_contributor_handles(proposal)``. Never part of the manifest or its hash.
+  never themselves, never across a block either way); the owner removes a contributor, or a contributor removes
+  themselves, by setting ``removed_at`` (the database's clock, ``proposal_contributors_guard``), once and for good: a
+  removed contributor is never listed again and cannot be added back (the primary key). Read directly by the owner and
+  the contributor (every row of theirs, removed ones included) and by another developer who reads the proposal (the
+  proposals' own SELECT policy, through the subquery), who sees only the credit not removed; organisations and staff
+  read the credit only as handles, through ``app_contributor_handles(proposal)``. Never part of the manifest or its
+  hash.
 
 Indexes: ``pk_developer_blocks`` (blocker, blocked) and ``ix_developer_blocks_blocked_user_id`` (blocks either way);
 ``uq_team_invitations_pending_pair`` (it also serves a block's ending of the pair's pending invitations),
@@ -286,6 +288,7 @@ CONTRIBUTOR_INSERT = (
     " WHERE t.id = proposal_contributors.thread_id"
     " AND t.a_user_id = LEAST(app_user_id(), proposal_contributors.user_id)"
     " AND t.b_user_id = GREATEST(app_user_id(), proposal_contributors.user_id))"
+    " AND NOT app_blocked_either_way(app_user_id(), user_id)"
 )
 CONTRIBUTOR_REMOVE = f"{_DEV} AND (user_id = app_user_id() OR {_OWNED})"
 
@@ -306,12 +309,13 @@ POLICIES: tuple[Policy, ...] = (
     Policy("team_thread_reads", "SELECT", _OWN_READ),
     Policy("team_thread_reads", "INSERT", check=_OWN_READ),
     Policy("team_thread_reads", "UPDATE", _OWN_READ, _OWN_READ),
-    # --- proposal_contributors: developers who read the proposal, and the contributor; the owner adds a counterpart;
-    # the owner or the contributor removes ---
+    # --- proposal_contributors: the owner and the contributor every row, other developers who read the proposal the
+    # credit not removed; the owner adds a counterpart (no block); the owner or the contributor removes ---
     Policy(
         "proposal_contributors",
         "SELECT",
-        f"{_DEV} AND (user_id = app_user_id() OR {_PROPOSAL.format(condition='')})",
+        f"{_DEV} AND (user_id = app_user_id() OR {_OWNED}"
+        f" OR (removed_at IS NULL AND {_PROPOSAL.format(condition='')}))",
     ),
     Policy("proposal_contributors", "INSERT", check=CONTRIBUTOR_INSERT),
     Policy("proposal_contributors", "UPDATE", CONTRIBUTOR_REMOVE, CONTRIBUTOR_REMOVE),

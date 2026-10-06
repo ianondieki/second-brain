@@ -653,7 +653,8 @@ async def test_the_owner_credits_a_counterpart_and_anyone_who_reads_the_proposal
     and never by anyone but the owner); every reader of the proposal (another developer, an organisation's member,
     staff) reads the handles of those not removed, by the time added, through ``app_contributor_handles`` (NULL to
     anyone who cannot read it), while only developers read the rows. The contributor or the owner removes a credit
-    once, at the database's time; it is never restored or added back; a block keeps the credit."""
+    once, at the database's time; it is never restored or added back, and other developers no longer see it; a block
+    keeps the credit given and refuses new credit either way."""
     async with t.as_app(owner_engine) as conn:
         owner, counterpart, second = (
             await peer(conn, "owner"),
@@ -706,6 +707,9 @@ async def test_the_owner_credits_a_counterpart_and_anyone_who_reads_the_proposal
         removed = "SELECT removed_at FROM proposal_contributors WHERE proposal_id = :p AND user_id = :u"
         assert (await t.run(conn, removed, p=published, u=counterpart)).year > 2001
         assert await t.run(conn, HANDLES, proposal=published) == names[1:]
+        # The removed credit stays the owner's and the contributor's to read; another developer no longer sees it.
+        assert [await count(conn, caller, rows) for caller in readers] == [3, 3, 1, 0, 0, 0]
+        await t.act(conn, counterpart)
         restore = "UPDATE proposal_contributors SET removed_at = NULL WHERE proposal_id = :p AND user_id = :u"
         await refused(conn, restore, "stays removed", "55000", p=published, u=counterpart)
         await t.act(conn, owner)
@@ -731,6 +735,21 @@ async def test_the_owner_credits_a_counterpart_and_anyone_who_reads_the_proposal
         await t.act(conn, owner)
         assert await t.run(conn, BLOCK, blocked=counterpart) == 2  # the block and the open thread; the credit stays
         assert await t.run(conn, HANDLES, proposal=draft) == names[:1]
+        await t.as_owner(conn)  # but no new credit across a block, either way, however the thread stands
+        another, _ = await w.add_proposal(conn, owner, niche, issue)
+        await t.act(conn, owner)
+        await refused(conn, CONTRIBUTE, RLS, "42501", proposal=another, user=counterpart, thread=thread)
+        await t.run(conn, "SELECT app_unblock_developer(:u)", u=counterpart)
+        await t.act(conn, counterpart)
+        await t.run(conn, BLOCK, blocked=owner)
+        await t.act(conn, owner)
+        await refused(conn, CONTRIBUTE, RLS, "42501", proposal=another, user=counterpart, thread=thread)
+        await t.as_owner(conn)
+        await t.run(conn, "DELETE FROM developer_blocks")
+        await t.act(conn, owner)
+        await t.run(
+            conn, CONTRIBUTE, proposal=another, user=counterpart, thread=thread
+        )  # the closed thread still names
 
 
 async def test_a_read_marker_is_a_partys_own(owner_engine: AsyncEngine) -> None:

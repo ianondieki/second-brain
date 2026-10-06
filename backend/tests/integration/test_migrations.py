@@ -1398,8 +1398,8 @@ V9_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
     ("team_thread_reads", "INSERT"): (None, _V9_OWN_READ),
     ("team_thread_reads", "UPDATE"): (_V9_OWN_READ, _V9_OWN_READ),
     ("proposal_contributors", "SELECT"): (
-        "(app_is_developer() AND ((user_id = app_user_id()) OR (EXISTS ( SELECT 1\n   FROM proposals p\n"
-        "  WHERE (p.id = proposal_contributors.proposal_id)))))",
+        f"(app_is_developer() AND ((user_id = app_user_id()) OR {_V9_OWNED} OR ((removed_at IS NULL) AND (EXISTS"
+        " ( SELECT 1\n   FROM proposals p\n  WHERE (p.id = proposal_contributors.proposal_id))))))",
         None,
     ),
     ("proposal_contributors", "INSERT"): (
@@ -1407,7 +1407,8 @@ V9_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
         f"(app_is_developer() AND (user_id <> app_user_id()) AND {_V9_OWNED} AND (EXISTS ( SELECT 1\n"
         "   FROM team_threads t\n  WHERE ((t.id = proposal_contributors.thread_id)"
         " AND (t.a_user_id = LEAST(app_user_id(), proposal_contributors.user_id))"
-        " AND (t.b_user_id = GREATEST(app_user_id(), proposal_contributors.user_id))))))",
+        " AND (t.b_user_id = GREATEST(app_user_id(), proposal_contributors.user_id)))))"
+        " AND (NOT app_blocked_either_way(app_user_id(), user_id)))",
     ),
     ("proposal_contributors", "UPDATE"): (_V9_REMOVE, _V9_REMOVE),
 }
@@ -1416,10 +1417,11 @@ V9_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
 async def test_schema_v9_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
     """Revision 0011: each new table has a policy for each command it is granted and no other, every policy is
     bridge_app's, and each is pinned whole: every reader and writer is a developer; blocks are the blocker's; an
-    invitation is its parties' and sent by a visible peer to a visible peer on an open problem with no block; a thread
-    and its messages are its parties'; a message is posted to an open thread with no block; a read marker is a party's
-    own; a contributor row is read by developers who read the proposal and by the contributor, added by the owner for
-    the other party of one of their threads and removed by either. bridge_app's report INSERT on moderation_cases is
+    invitation is its parties' and sent by a visible peer to one they may invite on an open problem with no block; a
+    thread and its messages are its parties'; a message is posted to an open thread with no block; a read marker is a
+    party's own; a contributor row is read by the owner and the contributor, and while not removed by developers who
+    read the proposal, added by the owner for the other party of one of their threads with no block, and removed by
+    either. bridge_app's report INSERT on moderation_cases is
     narrowed to every subject type but 'message' and 'team_message'."""
     found = await rows(
         owner_engine,
