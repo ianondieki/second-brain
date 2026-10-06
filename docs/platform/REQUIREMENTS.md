@@ -186,7 +186,7 @@ AC-HYG-01..06 are derived from `docs/spec/02-existing-repo.md`. Only the orchest
 
 Owner-authorised additions outside the spec's tables (so outside the check's R-id and AC rules; their acceptance
 tests live on the task card): **REQ-DEV-01** Today's five, **REQ-DEV-02** This week, **REQ-DEV-03** Peers and team up
-(P22, `tasks/P22.md`, D-58 to D-62; N26 and N27 below are P22-B's). The ids are used in commits, code and tests as
+(P22, `tasks/P22.md`, D-58 to D-62; N26 and N27 below are P22-B's, N28 and N29 P22-C's). The ids are used in commits, code and tests as
 every other REQ-ID is.
 
 ## 4. Acceptance tests (one row per AC or AC clause)
@@ -345,6 +345,8 @@ occur, as sub-rows; DECISIONS-NEEDED D-06 asks whether they get their own ids.
 | N25 | Daily digest of saved-search matches (P21, REQ-PERS-03, D-57) | Developers who opted in (`saved_search_digest`, off by default) | email | Yes | Status email: saved search names and counts only, never problem text |
 | N26 | An event the developer asked to be reminded of is tomorrow (P22-B, REQ-DEV-02, D-61) | The developer who pressed Remind me | email (the day before, 18:00 EAT) | Yes (Remind me per event; the reminders consent) | Status email: title, time, place and the calendar links, never the description |
 | N27 | An event the developer asked to be reminded of is today (P22-B, REQ-DEV-02, D-61) | The developer who pressed Remind me | in-app (08:00 EAT) | Yes (Remind me per event) | |
+| N28 | A developer invited the recipient to team up on a problem or Brief (P22-C, REQ-DEV-03, D-58) | The invited developer (opted in to peers) | in-app | Yes (the peers opt-in; a block stops it) | |
+| N29 | A new message in a team thread, or an invitation accepted (P22-C, REQ-DEV-03, D-58) | The other party | in-app | Yes (leave the thread or block) | |
 | (side) | `WITHDRAWN` by developer before agreement (Tier-2 access revoked) | Org | in-app + email | Yes | Status email |
 | (side) | `EM8` verification result (D1/D2/E1/E2 decisions) | The verified user or org admin | in-app + email | Yes | EM8 |
 
