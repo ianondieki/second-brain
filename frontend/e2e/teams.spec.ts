@@ -215,10 +215,15 @@ test.describe("Peers and team up", () => {
       await checkWidths(page, info);
       await shot(page, info, "teams-thread");
       await pageB.reload();
-      // On A's Peers, B is someone A teams up with now: the row links the thread instead of Team up.
+      // On A's Peers, B is someone A teams up with now: beside Team up (one invitation per problem) the row links the
+      // thread, and its menu still opens inside the screen.
       await page.goto("/dev/peers");
       await expect(page.locator(`[data-peer="${handleB}"] [data-relation=thread]`)).toHaveAttribute("href", threadPath);
-      await expect(page.locator(`[data-peer="${handleB}"] [data-team-up]`)).toHaveCount(0);
+      await expect(page.locator(`[data-peer="${handleB}"] [data-team-up]`)).toHaveCount(1);
+      await page.locator(`[data-peer="${handleB}"] [data-peer-menu] summary`).click();
+      await menuOnScreen(page, `[data-peer="${handleB}"] [data-peer-menu]`, info);
+      await checkWidths(page, info);
+      await page.keyboard.press("Escape");
       await expect(pageB.locator('[data-message][data-mine="false"]')).toContainText("sensor feed is ready");
 
       // A credits B on A's published idea; the idea page and its certificate say so.

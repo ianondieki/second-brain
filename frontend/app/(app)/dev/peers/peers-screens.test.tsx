@@ -83,7 +83,7 @@ describe("the peers list", () => {
     expect(first.querySelector("[data-peer-menu] [data-block]")?.textContent).toBe("Block");
   });
 
-  it("a peer already teamed up with links the thread; one with an invitation says so instead of Team up", () => {
+  it("beside Team up, a peer already teamed up with links the thread; one with an invitation says so", () => {
     const third = peer({ user_id: "01a11222-e704-715c-94b6-403e7159f447", handle: "dev-third" });
     renderWithIntl(
       <PeerList
@@ -98,7 +98,11 @@ describe("the peers list", () => {
         calls={fakeCalls()}
       />,
     );
-    expect(document.querySelectorAll("[data-team-up]")).toHaveLength(0);
+    // Team up stays on each row (an invitation is one per pair and problem): the relation is said beside it.
+    expect(document.querySelectorAll("[data-team-up]")).toHaveLength(3);
+    for (const handle of ["dev-kb3dysnk", "dev-5jtjq2m3", "dev-third"]) {
+      expect(within(rowOf(handle)).getAllByRole("button", { name: "Team up" })).toHaveLength(1);
+    }
     expect(within(rowOf("dev-kb3dysnk")).getByRole("link", { name: "Teaming up" }).getAttribute("href")).toBe("/dev/teams/01a11223-32cd-732d-9755-f7206d3c33e4");
     expect(rowOf("dev-5jtjq2m3").querySelector("[data-relation]")?.textContent).toBe("Invited you");
     expect(rowOf("dev-third").querySelector("[data-relation]")?.textContent).toBe("Invited");

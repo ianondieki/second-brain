@@ -33,9 +33,11 @@ export interface PeerListProps {
  * The peers of /dev/peers (REQ-DEV-03; D-58): one row each (handle, headline, the niches the two share by name, the
  * county when it is theirs too), "Team up" as each row's one action (a sheet: the problem or Brief, a note, "Send
  * invitation"), then "Invited" with the line saying it was sent, which takes focus. "Block" sits in each row's overflow
- * menu behind a confirmation; a peer the caller already teams up with shows "Teaming up" (their thread), and one with
- * an invitation either way "Invited you" or "Invited", instead of Team up; a blocked peer leaves the list and a status line says so (it takes focus). "More" adds
- * the next page of twenty.
+ * menu behind a confirmation. Beside Team up a row says what already stands: "Teaming up" (a link to their thread),
+ * "Invited you" or "Invited"; Team up stays, since an invitation is one per pair and problem (the sheet refuses another
+ * on the same problem in words). A blocked peer leaves the list and a status line says so (it takes focus). "More"
+ * adds the next page of twenty. The menu's button keeps to the row's right edge and its menu opens leftward, so it
+ * stays inside a 360 px screen whatever sits beside Team up.
  */
 export function PeerList({ initial, niches, relations = {}, locale, calls: given }: PeerListProps) {
   const t = useStrings("teamUp");
@@ -111,6 +113,7 @@ export function PeerList({ initial, niches, relations = {}, locale, calls: given
           {peers.map((peer) => {
             const titleId = `peer-${peer.user_id}-title`;
             const shared = nicheNames(peer.shared_niches, niches);
+            const relation = relations[peer.user_id];
             return (
               <RowBase
                 key={peer.user_id}
@@ -134,38 +137,41 @@ export function PeerList({ initial, niches, relations = {}, locale, calls: given
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   {invited[peer.user_id] ? (
                     <InvitedLine name={peer.handle} focus={justSent === peer.user_id} />
-                  ) : relations[peer.user_id]?.kind === "thread" ? (
-                    <Link href={threadHref((relations[peer.user_id] as { id: string }).id)} className={standaloneLinkClass} aria-describedby={titleId} data-relation="thread">
-                      {t("row.teaming")}
-                    </Link>
-                  ) : relations[peer.user_id] ? (
-                    <p className="flex min-h-11 items-center font-semibold text-ink" data-relation={relations[peer.user_id]?.kind}>
-                      {relations[peer.user_id]?.kind === "invitedYou" ? t("row.invitedYou") : t("row.invited")}
-                    </p>
                   ) : (
                     <Button aria-describedby={titleId} aria-haspopup="dialog" onClick={() => setInviting(peer)} data-team-up="">
                       {t("row.teamUp")}
                     </Button>
                   )}
-                  <Overflow label={t("row.more")} describedBy={titleId} data-peer-menu="">
-                    <button
-                      type="button"
-                      className={`${overflowItemClass} text-error`}
-                      aria-haspopup="dialog"
-                      onClick={(event) => {
-                        // The menu closes and its button takes focus before the dialog opens, so Cancel or Escape give
-                        // focus back to the row's menu button (this item is hidden once the menu closes).
-                        const menu = event.currentTarget.closest("details");
-                        if (menu) menu.open = false;
-                        menu?.querySelector("summary")?.focus();
-                        setBlockState("idle");
-                        setBlocking(peer);
-                      }}
-                      data-block=""
-                    >
-                      {t("row.block")}
-                    </button>
-                  </Overflow>
+                  {invited[peer.user_id] || !relation ? null : relation.kind === "thread" ? (
+                    <Link href={threadHref(relation.id)} className={standaloneLinkClass} aria-describedby={titleId} data-relation="thread">
+                      {t("row.teaming")}
+                    </Link>
+                  ) : (
+                    <p className="flex min-h-11 items-center text-ink-soft" data-relation={relation.kind}>
+                      {relation.kind === "invitedYou" ? t("row.invitedYou") : t("row.invited")}
+                    </p>
+                  )}
+                  <div className="ml-auto">
+                    <Overflow label={t("row.more")} describedBy={titleId} align="end" data-peer-menu="">
+                      <button
+                        type="button"
+                        className={`${overflowItemClass} text-error`}
+                        aria-haspopup="dialog"
+                        onClick={(event) => {
+                          // The menu closes and its button takes focus before the dialog opens, so Cancel or Escape give
+                          // focus back to the row's menu button (this item is hidden once the menu closes).
+                          const menu = event.currentTarget.closest("details");
+                          if (menu) menu.open = false;
+                          menu?.querySelector("summary")?.focus();
+                          setBlockState("idle");
+                          setBlocking(peer);
+                        }}
+                        data-block=""
+                      >
+                        {t("row.block")}
+                      </button>
+                    </Overflow>
+                  </div>
                 </div>
               </RowBase>
             );
