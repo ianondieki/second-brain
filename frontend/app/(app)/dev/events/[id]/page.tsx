@@ -78,6 +78,37 @@ export default async function EventPageRoute({ params }: PageProps<"/dev/events/
               </span>
               <span className="block text-sm text-ink-soft">{t("event.nairobi")}</span>
             </Description>
+          </DescriptionList>
+
+          {/* Remind me right after When: the page's one primary action stays above the fold on a phone. */}
+          <div className="mt-5">
+            <h3 className="sr-only">{t("reminder.heading")}</h3>
+            <RemindMe
+              eventId={event.id}
+              initial={event.reminder}
+              email={email}
+              labels={{
+                remind: t("reminder.remind"),
+                reminding: t("reminder.reminding"),
+                decline: t("reminder.decline"),
+                declining: t("reminder.declining"),
+                set: t("reminder.set"),
+                removed: t("reminder.removed"),
+                refusal: {
+                  gone: t("reminder.refusal.gone"),
+                  signedOut: t("reminder.refusal.signedOut"),
+                  generic: t("reminder.refusal.generic"),
+                },
+              }}
+              lines={{
+                both: t("reminder.line.both"),
+                noConsent: t.rich("reminder.line.noConsent", { link: settings }),
+                unverified: t("reminder.line.unverified"),
+              }}
+            />
+          </div>
+
+          <DescriptionList className="mt-6 border-t border-line pt-6">
             <Description label={t("event.where")}>
               {event.online ? (
                 <span className="flex flex-col items-start">
@@ -100,55 +131,25 @@ export default async function EventPageRoute({ params }: PageProps<"/dev/events/
             <Description label={t("event.organiser")}>{event.organiser}</Description>
           </DescriptionList>
 
-          <div className="mt-6 grid gap-6 border-t border-line pt-6 sm:grid-cols-2 sm:gap-8">
-            <div>
-              <h3 className="text-base font-semibold text-ink">{t("reminder.heading")}</h3>
-              <div className="mt-3">
-                <RemindMe
-                  eventId={event.id}
-                  initial={event.reminder}
-                  email={email}
-                  labels={{
-                    remind: t("reminder.remind"),
-                    reminding: t("reminder.reminding"),
-                    decline: t("reminder.decline"),
-                    declining: t("reminder.declining"),
-                    set: t("reminder.set"),
-                    removed: t("reminder.removed"),
-                    refusal: {
-                      gone: t("reminder.refusal.gone"),
-                      signedOut: t("reminder.refusal.signedOut"),
-                      generic: t("reminder.refusal.generic"),
-                    },
-                  }}
-                  lines={{
-                    both: t("reminder.line.both"),
-                    noConsent: t.rich("reminder.line.noConsent", { link: settings }),
-                    unverified: t("reminder.line.unverified"),
-                  }}
-                />
-              </div>
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-ink">{t("event.calendarHeading")}</h3>
-              <ul className="mt-1 flex flex-col items-start" data-calendar="">
-                {ics ? (
-                  <li>
-                    <a href={ics} download className={standaloneLinkClass} data-ics="">
-                      {t("event.ics")}
-                    </a>
-                  </li>
-                ) : null}
-                {google ? (
-                  <li>
-                    <a href={google} target="_blank" rel="noopener noreferrer" className={standaloneLinkClass} data-google="">
-                      {t("event.google")}
-                      {newTab}
-                    </a>
-                  </li>
-                ) : null}
-              </ul>
-            </div>
+          <div className="mt-6 border-t border-line pt-5">
+            <h3 className="text-base font-semibold text-ink">{t("event.calendarHeading")}</h3>
+            <ul className="mt-1 flex flex-col items-start sm:flex-row sm:gap-8" data-calendar="">
+              {ics ? (
+                <li>
+                  <a href={ics} download className={standaloneLinkClass} data-ics="">
+                    {t("event.ics")}
+                  </a>
+                </li>
+              ) : null}
+              {google ? (
+                <li>
+                  <a href={google} target="_blank" rel="noopener noreferrer" className={standaloneLinkClass} data-google="">
+                    {t("event.google")}
+                    {newTab}
+                  </a>
+                </li>
+              ) : null}
+            </ul>
           </div>
         </section>
 
