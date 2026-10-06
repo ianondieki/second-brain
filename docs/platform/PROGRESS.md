@@ -1183,7 +1183,9 @@ CodeQL run 272 on `0f71c88`: exactly the eight D-42 findings (one JavaScript, se
 `0f71c88`: the demo story, frontend, hygiene and legacy jobs green (the informational legacy job red as before);
 Playwright red on the three stale assertions above; scanners red on `npm audit` (D-56) and, new, on osv-scanner and
 Trivy for `source-map-js` 1.2.1 (CVE-2026-93749, a fixed release: bumped to 1.2.2 in ccbafb1); the backend job
-cancelled at its 35-minute limit (the seventh time on these runners; the suite passed locally in 26.3 min). Run 337 on `9875423` (the corrected specs and the bump): [[CI-337]]. Design shots
+cancelled at its 35-minute limit (the seventh time on these runners; the suite passed locally in 26.3 min). Run 337 on `9875423` (the corrected specs and the bump): Playwright green with the clock scenarios, the demo story,
+frontend, hygiene and legacy green; scanners red on `npm audit` only (osv-scanner and Trivy green after the bump);
+the backend job [[CI-337-BACKEND]]. Design shots
 `docs/demo/screenshots/p22b/` (12 screens, 1440 and 375, light and dark, strict axe 0 on all 48, ≤ 1 primary, no
 sideways scroll). JS budget on every route of the product and Lighthouse: scorecard "P22-B measurements" (every
 route under 150,000 B; Messages unchanged with 373 B left). Demo seed check: four events (three published, one in
