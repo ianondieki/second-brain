@@ -40,7 +40,7 @@ vi.mock("next-intl/server", () => ({
   getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
 }));
 
-const { homePeers, peersPage, teamThread } = await import("./data");
+const { homePeers, myPublishedIdeas, peersPage, teamThread } = await import("./data");
 
 const status = (code: number, errorCode = "x") => ({
   data: undefined,
@@ -122,6 +122,34 @@ describe("the peers page and thread reads", () => {
     expect(GET).not.toHaveBeenCalled();
     GET.mockResolvedValueOnce(status(404, "not_found"));
     await expect(teamThread(summary().id)).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+});
+
+describe("the ideas a counterpart can be credited on", () => {
+  const idea = (id: string, status: string, moderation_state: string, title: string | null) => ({ id, status, moderation_state, title });
+
+  it("are the caller's published, clear and titled ideas only", async () => {
+    GET.mockResolvedValueOnce({
+      data: {
+        items: [
+          idea("draft", "draft", "clear", "A draft"),
+          idea("ok", "published", "clear", "Fuel-level alerts"),
+          idea("held", "published", "held", "Held for review"),
+          idea("untitled", "published", "clear", null),
+          idea("empty", "published", "clear", ""),
+        ],
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    await expect(myPublishedIdeas()).resolves.toEqual([{ id: "ok", title: "Fuel-level alerts" }]);
+    expect(GET).toHaveBeenCalledWith("/api/me/proposals", expect.anything());
+  });
+
+  it("are none when they cannot be read (a refusal or the network), so the page offers no credit step", async () => {
+    GET.mockResolvedValueOnce(status(500));
+    await expect(myPublishedIdeas()).resolves.toEqual([]);
+    GET.mockRejectedValueOnce(new TypeError("fetch failed"));
+    await expect(myPublishedIdeas()).resolves.toEqual([]);
   });
 });
 
