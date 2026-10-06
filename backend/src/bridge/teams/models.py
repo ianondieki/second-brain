@@ -8,9 +8,9 @@ county or a shared liked niche) or counterpart, with no block. Organisation-only
 tables (every policy needs a developer); staff read one reported team message through ``app_reported_team_message``
 only.
 
-- ``developer_blocks`` (USER): the blocker's own rows (read, inserted, deleted by the blocker). A block ends every
-  pending invitation between the two (``ended``) and closes every open thread (``blocked``) in its own transaction, by
-  either path (``app_block_developer`` or a direct INSERT); unblocking (``app_unblock_developer``) deletes the row only.
+- ``developer_blocks`` (USER): the blocker's own rows (read and deleted by the blocker, inserted only through
+  ``app_block_developer``). A block ends every pending invitation between the two (``ended``) and closes every open
+  thread (``blocked``) in its own transaction; unblocking (``app_unblock_developer``) deletes the row only.
   A block hides both from each other in ``app_peers`` and ``app_developer_card`` and refuses invitations and messages
   between them; contributor credit already given stays.
 - ``team_invitations`` (USER): read by its two parties; inserted by a developer who opted in, as the sender, to one of
@@ -71,9 +71,10 @@ NOTE_VALID = (
 
 
 class DeveloperBlock(Base):
-    """A developer's block of another (D-58): the blocker inserts and deletes it (better: ``app_block_developer``,
-    which says what it ended, and ``app_unblock_developer``); ``created_at`` is the database's clock. Read by the
-    blocker only (``app_blocked_developers()`` adds the handles)."""
+    """A developer's block of another (D-58): inserted only through ``app_block_developer`` (bridge_app holds no
+    INSERT; the function answers 0 for an unknown id or an account that is no developer, and says what it ended),
+    deleted by the blocker (``app_unblock_developer``); ``created_at`` is the database's clock. Read by the blocker only
+    (``app_blocked_developers()`` adds the handles)."""
 
     __tablename__ = "developer_blocks"
     __table_args__ = (

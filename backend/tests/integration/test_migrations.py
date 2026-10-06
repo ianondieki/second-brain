@@ -325,7 +325,7 @@ APP_GRANTS: dict[str, set[str]] = {
     # revision 0011: a developer's blocks (inserted and lifted, never updated), invitations (decided only through
     # app_decide_team_invitation), threads (written only by the definers), messages (append-only), read markers and
     # contributor rows (removed by an UPDATE, never deleted)
-    "developer_blocks": {S, I, D},
+    "developer_blocks": {S, D},  # inserted only through app_block_developer
     "team_invitations": {S, I},
     "team_threads": {S},
     "team_messages": {S, I},
@@ -1224,7 +1224,7 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
         ("team_messages", ("UPDATE", "DELETE", "TRUNCATE")),
         ("team_invitations", ("UPDATE", "DELETE", "TRUNCATE")),
         ("team_threads", ("INSERT", "UPDATE", "DELETE", "TRUNCATE")),
-        ("developer_blocks", ("UPDATE", "TRUNCATE")),
+        ("developer_blocks", ("INSERT", "UPDATE", "TRUNCATE")),
         ("team_thread_reads", ("DELETE", "TRUNCATE")),
         ("proposal_contributors", ("DELETE", "TRUNCATE")),
     ):
@@ -1366,7 +1366,6 @@ _V9_BLOCKER = "((blocker_user_id = app_user_id()) AND app_is_developer())"
 # already covers it (the triggers' gates, the threads' own policy behind the subqueries, the block invariant).
 V9_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
     ("developer_blocks", "SELECT"): (_V9_BLOCKER, None),
-    ("developer_blocks", "INSERT"): (None, _V9_BLOCKER),
     ("developer_blocks", "DELETE"): (_V9_BLOCKER, None),
     ("team_invitations", "SELECT"): (
         "(((app_user_id() = from_user_id) OR (app_user_id() = to_user_id)) AND app_is_developer())",
@@ -2301,7 +2300,7 @@ V10_INSERTABLE: dict[str, set[str]] = {
 # Revision 0011: the columns bridge_app inserts (an invitation's status and times, a thread, a message's time and
 # redaction, a contributor's times are the database's or the definers').
 V11_INSERTABLE: dict[str, set[str]] = {
-    "developer_blocks": {"blocker_user_id", "blocked_user_id"},
+    "developer_blocks": set(),  # app_block_developer only
     "team_invitations": {"id", "from_user_id", "to_user_id", "problem_id", "note"},
     "team_threads": set(),
     "team_messages": {"id", "thread_id", "sender_user_id", "body"},

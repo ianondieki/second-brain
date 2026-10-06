@@ -476,9 +476,10 @@ async def test_a_block_ends_pending_invitations_and_closes_threads(owner_engine:
     """Given a pair with an open thread and pending invitations both ways, and another pair, When one blocks the other,
     Then every pending invitation between the two is ended and their thread closed (blocked), and the count says so;
     the other pair is untouched; a repeat changes nothing; neither invites nor posts across it; the blocked side reads
-    no block. When the blocker lifts it, Then nothing reopens. A direct INSERT of a block ends everything the same
-    way. Blocking oneself or nobody, or as a caller who is no developer, is refused; blocking an unknown id, staff or an
-    organisation-only account does nothing and returns 0, as a repeat does."""
+    no block. When the blocker lifts it, Then nothing reopens. bridge_app inserts no block but through
+    ``app_block_developer`` (permission denied, whoever is named); the owner's insert (a seed) ends everything the same
+    way. Blocking oneself or nobody, or as a caller who is no developer, is refused; blocking an unknown id, staff or
+    an organisation-only account does nothing and returns 0, as a repeat does."""
     async with t.as_app(owner_engine) as conn:
         amina, brian, carol = (
             await peer(conn, "amina"),
@@ -514,12 +515,13 @@ async def test_a_block_ends_pending_invitations_and_closes_threads(owner_engine:
         assert await _thread(conn, thread) == ("blocked", True)
         assert await _status(conn, towards) == ("ended", True)
         await invite(conn, amina, brian, second)  # a new invitation is possible again
-        # A direct INSERT by the blocker ends everything the same way.
+        # bridge_app inserts no block directly; the owner's insert (a seed) ends everything the same way.
         _, other_thread = await team(conn, amina, carol, first)
+        direct = "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:a, :b)"
         await t.act(conn, carol)
-        await t.run(
-            conn, "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:c, :a)", c=carol, a=amina
-        )
+        await refused(conn, direct, DENIED, "42501", a=carol, b=amina)
+        await t.as_owner(conn)
+        await t.run(conn, direct, a=carol, b=amina)
         assert await _thread(conn, other_thread) == ("blocked", True)
         assert await _status(conn, untouched) == ("ended", True)
         await t.act(conn, amina)
@@ -534,28 +536,12 @@ async def test_a_block_ends_pending_invitations_and_closes_threads(owner_engine:
         await t.act(conn, member)
         await refused(conn, BLOCK, "developers only", "42501", blocked=amina)
         await refused(conn, UNBLOCK, "developers only", "42501", blocked=amina)
-        await refused(
-            conn,
-            "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:m, :a)",
-            RLS,
-            m=member,
-            a=amina,
-        )
+        await refused(conn, direct, DENIED, "42501", a=member, b=amina)
         await t.act(conn, amina)
-        await refused(
-            conn,
-            "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:b, :c)",
-            RLS,
-            b=brian,
-            c=carol,
-        )
-        await refused(
-            conn,
-            "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:a, :a)",
-            "not_self",
-            "23514",
-            a=amina,
-        )
+        for unknown in (uuid7(), member):  # no foreign key or policy answer tells these apart: no INSERT at all
+            await refused(conn, direct, DENIED, "42501", a=amina, b=unknown)
+        await t.as_owner(conn)
+        await refused(conn, direct, "not_self", "23514", a=amina, b=amina)
 
 
 async def test_a_team_message_is_reported_once_ten_a_day_and_read_by_staff_through_the_function(

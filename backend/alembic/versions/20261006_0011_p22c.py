@@ -27,14 +27,16 @@ nothing of the new tables (every policy needs ``app_is_developer()``); staff rea
   INSERT OR UPDATE, every role): the shared clock when the flag turns true, kept while it stays true, NULL when false,
   whatever was sent (CHECK ``peers_opt_in_complete``). Nothing else of a profile reaches another developer but through
   the definers below (D-58: handle, headline, county and shared liked niches only).
-- ``developer_blocks`` (USER; bridge_app: SELECT, INSERT of the two ids, DELETE): the blocker's own rows, written and
-  read by a developer as the blocker (``blocker_user_id = app_user_id()``); never another's (the blocked side learns of
-  a block only through ``app_blocked_either_way``, and only for a pair it is in). PK (blocker, blocked); CHECK not
-  self. A block ends everything between the two in its own transaction, by whichever path it is inserted
-  (``app_block_developer`` or a direct INSERT): ``developer_blocks_0_lock`` (BEFORE INSERT) takes the pair's advisory
-  lock and ``developer_blocks_end_pair`` (AFTER INSERT) ends every pending invitation between them (``ended``) and
-  closes every open thread (``blocked``); contributor credit already given stays (D-62). Unblocking deletes the row
-  only: threads stay closed, ended invitations ended.
+- ``developer_blocks`` (USER; bridge_app: SELECT and DELETE, no INSERT): the blocker's own rows, read and deleted by a
+  developer as the blocker (``blocker_user_id = app_user_id()``); never another's (the blocked side learns of a block
+  only through ``app_blocked_either_way``, and only for a pair it is in). Inserted only through
+  ``app_block_developer`` (bridge_app holds no INSERT, so no foreign key or policy refusal tells an unknown id from an
+  account that is no developer: the function answers 0 to both). PK (blocker, blocked); CHECK not self. A block ends
+  everything between the two in its own transaction, however it is inserted (the function, or the owner's seed):
+  ``developer_blocks_0_lock`` (BEFORE INSERT) takes the pair's advisory lock and ``developer_blocks_end_pair`` (AFTER
+  INSERT) ends every pending invitation between them (``ended``) and closes every open thread (``blocked``);
+  contributor credit already given stays (D-62). Unblocking deletes the row only: threads stay closed, ended
+  invitations ended.
 - ``team_invitations`` (USER; bridge_app: SELECT, INSERT of ``id``, ``from_user_id``, ``to_user_id``, ``problem_id``,
   ``note``): read by its two parties (developers). Sent by a developer who opted in, as themselves, to a developer who
   opted in and is their peer or counterpart (never one outside their county and liked niches with no thread or pending
@@ -194,7 +196,7 @@ RLS_TABLES = NEW_TABLES
 # Table privileges of bridge_app on this revision's tables; anything not listed is not granted. Column-scoped where the
 # database owns a column (status, decisions, closing, times, redaction) or a column is written later (a removal).
 APP_GRANTS: dict[str, str] = {
-    "developer_blocks": "SELECT, INSERT (blocker_user_id, blocked_user_id), DELETE",
+    "developer_blocks": "SELECT, DELETE",  # inserted only through app_block_developer
     "team_invitations": "SELECT, INSERT (id, from_user_id, to_user_id, problem_id, note)",
     "team_threads": "SELECT",
     "team_messages": "SELECT, INSERT (id, thread_id, sender_user_id, body)",
@@ -293,9 +295,8 @@ CONTRIBUTOR_INSERT = (
 CONTRIBUTOR_REMOVE = f"{_DEV} AND (user_id = app_user_id() OR {_OWNED})"
 
 POLICIES: tuple[Policy, ...] = (
-    # --- developer_blocks: the blocker's own rows ---
+    # --- developer_blocks: the blocker's own rows (inserted only through app_block_developer) ---
     Policy("developer_blocks", "SELECT", _BLOCKER),
-    Policy("developer_blocks", "INSERT", check=_BLOCKER),
     Policy("developer_blocks", "DELETE", _BLOCKER),
     # --- team_invitations: the two parties read; a visible peer invites another on an open problem ---
     Policy("team_invitations", "SELECT", _PARTIES),
@@ -820,11 +821,11 @@ BEGIN
 END;
 $$;
 
--- A block ends everything between the two in its own transaction, by whichever path it is inserted: BEFORE INSERT
--- (developer_blocks_0_lock) takes the pair's lock before the row exists (so app_block_developer and a direct INSERT of
--- the same pair wait for each other instead of deadlocking on the key), AFTER INSERT (developer_blocks_end_pair, after
--- the policy admitted the row) ends the pair's pending invitations and closes its open threads (team_end_pair). For
--- every role. SECURITY DEFINER: the blocker updates neither table.
+-- A block ends everything between the two in its own transaction, however it is inserted (app_block_developer, the
+-- only path bridge_app has, or the owner's seed): BEFORE INSERT (developer_blocks_0_lock) takes the pair's lock before
+-- the row exists (so two inserts of the same pair wait for each other instead of deadlocking on the key), AFTER INSERT
+-- (developer_blocks_end_pair) ends the pair's pending invitations and closes its open threads (team_end_pair). For
+-- every role. SECURITY DEFINER: callable whoever inserts.
 CREATE FUNCTION developer_blocks_pair() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp

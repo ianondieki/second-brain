@@ -85,17 +85,16 @@ async def test_a_block_racing_an_invitation_ends_it_once_the_invitation_commits(
     owner, app = role_engine(url, "bridge_owner"), role_engine(url, "bridge_app")
     try:
         amina, brian, issue, _ = await _pair(owner, thread=False)
-        for blocking in (
-            BLOCK,
-            "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:me, :blocked)",
-        ):
-            async with app.connect() as inviter, app.connect() as blocker:
+        seed = "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:me, :blocked)"
+        for blocking, engine in ((BLOCK, app), (seed, owner)):  # the function, and the owner's insert (a seed)
+            async with app.connect() as inviter, engine.connect() as blocker:
                 await inviter.begin()
                 await t.act(inviter, brian)
                 params = invitation_params(brian, amina, issue)
                 await t.run(inviter, INVITE, **params)
                 await blocker.begin()
-                await t.act(blocker, amina)
+                if engine is app:
+                    await t.act(blocker, amina)
                 pid = await t.backend_pid(blocker)
                 block = asyncio.create_task(blocker.execute(sa.text(blocking), {"me": amina, "blocked": brian}))
                 await t.wait_until_blocked(inviter, pid, block)  # the block waits for the pair's lock
@@ -124,13 +123,8 @@ async def test_a_message_racing_a_close_or_a_block_is_refused_once_it_commits(ur
             await t.act(closer, amina)
             if closing == "close":
                 await t.run(closer, CLOSE, thread=thread, reason="left")
-            else:  # a direct INSERT: the trigger closes the thread with a plain UPDATE
-                await t.run(
-                    closer,
-                    "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:me, :other)",
-                    me=amina,
-                    other=brian,
-                )
+            else:  # a block closes the thread with a plain UPDATE (team_end_pair), which FOR SHARE waits for
+                assert await t.run(closer, BLOCK, blocked=brian) == 2
             await poster.begin()
             await t.act(poster, brian)  # its snapshot still sees the thread open
             pid = await t.backend_pid(poster)

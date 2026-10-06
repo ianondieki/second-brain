@@ -181,7 +181,7 @@ async def test_only_bridge_app_executes_the_trend_job_state(owner_engine: AsyncE
 
 
 TEAM_PRIVILEGES: dict[str, set[str]] = {
-    "developer_blocks": {"SELECT", "INSERT", "DELETE"},
+    "developer_blocks": {"SELECT", "DELETE"},  # inserted only through app_block_developer
     "team_invitations": {"SELECT", "INSERT"},
     "team_threads": {"SELECT"},
     "team_messages": {"SELECT", "INSERT"},
