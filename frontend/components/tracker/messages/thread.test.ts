@@ -2,21 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { message, LIMITS } from "@/test/messages";
 
-import {
-  contentTypeOf,
-  fileProblem,
-  fileSize,
-  firstUnread,
-  groupByDay,
-  maxMegabytes,
-  nairobiDay,
-  postRefusal,
-  prependOlder,
-  refusedAttachmentId,
-  reportRefusal,
-  retryMinutes,
-  uploadRefusal,
-} from "./thread";
+import { contentTypeOf, fileProblem, postRefusal, refusedAttachmentId, reportRefusal, retryMinutes, uploadRefusal } from "./refusals";
+import { fileSize, firstUnread, groupByDay, maxMegabytes, nairobiDay, prependOlder } from "./thread";
 
 // REQ-ENG-11 (docs/spec/06 6.9 "Messages tab"): the thread's pure parts: day groups in Nairobi time, the "New" line,
 // earlier pages, the files a person may attach, and the fixed sentence each refusal of the API gets.

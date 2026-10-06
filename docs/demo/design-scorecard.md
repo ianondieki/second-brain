@@ -356,3 +356,36 @@ cell after a cold start):
 | `/dev/week` | 99–100 / 100 / 1.9–2.0 s | 97 / 100 / 2.5 s |
 | `/dev/events/<id>` | 98 / 100 / 2.5 s | 100 / 100 / 1.9 s |
 | `/org/events` | 99 / 100 / 2.0 s | 100 / 100 / 1.9 s |
+
+## P22-C measurements (2026-10-06): Peers and team up (D-58, D-62)
+
+Shots: `frontend/demo/design-shots.spec.ts` with `SHOTS_DIR=docs/demo/screenshots/p22c` (Home with the Peers
+section on and off, `/dev/peers` on and off, `/dev/teams`, the thread, Settings › Profile, the idea page with its
+contributors line: 8 screens), 1440 and 375 px, light and dark, against the compose stack reset from this branch;
+strict axe 0 on every shot (32), at most one `[data-primary]`, no sideways scroll (the ux-reviewer's two rounds: 0
+violations on every state at 360, 375 and 1440 for Amina, Brian and Juma, menus and dialogs open included).
+
+JS budget (`scripts/js-budget.mjs`, gzipped script bodies until idle, 360 px, limit 150,000; the compose stack's
+production build of this branch, the demo developer's session; the new routes and the routes the shared composer
+touches):
+
+| Route | Bytes | |
+|---|---|---|
+| `/dev` (Home with the Peers section) | 143,994 | unchanged: the section is server-rendered |
+| `/dev/peers` | 147,149 | ok |
+| `/dev/teams` | 146,748 | ok |
+| `/dev/teams/<id>` | 148,805 | ok, 1,195 B left |
+| `/settings/profile` | 145,093 | ok |
+| `/dev/ideas/<id>` (with the contributors line) | 149,506 | ok, 494 B left |
+| Messages route (`/dev/engagements/<id>/messages`) | 148,497 | 1,130 B lighter than before (149,627): the attachment code loads on the first file chosen |
+
+Every other route re-measured is unchanged (`/dev/week` 141,823, `/dev/quiz` 147,824, `/dev/discover` 147,721,
+`/notifications` 143,080, `/settings/security` 147,312, `/settings/notifications` 144,899).
+
+Lighthouse 12.8.2 (mobile default, Slow 4G, Moto G class; production build; the ux-reviewer's rounds):
+
+| Page | Light: performance / accessibility / LCP | Dark |
+|---|---|---|
+| `/dev/peers` | 96 / 100 / 2.5 s | 98 / 100 / 2.1 s |
+| `/dev/teams/<id>` | 98–99 / 100 / 2.0–2.5 s | 98 / 100 / 2.2 s |
+| `/settings/profile` | 96 / 100 / 1.9–2.5 s | 99 / 100 / 2.0 s |

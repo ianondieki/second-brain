@@ -6,6 +6,11 @@ owner (verified legal name only when the owner is D2-verified, otherwise the han
 in UTC and East Africa Time (the RFC 3161 token's time once stored), the content hash, the signature and its key id,
 the TSA serial or "Timestamp pending", the attachment hashes, a QR code and link to ``{PUBLIC_BASE_URL}/verify/<cert
 id>``, and exactly the fixed footer of docs/spec/06 6.4 item 2. Owner text is escaped before layout.
+
+D-62 (a) (REQ-DEV-03): when the owner credited contributors, a "Contributors" row after the Owner row lists their
+handles joined by ", " (``app_contributor_handles``, read at render time like the owner's name). The registrant stays
+the one owner; nothing about shares. The credit is never part of the manifest or its hash, so adding or removing a
+contributor changes neither (``manifest_version`` stays "1") and the verify page shows no names as before.
 """
 
 from __future__ import annotations
@@ -37,6 +42,7 @@ FOOTER = (
     "guarantee against independent development or misuse."
 )
 PENDING = "Timestamp pending"
+CONTRIBUTORS = "Contributors"  # [[COPY-REVIEW]] D-62 (a)'s label, after the Owner row
 QR_SIZE = 38 * mm
 
 
@@ -58,6 +64,7 @@ class CertificateData:
     verify_url: str
     split_bps: int = 10_000
     attachment_hashes: tuple[bytes, ...] = field(default=())
+    contributors: tuple[str, ...] = field(default=())  # D-62 (a): handles, by the time each was added
 
 
 def utc_text(ts: datetime) -> str:
@@ -95,6 +102,10 @@ def render_pdf(data: CertificateData) -> bytes:
         ("Title", Paragraph(escape(data.title), body)),
         ("Version", Paragraph(str(data.version_no), body)),
         ("Owner", Paragraph(f"{owner}, {data.split_bps / 100:g}%", body)),
+    ]
+    if data.contributors:  # [[COPY-REVIEW]] the label (D-62 (a): "Contributors: <handles>")
+        rows.append((CONTRIBUTORS, Paragraph(escape(", ".join(data.contributors)), body)))
+    rows += [
         (when, Paragraph(f"{utc_text(moment)}<br/>{eat_text(moment)}", body)),
         ("Status", Paragraph(status_label(data.status), body)),
         ("Content hash (SHA-256)", Paragraph(data.content_hash.hex(), mono)),
@@ -149,7 +160,8 @@ def render_pdf(data: CertificateData) -> bytes:
 
 _CERTIFICATE = text(
     "SELECT r.cert_id, r.content_hash, r.signature, r.key_id, r.status, r.tsa_time, r.tsa_serial, v.id AS version_id,"
-    " v.version_no, v.title, v.registered_at, v.owner_handle, p.owner_id"
+    " v.version_no, v.title, v.registered_at, v.owner_handle, p.owner_id,"
+    " coalesce(app_contributor_handles(p.id), '{}') AS contributors"  # D-62 (a): read at render time
     " FROM provenance_records r JOIN proposal_versions v ON v.id = r.version_id"
     " JOIN proposals p ON p.id = v.proposal_id WHERE r.cert_id = :cert_id AND p.owner_id = :user"
 )
@@ -193,4 +205,5 @@ async def load_certificate(
         tsa_serial=row.tsa_serial,
         verify_url=verify_url(public_base_url, row.cert_id),
         attachment_hashes=tuple(bytes(h) for h in hashes),
+        contributors=tuple(str(handle) for handle in row.contributors),
     )

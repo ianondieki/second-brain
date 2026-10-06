@@ -1,6 +1,6 @@
 """The web app's engagement pages that in-app notices and emails link to (frontend ``app/(app)/{dev,org}/engagements``),
-and Discover with a saved search's filters (frontend ``app/(app)/dev/discover``, whose ``discoverHref`` writes the
-same query).
+Discover with a saved search's filters (frontend ``app/(app)/dev/discover``, whose ``discoverHref`` writes the
+same query), and the developer's team-up pages (N28, N29; P22 track C: ``/dev/teams`` and one thread).
 
 Each party opens an engagement in its own portal: the developer under ``/dev/engagements``, an organisation's people
 under ``/org/engagements``. There is no shared ``/engagements`` page. One engagement's organisation page reads the
@@ -20,6 +20,7 @@ from bridge.models.enums import EngagementParty
 DEV_ENGAGEMENTS: Final = "/dev/engagements"
 ORG_ENGAGEMENTS: Final = "/org/engagements"
 DEV_DISCOVER: Final = "/dev/discover"
+DEV_TEAMS: Final = "/dev/teams"  # invitations and threads (N28; P22 track C, REQ-DEV-03)
 MAX_PATH_CHARS: Final = 500  # in_app_notifications.link (bridge.notifications.in_app.MAX_LINK_CHARS)
 
 
@@ -37,6 +38,11 @@ def messages_path(party: EngagementParty, engagement_id: UUID) -> str:
 def dev_event_path(event_id: UUID) -> str:
     """A published event's page in the developer's portal (the N27 notice's link; P22-B, REQ-DEV-02)."""
     return f"/dev/events/{event_id}"
+
+
+def team_thread_path(thread_id: UUID) -> str:
+    """One team thread in the developer's portal (the N29 notice's link; P22 track C, REQ-DEV-03)."""
+    return f"/dev/teams/{thread_id}"
 
 
 def org_engagements_path(org_id: UUID) -> str:

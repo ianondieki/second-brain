@@ -442,7 +442,8 @@ gated; the report is "P21 report" below. P20 and P21 merged into the integration
 instruction. **P22 (2026-10-05, the same session; the owner's three developer-space features, critiqued and cut, the
 cuts accepted):** `tasks/P22.md`, D-58 to D-62, REQ-DEV-01..03; P22-A (Today's five) built and gated (report below); **P22-B (This week, 2026-10-06, the same
 session on Fable 5.1)** built and gated: revision 0010, the trend pipeline, the events backend, the screens (report
-below).
+below); A and B merged into the integration branch as `ed0bff5`. **P22-C (Peers and team up, 2026-10-06)** built and
+gated after D-62 (report below).
 
 **Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
 come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for
@@ -1209,3 +1210,83 @@ old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
 **For the owner.** D-62 (the collaborator credit wording) still blocks P22-C; D-56 (npm audit) and the CI runner
 question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
 check before release.
+
+### P22-C report (2026-10-06): Peers and team up (D-58, D-62)
+
+**Why.** The owner's developer-space brief asked for a space to find fellow developers nearby in the same field,
+befriend them and work together. The critique cut it to opt-in, county-level peers found by shared niches, "team
+up on a problem or Brief" instead of friends, a thread on the engagement-message rules with report and block, and
+a contributor credit on the proposal and certificate (D-58, D-62); the owner accepted the cuts and decided D-62 as
+(a) with the wording "Contributors: <handles>" (2026-10-06). Card: `tasks/P22.md` section C with the orchestrator's
+"Defaults taken" paragraph (no embedding in the prototype, so peers order by shared liked niches, same county and
+the newest opt-in; the counterpart rule; six new tables; in-app-only notices N28 and N29; a third Settings tab).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`, on top of P22-B; three worktree merges):
+
+- **Revision 0011** (db-migrations): `developer_profiles.peers_visible` and `peers_opted_in_at`, `developer_blocks`,
+  `team_invitations`, `team_threads`, `team_messages` (append-only), `team_thread_reads`, `proposal_contributors`;
+  every policy requires a developer; thirteen definer functions (`app_peers` with seven columns, `app_developer_card`,
+  the invitation decision that creates the thread, close, block and unblock, the report pair over
+  `moderation_cases` with `subject_type = 'team_message'`, `app_contributor_handles`); a "counterpart" reachable
+  without the current opt-in is only the other party of a thread or of a still-pending invitation; a blocked recipient
+  gets the same refusal as a stranger; blocking is possible only through `app_block_developer`, which returns 0 for any
+  id that is not a visible peer or counterpart; the downgrade refuses with rows or an opt-in.
+- **The backend** (impl-backend): `GET /api/me/peers` (six fields, 20 a page, `limit` ≤ 3 uncounted for Home,
+  60 pages an hour), the profile's `peers_visible` and county (10 changes a day), `/api/me/teams/*` (invitations
+  with 10 attempts a day including refused ones and a 30-day re-invite refusal after a decline or withdraw;
+  accept/decline/withdraw; threads with 60 messages an hour and Retry-After, read markers, leave, report),
+  `/api/me/blocks` (204 for every id, a row only for a visible peer or counterpart or a pair with any thread or
+  invitation), contributors on the idea page's and the organisation's proposal views and on the certificate's data
+  and PDF as "Contributors: <handles>" (the manifest and the content hash unchanged), the `team_message`
+  moderation case, N28 and N29 in-app notices, the demo seed (Zawadi and Juma; an accepted Amina→Brian thread;
+  Brian credited on one of Amina's ideas; a pending Zawadi→Amina invitation), the regenerated API types.
+- **The screens** (impl-frontend): Settings → Profile (headline, county, the "Visible to peers" switch with its
+  sentence, the blocked list), the Home "Peers" section (server-rendered; `/dev` unchanged at 143,994 B),
+  `/dev/peers` (rows with Team up beside the existing relation, the team-up sheet with the problem search and the
+  note, Block in an overflow menu, More), `/dev/teams` (invitations, threads, "Credited on" with Leave),
+  `/dev/teams/[id]` on the engagement thread's parts (Send as the one primary action, Report, Leave, Block, "Add as
+  contributor"; the step dialogs and the thread's calls load on first use, each failure settling into one
+  sentence), the contributors line on the idea page (Remove) and the certificate sheet, strings under
+  `_meta.reviewP22c`, `e2e/teams.spec.ts`; the engagement Messages route's composer now loads its attachment code
+  on the first file chosen (the route is 1,153 B lighter).
+
+**Reviews.** Revision 0011: security-reviewer CHANGES_REQUIRED (one MAJOR: a past invitation in any state kept a
+pair reachable after an opt-out, from the orchestrator's own formula) then PASS; reviewer CHANGES_REQUIRED (the same
+MAJOR and an untested ordering rule) then PASS; one MINOR closed in a third pass (the direct block insert). The
+backend: reviewer PASS and security-reviewer PASS, four and three MINORs closed (the blocks list as an oracle, a
+null handle as a block oracle, re-invites after a decline, an uncounted Home read). The screens: reviewer
+CHANGES_REQUIRED (three MAJORs: a failed script chunk left Send stuck on both thread screens and could replace the
+thread page with the error page; the invitations screen went stale after an answer) then CHANGES_REQUIRED again
+(a peer with one open thread had lost Team up) then PASS; ux-reviewer CHANGES_REQUIRED (one BLOCKER: the thread's
+overflow menu opened off-screen at 360 and pushed the page sideways; one MAJOR: a lead sentence overclaiming
+privacy) then CHANGES_REQUIRED (a focus regression after Block → Cancel) then PASS. Two MINORs stay open on the card.
+
+**Gate.** Playwright on the compose stack rebuilt and reset from the merged branch (mobile 360 and desktop, axe):
+211 passed, 5 skipped, 0 failed (22.5 min); the test-clock scenarios 4/4. Backend suite on the merged backend head
+`0a8d552`: 5,508 passed (39 min alongside the stack rebuild). CodeQL run 277 on `ff505a9`: exactly the eight D-42
+findings (one JavaScript, seven Python). `pr.yml` run 341 on `ff505a9`: Playwright with the clock scenarios, the demo
+story, hygiene and legacy green (the informational legacy job red as before); the frontend job red on one assertion
+of the Security settings' recovery-codes test (a `pagehide` state update read before React flushed it, on a slow
+runner; it passes locally and passed on every earlier run; the assertion now waits for the flush); scanners red on
+`npm audit` (D-56) and, new, on osv-scanner and Trivy for `sharp` 0.35.4 (GHSA-wq5f-xc86-pv6w, a fixed release: bumped
+to 0.35.5); the backend job [[CI-341-BACKEND]]. Run 342 on the corrected head: [[CI-342]]. Design shots
+`docs/demo/screenshots/p22c/` (8 screens, 1440 and 375, light and dark, strict axe 0 on all 32, ≤ 1 primary, no
+sideways scroll). JS budget on the new routes and every route the shared composer touches, and Lighthouse:
+scorecard "P22-C measurements" (every route under 150,000 B; the Messages route 1,130 B lighter; performance 96–99,
+accessibility 100). Demo seed check: Amina, Brian and Zawadi opted in, Juma not; the accepted thread with four
+messages; Brian credited on one of Amina's ideas; the pending Zawadi→Amina invitation. Traceability PASS.
+
+**Deviations.** (1) The sub-agents sign their commits as the model that wrote them (Opus 5.5), the orchestrator's
+carry the session's attribution (Fable 5.1); every commit carries the session line. (2) Commits over ~300 lines:
+three of revision 0011's, several of the backend's and six of the screens' (strings and tests apart). (3) Revision
+0011 was amended three times before its merge, in place. (4) The container restarted twice during this track
+(the disk filled to 97% once and broke the demo's object store until the Docker build cache was reclaimed); the
+screens' fix round was re-run by a second implementer from the surviving commits. (5) The demo story ran in CI.
+
+**Residuals (on the card).** The blocked party can infer a block from an `ended` thread with no card (a who-left
+column later); the composer's attachment count while its code is still loading; budget headroom on
+`/dev/ideas/<id>` (494 B); the profile embedding still never computed; contributor Leave on `/dev/teams` only;
+invitations answered in another tab show on the next read; the trend excerpts' licence check (B).
+
+**For the owner.** D-56 (npm audit), the CI runner question, the strings under `_meta.reviewP22c` for copy and
+Swahili review, the trend list's licence check, and the refinement pass proposed in chat.

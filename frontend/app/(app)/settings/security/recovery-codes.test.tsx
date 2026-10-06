@@ -442,7 +442,8 @@ describe("RecoveryCodeList", () => {
     fireEvent.click(screen.getByRole("button", { name: "Confirm code" }));
     await screen.findByTestId("recovery-codes");
     window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
-    expect(screen.queryByTestId("recovery-codes")).toBeNull();
+    // The listener's state update is flushed outside a React event: wait for it (a CI runner once saw the old DOM).
+    await waitFor(() => expect(screen.queryByTestId("recovery-codes")).toBeNull());
     expect(screen.getByText(CLEARED)).toBeTruthy();
   });
 

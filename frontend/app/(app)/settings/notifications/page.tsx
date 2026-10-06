@@ -59,7 +59,7 @@ export default async function NotificationSettingsPage() {
       {/* One 48 rem column: the tab strip ends where the card ends. */}
       <div className="max-w-3xl">
         <PageHeader title={tNav("label")} back={{ href: home, label: tSecurity("back") }} />
-        <SettingsTabs current="notifications" />
+        <SettingsTabs current="notifications" developer={me.side === "developer"} />
         <div>
           {choices.length === 0 && preferences.length === 0 ? (
             <EmptyState sentence={t("empty")} action={t("action.home")} href={home} />

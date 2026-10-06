@@ -8,7 +8,9 @@ tables. Rows are written as the owner role (RLS does not apply to the table owne
 staff table and ``CURATED_ROWS`` every curated one (the quiz's sets and questions, revision 0009, and the trend cards
 and their sources, revision 0010: approved or published rows that developers read, rejected ones they do not); the
 RLS tests fail otherwise, so a new tenant table cannot ship without a
-fixture and a policy. For the
+fixture and a policy. Revision 0011's team tables are each tenant's with its pitcher (an accepted invitation, its
+thread with a message from each, the tenant's read marker and block of a third developer, and the pitcher credited on
+the tenant's published and draft proposals). For the
 PUBLISHED tables each tenant has rows every signed-in user may read (published, clear) and rows only its owner may
 read (drafts, held, hidden, candidate), so the tests prove both halves of the rule.
 """
@@ -478,6 +480,73 @@ async def add_trend_rows(conn: AsyncConnection, staff_id: UUID) -> None:
         )
 
 
+async def add_team_rows(
+    conn: AsyncConnection, user_id: UUID, counterpart: UUID, problem_id: UUID, proposals: tuple[UUID, ...], label: str
+) -> None:
+    """Revision 0011: the tenant and its counterpart opted in to peers; the tenant's accepted invitation to the
+    counterpart on a public problem, its thread with a message from each and the tenant's read marker; the tenant's
+    block of a third developer; the counterpart credited on each of ``proposals`` (the tenant's), written as the
+    owner."""
+    await _insert(
+        conn, "UPDATE developer_profiles SET peers_visible = true WHERE user_id IN (:a, :b)", a=user_id, b=counterpart
+    )
+    blocked = await add_user(conn, f"blocked-{label}@example.test", "Blocked")
+    await _insert(
+        conn,
+        "INSERT INTO developer_profiles (user_id, handle) VALUES (:user, :handle)",
+        user=blocked,
+        handle=f"blocked-{label}",
+    )
+    await _insert(
+        conn,
+        "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:user, :blocked)",
+        user=user_id,
+        blocked=blocked,
+    )
+    invitation, thread = uuid7(), uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO team_invitations (id, from_user_id, to_user_id, problem_id, note) VALUES (:id, :user, :other,"
+        " :problem, 'Shall we?')",
+        id=invitation,
+        user=user_id,
+        other=counterpart,
+        problem=problem_id,
+    )
+    await _insert(
+        conn, "UPDATE team_invitations SET status = 'accepted', decided_at = now() WHERE id = :id", id=invitation
+    )
+    await _insert(
+        conn,
+        "INSERT INTO team_threads (id, invitation_id, a_user_id, b_user_id, problem_id)"
+        " VALUES (:id, :invitation, least(:user, :other), greatest(:user, :other), :problem)",
+        id=thread,
+        invitation=invitation,
+        user=user_id,
+        other=counterpart,
+        problem=problem_id,
+    )
+    for sender in (user_id, counterpart):
+        await _insert(
+            conn,
+            "INSERT INTO team_messages (id, thread_id, sender_user_id, body) VALUES (:id, :thread, :sender, 'Hello')",
+            id=uuid7(),
+            thread=thread,
+            sender=sender,
+        )
+    await _insert(
+        conn, "INSERT INTO team_thread_reads (thread_id, user_id) VALUES (:thread, :user)", thread=thread, user=user_id
+    )
+    for proposal in proposals:
+        await _insert(
+            conn,
+            "INSERT INTO proposal_contributors (proposal_id, user_id, thread_id) VALUES (:proposal, :other, :thread)",
+            proposal=proposal,
+            other=counterpart,
+            thread=thread,
+        )
+
+
 async def build(conn: AsyncConnection, tag: str) -> World:
     """Create the world inside ``conn`` (owner role). ``tag`` keeps emails and slugs unique per test session."""
     niche_id, plan_id = uuid7(), uuid7()
@@ -820,6 +889,9 @@ async def build(conn: AsyncConnection, tag: str) -> World:
         # --- Schema v8 (revision 0010): the organisation's events and its owner's reminder; absent at older revisions
         if await has_table(conn, "events"):
             await add_event_rows(conn, org_id, user_id, staff_id)
+        # --- Schema v9 (revision 0011): the tenant's team-up with its pitcher; absent at older revisions ---
+        if await has_table(conn, "team_threads"):
+            await add_team_rows(conn, user_id, pitcher, public_problem, (published, draft), f"{label}-{tag}")
         tenants.append(Tenant(user_id, org_id, email, published, draft, held, hidden, published_version, draft_version))
     # --- Schema v7 (revision 0009): the quiz; absent when the world is built at an older revision ---
     if await has_table(conn, "quiz_sets"):
@@ -993,6 +1065,29 @@ TENANT_ROWS: dict[str, Rows] = {
     # developer's reminders are theirs only
     "events": _rows("events", "t.id::text", "t.org_id", "t.created_by", "t.status = 'published'"),
     "event_reminders": _rows("event_reminders", "t.user_id::text || t.event_id::text", NO_ORG, "t.user_id"),
+    # revision 0011: a block is its blocker's; an invitation, its thread and the thread's messages are the tenant's (the
+    # sender) and its counterpart's; a read marker its user's; a contributor row its proposal owner's (and readable by
+    # every developer while the proposal is published and clear)
+    "developer_blocks": _rows(
+        "developer_blocks", "t.blocker_user_id::text || t.blocked_user_id::text", NO_ORG, "t.blocker_user_id"
+    ),
+    "team_invitations": _rows("team_invitations", "t.id::text", NO_ORG, "t.from_user_id"),
+    "team_threads": Rows(
+        key="team_threads.id::text",
+        owners=f"SELECT t.id::text AS key, {NO_ORG} AS org, i.from_user_id AS usr, false AS pub"
+        " FROM team_threads t JOIN team_invitations i ON i.id = t.invitation_id",
+    ),
+    "team_messages": Rows(
+        key="team_messages.id::text",
+        owners=f"SELECT m.id::text AS key, {NO_ORG} AS org, i.from_user_id AS usr, false AS pub FROM team_messages m"
+        " JOIN team_threads t ON t.id = m.thread_id JOIN team_invitations i ON i.id = t.invitation_id",
+    ),
+    "team_thread_reads": _rows("team_thread_reads", "t.thread_id::text || t.user_id::text", NO_ORG, "t.user_id"),
+    "proposal_contributors": Rows(
+        key="proposal_contributors.proposal_id::text || proposal_contributors.user_id::text",
+        owners=f"SELECT c.proposal_id::text || c.user_id::text AS key, {NO_ORG} AS org, p.owner_id AS usr,"
+        f" {_PUBLIC_PROPOSAL} AS pub FROM proposal_contributors c JOIN proposals p ON p.id = c.proposal_id",
+    ),
 }
 
 # STAFF tables: (key expression, owner query returning the keys of the fixture rows).

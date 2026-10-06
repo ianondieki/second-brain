@@ -34,6 +34,15 @@ or ``uphold`` (the message broke the rules: ``rejected``), with an optional staf
 details; the message itself never changes (a staff redaction is D-54's later function). Nobody decides a report they
 filed or one about an engagement they are a party of (``own_content``: its developer, any member of its
 organisation, the message's author among them, read under the staff member's own RLS).
+
+Team message reports (REQ-DEV-03, D-58; ``subject_type = 'team_message'``, filed by a party of a team thread through
+``app_report_team_message``): the same case kind as message reports. The lists show "Reported team message" with the
+reason codes and never the text; the case read by its id carries the one reported message (its thread, sender id and
+handle, text and time) through ``app_reported_team_message``, the only way staff read a team message, and each read
+writes an audit event (ids only). Decided ``dismiss`` (``approved``) or ``uphold`` (``rejected``) with an optional
+note; revision 0011 has no redaction function, so an upheld report records the outcome only and the message stays as
+it is. Nobody decides a report they filed or one about a message they wrote (``own_content``; staff are never a
+thread's party while staff, as every team policy needs a developer, but may have been one before).
 """
 
 from __future__ import annotations
@@ -61,6 +70,9 @@ UNRESOLVED: Final = ("open", "held", "escalated")
 Decision = Literal["approve", "reject", "dismiss", "uphold"]  # dismiss / uphold: message reports only
 MESSAGE: Final = "message"
 MESSAGE_TITLE: Final = "Reported message"  # [[COPY-REVIEW]] the queue's title of a message report
+TEAM_MESSAGE: Final = "team_message"
+TEAM_MESSAGE_TITLE: Final = "Reported team message"  # [[COPY-REVIEW]] the queue's title of a team message report
+REPORTS: Final = frozenset({MESSAGE, TEAM_MESSAGE})  # the report kinds: decided dismiss or uphold
 # A message report's outcome as the case's status: dismissed, the message stands (approved); upheld, it broke the rules.
 MESSAGE_OUTCOMES: Final[Mapping[str, ModerationCaseStatus]] = {
     "dismiss": ModerationCaseStatus.APPROVED,
@@ -103,6 +115,18 @@ class ReportedMessageOut(BaseModel):
     created_at: datetime
 
 
+class ReportedTeamMessageOut(BaseModel):
+    """The one team message a report shared with staff (``app_reported_team_message``): never the rest of its
+    thread."""
+
+    message_id: UUID
+    thread_id: UUID
+    sender_user_id: UUID
+    sender_handle: str | None
+    body: str = Field(description="The message's plain text as the developer typed it: render it as text")
+    created_at: datetime
+
+
 class StaffRef(BaseModel):
     id: UUID
     display_name: str
@@ -135,6 +159,11 @@ class CaseOut(BaseModel):
         description="A message report's message, on the case read by its id only (each read is audited); null in"
         " the lists and for every other subject",
     )
+    team_message: ReportedTeamMessageOut | None = Field(
+        default=None,
+        description="A team message report's message, on the case read by its id only (each read is audited); null"
+        " in the lists and for every other subject",
+    )
 
 
 class CaseList(BaseModel):
@@ -164,14 +193,19 @@ class DecisionOut(BaseModel):
 _CASES_SELECT: Final = (
     "SELECT m.id, m.subject_type, m.subject_id, m.reasons, m.source, m.status, m.created_at, m.classifier,"
     " m.decided_at, m.decided_by, d.display_name AS decider_name,"
-    # A message is never deleted (revision 0008: append-only), so a message report's subject is always there.
-    " (p.id IS NOT NULL OR pr.id IS NOT NULL OR m.subject_type = 'message') AS found,"
+    # A message is never deleted (revisions 0008 and 0011: append-only), so a report's subject is always there.
+    " (p.id IS NOT NULL OR pr.id IS NOT NULL OR m.subject_type IN ('message', 'team_message')) AS found,"
     " coalesce(p.moderation_state, pr.moderation_state) AS subject_state, p.current_version_id AS subject_version_id,"
     " coalesce(p.owner_id = :staff, pr.created_by = :staff,"
     # A message report is the staff member's own when they filed it or are a party of the message's engagement: the
     # thread's policy shows a message to its parties only (staff never), so it is visible here exactly then.
     " CASE WHEN m.subject_type = 'message' THEN m.reporter_id = :staff"
-    " OR EXISTS (SELECT 1 FROM engagement_messages em WHERE em.id = m.subject_id) END, false) AS own,"
+    " OR EXISTS (SELECT 1 FROM engagement_messages em WHERE em.id = m.subject_id)"
+    # A team message report is theirs when they filed it or wrote the message (the reporter and the sender are the
+    # thread's two parties); staff read the sender only through the report's own definer.
+    " WHEN m.subject_type = 'team_message' THEN m.reporter_id = :staff"
+    " OR EXISTS (SELECT 1 FROM app_reported_team_message(m.id) tm WHERE tm.sender_user_id = :staff) END,"
+    " false) AS own,"
     " coalesce(p.title, pr.title) AS title, p.problem_statement, p.impact_claims, p.summary, pr.statement,"
     " pr.affected_group, bo.id AS brief_org_id, bo.slug::text AS brief_org_slug, bo.legal_name AS brief_org_name"
     " FROM moderation_cases m"
@@ -196,7 +230,7 @@ def decision_options(
     """The decisions the decision route accepts for a case, and the code it answers when it refuses them."""
     if not unresolved:
         return [], "already_decided"
-    if subject_type == MESSAGE:  # a report: the reporter never decides it
+    if subject_type in REPORTS:  # a report: the reporter never decides it
         return ([], "own_content") if own else (["dismiss", "uphold"], None)
     if subject_type not in TIER1_FIELDS:
         return [], "unsupported_subject"
@@ -251,9 +285,7 @@ async def _case_out(row: Any, *, unresolved: bool) -> CaseOut:
         created_at=row.created_at,
         subject_state=row.subject_state,
         subject_version_id=row.subject_version_id,
-        preview=CasePreview(title=MESSAGE_TITLE, text=None)
-        if row.subject_type == MESSAGE
-        else CasePreview(title=row.title, text=row.summary or row.statement),
+        preview=_report_preview(row.subject_type) or CasePreview(title=row.title, text=row.summary or row.statement),
         fields=[CaseField(name=name, text=value) for name, value in fields.items()],
         flagged_fields=flagged_fields(row.classifier),
         actions=actions,
@@ -262,6 +294,12 @@ async def _case_out(row: Any, *, unresolved: bool) -> CaseOut:
         decided_by=None if row.decided_by is None else StaffRef(id=row.decided_by, display_name=row.decider_name),
         brief_org=org_ref(row.brief_org_id, row.brief_org_slug, row.brief_org_name),
     )
+
+
+def _report_preview(subject_type: str) -> CasePreview | None:
+    """A report's preview: its kind, never the text (the case read by its id carries the message)."""
+    titles = {MESSAGE: MESSAGE_TITLE, TEAM_MESSAGE: TEAM_MESSAGE_TITLE}
+    return CasePreview(title=titles[subject_type], text=None) if subject_type in titles else None
 
 
 async def list_cases(db: AsyncSession, *, unresolved: bool, staff_id: UUID) -> CaseList:
@@ -280,6 +318,8 @@ async def get_case(db: AsyncSession, *, case_id: UUID, staff_id: UUID) -> CaseOu
     case = await _case_out(row, unresolved=row.status in UNRESOLVED)
     if row.subject_type == MESSAGE:
         case.message = await reported_message(db, case_id=case_id, staff_id=staff_id)
+    if row.subject_type == TEAM_MESSAGE:
+        case.team_message = await reported_team_message(db, case_id=case_id, staff_id=staff_id)
     return case
 
 
@@ -308,6 +348,38 @@ async def reported_message(db: AsyncSession, *, case_id: UUID, staff_id: UUID) -
         message_id=row.message_id,
         engagement_id=row.engagement_id,
         sender_party=row.sender_party,
+        body=row.body,
+        created_at=row.created_at,
+    )
+
+
+_REPORTED_TEAM_MESSAGE = text(
+    "SELECT message_id, thread_id, sender_user_id, sender_handle::text AS sender_handle, body, created_at"
+    " FROM app_reported_team_message(:case)"
+)
+
+
+async def reported_team_message(db: AsyncSession, *, case_id: UUID, staff_id: UUID) -> ReportedTeamMessageOut | None:
+    """The message of a team message report, read through ``app_reported_team_message`` (staff admin or moderator),
+    with an audit event on the staff member's chain for every read (ids only, never the text). Committed."""
+    row = (await db.execute(_REPORTED_TEAM_MESSAGE, {"case": case_id})).one_or_none()
+    if row is None:
+        return None
+    await audit(
+        db,
+        "moderation.reported_team_message_read",
+        actor_user_id=staff_id,
+        actor_kind=AuditActor.STAFF,
+        subject_type="moderation_case",
+        subject_id=case_id,
+        payload={"message_id": str(row.message_id), "thread_id": str(row.thread_id)},
+    )
+    await db.commit()
+    return ReportedTeamMessageOut(
+        message_id=row.message_id,
+        thread_id=row.thread_id,
+        sender_user_id=row.sender_user_id,
+        sender_handle=row.sender_handle,
         body=row.body,
         created_at=row.created_at,
     )
@@ -361,17 +433,28 @@ async def _is_party(db: AsyncSession, message_id: UUID) -> bool:
 
 
 _MESSAGE_VISIBLE = text("SELECT 1 FROM engagement_messages WHERE id = :id")
+_TEAM_MESSAGE_SENDER = text("SELECT sender_user_id FROM app_reported_team_message(:case)")
+
+
+async def _own_report(db: AsyncSession, case: Any, staff_id: UUID) -> bool:
+    """Whether the staff member may not decide this report: they filed it, or it is about their own message (a team
+    message they wrote, or an engagement they are a party of)."""
+    if case.reporter_id == staff_id:
+        return True
+    if case.subject_type == TEAM_MESSAGE:
+        return (await db.execute(_TEAM_MESSAGE_SENDER, {"case": case.id})).scalar_one_or_none() == staff_id
+    return await _is_party(db, case.subject_id)
 
 
 async def _decide_message(
     db: AsyncSession, *, staff_id: UUID, case: Any, decision: Decision, note: str | None
 ) -> DecisionOut:
-    """Dismiss or uphold a message report: the case closes (the message never changes) and the decision is audited
-    with the staff note in its details."""
+    """Dismiss or uphold a message or team message report: the case closes (the message never changes: there is no
+    redaction function yet, D-54) and the decision is audited with the staff note in its details."""
     if decision not in MESSAGE_OUTCOMES:
         raise ApiError(422, "invalid_decision", "Dismiss or uphold a message report.")
-    if case.reporter_id == staff_id or await _is_party(db, case.subject_id):
-        raise ApiError(403, "own_content", "You cannot decide a report you filed or one about your own engagement.")
+    if await _own_report(db, case, staff_id):
+        raise ApiError(403, "own_content", "You cannot decide a report you filed or one about your own message.")
     outcome = MESSAGE_OUTCOMES[decision]
     await db.execute(_CLOSE, {"status": outcome.value, "staff": staff_id, "id": case.id})
     await audit(
@@ -381,7 +464,7 @@ async def _decide_message(
         actor_kind=AuditActor.STAFF,
         subject_type="moderation_case",
         subject_id=case.id,
-        payload={"subject_type": MESSAGE, "subject_id": str(case.subject_id), "decision": decision},
+        payload={"subject_type": case.subject_type, "subject_id": str(case.subject_id), "decision": decision},
         details={"note": note} if note else None,
     )
     await db.commit()
@@ -402,7 +485,7 @@ async def decide(
         raise not_found("No such case.")
     if case.status not in UNRESOLVED:
         raise ApiError(409, "already_decided", "This case was already decided.")
-    if case.subject_type == MESSAGE:
+    if case.subject_type in REPORTS:
         return await _decide_message(db, staff_id=staff_id, case=case, decision=decision, note=note)
     if decision not in ("approve", "reject"):
         raise ApiError(422, "invalid_decision", "Approve or reject this case.")

@@ -30,6 +30,9 @@ tenant table without a fixture fails the run. Tables read on the request path by
 - Events (revision 0010, PUBLISHED with a narrower public half): a developer reads the other organisation's published
   events and never its drafts; an organisation's members read its events in any status; a developer's reminders are
   theirs only (``integration/events/test_events_schema.py`` has the rest).
+- Team tables (revision 0011: blocks, team invitations, threads, messages, read markers and contributor rows): every
+  reader is a developer, so staff admin and an organisation-only account read no row of any of them, even with the
+  world's rows all about them (``integration/teams/`` has the rest).
 - A cross-tenant API access returns 404.
 """
 
@@ -202,6 +205,38 @@ async def test_curated_tables_are_read_by_staff_admin_and_by_developers_once_app
         await conn.execute(text("SET LOCAL ROLE bridge_app"))
         await _as_tenant(conn, org_only, world.a.org_id, table)
         assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0
+
+
+TEAM_TABLES = (
+    "developer_blocks",
+    "team_invitations",
+    "team_threads",
+    "team_messages",
+    "team_thread_reads",
+    "proposal_contributors",
+)
+
+
+@pytest.mark.parametrize("table", TEAM_TABLES)
+async def test_team_tables_are_read_by_developers_only(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, world: w.World, table: str
+) -> None:
+    """Revision 0011 (REQ-DEV-03, D-58): the world holds rows of each team table for both tenants; a developer reads
+    their own (``test_tenant_a_reads_only_its_own_and_public_rows_of_b``), while staff admin and a signed-in account
+    without a developer profile (an organisation-only member of A's organisation) read none, with or without an
+    organisation context."""
+    async with owner_engine.connect() as conn:
+        assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() >= 2, f"{table}: no fixture"
+    async with app_engine.connect() as conn, conn.begin():
+        await _as_tenant(conn, world.staff_id, None, table)
+        assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0, "staff read a row"
+    async with rolled_back(owner_engine) as conn:
+        org_only = await _add_user(conn, f"org-only-{uuid7().hex}@example.test")
+        await _add_member(conn, world.a.org_id, org_only, "{owner,admin}")
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
+        for org in (world.a.org_id, None):
+            await _as_tenant(conn, org_only, org, table)
+            assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0, "org-only read"
 
 
 @pytest.mark.parametrize("table", PUBLISHED_TABLES)

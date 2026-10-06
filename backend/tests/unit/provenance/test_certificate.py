@@ -118,3 +118,12 @@ def test_time_helpers() -> None:
     assert utc_text(STAMPED) == "2026-09-28 06:15:42 UTC"
     assert eat_text(STAMPED) == "2026-09-28 09:15:42 EAT (UTC+3)"
     assert verify_url("https://bridge.example/", "ABC12345") == "https://bridge.example/verify/ABC12345"
+
+
+def test_contributors_follow_the_owner_row_when_there_are_any() -> None:
+    """REQ-DEV-03, D-62 (a): "Contributors: <handles>" after the Owner row, escaped; no row without contributors."""
+    assert "Contributors" not in pdf_text(render_pdf(data()))
+    text = pdf_text(render_pdf(data(contributors=("dev-brian", "dev-<b>carol</b>&"))))
+    # The markup is drawn as text, not applied (reportlab draws "<" and ">" as their own runs).
+    assert "Contributorsdev-brian,dev-<b>carol</b>&" in text.replace(" ", "")
+    assert text.index("Owner") < text.index("Contributors") < text.index("Timestamped")

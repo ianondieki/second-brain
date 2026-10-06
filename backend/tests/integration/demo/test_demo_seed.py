@@ -61,6 +61,7 @@ from bridge.seed.demo.data import (
     COUNTY_C,
     DEMO_PASSWORD,
     ENGAGEMENTS,
+    JUMA,
     NGO_D,
     ORGS,
     P1,
@@ -75,6 +76,7 @@ from bridge.seed.demo.data import (
     TELCO_A,
     THREAD,
     VIEWED,
+    ZAWADI,
     all_accounts,
     totp_secret,
 )
@@ -85,6 +87,7 @@ from bridge.seed.demo.quiz import SEEDED_SETS, nairobi_today
 from bridge.seed.demo.research import SEEDED_ANSWERS
 from bridge.seed.demo.runtime import in_process_app, signed_in
 from bridge.seed.demo.scouts import SCOUT_KEYWORDS, SCOUT_NICHE, SCOUTED
+from bridge.seed.demo.teams import CONTRIBUTOR, PEERS, PENDING, TEAM
 from bridge.seed.demo.trending import LIKED
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
@@ -216,6 +219,29 @@ def this_week_lines() -> list[str]:
     return lines
 
 
+def teams_lines() -> list[str]:
+    """What the first run of Peers and team up's steps reports (P22 track C), last of all."""
+    liked = {**{email: set(slugs) for email, slugs in LIKED.items()}, ZAWADI.email: set(), JUMA.email: set()}
+    lines = []
+    for plan in PEERS:
+        if plan.county is not None:
+            lines.append(f"county of {plan.email}: {plan.county}")
+        if plan.opted_in:
+            lines.append(f"peers on for {plan.email}")
+        wanted = sorted(liked[plan.email] | set(plan.liked))
+        if wanted != sorted(liked[plan.email]):
+            lines.append(f"liked niches of {plan.email}: {', '.join(wanted)}")
+    assert P1.new_problem is not None
+    assert P2.new_problem is not None
+    lines += [
+        f"team-up of {TEAM.sender} and {TEAM.recipient} on {P2.new_problem.title}",
+        f"team thread of {TEAM.sender} and {TEAM.recipient}: {len(TEAM.messages)} messages",
+        f"contributor on {CONTRIBUTOR[0]}: {CONTRIBUTOR[1]}",
+        f"team-up invitation from {PENDING.sender} to {PENDING.recipient} on {P1.new_problem.title}",
+    ]
+    return lines
+
+
 async def counts(engine: AsyncEngine) -> dict[str, int]:
     return {table: int((await rows(engine, f"SELECT count(*) FROM {table}"))[0][0]) for table in TABLES}
 
@@ -228,14 +254,16 @@ async def test_running_the_demo_seed_again_changes_nothing(
 ) -> None:
     first, second, third = seeded
     assert first.created, "the first run seeds"
-    week = len(this_week_lines())
-    assert first.created[-10 - week : -7 - week] == [  # P21's beats, then P22's quiz and This week, last
+    teams = len(teams_lines())
+    week = len(this_week_lines()) + teams
+    assert first.created[-10 - week : -7 - week] == [  # P21's beats, then P22's quiz, This week and teams, last
         f"thread of {THREAD.proposal} with {THREAD.org}: {len(THREAD.messages)} messages",
         f"shortlist of {SHORTLISTED[1].legal_name}: {SHORTLISTED[0].key} by {SHORTLISTED[2].email}",
         f"saved search of {SAVED_SEARCH.owner}: {SAVED_SEARCH.name}",
     ]
     assert first.created[-7 - week : -week] == quiz_lines(await nairobi_today(owner))
-    assert first.created[-week:] == this_week_lines()
+    assert first.created[-week:-teams] == this_week_lines()
+    assert first.created[-teams:] == teams_lines()
     assert first.notes == []
     assert (second.created, second.notes, third.created, third.notes) == ([], [], [], [])
     assert (third.users, third.orgs, third.proposals, third.cert_ids) == (
@@ -601,7 +629,8 @@ async def test_discover_and_recommendations_have_something_to_show(
         "SELECT u.email, count(*) AS n FROM developer_niches d JOIN users u ON u.id = d.user_id"
         " WHERE d.kind = 'liked' GROUP BY u.email",
     )
-    assert {r.email: r.n for r in liked} == {AMINA.email: 3, BRIAN.email: 3}
+    # P22 track C: Brian also likes Networks & Telecommunications (two niches shared with Amina); Zawadi and Juma
+    assert {r.email: r.n for r in liked} == {AMINA.email: 3, BRIAN.email: 4, ZAWADI.email: 3, JUMA.email: 3}
     consents = await rows(
         owner,
         "SELECT u.email, c.granted, c.source FROM consents c JOIN users u ON u.id = c.user_id"
@@ -1017,13 +1046,52 @@ async def test_this_week_has_events_a_reminder_and_trend_cards(
             strip = (await developer.call("GET", "/api/me/week")).json()
         async with signed_in(demo_app, owner, BRIAN.email) as other:
             his = (await other.call("GET", "/api/me/week")).json()
+        async with signed_in(demo_app, owner, ZAWADI.email) as elsewhere:
+            hers = (await elsewhere.call("GET", "/api/me/week")).json()
     shown = {event["title"]: event for event in strip["events"]}
     assert set(shown) == {DEMO_EVENTS[0].title, DEMO_EVENTS[1].title}
     assert (shown[DEMO_EVENTS[0].title]["reminder"], shown[DEMO_EVENTS[1].title]["organiser"]) == (True, "Platform")
     assert strip["reminders_email"] in {"on", "unverified"}
     assert strip["trend"]["seeded_example"] is True
     assert strip["trend"]["title"] in {t.title for t in SEEDED_TRENDS if t.topic_slug in PUBLISHED_TRENDS}
-    assert [event["title"] for event in his["events"]] == [DEMO_EVENTS[1].title]
+    # Brian is in Nairobi City since P22 track C (Amina's peer): her event without her reminder, and the online one;
+    # Zawadi, in Mombasa, the online one only
+    assert {event["title"]: event["reminder"] for event in his["events"]} == {
+        DEMO_EVENTS[0].title: False,
+        DEMO_EVENTS[1].title: False,
+    }
+    assert [event["title"] for event in hers["events"]] == [DEMO_EVENTS[1].title]
+
+
+async def test_peers_and_team_up_have_a_scene(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P22 track C (REQ-DEV-03): Amina sees Brian (her county, two shared niches) then Zawadi (Mombasa, one shared
+    niche) and never Juma, who stayed off; her accepted team-up with Brian on P2's problem has a four-message thread;
+    P2 credits Brian ("Contributors: <his handle>"); Zawadi's invitation waits for Amina."""
+    report = seeded[0]
+    brian, zawadi = report.users[BRIAN.email], report.users[ZAWADI.email]
+    [handle] = await rows(owner, "SELECT handle::text FROM developer_profiles WHERE user_id = :u", u=brian)
+    async with in_process_app(demo_settings(), app, runtime) as (demo_app, _):
+        async with signed_in(demo_app, owner, AMINA.email) as amina:
+            peers = (await amina.call("GET", "/api/me/peers")).json()
+            threads = (await amina.call("GET", "/api/me/teams")).json()["threads"]
+            thread = (await amina.call("GET", f"/api/me/teams/{threads[0]['id']}")).json()
+            invitations = (await amina.call("GET", "/api/me/teams/invitations")).json()
+            idea = (await amina.call("GET", f"/api/me/proposals/{report.proposals[P2.key]}")).json()
+        async with signed_in(demo_app, owner, JUMA.email) as juma:
+            off = (await juma.call("GET", "/api/me/peers")).json()
+    assert [(p["user_id"], p["same_county"], len(p["shared_niches"])) for p in peers["peers"]] == [
+        (str(brian), True, 2),
+        (str(zawadi), False, 1),
+    ]
+    assert off == {"peers": [], "next": None, "opted_in": False}
+    assert len(threads) == 1
+    assert (threads[0]["counterpart"]["user_id"], threads[0]["open"]) == (str(brian), True)
+    assert [m["body"] for m in thread["items"]] == [body for _, body in TEAM.messages]
+    assert idea["contributors"] == [handle[0]]
+    [waiting] = invitations["received"]
+    assert (waiting["counterpart"]["user_id"], waiting["note"]) == (str(zawadi), PENDING.note)
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:

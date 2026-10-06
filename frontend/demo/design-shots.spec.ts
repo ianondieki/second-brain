@@ -45,7 +45,7 @@ const THEMES = (process.env.SHOT_THEMES ?? "light,dark").split(",") as Array<"li
 const WIDTHS = (process.env.SHOT_WIDTHS ?? "1440,375").split(",").map(Number);
 const FILTER = process.env.SHOT_FILTER ? new RegExp(process.env.SHOT_FILTER) : null;
 
-type Demo = "dev" | "devBrian" | "org" | "orgOwner" | "orgSacco" | "staff" | "moderator";
+type Demo = "dev" | "devBrian" | "org" | "orgOwner" | "orgSacco" | "staff" | "moderator" | "devJuma";
 /** A demo person, a session that owes its second factor, or a new test account of the bell's or the side states' scene. */
 type Who = "none" | "pendingMfa" | Demo | "freshDev" | "freshOrg" | "sideDev" | "sideOrg" | "quizDev";
 interface Shot {
@@ -53,7 +53,7 @@ interface Shot {
   path: string;
   who: Who;
   /** The screenshots folder under docs/demo/screenshots/ (default p18). */
-  set?: "p19" | "p21" | "p22a" | "p22b";
+  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c";
   /** Only these widths (default SHOT_WIDTHS). */
   widths?: number[];
   /** Shoot this element only (the top bar), not the page. */
@@ -73,6 +73,7 @@ interface Shot {
 const PEOPLE: Record<Demo, { email: string; name: string }> = {
   dev: { email: "amina@developers.example", name: "Amina Wanjiru" },
   devBrian: { email: "brian@developers.example", name: "Brian Otieno" },
+  devJuma: { email: "juma@developers.example", name: "Juma Kariuki" },
   org: { email: "reviewer@telco-a.example", name: "Telco A reviewer" },
   orgOwner: { email: "owner@telco-a.example", name: "Telco A owner" },
   orgSacco: { email: "owner@sacco-b.example", name: "SACCO B owner" },
@@ -971,6 +972,47 @@ const SHOTS: Shot[] = [
   // P22-B "This week": the Home strip (Amina: a reminder set on the Nairobi event), the week, an event with the
   // reminder on (Amina) and off (Brian), the trend of the day; the organisation's events, the form, one event; the
   // staff queue, a draft's page, the research page's Trends section and a candidate. Nothing is sent or decided.
+  // P22-C peers and team-up: Home with the Peers section (Amina, opted in; Juma, off), /dev/peers with a row menu,
+  // /dev/teams with the pending invitation and the thread, the thread itself, Settings > Profile, the idea page with
+  // its contributors line. Nothing is sent, accepted or blocked.
+  { name: "home-peers", set: "p22c", path: "/dev", who: "dev", prepare: async (page) => {
+      if (!(await page.locator("[data-home=peers] [data-peer]").first().isVisible())) return false;
+    } },
+  { name: "home-peers-off", set: "p22c", path: "/dev", who: "devJuma", prepare: async (page) => {
+      if (!(await page.locator("[data-home=peers][data-peers=off]").isVisible())) return false;
+    } },
+  { name: "peers", set: "p22c", path: "/dev/peers", who: "dev", prepare: async (page) => {
+      if (!(await page.locator("[data-peer]").first().isVisible())) return false;
+    } },
+  { name: "peers-off", set: "p22c", path: "/dev/peers", who: "devJuma", prepare: async (page) => {
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  { name: "teams", set: "p22c", path: "/dev/teams", who: "dev", prepare: async (page) => {
+      if (!(await page.locator("[data-thread]").first().isVisible())) return false;
+    } },
+  { name: "team-thread", set: "p22c", path: "/dev/teams", who: "dev", prepare: async (page) => {
+      const row = page.locator("[data-thread]").first();
+      if (!(await row.isVisible())) return false;
+      await row.getByRole("link").first().click();
+      await page.waitForURL(/\/dev\/teams\/[^/]+$/);
+      await page.getByRole("heading", { level: 1 }).waitFor();
+    } },
+  { name: "settings-profile", set: "p22c", path: "/settings/profile", who: "dev", prepare: async (page) => {
+      await page.getByRole("switch").waitFor();
+    } },
+  { name: "idea-contributors", set: "p22c", path: "/dev/ideas", who: "dev", prepare: async (page) => {
+      await page.getByRole("heading", { level: 1 }).waitFor();
+      const links = page.locator("main a[href^='/dev/ideas/']");
+      const n = await links.count();
+      for (let i = 0; i < n; i++) {
+        await links.nth(i).click();
+        await page.waitForURL(/\/dev\/ideas\/[^/]+/);
+        if (await page.locator("[data-contributors]").isVisible()) return;
+        await page.goBack();
+        await page.getByRole("heading", { level: 1 }).waitFor();
+      }
+      return false;
+    } },
   { name: "home-week", set: "p22b", path: "/dev", who: "dev", prepare: async (page) => {
       if (!(await page.locator("[data-home=week] [data-week-event]").first().isVisible())) return false;
     } },

@@ -26,7 +26,8 @@
     "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
     "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\").",
     "reviewP22a": "[[COPY-REVIEW]] P22-AF (REQ-DEV-01; D-59): quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks",
-    "reviewP22b": "[[COPY-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61): week.* (Home's This week strip, /dev/week, the event page with Remind me and Add to calendar, the trend page; week.trend.label.* follow problem.label.*), nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; the field sentences of eventForm.fieldError.* follow the backend's own (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed (the reminder email carries none)"
+    "reviewP22b": "[[COPY-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61): week.* (Home's This week strip, /dev/week, the event page with Remind me and Add to calendar, the trend page; week.trend.label.* follow problem.label.*), nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; the field sentences of eventForm.fieldError.* follow the backend's own (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed (the reminder email carries none)",
+    "reviewP22c": "[[COPY-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62): teams.* (Home's Peers section, /dev/peers, /dev/teams, the team-up thread page), teamUp.* (the peers list, the Team up sheet, invitations, the thread's menu, the contributor sheet and credits), profileSettings.* (Settings > Profile with the Visible to peers sentence the task card fixes), settingsNav.profile, ideaContributors.*, ideas.contributorsLine and ideas.sheet.contributors (D-62 (a): handles only, nothing about shares); the copy says team up, invitation and contributor, never friend, match or connect; the engagement thread's own sentences (trackerMessages.*) serve the team thread's messages and composer; trackerMessages.refusal.attachFailed (the composer's files could not load)"
   },
   "app": {
     "name": "Wazo",
@@ -1671,8 +1672,10 @@
       "checkAt": "Anyone can check this record at <id>{url}</id>",
       "print": "Print or save as PDF",
       "qrLabel": "QR code: the public verify page for certificate {id}",
-      "registeredAt": "{time} Nairobi time"
-    }
+      "registeredAt": "{time} Nairobi time",
+      "contributors": "Contributors: {handles}"
+    },
+    "contributorsLine": "Contributors: {handles}"
   },
   "ideaDelete": {
     "open": "Delete idea",
@@ -2827,7 +2830,8 @@
       },
       "conflict": "Something changed. Reload the page and try again.",
       "network": "The message was not sent. Check your connection and try again.",
-      "generic": "The message was not sent. Try again."
+      "generic": "The message was not sent. Try again.",
+      "attachFailed": "The files could not be added. Check your connection and try again."
     }
   },
   "billing": {
@@ -2970,7 +2974,8 @@
   "settingsNav": {
     "label": "Settings",
     "security": "Security",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "profile": "Profile"
   },
   "devEngagements": {
     "organisations": "Pitched to {count, plural, one {# organisation} other {# organisations}}",
@@ -3732,5 +3737,231 @@
     "notAdminAction": "Back to Events",
     "gone": "This event is not here.",
     "goneAction": "Back to Events"
+  },
+  "teams": {
+    "home": {
+      "title": "Peers",
+      "seeAll": "See all",
+      "listLabel": "Developers in your county or niches",
+      "off": "Turn on Visible to peers to find developers in your county or niches to team up with.",
+      "turnOn": "Turn on in Settings",
+      "empty": "No one in your county or niches is visible to peers yet."
+    },
+    "facts": {
+      "sameCounty": "Same county",
+      "sharedNiches": "{count, plural, one {# shared niche} other {# shared niches}}"
+    },
+    "peers": {
+      "pageTitle": "Peers",
+      "title": "Peers",
+      "lead": "Developers in your county or niches who are visible to peers. Invite one to team up on a problem.",
+      "back": "Home",
+      "teamsLink": "Invitations and threads",
+      "off": "Turn on Visible to peers in Settings to see developers in your county or niches.",
+      "turnOn": "Turn on in Settings",
+      "empty": "No one in your county or niches is visible to peers yet.",
+      "emptyAction": "Check your county in Settings",
+      "tooMany": "You have opened many pages of peers this hour. Try again later.",
+      "tooManyAction": "Back to Home"
+    },
+    "list": {
+      "pageTitle": "Team up",
+      "title": "Team up",
+      "lead": "Invitations to team up on a problem, and your threads with other developers.",
+      "back": "Peers",
+      "invitations": "Invitations",
+      "threads": "Threads",
+      "threadsLabel": "Your team-up threads",
+      "noThreads": "No threads yet. Accepting an invitation opens one.",
+      "empty": "No invitations or threads yet.",
+      "emptyAction": "Find peers",
+      "unread": "{count, plural, one {# unread} other {# unread}}",
+      "lastMessage": "Last message {time}",
+      "noMessages": "No messages yet",
+      "closed": "Closed",
+      "credits": "Credited on",
+      "creditsLead": "Ideas whose owners list you as a contributor.",
+      "on": "On {title}",
+      "someone": "A developer",
+      "problemGone": "A problem that is no longer published"
+    },
+    "thread": {
+      "pageTitle": "Team-up thread",
+      "back": "Team up",
+      "on": "Teaming up on <link>{title}</link>",
+      "onGone": "Teaming up on a problem that is no longer published",
+      "title": "Messages",
+      "lead": "Only the two of you read this thread; a moderator reads a message only if one of you reports it.",
+      "empty": "No messages yet. Say what you would like to work on together.",
+      "closed": {
+        "left": "This thread is closed: one of you left it. You can still read it.",
+        "blocked": "This thread is closed because you blocked this developer. You can still read it.",
+        "ended": "This thread has ended. You can still read it."
+      },
+      "closedEmpty": "This thread is closed and has no messages.",
+      "notFound": "This thread is not available.",
+      "notFoundAction": "Back to Team up",
+      "refusalClosed": "This thread is closed, so no new messages can be sent.",
+      "actionsLabel": "Thread actions"
+    }
+  },
+  "teamUp": {
+    "row": {
+      "teamUp": "Team up",
+      "invited": "Invited",
+      "sent": "Invitation sent to {name}.",
+      "more": "More options",
+      "block": "Block",
+      "sameCounty": "Same county",
+      "sharedNiches": "Shared niches: {value}",
+      "noHeadline": "No headline yet",
+      "teaming": "Teaming up",
+      "invitedYou": "Invited you"
+    },
+    "list": {
+      "more": "More",
+      "loading": "Loading…",
+      "moreFailed": "Could not load more peers. Try again.",
+      "moreTooMany": "You have opened many pages of peers this hour. Try again later.",
+      "blocked": "{name} is blocked. You no longer see each other anywhere."
+    },
+    "block": {
+      "title": "Block {name}?",
+      "body": "You will no longer see each other anywhere. Invitations between you end and any thread between you closes.",
+      "confirm": "Block",
+      "busy": "Blocking…",
+      "cancel": "Cancel",
+      "failed": "Could not block them. Try again."
+    },
+    "sheet": {
+      "title": "Team up with {name}",
+      "lead": "Choose the problem or Brief you want to work on together.",
+      "search": "Problem or Brief",
+      "searchHint": "Type a few words of its title.",
+      "suggested": "Recently published",
+      "results": "Problems with those words",
+      "searching": "Searching…",
+      "none": "No published problem has those words. Try others.",
+      "searchFailed": "Could not search problems. Try again.",
+      "note": "Note (optional)",
+      "noteHint": "Up to 300 characters. Say what you would bring.",
+      "meterLeft": {
+        "one": "{count} character left",
+        "other": "{count} characters left"
+      },
+      "meterOver": {
+        "one": "{count} character too many",
+        "other": "{count} characters too many"
+      },
+      "send": "Send invitation",
+      "sending": "Sending…",
+      "cancel": "Cancel",
+      "choose": "Choose a problem or Brief first."
+    },
+    "refusal": {
+      "peersOff": "Turn on Visible to peers in Settings before you invite anyone.",
+      "peerUnavailable": "This developer can no longer be invited.",
+      "problemUnavailable": "That problem is no longer open to team up. Choose another.",
+      "alreadyInvited": "An invitation between you on this problem is already open or was answered recently.",
+      "tooMany": "You have sent many invitations today. Try again tomorrow.",
+      "noteTooLong": "Keep the note to 300 characters.",
+      "invalid": "The note has characters that cannot be sent. Remove them and try again.",
+      "failed": "Could not send the invitation. Try again."
+    },
+    "invitation": {
+      "accept": "Accept",
+      "accepting": "Accepting…",
+      "decline": "Decline",
+      "declining": "Declining…",
+      "withdraw": "Withdraw",
+      "withdrawing": "Withdrawing…",
+      "accepted": "Invitation accepted. Your thread with {name} is open.",
+      "openThread": "Open the thread",
+      "declined": "Invitation declined.",
+      "withdrawn": "Invitation withdrawn.",
+      "gone": "This invitation was already answered or withdrawn.",
+      "failed": "Could not do that. Try again.",
+      "received": "{name} invited you",
+      "sent": "You invited {name}",
+      "on": "On {title}",
+      "someone": "A developer",
+      "problemGone": "A problem that is no longer published",
+      "receivedLabel": "Invitations to you",
+      "sentLabel": "Invitations you sent"
+    },
+    "thread": {
+      "more": "More",
+      "leave": "Leave thread",
+      "leaveTitle": "Leave this thread?",
+      "leaveBody": "Neither of you can send messages here after that. You can both still read it.",
+      "leaveConfirm": "Leave",
+      "leaving": "Leaving…",
+      "block": "Block {name}",
+      "failed": "Could not do that. Try again.",
+      "left": "You left the thread. You can still read it.",
+      "loadFailed": "Could not open that step. Check your connection and try again."
+    },
+    "credit": {
+      "add": "Add as contributor on an idea",
+      "title": "Add {name} as a contributor",
+      "lead": "Their handle shows on the idea and its certificate. You stay the one who registered it.",
+      "legend": "Your published ideas",
+      "confirm": "Add contributor",
+      "adding": "Adding…",
+      "choose": "Choose an idea first.",
+      "added": "Added as contributor on {title}.",
+      "already": "They are or were already credited on that idea.",
+      "notCounterpart": "You can no longer credit this developer.",
+      "failed": "Could not add them. Try again.",
+      "youAre": "You are a contributor on {title}",
+      "unpublished": "An idea that is not published now",
+      "leave": "Leave",
+      "leaveTitle": "Stop being a contributor on {title}?",
+      "leaveBody": "Your handle comes off the idea and its certificate. The owner cannot add you again on it.",
+      "leaveConfirm": "Leave",
+      "leaving": "Leaving…",
+      "left": "You are no longer a contributor on {title}.",
+      "leaveFailed": "Could not do that. Try again."
+    }
+  },
+  "profileSettings": {
+    "pageTitle": "Profile settings",
+    "title": "Profile",
+    "lead": "What other developers see when you are visible to peers.",
+    "handle": "Your handle: {name}",
+    "headline": "Headline",
+    "headlineHint": "One line about what you build. Up to 160 characters.",
+    "county": "County",
+    "countyNone": "Not given",
+    "visible": "Visible to peers",
+    "on": "On",
+    "off": "Off",
+    "explain": "Developers in your county or niches can see your handle, headline and shared niches. Never organisations.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Profile saved.",
+    "tooMany": "You have changed your county many times today. Try again tomorrow.",
+    "invalid": "The headline has characters that cannot be saved. Remove them and try again.",
+    "failed": "Could not save your profile. Try again.",
+    "signedOut": "Your session ended. Sign in again to save.",
+    "blocked": {
+      "title": "Blocked developers",
+      "lead": "You and they cannot see each other anywhere.",
+      "unblock": "Unblock",
+      "unblocking": "Unblocking…",
+      "unblocked": "{name} is unblocked. Threads that closed stay closed.",
+      "failed": "Could not unblock them. Try again."
+    }
+  },
+  "ideaContributors": {
+    "label": "Contributors:",
+    "remove": "Remove",
+    "confirmTitle": "Remove {name} as a contributor?",
+    "confirmBody": "Their handle comes off this idea and its certificate. You cannot add them again on this idea.",
+    "confirm": "Remove",
+    "removing": "Removing…",
+    "cancel": "Cancel",
+    "removed": "{name} is no longer a contributor on this idea.",
+    "failed": "Could not remove them. Try again."
   }
 }

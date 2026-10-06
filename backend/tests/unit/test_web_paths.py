@@ -35,8 +35,8 @@ NOT_PAGES = {
 }
 # Links to pages this branch's web app does not have: each is a known gap, reported, never a new one. Empty from P16
 # (which built /settings/notifications and /help, every email footer) until P22-B's backend landed before its screens
-# (P22-BF), which built the event page N27 links to. An entry that has become a page fails the test, so the list
-# never goes stale.
+# (P22-BF built the event page N27 links to) and P22-C's did the same (P22-CF built /dev/teams and /dev/teams/{id},
+# N28's and N29's). An entry that has become a page fails the test, so the list never goes stale.
 PAGES_NOT_BUILT: dict[str, str] = {}
 
 

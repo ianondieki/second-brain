@@ -29,8 +29,10 @@ import { homeGroups, homeStats } from "./home";
 import { IdeaCard } from "./ideas/IdeaCard";
 import { NEW_PATH, type MyProposalItem } from "./ideas/ideas";
 import { NeedsYouHero } from "./NeedsYouHero";
+import { PeersSection } from "./peers/PeersSection";
 import type { QuizCardState } from "./quiz/quiz";
 import { QuizCard } from "./quiz/QuizCard";
+import type { PeersPage } from "./teams/teams";
 import type { Week } from "./week/week";
 import { WeekStrip } from "./week/WeekStrip";
 
@@ -48,6 +50,8 @@ export interface HomeContentProps {
   quiz?: QuizCardState;
   /** This week (REQ-DEV-02): left out when null or not given (the read failed, or a fixture without it). */
   week?: Week | null;
+  /** Peers (REQ-DEV-03): left out when null or not given (the read failed, or a fixture without it). */
+  peers?: PeersPage | null;
 }
 
 /**
@@ -56,7 +60,7 @@ export interface HomeContentProps {
  * lists of rows side by side on a wide column (the other engagements, the ideas). "New proposal" is the screen's one
  * primary action. The tiles count what the page already reads: no series exists for them yet, so no sparkline.
  */
-export async function HomeContent({ me, engagements, ideas, recommended, quiz = null, week = null }: HomeContentProps) {
+export async function HomeContent({ me, engagements, ideas, recommended, quiz = null, week = null, peers = null }: HomeContentProps) {
   const [t, th, tr, locale] = await Promise.all([
     getTranslations("devHome"),
     getTranslations("home"),
@@ -146,6 +150,8 @@ export async function HomeContent({ me, engagements, ideas, recommended, quiz = 
         <QuizCard state={quiz} />
 
         <WeekStrip week={week} />
+
+        <PeersSection peers={peers} />
 
         <RecommendedForYou state={recommended} />
 

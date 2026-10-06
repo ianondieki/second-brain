@@ -49,7 +49,8 @@ class ModerationCase(IdMixin, TimestampsMixin, Base):
     Tier-1 fields only. Changing a subject's ``moderation_state`` is a separate step through
     ``app_moderate_proposal`` / ``app_moderate_problem``. A report of an engagement message (``subject_type =
     'message'``, revision 0008) is filed only through ``app_report_message`` (once per reporter and message) and read
-    by staff only through ``app_reported_message``."""
+    by staff only through ``app_reported_message``; a team message report (``subject_type = 'team_message'``, revision
+    0011) only through ``app_report_team_message`` and ``app_reported_team_message``."""
 
     __tablename__ = "moderation_cases"
     # Inserted by callers that may not read the new row back (no SELECT grant or policy), so the ORM must not add
@@ -65,6 +66,14 @@ class ModerationCase(IdMixin, TimestampsMixin, Base):
             "reporter_id",
             unique=True,
             postgresql_where=text("subject_type = 'message' AND source = 'report'"),
+        ),
+        # Revision 0011: one report per reporter and team message.
+        Index(
+            "uq_moderation_cases_team_message_report",
+            "subject_id",
+            "reporter_id",
+            unique=True,
+            postgresql_where=text("subject_type = 'team_message' AND source = 'report'"),
         ),
         # 1 to 50 non-blank reasons of at most 200 characters (app_reasons_are_valid, revision 0002).
         CheckConstraint("app_reasons_are_valid(reasons, 50)", name="reasons_valid"),

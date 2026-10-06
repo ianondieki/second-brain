@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { DevNav } from "@/components/DevNav";
@@ -37,6 +37,8 @@ import { ideaTags, ideaViews } from "./pitch/data";
 import { pitchesLeft, pitchHref } from "./pitch/picker";
 import { Pitches } from "./Pitches";
 import { Certificate } from "./Certificate";
+import { ContributorsLine } from "./ContributorsLine";
+import { ideaContributors } from "../../teams/data";
 import { WhoHasSeen } from "./WhoHasSeen";
 
 export async function generateMetadata({ params }: PageProps<"/dev/ideas/[id]">): Promise<Metadata> {
@@ -81,10 +83,13 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
   // Once the idea is known to be yours: its pitches and views (a registered idea only) and the county's name are read
   // together, not one after the other.
   const countyCode = version?.teaser.county_code;
-  const [tags, views, county] = await Promise.all([
+  // Contributors' handles (REQ-DEV-03; D-62 (a)); an answer from before P22-C has none.
+  const contributors = idea.contributors ?? [];
+  const [tags, views, county, credited] = await Promise.all([
     idea.current ? ideaTags(idea.id) : null,
     idea.current ? ideaViews(idea.id) : null,
     countyCode ? countyName(countyCode) : null,
+    idea.current ? ideaContributors(idea.id) : null,
   ]);
   const canPitch = status === "published" && tags !== null && pitchesLeft(tags.cap) !== 0;
   // An idea that answers an organisation's Problem Brief pitches with that organisation chosen first (REQ-DIR-05).
@@ -101,6 +106,17 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
               <span className="text-sm text-ink-soft">{t("version", { number: idea.current.version_no })}</span>
             ) : null}
           </p>
+          {/* D-62 (a): the contributors the owner credited, by handle, each with Remove (when the credit could be read;
+              kept on a registered idea with none, so the status line after the last Remove stays). */}
+          {credited ? (
+            <ClientStrings strings={await clientStrings(["ideaContributors"])}>
+              <ContributorsLine ideaId={idea.id} initial={credited} />
+            </ClientStrings>
+          ) : contributors.length > 0 ? (
+            <p className="mt-3 text-ink" data-contributors="">
+              {t("contributorsLine", { handles: new Intl.ListFormat(await getLocale(), { type: "conjunction" }).format(contributors) })}
+            </p>
+          ) : null}
         </PageHeader>
 
         {justPublished && idea.current?.cert_id ? (
