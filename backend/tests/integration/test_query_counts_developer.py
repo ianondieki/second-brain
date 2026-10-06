@@ -1,7 +1,7 @@
 """P16-E1 item 5 (REQ-FND-01, docs/spec/08 p95 budgets): the developer's main lists and details send as many
 statements with many rows as with few (``tests/integration/query_counts.py``): My ideas, one idea (its linked
-problems and attachments), Discover (Trending and the Opportunity Gap), Recommended for you, Companies and This week
-(P22, REQ-DEV-02)."""
+problems and attachments), Discover (Trending and the Opportunity Gap), Recommended for you, Companies, This week
+(P22, REQ-DEV-02), and the peers page and the team threads list (P22, REQ-DEV-03)."""
 
 from __future__ import annotations
 
@@ -222,3 +222,94 @@ async def test_this_week(developers: Developers, owner_engine: AsyncEngine, app_
         assert (await client.get("/api/me/week")).status_code == 200
     assert len([s for s in seen if "FROM events e" in s]) == 1, show(seen)
     assert len([s for s in seen if "trend_cards" in s]) == 1, show(seen)
+
+
+async def _peers(owner_engine: AsyncEngine, niche: UUID, count: int) -> None:
+    """``count`` developers who turned Peers on and like ``niche`` (as the owner)."""
+    async with owner_engine.begin() as conn:
+        for _ in range(count):
+            user = await w.add_user(conn, f"qc-peer-{uuid4().hex[:8]}@example.test", "Peer")
+            await conn.execute(
+                text("INSERT INTO developer_profiles (user_id, handle, peers_visible) VALUES (:u, :h, true)"),
+                {"u": user, "h": f"qc-peer-{user.hex[-12:]}"},
+            )
+            await conn.execute(
+                text("INSERT INTO developer_niches (user_id, niche_id, kind) VALUES (:u, :n, 'liked')"),
+                {"u": user, "n": niche},
+            )
+
+
+async def test_the_peers_page(developers: Developers, owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """REQ-DEV-03 (P22 card C): the peers page sends as many statements with 20 peers as with 2, and reads them in one
+    statement (``app_peers``)."""
+    tag = uuid4().hex[:8]
+    niche = uuid7()
+    client = await developers()
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO niches (id, slug, name_en) VALUES (:id, :slug, :name)"),
+            {"id": niche, "slug": f"qc-peers-{tag}", "name": f"Peers {tag}"},
+        )
+        await conn.execute(
+            text("INSERT INTO developer_niches (user_id, niche_id, kind) VALUES (:u, :n, 'liked')"),
+            {"u": user_of(client), "n": niche},
+        )
+    assert (await client.patch("/api/me/profile", json={"peers_visible": True})).status_code == 200
+    await _peers(owner_engine, niche, SMALL)
+    small, body = await counted(client, app_engine, "/api/me/peers")
+    assert len(body["peers"]) == SMALL
+    await _peers(owner_engine, niche, LARGE - SMALL)
+    large, body = await counted(client, app_engine, "/api/me/peers")
+    assert len(body["peers"]) == LARGE
+    assert large == small
+    with statements(app_engine) as seen:
+        assert (await client.get("/api/me/peers")).status_code == 200
+    assert len([s for s in seen if "app_peers" in s]) == 1, show(seen)
+
+
+async def _threads(owner_engine: AsyncEngine, developer: UUID, problem: UUID, count: int) -> None:
+    """``count`` team threads of ``developer`` with others, each with a message by the other (as the owner)."""
+    async with owner_engine.begin() as conn:
+        for _ in range(count):
+            other = await w.add_user(conn, f"qc-team-{uuid4().hex[:8]}@example.test", "Team")
+            await conn.execute(
+                text("INSERT INTO developer_profiles (user_id, handle) VALUES (:u, :h)"),
+                {"u": other, "h": f"qc-team-{other.hex[-12:]}"},
+            )
+            invitation, thread = uuid7(), uuid7()
+            await conn.execute(
+                text(
+                    "INSERT INTO team_invitations (id, from_user_id, to_user_id, problem_id, status, decided_at)"
+                    " VALUES (:id, :a, :b, :p, 'accepted', now())"
+                ),
+                {"id": invitation, "a": other, "b": developer, "p": problem},
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO team_threads (id, invitation_id, a_user_id, b_user_id, problem_id)"
+                    " VALUES (:id, :i, least(CAST(:a AS uuid), CAST(:b AS uuid)),"
+                    " greatest(CAST(:a AS uuid), CAST(:b AS uuid)), :p)"
+                ),
+                {"id": thread, "i": invitation, "a": other, "b": developer, "p": problem},
+            )
+            await conn.execute(
+                text("INSERT INTO team_messages (id, thread_id, sender_user_id, body) VALUES (:id, :t, :s, 'Hi')"),
+                {"id": uuid7(), "t": thread, "s": other},
+            )
+
+
+async def test_the_team_threads_list(
+    developers: Developers, proposal_world: ProposalWorld, owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """REQ-DEV-03 (P22 card C): the threads list (each with its counterpart's card, the problem's title, the last
+    message's time and the unread count) sends as many statements with 20 threads as with 2."""
+    client = await developers()
+    await _threads(owner_engine, user_of(client), proposal_world.problem_id, SMALL)
+    small, body = await counted(client, app_engine, "/api/me/teams")
+    assert len(body["threads"]) == SMALL
+    assert all(t["unread"] == 1 for t in body["threads"])
+    await _threads(owner_engine, user_of(client), proposal_world.problem_id, LARGE - SMALL)
+    large, body = await counted(client, app_engine, "/api/me/teams")
+    assert len(body["threads"]) == LARGE
+    assert all(t["counterpart"] for t in body["threads"])
+    assert large == small
