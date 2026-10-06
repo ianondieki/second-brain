@@ -160,6 +160,7 @@ Create Date: 2026-10-06
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import NamedTuple
 
 import sqlalchemy as sa
 from alembic import context, op
@@ -177,6 +178,20 @@ NEW_TABLES = (
     "team_thread_reads",
     "proposal_contributors",
 )
+RLS_TABLES = NEW_TABLES
+
+# Table privileges of bridge_app on this revision's tables; anything not listed is not granted. Column-scoped where the
+# database owns a column (status, decisions, closing, times, redaction) or a column is written later (a removal).
+APP_GRANTS: dict[str, str] = {
+    "developer_blocks": "SELECT, INSERT (blocker_user_id, blocked_user_id), DELETE",
+    "team_invitations": "SELECT, INSERT (id, from_user_id, to_user_id, problem_id, note)",
+    "team_threads": "SELECT",
+    "team_messages": "SELECT, INSERT (id, thread_id, sender_user_id, body)",
+    "team_thread_reads": "SELECT, INSERT (thread_id, user_id, last_read_at), UPDATE (last_read_at)",
+    "proposal_contributors": "SELECT, INSERT (proposal_id, user_id, thread_id), UPDATE (removed_at)",
+}
+# revision 0001's developer_profiles grant gains the switch (own row: 0001's UPDATE policy)
+PROFILE_GRANT = "GRANT UPDATE (peers_visible) ON TABLE developer_profiles TO bridge_app;"
 
 # CHECK expressions, verbatim from the ORM models (bridge.teams.models, bridge.profiles.models).
 INVITATION_STATUSES = ("pending", "accepted", "declined", "withdrawn", "ended")
@@ -190,14 +205,869 @@ NOTE_VALID = (
 )
 PEERS_OPT_IN_COMPLETE = "peers_visible = (peers_opted_in_at IS NOT NULL)"
 
+# moderation_cases (revisions 0002 and 0008): bridge_app's INSERT policy, as 0008 left it and narrowed again (restored
+# on downgrade).
+REPORTS_INSERT_0008 = (
+    "source = 'report' AND reporter_id = app_user_id() AND status = 'open' AND classifier IS NULL"
+    " AND assigned_to IS NULL AND decided_by IS NULL AND decided_at IS NULL AND subject_type <> 'message'"
+)
+REPORTS_INSERT = REPORTS_INSERT_0008 + " AND subject_type <> 'team_message'"  # app_report_team_message only
+TEAM_MESSAGE_REPORT = "subject_type = 'team_message' AND source = 'report'"
+
 
 def _in(column: str, values: tuple[str, ...]) -> str:
     return f"{column} IN ({', '.join(repr(value) for value in values)})"
 
 
+class Policy(NamedTuple):
+    """One RLS policy for one command, named ``<role>_<command>[_<suffix>]`` (unique per table)."""
+
+    table: str
+    command: str
+    using: str | None = None
+    check: str | None = None
+    role: str = "bridge_app"
+    suffix: str = ""
+
+    @property
+    def name(self) -> str:
+        return f"{self.role}_{self.command.lower()}" + (f"_{self.suffix}" if self.suffix else "")
+
+    def create_sql(self) -> str:
+        # USING filters existing rows (SELECT, UPDATE, DELETE); WITH CHECK validates new rows (INSERT, UPDATE).
+        shape = {"SELECT": (True, False), "INSERT": (False, True), "UPDATE": (True, True), "DELETE": (True, False)}
+        if shape.get(self.command) != (self.using is not None, self.check is not None):
+            raise ValueError(f"malformed policy: {self}")
+        sql = f"CREATE POLICY {self.name} ON {self.table} AS PERMISSIVE FOR {self.command} TO {self.role}"
+        if self.using is not None:
+            sql += f" USING ({self.using})"
+        if self.check is not None:
+            sql += f" WITH CHECK ({self.check})"
+        return sql + ";"
+
+
+# Predicates. Every reader and writer is a developer (app_is_developer(): organisation-only accounts and staff read and
+# write nothing here). A thread's parties are its canonical pair.
+_DEV = "app_is_developer()"
+_BLOCKER = f"blocker_user_id = app_user_id() AND {_DEV}"
+_PARTIES = f"app_user_id() IN (from_user_id, to_user_id) AND {_DEV}"
+_PAIR = f"app_user_id() IN (a_user_id, b_user_id) AND {_DEV}"
+
+
+def _thread(table: str, condition: str = "") -> str:
+    """The row's thread is one the caller is a party of (and meets ``condition``, over ``t``)."""
+    return (
+        f"EXISTS (SELECT 1 FROM team_threads t WHERE t.id = {table}.thread_id"
+        f" AND app_user_id() IN (t.a_user_id, t.b_user_id){condition})"
+    )
+
+
+INVITE = (
+    "from_user_id = app_user_id() AND app_is_visible_peer(from_user_id) AND app_is_visible_peer(to_user_id)"
+    " AND app_team_problem_open(problem_id) AND NOT app_blocked_either_way(from_user_id, to_user_id)"
+)
+MESSAGE_INSERT = f"sender_user_id = app_user_id() AND {_DEV} AND " + _thread(
+    "team_messages", " AND t.closed_at IS NULL AND NOT app_blocked_either_way(t.a_user_id, t.b_user_id)"
+)
+_OWN_READ = f"user_id = app_user_id() AND {_DEV} AND " + _thread("team_thread_reads")
+_PROPOSAL = "EXISTS (SELECT 1 FROM proposals p WHERE p.id = proposal_contributors.proposal_id{condition})"
+_OWNED = _PROPOSAL.format(condition=" AND p.owner_id = app_user_id()")
+CONTRIBUTOR_INSERT = (
+    f"{_DEV} AND user_id <> app_user_id() AND {_OWNED} AND EXISTS (SELECT 1 FROM team_threads t"
+    " WHERE t.id = proposal_contributors.thread_id"
+    " AND t.a_user_id = LEAST(app_user_id(), proposal_contributors.user_id)"
+    " AND t.b_user_id = GREATEST(app_user_id(), proposal_contributors.user_id))"
+)
+CONTRIBUTOR_REMOVE = f"{_DEV} AND (user_id = app_user_id() OR {_OWNED})"
+
+POLICIES: tuple[Policy, ...] = (
+    # --- developer_blocks: the blocker's own rows ---
+    Policy("developer_blocks", "SELECT", _BLOCKER),
+    Policy("developer_blocks", "INSERT", check=_BLOCKER),
+    Policy("developer_blocks", "DELETE", _BLOCKER),
+    # --- team_invitations: the two parties read; a visible peer invites another on an open problem ---
+    Policy("team_invitations", "SELECT", _PARTIES),
+    Policy("team_invitations", "INSERT", check=INVITE),
+    # --- team_threads: the two parties read (written by the definers only) ---
+    Policy("team_threads", "SELECT", _PAIR),
+    # --- team_messages: the thread's parties read; a party posts while it is open (append-only) ---
+    Policy("team_messages", "SELECT", f"{_DEV} AND " + _thread("team_messages")),
+    Policy("team_messages", "INSERT", check=MESSAGE_INSERT),
+    # --- team_thread_reads: a party's own marker ---
+    Policy("team_thread_reads", "SELECT", _OWN_READ),
+    Policy("team_thread_reads", "INSERT", check=_OWN_READ),
+    Policy("team_thread_reads", "UPDATE", _OWN_READ, _OWN_READ),
+    # --- proposal_contributors: developers who read the proposal, and the contributor; the owner adds a counterpart;
+    # the owner or the contributor removes ---
+    Policy(
+        "proposal_contributors",
+        "SELECT",
+        f"{_DEV} AND (user_id = app_user_id() OR {_PROPOSAL.format(condition='')})",
+    ),
+    Policy("proposal_contributors", "INSERT", check=CONTRIBUTOR_INSERT),
+    Policy("proposal_contributors", "UPDATE", CONTRIBUTOR_REMOVE, CONTRIBUTOR_REMOVE),
+)
+
+# ---------------------------------------------------------------------------------------------------------------------
+# SQL functions. As in 0001 to 0010: every function pins search_path = pg_catalog, public, pg_temp (pg_temp last),
+# EXECUTE is revoked from PUBLIC and granted explicitly (FUNCTION_GRANTS; internal and trigger functions to nobody).
+# SECURITY DEFINER functions run as bridge_owner, which bypasses RLS (ENABLED, not FORCED).
+# ---------------------------------------------------------------------------------------------------------------------
+
+FUNCTIONS_SQL = r"""
+-- Whether p_user is a developer who opted in to peers (D-58): an active user with a developer profile, no staff role
+-- and peers_visible. Answered only to a caller who is a developer (anyone else always gets false), so an organisation-
+-- only account or an unbound session learns nothing about anyone's opt-in. The invitations' INSERT policy and trigger,
+-- app_peers and the API call it. SECURITY DEFINER: reads other developers' profiles.
+CREATE FUNCTION app_is_visible_peer(p_user uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT public.app_is_developer() AND EXISTS (
+        SELECT 1 FROM public.developer_profiles d JOIN public.users u ON u.id = d.user_id
+         WHERE d.user_id = p_user AND d.peers_visible AND u.status = 'active' AND u.staff_role IS NULL)
+$$;
+
+-- Whether a block stands between p_a and p_b, in either direction (D-58: a block hides both from each other
+-- everywhere). Answered only when the caller is one of the two: NULL otherwise, so nobody learns whether two other
+-- users blocked each other, and a policy's NOT of it refuses. The policies call it with the caller as one side.
+-- SECURITY DEFINER: the blocked side does not read the block (developer_blocks is the blocker's own).
+CREATE FUNCTION app_blocked_either_way(p_a uuid, p_b uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT CASE WHEN public.app_user_id() IN (p_a, p_b) THEN EXISTS (
+        SELECT 1 FROM public.developer_blocks b
+         WHERE (b.blocker_user_id = p_a AND b.blocked_user_id = p_b)
+            OR (b.blocker_user_id = p_b AND b.blocked_user_id = p_a)) END
+$$;
+
+-- Whether a team may form on p_problem (D-58, the card's "a published problem or Brief"): it is published and clear,
+-- and every signed-in user reads it: a developer's problem, or a Brief that is public and published (an invited Brief
+-- is its invitees' and organisation's, so it never reaches another developer through an invitation; a closed Brief
+-- takes no new team). SECURITY DEFINER: the same answer whoever asks; it says only what any signed-in user reads.
+CREATE FUNCTION app_team_problem_open(p_problem uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.problems p
+         WHERE p.id = p_problem AND p.status = 'published' AND p.moderation_state = 'clear'
+           AND (p.org_id IS NULL OR EXISTS (SELECT 1 FROM public.problem_briefs b
+                                             WHERE b.problem_id = p.id AND b.visibility = 'public'
+                                               AND b.status = 'published')))
+$$;
+
+-- The pair's transaction-scoped advisory lock, the same whichever way round the two are named: an invitation's insert
+-- and a block (either path) take it, so a block and an invitation between the same two never pass each other.
+-- Internal (no EXECUTE grant): the triggers and definers below, as the owner.
+CREATE FUNCTION team_pair_lock(p_a uuid, p_b uuid) RETURNS void
+    LANGUAGE sql VOLATILE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
+        'team_pair:' || least(p_a, p_b)::text || ':' || greatest(p_a, p_b)::text, 0))
+$$;
+
+-- A block's consequences (D-58: a block ends everything): every pending invitation between the two is ended and every
+-- open thread between them closed with the reason blocked, at the shared clock; returns how many rows changed.
+-- Contributor credit already given stays (D-62). Internal (no EXECUTE grant): app_block_developer and the blocks'
+-- AFTER INSERT trigger, as the owner, under the pair's lock.
+CREATE FUNCTION team_end_pair(p_a uuid, p_b uuid) RETURNS integer
+    LANGUAGE plpgsql VOLATILE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_ended integer;
+    v_closed integer;
+    v_now timestamptz := public.app_clock_now();
+BEGIN
+    UPDATE public.team_invitations i SET status = 'ended', decided_at = v_now
+     WHERE i.status = 'pending' AND least(i.from_user_id, i.to_user_id) = least(p_a, p_b)
+       AND greatest(i.from_user_id, i.to_user_id) = greatest(p_a, p_b);
+    GET DIAGNOSTICS v_ended = ROW_COUNT;
+    UPDATE public.team_threads t SET closed_at = v_now, closed_reason = 'blocked'
+     WHERE t.closed_at IS NULL AND t.a_user_id = least(p_a, p_b) AND t.b_user_id = greatest(p_a, p_b);
+    GET DIAGNOSTICS v_closed = ROW_COUNT;
+    RETURN v_ended + v_closed;
+END;
+$$;
+
+-- The peers of p_caller (D-58), unordered: nothing when p_caller is not an active, non-staff developer who opted in;
+-- otherwise the other such developers of the same kind (real or demo: users.demo_account, as app_quiz_board) with no
+-- block either way, who share a liked niche with p_caller or are in p_caller's county (a regions row of kind county,
+-- never the country). Only the handle, headline, county (code and name), the shared liked niches' slugs (sorted),
+-- whether the county is the caller's and the opt-in time. Internal (no EXECUTE grant): app_peers and
+-- app_developer_card, as the owner.
+CREATE FUNCTION team_peers_of(p_caller uuid)
+    RETURNS TABLE (user_id uuid, handle citext, headline text, county_code text, county_name text,
+                   shared_niches text[], same_county boolean, opted_in_at timestamptz)
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    WITH me AS (
+        SELECT d.user_id, d.county_code, u.demo_account,
+               coalesce((SELECT r.kind = 'county' FROM public.regions r WHERE r.code = d.county_code), false)
+                   AS in_county
+          FROM public.developer_profiles d JOIN public.users u ON u.id = d.user_id
+         WHERE d.user_id = p_caller AND d.peers_visible AND u.status = 'active' AND u.staff_role IS NULL
+    ), others AS (
+        SELECT d.user_id, d.handle, d.headline::text AS headline, d.county_code::text AS county_code,
+               r.name::text AS county_name,
+               ARRAY(SELECT n.slug::text
+                       FROM public.developer_niches mine
+                       JOIN public.developer_niches theirs
+                         ON theirs.niche_id = mine.niche_id AND theirs.kind = 'liked' AND theirs.user_id = d.user_id
+                       JOIN public.niches n ON n.id = mine.niche_id
+                      WHERE mine.user_id = me.user_id AND mine.kind = 'liked'
+                      ORDER BY n.slug) AS shared,
+               me.in_county AND d.county_code IS NOT DISTINCT FROM me.county_code AS same,
+               d.peers_opted_in_at
+          FROM me
+          JOIN public.developer_profiles d ON d.user_id <> me.user_id AND d.peers_visible
+          JOIN public.users u
+            ON u.id = d.user_id AND u.status = 'active' AND u.staff_role IS NULL AND u.demo_account = me.demo_account
+          LEFT JOIN public.regions r ON r.code = d.county_code
+         WHERE NOT EXISTS (SELECT 1 FROM public.developer_blocks b
+                            WHERE (b.blocker_user_id = me.user_id AND b.blocked_user_id = d.user_id)
+                               OR (b.blocker_user_id = d.user_id AND b.blocked_user_id = me.user_id))
+    )
+    SELECT o.user_id, o.handle, o.headline, o.county_code, o.county_name, o.shared, o.same, o.peers_opted_in_at
+      FROM others o
+     WHERE cardinality(o.shared) > 0 OR o.same
+$$;
+
+-- A page of the caller's peers (D-58): the caller is a developer who opted in (anyone else, staff and organisation-
+-- only accounts included, is refused); team_peers_of's set, ordered by the number of shared liked niches, then the
+-- caller's county first, then the newest opt-in, then handle (the profile embedding is never computed in the prototype:
+-- its order replaces this one here when it is). At most 50 a page. SECURITY DEFINER: reads other developers' profiles
+-- and niches, returns the card's fields only.
+CREATE FUNCTION app_peers(p_limit integer, p_offset integer)
+    RETURNS TABLE (user_id uuid, handle citext, headline text, county_code text, county_name text,
+                   shared_niches text[], same_county boolean, opted_in_at timestamptz)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_user uuid := public.app_user_id();
+BEGIN
+    IF v_user IS NULL OR NOT public.app_is_visible_peer(v_user) THEN
+        RAISE EXCEPTION 'app_peers: developers who opted in to peers only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 50 OR p_offset IS NULL OR p_offset < 0 THEN
+        RAISE EXCEPTION 'app_peers: a limit of 1 to 50 and an offset of 0 or more'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    RETURN QUERY
+    SELECT p.user_id, p.handle, p.headline, p.county_code, p.county_name, p.shared_niches, p.same_county,
+           p.opted_in_at
+      FROM public.team_peers_of(v_user) p
+     ORDER BY cardinality(p.shared_niches) DESC, p.same_county DESC, p.opted_in_at DESC, p.handle
+     LIMIT p_limit OFFSET p_offset;
+END;
+$$;
+
+-- Another developer's card for the caller (D-58): their handle and headline, never anything else, when the caller is a
+-- developer, p_user is another user with a developer profile, no block stands between the two either way, and p_user
+-- is the other party of an invitation of the caller's (any status; every thread comes from an accepted one) or one of
+-- the caller's peers (team_peers_of). No row otherwise. SECURITY DEFINER: reads the profile and the pair's rows.
+CREATE FUNCTION app_developer_card(p_user uuid)
+    RETURNS TABLE (user_id uuid, handle citext, headline text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT d.user_id, d.handle, d.headline::text
+      FROM public.developer_profiles d
+     WHERE d.user_id = p_user AND p_user <> public.app_user_id() AND public.app_is_developer()
+       AND NOT EXISTS (SELECT 1 FROM public.developer_blocks b
+                        WHERE (b.blocker_user_id = public.app_user_id() AND b.blocked_user_id = p_user)
+                           OR (b.blocker_user_id = p_user AND b.blocked_user_id = public.app_user_id()))
+       AND (EXISTS (SELECT 1 FROM public.team_invitations i
+                     WHERE (i.from_user_id = public.app_user_id() AND i.to_user_id = p_user)
+                        OR (i.from_user_id = p_user AND i.to_user_id = public.app_user_id()))
+            OR EXISTS (SELECT 1 FROM public.team_peers_of(public.app_user_id()) p WHERE p.user_id = p_user))
+$$;
+
+-- The caller's own blocks, newest first, with each blocked developer's handle (the blocker knew it; the blocked side
+-- never reads a block). Developers only. SECURITY DEFINER: reads the blocked developers' handles.
+CREATE FUNCTION app_blocked_developers()
+    RETURNS TABLE (user_id uuid, handle citext, blocked_at timestamptz)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NOT public.app_is_developer() THEN
+        RAISE EXCEPTION 'app_blocked_developers: developers only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN QUERY
+    SELECT b.blocked_user_id, d.handle, b.created_at
+      FROM public.developer_blocks b JOIN public.developer_profiles d ON d.user_id = b.blocked_user_id
+     WHERE b.blocker_user_id = public.app_user_id()
+     ORDER BY b.created_at DESC, d.handle;
+END;
+$$;
+
+-- An invitation's one decision (REQ-DEV-03): accept or decline by the recipient, withdraw by the sender, a pending
+-- invitation only, at the shared clock. A non-party, a caller who is not a developer and an unknown id get one refusal.
+-- accept also needs the sender still an active, non-staff developer and the problem still open to teams
+-- (app_team_problem_open), and creates the pair's thread on the invitation's problem; it returns the thread's id (NULL
+-- for the other decisions). The parties never change (team_invitations_guard), so the caller is checked before the row
+-- is locked; a block in flight (it ends the pending invitation under its own row lock) is waited for and its outcome
+-- read. The app writes the audit event in the same transaction.
+CREATE FUNCTION app_decide_team_invitation(p_invitation uuid, p_decision text) RETURNS uuid
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_user uuid := public.app_user_id();
+    v_from uuid;
+    v_to uuid;
+    v_status text;
+    v_problem uuid;
+    v_thread uuid;
+    v_now timestamptz := public.app_clock_now();
+BEGIN
+    IF p_decision IS NULL OR p_decision NOT IN ('accept', 'decline', 'withdraw') THEN
+        RAISE EXCEPTION 'app_decide_team_invitation: the decision is accept, decline or withdraw'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    SELECT i.from_user_id, i.to_user_id INTO v_from, v_to FROM public.team_invitations i WHERE i.id = p_invitation;
+    IF NOT FOUND OR v_user IS NULL OR v_user NOT IN (v_from, v_to) OR NOT public.app_is_developer() THEN
+        RAISE EXCEPTION 'app_decide_team_invitation: no invitation of the caller''s with that id'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_decision = 'withdraw' AND v_user <> v_from THEN
+        RAISE EXCEPTION 'app_decide_team_invitation: only the sender withdraws an invitation'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_decision <> 'withdraw' AND v_user <> v_to THEN
+        RAISE EXCEPTION 'app_decide_team_invitation: only the recipient accepts or declines an invitation'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    SELECT i.status, i.problem_id INTO v_status, v_problem
+      FROM public.team_invitations i WHERE i.id = p_invitation FOR UPDATE;
+    IF v_status <> 'pending' THEN
+        RAISE EXCEPTION 'app_decide_team_invitation: the invitation was already decided (%)', v_status
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    IF p_decision = 'accept' THEN
+        IF NOT EXISTS (SELECT 1 FROM public.users u JOIN public.developer_profiles d ON d.user_id = u.id
+                        WHERE u.id = v_from AND u.status = 'active' AND u.staff_role IS NULL) THEN
+            RAISE EXCEPTION 'app_decide_team_invitation: the sender is no longer an active developer'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        IF NOT public.app_team_problem_open(v_problem) THEN
+            RAISE EXCEPTION 'app_decide_team_invitation: the problem is no longer open to teams'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+        UPDATE public.team_invitations SET status = 'accepted', decided_at = v_now WHERE id = p_invitation;
+        v_thread := public.uuid7();
+        INSERT INTO public.team_threads (id, invitation_id, a_user_id, b_user_id, problem_id)
+        VALUES (v_thread, p_invitation, least(v_from, v_to), greatest(v_from, v_to), v_problem);
+        RETURN v_thread;
+    END IF;
+    UPDATE public.team_invitations
+       SET status = CASE p_decision WHEN 'decline' THEN 'declined' ELSE 'withdrawn' END, decided_at = v_now
+     WHERE id = p_invitation;
+    RETURN NULL;
+END;
+$$;
+
+-- A party leaves a thread (REQ-DEV-03): an open thread of the caller's (a developer) is closed with the reason left,
+-- at the shared clock, for both (a closed thread is read-only and never reopens); blocked is a block's reason, never a
+-- caller's. A non-party, a caller who is not a developer and an unknown id get one refusal. Locks the thread FOR
+-- UPDATE, so a message in flight (FOR SHARE) is waited for.
+CREATE FUNCTION app_close_team_thread(p_thread uuid, p_reason text) RETURNS void
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_user uuid := public.app_user_id();
+    v_a uuid;
+    v_b uuid;
+    v_closed timestamptz;
+BEGIN
+    IF p_reason IS DISTINCT FROM 'left' THEN
+        RAISE EXCEPTION 'app_close_team_thread: a party closes a thread with the reason left'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    SELECT t.a_user_id, t.b_user_id INTO v_a, v_b FROM public.team_threads t WHERE t.id = p_thread;
+    IF NOT FOUND OR v_user IS NULL OR v_user NOT IN (v_a, v_b) OR NOT public.app_is_developer() THEN
+        RAISE EXCEPTION 'app_close_team_thread: no thread of the caller''s with that id'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    SELECT t.closed_at INTO v_closed FROM public.team_threads t WHERE t.id = p_thread FOR UPDATE;
+    IF v_closed IS NOT NULL THEN
+        RAISE EXCEPTION 'app_close_team_thread: the thread is already closed'
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    UPDATE public.team_threads SET closed_at = public.app_clock_now(), closed_reason = 'left' WHERE id = p_thread;
+END;
+$$;
+
+-- A developer blocks another developer (D-58), idempotently: under the pair's lock, every pending invitation between
+-- the two is ended and every open thread closed (team_end_pair), then the block is inserted (a repeat inserts nothing;
+-- the blocks' own triggers find nothing left to end). Returns how many rows changed: the block (0 or 1) plus the
+-- invitations ended and threads closed. Contributor credit already given stays: proposal_contributors is untouched
+-- (D-62 is about credit given, and the owner or the contributor may remove it). A caller who is not a developer is
+-- refused, so is naming nobody or oneself; a user without a developer profile is no_data_found. The app writes the
+-- audit event in the same transaction.
+CREATE FUNCTION app_block_developer(p_blocked uuid) RETURNS integer
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_user uuid := public.app_user_id();
+    v_changed integer;
+    v_inserted integer;
+BEGIN
+    IF v_user IS NULL OR NOT public.app_is_developer() THEN
+        RAISE EXCEPTION 'app_block_developer: developers only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_blocked IS NULL OR p_blocked = v_user THEN
+        RAISE EXCEPTION 'app_block_developer: name another developer' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.developer_profiles d WHERE d.user_id = p_blocked) THEN
+        RAISE EXCEPTION 'app_block_developer: no developer with that id' USING ERRCODE = 'no_data_found';
+    END IF;
+    PERFORM public.team_pair_lock(v_user, p_blocked);
+    v_changed := public.team_end_pair(v_user, p_blocked);
+    INSERT INTO public.developer_blocks (blocker_user_id, blocked_user_id) VALUES (v_user, p_blocked)
+    ON CONFLICT DO NOTHING;
+    GET DIAGNOSTICS v_inserted = ROW_COUNT;
+    RETURN v_changed + v_inserted;
+END;
+$$;
+
+-- A developer lifts their own block (D-58): deletes the row only; the threads it closed stay closed and the invitations
+-- it ended stay ended. Returns how many rows were deleted (0 when there was no such block). SECURITY INVOKER: the
+-- caller's own block, under the blocks' RLS (bridge_app's DELETE policy); a caller who is not a developer is refused.
+CREATE FUNCTION app_unblock_developer(p_blocked uuid) RETURNS integer
+    LANGUAGE plpgsql VOLATILE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_deleted integer;
+BEGIN
+    IF NOT public.app_is_developer() THEN
+        RAISE EXCEPTION 'app_unblock_developer: developers only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    DELETE FROM public.developer_blocks b
+     WHERE b.blocker_user_id = public.app_user_id() AND b.blocked_user_id = p_blocked;
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+    RETURN v_deleted;
+END;
+$$;
+
+-- A party reports a team message (REQ-DEV-03; 0008's app_report_message for subject_type 'team_message'): files one
+-- moderation case (source 'report', the caller as reporter_id) for a message of a thread the caller is a party of (a
+-- developer; anyone else gets one refusal, the same as for a message that does not exist), once per reporter and
+-- message (a repeat returns the same case with created false; uq_moderation_cases_team_message_report backs it). The
+-- reasons are one or more of the fixed codes spam, abuse, contact_details, confidential, other (never free text; each
+-- kept once, in code order; invalid_parameter_value otherwise). At most 10 team message reports per reporter in 24
+-- hours, fixed here (program_limit_exceeded). Serialised per reporter (an advisory lock; the count then reads every
+-- committed report at READ COMMITTED, the application's level). SECURITY DEFINER: reads the message and writes the case
+-- whatever the caller's RLS (bridge_app's own INSERT of a team message report is refused).
+CREATE FUNCTION app_report_team_message(p_message uuid, p_reasons text[])
+    RETURNS TABLE (case_id uuid, created boolean)
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_user uuid := public.app_user_id();
+    v_case uuid;
+BEGIN
+    IF v_user IS NULL OR NOT public.app_is_developer() OR NOT EXISTS (
+        SELECT 1 FROM public.team_messages m JOIN public.team_threads t ON t.id = m.thread_id
+         WHERE m.id = p_message AND v_user IN (t.a_user_id, t.b_user_id)
+    ) THEN
+        RAISE EXCEPTION 'app_report_team_message: no team message of the caller''s with that id'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_reasons IS NULL OR cardinality(p_reasons) = 0 OR array_ndims(p_reasons) <> 1
+       OR array_position(p_reasons, NULL) IS NOT NULL
+       OR NOT (p_reasons <@ ARRAY['spam', 'abuse', 'contact_details', 'confidential', 'other']) THEN
+        RAISE EXCEPTION 'app_report_team_message: the reasons are one or more of spam, abuse, contact_details,'
+            ' confidential, other' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    PERFORM pg_catalog.pg_advisory_xact_lock(
+        pg_catalog.hashtextextended('moderation_cases:team_message_report:' || v_user::text, 0));
+    SELECT c.id INTO v_case FROM public.moderation_cases c
+     WHERE c.subject_type = 'team_message' AND c.source = 'report' AND c.subject_id = p_message
+       AND c.reporter_id = v_user;
+    IF FOUND THEN
+        RETURN QUERY SELECT v_case, false;
+        RETURN;
+    END IF;
+    IF (SELECT count(*) FROM public.moderation_cases c
+         WHERE c.subject_type = 'team_message' AND c.source = 'report' AND c.reporter_id = v_user
+           AND c.created_at > now() - interval '24 hours') >= 10 THEN
+        RAISE EXCEPTION 'app_report_team_message: at most 10 team message reports a day'
+            USING ERRCODE = 'program_limit_exceeded';
+    END IF;
+    v_case := public.uuid7();
+    INSERT INTO public.moderation_cases (id, subject_type, subject_id, reasons, source, reporter_id)
+    VALUES (v_case, 'team_message', p_message,
+            ARRAY(SELECT r.code FROM unnest(ARRAY['spam', 'abuse', 'contact_details', 'confidential', 'other'])
+                                     WITH ORDINALITY AS r(code, n)
+                   WHERE r.code = ANY (p_reasons) ORDER BY r.n),
+            'report', v_user);
+    RETURN QUERY SELECT v_case, true;
+END;
+$$;
+
+-- The one team message a report shared (REQ-DEV-03; 0008's app_reported_message): staff admin or moderator only, and
+-- only the message of a team message report (every such case was filed by a party: app_report_team_message), with its
+-- sender's id and handle (staff act on the sender) and nothing else of the thread; no row for any other case. Staff
+-- read no team message otherwise. SECURITY DEFINER: reads the message whatever the caller's RLS.
+CREATE FUNCTION app_reported_team_message(p_case uuid)
+    RETURNS TABLE (message_id uuid, thread_id uuid, sender_user_id uuid, sender_handle citext, body text,
+                   created_at timestamptz)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NOT public.app_is_staff('{admin,moderator}') THEN
+        RAISE EXCEPTION 'app_reported_team_message: staff admin or moderator only'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN QUERY
+    SELECT m.id, m.thread_id, m.sender_user_id, d.handle, m.body, m.created_at
+      FROM public.moderation_cases c
+      JOIN public.team_messages m ON m.id = c.subject_id
+      LEFT JOIN public.developer_profiles d ON d.user_id = m.sender_user_id
+     WHERE c.id = p_case AND c.subject_type = 'team_message' AND c.source = 'report';
+END;
+$$;
+
+-- A proposal's credit (D-62 (a), "Contributors: <handles>"): the handles of its contributors who were not removed, by
+-- the time they were added, for a caller who may read the proposal: its owner, any signed-in user while it is published
+-- and clear, staff admin or moderator (the proposals' SELECT policy of revision 0002, restated: keep the two the same).
+-- NULL for anyone else (an empty array when there is no contributor). Read at render time; never part of the manifest
+-- or its hash. SECURITY DEFINER: reads the contributors and their handles whatever the caller's RLS.
+CREATE FUNCTION app_contributor_handles(p_proposal uuid) RETURNS text[]
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT CASE WHEN EXISTS (
+        SELECT 1 FROM public.proposals p
+         WHERE p.id = p_proposal
+           AND (p.owner_id = public.app_user_id()
+                OR (public.app_user_id() IS NOT NULL AND p.status = 'published' AND p.moderation_state = 'clear')
+                OR public.app_is_staff('{admin,moderator}')))
+    THEN ARRAY(SELECT d.handle::text
+                 FROM public.proposal_contributors c JOIN public.developer_profiles d ON d.user_id = c.user_id
+                WHERE c.proposal_id = p_proposal AND c.removed_at IS NULL
+                ORDER BY c.added_at, d.handle) END
+$$;
+
+-- A profile's opt-in time is the database's (D-58: the newest opt-in comes first among equals): the shared clock when
+-- peers_visible turns true (on insert or update), kept while it stays true, NULL while it is false, whatever was sent.
+-- For every role. SECURITY INVOKER (the clock is every writer's).
+CREATE FUNCTION developer_profiles_peers_opt_in() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NOT NEW.peers_visible THEN
+        NEW.peers_opted_in_at := NULL;
+    ELSIF TG_OP = 'INSERT' OR NOT OLD.peers_visible THEN
+        NEW.peers_opted_in_at := public.app_clock_now();
+    ELSE
+        NEW.peers_opted_in_at := OLD.peers_opted_in_at;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- A block ends everything between the two in its own transaction, by whichever path it is inserted: BEFORE INSERT
+-- (developer_blocks_0_lock) takes the pair's lock before the row exists (so app_block_developer and a direct INSERT of
+-- the same pair wait for each other instead of deadlocking on the key), AFTER INSERT (developer_blocks_end_pair, after
+-- the policy admitted the row) ends the pair's pending invitations and closes its open threads (team_end_pair). For
+-- every role. SECURITY DEFINER: the blocker updates neither table.
+CREATE FUNCTION developer_blocks_pair() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    PERFORM public.team_pair_lock(NEW.blocker_user_id, NEW.blocked_user_id);
+    IF TG_WHEN = 'AFTER' THEN
+        PERFORM public.team_end_pair(NEW.blocker_user_id, NEW.blocked_user_id);
+        RETURN NULL;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- The sender's precise refusals of their own invitation (the API's 404 and 403), ahead of the INSERT policy's generic
+-- one: only when the row is the caller's own (from_user_id = app.user_id) and the caller is a visible peer; anything
+-- else passes to the policy, which refuses it, so nothing is said here about anyone else's pair, opt-in or problem.
+-- Then: the recipient is a visible peer, the problem is open to teams, and (under the pair's lock, read afresh, so a
+-- block in flight is waited for) no block stands between the two. SECURITY DEFINER: reads the pair's blocks.
+CREATE FUNCTION team_invitations_open() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.from_user_id IS DISTINCT FROM public.app_user_id() OR NOT public.app_is_visible_peer(NEW.from_user_id) THEN
+        RETURN NEW;
+    END IF;
+    IF NOT public.app_is_visible_peer(NEW.to_user_id) THEN
+        RAISE EXCEPTION 'team_invitations: the recipient is not a developer who opted in to peers'
+            USING ERRCODE = 'no_data_found';
+    END IF;
+    IF NOT public.app_team_problem_open(NEW.problem_id) THEN
+        RAISE EXCEPTION 'team_invitations: no published problem with that id' USING ERRCODE = 'no_data_found';
+    END IF;
+    PERFORM public.team_pair_lock(NEW.from_user_id, NEW.to_user_id);
+    IF EXISTS (SELECT 1 FROM public.developer_blocks b
+                WHERE (b.blocker_user_id = NEW.from_user_id AND b.blocked_user_id = NEW.to_user_id)
+                   OR (b.blocker_user_id = NEW.to_user_id AND b.blocked_user_id = NEW.from_user_id)) THEN
+        RAISE EXCEPTION 'team_invitations: a block stands between the two developers'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- An invitation's parties, problem, note and creation time never change; it changes once, by its decision, from pending
+-- to accepted, declined, withdrawn or ended (decided_at with it: CHECK decision_complete). For every role (bridge_app
+-- holds no UPDATE: app_decide_team_invitation and a block). SECURITY INVOKER (the writer is the owner).
+CREATE FUNCTION team_invitations_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF (NEW.id, NEW.from_user_id, NEW.to_user_id, NEW.problem_id, NEW.note, NEW.created_at)
+       IS DISTINCT FROM (OLD.id, OLD.from_user_id, OLD.to_user_id, OLD.problem_id, OLD.note, OLD.created_at) THEN
+        RAISE EXCEPTION 'team_invitations: an invitation''s parties, problem, note and creation time never change'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF OLD.status <> 'pending' OR NEW.status = 'pending' THEN
+        RAISE EXCEPTION 'team_invitations: an invitation changes only by its one decision, from pending'
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- A thread's parties, problem, invitation and creation time never change; it changes once, when it closes (left or
+-- blocked, with closed_at: CHECK close_complete), and a closed thread never changes again (it never reopens). For every
+-- role (bridge_app holds no UPDATE). SECURITY INVOKER (the writer is the owner).
+CREATE FUNCTION team_threads_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF (NEW.id, NEW.invitation_id, NEW.a_user_id, NEW.b_user_id, NEW.problem_id, NEW.created_at)
+       IS DISTINCT FROM (OLD.id, OLD.invitation_id, OLD.a_user_id, OLD.b_user_id, OLD.problem_id, OLD.created_at) THEN
+        RAISE EXCEPTION 'team_threads: a thread''s parties, problem, invitation and creation time never change'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF OLD.closed_at IS NOT NULL THEN
+        RAISE EXCEPTION 'team_threads: a closed thread never changes and never reopens'
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- Runs first on a team message's insert (team_messages_0_visible sorts before team_messages_1_open): the message names
+-- a thread the caller reads (a party who is a developer), else one refusal, the same for a thread that does not exist,
+-- so the definer trigger after it reads, locks and reports nothing about another pair's thread. SECURITY INVOKER: the
+-- caller's RLS decides; the owner sees every thread.
+CREATE FUNCTION team_thread_visible() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.thread_id IS NULL OR NOT EXISTS (SELECT 1 FROM public.team_threads t WHERE t.id = NEW.thread_id) THEN
+        RAISE EXCEPTION 'team_messages: no thread of the caller''s with that id'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- A message is written only by a party of its thread and only while the thread is open (read-only once closed, by a
+-- party leaving or by a block). Reads the thread FOR SHARE: a close or a block in flight (they update the thread) is
+-- waited for and its outcome read, so no message is written once the close has committed; concurrent messages do not
+-- wait for each other. For every role. SECURITY DEFINER: locks a row bridge_app may not update.
+CREATE FUNCTION team_messages_open() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_a uuid;
+    v_b uuid;
+    v_closed timestamptz;
+BEGIN
+    SELECT t.a_user_id, t.b_user_id, t.closed_at INTO v_a, v_b, v_closed
+      FROM public.team_threads t WHERE t.id = NEW.thread_id FOR SHARE;
+    IF NEW.sender_user_id IS DISTINCT FROM v_a AND NEW.sender_user_id IS DISTINCT FROM v_b THEN
+        RAISE EXCEPTION 'team_messages: the sender is a party of the thread' USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_closed IS NOT NULL THEN
+        RAISE EXCEPTION 'team_messages: the thread is closed; it is read-only'
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- D-54 (default (a)), as engagement_messages_redaction_guard (revision 0008): a team message changes only by its
+-- redaction, once: its body becomes '[redacted]' with redacted_at and redacted_by set in the same statement, and
+-- nothing else changes; only the table's owner or a SECURITY DEFINER function it owns (none exists yet) may do it;
+-- bridge_app holds no UPDATE. DELETE and TRUNCATE stay refused for every role (block_mutation()). SECURITY INVOKER, so
+-- current_user is the writer.
+CREATE FUNCTION team_messages_redaction_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF current_user <> (SELECT pg_catalog.pg_get_userbyid(c.relowner) FROM pg_catalog.pg_class c WHERE c.oid = TG_RELID)
+       OR OLD.redacted_at IS NOT NULL OR NEW.body IS DISTINCT FROM '[redacted]'
+       OR NEW.redacted_at IS NULL OR NEW.redacted_by IS NULL
+       OR (NEW.id, NEW.thread_id, NEW.sender_user_id, NEW.created_at)
+          IS DISTINCT FROM (OLD.id, OLD.thread_id, OLD.sender_user_id, OLD.created_at) THEN
+        RAISE EXCEPTION 'team_messages: a message changes only by its redaction, once, by the owner (D-54)'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- A contributor's proposal, user, thread and time added never change; removed_at is set once, at the shared clock
+-- (whatever was sent), and a removed contributor stays removed (never listed again; never added back: the primary
+-- key). For every role (bridge_app's UPDATE is of removed_at, by the owner or the contributor). SECURITY INVOKER.
+CREATE FUNCTION proposal_contributors_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF (NEW.proposal_id, NEW.user_id, NEW.thread_id, NEW.added_at)
+       IS DISTINCT FROM (OLD.proposal_id, OLD.user_id, OLD.thread_id, OLD.added_at) THEN
+        RAISE EXCEPTION 'proposal_contributors: a contributor''s proposal, user, thread and time added never change'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF OLD.removed_at IS NOT NULL THEN
+        RAISE EXCEPTION 'proposal_contributors: a removed contributor stays removed'
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    IF NEW.removed_at IS NOT NULL THEN
+        NEW.removed_at := public.app_clock_now();
+    END IF;
+    RETURN NEW;
+END;
+$$;
+"""
+
+# EXECUTE grants (EXECUTE revoked from PUBLIC first): a policy runs its functions with the caller's privileges.
+FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
+    "app_is_visible_peer(uuid)": ("bridge_app",),  # the invitations' policy and trigger, the API
+    "app_blocked_either_way(uuid, uuid)": ("bridge_app",),  # the invitations' and messages' INSERT policies
+    "app_team_problem_open(uuid)": ("bridge_app",),  # the invitations' INSERT policy, the API
+    "app_peers(integer, integer)": ("bridge_app",),  # a developer who opted in
+    "app_developer_card(uuid)": ("bridge_app",),  # a developer: a counterpart's or a peer's handle and headline
+    "app_blocked_developers()": ("bridge_app",),  # a developer: their own blocks
+    "app_decide_team_invitation(uuid, text)": ("bridge_app",),  # the recipient or the sender
+    "app_close_team_thread(uuid, text)": ("bridge_app",),  # a party
+    "app_block_developer(uuid)": ("bridge_app",),  # a developer
+    "app_unblock_developer(uuid)": ("bridge_app",),  # a developer (INVOKER)
+    "app_report_team_message(uuid, text[])": ("bridge_app",),  # a party's report of one team message
+    "app_reported_team_message(uuid)": ("bridge_app",),  # staff admin|moderator read the reported team message
+    "app_contributor_handles(uuid)": ("bridge_app",),  # anyone who reads the proposal
+}
+INTERNAL_FUNCTIONS = ("team_pair_lock(uuid, uuid)", "team_end_pair(uuid, uuid)", "team_peers_of(uuid)")
+TRIGGER_FUNCTIONS = (
+    "developer_profiles_peers_opt_in()",
+    "developer_blocks_pair()",
+    "team_invitations_open()",
+    "team_invitations_guard()",
+    "team_threads_guard()",
+    "team_thread_visible()",
+    "team_messages_open()",
+    "team_messages_redaction_guard()",
+    "proposal_contributors_guard()",
+)
+
+TRIGGERS_SQL = r"""
+CREATE TRIGGER developer_profiles_peers_opt_in
+    BEFORE INSERT OR UPDATE ON developer_profiles
+    FOR EACH ROW EXECUTE FUNCTION developer_profiles_peers_opt_in();
+CREATE TRIGGER developer_blocks_0_lock
+    BEFORE INSERT ON developer_blocks
+    FOR EACH ROW EXECUTE FUNCTION developer_blocks_pair();
+CREATE TRIGGER developer_blocks_end_pair
+    AFTER INSERT ON developer_blocks
+    FOR EACH ROW EXECUTE FUNCTION developer_blocks_pair();
+CREATE TRIGGER team_invitations_open
+    BEFORE INSERT ON team_invitations
+    FOR EACH ROW EXECUTE FUNCTION team_invitations_open();
+CREATE TRIGGER team_invitations_guard
+    BEFORE UPDATE ON team_invitations
+    FOR EACH ROW EXECUTE FUNCTION team_invitations_guard();
+CREATE TRIGGER team_threads_guard
+    BEFORE UPDATE ON team_threads
+    FOR EACH ROW EXECUTE FUNCTION team_threads_guard();
+CREATE TRIGGER team_messages_0_visible
+    BEFORE INSERT ON team_messages
+    FOR EACH ROW EXECUTE FUNCTION team_thread_visible();
+CREATE TRIGGER team_messages_1_open
+    BEFORE INSERT ON team_messages
+    FOR EACH ROW EXECUTE FUNCTION team_messages_open();
+CREATE TRIGGER team_messages_no_delete
+    BEFORE DELETE ON team_messages
+    FOR EACH ROW EXECUTE FUNCTION block_mutation();
+CREATE TRIGGER team_messages_redaction_guard
+    BEFORE UPDATE ON team_messages
+    FOR EACH ROW EXECUTE FUNCTION team_messages_redaction_guard();
+CREATE TRIGGER team_messages_no_truncate
+    BEFORE TRUNCATE ON team_messages
+    FOR EACH STATEMENT EXECUTE FUNCTION block_mutation();
+CREATE TRIGGER proposal_contributors_guard
+    BEFORE UPDATE ON proposal_contributors
+    FOR EACH ROW EXECUTE FUNCTION proposal_contributors_guard();
+"""
+
+
+def _run_sql(script: str) -> None:
+    """Run a SQL script verbatim on the migration's connection (same transaction); see revision 0001."""
+    cursor = op.get_bind().connection.cursor()
+    try:
+        cursor.execute(script)
+    finally:
+        cursor.close()
+
+
+def _grant_sql() -> str:
+    grants = [f"GRANT {privileges} ON TABLE {table} TO bridge_app;" for table, privileges in APP_GRANTS.items()]
+    grants.append(PROFILE_GRANT)
+    grants += [
+        f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC;" for signature in (*INTERNAL_FUNCTIONS, *TRIGGER_FUNCTIONS)
+    ]
+    for signature, roles in FUNCTION_GRANTS.items():
+        grants.append(f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC;")
+        grants.append(f"GRANT EXECUTE ON FUNCTION {signature} TO {', '.join(roles)};")
+    return "\n".join(grants)
+
+
 def upgrade() -> None:
     _add_profile_columns()
     _create_tables()
+    _run_sql(FUNCTIONS_SQL)  # before the policies: they call app_is_visible_peer and the others
+    _run_sql("\n".join(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;" for table in RLS_TABLES))
+    _run_sql("\n".join(policy.create_sql() for policy in POLICIES))
+    _run_sql(f"ALTER POLICY bridge_app_insert ON moderation_cases WITH CHECK ({REPORTS_INSERT});")
+    op.create_index(
+        "uq_moderation_cases_team_message_report",
+        "moderation_cases",
+        ["subject_id", "reporter_id"],
+        unique=True,
+        postgresql_where=sa.text(TEAM_MESSAGE_REPORT),
+    )
+    _run_sql(TRIGGERS_SQL)
+    _run_sql(_grant_sql())
 
 
 def downgrade() -> None:
@@ -220,11 +1090,23 @@ def downgrade() -> None:
             " contributor credit or peers opt-ins; back the database up, get the human's decision (CLAUDE.md:"
             " destructive migration), then run with -x allow_teams_loss=true"
         )
+    # Revision 0008's report policy as it was (first: nothing depends on it), and no team message report index.
+    _run_sql(f"ALTER POLICY bridge_app_insert ON moderation_cases WITH CHECK ({REPORTS_INSERT_0008});")
+    op.drop_index("uq_moderation_cases_team_message_report", table_name="moderation_cases")
+    # Dropping a table drops its policies, triggers, indexes and grants (block_mutation(), app_clock_now() and
+    # app_is_developer() are revisions 0002, 0003 and 0009's and stay); the policies go with their tables before the
+    # functions they call. Dropping a column drops its grant.
     for table in reversed(NEW_TABLES):
         op.drop_table(table)
+    _run_sql("DROP TRIGGER developer_profiles_peers_opt_in ON developer_profiles;")
     op.drop_constraint(op.f("ck_developer_profiles_peers_opt_in_complete"), "developer_profiles", type_="check")
     op.drop_column("developer_profiles", "peers_opted_in_at")
     op.drop_column("developer_profiles", "peers_visible")
+    _run_sql(
+        "\n".join(
+            f"DROP FUNCTION {signature};" for signature in (*TRIGGER_FUNCTIONS, *FUNCTION_GRANTS, *INTERNAL_FUNCTIONS)
+        )
+    )
 
 
 def _add_profile_columns() -> None:
