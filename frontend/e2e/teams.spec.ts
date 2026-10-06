@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Browser, type Page, type TestInfo } from "@playwright/test";
 
 import { signUpDeveloper } from "./support/accounts";
 import { checkWidths, shot } from "./support/discover-scene";
@@ -49,6 +49,25 @@ async function handleOf(request: APIRequestContext): Promise<string> {
 
 async function visible(request: APIRequestContext, on: boolean) {
   await request.patch("/api/me/profile", { headers: { "X-CSRF-Token": await csrf(request) }, data: { peers_visible: on } });
+}
+
+/**
+ * An open overflow menu lies wholly inside the screen (no part cut at either edge), at this width and, on mobile, at
+ * 375 px too: no sideways scroll alone would not catch a menu cut at the left edge.
+ */
+async function menuOnScreen(page: Page, menu: string, info: TestInfo) {
+  const size = page.viewportSize()!;
+  const widths = info.project.name.startsWith("mobile") ? [size.width, 375] : [size.width];
+  try {
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: size.height });
+      const box = (await page.locator(`${menu}[open] > div`).boundingBox())!;
+      expect(box.x, `${menu} at ${width} px`).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, `${menu} at ${width} px`).toBeLessThanOrEqual(width);
+    }
+  } finally {
+    await page.setViewportSize(size);
+  }
 }
 
 /** Settings › Profile through the screen: the county, a headline and Visible to peers on, then Save. */
@@ -115,6 +134,7 @@ test.describe("Peers and team up", () => {
       // B's row menu stays inside the screen when open, and closes on Escape.
       await row.locator("[data-peer-menu] summary").click();
       await expect(row.locator("[data-peer-menu] [data-block]")).toBeVisible();
+      await menuOnScreen(page, `[data-peer="${handleB}"] [data-peer-menu]`, info);
       await checkWidths(page, info);
       await page.keyboard.press("Escape");
       await expect(row.locator("[data-peer-menu] [data-block]")).toBeHidden();
@@ -208,6 +228,7 @@ test.describe("Peers and team up", () => {
       await pageB.locator("[data-thread-menu] summary").click();
       // The thread's menu opens leftward from its button: no sideways scroll at 360 or 375 px while it is open.
       await expect(pageB.getByRole("button", { name: `Block ${handleA}` })).toBeVisible();
+      await menuOnScreen(pageB, "[data-thread-menu]", info);
       await checkWidths(pageB, info);
       await pageB.getByRole("button", { name: `Block ${handleA}` }).click();
       const block = pageB.getByRole("dialog", { name: `Block ${handleA}?` });

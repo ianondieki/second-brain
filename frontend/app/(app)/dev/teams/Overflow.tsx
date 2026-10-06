@@ -35,7 +35,7 @@ export function Overflow({
         </Icon>
       </summary>
       <div
-        className={`absolute top-full z-10 mt-2 flex min-w-44 flex-col rounded-control border border-line bg-field p-1 shadow-overlay ${align === "end" ? "right-0" : "left-0"}`}
+        className={`absolute top-full z-10 mt-2 flex w-max max-w-[calc(100vw-2rem)] min-w-44 flex-col rounded-control border border-line bg-field p-1 shadow-overlay ${align === "end" ? "right-0" : "left-0"}`}
       >
         {children}
       </div>
