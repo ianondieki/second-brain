@@ -12,7 +12,7 @@ afterEach(cleanup);
 
 // docs/spec/07 item 1 and AC-UX-1: at most five items per portal; the current one is marked for assistive tech.
 describe("OrgNav", () => {
-  it("lists four sections: Home, Inbox, Engagements and Problems (REQ-DIR-05)", () => {
+  it("lists five sections: Home, Inbox, Engagements, Problems (REQ-DIR-05) and Events (REQ-DEV-02)", () => {
     expect(ORG_SECTIONS.length).toBeLessThanOrEqual(5);
     renderWithIntl(<OrgNav current="inbox" />);
     const nav = screen.getByRole("navigation", { name: "Organisation" });
@@ -22,6 +22,7 @@ describe("OrgNav", () => {
       ["Inbox", "/org/inbox"],
       ["Engagements", "/org/engagements"],
       ["Problems", "/org/problems"],
+      ["Events", "/org/events"],
     ]);
   });
 
@@ -31,7 +32,7 @@ describe("OrgNav", () => {
   });
 
   // The tab bar shares 360 px between its tabs (PortalNav). The developer's five tabs fit there in both languages
-  // (e2e/navigation.spec.ts); the organisation's four take no more room: no label longer than the developer's longest,
+  // (e2e/navigation.spec.ts); the organisation's five take no more room: no label longer than the developer's longest,
   // and no more letters in all.
   it.each([
     ["en", en.nav],
