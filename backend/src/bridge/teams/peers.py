@@ -10,7 +10,9 @@ shared niche slugs and whether the county is the caller's: never an email, phone
 The page is one statement (plus the caller's check, which the dependency asks with the developer check).
 
 Pages are limited to ``teams.peers_pages_per_hour`` an hour per developer who opted in (429 ``too_many_peer_pages``,
-``Retry-After``), so the opted-in set cannot be paged through at speed (the 0011 security review's MINOR 5).
+``Retry-After``), so the opted-in set cannot be paged through at speed (the 0011 security review's MINOR 5). ``limit``
+(1 to 20, default 20) sets the page's size; the first page of at most 3 rows (Home's Peers section) is not counted,
+so visiting Home never locks a developer out of the peers page, while any later page counts whatever its size.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from bridge.teams.schemas import PeerOut, PeersPage
 
 router = APIRouter(prefix="/api/me/peers", tags=["teams"], responses=ERROR_RESPONSES)
 PAGE_SIZE: Final = 20
+HOME_ROWS: Final = 3  # Home's Peers section: a first page this small is not counted
 MAX_PAGE: Final = 500
 _PEERS: Final = text(
     "SELECT user_id, handle::text AS handle, headline, county_name, shared_niches, same_county"
@@ -49,23 +52,26 @@ async def my_peers(
     db: Db,
     settings: SettingsDep,
     page: Annotated[int, Query(ge=1, le=MAX_PAGE, description="1 for the first page")] = 1,
+    limit: Annotated[
+        int, Query(ge=1, le=PAGE_SIZE, description="Rows a page (a first page of 3 or fewer is not counted)")
+    ] = PAGE_SIZE,
 ) -> PeersPage:
     """Developers near you or in your niches who turned Peers on, 20 a page; empty until you turn it on."""
     if not caller.opted_in:
         return empty()
-    policy = get_teams_policy()
-    await limits.spend(
-        db,
-        settings.secret_key.get_secret_value(),
-        purpose=limits.PEERS_PAGE,
-        user_id=caller.live.user.id,
-        limit=policy.peers_pages_per_hour,
-        window=limits.HOUR,
-        code="too_many_peer_pages",
-        message=TOO_MANY_PAGES,
-    )
+    if page > 1 or limit > HOME_ROWS:
+        await limits.spend(
+            db,
+            settings.secret_key.get_secret_value(),
+            purpose=limits.PEERS_PAGE,
+            user_id=caller.live.user.id,
+            limit=get_teams_policy().peers_pages_per_hour,
+            window=limits.HOUR,
+            code="too_many_peer_pages",
+            message=TOO_MANY_PAGES,
+        )
     try:
-        rows = (await db.execute(_PEERS, {"limit": PAGE_SIZE + 1, "offset": (page - 1) * PAGE_SIZE})).all()
+        rows = (await db.execute(_PEERS, {"limit": limit + 1, "offset": (page - 1) * limit})).all()
     except DBAPIError as exc:  # the switch turned off since the check: nothing to show, nothing counted
         await db.rollback()
         if getattr(exc.orig, "sqlstate", None) != "42501":
@@ -82,8 +88,8 @@ async def my_peers(
                 shared_niches=list(row.shared_niches),
                 same_county=bool(row.same_county),
             )
-            for row in rows[:PAGE_SIZE]
+            for row in rows[:limit]
         ],
-        next=page + 1 if len(rows) > PAGE_SIZE and page < MAX_PAGE else None,
+        next=page + 1 if len(rows) > limit and page < MAX_PAGE else None,
         opted_in=True,
     )

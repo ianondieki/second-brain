@@ -166,6 +166,27 @@ async def test_the_peers_page_is_limited_per_hour(teams: TeamsDb, as_user: Clien
     assert (await (await as_user(off)).get(PEERS)).status_code == 200  # nothing is read, nothing is counted
 
 
+async def test_homes_first_three_are_not_counted(teams: TeamsDb, as_user: Clients) -> None:
+    """Home's Peers section (the first page, 3 rows or fewer) never counts toward the hourly limit, so it cannot lock
+    a developer out of the peers page; any later page counts whatever its size."""
+    here = county()
+    caller = await developer(teams, "home", county=here)
+    made = [await developer(teams, f"h{n}", county=here) for n in range(4)]
+    await _spent(teams, limits.PEERS_PAGE, caller, 59)
+    client = await as_user(caller)
+    for _ in range(5):
+        home = await client.get(PEERS, params={"limit": 3})
+        assert home.status_code == 200
+    assert [UUID(p["user_id"]) for p in home.json()["peers"]] == made[::-1][:3]  # the newest opt-ins first
+    assert home.json()["next"] == 2
+    assert (await client.get(PEERS)).status_code == 200  # the 60th counted page of the hour
+    for params in ({}, {"limit": 3, "page": 2}, {"limit": 4}):
+        assert code(await client.get(PEERS, params=params)) == (429, "too_many_peer_pages"), params
+    assert (await client.get(PEERS, params={"limit": 1})).status_code == 200
+    assert (await client.get(PEERS, params={"limit": 21})).status_code == 422
+    assert (await client.get(PEERS, params={"limit": 0})).status_code == 422
+
+
 @pytest.mark.parametrize("via", ["county", "niches"])
 async def test_county_and_niche_changes_are_limited_per_day(teams: TeamsDb, as_user: Clients, via: str) -> None:
     here, there = county(), county()
