@@ -177,10 +177,13 @@ test.describe("Peers and team up", () => {
       makeD1(emailA);
       const idea = await publishIdea(page.request, `Fuel alerts ${Date.now().toString(36)}`);
       await page.reload();
+      // The steps answer once the thread has hydrated (their buttons are server markup).
+      await page.locator('[data-thread][data-hydrated="true"]').waitFor(SERVER_STEP);
       await page.getByRole("button", { name: "Add as contributor on an idea" }).click();
       const credit = page.getByRole("dialog", { name: `Add ${handleB} as a contributor` });
-      await credit.getByRole("radio", { name: idea.title }).check();
+      await credit.getByRole("radio", { name: idea.title }).check(SERVER_STEP);
       await checkWidths(page, info);
+      await shot(page, info, "teams-credit");
       await credit.getByRole("button", { name: "Add contributor" }).click();
       const added = page.getByRole("status").filter({ hasText: `Added as contributor on ${idea.title}.` });
       await expect(added).toBeFocused(SERVER_STEP);
@@ -191,9 +194,11 @@ test.describe("Peers and team up", () => {
       await shot(page, info, "teams-idea");
 
       // B blocks A from the thread's menu: A's peers no longer list B and A's thread reads closed.
+      await pageB.locator('[data-thread][data-hydrated="true"]').waitFor(SERVER_STEP);
       await pageB.locator("[data-thread-menu] summary").click();
       await pageB.getByRole("button", { name: `Block ${handleA}` }).click();
       const block = pageB.getByRole("dialog", { name: `Block ${handleA}?` });
+      await expect(block).toBeVisible(SERVER_STEP);
       await checkWidths(pageB, info);
       await block.getByRole("button", { name: "Block" }).click();
       await expect(pageB.getByRole("status").filter({ hasText: `${handleA} is blocked.` })).toBeFocused(SERVER_STEP);
