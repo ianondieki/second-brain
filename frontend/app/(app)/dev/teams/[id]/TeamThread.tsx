@@ -1,18 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ComponentType } from "react";
-import { createPortal } from "react-dom";
 
-import { useStrings } from "@/components/ClientStrings";
 import { lazyCalls } from "@/components/tracker/messages/lazy-calls";
 import { Thread } from "@/components/tracker/messages/Thread";
 import type { Thread as ThreadPage } from "@/components/tracker/messages/thread";
-import { Alert } from "@/components/ui/Alert";
 import { api } from "@/lib/api/client";
 
 import type { TeamCalls } from "../calls";
-import { closeOverflows } from "../overflow-close";
-import { STEP_STATUS_ID, STEPS_ID } from "./ids";
+import { STEP_FAILED_ID, STEPS_ID } from "./ids";
 import type { IdeaChoice, Sheet, ThreadSheets as Sheets } from "./ThreadSheets";
 
 const load = () => import("./later");
@@ -31,8 +27,8 @@ async function markRead(threadId: string, upTo: string) {
  * messages by day with "New" above the first unread, earlier pages on request, Report on the other developer's
  * messages (the same sheet and reasons), the composer with Send as the screen's one primary action and no files.
  * Opening it marks the thread read. It also answers the page's step buttons (StepButtons, server markup under
- * #thread-steps): a press opens that step's dialog in #thread-step-status, where its status line stays. Only the
- * calls differ from the engagement's (./thread-calls.ts).
+ * #thread-steps): a press opens that step's dialog, whose status line then stays above the messages. Only the calls
+ * differ from the engagement's (./thread-calls.ts).
  */
 export function TeamThread({
   threadId,
@@ -61,45 +57,39 @@ export function TeamThread({
 }) {
   // The team calls (./thread-calls.ts) load with the first that needs them; marking read runs as the thread opens.
   const threadCalls = useMemo(() => lazyCalls(async () => (await load()).teamThreadCalls(counterpart), markRead), [counterpart]);
-  const t = useStrings("teamUp");
-  // The step pressed (a new n each press), and the dialogs' component once loaded, or "failed".
-  const [sheet, setSheet] = useState<{ step: Sheet; n: number; Sheets: ComponentType<Parameters<typeof Sheets>[0]> | "failed" } | null>(null);
+  // The step pressed (a new n each press) and the dialogs' component, once loaded.
+  const [sheet, setSheet] = useState<{ step: Sheet; n: number; Sheets: ComponentType<Parameters<typeof Sheets>[0]> } | null>(null);
 
   useEffect(() => {
-    // The steps answer from now on (before hydration they are inert), and their overflow menu closes as menus do.
-    const steps = document.getElementById(STEPS_ID);
-    steps?.removeAttribute("inert");
+    const stop = new AbortController();
     const press = (event: Event) => {
-      closeOverflows(event);
-      if (event.type !== "click") return;
-      const step = (event.target as Element).closest<HTMLElement>(`#${STEPS_ID} [data-step]`)?.dataset.step as Sheet | undefined;
+      // An open overflow menu closes as menus do (Escape, a press outside, an item's press): its code comes with the
+      // steps' (./later), which an open menu is about to need.
+      if (document.querySelector("details[data-overflow][open]")) void load().then((m) => m.closeOverflows(event), () => {});
+      const step = event.type === "click" && (event.target as Element).closest<HTMLElement>(`#${STEPS_ID} [data-step]`)?.dataset.step;
       if (!step) return;
+      // A step that cannot load (offline, a new deploy) shows the page's one sentence for it, which takes focus.
+      const failed = document.getElementById(STEP_FAILED_ID);
       load().then(
-        (m) => setSheet((now) => ({ step, n: (now?.n ?? 0) + 1, Sheets: m.ThreadSheets })),
-        () => setSheet((now) => ({ step, n: (now?.n ?? 0) + 1, Sheets: "failed" })),
+        (m) => {
+          if (failed) failed.hidden = true;
+          setSheet((now) => ({ step: step as Sheet, n: (now?.n ?? 0) + 1, Sheets: m.ThreadSheets }));
+        },
+        () => {
+          if (failed) failed.hidden = false;
+          failed?.focus();
+        },
       );
     };
-    document.addEventListener("click", press);
-    document.addEventListener("keydown", press);
-    return () => {
-      document.removeEventListener("click", press);
-      document.removeEventListener("keydown", press);
-    };
+    document.addEventListener("click", press, { signal: stop.signal });
+    document.addEventListener("keydown", press, { signal: stop.signal });
+    return () => stop.abort();
   }, []);
 
-  const host = sheet ? document.getElementById(STEP_STATUS_ID) : null;
   return (
     <>
-      {sheet && host
-        ? createPortal(
-            sheet.Sheets === "failed" ? (
-              <Alert key={sheet.n}>{t("thread.loadFailed")}</Alert>
-            ) : (
-              <sheet.Sheets key={sheet.n} sheet={sheet.step} threadId={threadId} counterpart={person} ideas={ideas} calls={given} />
-            ),
-            host,
-          )
-        : null}
+      {/* A step's dialog, and its status line once done, above the messages. */}
+      {sheet ? <sheet.Sheets key={sheet.n} sheet={sheet.step} threadId={threadId} counterpart={person} ideas={ideas} calls={given} /> : null}
       <Thread engagementId={threadId} initial={initial} today={today} locale={locale} orgName="" empty={empty} calls={threadCalls} />
     </>
   );

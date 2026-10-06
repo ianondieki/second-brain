@@ -9,6 +9,7 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { problemHref } from "@/components/problem/problem";
 import { nairobiToday } from "@/components/tracker/input";
 import { textLinkClass } from "@/components/ui/Button";
+import { Alert } from "@/components/ui/Alert";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { InfoIcon } from "@/components/ui/status-icons";
@@ -20,7 +21,7 @@ import { myPublishedIdeas, teamThread } from "../data";
 import { closedReason, TEAMS_PATH, toThreadPage } from "../teams";
 import { StepButtons } from "./StepButtons";
 import { TeamThread } from "./TeamThread";
-import { STEP_STATUS_ID, STEPS_ID } from "./ids";
+import { STEP_FAILED_ID, STEPS_ID } from "./ids";
 
 export async function generateMetadata({ params }: PageProps<"/dev/teams/[id]">): Promise<Metadata> {
   const t = await getTranslations("teams");
@@ -63,7 +64,7 @@ export default async function TeamThreadPage({ params }: PageProps<"/dev/teams/[
 
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
-      <div className="flex max-w-3xl flex-col gap-10">
+      <div className="flex max-w-3xl flex-col gap-10 [&:has([data-thread][data-hydrated=false])_#thread-steps]:pointer-events-none [&:has([data-thread][data-hydrated=false])_#thread-steps]:opacity-60">
         <PageHeader back={{ href: TEAMS_PATH, label: t("thread.back") }} title={name}>
           <p className="mt-2 text-ink-soft [overflow-wrap:anywhere]" data-thread-problem="">
             {thread.problem.title
@@ -83,9 +84,11 @@ export default async function TeamThreadPage({ params }: PageProps<"/dev/teams/[
           {/* The steps' buttons are markup; TeamThread answers their presses and puts a step's dialog and status line
               in the first box (nothing of the steps ships with the page: docs/spec/07 item 5). */}
           <div className="-mt-4 flex flex-col gap-4" data-thread-actions="">
-            <div id={STEP_STATUS_ID} className="contents" />
-            {/* Inert (and dimmed) until the thread's script answers the steps: a press before then does nothing. */}
-            <div id={STEPS_ID} inert className="flex flex-wrap items-center gap-3 empty:hidden [&[inert]]:opacity-60">
+            <div id={STEP_FAILED_ID} hidden tabIndex={-1} className="focus:outline-none">
+              <Alert>{tu("thread.loadFailed")}</Alert>
+            </div>
+            {/* Dimmed and not pressable until the thread's script answers them (it has hydrated). */}
+            <div id={STEPS_ID} className="flex flex-wrap items-center gap-3 empty:hidden">
               <StepButtons
                 credit={counterpart && published.length > 0 ? tu("credit.add") : null}
                 more={tu("thread.more")}

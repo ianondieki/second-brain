@@ -1,11 +1,11 @@
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
 import { renderWithIntl } from "@/test/intl";
 
 import { toThreadPage, type TeamThread as TeamThreadRead } from "../teams";
-import { STEP_STATUS_ID, STEPS_ID } from "./ids";
+import { STEP_FAILED_ID, STEPS_ID } from "./ids";
 import { StepButtons } from "./StepButtons";
 import { TeamThread } from "./TeamThread";
 
@@ -41,8 +41,10 @@ describe("a step whose module cannot load", () => {
   it("says so in one sentence and keeps the page", async () => {
     renderWithIntl(
       <>
-        <div id={STEP_STATUS_ID} />
-        <div id={STEPS_ID} inert>
+        <div id={STEP_FAILED_ID} hidden tabIndex={-1}>
+          <p role="alert">{en.teamUp.thread.loadFailed}</p>
+        </div>
+        <div id={STEPS_ID}>
           <StepButtons credit={null} more="More options" leave="Leave thread" block="Block dev-kb3dysnk" />
         </div>
         <TeamThread
@@ -57,12 +59,12 @@ describe("a step whose module cannot load", () => {
         />
       </>,
     );
-    // Hydrated: the steps answer.
-    expect(document.getElementById(STEPS_ID)?.hasAttribute("inert")).toBe(false);
+    const failed = document.getElementById(STEP_FAILED_ID) as HTMLElement;
+    expect(failed.hidden).toBe(true);
     await act(async () => fireEvent.click(document.querySelector("[data-block]") as HTMLElement));
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe(en.teamUp.thread.loadFailed);
-    expect(document.getElementById(STEP_STATUS_ID)?.contains(alert)).toBe(true);
+    await waitFor(() => expect(failed.hidden).toBe(false));
+    expect(screen.getByRole("alert").textContent).toBe(en.teamUp.thread.loadFailed);
+    expect(document.activeElement).toBe(failed);
     expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
   });
 });

@@ -9,7 +9,7 @@ import { renderWithIntl } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
 import TeamThreadPage from "./[id]/page";
-import { STEP_STATUS_ID, STEPS_ID } from "./[id]/ids";
+import { STEPS_ID } from "./[id]/ids";
 import { StepButtons } from "./[id]/StepButtons";
 import { TeamThread } from "./[id]/TeamThread";
 import type { TeamCalls } from "./calls";
@@ -271,7 +271,6 @@ describe("the thread's steps", () => {
   function steps(ideas: typeof IDEAS, calls: Partial<TeamCalls>) {
     return (
       <>
-        <div id={STEP_STATUS_ID} className="contents" />
         <div id={STEPS_ID}>
           <StepButtons
             credit={ideas.length > 0 ? "Add as contributor on an idea" : null}
