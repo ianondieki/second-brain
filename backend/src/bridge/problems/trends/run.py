@@ -19,7 +19,8 @@ The caller stores what it returns (``app_create_trend_candidate(p_card, p_source
 
 Each attempt has its own trace id, ``trends:<week_start>:<attempt>`` (``llm_calls.trace_id``); each kept card carries
 the trace id of the call that wrote it (``trend_cards.llm_trace_id``). One log line per refused answer
-(``trends.draft_refused_attempt``) and one per week (``trends.drafted`` or ``trends.draft_refused``).
+(``trends.draft_refused_attempt``) and one per week (``trends.drafted`` or ``trends.draft_refused``), with the
+week's Monday as ``day`` and reviewed fields only (``tests/unit/test_log_fields.py``).
 """
 
 from __future__ import annotations
@@ -202,7 +203,7 @@ async def draft_trends(deps: TrendsDeps, week_start: date) -> Accepted | Refused
             last = verdict.refused
             log.info(
                 "trends.draft_refused_attempt",
-                week_start=week_start.isoformat(),
+                day=week_start.isoformat(),
                 attempt=attempts,
                 reason=last.value,
                 discarded=[r.value for r in verdict.discarded],
@@ -211,9 +212,9 @@ async def draft_trends(deps: TrendsDeps, week_start: date) -> Accepted | Refused
         cards = tuple(candidate(kept, result.trace_id) for kept in verdict.kept)
         log.info(
             "trends.drafted",
-            week_start=week_start.isoformat(),
+            day=week_start.isoformat(),
             attempts=attempts,
-            cards=len(cards),
+            count=len(cards),
             discarded=[r.value for r in discarded],
             cost_usd=str(cost),
         )
@@ -225,7 +226,7 @@ async def draft_trends(deps: TrendsDeps, week_start: date) -> Accepted | Refused
 def _refused(week_start: date, reason: str, attempts: int, cost: Decimal, discarded: list[Reason]) -> Refused:
     log.warning(
         "trends.draft_refused",
-        week_start=week_start.isoformat(),
+        day=week_start.isoformat(),
         reason=reason,
         attempts=attempts,
         cost_usd=str(cost),
