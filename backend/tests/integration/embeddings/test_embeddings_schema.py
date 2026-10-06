@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
@@ -460,20 +461,51 @@ async def test_the_writer_writes_only_under_a_granted_profiling_consent(owner_en
 
 async def test_a_withdrawal_clears_the_vector_in_its_own_transaction(owner_engine: AsyncEngine) -> None:
     """Given an embedded developer, When they record a marketing decision or a profiling grant, Then the vector stays;
-    When they withdraw profiling (as themselves, or a row the owner inserts), Then the vector, model, version and time
-    are NULL before the transaction ends, and the developer is no longer listed (AC-PERS-3)."""
+    When they withdraw profiling (as themselves, or a row the owner inserts), Then the vector, model, version, time and
+    hash are NULL before the transaction ends, and the developer is no longer listed (AC-PERS-3); the withdrawal writes
+    the profile's row (updated_at moves) even when there is no vector, so a writer racing it always meets the write
+    (review MINOR 2)."""
     async with t.as_app(owner_engine) as conn:
         user, seeded = await consented(conn, "optout"), await consented(conn, "seeded")
+        bare = await consented(conn, "bare")  # never embedded
         for embedded in (user, seeded):
             assert await set_profile(conn, embedded)
+        await t.as_owner(conn)
+        await t.run(
+            conn,
+            "UPDATE developer_profiles SET updated_at = now() - interval '1 hour' WHERE user_id = ANY(:u)",
+            u=[user, seeded, bare],
+        )
         await decide(conn, user, False, "marketing")
         await decide(conn, user, True)
         assert (await stored_profile(conn, user))["first"] == 1.0
+        untouched = "SELECT updated_at < now() FROM developer_profiles WHERE user_id = :u"
+        assert await t.run(conn, untouched, u=user) is True  # neither a marketing decision nor a grant writes it
         await decide(conn, user, False)
         await decide(conn, seeded, False, as_owner=True)
-        for withdrawn in (user, seeded):
+        await decide(conn, bare, False)
+        for withdrawn in (user, seeded, bare):
             assert await stored_profile(conn, withdrawn) == EMPTY_PROFILE
+            touched = "SELECT updated_at = now() FROM developer_profiles WHERE user_id = :u"
+            assert await t.run(conn, touched, u=withdrawn) is True
         assert await listed(conn, user, seeded) == set()
+
+
+@pytest.mark.parametrize("level", ["REPEATABLE READ", "SERIALIZABLE"])
+async def test_the_writers_run_at_read_committed_only(owner_engine: AsyncEngine, level: str) -> None:
+    """Given a transaction at REPEATABLE READ or SERIALIZABLE, When the worker writes a profile's or a problem's vector,
+    Then both writers refuse (invalid_transaction_state): their consent, state and text reads after the row lock would
+    see the snapshot, not the committed state (review MINOR 2)."""
+    async with t.as_app(owner_engine) as conn:
+        await t.run(conn, f"SET TRANSACTION ISOLATION LEVEL {level}")
+        user = await consented(conn, "isolated")
+        issue = await w.add_problem(conn, user, await niche(conn, "isolated"))
+        common = {"vector": vector(), "model": MODEL, "version": VERSION}
+        profile_hash, problem_hash = sha(await profile_text(conn, user)), sha(await problem_text(conn, issue))
+        await t.act(conn, None)
+        match = f"must run at READ COMMITTED isolation, not {level}"
+        await refused(conn, SET_PROFILE, match, "25000", **common, user=user, text_hash=profile_hash)
+        await refused(conn, SET_PROBLEM, match, "25000", **common, problem=issue, text_hash=problem_hash)
 
 
 async def test_the_clearer_serves_the_worker_and_the_own_row_only(owner_engine: AsyncEngine) -> None:

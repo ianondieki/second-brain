@@ -35,7 +35,8 @@ an edit that commits between the listing and the write is never stamped as embed
   Index ``ix_problems_embedding`` (HNSW, ``vector_cosine_ops``).
 - ``consents`` (revision 0001; append-only): ``consents_profiling_withdrawn`` (AFTER INSERT, every role, WHEN the row
   is ``profiling`` and not granted) nulls the profile's vector, model, version, time and hash in the inserting
-  transaction, under the profile's row lock, whatever the app does next. The app also calls
+  transaction and moves ``updated_at`` to ``now()``, always writing the row (even without a vector), whatever the app
+  does next. The app also calls
   ``app_clear_profile_embedding`` in the opt-out request (belt and braces; the second call finds nothing to clear).
 - ``developer_niches`` (revision 0001): no trigger. The text holds the liked niches' names, so the hash sees a liked
   niche added, removed or renamed without one.
@@ -45,7 +46,8 @@ listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself; "the w
 as revisions 0007 to 0011's jobs; a model or version label is 1 to 80 or 1 to 40 characters, not blank, without a
 control character; a text hash is 64 lower-case hex digits; a vector has exactly 1,024 dimensions and is not the zero
 vector (cosine is undefined there; NaN and infinities are pgvector's refusals); invalid_parameter_value otherwise, and
-for a limit outside 1 to 1,000):
+for a limit outside 1 to 1,000; the two writers run at READ COMMITTED only, invalid_transaction_state otherwise, as
+revision 0001's audit trigger):
 
 - ``app_profiles_to_embed(model, version, limit)`` -> (user_id, text, text_hash): the worker only
   (insufficient_privilege for a bound session). Developers (a profile; the user active and not staff) whose latest
@@ -63,9 +65,9 @@ for a limit outside 1 to 1,000):
   ``profile_embedded_at = now()`` and the hash, and returns true, only while the latest ``profiling`` consent is
   granted, the user is active and not staff, and ``text_hash`` is the hash of the text as it reads now; false, writing
   nothing, otherwise (and for a user without a profile or with an empty text).
-- ``app_clear_profile_embedding(user)``: nulls the vector, model, version, time and hash (under the row lock). The
-  worker for any user, or a bound user for their own row only (the opt-out runs in the user's request);
-  insufficient_privilege for anyone else. An unknown user or an empty row is a no-op.
+- ``app_clear_profile_embedding(user)``: nulls the vector, model, version, time and hash and moves ``updated_at`` (the
+  row is always written, so it is locked). The worker for any user, or a bound user for their own row only (the
+  opt-out runs in the user's request); insufficient_privilege for anyone else. An unknown user is a no-op.
 - ``app_problems_to_embed(model, version, limit)`` -> (problem_id, text, text_hash): the worker only. Published and
   clear problems whose vector is stale (none, another model or version, or a stored hash that is not ``text_hash``);
   ``text`` the title and statement, normalised as above; oldest ``embedded_at`` first (never embedded first), then id.
@@ -82,11 +84,12 @@ for a limit outside 1 to 1,000):
   version)`` and ``problems_to_embed(model, version)`` (the stale sets with their times, texts and hashes, unordered;
   NULL model and version leave the model rule out), ``profile_embedding_clear(user)``.
 
-Lock order: a profile's row lock, then the consent and text reads (the writer; a withdrawal's trigger takes the same
-row lock); a problem's row lock, then its state and text (the writer; a moderation decision or an edit updates the
-same row). A change to a profile's niches or proposals takes no profile lock: committed before the writer's read, the
-writer sees it (and refuses a stale hash); committed after, the stored hash is the older text's and the row is
-listed again.
+Lock order: a profile's row lock, then the consent and text reads (the writer; a withdrawal's trigger writes the same
+row, so either waits for the other: at READ COMMITTED the writer then reads the withdrawal, and the withdrawal clears
+what the writer left); a problem's row lock, then its state and text (the writer; a moderation decision or an edit
+updates the same row). A change to a profile's niches or proposals takes no profile lock: committed before the
+writer's read, the writer sees it (and refuses a stale hash); committed after, the stored hash is the older text's and
+the row is listed again.
 
 Operating rules for the code that uses this schema:
 
@@ -273,22 +276,18 @@ AS $$
             OR p.embedding_hash IS DISTINCT FROM t.body_hash)
 $$;
 
--- Nulls p_user's profile vector, model, version, time and hash, under the profile's row lock (taken even when there is
--- nothing to clear, so a writer in flight is waited for, or waits). Internal (no EXECUTE grant): the clearer and the
--- consents trigger, as the owner.
+-- Nulls p_user's profile vector, model, version, time and hash and moves updated_at to now(): the row is always
+-- written, even when there is nothing to clear, so a writer in flight is waited for (or waits), and a writer whose
+-- snapshot predates this one would meet a write conflict rather than overwrite it. Internal (no EXECUTE grant): the
+-- clearer and the consents trigger, as the owner.
 CREATE FUNCTION profile_embedding_clear(p_user uuid) RETURNS void
-    LANGUAGE plpgsql VOLATILE
+    LANGUAGE sql VOLATILE
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-BEGIN
-    PERFORM 1 FROM public.developer_profiles d WHERE d.user_id = p_user FOR UPDATE;
     UPDATE public.developer_profiles d
        SET profile_embedding = NULL, embed_model = NULL, embed_version = NULL, profile_embedded_at = NULL,
-           profile_embedding_hash = NULL
+           profile_embedding_hash = NULL, updated_at = now()
      WHERE d.user_id = p_user
-       AND (d.profile_embedding IS NOT NULL OR d.embed_model IS NOT NULL OR d.embed_version IS NOT NULL
-            OR d.profile_embedded_at IS NOT NULL OR d.profile_embedding_hash IS NOT NULL);
-END;
 $$;
 
 -- A page of the developers whose profile vector the worker computes next (REQ-PERS-02; AC-PERS-3: only while the
@@ -335,6 +334,11 @@ BEGIN
     IF public.app_user_id() IS NOT NULL THEN
         RAISE EXCEPTION 'app_set_profile_embedding: the embedding worker only, with no user bound'
             USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    -- Under REPEATABLE READ or SERIALIZABLE the consent, state and text read after the lock could predate it.
+    IF current_setting('transaction_isolation') <> 'read committed' THEN
+        RAISE EXCEPTION 'app_set_profile_embedding: must run at READ COMMITTED isolation, not %',
+            upper(current_setting('transaction_isolation')) USING ERRCODE = 'invalid_transaction_state';
     END IF;
     IF p_vector IS NULL OR vector_dims(p_vector) <> 1024 OR vector_norm(p_vector) = 0
        OR NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40))
@@ -421,6 +425,11 @@ BEGIN
     IF public.app_user_id() IS NOT NULL THEN
         RAISE EXCEPTION 'app_set_problem_embedding: the embedding worker only, with no user bound'
             USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    -- Under REPEATABLE READ or SERIALIZABLE the consent, state and text read after the lock could predate it.
+    IF current_setting('transaction_isolation') <> 'read committed' THEN
+        RAISE EXCEPTION 'app_set_problem_embedding: must run at READ COMMITTED isolation, not %',
+            upper(current_setting('transaction_isolation')) USING ERRCODE = 'invalid_transaction_state';
     END IF;
     IF p_vector IS NULL OR vector_dims(p_vector) <> 1024 OR vector_norm(p_vector) = 0
        OR NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40))
