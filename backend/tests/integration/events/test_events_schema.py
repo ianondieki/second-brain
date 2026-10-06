@@ -228,6 +228,30 @@ async def test_staff_decide_a_draft_once(owner_engine: AsyncEngine) -> None:
         )
 
 
+async def test_an_event_that_has_ended_is_never_published(owner_engine: AsyncEngine) -> None:
+    """``app_decide_event`` refuses to publish a draft whose end is at or before the shared clock ("the event is over",
+    the app's 409 ``event_over``; the draft stays as it was) and still rejects it; a draft that is running or still to
+    come is published."""
+    async with t.as_app(owner_engine) as conn:
+        p = await people(conn)
+        now = await clock(conn)
+        hour = timedelta(hours=1)
+        ended = await post(conn, p.org, p.reviewer, now, starts=now - 3 * hour, ends=now - timedelta(seconds=1))
+        for staff in (p.moderator, p.admin):
+            await t.act(conn, staff)
+            await t.expect(conn, DECIDE, "the event is over, so it is never published", event=ended, decision="publish")
+        assert (await status_of(conn, ended)).status == "draft"
+        await decide(conn, p.moderator, ended, "reject")
+        assert ((await status_of(conn, ended)).status, (await status_of(conn, ended)).decided_by) == (
+            "rejected",
+            p.moderator,
+        )
+        for starts, ends in ((now - hour, now + hour), (now + 24 * hour, now + 26 * hour)):
+            event_id = await post(conn, p.org, p.reviewer, now, starts=starts, ends=ends)
+            await decide(conn, p.admin, event_id)
+            assert (await status_of(conn, event_id)).status == "published"
+
+
 async def test_staff_and_the_organisations_editors_cancel_drafts_and_published_events(
     owner_engine: AsyncEngine,
 ) -> None:
@@ -349,7 +373,12 @@ async def test_a_developer_reminds_themselves_of_published_events_only(owner_eng
         cancelled = await published(conn, p, now)
         await t.act(conn, p.moderator)
         await t.run(conn, CANCEL, event=cancelled)
-        ended = await published(conn, p, now, starts=now - timedelta(hours=3), ends=now - timedelta(minutes=1))
+        ended = await post(
+            conn, p.org, p.reviewer, now, starts=now - timedelta(hours=3), ends=now - timedelta(minutes=1)
+        )
+        await t.as_owner(conn)  # published before it ended (app_decide_event never publishes an ended event)
+        publish = "UPDATE events SET status = 'published', decided_by = :m, decided_at = now() WHERE id = :id"
+        await t.run(conn, publish, m=p.moderator, id=ended)
         running = await published(conn, p, now, starts=now - timedelta(hours=1), ends=now + timedelta(hours=1))
         await t.act(conn, p.developer)
         returned = await conn.execute(sa.text(REMIND + " RETURNING created_at"), {"user": p.developer, "event": live})

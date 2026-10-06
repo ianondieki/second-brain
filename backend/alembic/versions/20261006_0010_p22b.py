@@ -64,9 +64,10 @@ Functions (SECURITY DEFINER unless noted; pinned search_path; EXECUTE revoked fr
 listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself):
 
 - ``app_decide_event(event, decision)``: staff admin or moderator (insufficient_privilege); ``publish`` or ``reject``
-  (invalid_parameter_value); an unknown event no_data_found; an event that is not a draft
-  object_not_in_prerequisite_state. Locks the event FOR UPDATE; sets the status, ``decided_by`` (the caller) and
-  ``decided_at`` (the shared clock).
+  (invalid_parameter_value); an unknown event no_data_found; an event that is not a draft, and ``publish`` of an
+  event that has ended (``ends_at <= app_clock_now()``; "the event is over", the app's 409 ``event_over``; it may
+  still be rejected), object_not_in_prerequisite_state. Locks the event FOR UPDATE; sets the status, ``decided_by``
+  (the caller) and ``decided_at`` (the shared clock).
 - ``app_cancel_event(event)``: staff admin or moderator, or an editor of the event's organisation (narrowed by
   ``app.org_id``); the staff admin who posted a platform event is staff. One refusal (insufficient_privilege, "no
   event the caller may cancel with that id") for an unknown event and for any other caller, so it tells nobody that a
@@ -268,13 +269,15 @@ POLICIES: tuple[Policy, ...] = (
 
 FUNCTIONS_SQL = r"""
 -- A staff admin or moderator publishes or rejects a draft event once (D-60: nothing unmoderated is shown), as
--- themselves, at the shared clock. The app writes the audit event in the same transaction.
+-- themselves, at the shared clock; an event that has ended is never published (it may be rejected). The app writes
+-- the audit event in the same transaction.
 CREATE FUNCTION app_decide_event(p_event uuid, p_decision text) RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
     v_status text;
+    v_ends timestamptz;
     v_now timestamptz := public.app_clock_now();
 BEGIN
     IF NOT public.app_is_staff('{admin,moderator}') THEN
@@ -283,12 +286,16 @@ BEGIN
     IF p_decision IS NULL OR p_decision NOT IN ('publish', 'reject') THEN
         RAISE EXCEPTION 'app_decide_event: the decision is publish or reject' USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    SELECT e.status INTO v_status FROM public.events e WHERE e.id = p_event FOR UPDATE;
+    SELECT e.status, e.ends_at INTO v_status, v_ends FROM public.events e WHERE e.id = p_event FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'app_decide_event: no event with that id' USING ERRCODE = 'no_data_found';
     END IF;
     IF v_status <> 'draft' THEN
         RAISE EXCEPTION 'app_decide_event: only a draft event is decided (this one is %)', v_status
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    IF p_decision = 'publish' AND v_ends <= v_now THEN  -- the app's 409 event_over; a reject is still allowed
+        RAISE EXCEPTION 'app_decide_event: the event is over, so it is never published'
             USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     UPDATE public.events
