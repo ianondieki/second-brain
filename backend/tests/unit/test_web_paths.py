@@ -35,9 +35,12 @@ NOT_PAGES = {
 }
 # Links to pages this branch's web app does not have: each is a known gap, reported, never a new one. Empty from P16
 # (which built /settings/notifications and /help, every email footer) until P22-B's backend landed before its screens
-# (P22-BF), which built the event page N27 links to. An entry that has become a page fails the test, so the list
-# never goes stale.
-PAGES_NOT_BUILT: dict[str, str] = {}
+# (P22-BF), which built the event page N27 links to; P22-C's backend lands before its screens (P22-CF builds both
+# pages). An entry that has become a page fails the test, so the list never goes stale.
+PAGES_NOT_BUILT: dict[str, str] = {
+    "/dev/teams": "N28's link (web_paths.DEV_TEAMS): the invitations and threads page, P22-CF's",
+    "/dev/teams/{}": "N29's link (web_paths.team_thread_path): one team thread's page, P22-CF's",
+}
 
 
 def routes() -> list[re.Pattern[str]]:
