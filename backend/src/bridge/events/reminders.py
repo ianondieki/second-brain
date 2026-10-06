@@ -23,7 +23,9 @@ A queued N26 email (a transient failure, retried by the next runs within the win
 moment, as EM7's ``_sweep``: it ends ``failed`` ("expired") when the developer declines (``withdraw_n26``, in the
 Decline's transaction), when a run handling the developer finds it outside an open window (its reminder declined, its
 event cancelled, or its window closed), and, as the backstop for developers no run handles any more, in the first
-run after midnight in Nairobi, when every N26 window has closed, for every active user.
+run after midnight in Nairobi, when every N26 window has closed, for every active user. An expired email is not a
+sent one: when the developer presses Remind me again while its window is open, the next run sends it (resumed under its
+key); a sent one is never sent twice.
 
 One developer's failure is logged and never stops the run; the next run picks them up. A run with nothing due writes
 nothing and logs nothing.
@@ -352,8 +354,22 @@ async def _email(deps: Deps, db: AsyncSession, r: Recipient, row: Any, now: date
     if block is not None:
         return Outcome(r.id, row.id, N26, block)
     key = n26_key(r.id, row.id)
-    found = await db.scalar(select(NotificationDelivery.status).where(NotificationDelivery.dedupe_key == key))
-    if found is not None and found is not DeliveryStatus.QUEUED:  # sent (or ended) by an earlier run
+    found = (
+        await db.execute(
+            select(NotificationDelivery.status, NotificationDelivery.last_error).where(
+                NotificationDelivery.dedupe_key == key
+            )
+        )
+    ).one_or_none()
+    if found is not None and (found.status, found.last_error) == (DeliveryStatus.FAILED, EXPIRED):
+        # Ended by a sweep (a Decline), and the reminder is live again in its window: the developer asked again, so
+        # the email may go (resumed under its key, with the attempts it had left).
+        await db.execute(
+            update(NotificationDelivery)
+            .where(NotificationDelivery.dedupe_key == key, NotificationDelivery.status == DeliveryStatus.FAILED)
+            .values(status=DeliveryStatus.QUEUED, last_error=None, to_address=r.email)
+        )
+    elif found is not None and found.status is not DeliveryStatus.QUEUED:  # sent (or ended) by an earlier run
         return Outcome(r.id, row.id, N26, "already")
     rendered = render_n26(row, base_url=deps.settings.public_base_url, product=deps.settings.product_name)
     message = EmailMessage(to=r.email, subject=rendered.subject, text=rendered.text, html=rendered.html, tag=N26)

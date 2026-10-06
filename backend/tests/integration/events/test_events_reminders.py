@@ -230,6 +230,25 @@ async def test_a_declined_reminder_ends_its_queued_email_at_once(week: WeekDb, a
     assert (mail.outbox, mail.attempts) == ([], 1)
 
 
+async def test_remind_me_again_after_a_decline_sends_the_email_once(week: WeekDb, as_user: Clients) -> None:
+    """Review round 2 MINOR 2: the email Decline ended is not a sent one. Remind me again at 18:30 and the next run
+    sends it, once; a Decline and a Remind me after it was sent send nothing more."""
+    p, event_id, monday, mail = await queued_at_six(week)
+    developer = await as_user(p.developer)
+    path = f"/api/me/events/{event_id}/reminder"
+    assert (await developer.delete(path)).status_code == 204
+    await at(week, monday + timedelta(days=1), time(18, 30))
+    assert (await developer.post(path)).status_code == 201
+    await run_event_reminders(deps(week, mail))
+    assert (len(mail.outbox), mail.attempts) == (1, 2)
+    assert await n26_rows(week, p.developer) == [("sent", None, 2)]
+    assert (await developer.delete(path)).status_code == 204
+    assert (await developer.post(path)).status_code == 201
+    await at(week, monday + timedelta(days=1), time(18, 45))
+    await run_event_reminders(deps(week, mail))
+    assert (len(mail.outbox), await n26_rows(week, p.developer)) == (1, [("sent", None, 2)])
+
+
 async def test_a_queued_email_ends_when_its_window_closes(week: WeekDb) -> None:
     """Review MINOR 2: after midnight the day-before email is never sent; the run handling the developer ends it."""
     p, _, monday, mail = await queued_at_six(week)
