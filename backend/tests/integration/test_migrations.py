@@ -1261,6 +1261,19 @@ async def test_schema_v8_policies_are_exactly_the_planned_ones(owner_engine: Asy
     reminder = by["event_reminders", "INSERT"].with_check
     assert "(e.status = 'published'::text) AND (e.ends_at > app_clock_now())" in reminder
     assert by["event_reminders", "SELECT"].qual == by["event_reminders", "DELETE"].qual == "(user_id = app_user_id())"
+    # The readers, pinned whole: each term stays even where another layer already covers it (the review of 0010: the
+    # events' org_id IS NOT NULL, the sources' own status and developer terms behind the cards' policy in the subquery).
+    assert by["events", "SELECT"].qual == (
+        "(app_is_staff('{admin,moderator}'::staff_role[]) OR ((status = 'published'::text) AND app_is_developer())"
+        " OR ((org_id IS NOT NULL) AND app_is_member(org_id) AND ((app_org_id() IS NULL) OR (org_id = app_org_id()))))"
+    )
+    assert by["trend_cards", "SELECT"].qual == (
+        "(app_is_staff('{admin}'::staff_role[]) OR ((status = 'published'::text) AND app_is_developer()))"
+    )
+    assert by["trend_card_sources", "SELECT"].qual == (
+        "(app_is_staff('{admin}'::staff_role[]) OR (app_is_developer() AND (EXISTS ( SELECT 1\n   FROM trend_cards c\n"
+        "  WHERE ((c.id = trend_card_sources.card_id) AND (c.status = 'published'::text))))))"
+    )
 
 
 async def test_tags_keep_revision_0002s_policies(owner_engine: AsyncEngine) -> None:
