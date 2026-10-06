@@ -222,12 +222,17 @@ async def test_c3_a_block_ends_everything_and_an_unblock_reopens_nothing(teams: 
 
 
 async def test_blocking_nobody_answers_like_a_block(teams: TeamsDb, as_user: Clients) -> None:
+    """Only a developer the caller can see (a peer or a counterpart) is blocked; any other id answers the same 204 and
+    leaves no row, so the list never confirms that an arbitrary id is a developer."""
     amina = await developer(teams, "blocker")
+    stranger = await developer(teams, "optedout", peers=False)  # a developer, but not one Amina can see
     org = await org_only(teams)
     client = await as_user(amina)
-    for target in (uuid7(), org.owner):
+    for target in (uuid7(), org.owner, stranger):
         assert (await client.post(BLOCKS, json={"user_id": str(target)})).status_code == 204
     assert (await client.get(BLOCKS)).json() == {"blocked": []}
+    rows = await owner_rows(teams, "SELECT 1 FROM developer_blocks WHERE blocker_user_id = :u", u=amina)
+    assert rows == []
     assert code(await client.post(BLOCKS, json={"user_id": str(amina)})) == (422, "cannot_block_yourself")
     assert await audits(teams, "team.blocked", amina) == []
 

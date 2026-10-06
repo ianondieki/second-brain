@@ -13,9 +13,11 @@
   ``POST /{thread_id}/messages/{message_id}/report`` ``{reasons}`` (201 ``{case_id}``; 409 ``own_message`` /
   ``already_reported``; 429 ``too_many_reports``).
 - ``POST /api/me/blocks`` ``{user_id}`` (204, through ``app_block_developer``: it ends the pair's pending invitations
-  and closes their open threads; an unknown id or an account that is no developer answers 204 too, so nothing tells
-  them apart; 422 ``cannot_block_yourself``), ``DELETE /api/me/blocks/{user_id}`` (204, idempotent; threads stay
-  closed), ``GET /api/me/blocks`` (the caller's blocks with each handle).
+  and closes their open threads; 422 ``cannot_block_yourself``). Only a developer the caller can see now is blocked: a
+  peer or a counterpart (``app_developer_card`` answers a row); any other id (unknown, no developer, opted out and no
+  counterpart, or a block already standing either way) changes nothing and answers the same 204, so neither the answer
+  nor ``GET /api/me/blocks`` ever confirms that an arbitrary id is a developer. ``DELETE /api/me/blocks/{user_id}``
+  (204, idempotent; threads stay closed), ``GET /api/me/blocks`` (the caller's blocks with each handle).
 """
 
 from __future__ import annotations
@@ -55,6 +57,7 @@ from bridge.teams.schemas import (
 
 router = APIRouter(prefix="/api/me/teams", tags=["teams"], responses=ERROR_RESPONSES)
 blocks_router = APIRouter(prefix="/api/me/blocks", tags=["teams"], responses=ERROR_RESPONSES)
+_VISIBLE: Final = text("SELECT EXISTS (SELECT 1 FROM app_developer_card(:user))")  # a peer or a counterpart now
 _BLOCK: Final = text("SELECT app_block_developer(:user)")
 _UNBLOCK: Final = text("SELECT app_unblock_developer(:user)")
 _BLOCKED: Final = text("SELECT user_id, handle::text AS handle, blocked_at FROM app_blocked_developers()")
@@ -160,8 +163,13 @@ async def report(thread_id: UUID, message_id: UUID, body: TeamReportIn, live: De
 
 @blocks_router.post("", status_code=204, response_class=Response)
 async def block(body: BlockIn, live: Developer, db: Db) -> None:
-    """Block a developer: pending invitations between you end, open threads close, and neither of you sees the other
-    as a peer or can invite the other. Blocking an id that is no developer changes nothing and answers the same."""
+    """Block a peer or a developer you team up with: pending invitations between you end, open threads close, and
+    neither of you sees the other as a peer or can invite the other. Any other id changes nothing and answers the
+    same."""
+    if body.user_id == live.user.id:
+        raise ApiError(422, "cannot_block_yourself", "Block another developer.")
+    if not await db.scalar(_VISIBLE, {"user": body.user_id}):
+        return  # nobody the caller can see: nothing to block, and nothing said about the id
     try:
         changed = int(await db.scalar(_BLOCK, {"user": body.user_id}) or 0)
     except DBAPIError as exc:
