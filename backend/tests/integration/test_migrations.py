@@ -555,20 +555,21 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     # revision 0012: profile and problem embeddings (the worker with no user bound; the clearer also for the own row;
     # internal and trigger functions: nobody)
     "app_profiles_to_embed(text, text, integer)": (True, {"bridge_app"}),
-    "app_set_profile_embedding(uuid, vector, text, text)": (True, {"bridge_app"}),
+    "app_set_profile_embedding(uuid, vector, text, text, text)": (True, {"bridge_app"}),
     "app_clear_profile_embedding(uuid)": (True, {"bridge_app"}),
     "app_problems_to_embed(text, text, integer)": (True, {"bridge_app"}),
-    "app_set_problem_embedding(uuid, vector, text, text)": (True, {"bridge_app"}),
+    "app_set_problem_embedding(uuid, vector, text, text, text)": (True, {"bridge_app"}),
     "app_stale_embedding_counts(text, text)": (True, {"bridge_app"}),
     "embedding_label_is_valid(text, integer)": (False, set()),
     "embedding_text_line(text)": (False, set()),
+    "embedding_text_hash(text)": (False, set()),
+    "problem_embedding_text(text, text)": (False, set()),
     "profile_consent_granted(uuid)": (False, set()),
     "profile_embedding_text(uuid)": (False, set()),
     "profiles_to_embed(text, text)": (False, set()),
     "problems_to_embed(text, text)": (False, set()),
     "profile_embedding_clear(uuid)": (False, set()),
     "consents_profiling_withdrawn()": (True, set()),  # clears the vector bridge_app cannot update
-    "developer_niches_liked_changed()": (True, set()),  # moves the profile's updated_at, whoever changed the niches
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -843,7 +844,9 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     }
     assert set(at_head["columns"]) - set(at_0011["columns"]) == {
         "developer_profiles.profile_embedded_at timestamp with time zone",
+        "developer_profiles.profile_embedding_hash text",
         "problems.embedded_at timestamp with time zone",
+        "problems.embedding_hash text",
         "ix_developer_profiles_profile_embedding.profile_embedding vector(1024)",  # the indexes' own columns
         "ix_problems_embedding.embedding vector(1024)",
     }
@@ -1181,10 +1184,10 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     assert not claim_protected & updatable["org_claims"]
     profile_protected = {"verification_level", "handle", "profile_embedding", "embed_model", "embed_version"}
     profile_protected |= {"peers_opted_in_at"}  # revision 0011: the database's
-    profile_protected |= {"profile_embedded_at"}  # revision 0012: app_set_profile_embedding's
+    profile_protected |= {"profile_embedded_at", "profile_embedding_hash"}  # revision 0012: the writer's
     assert not profile_protected & updatable["developer_profiles"]
     # revision 0012: app_set_problem_embedding's (revisions 0002 and 0005 granted the first three; 0012 revokes them)
-    assert not {"embedding", "embed_model", "embed_version", "embedded_at"} & updatable["problems"]
+    assert not {"embedding", "embed_model", "embed_version", "embedded_at", "embedding_hash"} & updatable["problems"]
     projection = {"state", "end_reason", "stage_entered_at", "stage_deadline_at", "ended_at", "lock_version"}
     keys = {"proposal_id", "org_id", "developer_id", "version_id", "origin"}
     assert not (projection | keys) & updatable["engagements"]  # the chain's projection is the database's (0003)
@@ -1214,11 +1217,18 @@ async def test_bridge_app_cannot_update_protected_columns(app_engine: AsyncEngin
             "embed_version = 'x'",
             "profile_embedding = NULL",
             "profile_embedded_at = NULL",  # revision 0012
+            "profile_embedding_hash = NULL",
         ):
             await expect_error(
                 conn, f"UPDATE developer_profiles SET {assignment} WHERE user_id = :id", "permission denied", by_user
             )
-        for assignment in ("embedding = NULL", "embed_model = 'x'", "embed_version = 'x'", "embedded_at = NULL"):
+        for assignment in (
+            "embedding = NULL",
+            "embed_model = 'x'",
+            "embed_version = 'x'",
+            "embedded_at = NULL",
+            "embedding_hash = NULL",
+        ):
             # revision 0012: a problem's vector is app_set_problem_embedding's, its author's own problem included
             await expect_error(
                 conn, f"UPDATE problems SET {assignment} WHERE created_by = :id", "permission denied", by_user
@@ -1683,8 +1693,8 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
                 # revision 0012: the embedding worker's readers, writers and count, refused to any signed-in caller
                 ("SELECT count(*) FROM app_profiles_to_embed('m', 'v', 10)", "the embedding worker only"),
                 ("SELECT count(*) FROM app_problems_to_embed('m', 'v', 10)", "the embedding worker only"),
-                ("SELECT app_set_profile_embedding(:id, NULL, 'm', 'v')", "the embedding worker only"),
-                ("SELECT app_set_problem_embedding(:id, NULL, 'm', 'v')", "the embedding worker only"),
+                ("SELECT app_set_profile_embedding(:id, NULL, 'm', 'v', 'h')", "the embedding worker only"),
+                ("SELECT app_set_problem_embedding(:id, NULL, 'm', 'v', 'h')", "the embedding worker only"),
                 ("SELECT * FROM app_stale_embedding_counts()", "the embedding worker only"),
                 ("SELECT app_clear_profile_embedding(uuid7())", "the caller's own profile"),
             ):
@@ -2288,7 +2298,8 @@ async def test_bridge_app_inserts_every_users_column_but_demo_account(owner_engi
 # Revision 0006: a note's time, the database's clock too, and its redaction (D-54), the owner's.
 DEFINER_ONLY_COLUMNS: dict[str, set[str]] = {
     # Revision 0012: a problem's vector, its model, version and time are app_set_problem_embedding's.
-    "problems": {"research_run_id", "named_orgs", "embedding", "embed_model", "embed_version", "embedded_at"},
+    "problems": {"research_run_id", "named_orgs", "embedding", "embed_model", "embed_version", "embedded_at"}
+    | {"embedding_hash"},
     "problem_sources": {"excerpt_ref"},
     "agent_runs": {"started_at"},
     "engagement_notes": {"created_at", "redacted_at", "redacted_by"},  # D-54: a redaction is the owner's
@@ -3060,13 +3071,9 @@ V11_TRIGGERS = {
     ("proposal_contributors", "proposal_contributors_guard"): ("proposal_contributors_guard", ROW | BEFORE | ON_UPDATE),
 }
 # Revision 0012: a profiling decision that is not a grant clears the profile's vector (AFTER, once the consents' policy
-# admitted the row; the trigger's WHEN names the rows); a liked-niche change marks the profile's vector stale.
+# admitted the row; the trigger's WHEN names the rows). A liked-niche change needs no trigger: the text's hash sees it.
 V12_TRIGGERS = {
     ("consents", "consents_profiling_withdrawn"): ("consents_profiling_withdrawn", ROW | ON_INSERT),
-    ("developer_niches", "developer_niches_liked_changed"): (
-        "developer_niches_liked_changed",
-        ROW | ON_INSERT | ON_UPDATE | ON_DELETE,
-    ),
 }
 
 

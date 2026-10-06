@@ -1,16 +1,14 @@
 """Fixtures of the embedding schema tests (revision 0012; REQ-PERS-02, REQ-EMB-01): developers with a profiling
 decision, liked and followed niches and proposals; problems in each state; the worker (bridge_app with no user bound)
-listing and writing vectors. Every helper runs inside one transaction of the owner engine (``tracker.as_app``) and
-switches the role as it acts.
+listing rows with their text and its hash, and writing vectors with the hash of the text they were computed from.
+Every helper runs inside one transaction of the owner engine (``tracker.as_app``) and switches the role as it acts.
 
-Within one transaction ``now()`` does not move, and the database stamps every vector with ``now()``. So a test that
-needs "embedded a minute ago, changed since" first ages the fixtures (``age``: an hour back) and then moves the vector's
-time a minute back (``embed_profile``/``embed_problem``); a change made afterwards is stamped ``now()``, later than the
-vector, as a later transaction's would be."""
+Freshness is content-based (the stored hash against the text's hash now), so no helper needs to move a clock."""
 
 from __future__ import annotations
 
-from typing import Any
+import hashlib
+from typing import Any, NamedTuple
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -21,10 +19,10 @@ from tests.integration import world as w
 from tests.integration.engagements import tracker as t
 
 MODEL, VERSION = "bge-m3-test", "1"
-PROFILES = "SELECT user_id, text FROM app_profiles_to_embed(:model, :version, :limit)"
-PROBLEMS = "SELECT problem_id, text FROM app_problems_to_embed(:model, :version, :limit)"
-SET_PROFILE = "SELECT app_set_profile_embedding(:user, CAST(:vector AS vector), :model, :version)"
-SET_PROBLEM = "SELECT app_set_problem_embedding(:problem, CAST(:vector AS vector), :model, :version)"
+PROFILES = "SELECT user_id, text, text_hash FROM app_profiles_to_embed(:model, :version, :limit)"
+PROBLEMS = "SELECT problem_id, text, text_hash FROM app_problems_to_embed(:model, :version, :limit)"
+SET_PROFILE = "SELECT app_set_profile_embedding(:user, CAST(:vector AS vector), :model, :version, :text_hash)"
+SET_PROBLEM = "SELECT app_set_problem_embedding(:problem, CAST(:vector AS vector), :model, :version, :text_hash)"
 CLEAR = "SELECT app_clear_profile_embedding(:user)"
 COUNTS = "SELECT profiles, problems FROM app_stale_embedding_counts(:model, :version)"
 WORKER_ONLY = "the embedding worker only, with no user bound"
@@ -32,6 +30,17 @@ CONSENT = (
     "INSERT INTO consents (id, user_id, purpose, granted, text_version, text_sha256, source)"
     " VALUES (:id, :user, CAST(:purpose AS consent_purpose), :granted, 'v1', :sha, 'settings')"
 )
+
+
+class Listed(NamedTuple):
+    id: UUID
+    text: str
+    text_hash: str
+
+
+def sha(text: str) -> str:
+    """What the database stores with a vector: the SHA-256 of the text's UTF-8 bytes, in hex."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def vector(first: float = 1.0, dims: int = 1024) -> str:
@@ -98,90 +107,83 @@ async def proposal(
     return proposal_id
 
 
-async def age(conn: AsyncConnection, *users: UUID) -> None:
-    """As the owner: move the users' profile edits and proposal times an hour back."""
-    await t.as_owner(conn)
-    for user in users:
-        await t.run(
-            conn, "UPDATE developer_profiles SET updated_at = now() - interval '1 hour' WHERE user_id = :u", u=user
-        )
-        await t.run(
-            conn,
-            "UPDATE proposals SET updated_at = updated_at - interval '1 hour',"
-            " published_at = published_at - interval '1 hour', hidden_at = hidden_at - interval '1 hour'"
-            " WHERE owner_id = :u",
-            u=user,
-        )
-
-
 async def profiles(
     conn: AsyncConnection, model: str = MODEL, version: str = VERSION, limit: int = 1000
-) -> list[tuple[UUID, str]]:
+) -> list[Listed]:
     """As the worker: a page of ``app_profiles_to_embed``, in its order."""
     await t.act(conn, None)
     found = await conn.execute(sa.text(PROFILES), {"model": model, "version": version, "limit": limit})
-    return [(row.user_id, row.text) for row in found]
+    return [Listed(*row) for row in found]
 
 
 async def listed(conn: AsyncConnection, *users: UUID, model: str = MODEL, version: str = VERSION) -> set[UUID]:
     """Which of ``users`` the profiles reader lists (other tests' committed rows may be listed too)."""
-    return {user for user, _ in await profiles(conn, model, version)} & set(users)
+    return {row.id for row in await profiles(conn, model, version)} & set(users)
 
 
 async def problems(
     conn: AsyncConnection, model: str = MODEL, version: str = VERSION, limit: int = 1000
-) -> list[tuple[UUID, str]]:
+) -> list[Listed]:
     await t.act(conn, None)
     found = await conn.execute(sa.text(PROBLEMS), {"model": model, "version": version, "limit": limit})
-    return [(row.problem_id, row.text) for row in found]
+    return [Listed(*row) for row in found]
+
+
+async def profile_text(conn: AsyncConnection, user: UUID) -> str:
+    """As the owner: the profile's text as it reads now (the internal function the readers and writer use)."""
+    await t.as_owner(conn)
+    found: str = await t.run(conn, "SELECT profile_embedding_text(:u)", u=user)
+    return found
+
+
+async def problem_text(conn: AsyncConnection, problem_id: UUID) -> str:
+    await t.as_owner(conn)
+    found: str = await t.run(
+        conn, "SELECT problem_embedding_text(title, statement) FROM problems WHERE id = :id", id=problem_id
+    )
+    return found
 
 
 async def set_profile(
-    conn: AsyncConnection, user: UUID, *, model: str = MODEL, version: str = VERSION, first: float = 1.0
+    conn: AsyncConnection,
+    user: UUID,
+    *,
+    model: str = MODEL,
+    version: str = VERSION,
+    first: float = 1.0,
+    text_hash: str | None = None,
 ) -> bool:
-    """As the worker: write ``user``'s profile vector; whether it wrote."""
+    """As the worker: write ``user``'s profile vector with ``text_hash`` (by default the hash of the text now)."""
+    text_hash = text_hash or sha(await profile_text(conn, user))
     await t.act(conn, None)
-    wrote: bool = await t.run(conn, SET_PROFILE, user=user, vector=vector(first), model=model, version=version)
+    params = {"user": user, "vector": vector(first), "model": model, "version": version, "text_hash": text_hash}
+    wrote: bool = await t.run(conn, SET_PROFILE, **params)
     return wrote
 
 
 async def set_problem(
-    conn: AsyncConnection, problem_id: UUID, *, model: str = MODEL, version: str = VERSION, first: float = 1.0
+    conn: AsyncConnection,
+    problem_id: UUID,
+    *,
+    model: str = MODEL,
+    version: str = VERSION,
+    first: float = 1.0,
+    text_hash: str | None = None,
 ) -> bool:
+    text_hash = text_hash or sha(await problem_text(conn, problem_id) or "")
     await t.act(conn, None)
-    wrote: bool = await t.run(conn, SET_PROBLEM, problem=problem_id, vector=vector(first), model=model, version=version)
+    params = {"problem": problem_id, "vector": vector(first), "model": model, "version": version}
+    wrote: bool = await t.run(conn, SET_PROBLEM, **params, text_hash=text_hash)
     return wrote
 
 
-async def embed_profile(conn: AsyncConnection, user: UUID, *, model: str = MODEL, version: str = VERSION) -> None:
-    """Written by the worker, then dated a minute back (see the module's docstring)."""
-    assert await set_profile(conn, user, model=model, version=version)
-    await t.as_owner(conn)
-    await t.run(
-        conn,
-        "UPDATE developer_profiles SET profile_embedded_at = now() - interval '1 minute' WHERE user_id = :u",
-        u=user,
-    )
-
-
-async def embed_problem(conn: AsyncConnection, problem_id: UUID) -> None:
-    assert await set_problem(conn, problem_id)
-    await t.as_owner(conn)
-    await t.run(
-        conn,
-        "UPDATE problems SET embedded_at = now() - interval '1 minute', updated_at = now() - interval '1 hour'"
-        " WHERE id = :id",
-        id=problem_id,
-    )
-
-
 async def stored_profile(conn: AsyncConnection, user: UUID) -> dict[str, Any]:
-    """As the owner: the profile's vector (its first value), model, version and time."""
+    """As the owner: the profile's vector (its first value), model, version, time and hash."""
     await t.as_owner(conn)
     found = await conn.execute(
         sa.text(
-            "SELECT (profile_embedding::real[])[1] AS first, embed_model, embed_version, profile_embedded_at"
-            " FROM developer_profiles WHERE user_id = :u"
+            "SELECT (profile_embedding::real[])[1] AS first, embed_model, embed_version, profile_embedded_at,"
+            " profile_embedding_hash FROM developer_profiles WHERE user_id = :u"
         ),
         {"u": user},
     )
@@ -192,9 +194,19 @@ async def stored_problem(conn: AsyncConnection, problem_id: UUID) -> dict[str, A
     await t.as_owner(conn)
     found = await conn.execute(
         sa.text(
-            "SELECT (embedding::real[])[1] AS first, embed_model, embed_version, embedded_at FROM problems"
-            " WHERE id = :id"
+            "SELECT (embedding::real[])[1] AS first, embed_model, embed_version, embedded_at, embedding_hash"
+            " FROM problems WHERE id = :id"
         ),
         {"id": problem_id},
     )
     return dict(found.one()._mapping)
+
+
+EMPTY_PROFILE = {
+    "first": None,
+    "embed_model": None,
+    "embed_version": None,
+    "profile_embedded_at": None,
+    "profile_embedding_hash": None,
+}
+EMPTY_PROBLEM = {"first": None, "embed_model": None, "embed_version": None, "embedded_at": None, "embedding_hash": None}

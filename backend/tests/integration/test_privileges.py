@@ -23,8 +23,8 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
   markers, contributor rows), with exactly its matrix; no role but the owner sets a profile's opt-in time, and only
   bridge_app turns the peers switch; only bridge_app executes the peers and team definers.
 - Revision 0012 (REQ-PERS-02, REQ-EMB-01): no role but the owner updates a profile's or a problem's vector, model,
-  version or time, or inserts a problem's (the worker writes them through the definers); only bridge_app executes the
-  embedding definers, and nobody their internal helpers.
+  version, time or text hash, or inserts a problem's (the worker writes them through the definers); only bridge_app
+  executes the embedding definers, and nobody their internal helpers.
 """
 
 from __future__ import annotations
@@ -249,8 +249,14 @@ async def test_only_bridge_app_executes_the_team_definers(owner_engine: AsyncEng
 
 
 EMBEDDING_COLUMNS = {
-    "developer_profiles": ("profile_embedding", "embed_model", "embed_version", "profile_embedded_at"),
-    "problems": ("embedding", "embed_model", "embed_version", "embedded_at"),
+    "developer_profiles": (
+        "profile_embedding",
+        "embed_model",
+        "embed_version",
+        "profile_embedded_at",
+        "profile_embedding_hash",
+    ),
+    "problems": ("embedding", "embed_model", "embed_version", "embedded_at", "embedding_hash"),
 }
 
 
@@ -284,15 +290,17 @@ async def test_no_role_writes_an_embedding_but_the_owners_definers(
     ("signature", "callers"),
     [
         ("public.app_profiles_to_embed(text, text, integer)", {"bridge_app"}),
-        ("public.app_set_profile_embedding(uuid, vector, text, text)", {"bridge_app"}),
+        ("public.app_set_profile_embedding(uuid, vector, text, text, text)", {"bridge_app"}),
         ("public.app_clear_profile_embedding(uuid)", {"bridge_app"}),
         ("public.app_problems_to_embed(text, text, integer)", {"bridge_app"}),
-        ("public.app_set_problem_embedding(uuid, vector, text, text)", {"bridge_app"}),
+        ("public.app_set_problem_embedding(uuid, vector, text, text, text)", {"bridge_app"}),
         ("public.app_stale_embedding_counts(text, text)", {"bridge_app"}),
         ("public.profiles_to_embed(text, text)", set()),
         ("public.profile_embedding_text(uuid)", set()),
         ("public.profile_embedding_clear(uuid)", set()),
         ("public.profile_consent_granted(uuid)", set()),
+        ("public.embedding_text_hash(text)", set()),
+        ("public.problem_embedding_text(text, text)", set()),
     ],
 )
 async def test_only_bridge_app_executes_the_embedding_definers(

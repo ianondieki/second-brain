@@ -32,6 +32,9 @@ from tests.integration.embeddings.schema_world import (
     VERSION,
     decide,
     named_niche,
+    problem_text,
+    profile_text,
+    sha,
     vector,
 )
 from tests.integration.engagements import tracker as t
@@ -51,26 +54,27 @@ def url(admin_url: URL) -> Iterator[URL]:
         drop_database(admin_url, name)
 
 
-async def _consented(owner: AsyncEngine) -> UUID:
-    """Committed: a developer with a liked niche who granted profiling."""
+async def _consented(owner: AsyncEngine) -> tuple[UUID, str]:
+    """Committed: a developer with a liked niche who granted profiling, and their text's hash."""
     async with owner.begin() as conn:
         user = await developer(conn, "racer", peers=False, liked=(await named_niche(conn, "Racing"),))
         await decide(conn, user, True)
-    return user
+        text_hash = sha(await profile_text(conn, user))
+    return user, text_hash
 
 
 def _withdrawal(user: UUID) -> dict[str, object]:
     return {"id": uuid7(), "user": user, "purpose": "profiling", "granted": False, "sha": bytes(32)}
 
 
-def _write(user: UUID) -> dict[str, object]:
-    return {"user": user, "vector": vector(), "model": MODEL, "version": VERSION}
+def _write(user: UUID, text_hash: str) -> dict[str, object]:
+    return {"user": user, "vector": vector(), "model": MODEL, "version": VERSION, "text_hash": text_hash}
 
 
 async def test_a_write_racing_a_withdrawal_writes_nothing_once_it_commits(url: URL) -> None:
     owner, app = role_engine(url, "bridge_owner"), role_engine(url, "bridge_app")
     try:
-        user = await _consented(owner)
+        user, text_hash = await _consented(owner)
         async with app.connect() as settings, app.connect() as worker:
             await settings.begin()
             await t.act(settings, user)
@@ -78,7 +82,7 @@ async def test_a_write_racing_a_withdrawal_writes_nothing_once_it_commits(url: U
             await worker.begin()
             await t.act(worker, None)  # its snapshot still sees the grant
             pid = await t.backend_pid(worker)
-            write = asyncio.create_task(worker.execute(sa.text(SET_PROFILE), _write(user)))
+            write = asyncio.create_task(worker.execute(sa.text(SET_PROFILE), _write(user, text_hash)))
             await t.wait_until_blocked(settings, pid, write)  # the writer waits for the profile's row
             await settings.commit()
             assert (await write).scalar_one() is False
@@ -93,11 +97,11 @@ async def test_a_write_racing_a_withdrawal_writes_nothing_once_it_commits(url: U
 async def test_a_withdrawal_racing_a_write_clears_it_once_it_commits(url: URL) -> None:
     owner, app = role_engine(url, "bridge_owner"), role_engine(url, "bridge_app")
     try:
-        user = await _consented(owner)
+        user, text_hash = await _consented(owner)
         async with app.connect() as worker, app.connect() as settings:
             await worker.begin()
             await t.act(worker, None)
-            assert (await worker.execute(sa.text(SET_PROFILE), _write(user))).scalar_one() is True
+            assert (await worker.execute(sa.text(SET_PROFILE), _write(user, text_hash))).scalar_one() is True
             await settings.begin()
             await t.act(settings, user)
             pid = await t.backend_pid(settings)
@@ -119,6 +123,7 @@ async def test_a_problem_write_racing_a_hold_writes_nothing_once_it_commits(url:
         async with owner.begin() as conn:
             author = await developer(conn, "author", peers=False)
             issue = await w.add_problem(conn, author, await named_niche(conn, "Held"))
+            text_hash = sha(await problem_text(conn, issue))
         async with app.connect() as holder, app.connect() as worker:
             await holder.begin()
             await t.act(holder, author)
@@ -126,7 +131,7 @@ async def test_a_problem_write_racing_a_hold_writes_nothing_once_it_commits(url:
             await worker.begin()
             await t.act(worker, None)  # its snapshot still sees the problem published and clear
             pid = await t.backend_pid(worker)
-            params = {"problem": issue, "vector": vector(), "model": MODEL, "version": VERSION}
+            params = {"problem": issue, "vector": vector(), "model": MODEL, "version": VERSION, "text_hash": text_hash}
             write = asyncio.create_task(worker.execute(sa.text(SET_PROBLEM), params))
             await t.wait_until_blocked(holder, pid, write)  # the writer waits for the problem's row
             await holder.commit()

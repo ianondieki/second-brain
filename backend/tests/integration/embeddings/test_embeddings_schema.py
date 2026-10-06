@@ -4,14 +4,17 @@ listed too, so each test asserts about its own rows).
 
 - The indexes are HNSW over ``vector_cosine_ops``.
 - ``app_profiles_to_embed`` lists developers (active, not staff) whose latest ``profiling`` decision is a grant and
-  whose vector is missing or stale (another model or version; a profile edit, a liked-niche change, or a proposal
-  published, hidden or changed since), with the text (headline, bio, liked niche names, the five latest published
-  teasers; NFKC, whitespace collapsed, at most 8,000 characters), never embedded first; never anyone else.
-- ``app_set_profile_embedding`` writes only under a granted consent for an active, non-staff developer; a withdrawal
-  clears the vector in its own transaction (the consents trigger); ``app_clear_profile_embedding`` works for the
-  worker and for the own row only.
-- ``app_problems_to_embed`` lists published and clear problems only; ``app_set_problem_embedding`` re-checks that, so
-  a problem held or archived after it was listed is not written.
+  whose vector is missing or stale (another model or version, or a stored hash that is not the hash of the text now:
+  a profile edit, a liked niche added, removed or renamed, a proposal published, hidden or with a new teaser), with
+  the text (headline, bio, liked niche names, the five latest published teasers; NFKC, whitespace collapsed, at most
+  8,000 characters) and its SHA-256, never embedded first; never anyone else. An update that changes no part of the
+  text (a moved ``updated_at``, a followed niche, a weight, a draft) leaves the vector fresh.
+- ``app_set_profile_embedding`` writes only under a granted consent for an active, non-staff developer and only with
+  the hash of the text as it reads now (an edit between the listing and the write is never stamped as embedded); a
+  withdrawal clears the vector in its own transaction (the consents trigger); ``app_clear_profile_embedding`` works for
+  the worker and for the own row only.
+- ``app_problems_to_embed`` lists published and clear problems only; ``app_set_problem_embedding`` re-checks that and
+  the text's hash, so a problem held, archived or edited after it was listed is not written.
 - Every worker function refuses a bound session (insufficient_privilege) and malformed arguments
   (invalid_parameter_value); ``profile_embedded_at`` is readable with the own row only.
 """
@@ -20,7 +23,6 @@ from __future__ import annotations
 
 from uuid import UUID
 
-import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
@@ -29,6 +31,8 @@ from tests.integration import world as w
 from tests.integration.embeddings.schema_world import (
     CLEAR,
     COUNTS,
+    EMPTY_PROBLEM,
+    EMPTY_PROFILE,
     MODEL,
     PROBLEMS,
     PROFILES,
@@ -36,17 +40,17 @@ from tests.integration.embeddings.schema_world import (
     SET_PROFILE,
     VERSION,
     WORKER_ONLY,
-    age,
     decide,
-    embed_problem,
-    embed_profile,
     listed,
     named_niche,
+    problem_text,
     problems,
+    profile_text,
     profiles,
     proposal,
     set_problem,
     set_profile,
+    sha,
     stored_problem,
     stored_profile,
     vector,
@@ -122,8 +126,9 @@ async def test_a_consented_developer_is_listed_with_their_normalised_text(owner_
         expected = ["Builds fintech tools", "M-Pesa fixes for chamas", "Zebra", "Agri", "Health"]
         for n in range(1, 6):
             expected += [f"Title {n}"] + ([] if n == 3 else [f"Statement {n}"])
-        found = dict(await profiles(conn))
-        assert found[user] == "\n".join(expected)
+        found = {row.id: row for row in await profiles(conn)}
+        assert found[user].text == "\n".join(expected)
+        assert found[user].text_hash == sha(found[user].text)  # SHA-256 of the UTF-8 text, hex
 
 
 async def test_the_text_is_cut_at_8000_characters(owner_engine: AsyncEngine) -> None:
@@ -138,7 +143,7 @@ async def test_the_text_is_cut_at_8000_characters(owner_engine: AsyncEngine) -> 
             b="word " * 2000,
             u=user,
         )
-        text = dict(await profiles(conn))[user]
+        text = {row.id: row.text for row in await profiles(conn)}[user]
         assert len(text) == 8000
         assert text.startswith("Head\nword word ")
 
@@ -183,40 +188,53 @@ async def test_staff_suspended_and_empty_profiles_are_never_listed_or_written(ow
             assert (await stored_profile(conn, user))["first"] is None
 
 
-async def test_a_stale_model_or_version_is_listed_and_a_fresh_vector_is_not(owner_engine: AsyncEngine) -> None:
-    """Given a consented developer whose vector the worker wrote with the current model and version, Then they are not
-    listed for that model and version, and are listed for another model or another version; a vector without its time
-    (written outside the worker) is stale."""
+async def test_a_stale_model_version_or_hash_is_listed_and_a_fresh_vector_is_not(owner_engine: AsyncEngine) -> None:
+    """Given a consented developer whose vector the worker wrote with the current model, version and the hash of their
+    text, Then they are not listed for that model and version, and are listed for another model or version, when the
+    stored hash is gone or another one, or when the vector is gone (the owner's hand); the vector's time only orders
+    the list."""
     async with t.as_app(owner_engine) as conn:
         user = await consented(conn, "fresh")
-        await age(conn, user)
         assert await listed(conn, user) == {user}
-        await embed_profile(conn, user)
+        assert await set_profile(conn, user)
         assert await listed(conn, user) == set()
         assert await listed(conn, user, model="other-model") == {user}
         assert await listed(conn, user, version="2") == {user}
         await t.as_owner(conn)
         await t.run(conn, "UPDATE developer_profiles SET profile_embedded_at = NULL WHERE user_id = :u", u=user)
-        assert await listed(conn, user) == {user}
-        await embed_profile(conn, user)  # a time without a vector (the owner's hand) is stale too
-        await t.run(conn, "UPDATE developer_profiles SET profile_embedding = NULL WHERE user_id = :u", u=user)
-        assert await listed(conn, user) == {user}
+        assert await listed(conn, user) == set()
+        for change in (
+            "profile_embedding_hash = NULL",
+            f"profile_embedding_hash = '{sha('another text')}'",
+            "profile_embedding = NULL",
+        ):
+            assert await set_profile(conn, user)
+            await t.as_owner(conn)
+            await t.run(conn, f"UPDATE developer_profiles SET {change} WHERE user_id = :u", u=user)
+            assert await listed(conn, user) == {user}, change
 
 
-async def test_an_edit_a_liked_niche_change_or_a_teaser_change_makes_a_profile_stale(owner_engine: AsyncEngine) -> None:
-    """Given consented developers embedded a minute ago with nothing changed since, When one edits their profile, one
-    adds a liked niche, one removes one, one changes a liked niche to followed, one has a proposal published (by the
-    app, or dated by the owner as a seed does), one hides a proposal and one has a published proposal's teaser
-    changed, Then exactly those are listed; following or unfollowing a niche, changing a liked niche's weight and
-    editing a draft proposal leave the vector fresh."""
+async def test_a_change_to_the_text_makes_a_profile_stale_and_nothing_else_does(owner_engine: AsyncEngine) -> None:
+    """Given consented developers whose vectors are fresh, When one edits their headline, one adds a liked niche, one
+    removes one, one changes a liked niche to followed, one's liked niche is renamed by staff, one has a proposal
+    published, one hides a proposal and one has a published proposal's teaser changed, Then exactly those are listed;
+    an update that moves updated_at but changes no text, following or unfollowing a niche, changing a liked niche's
+    weight, editing a draft proposal and moving a published proposal's dates leave the vector fresh."""
     async with t.as_app(owner_engine) as conn:
         shared, extra = await niche(conn, "shared"), await niche(conn, "extra")
-        labels = ["edit", "add", "remove", "unlike", "publish", "seeded", "hide", "teaser", "follow", "unfollow"]
-        labels += ["weight", "draft"]
+        labels = ["edit", "add", "remove", "unlike", "rename", "publish", "hide", "teaser", "touch", "follow"]
+        labels += ["unfollow", "weight", "draft", "redate"]
         users = {label: await consented(conn, label, liked=(shared, await niche(conn, label))) for label in labels}
+        renamed = await niche(conn, "to-rename")
+        await t.run(
+            conn,
+            "INSERT INTO developer_niches (user_id, niche_id, kind) VALUES (:u, :n, 'liked')",
+            u=users["rename"],
+            n=renamed,
+        )
         published = {
             label: await proposal(conn, users[label], shared, title="Teaser", statement="Statement")
-            for label in ("hide", "teaser", "seeded")
+            for label in ("hide", "teaser", "redate")
         }
         followed = await niche(conn, "followed")
         await t.run(
@@ -226,16 +244,17 @@ async def test_an_edit_a_liked_niche_change_or_a_teaser_change_makes_a_profile_s
             n=followed,
         )
         draft = await proposal(conn, users["draft"], shared, title="Draft", statement="Draft", status="draft")
-        await age(conn, *users.values())
         for user in users.values():
-            await embed_profile(conn, user)
+            assert await set_profile(conn, user)
         assert await listed(conn, *users.values()) == set()
 
-        await t.act(conn, users["edit"])  # the app's PATCH: the ORM moves updated_at
+        await t.act(conn, users["edit"])  # the app's PATCH
+        await t.run(conn, "UPDATE developer_profiles SET headline = 'New' WHERE user_id = :u", u=users["edit"])
+        await t.act(conn, users["touch"])  # an ORM update that changes nothing of the text (review MINOR 3)
         await t.run(
             conn,
-            "UPDATE developer_profiles SET headline = 'New', updated_at = now() WHERE user_id = :u",
-            u=users["edit"],
+            "UPDATE developer_profiles SET updated_at = now() + interval '1 hour' WHERE user_id = :u",
+            u=users["touch"],
         )
         add = "INSERT INTO developer_niches (user_id, niche_id, kind) VALUES (:u, :n, CAST(:k AS niche_interest))"
         await t.act(conn, users["add"])
@@ -251,12 +270,12 @@ async def test_an_edit_a_liked_niche_change_or_a_teaser_change_makes_a_profile_s
             u=users["unlike"],
             n=shared,
         )
+        await t.as_owner(conn)  # staff rename a niche
+        await t.run(conn, "UPDATE niches SET name_en = 'Renamed' WHERE id = :n", n=renamed)
         await t.act(conn, users["follow"])
         await t.run(conn, add, u=users["follow"], n=extra, k="followed")
         await t.act(conn, users["unfollow"])
         await t.run(conn, "DELETE FROM developer_niches WHERE user_id = :u AND kind = 'followed'", u=users["unfollow"])
-        await t.as_owner(conn)  # a seed dates a publication itself: published_at moves, updated_at does not
-        await t.run(conn, "UPDATE proposals SET published_at = now() WHERE id = :id", id=published["seeded"])
         await t.act(conn, users["weight"])
         await t.run(conn, "UPDATE developer_niches SET weight = 2 WHERE user_id = :u", u=users["weight"])
         await proposal(conn, users["publish"], shared, title="New", statement="New", days_ago=0)
@@ -272,8 +291,43 @@ async def test_an_edit_a_liked_niche_change_or_a_teaser_change_makes_a_profile_s
         )
         await t.act(conn, users["draft"])
         await t.run(conn, "UPDATE proposals SET title = 'Still a draft', updated_at = now() WHERE id = :id", id=draft)
-        stale = {users[label] for label in ("edit", "add", "remove", "unlike", "publish", "seeded", "hide", "teaser")}
+        await t.as_owner(conn)  # one proposal: its dates order nothing
+        await t.run(
+            conn,
+            "UPDATE proposals SET published_at = now() + interval '1 hour', updated_at = now() + interval '1 hour'"
+            " WHERE id = :id",
+            id=published["redate"],
+        )
+        stale = {users[label] for label in ("edit", "add", "remove", "unlike", "rename", "publish", "hide", "teaser")}
         assert await listed(conn, *users.values()) == stale
+
+
+async def test_an_edit_between_the_listing_and_the_write_is_never_stamped(owner_engine: AsyncEngine) -> None:
+    """Given a developer and a problem the worker listed with their texts' hashes, When the headline and the problem's
+    statement change before the vectors are written (review MAJOR: freshness by time lost such an edit), Then the
+    writers write nothing and return false; both are listed again with the new texts' hashes, and written with those
+    they are fresh."""
+    async with t.as_app(owner_engine) as conn:
+        user = await consented(conn, "racing")
+        issue = await w.add_problem(conn, user, await niche(conn, "racing-problem"))
+        profile = {row.id: row for row in await profiles(conn)}[user]
+        problem = {row.id: row for row in await problems(conn)}[issue]
+        await t.act(conn, user)
+        await t.run(conn, "UPDATE developer_profiles SET headline = 'Edited meanwhile' WHERE user_id = :u", u=user)
+        await t.run(conn, "UPDATE problems SET statement = 'Edited meanwhile' WHERE id = :id", id=issue)
+        assert await set_profile(conn, user, text_hash=profile.text_hash) is False
+        assert await set_problem(conn, issue, text_hash=problem.text_hash) is False
+        assert await stored_profile(conn, user) == EMPTY_PROFILE
+        assert await stored_problem(conn, issue) == EMPTY_PROBLEM
+        again = {row.id: row for row in await profiles(conn)}[user]
+        assert again.text.startswith("Edited meanwhile\n")
+        assert again.text_hash != profile.text_hash
+        problem_again = {row.id: row for row in await problems(conn)}[issue]
+        assert problem_again.text_hash == sha(await problem_text(conn, issue)) != problem.text_hash
+        assert await set_profile(conn, user, text_hash=again.text_hash) is True
+        assert await set_problem(conn, issue, text_hash=problem_again.text_hash) is True
+        assert await listed(conn, user) == set()
+        assert issue not in {row.id for row in await problems(conn)}
 
 
 async def test_never_embedded_first_then_the_oldest_vector(owner_engine: AsyncEngine) -> None:
@@ -309,7 +363,7 @@ async def test_never_embedded_first_then_the_oldest_vector(owner_engine: AsyncEn
                 u=user,
             )
         mine = {first, second, old, recent}
-        order = [user for user, _ in await profiles(conn) if user in mine]
+        order = [row.id for row in await profiles(conn) if row.id in mine]
         assert first < second
         assert order == [first, second, old, recent]
         assert len(await profiles(conn, limit=1)) == 1
@@ -324,7 +378,13 @@ async def test_the_worker_functions_refuse_a_bound_session_and_malformed_argumen
     async with t.as_app(owner_engine) as conn:
         user = await consented(conn, "bound")
         issue = await w.add_problem(conn, user, await niche(conn, "bound-problem"))
-        ok: dict[str, object] = {"model": MODEL, "version": VERSION, "limit": 10, "vector": vector()}
+        ok: dict[str, object] = {
+            "model": MODEL,
+            "version": VERSION,
+            "limit": 10,
+            "vector": vector(),
+            "text_hash": sha(await profile_text(conn, user)),
+        }
         calls: tuple[tuple[str, dict[str, object]], ...] = (
             (PROFILES, {}),
             (PROBLEMS, {}),
@@ -359,6 +419,11 @@ async def test_the_worker_functions_refuse_a_bound_session_and_malformed_argumen
             await refused(
                 conn, SET_PROBLEM, "a non-zero vector of 1024", INVALID, **{**ok, "problem": issue, "vector": bad}
             )
+        for bad_hash in (None, "", "0" * 63, "A" * 64, "g" * 64, "0" * 65):
+            await refused(conn, SET_PROFILE, "the text's hash", INVALID, **{**ok, "user": user, "text_hash": bad_hash})
+            await refused(
+                conn, SET_PROBLEM, "the text's hash", INVALID, **{**ok, "problem": issue, "text_hash": bad_hash}
+            )
         await refused(conn, COUNTS, "or neither", INVALID, model=MODEL, version=None)
         await refused(conn, COUNTS, "or neither", INVALID, model=None, version=VERSION)
         await refused(conn, COUNTS, "or neither", INVALID, model="", version=VERSION)
@@ -369,8 +434,8 @@ async def test_the_worker_functions_refuse_a_bound_session_and_malformed_argumen
 
 async def test_the_writer_writes_only_under_a_granted_profiling_consent(owner_engine: AsyncEngine) -> None:
     """Given developers who granted, withdrew or never decided, and an id with no profile, When the worker writes
-    their vectors, Then only the granted one is written (vector, model, version and the transaction's time) and the
-    writer says so; the others are left without a vector and the writer returns false."""
+    their vectors, Then only the granted one is written (vector, model, version, the transaction's time and the text's
+    hash) and the writer says so; the others are left without a vector and the writer returns false."""
     async with t.as_app(owner_engine) as conn:
         granted = await consented(conn, "granted")
         withdrawn = await consented(conn, "withdrawn")
@@ -385,16 +450,12 @@ async def test_the_writer_writes_only_under_a_granted_profiling_consent(owner_en
             "embed_model": MODEL,
             "embed_version": VERSION,
             "profile_embedded_at": now,
+            "profile_embedding_hash": sha(await profile_text(conn, granted)),
         }
         for user in (withdrawn, never, no_profile, uuid7()):
             assert await set_profile(conn, user) is False
         for user in (withdrawn, never):
-            assert await stored_profile(conn, user) == {
-                "first": None,
-                "embed_model": None,
-                "embed_version": None,
-                "profile_embedded_at": None,
-            }
+            assert await stored_profile(conn, user) == EMPTY_PROFILE
 
 
 async def test_a_withdrawal_clears_the_vector_in_its_own_transaction(owner_engine: AsyncEngine) -> None:
@@ -410,9 +471,8 @@ async def test_a_withdrawal_clears_the_vector_in_its_own_transaction(owner_engin
         assert (await stored_profile(conn, user))["first"] == 1.0
         await decide(conn, user, False)
         await decide(conn, seeded, False, as_owner=True)
-        empty = {"first": None, "embed_model": None, "embed_version": None, "profile_embedded_at": None}
         for withdrawn in (user, seeded):
-            assert await stored_profile(conn, withdrawn) == empty
+            assert await stored_profile(conn, withdrawn) == EMPTY_PROFILE
         assert await listed(conn, user, seeded) == set()
 
 
@@ -434,12 +494,7 @@ async def test_the_clearer_serves_the_worker_and_the_own_row_only(owner_engine: 
         await t.act(conn, None)
         await t.run(conn, CLEAR, user=brian)
         await t.run(conn, CLEAR, user=uuid7())
-        assert await stored_profile(conn, brian) == {
-            "first": None,
-            "embed_model": None,
-            "embed_version": None,
-            "profile_embedded_at": None,
-        }
+        assert await stored_profile(conn, brian) == EMPTY_PROFILE
 
 
 async def test_profile_embedded_at_is_read_with_the_own_row_only(owner_engine: AsyncEngine) -> None:
@@ -465,8 +520,9 @@ async def test_profile_embedded_at_is_read_with_the_own_row_only(owner_engine: A
 async def test_problems_listed_are_published_and_clear_with_their_text(owner_engine: AsyncEngine) -> None:
     """Given problems published and clear, published but held, pending review, rejected, archived and candidate,
     When the worker lists problems to embed, Then only the published and clear one is listed, with its title and
-    statement normalised on two lines; once embedded it is listed again only for another model or version, after an
-    edit, or when its vector has no time."""
+    statement normalised on two lines and its hash; once embedded it is listed again only for another model or
+    version, after an edit of its text, or when its vector or hash is gone (not after an update that changes no
+    text)."""
     async with t.as_app(owner_engine) as conn:
         author = await developer(conn, "author", peers=False)
         topic = await niche(conn, "problems")
@@ -490,22 +546,28 @@ async def test_problems_listed_are_published_and_clear_with_their_text(owner_eng
             s="Agents run\n\nout of float\x0b ",
             id=ids["open"],
         )
-        found = {problem: text for problem, text in await problems(conn) if problem in set(ids.values())}
-        assert found == {ids["open"]: "M-Pesa float\nAgents run out of float"}
-        await embed_problem(conn, ids["open"])
         mine = set(ids.values())
-        assert not {p for p, _ in await problems(conn)} & mine
-        assert {p for p, _ in await problems(conn, model="other")} & mine == {ids["open"]}
-        assert {p for p, _ in await problems(conn, version="2")} & mine == {ids["open"]}
-        await t.as_owner(conn)
-        await t.run(conn, "UPDATE problems SET statement = 'Edited', updated_at = now() WHERE id = :id", id=ids["open"])
-        assert {p for p, _ in await problems(conn)} & mine == {ids["open"]}
-        await embed_problem(conn, ids["open"])
-        await t.run(conn, "UPDATE problems SET embedded_at = NULL WHERE id = :id", id=ids["open"])
-        assert {p for p, _ in await problems(conn)} & mine == {ids["open"]}
-        await embed_problem(conn, ids["open"])  # a time without a vector is stale too
-        await t.run(conn, "UPDATE problems SET embedding = NULL WHERE id = :id", id=ids["open"])
-        assert {p for p, _ in await problems(conn)} & mine == {ids["open"]}
+        found = {row.id: row for row in await problems(conn) if row.id in mine}
+        assert {problem: row.text for problem, row in found.items()} == {
+            ids["open"]: "M-Pesa float\nAgents run out of float"
+        }
+        assert found[ids["open"]].text_hash == sha("M-Pesa float\nAgents run out of float")
+        assert await set_problem(conn, ids["open"])
+        assert not {row.id for row in await problems(conn)} & mine
+        assert {row.id for row in await problems(conn, model="other")} & mine == {ids["open"]}
+        assert {row.id for row in await problems(conn, version="2")} & mine == {ids["open"]}
+        await t.as_owner(conn)  # an update that changes no text: still fresh
+        await t.run(
+            conn,
+            "UPDATE problems SET updated_at = now() + interval '1 hour', embedded_at = NULL WHERE id = :id",
+            id=ids["open"],
+        )
+        assert not {row.id for row in await problems(conn)} & mine
+        for change in ("statement = 'Edited'", "embedding_hash = NULL", "embedding = NULL"):
+            assert await set_problem(conn, ids["open"])
+            await t.as_owner(conn)
+            await t.run(conn, f"UPDATE problems SET {change} WHERE id = :id", id=ids["open"])
+            assert {row.id for row in await problems(conn)} & mine == {ids["open"]}, change
 
 
 async def test_problems_never_embedded_first_then_the_oldest_and_never_a_blank_one(owner_engine: AsyncEngine) -> None:
@@ -537,7 +599,7 @@ async def test_problems_never_embedded_first_then_the_oldest_and_never_a_blank_o
                 id=problem_id,
             )
         mine = {first, second, old, recent, blank}
-        assert [p for p, _ in await problems(conn) if p in mine] == [first, second, old, recent]
+        assert [row.id for row in await problems(conn) if row.id in mine] == [first, second, old, recent]
         assert len(await problems(conn, limit=1)) == 1
         assert len(await problems(conn, limit=3)) <= 3
 
@@ -549,8 +611,7 @@ async def test_the_problem_writer_writes_only_while_published_and_clear(owner_en
     async with t.as_app(owner_engine) as conn:
         author = await developer(conn, "writer", peers=False)
         issue = await w.add_problem(conn, author, await niche(conn, "writer"))
-        assert issue in {p for p, _ in await problems(conn)}
-        empty = {"first": None, "embed_model": None, "embed_version": None, "embedded_at": None}
+        assert issue in {row.id for row in await problems(conn)}
         for status, state in (("published", "held"), ("archived", "clear"), ("pending_review", "clear")):
             await t.as_owner(conn)
             await t.run(
@@ -562,7 +623,7 @@ async def test_the_problem_writer_writes_only_while_published_and_clear(owner_en
                 id=issue,
             )
             assert await set_problem(conn, issue) is False, (status, state)
-            assert await stored_problem(conn, issue) == empty
+            assert await stored_problem(conn, issue) == EMPTY_PROBLEM
         await t.as_owner(conn)
         await t.run(
             conn, "UPDATE problems SET status = 'published', moderation_state = 'clear' WHERE id = :id", id=issue
@@ -574,6 +635,7 @@ async def test_the_problem_writer_writes_only_while_published_and_clear(owner_en
             "embed_model": MODEL,
             "embed_version": VERSION,
             "embedded_at": now,
+            "embedding_hash": sha(await problem_text(conn, issue)),
         }
         assert await set_problem(conn, uuid7()) is False
 
@@ -601,22 +663,3 @@ async def test_the_counts_follow_the_readers(owner_engine: AsyncEngine) -> None:
         assert await set_profile(conn, user)
         assert await set_problem(conn, issue)
         assert await counts() == base
-
-
-@pytest.mark.parametrize("kind", ["liked", "followed"])
-async def test_deleting_a_developer_with_niches_cascades(owner_engine: AsyncEngine, kind: str) -> None:
-    """Given a developer with a profile, a vector and a niche, When their account is deleted (the owner's erasure),
-    Then the cascade removes the profile and the niches; the liked-niche trigger does not stand in its way."""
-    async with t.as_app(owner_engine) as conn:
-        topic = await niche(conn, "cascade")
-        niches = (topic,)
-        if kind == "liked":
-            user = await developer(conn, "cascade", peers=False, liked=niches)
-        else:
-            user = await developer(conn, "cascade", peers=False, followed=niches)
-        await decide(conn, user, True)
-        assert await set_profile(conn, user)
-        await t.as_owner(conn)
-        await t.run(conn, "DELETE FROM users WHERE id = :u", u=user)
-        assert await t.run(conn, "SELECT count(*) FROM developer_profiles WHERE user_id = :u", u=user) == 0
-        assert await t.run(conn, "SELECT count(*) FROM developer_niches WHERE user_id = :u", u=user) == 0
