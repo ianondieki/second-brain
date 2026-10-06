@@ -12,6 +12,8 @@ look back, the trend of the day, a developer's card and the named-organisation r
 - ``trend_of_day(db, today)``: the published cards ordered by ``published_at, id``, the one at index
   ``today.toordinal() mod count`` (today: the Nairobi day on the shared clock when not given), in one statement.
 - ``published_card(db, id)``: a published card with its sources, for its page (None for anything else).
+- ``defer_run(db, user_id=...)``: a staff admin's manual run, queued as the weekly task ``trends.draft`` through the
+  transactional outbox (the API never imports the task module), naming the admin so the job binds them.
 - ``unsourced_names(...)``: the rule ``draft_trends`` applied (``bridge.problems.trends.checks``), repeated on what is
   stored: every organisation the card names (the TECH allowlist's found in its text and its own ``named_orgs``) must
   be named by a stored source, in its quote or as its publisher, and no capitalised name may appear that no source
@@ -33,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.engagements.calendar import NAIROBI
 from bridge.events.schemas import TrendCardDetailOut, TrendCardOut, TrendSourceOut
+from bridge.jobs.outbox import defer
 from bridge.problems.research.checks import named_organisations
 from bridge.problems.research.sources import TECH, CatalogueKind, Excerpt, get_catalogue, url_host
 from bridge.problems.trends.checks import unsourced_capitalised
@@ -40,6 +43,9 @@ from bridge.problems.trends.checks import unsourced_names as names_without_sourc
 from bridge.problems.trends.run import Accepted, TrendCandidate
 from bridge.trends.models import TrendCard, TrendCardSource
 
+RUN_TASK: Final = "trends.draft"
+QUEUE: Final = "trends"
+LOCK: Final = "trends:draft"  # one run at a time, the weekly one and the manual ones alike
 _CREATE: Final = text("SELECT app_create_trend_candidate(CAST(:card AS jsonb), CAST(:sources AS jsonb))")
 # The day's index over the published cards: ``today.toordinal()`` when given, else the Nairobi day on the shared clock.
 _OF_THE_DAY: Final = text(
@@ -176,3 +182,10 @@ def unsourced_names(
         title, summary, excerpts, allowlist
     )
     return tuple(dict.fromkeys(found))
+
+
+async def defer_run(db: AsyncSession, *, user_id: UUID, timestamp: int) -> int:
+    """Queue a manual run of ``trends.draft`` in the caller's transaction (``timestamp``: the task's own argument, which
+    it ignores). The job binds ``user_id`` (a staff admin), who reads the cards and creates the candidates."""
+    args = {"timestamp": timestamp, "user_id": str(user_id)}
+    return await defer(db, RUN_TASK, args, queue=QUEUE, lock=LOCK)

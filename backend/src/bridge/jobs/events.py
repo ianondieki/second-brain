@@ -1,4 +1,4 @@
-"""This week's reminder job (REQ-DEV-02; D-61; P22 card B; ``REQUIREMENTS.md`` §5 N26, N27; ``bridge.events.reminders``).
+"""This week's reminder job (REQ-DEV-02; D-61; P22 card B; REQUIREMENTS.md §5 N26, N27; ``bridge.events.reminders``).
 
 ``events.remind`` runs every 15 minutes on the reminders queue. Procrastinate's cron is UTC and passes its own
 ``timestamp``; the job ignores it and reads the shared clock (``app_clock_now()``), so the dev and test clock drives
