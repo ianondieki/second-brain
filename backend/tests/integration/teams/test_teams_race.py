@@ -30,8 +30,8 @@ from tests.integration.teams.schema_world import (
     INVITE,
     POST,
     REPORT,
-    developer,
     invitation_params,
+    peer,
     post,
     problem,
     team,
@@ -52,7 +52,7 @@ def url(admin_url: URL) -> Iterator[URL]:
 async def _pair(owner: AsyncEngine, *, thread: bool) -> tuple[UUID, UUID, UUID, UUID | None]:
     """Committed: two developers who opted in, a problem and, when asked, their team's thread."""
     async with owner.begin() as conn:
-        amina, brian = await developer(conn, "amina"), await developer(conn, "brian")
+        amina, brian = await peer(conn, "amina"), await peer(conn, "brian")
         issue = await problem(conn, amina)
         found = (await team(conn, amina, brian, issue))[1] if thread else None
     return amina, brian, issue, found
@@ -149,7 +149,7 @@ async def test_two_reports_racing_past_the_ninth_leave_exactly_ten(url: URL) -> 
     owner, app = role_engine(url, "bridge_owner"), role_engine(url, "bridge_app")
     try:
         async with owner.begin() as conn:
-            amina, brian = await developer(conn, "amina"), await developer(conn, "brian")
+            amina, brian = await peer(conn, "amina"), await peer(conn, "brian")
             _, thread = await team(conn, amina, brian, await problem(conn, amina))
             messages = [await post(conn, brian, thread, f"#{n}") for n in range(11)]
             await t.act(conn, amina)

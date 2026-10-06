@@ -255,10 +255,12 @@ async def test_a_card_reaches_a_counterpart_or_a_peer_and_never_across_a_block(o
         shared = await niche(conn, "logistics")
         dev = await developer(conn, "dev", liked=(shared,))
         peer = await developer(conn, "peer", liked=(shared,))
-        counterpart = await developer(conn, "counterpart")
+        counterpart = await developer(conn, "counterpart", liked=(shared,))  # a peer when invited, then no more
         stranger = await developer(conn, "stranger")
         member, admin = await org_only(conn), await developer(conn, "admin", staff="admin")
         await invite(conn, dev, counterpart, await problem(conn, dev))
+        await t.as_owner(conn)
+        await t.run(conn, "DELETE FROM developer_niches WHERE user_id = :u", u=counterpart)
         assert [row.user_id for row in await card(conn, dev, peer)] == [peer]
         assert [tuple(row) for row in await card(conn, dev, counterpart)] == [
             (counterpart, await handle(conn, counterpart), None)

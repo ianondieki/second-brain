@@ -39,13 +39,16 @@ from tests.integration.teams.schema_world import (
     UNBLOCK,
     brief,
     count,
+    county,
     decide,
     developer,
     handle,
     invitation_params,
     invite,
+    niche,
     org_only,
     organisation,
+    peer,
     post,
     problem,
     refused,
@@ -53,6 +56,7 @@ from tests.integration.teams.schema_world import (
 )
 
 NO_INVITATION = "no invitation of the caller's with that id"
+NOT_REACHABLE = "the recipient is neither a peer nor a counterpart of the sender"
 NO_THREAD = "team_messages: no thread of the caller's with that id"
 STATUS = "SELECT status, decided_at IS NOT NULL FROM team_invitations WHERE id = :id"
 THREAD = "SELECT closed_reason, closed_at IS NOT NULL FROM team_threads WHERE id = :id"
@@ -74,12 +78,13 @@ async def test_an_invitation_names_an_open_problem_and_a_visible_peer(owner_engi
     """Given two developers who opted in, When one invites the other, Then the invitation is pending with the
     database's times, for a published, clear problem that every signed-in user reads (a developer's, or a public
     published Brief); the sender hears why otherwise: a held, unpublished or archived problem, an invited or closed
-    Brief (no_data_found), a recipient who did not opt in, is staff or has no developer profile (no_data_found); a
+    Brief (no_data_found), a recipient who is no peer: did not opt in, is staff or has no developer profile
+    (no_data_found); a
     sender who did not opt in, who is no developer, or who names another sender is refused by the policy; the note is
     1 to 300 characters (line breaks allowed) or none; nobody names the status or its time."""
     async with t.as_app(owner_engine) as conn:
-        sender, to = await developer(conn, "sender"), await developer(conn, "to")
-        hidden, staff = await developer(conn, "hidden", peers=False), await developer(conn, "staff", staff="admin")
+        sender, to = await peer(conn, "sender"), await peer(conn, "to")
+        hidden, staff = await peer(conn, "hidden", peers=False), await peer(conn, "staff", staff="admin")
         member = await org_only(conn)
         org = await organisation(conn, "briefs")
         open_problem = await problem(conn, sender)
@@ -101,7 +106,7 @@ async def test_an_invitation_names_an_open_problem_and_a_visible_peer(owner_engi
             await refused(conn, INVITE, "team_invitations: no published problem with that id", "P0002", **params)
         for recipient in (hidden, staff, member, uuid7()):
             params = invitation_params(sender, recipient, open_problem)
-            await refused(conn, INVITE, "the recipient is not a developer who opted in to peers", "P0002", **params)
+            await refused(conn, INVITE, NOT_REACHABLE, "P0002", **params)
         for caller in (hidden, member, staff):  # the policy refuses, and nothing is said about the recipient
             await t.act(conn, caller)
             for recipient in (to, hidden):
@@ -120,11 +125,87 @@ async def test_an_invitation_names_an_open_problem_and_a_visible_peer(owner_engi
         )
 
 
+async def test_an_invitation_reaches_a_peer_or_a_counterpart_only(owner_engine: AsyncEngine) -> None:
+    """Given developers who opted in, When one invites another, Then a peer (the sender's county, or a shared liked
+    niche) is reached, and an opted-in developer in another county with no shared niche and no history is refused
+    (P0002 from the trigger; the policy alone refuses it too); an existing counterpart is reached even once no peer
+    (their niche dropped, then their switch off), but not once suspended or across a block; ``app_is_visible_peer``
+    answers the same to the sender."""
+    async with t.as_app(owner_engine) as conn:
+        kisumu, nakuru = await county(conn, "Kisumu"), await county(conn, "Nakuru")
+        agri, health = await niche(conn, "agri"), await niche(conn, "health")
+        sender = await developer(conn, "sender", county_code=kisumu, liked=(agri,))
+        neighbour = await developer(conn, "neighbour", county_code=kisumu)
+        colleague = await developer(conn, "colleague", county_code=nakuru, liked=(agri,))
+        outsider = await developer(conn, "outsider", county_code=nakuru, liked=(health,))
+        issues = [await problem(conn, sender) for _ in range(6)]
+        visible = "SELECT app_is_visible_peer(:u)"
+        await t.act(conn, sender)
+        assert [await t.run(conn, visible, u=u) for u in (sender, neighbour, colleague, outsider)] == [
+            True,
+            True,
+            True,
+            False,
+        ]
+        await refused(conn, INVITE, NOT_REACHABLE, "P0002", **invitation_params(sender, outsider, issues[0]))
+        await invite(conn, sender, neighbour, issues[0])  # the same county
+        await invite(conn, sender, colleague, issues[0])  # a shared liked niche
+        await t.as_owner(conn)  # the policy alone, without the trigger's precise refusal
+        await t.run(conn, "ALTER TABLE team_invitations DISABLE TRIGGER team_invitations_open")
+        await t.act(conn, sender)
+        await refused(conn, INVITE, RLS, "42501", **invitation_params(sender, outsider, issues[0]))
+        await t.as_owner(conn)
+        await t.run(conn, "ALTER TABLE team_invitations ENABLE TRIGGER team_invitations_open")
+        await t.run(conn, "DELETE FROM developer_niches WHERE user_id = :u", u=colleague)  # no peer any more
+        await t.act(conn, sender)
+        assert await t.run(conn, visible, u=colleague) is True  # a counterpart
+        await invite(conn, sender, colleague, issues[1])
+        await invite(conn, colleague, sender, issues[2])
+        await t.as_owner(conn)
+        await t.run(conn, "UPDATE developer_profiles SET peers_visible = false WHERE user_id = :u", u=colleague)
+        await invite(conn, sender, colleague, issues[3])  # a counterpart who turned the switch off
+        await t.as_owner(conn)
+        await t.run(conn, "UPDATE users SET status = 'suspended' WHERE id = :u", u=colleague)
+        await t.act(conn, sender)
+        assert await t.run(conn, visible, u=colleague) is False
+        await refused(conn, INVITE, NOT_REACHABLE, "P0002", **invitation_params(sender, colleague, issues[4]))
+        await t.as_owner(conn)
+        await t.run(conn, "UPDATE users SET status = 'active' WHERE id = :u", u=colleague)
+        await t.act(conn, neighbour)
+        assert await t.run(conn, BLOCK, blocked=sender) == 2  # the block and the pending invitation it ended
+        await t.act(conn, sender)
+        assert await t.run(conn, visible, u=neighbour) is False
+        await refused(
+            conn, INVITE, "a block stands between", "42501", **invitation_params(sender, neighbour, issues[5])
+        )
+        await t.as_owner(conn)
+        await t.run(
+            conn,
+            "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:a, :b)",
+            a=colleague,
+            b=sender,
+        )
+        await t.act(conn, sender)
+        assert await t.run(conn, visible, u=colleague) is False  # a counterpart across a block
+        assert await t.run(conn, visible, u=outsider) is False
+        await t.as_owner(conn)  # the other way round: the sender's own block
+        await t.run(conn, "DELETE FROM developer_blocks WHERE blocker_user_id = :a", a=colleague)
+        await t.act(conn, sender)
+        assert await t.run(conn, visible, u=colleague) is True
+        await t.run(
+            conn,
+            "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:a, :b)",
+            a=sender,
+            b=colleague,
+        )
+        assert await t.run(conn, visible, u=colleague) is False
+
+
 async def test_one_pending_invitation_per_pair_and_problem_either_way(owner_engine: AsyncEngine) -> None:
     """Given a pending invitation, When either party invites the other on the same problem, Then the partial unique
     index refuses it; another problem is fine, and once the first is decided the pair may invite again."""
     async with t.as_app(owner_engine) as conn:
-        amina, brian = await developer(conn, "amina"), await developer(conn, "brian")
+        amina, brian = await peer(conn, "amina"), await peer(conn, "brian")
         first, second = await problem(conn, amina), await problem(conn, amina)
         invitation = await invite(conn, amina, brian, first)
         await t.act(conn, amina)
@@ -146,7 +227,7 @@ async def test_decisions_are_the_right_partys_and_once(owner_engine: AsyncEngine
     at the database's time; the wrong party is refused, a non-party, a caller who is no developer and an unknown id get
     one refusal, a decided invitation never changes (for every role), and bridge_app updates nothing directly."""
     async with t.as_app(owner_engine) as conn:
-        sender, to, third = await developer(conn, "sender"), await developer(conn, "to"), await developer(conn, "third")
+        sender, to, third = await peer(conn, "sender"), await peer(conn, "to"), await peer(conn, "third")
         member = await org_only(conn)
         issue = await problem(conn, sender)
         invitation = await invite(conn, sender, to, issue)
@@ -219,7 +300,7 @@ async def test_accept_needs_an_active_sender_and_a_problem_still_open(owner_engi
     """Given pending invitations, When the sender was suspended or the problem was held since, Then accepting is refused
     (object_not_in_prerequisite_state) and the invitation stays pending; declining is still possible."""
     async with t.as_app(owner_engine) as conn:
-        sender, to = await developer(conn, "sender"), await developer(conn, "to")
+        sender, to = await peer(conn, "sender"), await peer(conn, "to")
         held, other = await problem(conn, sender), await problem(conn, sender)
         first, second = await invite(conn, sender, to, held), await invite(conn, sender, to, other)
         await t.as_owner(conn)
@@ -245,11 +326,11 @@ async def test_only_the_parties_read_a_thread_and_post_while_it_is_open(owner_en
     a party never posts as the other; the owner never writes a message from a non-party."""
     async with t.as_app(owner_engine) as conn:
         amina, brian, third = (
-            await developer(conn, "amina"),
-            await developer(conn, "brian"),
-            await developer(conn, "third"),
+            await peer(conn, "amina"),
+            await peer(conn, "brian"),
+            await peer(conn, "third"),
         )
-        member, admin = await org_only(conn), await developer(conn, "admin", staff="admin")
+        member, admin = await org_only(conn), await peer(conn, "admin", staff="admin")
         invitation, thread = await team(conn, amina, brian, await problem(conn, amina))
         await post(conn, amina, thread)
         await post(conn, brian, thread, "Yes")
@@ -299,7 +380,7 @@ async def test_messages_are_append_only_but_for_the_owners_one_redaction(owner_e
     its redaction; the owner deletes and truncates nothing and only redacts it once (the body to '[redacted]' with
     who and when, nothing else); a body is 1 to 4,000 characters and never looks redacted."""
     async with t.as_app(owner_engine) as conn:
-        amina, brian = await developer(conn, "amina"), await developer(conn, "brian")
+        amina, brian = await peer(conn, "amina"), await peer(conn, "brian")
         _, thread = await team(conn, amina, brian, await problem(conn, amina))
         message = await post(conn, amina, thread)
         await t.act(conn, amina)
@@ -350,9 +431,9 @@ async def test_a_closed_thread_is_read_only_and_never_reopens(owner_engine: Asyn
     as for an unknown thread; for every role the thread never reopens and its parties and problem never change."""
     async with t.as_app(owner_engine) as conn:
         amina, brian, third = (
-            await developer(conn, "amina"),
-            await developer(conn, "brian"),
-            await developer(conn, "third"),
+            await peer(conn, "amina"),
+            await peer(conn, "brian"),
+            await peer(conn, "third"),
         )
         _, thread = await team(conn, amina, brian, await problem(conn, amina))
         await t.act(conn, brian)
@@ -400,9 +481,9 @@ async def test_a_block_ends_pending_invitations_and_closes_threads(owner_engine:
     way. Blocking oneself, nobody, a user without a developer profile, or as a caller who is no developer is refused."""
     async with t.as_app(owner_engine) as conn:
         amina, brian, carol = (
-            await developer(conn, "amina"),
-            await developer(conn, "brian"),
-            await developer(conn, "carol"),
+            await peer(conn, "amina"),
+            await peer(conn, "brian"),
+            await peer(conn, "carol"),
         )
         first, second, third = [await problem(conn, amina) for _ in range(3)]
         _, thread = await team(conn, amina, brian, first)
@@ -483,11 +564,11 @@ async def test_a_team_message_is_reported_once_ten_a_day_and_read_by_staff_throu
     one reported message (with its sender) through ``app_reported_team_message`` only, and nobody else does."""
     async with t.as_app(owner_engine) as conn:
         amina, brian, third = (
-            await developer(conn, "amina"),
-            await developer(conn, "brian"),
-            await developer(conn, "third"),
+            await peer(conn, "amina"),
+            await peer(conn, "brian"),
+            await peer(conn, "third"),
         )
-        moderator = await developer(conn, "moderator", staff="moderator")
+        moderator = await peer(conn, "moderator", staff="moderator")
         _, thread = await team(conn, amina, brian, await problem(conn, amina))
         messages = [await post(conn, brian, thread, f"Message {n}") for n in range(11)]
         await t.act(conn, amina)
@@ -572,12 +653,12 @@ async def test_the_owner_credits_a_counterpart_and_anyone_who_reads_the_proposal
     once, at the database's time; it is never restored or added back; a block keeps the credit."""
     async with t.as_app(owner_engine) as conn:
         owner, counterpart, second = (
-            await developer(conn, "owner"),
-            await developer(conn, "counterpart"),
-            await developer(conn, "second"),
+            await peer(conn, "owner"),
+            await peer(conn, "counterpart"),
+            await peer(conn, "second"),
         )
-        stranger, reader = await developer(conn, "stranger"), await developer(conn, "reader")
-        member, admin = await org_only(conn), await developer(conn, "admin", staff="admin")
+        stranger, reader = await peer(conn, "stranger"), await peer(conn, "reader")
+        member, admin = await org_only(conn), await peer(conn, "admin", staff="admin")
         issue = await problem(conn, owner)
         _, thread = await team(conn, owner, counterpart, issue)
         _, second_thread = await team(conn, second, owner, issue)
@@ -654,9 +735,9 @@ async def test_a_read_marker_is_a_partys_own(owner_engine: AsyncEngine) -> None:
     (never its thread or user), a third developer marks nothing, and nobody reads another's marker."""
     async with t.as_app(owner_engine) as conn:
         amina, brian, third = (
-            await developer(conn, "amina"),
-            await developer(conn, "brian"),
-            await developer(conn, "third"),
+            await peer(conn, "amina"),
+            await peer(conn, "brian"),
+            await peer(conn, "third"),
         )
         _, thread = await team(conn, amina, brian, await problem(conn, amina))
         mark = "INSERT INTO team_thread_reads (thread_id, user_id, last_read_at) VALUES (:t, :u, now())"
@@ -681,9 +762,9 @@ async def test_a_party_who_becomes_staff_or_is_suspended_loses_every_power(owner
     every path needs a developer (staff decide and moderate, they never take part)."""
     async with t.as_app(owner_engine) as conn:
         amina, brian, carol = (
-            await developer(conn, "amina"),
-            await developer(conn, "brian"),
-            await developer(conn, "carol"),
+            await peer(conn, "amina"),
+            await peer(conn, "brian"),
+            await peer(conn, "carol"),
         )
         issue = await problem(conn, amina)
         _, thread = await team(conn, amina, brian, issue)

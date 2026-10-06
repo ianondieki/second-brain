@@ -1,22 +1,25 @@
 """Peers and team-up: the tables of revision 0011 (P22 track C, REQ-DEV-03, D-58, D-62).
 
 Rules the database enforces (revision 0011; the 60-an-hour message limit, the daily invitation limit, the note's and
-message's normalisation and every notice are the application's). A "developer" is ``app_is_developer()``: an active
-user with a developer profile and no staff role; a "visible peer" is a developer whose profile has ``peers_visible``
-(``app_is_visible_peer``). Organisation-only accounts and staff read none of these tables (every policy needs a
-developer); staff read one reported team message through ``app_reported_team_message`` only.
+message's normalisation and every notice are the application's). A "developer" is ``app_is_developer()``: an active user
+with a developer profile and no staff role; a "visible peer" of the caller (``app_is_visible_peer``) is the caller when
+they opted in (``peers_visible``), one of their peers (opted in, same county or a shared liked niche, no block) or an
+existing counterpart of theirs (an invitation in any state) with no block. Organisation-only accounts and staff read
+none of these tables (every policy needs a developer); staff read one reported team message through
+``app_reported_team_message`` only.
 
 - ``developer_blocks`` (USER): the blocker's own rows (read, inserted, deleted by the blocker). A block ends every
   pending invitation between the two (``ended``) and closes every open thread (``blocked``) in its own transaction, by
   either path (``app_block_developer`` or a direct INSERT); unblocking (``app_unblock_developer``) deletes the row only.
   A block hides both from each other in ``app_peers`` and ``app_developer_card`` and refuses invitations and messages
   between them; contributor credit already given stays.
-- ``team_invitations`` (USER): read by its two parties; inserted by a visible peer as the sender, to another visible
-  peer, on a problem open to teams (``app_team_problem_open``: published, clear, a developer's or a public published
-  Brief), with no block either way and a note of 1 to 300 characters or none; one pending invitation per pair and
-  problem in either direction (``uq_team_invitations_pending_pair``). ``status``, ``created_at`` and ``decided_at`` are
-  the database's: the status moves once, from ``pending``, only through ``app_decide_team_invitation`` (accept or
-  decline by the recipient, withdraw by the sender) or a block (``ended``); nothing else of it ever changes.
+- ``team_invitations`` (USER): read by its two parties; inserted by a developer who opted in, as the sender, to one of
+  their visible peers (a peer or an existing counterpart), on a problem open to teams (``app_team_problem_open``:
+  published, clear, a developer's or a public published Brief), with no block either way and a note of 1 to 300
+  characters or none; one pending invitation per pair and problem in either direction
+  (``uq_team_invitations_pending_pair``). ``status``, ``created_at`` and ``decided_at`` are the database's: the status
+  moves once, from ``pending``, only through ``app_decide_team_invitation`` (accept or decline by the recipient,
+  withdraw by the sender) or a block (``ended``); nothing else of it ever changes.
 - ``team_threads`` (USER): one per accepted invitation, between its canonical pair (``a_user_id < b_user_id``), read by
   the two; written only by ``app_decide_team_invitation`` (accept), ``app_close_team_thread`` (``left``) and a block
   (``blocked``); a closed thread never reopens.

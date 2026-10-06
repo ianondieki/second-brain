@@ -110,6 +110,25 @@ async def developer(
     return user
 
 
+async def common_niche(conn: AsyncConnection) -> UUID:
+    """As the owner: the niche every ``peer`` likes (one per database, so the team tests' developers are peers)."""
+    await t.as_owner(conn)
+    await t.run(
+        conn,
+        "INSERT INTO niches (id, slug, name_en) VALUES (:id, 'teams-common', 'Teams') ON CONFLICT (slug) DO NOTHING",
+        id=uuid7(),
+    )
+    found: UUID = await t.run(conn, "SELECT id FROM niches WHERE slug = 'teams-common'")
+    return found
+
+
+async def peer(conn: AsyncConnection, label: str, **options: Any) -> UUID:
+    """As the owner: a developer (``developer``'s options) who also likes the common niche, so any two who opted in are
+    peers and may invite each other."""
+    liked = (await common_niche(conn), *options.pop("liked", ()))
+    return await developer(conn, label, liked=liked, **options)
+
+
 async def handle(conn: AsyncConnection, user: UUID) -> str:
     await t.as_owner(conn)
     found: str = await t.run(conn, "SELECT handle::text FROM developer_profiles WHERE user_id = :u", u=user)
