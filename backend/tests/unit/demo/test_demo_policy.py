@@ -106,8 +106,8 @@ def test_totp_secrets_are_fixed_per_address_and_codes_match_an_authenticator_app
 
 def test_the_dataset_names_only_fixtures_at_reserved_domains() -> None:
     accounts = all_accounts()
-    # 11 people, the P11 staff admin and the P15 staff moderator
-    assert len(accounts) == len({email for email, _, _ in accounts}) == 13
+    # 11 people, the P11 staff admin, the P15 staff moderator and P22's two more developers (Peers)
+    assert len(accounts) == len({email for email, _, _ in accounts}) == 15
     assert all(email.endswith(".example") for email, _, _ in accounts)
     assert all(org.legal_name.endswith("(fixture)") for org in ORGS)
     assert {org.verification.value for org in ORGS} == {"e2", "e1", "unclaimed"}

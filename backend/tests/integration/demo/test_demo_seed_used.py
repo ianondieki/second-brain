@@ -56,7 +56,7 @@ from bridge.seed.reference import SEED_TABLES, seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
-from tests.integration.demo.test_demo_seed import this_week_lines
+from tests.integration.demo.test_demo_seed import teams_lines, this_week_lines
 
 NEW_PASSWORD = "amina-changed-it-in-the-app"
 TELCO_REVIEWER, TELCO_SIGNATORY = TELCO_A.seats[1].email, TELCO_A.seats[0].email
@@ -131,7 +131,8 @@ async def test_with_the_flags_off_the_seed_stops_before_deal_steps_and_says_so(
     seeded: tuple[DemoReport, DemoReport],
 ) -> None:
     off, _ = seeded
-    week = len(this_week_lines())
+    teams = len(teams_lines())
+    week = len(this_week_lines()) + teams
     assert off.created[-10 - week : -7 - week] == [  # P21's beats: P1's thread is open at CONTACT_MADE too
         f"thread of {P1.key} with {SACCO_B.legal_name}: {len(THREAD.messages)} messages",
         f"shortlist of {TELCO_A.legal_name}: {SCOUTED.key} by {TELCO_REVIEWER}",
@@ -139,7 +140,8 @@ async def test_with_the_flags_off_the_seed_stops_before_deal_steps_and_says_so(
     ]
     quiz = [line.split(" ")[:2] for line in off.created[-7 - week : -week]]
     assert quiz == [["quiz", "set"]] * 4 + [["quiz", "attempt"]] * 3
-    assert off.created[-week:] == this_week_lines()  # P22's This week: flags or not
+    assert off.created[-week:-teams] == this_week_lines()  # P22's This week: flags or not
+    assert off.created[-teams:] == teams_lines()  # P22's Peers and team up: flags or not
     assert off.notes == [
         "Tier-2 view skipped: FEATURE_TIER2_ENABLED is off",
         f"{P1.key} with {SACCO_B.legal_name} stopped at CONTACT_MADE: FEATURE_DEALS_ENABLED is off",
