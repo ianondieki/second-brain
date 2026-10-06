@@ -243,9 +243,12 @@ async def test_c3_a_block_ends_everything_and_an_unblock_reopens_nothing(teams: 
     assert amina not in [UUID(p["user_id"]) for p in (await b.get(PEERS)).json()["peers"]]
     third = await problem(teams)
     stranger = await developer(teams, "unrelated")
-    as_stranger = code(await b.post(INVITATIONS, json={"to_user_id": str(stranger), "problem_id": str(third)}))
-    blocked = code(await b.post(INVITATIONS, json={"to_user_id": str(amina), "problem_id": str(third)}))
-    assert blocked == as_stranger == (404, "peer_unavailable")  # the same answer as for a stranger
+    as_stranger = await b.post(INVITATIONS, json={"to_user_id": str(stranger), "problem_id": str(third)})
+    blocked = await b.post(INVITATIONS, json={"to_user_id": str(amina), "problem_id": str(third)})
+    assert code(blocked) == (404, "peer_unavailable")
+    # the same answer as for a stranger: the status, the whole body and no Retry-After
+    assert (blocked.status_code, blocked.json()) == (as_stranger.status_code, as_stranger.json())
+    assert blocked.headers.get("retry-after") == as_stranger.headers.get("retry-after") is None
     assert code(await a.post(INVITATIONS, json={"to_user_id": str(brian), "problem_id": str(third)})) == (
         404,
         "peer_unavailable",
