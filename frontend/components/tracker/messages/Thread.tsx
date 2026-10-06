@@ -36,7 +36,8 @@ export interface ThreadProps {
   /** Today in Nairobi on the platform's clock (the tracker's `today`), for "Today" and "Yesterday". */
   today: string;
   locale: string;
-  /** The organisation's name: what an organisation member's message says beside the sender. */
+  /** The organisation's name: what an organisation member's message says beside the sender. Empty for a thread
+   * between two developers (a team thread): no side is said beside the sender then. */
   orgName: string;
   /** The sentence of an empty thread (formatted on the server: it differs by who reads it), or null for none. */
   empty: string | null;
@@ -197,11 +198,11 @@ function MessageItem({
       data-mine={mine ? "true" : "false"}
       className={cn("flex scroll-mt-6 gap-3 focus:outline-none", mine ? "ml-8 justify-end sm:ml-24" : "mr-8 sm:mr-24")}
     >
-      {mine ? null : <Avatar name={message.sender_name} kind={message.sender_party === "org" ? "org" : "person"} size="sm" className="mt-0.5" />}
+      {mine ? null : <Avatar name={message.avatar ?? message.sender_name} kind={message.sender_party === "org" ? "org" : "person"} size="sm" className="mt-0.5" />}
       <div className={cn("flex min-w-0 flex-col gap-1.5", mine && "items-end")}>
         <p id={headId} className="flex flex-wrap items-baseline gap-x-2 text-sm">
           <span className="font-semibold text-ink">{mine ? t("you") : message.sender_name}</span>
-          {mine ? null : (
+          {mine || !orgName ? null : (
             <span className="text-ink-soft">{message.sender_party === "developer" ? t("developer") : orgName}</span>
           )}
           <time dateTime={message.created_at} className="text-ink-soft tabular-nums">

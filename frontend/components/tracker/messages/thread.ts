@@ -8,7 +8,9 @@ import { formatDay, formatTime } from "@/lib/format";
 
 type Schemas = components["schemas"];
 export type Thread = Schemas["MessageThreadOut"];
-export type Message = Schemas["MessageOut"];
+/** A message as the thread draws it; `avatar`, when given, is what its avatar's initials come from (a team thread's
+ * handle without its "dev-"). */
+export type Message = Schemas["MessageOut"] & { avatar?: string };
 export type SentFile = Schemas["MessageAttachmentOut"];
 export type StagedFile = Schemas["StagedAttachmentOut"];
 export type Limits = Schemas["ThreadLimits"];

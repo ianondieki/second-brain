@@ -226,6 +226,10 @@ describe("a team thread's page", () => {
     expect(screen.getByRole("link", { name: PROBLEM.title }).getAttribute("href")).toBe(`/problems/${PROBLEM.id}`);
     expect(document.querySelectorAll("[data-message]")).toHaveLength(2);
     expect(document.querySelector('[data-message][data-mine="false"]')?.textContent).toContain("dev-kb3dysnk");
+    // No side is said beside a developer's handle in a team thread; the avatar's initial follows "dev-".
+    const theirs = document.querySelector('[data-message][data-mine="false"]') as HTMLElement;
+    expect(theirs.textContent).not.toContain("Developer");
+    expect(theirs.querySelector("[data-avatar]")?.textContent).toBe("K");
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
     expect(document.querySelector("[data-primary]")?.textContent).toBe("Send");
     expect(document.querySelector("[data-attach]")).toBeNull();

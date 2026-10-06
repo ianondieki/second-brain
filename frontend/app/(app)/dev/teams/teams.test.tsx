@@ -228,9 +228,9 @@ describe("team-up rules", () => {
     expect(page.status).toBe("open");
     expect(page.unread).toBe(1);
     expect(page.limits).toEqual({ max_chars: 4000, max_attachments: 0, max_attachment_bytes: 0, accepted_types: [] });
-    expect(page.items.map((m) => [m.sender_name, m.sender_party, m.attachments.length])).toEqual([
-      ["", "developer", 0],
-      ["dev-kb3dysnk", "developer", 0],
+    expect(page.items.map((m) => [m.sender_name, m.sender_party, m.attachments.length, (m as { avatar?: string }).avatar])).toEqual([
+      ["", "developer", 0, "kb3dysnk"],
+      ["dev-kb3dysnk", "developer", 0, "kb3dysnk"],
     ]);
     expect(toThreadPage({ ...read, thread: summary({ open: false, closed_reason: "left" }) }, "x").status).toBe("read_only");
   });

@@ -10,12 +10,14 @@ type TeamMessage = components["schemas"]["TeamMessageOut"];
 
 /**
  * A team message in the engagement thread's shape (components/tracker/messages/Thread.tsx draws both): the other
- * developer by their handle, on the developer side, with no files (a team message has none).
+ * developer by their handle (the avatar from what follows "dev-"), on the developer side, with no files.
  */
 export function toMessage(message: TeamMessage, counterpart: string): Message {
   return {
     ...message,
     sender_name: message.mine ? "" : counterpart,
+    // Handles read "dev-k61aq5tf": the avatar takes its initial from what follows "dev-".
+    avatar: counterpart.replace(/^dev-/, ""),
     sender_party: "developer",
     attachments: [],
   };
