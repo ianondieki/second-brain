@@ -154,20 +154,20 @@ async def test_a_peer_shares_a_liked_niche_or_the_county(owner_engine: AsyncEngi
 async def test_peers_come_by_shared_niches_then_county_then_newest_opt_in(owner_engine: AsyncEngine) -> None:
     """Given peers with two, one and no shared niches, in and out of the caller's county, opted in at different times,
     When the caller asks, Then two shared niches come before one, among equals the caller's county first, then the
-    newest opt-in; pages of 1 to 50 from an offset of 0 or more."""
+    newest opt-in (``late`` turned the switch on after ``early``, against their handles' order); pages of 1 to 50 from
+    an offset of 0 or more."""
     async with t.as_app(owner_engine) as conn:
         home, away = await county(conn, "Mombasa"), await county(conn, "Kilifi")
         a, b, c = await niche(conn, "a"), await niche(conn, "b"), await niche(conn, "c")
         caller = await developer(conn, "caller", county_code=home, liked=(a, b, c))
         two_away = await developer(conn, "twoaway", county_code=away, liked=(a, b))
-        one_home_old = await developer(conn, "onehomeold", county_code=home, liked=(a,))
-        one_home_new = await developer(conn, "onehomenew", county_code=home, liked=(b,))
+        early = await developer(conn, "early", county_code=home, liked=(a,))  # opted in first, sorts first by handle
+        late = await developer(conn, "late", county_code=home, liked=(b,))
         one_away = await developer(conn, "oneaway", county_code=away, liked=(c,))
         none_home = await developer(conn, "nonehome", county_code=home)
-        order = [two_away, one_home_new, one_home_old, one_away, none_home]
+        assert await handle(conn, early) < await handle(conn, late)
+        order = [two_away, late, early, one_away, none_home]
         assert await peer_ids(conn, caller) == order
-        rows = await peers(conn, caller)
-        assert [row.opted_in_at for row in rows][1] > [row.opted_in_at for row in rows][2]
         pages = [[row.user_id for row in await peers(conn, caller, 2, offset)] for offset in (0, 2, 4, 6)]
         assert pages == [order[:2], order[2:4], order[4:], []]
         assert [row.user_id for row in await peers(conn, caller, 1, 0)] == order[:1]
@@ -204,9 +204,9 @@ async def test_a_block_hides_both_from_each_other_until_it_is_lifted(owner_engin
 
 
 async def test_the_peers_page_carries_the_card_fields_only(owner_engine: AsyncEngine) -> None:
-    """Given a peer with a headline, a bio and a verification level, When the caller asks, Then each row is the eight
-    card fields (user id, handle, headline, county code and name, shared niches, same county, opt-in time) and never
-    the bio, the level, an email or a name."""
+    """Given a peer with a headline, a bio and a verification level, When the caller asks, Then each row is the seven
+    card fields (user id, handle, headline, county code and name, shared niches, same county) and never the bio, the
+    level, an email, a name or the opt-in time (it orders the page and is never returned)."""
     async with t.as_app(owner_engine) as conn:
         shared = await niche(conn, "civic")
         caller, peer = await developer(conn, "caller", liked=(shared,)), await developer(conn, "peer", liked=(shared,))
@@ -226,12 +226,11 @@ async def test_the_peers_page_carries_the_card_fields_only(owner_engine: AsyncEn
             "county_name",
             "shared_niches",
             "same_county",
-            "opted_in_at",
         ]
         (row,) = result.all()
         assert (row.user_id, row.handle, row.headline) == (peer, await handle(conn, peer), "Builds USSD apps")
         signature = await t.run(conn, "SELECT pg_get_function_result('app_peers(integer, integer)'::regprocedure)")
-        for private in ("bio", "verification", "email", "display_name"):
+        for private in ("bio", "verification", "email", "display_name", "opted_in"):
             assert private not in signature
 
 

@@ -94,13 +94,14 @@ listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself):
   a developer. ``app_blocked_either_way(a, b)`` -> boolean: a block stands between ``a`` and ``b``
   either way; NULL unless the caller is ``a`` or ``b``. ``app_team_problem_open(problem)`` -> boolean: published,
   clear and readable by every signed-in user (see ``team_invitations``).
-- ``app_peers(limit, offset)`` -> (user_id, handle, headline, county_code, county_name, shared_niches, same_county,
-  opted_in_at): a visible peer only (insufficient_privilege otherwise: not opted in, staff, organisation-only,
+- ``app_peers(limit, offset)`` -> (user_id, handle, headline, county_code, county_name, shared_niches,
+  same_county): a visible peer only (insufficient_privilege otherwise: not opted in, staff, organisation-only,
   unbound); a limit of 1 to 50 and an offset of 0 or more (invalid_parameter_value). The other visible peers of the
   caller's kind (real accounts for a real caller, demo accounts for a demo caller, as ``app_quiz_board``) with no
   block either way, who share a liked niche with the caller or are in the caller's county (a ``regions`` row of kind
   county, never the country); ``shared_niches`` the shared liked niches' slugs, sorted; ordered by the number of shared
-  niches, then same county first, then the newest opt-in, then handle (the profile embedding is never computed in the
+  niches, then same county first, then the newest opt-in (the order only: the time is never returned, so nobody
+  learns when another developer turned the switch on), then handle (the profile embedding is never computed in the
   prototype; its order replaces this one behind the same function when it is). Nothing else of a profile.
 - ``app_developer_card(user)`` -> (user_id, handle, headline): one row when the caller is a developer, ``user`` is
   another developer, no block stands between them either way, and ``user`` is a counterpart of the caller's (a thread
@@ -473,12 +474,12 @@ $$;
 
 -- A page of the caller's peers (D-58): the caller is a developer who opted in (anyone else, staff and organisation-
 -- only accounts included, is refused); team_peers_of's set, ordered by the number of shared liked niches, then the
--- caller's county first, then the newest opt-in, then handle (the profile embedding is never computed in the prototype:
--- its order replaces this one here when it is). At most 50 a page. SECURITY DEFINER: reads other developers' profiles
--- and niches, returns the card's fields only.
+-- caller's county first, then the newest opt-in (ordered by, never returned), then handle (the profile embedding is
+-- never computed in the prototype: its order replaces this one here when it is). At most 50 a page. SECURITY DEFINER:
+-- reads other developers' profiles and niches, returns the card's fields only.
 CREATE FUNCTION app_peers(p_limit integer, p_offset integer)
     RETURNS TABLE (user_id uuid, handle citext, headline text, county_code text, county_name text,
-                   shared_niches text[], same_county boolean, opted_in_at timestamptz)
+                   shared_niches text[], same_county boolean)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
@@ -493,8 +494,7 @@ BEGIN
             USING ERRCODE = 'invalid_parameter_value';
     END IF;
     RETURN QUERY
-    SELECT p.user_id, p.handle, p.headline, p.county_code, p.county_name, p.shared_niches, p.same_county,
-           p.opted_in_at
+    SELECT p.user_id, p.handle, p.headline, p.county_code, p.county_name, p.shared_niches, p.same_county
       FROM public.team_peers_of(v_user) p
      ORDER BY cardinality(p.shared_niches) DESC, p.same_county DESC, p.opted_in_at DESC, p.handle
      LIMIT p_limit OFFSET p_offset;
