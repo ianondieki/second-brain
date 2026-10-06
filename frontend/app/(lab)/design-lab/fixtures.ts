@@ -178,6 +178,7 @@ export const IDEA: MyProposal = {
     },
     confidential: { approach: null, architecture: null, pricing: null, notes: null, links: [], attachments: [] },
   },
+  contributors: [],
 };
 
 export const TEASER: TeaserCard = {
@@ -189,6 +190,7 @@ export const TEASER: TeaserCard = {
   provenance: { status: "timestamped", label: "Timestamped", verify_path: `/verify/${CERT_ID}` },
   problems: [],
   teaser: IDEA.current!.teaser,
+  contributors: [],
 };
 
 export const NDA: EvaluationNda = {
