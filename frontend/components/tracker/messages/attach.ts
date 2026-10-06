@@ -2,7 +2,8 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 
 import type { ThreadCalls } from "./calls";
 import type { Pending } from "./PendingRows";
-import { contentTypeOf, fileProblem, REFRESH_REFUSALS, type Limits, type PostRefusal } from "./thread";
+import { contentTypeOf, fileProblem } from "./refusals";
+import { REFRESH_REFUSALS, type Limits, type PostRefusal } from "./thread";
 
 // The composer's files at work (REQ-ENG-11): choosing, uploading and removing them. Loaded with the first file chosen
 // (Composer.tsx), so a thread without files (a team thread, REQ-DEV-03) never loads it and a thread with them only

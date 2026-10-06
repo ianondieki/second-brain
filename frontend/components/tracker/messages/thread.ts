@@ -1,4 +1,3 @@
-import { apiErrorCode, detailOf } from "@/lib/api/error-code";
 import type { components } from "@/lib/api/schema";
 import { formatDay, formatTime } from "@/lib/format";
 
@@ -91,23 +90,6 @@ export function fileSize(bytes: number, locale = "en"): string {
   return new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "short", maximumFractionDigits: 1 }).format(value);
 }
 
-/** The type the API is sent: the browser's, or by the name's ending for Markdown and text files it leaves blank. */
-export function contentTypeOf(file: Pick<File, "name" | "type">): string {
-  if (file.type) return file.type === "text/x-markdown" ? "text/markdown" : file.type;
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".md") || name.endsWith(".markdown")) return "text/markdown";
-  if (name.endsWith(".txt")) return "text/plain";
-  return "";
-}
-
-/** Why a chosen file cannot be uploaded, before anything is sent (the API checks the same again), or null. */
-export function fileProblem(file: Pick<File, "name" | "type" | "size">, limits: Limits): FileProblem | null {
-  if (!limits.accepted_types.includes(contentTypeOf(file))) return "type";
-  if (file.size === 0) return "empty";
-  if (file.size > limits.max_attachment_bytes) return "size";
-  return null;
-}
-
 /** Megabytes in the "up to 20 MB" sentences (20,971,520 bytes reads as 20). */
 export function maxMegabytes(limits: Limits): number {
   return Math.round(limits.max_attachment_bytes / (1024 * 1024));
@@ -142,75 +124,7 @@ export const TEXT_REFUSALS: ReadonlySet<PostRefusal> = new Set(["blank", "tooLon
 /** Refusals after which the thread itself changed (it closed, or it is not open): the page is fetched again. */
 export const REFRESH_REFUSALS: ReadonlySet<PostRefusal> = new Set(["readOnly", "notOpen", "cannotPost"]);
 
-const POST_CODES: Record<string, PostRefusal> = {
-  contains_contact: "containsContact",
-  attachment_pending: "pending",
-  unknown_attachment: "unknownFile",
-  attachment_infected: "infected",
-  attachment_expired: "expired",
-  too_many_attachments: "tooManyFiles",
-  thread_not_open: "notOpen",
-  thread_read_only: "readOnly",
-  cannot_post: "cannotPost",
-  too_many_messages: "tooMany",
-  conflict: "conflict",
-};
-
-export function postRefusal(status: number, error: unknown): PostRefusal {
-  const code = apiErrorCode(error);
-  if (code && code in POST_CODES) return POST_CODES[code];
-  if (status === 422) return "invalid";
-  if (status === 409) return "conflict";
-  if (status === 403) return "cannotPost";
-  return "generic";
-}
-
-const FILE_CODES: Record<string, FileProblem> = {
-  unsupported_file: "type",
-  too_large: "size",
-  empty_file: "empty",
-  attachment_infected: "infected",
-  too_many_staged: "staged",
-  too_many_uploads: "limit",
-  upload_quota: "limit",
-  storage_unavailable: "storage",
-};
-
-/** An upload's refusal; the thread's own refusals (closed, not open) come back as a PostRefusal instead. */
-export function uploadRefusal(status: number, error: unknown): FileProblem | PostRefusal {
-  const code = apiErrorCode(error);
-  if (code && code in FILE_CODES) return FILE_CODES[code];
-  if (code === "thread_read_only") return "readOnly";
-  if (code === "thread_not_open") return "notOpen";
-  if (code === "cannot_post") return "cannotPost";
-  if (status === 413) return "size";
-  if (status === 429) return "limit";
-  if (status === 503) return "storage";
-  return "failed";
-}
-
 export type ReportRefusal = "reportOwn" | "reportLimit" | "reportFailed";
-
-export function reportRefusal(status: number, error: unknown): ReportRefusal {
-  const code = apiErrorCode(error);
-  if (code === "own_message") return "reportOwn";
-  if (code === "too_many_reports" || status === 429) return "reportLimit";
-  return "reportFailed";
-}
-
-/** Whole minutes until a 429 lifts, from the Retry-After header or the body's `retry_after_seconds` (at least 1). */
-export function retryMinutes(headers: Pick<Headers, "get"> | null, error: unknown): number {
-  const header = Number(headers?.get("Retry-After"));
-  const body = Number(detailOf(error)?.retry_after_seconds);
-  const seconds = Number.isFinite(header) && header > 0 ? header : Number.isFinite(body) && body > 0 ? body : 60;
-  return Math.max(1, Math.ceil(seconds / 60));
-}
-
-/** The id of a refused upload's record, which its uploader may remove (an infected file holds a staging place). */
-export function refusedAttachmentId(error: unknown): string | null {
-  const id = detailOf(error)?.attachment_id;
-  return typeof id === "string" ? id : null;
-}
 
 /**
  * The plural form of a count in the page's language ("one" or "other"; English and Swahili use only these). The

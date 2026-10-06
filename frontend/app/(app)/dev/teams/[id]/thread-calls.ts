@@ -1,5 +1,5 @@
 import type { ThreadCalls } from "@/components/tracker/messages/calls";
-import { retryMinutes } from "@/components/tracker/messages/thread";
+import { retryMinutes } from "@/components/tracker/messages/refusals";
 import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode } from "@/lib/api/error-code";
 
