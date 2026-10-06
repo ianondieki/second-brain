@@ -188,3 +188,30 @@ async def test_the_cassette_replays_a_retry_through_the_real_sdk() -> None:
     second = "\n".join(block["text"] for m in tape.requests[1].json()["messages"] for block in m["content"])
     assert "refused by the checks (injection_suspected)" in second
     assert [e.status for e in r.ledger.entries] == [CallStatus.OK, CallStatus.OK]
+
+
+async def test_an_excluded_ref_is_not_sent_and_a_draft_citing_it_is_unknown_excerpt() -> None:
+    """Excerpts a stored card already cites (``exclude_refs``) never reach the prompt; citing one is invented."""
+    client = fakes.FakeTrendsClient("partly_valid")
+    outcome = await draft_trends(deps(client), WEEK, exclude_refs=frozenset({"tr-dat-002"}))
+    [request] = client.requests
+    text = "\n".join(b.text for m in request.messages for b in m.blocks)
+    assert "id: tr-dat-002" not in text
+    assert text.count("<submission nonce=") == 12  # the next excerpt takes its place
+    assert isinstance(outcome, Accepted)
+    assert outcome.discarded == (Reason.UNKNOWN_EXCERPT,)  # the second trend cites a ref that was not sent
+    assert "tr-dat-002" not in {s.excerpt_ref for c in outcome.cards for s in c.sources}
+    only_databases = await draft_trends(
+        deps(fakes.FakeTrendsClient("valid", "valid")), WEEK, exclude_refs=frozenset({"tr-dat-002"})
+    )
+    assert isinstance(only_databases, Accepted)
+    assert only_databases.discarded == (Reason.UNKNOWN_EXCERPT,)  # DATABASES cites tr-dat-002, now unsent
+    assert [c.topic_slug for c in only_databases.cards] == ["security", "kenya-ict"]
+
+
+async def test_excluding_every_usable_excerpt_refuses_without_a_call() -> None:
+    client = fakes.FakeTrendsClient("valid")
+    every = frozenset(e.id for e in get_catalogue(CatalogueKind.TRENDS).excerpts)
+    outcome = await draft_trends(deps(client), WEEK, exclude_refs=every)
+    assert outcome == Refused(WEEK, "no_saved_excerpts", 0, Decimal(0))
+    assert client.requests == []

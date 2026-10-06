@@ -125,3 +125,13 @@ def test_a_retry_carries_the_reason_code_only() -> None:
     assert len(retry[1].parts) == len(first[1].parts) + 1
     assert retry[1].parts[-1] == synthesis.retry_instruction(Reason.NO_VERIFIED_CITATION)
     assert "(no_verified_citation)" in synthesis.retry_instruction(Reason.NO_VERIFIED_CITATION).text
+
+
+def test_excluded_refs_are_left_out_of_the_week() -> None:
+    sent = week()
+    excluded = frozenset({sent[0].id, sent[1].id})
+    rest = synthesis.select_excerpts(CATALOGUE, WEEK, SCORING, POLICY.max_excerpts, exclude_refs=excluded)
+    assert len(rest) == POLICY.max_excerpts
+    assert not excluded & {e.id for e in rest}
+    fields = synthesis.excerpt_fields(rest)
+    assert not any(f"id: {ref}\n" in f.value for f in fields for ref in excluded)

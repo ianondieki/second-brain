@@ -8,7 +8,8 @@ The caller stores what it returns (``app_create_trend_candidate(p_card, p_source
 ``p_card()`` and ``p_sources()`` as JSON); nothing here reads or writes a table.
 
 - The week's excerpts (``synthesis.select_excerpts`` on ``week_start``: at most ``trends.max_excerpts``, not archived,
-  spread over the topics) are sent with the week; none refuses the week without a call (``no_saved_excerpts``).
+  spread over the topics, leaving out ``exclude_refs``: the excerpts stored cards already cite) are sent with the
+  week; none refuses the week without a call (``no_saved_excerpts``).
 - An answer the checks refuse (``injection_suspected``, ``no_trends``, or every draft discarded) is retried until
   ``trends.draft_attempts`` calls (2: one retry) are spent, the retry carrying the refusal's reason code; then the
   week is ``Refused`` with the last reason. An answer with at least one kept draft is ``Accepted`` with the kept ones.
@@ -164,12 +165,17 @@ def candidate(kept: KeptTrend, llm_trace_id: str) -> TrendCandidate:
     )
 
 
-async def draft_trends(deps: TrendsDeps, week_start: date) -> Accepted | Refused:
-    """Draft the trends of the week starting ``week_start`` (see the module docstring)."""
+async def draft_trends(
+    deps: TrendsDeps, week_start: date, *, exclude_refs: frozenset[str] = frozenset()
+) -> Accepted | Refused:
+    """Draft the trends of the week starting ``week_start`` (see the module docstring). ``exclude_refs`` are the
+    excerpt ids a stored card already cites: they are not sent, so a draft citing one is ``unknown_excerpt``."""
     policy = deps.policy
     scoring = policy.scoring(deps.research)
     allowlist = deps.catalogue.allowlists.get(TECH)
-    excerpts = synthesis.select_excerpts(deps.catalogue, week_start, scoring, policy.max_excerpts)
+    excerpts = synthesis.select_excerpts(
+        deps.catalogue, week_start, scoring, policy.max_excerpts, exclude_refs=exclude_refs
+    )
     if allowlist is None or not excerpts:
         return _refused(week_start, NO_SAVED_EXCERPTS, 0, Decimal(0), [])
     sent = {excerpt.id: excerpt for excerpt in excerpts}

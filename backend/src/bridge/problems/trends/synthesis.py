@@ -120,15 +120,22 @@ def system_prompt(max_cards: int, min_support_words: int) -> str:
     )
 
 
-def select_excerpts(catalogue: Catalogue, as_of: date, scoring: ResearchPolicy, limit: int) -> tuple[Excerpt, ...]:
-    """At most ``limit`` saved TECH excerpts published by ``as_of`` and not archived on it (``scoring`` carries the
-    trends' ages), spread over the topics: the topics in order of their freshest excerpt, each topic's excerpts
-    freshest first, taken one topic at a time in turn; returned freshest first (then by id). Deterministic: a retry
-    sees the same excerpts."""
+def select_excerpts(
+    catalogue: Catalogue,
+    as_of: date,
+    scoring: ResearchPolicy,
+    limit: int,
+    *,
+    exclude_refs: frozenset[str] = frozenset(),
+) -> tuple[Excerpt, ...]:
+    """At most ``limit`` saved TECH excerpts published by ``as_of``, not archived on it (``scoring`` carries the
+    trends' ages) and not in ``exclude_refs`` (excerpts a stored card already cites), spread over the topics: the
+    topics in order of their freshest excerpt, each topic's excerpts freshest first, taken one topic at a time in
+    turn; returned freshest first (then by id). Deterministic: a retry sees the same excerpts."""
     by_topic: dict[str, list[Excerpt]] = defaultdict(list)
     for excerpt in catalogue.excerpts:
         live = excerpt.published_date <= as_of and freshness(excerpt, as_of, scoring) is not Freshness.ARCHIVED
-        if excerpt.country == TECH and live:
+        if excerpt.country == TECH and live and excerpt.id not in exclude_refs:
             by_topic[excerpt.topic_slug].append(excerpt)
     queues = [sorted(group, key=lambda e: (-e.published_date.toordinal(), e.id)) for group in by_topic.values()]
     queues.sort(key=lambda q: (-q[0].published_date.toordinal(), q[0].topic_slug))
