@@ -4,7 +4,6 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { Badge } from "@/components/ui/Badge";
 import { InfoIcon, PencilIcon } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
@@ -15,9 +14,11 @@ import { formatCalendarDate } from "@/lib/format";
 import { trendPage } from "../../week/data";
 import { safeHttps, WEEK_PATH } from "../../week/week";
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<"/dev/trends/[id]">): Promise<Metadata> {
   const t = await getTranslations("week");
-  return { title: t("trend.pageTitle") };
+  const me = await requireMe();
+  if (homeFor(me.side) !== "/dev") return { title: t("trend.pageTitle") };
+  return { title: (await trendPage((await params).id)).title };
 }
 
 /**
@@ -39,11 +40,11 @@ export default async function TrendPage({ params }: PageProps<"/dev/trends/[id]"
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <article aria-labelledby="trend-title" className="flex max-w-3xl flex-col gap-12 lg:gap-14" data-trend={trend.id}>
         <PageHeader back={{ href: WEEK_PATH, label: t("trend.back") }} titleId="trend-title" title={trend.title}>
-          {/* The label under the title, as on a research card: no eyebrow above a heading. */}
-          <p className="mt-3">
-            <Badge tone="neutral" icon={label === "seeded" ? <InfoIcon /> : <PencilIcon />} data-label={label}>
-              {t(`trend.label.${label}`, { date })}
-            </Badge>
+          {/* The label under the title as plain words, as a research card's in a list: no eyebrow above a heading, and
+              no pill for a sentence this long (it wraps at 360 px). */}
+          <p className="mt-3 flex max-w-[65ch] items-start gap-2 text-sm text-ink-soft">
+            {label === "seeded" ? <InfoIcon className="mt-0.5 size-4 shrink-0" /> : <PencilIcon className="mt-0.5 size-4 shrink-0" />}
+            <span data-label={label}>{t(`trend.label.${label}`, { date })}</span>
           </p>
           <p className="mt-5 max-w-[65ch] text-lg [overflow-wrap:anywhere] text-ink" data-summary="">
             {trend.summary}

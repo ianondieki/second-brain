@@ -55,7 +55,7 @@ export async function trendOfTheDay(): Promise<Week["trend"]> {
  * One published event's page. Not published, cancelled, over or unknown: the not-found page (the API answers 404 for
  * each, and never says which).
  */
-export async function eventPage(id: string): Promise<EventPage> {
+export const eventPage = cache(async function eventPage(id: string): Promise<EventPage> {
   if (!isUuid(id)) notFound();
   const { data, response } = await serverApi().GET("/api/events/{event_id}", {
     params: { path: { event_id: id } },
@@ -65,15 +65,15 @@ export async function eventPage(id: string): Promise<EventPage> {
   if (response.status === 401) redirect("/login");
   if (response.status === 404) notFound();
   throw new Error(`GET /api/events/{event_id} answered ${response.status}`);
-}
+});
 
 /** The email gate's answer for the event page's sentence before "Remind me" is pressed (null: not read). */
 export async function emailState(): Promise<Week["reminders_email"] | null> {
   return (await weekStrip())?.reminders_email ?? null;
 }
 
-/** One published trend card with its sources; anything else is the not-found page. */
-export async function trendPage(id: string): Promise<TrendDetail> {
+/** One published trend card with its sources; anything else is the not-found page. Read once per request. */
+export const trendPage = cache(async function trendPage(id: string): Promise<TrendDetail> {
   if (!isUuid(id)) notFound();
   const { data, response } = await serverApi().GET("/api/me/trends/{card_id}", {
     params: { path: { card_id: id } },
@@ -83,4 +83,4 @@ export async function trendPage(id: string): Promise<TrendDetail> {
   if (response.status === 401) redirect("/login");
   if (response.status === 404) notFound();
   throw new Error(`GET /api/me/trends/{card_id} answered ${response.status}`);
-}
+});
