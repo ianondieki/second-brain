@@ -153,7 +153,12 @@ describe("the composer", () => {
     );
     const { calls } = renderComposer(LIMITS, fakeCalls({ uploadFile }));
     fireEvent.change(document.querySelector("input[type=file]")!, { target: { files: [new File(["%PDF"], "a.pdf", { type: "application/pdf" })] } });
-    const row = document.querySelector<HTMLElement>("[data-pending-file='a.pdf']")!;
+    // The file's row appears once the files' code has loaded (./attach.ts, ./PendingRows.tsx load on first use).
+    const row = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-pending-file='a.pdf']");
+      expect(found).not.toBeNull();
+      return found!;
+    });
     await waitFor(() => expect(row.textContent).toContain("Uploading 30%"));
     expect(within(row).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("30");
     fireEvent.change(screen.getByLabelText("Your message"), { target: { value: "Hi" } });
@@ -226,5 +231,20 @@ describe("the composer", () => {
     expect(signal.aborted).toBe(false);
     await act(async () => answer());
     expect(calls.removeStaged).toHaveBeenCalledWith(ENGAGEMENT_ID, "staged-left");
+  });
+
+  // P22-CF review: a call that throws (its module failed to load) never leaves Send busy.
+  it("a send that throws says the network sentence and frees Send", async () => {
+    renderComposer(LIMITS, fakeCalls({ postMessage: vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))) }));
+    fireEvent.change(screen.getByLabelText("Your message"), { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("The message was not sent. Check your connection and try again."));
+    expect(screen.getByRole("button", { name: "Send" }).getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("a thread that takes no files offers no Attach", () => {
+    renderComposer({ ...LIMITS, max_attachments: 0 });
+    expect(document.querySelector("[data-attach]")).toBeNull();
+    expect(screen.getByRole("button", { name: "Send" })).toBeTruthy();
   });
 });

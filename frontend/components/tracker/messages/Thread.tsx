@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -11,7 +11,6 @@ import { cn } from "@/components/ui/cn";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
-import * as defaultCalls from "./calls";
 import type { ThreadCalls } from "./calls";
 import { Composer } from "./Composer";
 import { FileIcon } from "./FileIcon";
@@ -37,12 +36,13 @@ export interface ThreadProps {
   /** Today in Nairobi on the platform's clock (the tracker's `today`), for "Today" and "Yesterday". */
   today: string;
   locale: string;
-  /** The organisation's name: what an organisation member's message says beside the sender. */
+  /** The organisation's name: what an organisation member's message says beside the sender. Empty for a thread
+   * between two developers (a team thread): no side is said beside the sender then. */
   orgName: string;
   /** The sentence of an empty thread (formatted on the server: it differs by who reads it), or null for none. */
   empty: string | null;
-  /** Tests pass fakes; the real calls otherwise. */
-  calls?: Partial<ThreadCalls>;
+  /** What the thread calls: an engagement's (EngagementThread), a team thread's, or tests' fakes. */
+  calls: ThreadCalls;
 }
 
 /**
@@ -51,11 +51,10 @@ export interface ThreadProps {
  * request; a Report on everyone else's messages; the composer when the caller may post. Opening it marks the thread
  * read up to its newest message.
  */
-export function Thread({ engagementId, initial, today, locale, orgName, empty, calls }: ThreadProps) {
+export function Thread({ engagementId, initial, today, locale, orgName, empty, calls: call }: ThreadProps) {
   const t = useStrings("trackerMessages");
   const router = useRouter();
   const hydrated = useHydrated();
-  const call: ThreadCalls = useMemo(() => ({ ...defaultCalls, ...calls }), [calls]);
   const [messages, setMessages] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.next_cursor);
   const [earlier, setEarlier] = useState<"idle" | "busy" | "failed">("idle");
@@ -199,11 +198,11 @@ function MessageItem({
       data-mine={mine ? "true" : "false"}
       className={cn("flex scroll-mt-6 gap-3 focus:outline-none", mine ? "ml-8 justify-end sm:ml-24" : "mr-8 sm:mr-24")}
     >
-      {mine ? null : <Avatar name={message.sender_name} kind={message.sender_party === "org" ? "org" : "person"} size="sm" className="mt-0.5" />}
+      {mine ? null : <Avatar name={message.avatar ?? message.sender_name} kind={message.sender_party === "org" ? "org" : "person"} size="sm" className="mt-0.5" />}
       <div className={cn("flex min-w-0 flex-col gap-1.5", mine && "items-end")}>
         <p id={headId} className="flex flex-wrap items-baseline gap-x-2 text-sm">
           <span className="font-semibold text-ink">{mine ? t("you") : message.sender_name}</span>
-          {mine ? null : (
+          {mine || !orgName ? null : (
             <span className="text-ink-soft">{message.sender_party === "developer" ? t("developer") : orgName}</span>
           )}
           <time dateTime={message.created_at} className="text-ink-soft tabular-nums">

@@ -38,7 +38,7 @@ export default async function SecurityPage() {
       {/* One 48 rem column: the tab strip ends where the cards end. */}
       <div className="max-w-3xl">
         <PageHeader title={tNav("label")} back={{ href: home, label: t("back") }} />
-        <SettingsTabs current="security" />
+        <SettingsTabs current="security" developer={me.side === "developer"} />
         {/* Server-formatted strings, not next-intl's client runtime (about 3.5 KB of the budget; P16-D). */}
         <ClientStrings
           strings={{

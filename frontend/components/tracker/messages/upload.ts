@@ -1,7 +1,8 @@
 import { ensureCsrf, CSRF_HEADER } from "@/lib/api/csrf";
 
 import type { UploadOptions, UploadOutcome } from "./calls";
-import { refusedAttachmentId, retryMinutes, uploadRefusal, type StagedFile } from "./thread";
+import { refusedAttachmentId, retryMinutes, uploadRefusal } from "./refusals";
+import type { StagedFile } from "./thread";
 
 // The upload itself (REQ-ENG-11), loaded with the first file a person chooses (./calls uploadFile).
 

@@ -9,14 +9,13 @@ import { cn } from "@/components/ui/cn";
 import { TextAreaField } from "@/components/ui/TextAreaField";
 
 import type { ThreadCalls } from "./calls";
+import type { AttachContext } from "./attach";
 import { ClipIcon } from "./FileIcon";
 import type { Pending } from "./PendingRows";
 import {
   METER_FROM,
   REFRESH_REFUSALS,
   TEXT_REFUSALS,
-  contentTypeOf,
-  fileProblem,
   maxMegabytes,
   postRefusalKey,
   type Limits,
@@ -26,6 +25,9 @@ import {
 
 // The file rows load with the first file chosen (the Messages route sits near its 150 KB; docs/spec/07 item 5).
 const PendingRows = lazy(() => import("./PendingRows").then((m) => ({ default: m.PendingRows })));
+// Choosing, uploading and removing files load with the first file chosen (./attach.ts); once loaded, every composer
+// answers at once (a Remove, only shown once a file was chosen, always does).
+let attach: typeof import("./attach") | null = null;
 
 const BODY_ID = "message-body";
 
@@ -65,7 +67,7 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
     const running = uploads.current;
     const dropped = discarded.current;
     // Leaving the page stops the uploads still running, except a removed file the API is scanning: its answer still
-    // comes, and its staged record is deleted then (upload below).
+    // comes, and its staged record is deleted then (./attach.ts).
     return () => running.forEach((controller, key) => (dropped.has(key) ? undefined : controller.abort()));
   }, []);
 
@@ -74,10 +76,6 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
   const textRefusal = refusal && TEXT_REFUSALS.has(refusal.kind) ? refusal : null;
   const otherRefusal = refusal && !TEXT_REFUSALS.has(refusal.kind) ? refusal : null;
 
-  function update(key: string, change: Partial<Pending>) {
-    setFiles((now) => now.map((file) => (file.key === key ? { ...file, ...change } : file)));
-  }
-
   function refuse(kind: PostRefusal, minutes?: number) {
     setRefusal({ kind, minutes });
     if (TEXT_REFUSALS.has(kind)) document.getElementById(BODY_ID)?.focus();
@@ -85,75 +83,37 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
     if (REFRESH_REFUSALS.has(kind)) onClosed();
   }
 
-  async function upload(key: string, file: File) {
-    const controller = new AbortController();
-    uploads.current.set(key, controller);
-    const outcome = await calls.uploadFile(engagementId, file, {
-      contentType: contentTypeOf(file),
-      signal: controller.signal,
-      onProgress: (percent) => update(key, percent < 100 ? { progress: percent } : { progress: 100, status: "scanning" }),
-    });
-    uploads.current.delete(key);
-    if (discarded.current.delete(key)) {
-      const staged = outcome.ok ? outcome.file.id : (outcome.attachmentId ?? null);
-      if (staged) void calls.removeStaged(engagementId, staged);
-      return;
-    }
-    if (controller.signal.aborted) return;
-    if (outcome.ok) {
-      update(key, { status: "ready", id: outcome.file.id, progress: 100 });
-      setSaid(t("fileStatus", { name: file.name, value: t("status.ready") }));
-      return;
-    }
-    update(key, { status: "blocked", problem: outcome.problem, minutes: outcome.minutes, id: outcome.attachmentId ?? null });
-    setSaid(t("fileStatus", { name: file.name, value: t("status.blocked") }));
-    if (REFRESH_REFUSALS.has(outcome.problem as PostRefusal)) onClosed();
-  }
+  // What ./attach.ts works with: the composer's state and refs, and how it words things.
+  const context = (): AttachContext => ({
+    engagementId,
+    limits,
+    calls,
+    files,
+    setFiles,
+    discarded,
+    uploads,
+    counter,
+    form,
+    refuse,
+    clearRefusal: () => setRefusal(null),
+    sayStatus: (name, ready) => setSaid(t("fileStatus", { name, value: t(ready ? "status.ready" : "status.blocked") })),
+    onClosed,
+  });
 
-  function choose(list: FileList | null) {
-    if (!list || list.length === 0) return;
-    setRefusal(null);
-    const room = limits.max_attachments - files.filter((file) => file.status !== "blocked").length;
-    const chosen = Array.from(list);
-    if (chosen.length > room) refuse("tooManyFiles");
-    const added = chosen.slice(0, Math.max(0, room)).map((file) => {
-      counter.current += 1;
-      const problem = fileProblem(file, limits);
-      const pending: Pending = {
-        key: `file-${counter.current}`,
-        name: file.name,
-        size: file.size,
-        status: problem ? "blocked" : "uploading",
-        progress: 0,
-        id: null,
-        problem,
-      };
-      return { file, pending };
-    });
-    // The rows first, then the uploads, so every progress report finds its row.
-    setFiles((now) => [...now, ...added.map(({ pending }) => pending)]);
-    for (const { file, pending } of added) if (!pending.problem) void upload(pending.key, file);
+  function choose(chosen: File[]) {
+    if (attach) return attach.choose(context(), chosen);
+    import("./attach").then(
+      (m) => {
+        attach = m;
+        m.choose(context(), chosen);
+      },
+      // Offline or a new deploy: the files cannot be taken now; the sentence says to check the connection.
+      () => refuse("attachFailed"),
+    );
   }
 
   function remove(file: Pending) {
-    if (file.status === "uploading") {
-      // Not every byte has reached the API, so it has kept nothing: the request can stop.
-      uploads.current.get(file.key)?.abort();
-      uploads.current.delete(file.key);
-    } else if (file.status === "scanning") {
-      // The API holds the file while it scans: let it answer, then delete what it staged (upload above).
-      discarded.current.add(file.key);
-    }
-    const index = files.findIndex((f) => f.key === file.key);
-    const next = files[index + 1] ?? files[index - 1];
-    setFiles((now) => now.filter((f) => f.key !== file.key));
-    if (file.id) void calls.removeStaged(engagementId, file.id);
-    setRefusal(null);
-    // Focus goes to the next row's Remove, or to Attach files once no row is left (never to the hidden input).
-    requestAnimationFrame(() => {
-      const target = next ? `[data-remove="${next.key}"]` : "[data-attach]";
-      form.current?.querySelector<HTMLElement>(target)?.focus();
-    });
+    attach?.remove(context(), file);
   }
 
   async function send(event: FormEvent<HTMLFormElement>) {
@@ -165,12 +125,18 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
     if (files.some((file) => file.status === "blocked")) return refuse("blockedFiles");
     setBusy(true);
     setRefusal(null);
-    const outcome = await calls.postMessage(
-      engagementId,
-      text,
-      files.flatMap((file) => (file.id ? [file.id] : [])),
-    );
-    setBusy(false);
+    let outcome: Awaited<ReturnType<ThreadCalls["postMessage"]>>;
+    try {
+      outcome = await calls.postMessage(
+        engagementId,
+        text,
+        files.flatMap((file) => (file.id ? [file.id] : [])),
+      );
+    } catch {
+      outcome = { ok: false, refusal: "network" };
+    } finally {
+      setBusy(false);
+    }
     if (!outcome.ok) return refuse(outcome.refusal, outcome.minutes);
     onSent(outcome.message);
     setText("");
@@ -224,26 +190,31 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
       {otherRefusal ? <Alert ref={alert}>{refusalText(otherRefusal.kind, otherRefusal.minutes)}</Alert> : null}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-col items-start gap-1">
-          <Button variant="secondary" aria-describedby="attach-hint" onClick={() => picker.current?.click()} data-attach="">
-            <ClipIcon className="mr-2 size-5" />
-            {t("attach")}
-          </Button>
-          <p id="attach-hint" className="max-w-[40ch] text-xs text-ink-soft">
-            {t("attachHint", { value: maxMegabytes(limits), max: limits.max_attachments })}
-          </p>
-          <input
-            ref={picker}
-            type="file"
-            multiple
-            hidden
-            accept={[...limits.accepted_types, ".md", ".markdown", ".txt"].join(",")}
-            onChange={(event) => {
-              choose(event.currentTarget.files);
-              event.currentTarget.value = "";
-            }}
-          />
-        </div>
+        {/* A thread without files (a team thread: max_attachments 0) has no Attach; Send keeps its place. */}
+        {limits.max_attachments ? (
+          <div className="flex flex-col items-start gap-1">
+            <Button variant="secondary" aria-describedby="attach-hint" onClick={() => picker.current?.click()} data-attach="">
+              <ClipIcon className="mr-2 size-5" />
+              {t("attach")}
+            </Button>
+            <p id="attach-hint" className="max-w-[40ch] text-xs text-ink-soft">
+              {t("attachHint", { value: maxMegabytes(limits), max: limits.max_attachments })}
+            </p>
+            <input
+              ref={picker}
+              type="file"
+              multiple
+              hidden
+              accept={[...limits.accepted_types, ".md", ".markdown", ".txt"].join(",")}
+              onChange={(event) => {
+                choose(Array.from(event.currentTarget.files ?? []));
+                event.currentTarget.value = "";
+              }}
+            />
+          </div>
+        ) : (
+          <span />
+        )}
         <Button type="submit" variant="primary" busy={busy} data-send="">
           {busy ? t("sending") : t("send")}
         </Button>
