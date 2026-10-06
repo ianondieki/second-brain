@@ -391,8 +391,9 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-06, session 6): none. P22-A and P22-B merged together as `ed0bff5` on the owner's
-instruction (merge commit of `claude/fervent-mccarthy-0zyqn2` at `2ace097`); integration head before it `feb01e9`.
+**Open branches** (2026-10-06, session 6): none. P22-C merged as `3316909` on the owner's instruction (merge commit of
+`claude/fervent-mccarthy-0zyqn2` at `aecc694`); integration head before it `efb9326`. Earlier the same day: P22-A and
+P22-B merged together as `ed0bff5` (at `2ace097`); integration head before it `feb01e9`.
 Earlier the same session: P20 and P21 merged together as `429a7aa` (at `9218fce`); integration head before it `5c3db9d`.
 Earlier (2026-10-02, session 5): P19 merged as `f839977` (merge commit of `claude/fervent-mccarthy-0zyqn2` at `fc19695`); integration head before it `42c6073` (D-53 recorded on `cf0da47`). P18 merged as `cf0da47` (at `dcf6de1`); integration head before it `9142360`.
 
@@ -1269,7 +1270,8 @@ story, hygiene and legacy green (the informational legacy job red as before); th
 of the Security settings' recovery-codes test (a `pagehide` state update read before React flushed it, on a slow
 runner; it passes locally and passed on every earlier run; the assertion now waits for the flush); scanners red on
 `npm audit` (D-56) and, new, on osv-scanner and Trivy for `sharp` 0.35.4 (GHSA-wq5f-xc86-pv6w, a fixed release: bumped
-to 0.35.5); the backend job [[CI-341-BACKEND]]. Run 342 on the corrected head: [[CI-342]]. Design shots
+to 0.35.5); the backend job cancelled at its 35-minute limit (the eighth time on these runners). Run 342 on the corrected head `4e530cb`: frontend green, scanners red on `npm audit` only (osv-scanner and Trivy green
+after the bump), hygiene and legacy green; Playwright, the demo story and the backend job [[CI-342-REST]]. Design shots
 `docs/demo/screenshots/p22c/` (8 screens, 1440 and 375, light and dark, strict axe 0 on all 32, ≤ 1 primary, no
 sideways scroll). JS budget on the new routes and every route the shared composer touches, and Lighthouse:
 scorecard "P22-C measurements" (every route under 150,000 B; the Messages route 1,130 B lighter; performance 96–99,
