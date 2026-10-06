@@ -18,7 +18,7 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
   ``app_quiz_answers``.
 - Revision 0010 (REQ-DEV-02): only bridge_app touches a developer's event reminders (never updating one); trend cards
   and sources are written by no role but the owner's definers; who decided an event or a trend card is readable by no
-  role but the owner.
+  role but the owner; only bridge_app executes the weekly trend job's reader ``app_trend_job_state``.
 """
 
 from __future__ import annotations
@@ -148,6 +148,33 @@ async def test_no_role_reads_who_decided(owner_engine: AsyncEngine, table: str) 
         assert list(readers.scalars()) == []
         reads = "SELECT has_column_privilege('bridge_app', CAST(:t AS regclass), 'decided_at', 'SELECT')"
         assert (await conn.execute(text(reads), {"t": f"public.{table}"})).scalar_one() is True
+
+
+async def test_only_bridge_app_executes_the_trend_job_state(owner_engine: AsyncEngine) -> None:
+    """Revision 0010 (REQ-DEV-02, D-60): ``app_trend_job_state`` (the weekly trend job's one row: whether a card that is
+    not rejected is recent, and the excerpt ids such cards cite) is executable by bridge_app alone of every role of the
+    cluster, PUBLIC included; its ACL names the owner and bridge_app only. The function itself refuses any session
+    with a user bound (tests/integration/events/test_trend_job_state.py)."""
+    signature = "public.app_trend_job_state(timestamp with time zone)"
+    async with owner_engine.connect() as conn:
+        callers = await conn.execute(
+            text(
+                "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                " AND r.rolname NOT LIKE 'pg\\_%' AND has_function_privilege(r.oid, :sig, 'EXECUTE')"
+            ),
+            {"sig": signature},
+        )
+        assert set(callers.scalars()) == {"bridge_app"}
+        public = "SELECT has_function_privilege('public', :sig, 'EXECUTE')"
+        assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
+        acl = await conn.execute(
+            text(
+                "SELECT a.grantee::regrole::text || ' ' || a.privilege_type FROM pg_proc p"
+                " CROSS JOIN LATERAL aclexplode(p.proacl) a WHERE p.oid = to_regprocedure(:sig)"
+            ),
+            {"sig": signature},
+        )
+        assert sorted(acl.scalars()) == ["bridge_app EXECUTE", "bridge_owner EXECUTE"]
 
 
 async def test_no_role_reads_or_writes_all_data(owner_engine: AsyncEngine) -> None:
