@@ -23,8 +23,9 @@ Technology trend cards (REQ-DEV-02; D-60; P22 card B, default (5)):
 - ``POST /trends/{id}/decision`` ``{decision: publish|reject}``: publishing repeats the named-organisation rule on what
   is stored first (``bridge.problems.trends.store.unsourced_names``: 409 ``unsourced_name``), then
   ``app_decide_trend_card``, once (409 ``already_decided``); audited ``trend.card_decided`` on the admin's chain.
-- ``POST /trend-runs``: 202, the weekly task ``trends.draft`` queued now through the outbox with the admin's id (the job
-  binds them); it does nothing when a candidate or published card is less than 6 days old.
+- ``POST /trend-runs``: 202, the weekly task ``trends.draft`` queued now through the outbox with the admin's id (named
+  in the job's log line; the run is the platform's); it does nothing when a card that is not rejected is under 6 days
+  old.
 """
 
 from __future__ import annotations
@@ -462,8 +463,8 @@ async def decide_trend_card(card_id: UUID, body: TrendDecisionIn, staff: StaffAd
 
 @router.post("/trend-runs", status_code=202)
 async def start_trend_run(staff: StaffAdmin, db: Db) -> TrendRunOut:
-    """Draft this week's trends now (the weekly task, bound to you); nothing happens when a candidate or published
-    card is less than 6 days old."""
+    """Draft this week's trends now (the weekly task, run as the platform); nothing happens when a card that is not
+    rejected is under 6 days old."""
     timestamp = int((await db.execute(_NOW)).scalar_one())
     job_id = await trends.defer_run(db, user_id=staff.live.user.id, timestamp=timestamp)
     await db.commit()

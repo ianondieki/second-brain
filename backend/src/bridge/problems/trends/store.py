@@ -2,18 +2,19 @@
 look back, the trend of the day, a developer's card and the named-organisation rule on a stored card.
 
 - ``store_candidates(db, accepted)``: one ``app_create_trend_candidate(p_card, p_sources)`` per kept card, in the
-  model's order, in the caller's transaction (the job: with no user bound, or a staff admin's manual run). The card's
+  model's order, in the caller's transaction (the weekly job, with no user bound). The card's
   confidence goes as a JSON number (``numeric(4,3)``), everything else as ``draft_trends`` copied it from the saved
   excerpts. Returns the new ids.
-- ``job_state(db, since)``: whether a candidate or published card was created since ``since`` (the weekly job then
-  makes no call) and the excerpt ids the candidate and published cards cite (never sent again, so a week does not
-  redraft a card staff have). Read under the session's own binding: a staff admin reads every card; a session with no
-  user bound reads none (revision 0010 gives the job no reader), so it answers None and the job does nothing.
+- ``job_state(db, since)``: whether a card that is not rejected (a candidate or a published one) was created at or
+  after ``since`` (the weekly job then makes no call) and the excerpt ids such cards cite (never sent again, so a week
+  does not redraft a card staff have), through ``app_trend_job_state(since)`` on a session with no user bound: the
+  job's only reader of the cards, which tells it nothing else of them.
 - ``trend_of_day(db, today)``: the published cards ordered by ``published_at, id``, the one at index
   ``today.toordinal() mod count`` (today: the Nairobi day on the shared clock when not given), in one statement.
 - ``published_card(db, id)``: a published card with its sources, for its page (None for anything else).
 - ``defer_run(db, user_id=...)``: a staff admin's manual run, queued as the weekly task ``trends.draft`` through the
-  transactional outbox (the API never imports the task module), naming the admin so the job binds them.
+  transactional outbox (the API never imports the task module), naming the admin for the job's log line; the job runs
+  as the platform, as the weekly run does.
 - ``unsourced_names(...)``: the rule ``draft_trends`` applied (``bridge.problems.trends.checks``), repeated on what is
   stored: every organisation the card names (the TECH allowlist's found in its text and its own ``named_orgs``) must
   be named by a stored source, in its quote or as its publisher, and no capitalised name may appear that no source
@@ -55,14 +56,7 @@ _OF_THE_DAY: Final = text(
     " count(*) OVER () AS n FROM trend_cards c WHERE c.status = 'published') t"
     " WHERE t.i = mod(coalesce(CAST(:ordinal AS bigint), app_nairobi_today() - DATE '0001-01-01' + 1), t.n)"
 )
-_RECENT: Final = text(
-    "SELECT EXISTS (SELECT 1 FROM trend_cards WHERE status IN ('candidate', 'published') AND created_at >= :since)"
-    " AS recent, app_user_id() IS NOT NULL AND app_is_staff('{admin}') AS reader"
-)
-_CITED: Final = text(
-    "SELECT DISTINCT s.excerpt_ref FROM trend_card_sources s JOIN trend_cards c ON c.id = s.card_id"
-    " WHERE c.status IN ('candidate', 'published')"
-)
+_STATE: Final = text("SELECT recent, cited_refs FROM app_trend_job_state(:since)")
 
 
 def card_json(card: TrendCandidate) -> str:
@@ -83,17 +77,14 @@ async def store_candidates(db: AsyncSession, accepted: Accepted) -> list[UUID]:
 
 @dataclass(frozen=True, slots=True)
 class JobState:
-    recent: bool  # a candidate or published card created since the look-back's start
-    cited: frozenset[str]  # excerpt ids the candidate and published cards cite
+    recent: bool  # a card that is not rejected created at or after the look-back's start
+    cited: frozenset[str]  # excerpt ids the cards that are not rejected cite
 
 
-async def job_state(db: AsyncSession, since: datetime) -> JobState | None:
-    """The weekly job's look back (see the module docstring); None when the session cannot read the cards."""
-    row = (await db.execute(_RECENT, {"since": since})).one()
-    if not row.reader:
-        return None
-    cited = frozenset(str(ref) for ref in (await db.scalars(_CITED)).all())
-    return JobState(bool(row.recent), cited)
+async def job_state(db: AsyncSession, since: datetime) -> JobState:
+    """The weekly job's look back (see the module docstring), on a session with no user bound."""
+    row = (await db.execute(_STATE, {"since": since})).one()
+    return JobState(bool(row.recent), frozenset(str(ref) for ref in row.cited_refs))
 
 
 def reviewed_on(published_at: datetime) -> date:
@@ -188,6 +179,6 @@ def unsourced_names(
 
 async def defer_run(db: AsyncSession, *, user_id: UUID, timestamp: int) -> int:
     """Queue a manual run of ``trends.draft`` in the caller's transaction (``timestamp``: the task's own argument, which
-    it ignores). The job binds ``user_id`` (a staff admin), who reads the cards and creates the candidates."""
+    it ignores; ``user_id``: the staff admin who asked, named in the job's log line)."""
     args = {"timestamp": timestamp, "user_id": str(user_id)}
     return await defer(db, RUN_TASK, args, queue=QUEUE, lock=LOCK)
