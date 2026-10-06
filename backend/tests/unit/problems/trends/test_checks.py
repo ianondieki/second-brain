@@ -306,3 +306,12 @@ def test_a_declared_name_is_at_most_200_characters() -> None:
     name = "GitHub " + "x" * 194
     assert len(name) == 201
     assert one(security(named_orgs=(name,))) == Discarded(Reason.TEXT_OUT_OF_BOUNDS)
+
+
+def test_the_answer_verdict_keeps_one_verdict_per_draft_in_order() -> None:
+    partly = check_answer(fakes.answer("partly_valid").draft(), SENT, ALLOWLIST, SCORING, WEEK, max_cards=3)
+    assert [type(v).__name__ for v in partly.verdicts] == ["KeptTrend", "Discarded", "KeptTrend"]
+    over = check_answer(fakes.answer("over_card_limit").draft(), SENT, ALLOWLIST, SCORING, WEEK, max_cards=3)
+    assert over.verdicts[-1] == Discarded(Reason.OVER_CARD_LIMIT)
+    flagged = check_answer(fakes.answer("injection_suspected").draft(), SENT, ALLOWLIST, SCORING, WEEK, max_cards=3)
+    assert flagged.verdicts == (Discarded(Reason.INJECTION_SUSPECTED),) * 3

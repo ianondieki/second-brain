@@ -39,6 +39,12 @@ flagged answer is used) or drafts no trend (``no_trends``); drafts beyond ``tren
    weights), so the shipped 0.40 discards nothing today; the rule stays for a policy change.
 
 A kept draft carries its verified sources with the support each was verified by, in citation order.
+
+Prompt rules that code does not check: "no advice to buy, subscribe or switch", "no private person", "no claim beyond
+what a quote states" and "no speculation" are asked of the model in the system prompt
+(``bridge.problems.trends.synthesis``) and enforced by the staff admin's approval of every card, as for research cards;
+the checks above catch only what they name (a person's name is caught when one of its capitalised words falls
+mid-sentence and no cited quote carries it, as any unsourced capitalised token is).
 """
 
 from __future__ import annotations
@@ -164,11 +170,13 @@ class Discarded:
 @dataclass(frozen=True, slots=True)
 class AnswerVerdict:
     """``refused`` is set when nothing of the answer may be used (``injection_suspected``, ``no_trends``) or when no
-    draft was kept (then it is the first discarded draft's reason); ``kept`` and ``discarded`` are per draft."""
+    draft was kept (then it is the first discarded draft's reason); ``kept`` and ``discarded`` are per draft;
+    ``verdicts`` has one verdict per drafted trend, in the model's order (for evals)."""
 
     kept: tuple[KeptTrend, ...]
     discarded: tuple[Reason, ...]
     refused: Reason | None
+    verdicts: tuple[KeptTrend | Discarded, ...]
 
 
 def sentence_count(text: str) -> int:
@@ -314,18 +322,12 @@ def check_answer(
 ) -> AnswerVerdict:
     """The verdict on a whole answer (see the module docstring)."""
     if answer.injection_suspected:
-        reasons = (Reason.INJECTION_SUSPECTED,) * len(answer.trends)
-        return AnswerVerdict((), reasons, Reason.INJECTION_SUSPECTED)
+        flagged = (Discarded(Reason.INJECTION_SUSPECTED),) * len(answer.trends)
+        return AnswerVerdict((), tuple(v.reason for v in flagged), Reason.INJECTION_SUSPECTED, flagged)
     if not answer.trends:
-        return AnswerVerdict((), (), Reason.NO_TRENDS)
-    kept: list[KeptTrend] = []
-    discarded: list[Reason] = []
-    for draft in answer.trends[:max_cards]:
-        verdict = check_trend(draft, sent, allowlist, scoring, as_of)
-        if isinstance(verdict, Discarded):
-            discarded.append(verdict.reason)
-        else:
-            kept.append(verdict)
-    discarded += [Reason.OVER_CARD_LIMIT] * max(0, len(answer.trends) - max_cards)
-    refused = None if kept else discarded[0]
-    return AnswerVerdict(tuple(kept), tuple(discarded), refused)
+        return AnswerVerdict((), (), Reason.NO_TRENDS, ())
+    verdicts = [check_trend(draft, sent, allowlist, scoring, as_of) for draft in answer.trends[:max_cards]]
+    verdicts += [Discarded(Reason.OVER_CARD_LIMIT)] * max(0, len(answer.trends) - max_cards)
+    kept = tuple(v for v in verdicts if isinstance(v, KeptTrend))
+    discarded = tuple(v.reason for v in verdicts if isinstance(v, Discarded))
+    return AnswerVerdict(kept, discarded, None if kept else discarded[0], tuple(verdicts))
