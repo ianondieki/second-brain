@@ -267,6 +267,24 @@ async def test_c3_a_block_ends_everything_and_an_unblock_reopens_nothing(teams: 
     assert brian in [UUID(p["user_id"]) for p in (await a.get(PEERS)).json()["peers"]]
 
 
+async def test_a_block_across_the_others_block_is_recorded_and_outlives_its_lifting(
+    teams: TeamsDb, as_user: Clients
+) -> None:
+    """B blocks A; A's block of B (a counterpart, though the card is hidden by B's block) is still recorded, so when B
+    unblocks, A's block stands and B cannot invite A (the same 404 as for a stranger)."""
+    amina, brian, _ = await pair(teams, "mutual")
+    a, b = await as_user(amina), await as_user(brian)
+    await team(a, b, await problem(teams))
+    assert (await b.post(BLOCKS, json={"user_id": str(amina)})).status_code == 204
+    assert (await a.post(BLOCKS, json={"user_id": str(brian)})).status_code == 204
+    blocks = "SELECT blocker_user_id FROM developer_blocks WHERE blocker_user_id = :u AND blocked_user_id = :v"
+    assert len(await owner_rows(teams, blocks, u=amina, v=brian)) == 1
+    assert (await b.delete(f"{BLOCKS}/{amina}")).status_code == 204
+    refused = await b.post(INVITATIONS, json={"to_user_id": str(amina), "problem_id": str(await problem(teams))})
+    assert code(refused) == (404, "peer_unavailable")
+    assert len(await owner_rows(teams, blocks, u=amina, v=brian)) == 1
+
+
 async def test_blocking_nobody_answers_like_a_block(teams: TeamsDb, as_user: Clients) -> None:
     """Only a developer the caller can see (a peer or a counterpart) is blocked; any other id answers the same 204 and
     leaves no row, so the list never confirms that an arbitrary id is a developer."""

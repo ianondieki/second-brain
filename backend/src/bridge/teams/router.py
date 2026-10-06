@@ -14,11 +14,13 @@
   ``POST /{thread_id}/messages/{message_id}/report`` ``{reasons}`` (201 ``{case_id}``; 409 ``own_message`` /
   ``already_reported``; 429 ``too_many_reports``).
 - ``POST /api/me/blocks`` ``{user_id}`` (204, through ``app_block_developer``: it ends the pair's pending invitations
-  and closes their open threads; 422 ``cannot_block_yourself``). Only a developer the caller can see now is blocked: a
-  peer or a counterpart (``app_developer_card`` answers a row); any other id (unknown, no developer, opted out and no
-  counterpart, or a block already standing either way) changes nothing and answers the same 204, so neither the answer
-  nor ``GET /api/me/blocks`` ever confirms that an arbitrary id is a developer. ``DELETE /api/me/blocks/{user_id}``
-  (204, idempotent; threads stay closed), ``GET /api/me/blocks`` (the caller's blocks with each handle).
+  and closes their open threads; 422 ``cannot_block_yourself``). Only a developer the caller knows is blocked: a
+  peer or a counterpart now (``app_developer_card`` answers a row), or one they have had a team thread or an
+  invitation with, in any state (so the caller's block lands even across the other's own block and outlives its
+  lifting); any other id (unknown, no developer, an opted-out stranger) changes nothing and answers the same 204, so
+  neither the answer nor ``GET /api/me/blocks`` ever confirms that an arbitrary id is a developer.
+  ``DELETE /api/me/blocks/{user_id}`` (204, idempotent; threads stay closed), ``GET /api/me/blocks`` (the caller's
+  blocks with each handle).
 """
 
 from __future__ import annotations
@@ -58,7 +60,16 @@ from bridge.teams.schemas import (
 
 router = APIRouter(prefix="/api/me/teams", tags=["teams"], responses=ERROR_RESPONSES)
 blocks_router = APIRouter(prefix="/api/me/blocks", tags=["teams"], responses=ERROR_RESPONSES)
-_VISIBLE: Final = text("SELECT EXISTS (SELECT 1 FROM app_developer_card(:user))")  # a peer or a counterpart now
+# Whom the caller may block: a peer or a counterpart now (app_developer_card answers a row), or a developer they have
+# had a team thread or an invitation with, in any state, read as a party under the caller's own RLS: so a block also
+# lands across the other's block (which hides the card) and outlives their unblock.
+_BLOCKABLE: Final = text(
+    "SELECT EXISTS (SELECT 1 FROM app_developer_card(:user))"
+    " OR EXISTS (SELECT 1 FROM team_threads t WHERE t.a_user_id = least(app_user_id(), CAST(:user AS uuid))"
+    "   AND t.b_user_id = greatest(app_user_id(), CAST(:user AS uuid)))"
+    " OR EXISTS (SELECT 1 FROM team_invitations i WHERE (i.from_user_id = app_user_id() AND i.to_user_id = :user)"
+    "   OR (i.from_user_id = :user AND i.to_user_id = app_user_id()))"
+)
 _BLOCK: Final = text("SELECT app_block_developer(:user)")
 _UNBLOCK: Final = text("SELECT app_unblock_developer(:user)")
 _BLOCKED: Final = text("SELECT user_id, handle::text AS handle, blocked_at FROM app_blocked_developers()")
@@ -170,8 +181,8 @@ async def block(body: BlockIn, live: Developer, db: Db) -> None:
     same."""
     if body.user_id == live.user.id:
         raise ApiError(422, "cannot_block_yourself", "Block another developer.")
-    if not await db.scalar(_VISIBLE, {"user": body.user_id}):
-        return  # nobody the caller can see: nothing to block, and nothing said about the id
+    if not await db.scalar(_BLOCKABLE, {"user": body.user_id}):
+        return  # nobody the caller knows: nothing to block, and nothing said about the id
     try:
         changed = int(await db.scalar(_BLOCK, {"user": body.user_id}) or 0)
     except DBAPIError as exc:
