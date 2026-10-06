@@ -173,7 +173,8 @@ async def test_only_a_granted_latest_profiling_decision_lists_a_developer(owner_
 
 async def test_staff_suspended_and_empty_profiles_are_never_listed_or_written(owner_engine: AsyncEngine) -> None:
     """Given consented developers who are staff, suspended, or have nothing to embed (no headline, bio, liked niche
-    or published proposal), Then none is listed, and the writer writes none of the first two."""
+    or published proposal), Then none is listed, and the writer writes none of them (an empty text, even with its
+    hash, is never written)."""
     async with t.as_app(owner_engine) as conn:
         staff = await consented(conn, "staff", staff="admin")
         gone = await consented(conn, "gone")
@@ -185,7 +186,8 @@ async def test_staff_suspended_and_empty_profiles_are_never_listed_or_written(ow
         assert await listed(conn, staff, gone, empty, regular) == {regular}
         assert await set_profile(conn, staff) is False
         assert await set_profile(conn, gone) is False
-        for user in (staff, gone):
+        assert await set_profile(conn, empty, text_hash=sha("")) is False  # nothing to embed is never written
+        for user in (staff, gone, empty):
             assert (await stored_profile(conn, user))["first"] is None
 
 
@@ -650,6 +652,7 @@ async def test_problems_never_embedded_first_then_the_oldest_and_never_a_blank_o
                 m=minutes,
                 id=problem_id,
             )
+        assert await set_problem(conn, blank, text_hash=sha("")) is False  # nothing to embed is never written
         mine = {first, second, old, recent, blank}
         assert [row.id for row in await problems(conn) if row.id in mine] == [first, second, old, recent]
         assert len(await problems(conn, limit=1)) == 1
