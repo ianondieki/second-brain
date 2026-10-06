@@ -46,7 +46,6 @@ CRON: Final = "15 2 * * 1"  # Monday 02:15 UTC = 05:15 Africa/Nairobi
 LOOK_BACK: Final = timedelta(days=6)
 RECENT_CARD: Final = "recent_card"
 _NOW: Final = text("SELECT app_clock_now()")
-log = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -82,6 +81,7 @@ async def run_weekly(deps: WeeklyDeps, *, user_id: UUID | None = None) -> Weekly
     """One pass of ``trends.draft`` (see the module docstring); ``user_id``: the staff admin who asked for a manual run
     (the log line's), None for the weekly one."""
     started_by = None if user_id is None else str(user_id)
+    log = get_logger(__name__)  # per call, so a logger cached under an earlier configuration is never reused
     async with deps.factory() as db:
         now: datetime = (await db.execute(_NOW)).scalar_one()
         week_start = monday_of(now)
