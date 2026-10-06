@@ -49,8 +49,9 @@ LOCK: Final = "trends:draft"  # one run at a time, the weekly one and the manual
 _CREATE: Final = text("SELECT app_create_trend_candidate(CAST(:card AS jsonb), CAST(:sources AS jsonb))")
 # The day's index over the published cards: ``today.toordinal()`` when given, else the Nairobi day on the shared clock.
 _OF_THE_DAY: Final = text(
-    "SELECT t.id, t.title, t.summary, t.topic_slug, t.published_at FROM (SELECT c.id, c.title, c.summary,"
-    " c.topic_slug, c.published_at, row_number() OVER (ORDER BY c.published_at, c.id) - 1 AS i,"
+    "SELECT t.id, t.title, t.summary, t.topic_slug, t.published_at, t.llm_trace_id FROM (SELECT c.id, c.title,"
+    " c.summary, c.topic_slug, c.published_at, c.llm_trace_id, row_number() OVER (ORDER BY c.published_at, c.id) - 1"
+    " AS i,"
     " count(*) OVER () AS n FROM trend_cards c WHERE c.status = 'published') t"
     " WHERE t.i = mod(coalesce(CAST(:ordinal AS bigint), app_nairobi_today() - DATE '0001-01-01' + 1), t.n)"
 )
@@ -107,6 +108,7 @@ def _card_out(row: Any) -> TrendCardOut:
         topic_slug=row.topic_slug,
         published_at=row.published_at,
         reviewed_on=reviewed_on(row.published_at),
+        seeded_example=row.llm_trace_id is None,
     )
 
 
@@ -122,7 +124,7 @@ async def published_card(db: AsyncSession, card_id: UUID) -> TrendCardDetailOut 
     C, S = TrendCard, TrendCardSource
     row = (
         await db.execute(
-            select(C.id, C.title, C.summary, C.topic_slug, C.published_at, C.named_orgs).where(
+            select(C.id, C.title, C.summary, C.topic_slug, C.published_at, C.llm_trace_id, C.named_orgs).where(
                 C.id == card_id, C.status == "published"
             )
         )

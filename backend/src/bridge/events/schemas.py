@@ -103,6 +103,9 @@ class TrendCardOut(BaseModel):
     topic_slug: str
     published_at: datetime
     reviewed_on: date = Field(description="The Nairobi day staff published it (the label's date)")
+    seeded_example: bool = Field(
+        description="Written by hand for the demo, not by the model: never labelled AI-drafted (no generating call)"
+    )
 
 
 class TrendSourceOut(BaseModel):

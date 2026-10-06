@@ -165,5 +165,6 @@ async def test_a_manual_run_queues_the_weekly_task_and_its_cards_can_be_publishe
     developer = await as_user(p.developer)
     week_out = (await developer.get("/api/me/week")).json()
     assert week_out["trend"]["id"] in {str(c) for c in stored.card_ids}
+    assert week_out["trend"]["seeded_example"] is False  # drafted by the model: labelled AI-drafted
     assert week_out["trend"]["title"] in {fakes.SECURITY.title, fakes.DATABASES.title, fakes.KENYA.title}
     assert (await developer.get(f"/api/me/trends/{stored.card_ids[0]}")).json()["sources"][0]["publisher"] == "GitHub"

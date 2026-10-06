@@ -229,5 +229,6 @@ async def test_who_reads_this_week(week: WeekDb, as_user: Clients) -> None:
         ["GitHub"],
     )
     assert not {"decided_by", "decided_at", "llm_trace_id", "confidence"} & keys(card)
+    assert card["seeded_example"] is True  # no generating call: never labelled AI-drafted
     assert code(await developer.get(f"/api/me/trends/{candidate}")) == (404, "not_found")
     assert (await developer.get(f"/api/events/{event_id}")).status_code == 200
