@@ -32,6 +32,7 @@ from tests.integration.events.api_world import (
     owner_run,
     published,
 )
+from tests.unit.events.test_reminders import decoded_links
 
 EVENT_START = time(18, 0)
 
@@ -84,8 +85,11 @@ async def test_one_email_the_day_before_and_one_notice_the_morning_of(week: Week
     assert "iHub, Senteu Plaza, Nairobi City" in email.text
     assert f"/api/events/{event_id}/calendar.ics" in email.text
     assert "https://calendar.google.com/calendar/render?action=TEMPLATE" in email.text
-    assert "Talks and a workshop" not in email.text  # never the description
-    assert "Talks and a workshop" not in (email.html or "")
+    for body in (email.text, email.html or ""):  # never the description, in the text or in any link's query
+        assert "Talks and a workshop" not in body
+        for link, query in decoded_links(body):
+            assert "Talks and a workshop" not in link + " ".join(v for values in query.values() for v in values)
+            assert "details" not in query
     await at(week, tuesday, time(18, 15))
     await run_event_reminders(deps(week, mail))
     assert len(mail.outbox) == 1

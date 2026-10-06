@@ -194,7 +194,8 @@ def render_n26(row: Any, *, base_url: str, product: str) -> Rendered:
         "title": title,
         "when": when(row.starts_at, row.ends_at),
         "place": unlinkable(place(row)),
-        "google_url": google_calendar_url(_calendar_event(row)),
+        # Nothing the poster wrote beyond the title and venue: no description, no link, no join address (N26).
+        "google_url": google_calendar_url(_calendar_event(row), location=place(row), details=False),
         "ics_url": base + calendar_path(row.id),
         "settings_url": f"{base}/settings/notifications",
         "help_url": f"{base}/help",

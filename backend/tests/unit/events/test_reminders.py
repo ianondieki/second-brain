@@ -4,9 +4,12 @@ title, when, where and the two calendar links, never the description; escaped an
 
 from __future__ import annotations
 
+import html
+import re
 from datetime import UTC, datetime, time
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import parse_qs, unquote, urlsplit
 from uuid import UUID
 
 import pytest
@@ -61,6 +64,40 @@ def test_when_and_where_for_people() -> None:
     )
     assert reminders.place(row()) == "iHub, Nairobi City"
     assert reminders.place(row(online=True, venue=None, county_name=None, join_url="https://x.example/j")) == "Online"
+
+
+LINK = re.compile(r"https?://[^\s\"'<>]+")
+
+
+def decoded_links(body: str) -> list[tuple[str, dict[str, list[str]]]]:
+    """Every link of an email body, unescaped and percent-decoded, with its decoded query."""
+    found = []
+    for raw in LINK.findall(body):
+        link = html.unescape(raw)
+        found.append((unquote(link), parse_qs(urlsplit(link).query)))
+    return found
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        row(link="https://poster.example/rust-night"),
+        row(online=True, venue=None, county_name=None, join_url="https://poster.example/join", link=None),
+    ],
+)
+def test_no_link_of_the_n26_email_carries_the_description_or_a_poster_address(event: SimpleNamespace) -> None:
+    rendered = reminders.render_n26(event, base_url="https://wazo.example", product="Wazo")
+    for body in (rendered.text, rendered.html):
+        links = decoded_links(body)
+        assert len(links) >= 2  # the Google link and the calendar file at least
+        for link, query in links:
+            words = link + " " + " ".join(v for values in query.values() for v in values)
+            assert "Secret plans" not in words
+            assert "poster.example" not in words
+        [google] = [query for link, query in links if link.startswith("https://calendar.google.com/")]
+        assert "details" not in google
+        assert google["location"] == ["Online" if event.online else "iHub, Nairobi City"]
+        assert google["text"] == [event.title]
 
 
 def test_the_n26_email_states_when_and_where_and_the_calendar_links_only() -> None:

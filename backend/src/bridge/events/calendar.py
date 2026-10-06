@@ -121,15 +121,16 @@ def ics(event: CalendarEvent, *, host: str, product: str) -> bytes:
     return "".join(fold(line) + CRLF for line in lines).encode("utf-8")
 
 
-def google_calendar_url(event: CalendarEvent) -> str:
-    """Google Calendar's template link for the event (see the module docstring)."""
-    details = event.description if not event.link else f"{event.description}\n\n{event.link}"
+def google_calendar_url(event: CalendarEvent, *, location: str | None = None, details: bool = True) -> str:
+    """Google Calendar's template link for the event (see the module docstring). ``location`` replaces the event's
+    place (an email passes the place for people, never the poster's join address) and ``details=False`` leaves out
+    the description and the poster's link: an email carries neither (N26)."""
     params = [
         ("action", "TEMPLATE"),
         ("text", event.title),
         ("dates", f"{utc_stamp(event.starts_at)}/{utc_stamp(event.ends_at)}"),
-        ("details", details),
-        ("location", place(event)),
-        ("ctz", NAIROBI_TZ),
     ]
+    if details:
+        params.append(("details", event.description if not event.link else f"{event.description}\n\n{event.link}"))
+    params += [("location", place(event) if location is None else location), ("ctz", NAIROBI_TZ)]
     return f"{GOOGLE_TEMPLATE}?{urlencode(params, quote_via=quote, safe='')}"
