@@ -105,6 +105,8 @@ export function PeerList({ initial, niches, locale, calls: given }: PeerListProp
                 data-peer={peer.handle}
                 data-invited={invited[peer.user_id] ? "" : undefined}
                 titleId={titleId}
+                // The page has no section heading over the list: each peer's handle is the next level under the h1.
+                headingLevel={2}
                 title={peer.handle}
                 meta={peer.headline ?? t("row.noHeadline")}
               >

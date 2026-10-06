@@ -89,7 +89,7 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
     idea.current ? ideaTags(idea.id) : null,
     idea.current ? ideaViews(idea.id) : null,
     countyCode ? countyName(countyCode) : null,
-    contributors.length > 0 ? ideaContributors(idea.id) : null,
+    idea.current ? ideaContributors(idea.id) : null,
   ]);
   const canPitch = status === "published" && tags !== null && pitchesLeft(tags.cap) !== 0;
   // An idea that answers an organisation's Problem Brief pitches with that organisation chosen first (REQ-DIR-05).
@@ -106,8 +106,9 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
               <span className="text-sm text-ink-soft">{t("version", { number: idea.current.version_no })}</span>
             ) : null}
           </p>
-          {/* D-62 (a): the contributors the owner credited, by handle, each with Remove (when the credit could be read). */}
-          {credited && credited.length > 0 ? (
+          {/* D-62 (a): the contributors the owner credited, by handle, each with Remove (when the credit could be read;
+              kept on a registered idea with none, so the status line after the last Remove stays). */}
+          {credited ? (
             <ClientStrings strings={await clientStrings(["ideaContributors"])}>
               <ContributorsLine ideaId={idea.id} initial={credited} />
             </ClientStrings>

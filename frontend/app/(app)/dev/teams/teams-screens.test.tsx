@@ -148,7 +148,7 @@ describe("the invitations", () => {
     expect(document.querySelector("[data-primary]")).toBeNull();
   });
 
-  it("Accept says the thread is open, links it, takes focus and reads the page again", async () => {
+  it("Accept says the thread is open, links it and takes focus (the line stays: the page is not read again)", async () => {
     const calls = teamCalls();
     renderWithIntl(<InvitationList initial={{ received: [invitation()], sent: [] }} calls={calls} />);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Accept" })));
@@ -158,7 +158,7 @@ describe("the invitations", () => {
     expect(within(status).getByRole("link", { name: "Open the thread" }).getAttribute("href")).toBe("/dev/teams/01a11223-32cd-732d-9755-f7206d3c33e4");
     await waitFor(() => expect(document.activeElement).toBe(status));
     expect(document.querySelector("[data-invitation]")).toBeNull();
-    expect(refresh).toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("Decline and Withdraw say so; an invitation already answered says that instead", async () => {

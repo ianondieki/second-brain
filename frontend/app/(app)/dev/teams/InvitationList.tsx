@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -17,17 +16,15 @@ type Said = { kind: "accepted"; name: string; threadId: string } | { kind: "decl
 /**
  * The pending invitations of /dev/teams (REQ-DEV-03): the ones received first (who, the problem, their note, then
  * Accept and Decline), then the ones sent (Withdraw). Each answer leaves the list and a status line says what
- * happened (it takes focus); after Accept it links the new thread. The page is then read again, so Threads follows.
- * No button here is the screen's primary action.
+ * happened (it takes focus); after Accept it links the new thread. The page is not read again (that would take the
+ * section, and its status line, away with the last card). No button here is the screen's primary action.
  */
 export function InvitationList({ initial, calls: given }: { initial: Invitations; calls?: Partial<TeamCalls> }) {
   const t = useStrings("teamUp");
-  const router = useRouter();
   const [calls] = useState<TeamCalls>(() => ({ ...teamCalls(), ...given }));
   const [answered, setAnswered] = useState<Record<string, true>>({});
   const [busy, setBusy] = useState<{ id: string; step: Step } | null>(null);
   const [said, setSaid] = useState<(Said & { n: number }) | null>(null);
-  const [, startRefresh] = useTransition();
   const status = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,7 +45,6 @@ export function InvitationList({ initial, calls: given }: { initial: Invitations
     else if (step === "accept" && "threadId" in outcome) {
       say({ kind: "accepted", name: invitation.counterpart?.handle ?? t("invitation.someone"), threadId: String(outcome.threadId) });
     } else say({ kind: step === "withdraw" ? "withdrawn" : "declined" });
-    if (outcome.ok || outcome.refusal === "gone") startRefresh(() => router.refresh());
   }
 
   const received = initial.received.filter((item) => !answered[item.id]);

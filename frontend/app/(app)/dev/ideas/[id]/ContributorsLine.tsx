@@ -71,7 +71,7 @@ export function ContributorsLine({
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-3">
+    <div className={items.length > 0 || said ? "mt-3 flex flex-col gap-3" : undefined}>
       {items.length > 0 ? (
         <p className="flex flex-wrap items-center gap-x-2 text-ink" data-contributors="">
           <span>{t("label")}</span>{" "}
