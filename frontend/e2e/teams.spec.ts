@@ -112,6 +112,12 @@ test.describe("Peers and team up", () => {
       const row = page.locator(`[data-peer="${handleB}"]`);
       await expect(row).toContainText("Dashboards for field teams");
       await expect(row).toContainText("Same county");
+      // B's row menu stays inside the screen when open, and closes on Escape.
+      await row.locator("[data-peer-menu] summary").click();
+      await expect(row.locator("[data-peer-menu] [data-block]")).toBeVisible();
+      await checkWidths(page, info);
+      await page.keyboard.press("Escape");
+      await expect(row.locator("[data-peer-menu] [data-block]")).toBeHidden();
       await checkWidths(page, info);
       await shot(page, info, "teams-peers");
 
@@ -171,12 +177,16 @@ test.describe("Peers and team up", () => {
       await checkWidths(page, info);
       await shot(page, info, "teams-thread");
       await pageB.reload();
+      // On A's Peers, B is someone A teams up with now: the row links the thread instead of Team up.
+      await page.goto("/dev/peers");
+      await expect(page.locator(`[data-peer="${handleB}"] [data-relation=thread]`)).toHaveAttribute("href", threadPath);
+      await expect(page.locator(`[data-peer="${handleB}"] [data-team-up]`)).toHaveCount(0);
       await expect(pageB.locator('[data-message][data-mine="false"]')).toContainText("sensor feed is ready");
 
       // A credits B on A's published idea; the idea page and its certificate say so.
       makeD1(emailA);
       const idea = await publishIdea(page.request, `Fuel alerts ${Date.now().toString(36)}`);
-      await page.reload();
+      await page.goto(threadPath);
       // The steps answer once the thread has hydrated (their buttons are server markup).
       await page.locator('[data-thread][data-hydrated="true"]').waitFor(SERVER_STEP);
       await page.getByRole("button", { name: "Add as contributor on an idea" }).click();
@@ -196,6 +206,9 @@ test.describe("Peers and team up", () => {
       // B blocks A from the thread's menu: A's peers no longer list B and A's thread reads closed.
       await pageB.locator('[data-thread][data-hydrated="true"]').waitFor(SERVER_STEP);
       await pageB.locator("[data-thread-menu] summary").click();
+      // The thread's menu opens leftward from its button: no sideways scroll at 360 or 375 px while it is open.
+      await expect(pageB.getByRole("button", { name: `Block ${handleA}` })).toBeVisible();
+      await checkWidths(pageB, info);
       await pageB.getByRole("button", { name: `Block ${handleA}` }).click();
       const block = pageB.getByRole("dialog", { name: `Block ${handleA}?` });
       await expect(block).toBeVisible(SERVER_STEP);
@@ -210,7 +223,8 @@ test.describe("Peers and team up", () => {
       await expect(page.locator(`[data-peer="${handleB}"]`)).toHaveCount(0);
       await checkWidths(page, info);
       await page.goto(threadPath);
-      await expect(page.locator("[data-thread-closed]")).toBeVisible();
+      // B blocked A: on A's side the thread has ended (A cannot see who, nor that it was a block).
+      await expect(page.locator("[data-thread-closed=ended]")).toBeVisible();
       await expect(page.locator("[data-composer]")).toHaveCount(0);
       await expect(page.locator("[data-primary]")).toHaveCount(0);
       await checkWidths(page, info);
