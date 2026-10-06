@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import html
 import re
-from datetime import UTC, datetime, time
+from datetime import UTC, date, datetime, time
 from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -130,6 +130,9 @@ def test_the_job_runs_every_15_minutes_one_run_at_a_time() -> None:
     assert task.configure(task_kwargs={"timestamp": 0}).job.lock == "events:remind"
     crons = {t.task.name: t.cron for t in app.periodic_registry.periodic_tasks.values()}
     assert crons[jobs.TASK] == "*/15 * * * *"
+    swept = app.tasks[reminders.SWEEP_TASK]  # queued once a day by the day's first run, never on a cron
+    assert (swept.name, swept.queue, swept.lock) == ("events.sweep", "reminders", "events:sweep")
+    assert reminders.SWEEP_TASK not in crons
 
 
 async def test_the_task_runs_a_pass_on_the_installed_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -151,6 +154,24 @@ async def test_the_task_runs_a_pass_on_the_installed_runtime(monkeypatch: pytest
     assert isinstance(jobs.runtime(), reminders.EventReminderRuntime)
     assert jobs.runtime() is jobs.runtime()
     jobs.use_runtime(None)
+
+
+async def test_the_sweep_task_runs_on_the_installed_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[Any] = []
+
+    async def run(deps: reminders.Deps, day: Any) -> int:
+        calls.append((deps, day))
+        return 0
+
+    monkeypatch.setattr(jobs, "run_sweep", run)
+    mail, factory = FakeEmailProvider(), object()
+    jobs.use_runtime(reminders.EventReminderRuntime(get_settings(), factory=factory, email=mail))  # type: ignore[arg-type]
+    try:
+        await jobs.sweep(day="2026-10-14")
+    finally:
+        jobs.use_runtime(None)
+    [(deps, day)] = calls
+    assert (deps.factory, day) == (factory, date(2026, 10, 14))
 
 
 def test_the_runtime_builds_its_parts_once() -> None:

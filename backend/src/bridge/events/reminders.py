@@ -22,8 +22,10 @@ event cancelled before the moment means nothing is sent. Per reminder:
 A queued N26 email (a transient failure, retried by the next runs within the window) never goes out after its
 moment, as EM7's ``_sweep``: it ends ``failed`` ("expired") when the developer declines (``withdraw_n26``, in the
 Decline's transaction), when a run handling the developer finds it outside an open window (its reminder declined, its
-event cancelled, or its window closed), and, as the backstop for developers no run handles any more, in the first
-run after midnight in Nairobi, when every N26 window has closed, for every active user. An expired email is not a
+event cancelled, or its window closed), and, as the backstop for developers no run handles any more, once a Nairobi
+day for every active user: the first run of the day, whatever its hour, queues the job ``events.sweep`` for that day
+(the job queue is the record: a day that has an ``events.sweep`` job is not queued again), which ends every queued
+N26 email of an earlier day (every such window has closed). An expired email is not a
 sent one: when the developer presses Remind me again while its window is open, the next run sends it (resumed under its
 key); a sent one is never sent twice.
 
@@ -49,6 +51,7 @@ from bridge.config import Settings, get_settings
 from bridge.db import bind_tenant, create_engine, create_session_factory
 from bridge.engagements.calendar import NAIROBI
 from bridge.events.calendar import CalendarEvent, calendar_path, google_calendar_url
+from bridge.jobs.outbox import defer
 from bridge.logging import get_logger
 from bridge.models.enums import DeliveryStatus, NotificationChannel, UserStatus
 from bridge.notifications.deliveries import MAX_ATTEMPTS, send_email
@@ -68,7 +71,14 @@ ONLINE: Final = "Online"  # [[COPY-REVIEW]]
 SUBJECT: Final = "Tomorrow: {title}"  # [[COPY-REVIEW]]
 TODAY_AT: Final = "Today at {at} · {place}"  # [[COPY-REVIEW]] the N27 body; the title is the event's
 EXPIRED: Final = "expired: the reminder was declined, the event cancelled or its moment passed"
-SWEEP_UNTIL: Final = time(0, 15)  # the first run of a Nairobi day sweeps every active user's queued N26 emails
+SWEEP_TASK: Final = "events.sweep"  # once a Nairobi day: every active user's queued N26 emails of earlier days end
+SWEEP_QUEUE: Final = "reminders"
+SWEEP_LOCK: Final = "events:sweep"
+# Whether the day's sweep was queued already (bridge_app runs the worker and reads its queue).
+_SWEPT: Final = text(
+    "SELECT EXISTS (SELECT 1 FROM procrastinate_jobs WHERE queue_name = :queue AND task_name = :task"
+    " AND args ->> 'day' = :day) AS queued"
+)
 _DUE: Final = text("SELECT user_id, event_id FROM app_event_reminders_due(:now)")
 _CLOCK: Final = text("SELECT app_clock_now()")
 # The caller's reminders on the listed events, as they stand now under the caller's policies: a reminder deleted, or
@@ -141,6 +151,7 @@ class Report:
     due: int
     outcomes: tuple[Outcome, ...] = ()
     expired: int = 0  # queued N26 emails this run ended
+    sweep_queued: bool = False  # this run queued the day's events.sweep
 
 
 def _midnight(day: date) -> datetime:
@@ -240,6 +251,7 @@ async def run_event_reminders(deps: Deps, *, now: datetime | None = None) -> Rep
     async with deps.factory() as db:
         now = now or await clock_now(db)
         due = (await db.execute(_DUE, {"now": now})).all()
+        sweep_queued = await queue_sweep(db, now.astimezone(NAIROBI).date())
     by_user: dict[UUID, list[UUID]] = defaultdict(list)
     for row in due:
         by_user[row.user_id].append(row.event_id)
@@ -253,17 +265,35 @@ async def run_event_reminders(deps: Deps, *, now: datetime | None = None) -> Rep
         except Exception as exc:  # one developer never stops the run; the next run retries them
             log.error("events.remind_failed", user_id=str(user_id), error_type=type(exc).__name__)
             outcomes.append(Outcome(user_id, None, None, "error"))
-    if now.astimezone(NAIROBI).time() < SWEEP_UNTIL:
-        expired += await sweep_all(deps, skip=frozenset(by_user))
     acted = [o for o in outcomes if o.status not in ("already",)]
     if acted:
         log.info("events.reminded", count=len(acted), recipients=len(by_user))
-    return Report(now, len(due), tuple(outcomes), expired)
+    return Report(now, len(due), tuple(outcomes), expired, sweep_queued)
 
 
-async def expire_n26(db: AsyncSession, user_id: UUID, *, keep: Collection[str] = (), only: str | None = None) -> int:
+async def queue_sweep(db: AsyncSession, day: date) -> bool:
+    """Queue ``events.sweep`` for the Nairobi ``day`` through the outbox, unless the day has one (committed here);
+    whether this call queued it. Runs of ``events.remind`` never overlap (their lock), so a day gets one."""
+    found = {"queue": SWEEP_QUEUE, "task": SWEEP_TASK, "day": day.isoformat()}
+    if (await db.execute(_SWEPT, found)).scalar_one():
+        return False
+    await defer(db, SWEEP_TASK, {"day": day.isoformat()}, queue=SWEEP_QUEUE, lock=SWEEP_LOCK)
+    await db.commit()
+    log.info("events.sweep_queued", day=day.isoformat())
+    return True
+
+
+async def expire_n26(
+    db: AsyncSession,
+    user_id: UUID,
+    *,
+    keep: Collection[str] = (),
+    only: str | None = None,
+    before: date | None = None,
+) -> int:
     """End ``user_id``'s queued N26 emails ``failed`` ("expired"), but those keyed ``keep`` (``only``: that key's
-    alone), on a session bound to them; the caller commits. Returns how many ended."""
+    alone; ``before``: those of an earlier Nairobi day only), on a session bound to them; the caller commits. Returns
+    how many ended."""
     query = update(NotificationDelivery).where(
         NotificationDelivery.user_id == user_id,
         NotificationDelivery.kind == N26,
@@ -273,6 +303,8 @@ async def expire_n26(db: AsyncSession, user_id: UUID, *, keep: Collection[str] =
     )
     if only is not None:
         query = query.where(NotificationDelivery.dedupe_key == only)
+    if before is not None:
+        query = query.where(NotificationDelivery.local_date < before)
     ended = (
         (
             await db.execute(
@@ -292,22 +324,22 @@ async def withdraw_n26(db: AsyncSession, user_id: UUID, event_id: UUID) -> int:
     return await expire_n26(db, user_id, only=n26_key(user_id, event_id))
 
 
-async def sweep_all(deps: Deps, *, skip: frozenset[UUID] = frozenset()) -> int:
-    """The backstop after midnight: every active user's queued N26 emails end (every N26 window closes at midnight),
-    each user in a session bound to them; ``skip``: the users this run handled already."""
+async def run_sweep(deps: Deps, day: date) -> int:
+    """The job ``events.sweep`` of the Nairobi ``day``: every active user's queued N26 emails of an earlier day end
+    (each such window closed by that day's midnight; today's may still be in theirs), each user in a session bound to
+    them. Returns how many ended."""
     async with deps.factory() as db:
         users = (await db.scalars(select(User.id).where(User.status == UserStatus.ACTIVE).order_by(User.id))).all()
     expired = 0
     for user_id in users:
-        if user_id in skip:
-            continue
         try:
             async with deps.factory() as db:
                 await bind_tenant(db, user_id=user_id)
-                expired += await expire_n26(db, user_id)
+                expired += await expire_n26(db, user_id, before=day)
                 await db.commit()
         except Exception as exc:  # one user never stops the sweep; the next day's sweep retries them
             log.error("events.sweep_failed", user_id=str(user_id), error_type=type(exc).__name__)
+    log.info("events.swept", day=day.isoformat(), count=expired)
     return expired
 
 

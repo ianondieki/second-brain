@@ -17,7 +17,7 @@ from sqlalchemy import text
 
 from bridge.config import get_settings
 from bridge.db import bind_tenant, create_session_factory
-from bridge.events.reminders import EXPIRED, Deps, EventReminderRuntime, run_event_reminders
+from bridge.events.reminders import EXPIRED, Deps, EventReminderRuntime, run_event_reminders, run_sweep
 from bridge.notifications.email import DeliveryError, FakeEmailProvider
 from tests.integration.events.api_world import (
     NAIROBI_CITY,
@@ -259,20 +259,38 @@ async def test_a_queued_email_ends_when_its_window_closes(week: WeekDb) -> None:
     assert (mail.outbox, mail.attempts) == ([], 1)
 
 
-async def test_a_queued_email_of_a_cancelled_event_ends_by_midnight(week: WeekDb) -> None:
-    """Review MINOR 2: once the event is cancelled no run lists the developer, so nothing is sent; the first run after
-    midnight sweeps every active user's queued day-before emails (every window has closed by then)."""
-    p, event_id, monday, mail = await queued_at_six(week)
+async def test_the_days_first_run_queues_the_sweep_whatever_the_hour(week: WeekDb) -> None:
+    """Review MINOR 2 and round 2 MINOR 3: once the event is cancelled no run lists the developer, so nothing is sent;
+    the first run of the next day, even at 18:30, queues that day's ``events.sweep`` (once: the job queue records it),
+    which ends every queued day-before email of an earlier day and leaves today's, still in its window."""
+    p, event_id, monday, mail = await queued_at_six(week)  # the developer's, queued on Tuesday
     await cancel(week, event_id, p.org.owner)
     await at(week, monday + timedelta(days=1), time(18, 15))
     assert (await run_event_reminders(deps(week, mail))).due == 0
     assert (mail.outbox, mail.attempts) == ([], 1)
-    await at(week, monday + timedelta(days=1), time(23, 45))
-    assert (await run_event_reminders(deps(week, mail))).expired == 0  # not the first run of a day
-    await at(week, monday + timedelta(days=2), time(0, 5))
-    swept = await run_event_reminders(deps(week, mail))
-    assert (swept.due, swept.expired) == (0, 1)
+    wednesday = monday + timedelta(days=2)
+    thursday_event = await published(
+        week, p, nairobi(wednesday + timedelta(days=1), time(18, 0)), county=NAIROBI_CITY, title="Thursday night"
+    )
+    await remind(week, p.other, thursday_event)
+    mail.fail_next(DeliveryError("try later", transient=True))
+    await at(week, wednesday, time(18, 30))  # Wednesday's first run, late: the other's email fails and waits
+    first = await run_event_reminders(deps(week, mail))
+    assert first.sweep_queued is True
+    jobs = await owner_rows(
+        week,
+        "SELECT queue_name, lock FROM procrastinate_jobs WHERE task_name = 'events.sweep' AND args ->> 'day' = :d",
+        d=wednesday.isoformat(),
+    )
+    assert [tuple(j) for j in jobs] == [("reminders", "events:sweep")]
+    assert await run_sweep(deps(week, mail), wednesday) == 1  # what the worker runs
     assert await n26_rows(week, p.developer) == [("failed", EXPIRED, 1)]
+    assert await n26_rows(week, p.other) == [("queued", "try later", 1)]  # today's, in its window: left
+    await at(week, wednesday, time(18, 45))
+    second = await run_event_reminders(deps(week, mail))
+    assert second.sweep_queued is False  # the day has its sweep
+    assert [r[0] for r in await n26_rows(week, p.other)] == ["sent"]
+    assert len(mail.outbox) == 1
 
 
 async def test_the_job_is_silent_when_nothing_is_due_and_runs_as_the_worker_wires_it(week: WeekDb) -> None:
