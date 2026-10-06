@@ -1,7 +1,7 @@
 """Technology trend cards: the tables of revision 0010 (P22 track B, REQ-DEV-02, D-60).
 
-A trend card is drafted by the weekly job (bridge_app with no user bound) or a staff admin's manual run, from the
-excerpts of official technology publishers, and enters the database only through
+A trend card is drafted by the trend job (bridge_app with no user bound: the weekly run, or a staff admin's manual
+run), from the excerpts of official technology publishers, and enters the database only through
 ``app_create_trend_candidate(card, sources)``: a ``candidate`` with 1 to 5 sources. A staff admin publishes or rejects
 it once (``app_decide_trend_card``); then nothing of it changes. Rules the database enforces (revision 0010; the
 publisher allowlist, the research checks and the daily rotation are the application's):

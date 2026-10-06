@@ -156,9 +156,9 @@ async def test_a_rejected_card_is_neither_recent_nor_cited(owner_engine: AsyncEn
 
 
 async def test_only_a_session_with_no_user_bound_reads_the_job_state(owner_engine: AsyncEngine) -> None:
-    """A signed-in session is refused with insufficient_privilege whoever it is: a developer, a staff admin (who reads
-    the cards under RLS instead: the manual run), a staff moderator, an organisation's owner and viewer; the job's
-    NULL time is invalid_parameter_value."""
+    """A signed-in session is refused with insufficient_privilege whoever it is: a developer, a staff admin (a manual
+    run has no user bound either: the admin appears only in the job's log line), a staff moderator, an organisation's
+    owner and viewer; the job's NULL time is invalid_parameter_value."""
     async with t.as_app(owner_engine) as conn:
         p = await people(conn)
         now = await no_cards(conn)
