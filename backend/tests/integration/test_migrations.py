@@ -2757,10 +2757,11 @@ V9_TRIGGERS = {
     ("quiz_flags", "quiz_flags_no_update"): ("block_mutation", ROW | BEFORE | ON_UPDATE),
 }
 
-# Revision 0010: an event's status, organisation and poster change only as the definers do, its content only while a
-# draft; a trend card changes once (its decision); a source joins a candidate card and never changes.
+# Revision 0010: an event's county is a county; its status, organisation and poster change only as the definers do,
+# its content only while a draft; a trend card changes once (its decision); a source joins a candidate card and never
+# changes.
 V10_TRIGGERS = {
-    ("events", "events_guard"): ("events_guard", ROW | BEFORE | ON_UPDATE),
+    ("events", "events_guard"): ("events_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
     ("trend_cards", "trend_cards_guard"): ("trend_cards_guard", ROW | BEFORE | ON_UPDATE),
     ("trend_card_sources", "trend_card_sources_guard"): ("trend_card_sources_guard", ROW | BEFORE | ON_INSERT),
     ("trend_card_sources", "trend_card_sources_no_update"): ("block_mutation", ROW | BEFORE | ON_UPDATE),

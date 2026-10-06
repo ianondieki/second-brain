@@ -24,14 +24,17 @@ role, so staff decide and never read as developers):
   the application's check, as for Briefs (``_require_e2``): the policy does not read ``organizations.verification``.
   ``status`` moves only from ``draft`` to ``published`` or ``rejected`` (``app_decide_event``) or ``cancelled``, and
   from ``published`` to ``cancelled`` (``app_cancel_event``), with ``decided_by``/``decided_at`` and
-  ``cancelled_at``; ``events_guard`` (BEFORE UPDATE, every role, the owner too) refuses any other status change, any
+  ``cancelled_at``; ``events_guard`` (BEFORE INSERT OR UPDATE, every role, the owner too) refuses a county that is
+  not one (a ``regions`` row of kind ``country``, such as ``KE``; an unknown code is the foreign key's), any other
+  status change, any
   change of ``org_id``, ``created_by`` or ``created_at``, a decision column changed without the status, anything
   else changed with the status, and a content change of an event that is not a draft; and it owns ``updated_at``:
   the shared clock on every content or status change, whatever was sent, and unchanged otherwise (so a reviewer's
   ``p_seen`` names exactly the content they read).
   CHECKs: a title of 1 to 120 characters and a description of 1 to 1,000 (no control character; the description may
   hold tabs and line breaks); it ends after it starts and at most 3 days later; online with a join URL and neither
-  venue nor county, or in person at a venue (1 to 160) in a county (``regions.code``) without a join URL; ``join_url``
+  venue nor county, or in person at a venue (1 to 160) in a county (``regions.code`` of kind ``county``: the
+  guard) without a join URL; ``join_url``
   and ``link``, when set, https on an ASCII host (letters, digits, dots and hyphens, an optional port; no user info, no
   whitespace or control character; ``app_research_source_is_valid``'s rule) of at most 400 characters; a draft has no
   decision, a published or rejected event has one (who and when), only a cancelled event has ``cancelled_at``.
@@ -578,18 +581,28 @@ $$;
 -- rejected or cancelled, or from published to cancelled, and a status change changes nothing else (a cancellation
 -- keeps the decision); the decision and cancellation columns change only with the status; only a draft's content
 -- changes. updated_at is the database's: the shared clock on every content or status change, whatever was sent, and
--- unchanged otherwise. For every role (bridge_app's UPDATE is the poster's draft content by grant and policy).
--- SECURITY INVOKER.
+-- unchanged otherwise. On INSERT and UPDATE, an event's county is a county: a regions row of kind county, never the
+-- country (an unknown code is left to the foreign key). For every role (bridge_app's UPDATE is the poster's draft
+-- content by grant and policy). SECURITY INVOKER (regions is readable by every role that writes events).
 CREATE FUNCTION events_guard() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
-    v_content_changed boolean := (NEW.title, NEW.description, NEW.starts_at, NEW.ends_at, NEW.online, NEW.venue,
-                                  NEW.county_code, NEW.join_url, NEW.link)
-                                 IS DISTINCT FROM (OLD.title, OLD.description, OLD.starts_at, OLD.ends_at, OLD.online,
-                                                   OLD.venue, OLD.county_code, OLD.join_url, OLD.link);
+    v_content_changed boolean;
 BEGIN
+    IF NEW.county_code IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.county_code IS DISTINCT FROM OLD.county_code)
+       AND EXISTS (SELECT 1 FROM public.regions r WHERE r.code = NEW.county_code AND r.kind <> 'county') THEN
+        RAISE EXCEPTION 'events: an event''s county is one of the counties, not a country'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    IF TG_OP = 'INSERT' THEN
+        RETURN NEW;
+    END IF;
+    v_content_changed := (NEW.title, NEW.description, NEW.starts_at, NEW.ends_at, NEW.online, NEW.venue,
+                          NEW.county_code, NEW.join_url, NEW.link)
+                         IS DISTINCT FROM (OLD.title, OLD.description, OLD.starts_at, OLD.ends_at, OLD.online,
+                                           OLD.venue, OLD.county_code, OLD.join_url, OLD.link);
     IF (NEW.id, NEW.org_id, NEW.created_by, NEW.created_at)
        IS DISTINCT FROM (OLD.id, OLD.org_id, OLD.created_by, OLD.created_at) THEN
         RAISE EXCEPTION 'events: an event''s organisation, poster and creation time never change'
@@ -682,7 +695,7 @@ TRIGGER_FUNCTIONS = ("events_guard()", "trend_cards_guard()", "trend_card_source
 
 TRIGGERS_SQL = r"""
 CREATE TRIGGER events_guard
-    BEFORE UPDATE ON events
+    BEFORE INSERT OR UPDATE ON events
     FOR EACH ROW EXECUTE FUNCTION events_guard();
 CREATE TRIGGER trend_cards_guard
     BEFORE UPDATE ON trend_cards

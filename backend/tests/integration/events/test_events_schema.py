@@ -50,7 +50,7 @@ async def test_an_event_is_online_or_somewhere_short_and_its_urls_are_https(owne
     join URL and neither venue nor county, or at a venue in a county without a join URL; it ends after it starts and at
     most three days later; https URLs on an ASCII host without user info or whitespace (400 characters at most); a
     title of 1 to 120 characters and a description of 1 to 1,000 (line breaks allowed, other control characters not);
-    a venue of 1 to 160 in a known county."""
+    a venue of 1 to 160 in a known county, never the country (for every role, on insert and on edit)."""
     async with t.as_app(owner_engine) as conn:
         p = await people(conn)
         now, kisumu = await clock(conn), await county(conn)
@@ -83,6 +83,7 @@ async def test_an_event_is_online_or_somewhere_short_and_its_urls_are_https(owne
             ({"description": "A bell\x07"}, "description_valid"),
             (here | {"venue": "v" * 161}, "venue_valid"),
             (here | {"county": "XX-0000"}, "fk_events_county_code_regions"),
+            (here | {"county": "KE"}, "county is one of the counties, not a country"),  # the country
         )
         for overrides, constraint in cases:
             await t.expect(conn, POST, constraint, **event(p.org, p.reviewer, now, **overrides))
@@ -93,6 +94,13 @@ async def test_an_event_is_online_or_somewhere_short_and_its_urls_are_https(owne
         )
         for overrides in accepted:
             await t.run(conn, POST, **event(p.org, p.reviewer, now, **overrides))
+        draft = event(p.org, p.reviewer, now, **here)
+        await t.run(conn, POST, **draft)
+        country = "UPDATE events SET county_code = 'KE' WHERE id = :id"
+        await t.expect(conn, country, "one of the counties", id=draft["id"])  # the poster's edit
+        await t.as_owner(conn)  # every role
+        await t.expect(conn, country, "one of the counties", id=draft["id"])
+        await t.expect(conn, POST, "one of the counties", **event(p.org, p.reviewer, now, **(here | {"county": "KE"})))
 
 
 async def test_editors_and_staff_admins_post_drafts_and_nobody_else_does(owner_engine: AsyncEngine) -> None:
