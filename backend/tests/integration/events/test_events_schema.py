@@ -468,15 +468,16 @@ async def test_a_developer_reminds_themselves_of_published_events_only(owner_eng
         await t.expect(
             conn, "UPDATE event_reminders SET event_id = :e WHERE user_id = :u", DENIED, e=running, u=p.developer
         )
-        for user, org in (
+        readers: tuple[tuple[UUID | None, UUID | None], ...] = (
             (p.other, None),
             (p.viewer, p.org),
             (p.reviewer, p.org),
             (p.admin, None),
             (p.moderator, None),
             (None, None),
-        ):
-            await t.act(conn, user, org)
+        )
+        for reader, scope in readers:
+            await t.act(conn, reader, scope)
             assert (
                 await t.run(
                     conn, "SELECT count(*) FROM event_reminders WHERE event_id = ANY(:ids)", ids=[live, running]
