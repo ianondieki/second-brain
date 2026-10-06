@@ -6,6 +6,7 @@ definers, and signed-in clients of the in-process API."""
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
@@ -255,3 +256,45 @@ async def audit_actions(db: WeekDb, subject: UUID) -> list[Any]:
         " WHERE subject_id = :s ORDER BY occurred_at, seq",
         s=subject,
     )
+
+
+def trend_source(**overrides: Any) -> dict[str, Any]:
+    """One trend source as the job sends it (dates before any day the module's clock reaches)."""
+    found = {
+        "url": "https://github.blog/changelog/2026-10-02-npm-trusted-publishing",
+        "publisher": "GitHub",
+        "published_date": "2026-10-02",
+        "retrieved_at": "2026-10-06",
+        "quote": "Unvalidated npm trusted publishing configurations now expire 48 hours after creation.",
+        "excerpt_ref": "tr-sec-001",
+        "support": "now expire 48 hours after creation",
+    }
+    return found | overrides
+
+
+async def trend_card(
+    db: WeekDb,
+    admin: UUID | None,
+    *,
+    title: str = "npm trusted publishing setups now expire",
+    summary: str = "Unvalidated npm trusted publishing configurations now expire 48 hours after creation. Maintainers"
+    " should validate a new setup soon after creating it.",
+    named_orgs: tuple[str, ...] = (),
+    decision: str | None = "publish",
+    sources: tuple[dict[str, Any], ...] | None = None,
+) -> UUID:
+    """A trend card through ``app_create_trend_candidate`` (as the owner: no user bound), decided by ``admin`` through
+    ``app_decide_trend_card`` unless ``decision`` is None."""
+    card = {"title": title, "summary": summary, "topic_slug": "security", "confidence": 0.8, "named_orgs": named_orgs}
+    async with db.owner.begin() as conn:
+        found = await conn.execute(
+            text("SELECT app_create_trend_candidate(CAST(:c AS jsonb), CAST(:s AS jsonb))"),
+            {"c": json.dumps(card), "s": json.dumps(list(sources or (trend_source(),)))},
+        )
+        card_id = UUID(str(found.scalar_one()))
+    if decision is not None and admin is not None:
+        async with create_session_factory(db.app)() as session:
+            await bind_tenant(session, user_id=admin)
+            await session.execute(text("SELECT app_decide_trend_card(:c, :d)"), {"c": card_id, "d": decision})
+            await session.commit()
+    return card_id
