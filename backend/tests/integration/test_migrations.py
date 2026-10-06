@@ -208,7 +208,8 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     "saved_searches": {"name", "alerts", "last_alerted_at"},
     # revision 0009: a developer's quiz settings and streak (never the key or its time)
     "quiz_profiles": {"leaderboard_opt_in", "current_streak", "best_streak", "last_played_on"},
-    # revision 0010: the poster edits a draft event's content (never its status, decision, organisation or poster)
+    # revision 0010: the poster edits a draft event's content (never its status, decision, organisation, poster or
+    # updated_at: events_guard sets it)
     "events": {
         "title",
         "description",
@@ -219,7 +220,6 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "county_code",
         "join_url",
         "link",
-        "updated_at",
     },
 }
 APP_GRANTS: dict[str, set[str]] = {

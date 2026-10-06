@@ -15,7 +15,7 @@ role, so staff decide and never read as developers):
 
 - ``events`` (PUBLISHED: an organisation's when ``org_id`` is set, the platform's otherwise; bridge_app: SELECT of
   every column but ``decided_by``, INSERT of ``id``, ``org_id``, ``created_by`` and the content columns, UPDATE of the
-  content columns and ``updated_at``; no DELETE). Readers: staff admin and moderator every event; a developer the
+  content columns only; no DELETE). Readers: staff admin and moderator every event; a developer the
   published ones; an active member of the organisation (narrowed by ``app.org_id``) its events in any status; nobody
   else any (organisation-only accounts read no other organisation's events, and no session without a user reads
   any). Writers: an editor of the organisation (owner, admin, signatory or reviewer, the Briefs' editors; narrowed by
@@ -26,7 +26,9 @@ role, so staff decide and never read as developers):
   from ``published`` to ``cancelled`` (``app_cancel_event``), with ``decided_by``/``decided_at`` and
   ``cancelled_at``; ``events_guard`` (BEFORE UPDATE, every role, the owner too) refuses any other status change, any
   change of ``org_id``, ``created_by`` or ``created_at``, a decision column changed without the status, anything
-  else changed with the status, and a content change of an event that is not a draft.
+  else changed with the status, and a content change of an event that is not a draft; and it owns ``updated_at``:
+  the shared clock on every content or status change, whatever was sent, and unchanged otherwise (so a reviewer's
+  ``p_seen`` names exactly the content they read).
   CHECKs: a title of 1 to 120 characters and a description of 1 to 1,000 (no control character; the description may
   hold tabs and line breaks); it ends after it starts and at most 3 days later; online with a join URL and neither
   venue nor county, or in person at a venue (1 to 160) in a county (``regions.code``) without a join URL; ``join_url``
@@ -143,8 +145,7 @@ CARD_READABLE = (
 )
 APP_GRANTS: dict[str, str] = {
     "events": (
-        f"SELECT ({EVENT_READABLE}), INSERT (id, org_id, created_by, {EVENT_CONTENT}),"
-        f" UPDATE ({EVENT_CONTENT}, updated_at)"
+        f"SELECT ({EVENT_READABLE}), INSERT (id, org_id, created_by, {EVENT_CONTENT}), UPDATE ({EVENT_CONTENT})"
     ),
     "event_reminders": "SELECT, INSERT (user_id, event_id), DELETE",
     "trend_cards": f"SELECT ({CARD_READABLE})",
@@ -300,7 +301,7 @@ BEGIN
     END IF;
     UPDATE public.events
        SET status = CASE p_decision WHEN 'publish' THEN 'published' ELSE 'rejected' END,
-           decided_by = public.app_user_id(), decided_at = v_now, updated_at = v_now
+           decided_by = public.app_user_id(), decided_at = v_now
      WHERE id = p_event;
 END;
 $$;
@@ -336,7 +337,7 @@ BEGIN
         RAISE EXCEPTION 'app_cancel_event: only a draft or published event is cancelled (this one is %)', v_status
             USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
-    UPDATE public.events SET status = 'cancelled', cancelled_at = v_now, updated_at = v_now WHERE id = p_event;
+    UPDATE public.events SET status = 'cancelled', cancelled_at = v_now WHERE id = p_event;
 END;
 $$;
 
@@ -560,7 +561,9 @@ $$;
 -- An event's organisation, poster and creation time never change; its status moves only from draft to published,
 -- rejected or cancelled, or from published to cancelled, and a status change changes nothing else (a cancellation
 -- keeps the decision); the decision and cancellation columns change only with the status; only a draft's content
--- changes. For every role (bridge_app's UPDATE is the poster's draft content by grant and policy). SECURITY INVOKER.
+-- changes. updated_at is the database's: the shared clock on every content or status change, whatever was sent, and
+-- unchanged otherwise. For every role (bridge_app's UPDATE is the poster's draft content by grant and policy).
+-- SECURITY INVOKER.
 CREATE FUNCTION events_guard() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog, public, pg_temp
@@ -588,6 +591,7 @@ BEGIN
             RAISE EXCEPTION 'events: a decision or a cancellation changes nothing else of the event'
                 USING ERRCODE = 'check_violation';
         END IF;
+        NEW.updated_at := public.app_clock_now();
         RETURN NEW;
     END IF;
     IF (NEW.decided_by, NEW.decided_at, NEW.cancelled_at)
@@ -598,6 +602,7 @@ BEGIN
     IF OLD.status <> 'draft' AND v_content_changed THEN
         RAISE EXCEPTION 'events: only a draft event is edited' USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
+    NEW.updated_at := CASE WHEN v_content_changed THEN public.app_clock_now() ELSE OLD.updated_at END;
     RETURN NEW;
 END;
 $$;

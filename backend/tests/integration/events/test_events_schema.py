@@ -318,11 +318,19 @@ async def test_no_status_moves_but_the_definers_and_only_the_posters_draft_is_ed
         draft = await post(conn, p.org, p.reviewer, now)
         live = await published(conn, p, now)
         await t.act(conn, p.reviewer, p.org)
-        for assignment in ("status = 'published'", "decided_at = now()", "cancelled_at = now()", "org_id = NULL"):
+        for assignment in (
+            "status = 'published'",
+            "decided_at = now()",
+            "cancelled_at = now()",
+            "org_id = NULL",
+            "updated_at = '2000-01-01'",
+        ):
             await t.expect(conn, f"UPDATE events SET {assignment} WHERE id = :id", DENIED, id=draft)
         await t.expect(conn, "DELETE FROM events WHERE id = :id", DENIED, id=draft)
-        edit = "UPDATE events SET title = :title, updated_at = app_clock_now() WHERE id = :id"
+        edit = "UPDATE events SET title = :title WHERE id = :id"
+        seen = await t.run(conn, "SELECT updated_at FROM events WHERE id = :id", id=draft)
         assert await t.rowcount(conn, edit, title="Edited title", id=draft) == 1
+        assert await t.run(conn, "SELECT updated_at FROM events WHERE id = :id", id=draft) > seen  # the database's
         assert await t.rowcount(conn, edit, title="Edited title", id=live) == 0  # published: the policy
         await t.expect(conn, "UPDATE events SET online = false WHERE id = :id", "place_valid", id=draft)
         await t.act(conn, p.owner, p.org)  # an editor of the organisation who did not post it
@@ -356,6 +364,14 @@ async def test_no_status_moves_but_the_definers_and_only_the_posters_draft_is_ed
         for assignment, event_id, match in guard:
             await t.expect(conn, f"UPDATE events SET {assignment} WHERE id = :id", match, id=event_id)
         assert await t.rowcount(conn, "UPDATE events SET title = 'Owner edit' WHERE id = :id", id=draft) == 1
+        # updated_at is the database's for every role: a supplied value is overwritten with the shared clock on a
+        # content change and ignored without one
+        backdate = "UPDATE events SET title = :title, updated_at = '2000-01-01' WHERE id = :id RETURNING updated_at"
+        moved = await t.run(conn, backdate, title="Backdated?", id=draft)
+        assert abs(moved - now) < timedelta(minutes=5)
+        alone = "UPDATE events SET updated_at = '2000-01-01' WHERE id = :id RETURNING updated_at"
+        assert await t.run(conn, alone, id=draft) == moved
+        assert await t.run(conn, backdate, title="Backdated?", id=draft) == moved  # no change: kept
 
 
 async def test_a_developer_reminds_themselves_of_published_events_only(owner_engine: AsyncEngine) -> None:

@@ -26,7 +26,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Text, func, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bridge.models.base import Base, IdMixin, Tenancy
@@ -81,9 +81,11 @@ DECISION_COMPLETE = (
 class Event(IdMixin, Base):
     """A technology event posted by an organisation's editor (``org_id``) or a staff admin (``org_id`` NULL: the
     platform). bridge_app inserts ``id``, ``org_id``, ``created_by`` (the caller) and the content columns as a draft
-    (``status`` is the database's default), updates the content columns and ``updated_at`` of its own draft only, and
-    never deletes; decisions and cancellations only through ``app_decide_event`` and ``app_cancel_event``. The E2
-    verification of the posting organisation is the application's check (as for Briefs), not the database's."""
+    (``status`` is the database's default), updates the content columns of its own draft only, and never deletes;
+    ``updated_at`` is the database's (``events_guard``: the shared clock on every content or status change, never
+    what was sent; read it back). Decisions and cancellations only through ``app_decide_event`` and
+    ``app_cancel_event``. The E2 verification of the posting organisation is the application's check (as for Briefs),
+    not the database's."""
 
     __tablename__ = "events"
     __table_args__ = (
@@ -119,9 +121,7 @@ class Event(IdMixin, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("app_clock_now()"), onupdate=func.app_clock_now()
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
 
 
 class EventReminder(Base):
