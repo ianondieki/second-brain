@@ -24,7 +24,7 @@ POST = (
     " join_url, link) VALUES (:id, :org, :by, :title, :description, :starts, :ends, :online, :venue, :county,"
     " :join_url, :link)"
 )
-DECIDE = "SELECT app_decide_event(:event, :decision)"
+DECIDE = "SELECT app_decide_event(:event, :decision, :seen)"
 CANCEL = "SELECT app_cancel_event(:event)"
 REMIND = "INSERT INTO event_reminders (user_id, event_id) VALUES (:user, :event)"
 DUE = "SELECT user_id, event_id FROM app_event_reminders_due(:now)"
@@ -142,9 +142,18 @@ async def post(conn: AsyncConnection, org: UUID | None, by: UUID, now: datetime,
     return UUID(str(params["id"]))
 
 
+async def seen_of(conn: AsyncConnection, event_id: UUID) -> datetime:
+    """As the owner: the event's updated_at, the version a reviewer reads."""
+    await t.as_owner(conn)
+    seen: datetime = await t.run(conn, "SELECT updated_at FROM events WHERE id = :id", id=event_id)
+    return seen
+
+
 async def decide(conn: AsyncConnection, staff: UUID, event_id: UUID, decision: str = "publish") -> None:
+    """As ``staff``: decide the event as it is now (the version they reviewed)."""
+    seen = await seen_of(conn, event_id)
     await t.act(conn, staff)
-    await t.run(conn, DECIDE, event=event_id, decision=decision)
+    await t.run(conn, DECIDE, event=event_id, decision=decision, seen=seen)
 
 
 async def published(conn: AsyncConnection, p: People, now: datetime, **overrides: Any) -> UUID:

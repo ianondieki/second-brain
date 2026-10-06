@@ -65,11 +65,13 @@ rotation); ``uq_trend_card_sources_card_id_position`` serves a card's sources.
 Functions (SECURITY DEFINER unless noted; pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_app where
 listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself):
 
-- ``app_decide_event(event, decision)``: staff admin or moderator (insufficient_privilege); ``publish`` or ``reject``
-  (invalid_parameter_value); an unknown event no_data_found; an event that is not a draft, and ``publish`` of an
-  event that has ended (``ends_at <= app_clock_now()``; "the event is over", the app's 409 ``event_over``; it may
-  still be rejected), object_not_in_prerequisite_state. Locks the event FOR UPDATE; sets the status, ``decided_by``
-  (the caller) and ``decided_at`` (the shared clock).
+- ``app_decide_event(event, decision, seen)``: staff admin or moderator (insufficient_privilege); ``publish`` or
+  ``reject`` and the ``updated_at`` the reviewer read (invalid_parameter_value when NULL); an unknown event
+  no_data_found. Locks the event FOR UPDATE, then refuses (object_not_in_prerequisite_state) an event that is not a
+  draft, one whose ``updated_at`` is not ``seen`` ("the event changed since it was reviewed", the app's 409
+  ``changed_since_review``: the poster edited it after the reviewer read it; for both decisions) and ``publish`` of
+  an event that has ended (``ends_at <= app_clock_now()``; "the event is over", the app's 409 ``event_over``; it
+  may still be rejected). Sets the status, ``decided_by`` (the caller) and ``decided_at`` (the shared clock).
 - ``app_cancel_event(event)``: staff admin or moderator, or an editor of the event's organisation (narrowed by
   ``app.org_id``); the staff admin who posted a platform event is staff. One refusal (insufficient_privilege, "no
   event the caller may cancel with that id") for an unknown event and for any other caller, so it tells nobody that a
@@ -103,6 +105,9 @@ Operating rules for the code that uses this schema:
   (deferred with raiseload): who decided is in the audit event the app writes in the decision's transaction.
 - Decisions and cancellations only through ``app_decide_event``, ``app_cancel_event`` and ``app_decide_trend_card``
   (the app writes the audit event in the same transaction; insufficient_privilege from ``app_cancel_event`` is 404).
+  The staff review screen carries the event's ``updated_at`` as read and sends it back as ``p_seen``; map "changed
+  since it was reviewed" to 409 ``changed_since_review`` (reload and review again) and "the event is over" to 409
+  ``event_over``.
   Serve the ``.ics`` and the Google link for published events only (read under the caller's RLS).
 - Remind me: INSERT (user_id, event_id) as the developer (the policy's refusal of a draft, cancelled or past event is
   409 or 404; a repeat is the primary key's unique violation, or ``ON CONFLICT DO NOTHING``); Decline is a DELETE.
@@ -270,15 +275,17 @@ POLICIES: tuple[Policy, ...] = (
 
 FUNCTIONS_SQL = r"""
 -- A staff admin or moderator publishes or rejects a draft event once (D-60: nothing unmoderated is shown), as
--- themselves, at the shared clock; an event that has ended is never published (it may be rejected). The app writes
--- the audit event in the same transaction.
-CREATE FUNCTION app_decide_event(p_event uuid, p_decision text) RETURNS void
+-- themselves, at the shared clock, on exactly the content they reviewed: p_seen is the updated_at they read (the
+-- database's, events_guard), and a draft edited since is refused under the row lock; an event that has ended is
+-- never published (it may be rejected). The app writes the audit event in the same transaction.
+CREATE FUNCTION app_decide_event(p_event uuid, p_decision text, p_seen timestamptz) RETURNS void
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
     v_status text;
     v_ends timestamptz;
+    v_updated timestamptz;
     v_now timestamptz := public.app_clock_now();
 BEGIN
     IF NOT public.app_is_staff('{admin,moderator}') THEN
@@ -287,12 +294,21 @@ BEGIN
     IF p_decision IS NULL OR p_decision NOT IN ('publish', 'reject') THEN
         RAISE EXCEPTION 'app_decide_event: the decision is publish or reject' USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    SELECT e.status, e.ends_at INTO v_status, v_ends FROM public.events e WHERE e.id = p_event FOR UPDATE;
+    IF p_seen IS NULL THEN
+        RAISE EXCEPTION 'app_decide_event: name the updated_at the reviewer read'
+            USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    SELECT e.status, e.ends_at, e.updated_at INTO v_status, v_ends, v_updated
+      FROM public.events e WHERE e.id = p_event FOR UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'app_decide_event: no event with that id' USING ERRCODE = 'no_data_found';
     END IF;
     IF v_status <> 'draft' THEN
         RAISE EXCEPTION 'app_decide_event: only a draft event is decided (this one is %)', v_status
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    IF v_updated IS DISTINCT FROM p_seen THEN  -- the app's 409 changed_since_review, for both decisions
+        RAISE EXCEPTION 'app_decide_event: the event changed since it was reviewed'
             USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
     IF p_decision = 'publish' AND v_ends <= v_now THEN  -- the app's 409 event_over; a reject is still allowed
@@ -655,7 +671,7 @@ $$;
 
 # EXECUTE grants (EXECUTE revoked from PUBLIC first): a policy runs its functions with the caller's privileges.
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
-    "app_decide_event(uuid, text)": ("bridge_app",),  # staff admin or moderator
+    "app_decide_event(uuid, text, timestamp with time zone)": ("bridge_app",),  # staff admin or moderator
     "app_cancel_event(uuid)": ("bridge_app",),  # staff, or an editor of the event's organisation
     "app_event_reminders_due(timestamp with time zone)": ("bridge_app",),  # the reminder job, no user bound
     "app_create_trend_candidate(jsonb, jsonb)": ("bridge_app",),  # the trend job (no user bound) or staff admin

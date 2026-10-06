@@ -39,6 +39,7 @@ from tests.integration.events.schema_world import (
     people,
     post,
     published,
+    seen_of,
     status_of,
     visible,
 )
@@ -200,32 +201,34 @@ async def test_staff_decide_a_draft_once(owner_engine: AsyncEngine) -> None:
         p = await people(conn)
         now = await clock(conn)
         first = await post(conn, p.org, p.reviewer, now)
+        seen = await seen_of(conn, first)
         for user, org in ((p.developer, None), (p.owner, p.org), (p.reviewer, p.org), (None, None)):
             await t.act(conn, user, org)
-            await t.expect(conn, DECIDE, "staff admin or moderator only", event=first, decision="publish")
+            await t.expect(conn, DECIDE, "staff admin or moderator only", event=first, decision="publish", seen=seen)
         await t.act(conn, p.moderator)
-        await t.expect(conn, DECIDE, "the decision is publish or reject", event=first, decision="published")
-        await t.expect(conn, DECIDE, "the decision is publish or reject", event=first, decision=None)
-        await t.expect(conn, DECIDE, "no event with that id", event=uuid7(), decision="publish")
-        await t.run(conn, DECIDE, event=first, decision="publish")
+        bad = "the decision is publish or reject"
+        await t.expect(conn, DECIDE, bad, event=first, decision="published", seen=seen)
+        await t.expect(conn, DECIDE, bad, event=first, decision=None, seen=seen)
+        await t.expect(conn, DECIDE, "name the updated_at", event=first, decision="publish", seen=None)
+        await t.expect(conn, DECIDE, "no event with that id", event=uuid7(), decision="publish", seen=seen)
+        await t.run(conn, DECIDE, event=first, decision="publish", seen=seen)
         decided = await status_of(conn, first)
         assert (decided.status, decided.decided_by, decided.cancelled_at) == ("published", p.moderator, None)
         assert abs(decided.decided_at - now) < timedelta(minutes=5)  # the shared clock
+        after = await seen_of(conn, first)
+        assert after > seen  # the decision moved updated_at (events_guard)
         await t.act(conn, p.admin)
-        await t.expect(
-            conn, DECIDE, r"only a draft event is decided \(this one is published\)", event=first, decision="reject"
-        )
+        published_once = r"only a draft event is decided \(this one is published\)"
+        await t.expect(conn, DECIDE, published_once, event=first, decision="reject", seen=after)
         second = await post(conn, p.org, p.owner, now)
-        await t.act(conn, p.admin)
-        await t.run(conn, DECIDE, event=second, decision="reject")
+        await decide(conn, p.admin, second, "reject")
         assert ((await status_of(conn, second)).status, (await status_of(conn, second)).decided_by) == (
             "rejected",
             p.admin,
         )
         await t.act(conn, p.moderator)
-        await t.expect(
-            conn, DECIDE, r"only a draft event is decided \(this one is rejected\)", event=second, decision="publish"
-        )
+        rejected_once = r"only a draft event is decided \(this one is rejected\)"
+        await t.expect(conn, DECIDE, rejected_once, event=second, decision="publish", seen=after)
 
 
 async def test_an_event_that_has_ended_is_never_published(owner_engine: AsyncEngine) -> None:
@@ -237,9 +240,11 @@ async def test_an_event_that_has_ended_is_never_published(owner_engine: AsyncEng
         now = await clock(conn)
         hour = timedelta(hours=1)
         ended = await post(conn, p.org, p.reviewer, now, starts=now - 3 * hour, ends=now - timedelta(seconds=1))
+        seen = await seen_of(conn, ended)
+        over = "the event is over, so it is never published"
         for staff in (p.moderator, p.admin):
             await t.act(conn, staff)
-            await t.expect(conn, DECIDE, "the event is over, so it is never published", event=ended, decision="publish")
+            await t.expect(conn, DECIDE, over, event=ended, decision="publish", seen=seen)
         assert (await status_of(conn, ended)).status == "draft"
         await decide(conn, p.moderator, ended, "reject")
         assert ((await status_of(conn, ended)).status, (await status_of(conn, ended)).decided_by) == (
@@ -250,6 +255,33 @@ async def test_an_event_that_has_ended_is_never_published(owner_engine: AsyncEng
             event_id = await post(conn, p.org, p.reviewer, now, starts=starts, ends=ends)
             await decide(conn, p.admin, event_id)
             assert (await status_of(conn, event_id)).status == "published"
+
+
+async def test_a_decision_is_on_the_version_the_reviewer_read(owner_engine: AsyncEngine) -> None:
+    """Review MAJOR 1: ``app_decide_event`` decides only the content the reviewer read. A draft its poster edited after
+    the reviewer read it (its ``updated_at``) is neither published nor rejected with the old reading ("the event changed
+    since it was reviewed", the app's 409 ``changed_since_review``), nor with any other time; with the current reading
+    it is published, and the edited content is what is published."""
+    async with t.as_app(owner_engine) as conn:
+        p = await people(conn)
+        now = await clock(conn)
+        draft = await post(conn, p.org, p.reviewer, now)
+        read = await seen_of(conn, draft)
+        await t.act(conn, p.reviewer, p.org)  # the poster edits after the moderator read it
+        assert await t.rowcount(conn, "UPDATE events SET title = 'Bait and switch' WHERE id = :id", id=draft) == 1
+        changed = "the event changed since it was reviewed"
+        await t.act(conn, p.moderator)
+        for decision in ("publish", "reject"):
+            await t.expect(conn, DECIDE, changed, event=draft, decision=decision, seen=read)
+        assert (await status_of(conn, draft)).status == "draft"
+        current = await seen_of(conn, draft)
+        assert current > read
+        await t.act(conn, p.moderator)
+        for other in (current + timedelta(microseconds=1), current - timedelta(microseconds=1)):
+            await t.expect(conn, DECIDE, changed, event=draft, decision="publish", seen=other)
+        await t.run(conn, DECIDE, event=draft, decision="publish", seen=current)
+        decided = await status_of(conn, draft)
+        assert (decided.status, decided.title, decided.decided_by) == ("published", "Bait and switch", p.moderator)
 
 
 async def test_staff_and_the_organisations_editors_cancel_drafts_and_published_events(

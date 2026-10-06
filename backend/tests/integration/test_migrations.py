@@ -509,7 +509,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "quiz_attempts_score()": (True, set()),  # reads the answers
     "quiz_attempts_guard()": (False, set()),
     # revision 0010: events and trend cards (triggers and internal functions: nobody)
-    "app_decide_event(uuid, text)": (True, {"bridge_app"}),  # staff admin or moderator
+    "app_decide_event(uuid, text, timestamp with time zone)": (True, {"bridge_app"}),  # staff admin or moderator
     "app_cancel_event(uuid)": (True, {"bridge_app"}),  # staff, or an editor of the event's organisation
     "app_event_reminders_due(timestamp with time zone)": (True, {"bridge_app"}),  # the reminder job, no user bound
     "trend_source_is_valid(jsonb)": (False, set()),  # app_create_trend_candidate
@@ -1435,7 +1435,7 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
             await expect_error(conn, "SELECT * FROM app_reported_message(uuid7())", "staff admin or moderator only")
             # revision 0010: the event and trend definers, each refused to a signed-in non-staff caller
             for call, refusal in (
-                ("SELECT app_decide_event(uuid7(), 'publish')", "staff admin or moderator only"),
+                ("SELECT app_decide_event(uuid7(), 'publish', now())", "staff admin or moderator only"),
                 ("SELECT app_cancel_event(uuid7())", "no event the caller may cancel"),
                 ("SELECT count(*) FROM app_event_reminders_due(now())", "the event reminder job only"),
                 ("SELECT app_create_trend_candidate('{}', '[]')", "the trend job with no user bound"),
