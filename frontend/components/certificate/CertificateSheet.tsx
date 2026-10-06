@@ -24,6 +24,8 @@ export interface CertificateSheetProps {
   fingerprint?: string | null;
   /** The seal's ring draws once on the owner's page; still everywhere else. */
   animate?: boolean;
+  /** The contributors' handles (D-62 (a): "Contributors: <handles>", read at render time, never part of the record). */
+  contributors?: readonly string[];
 }
 
 /**
@@ -31,7 +33,18 @@ export interface CertificateSheetProps {
  * the certificate id, the registration time, the evidence status, the fingerprint when known, and a QR to the public
  * verify page. Printable: `data-print-sheet` keeps it alone on paper (app/globals.css).
  */
-export async function CertificateSheet({ title, ownerName, versionNo, certId, registeredAt, stamped, verifyUrl, fingerprint, animate = false }: CertificateSheetProps) {
+export async function CertificateSheet({
+  title,
+  ownerName,
+  versionNo,
+  certId,
+  registeredAt,
+  stamped,
+  verifyUrl,
+  fingerprint,
+  animate = false,
+  contributors = [],
+}: CertificateSheetProps) {
   const t = await getTranslations("ideas.sheet");
   const locale = await getLocale();
   const qr = encode(verifyUrl, { ecc: "M" }).data;
@@ -45,6 +58,11 @@ export async function CertificateSheet({ title, ownerName, versionNo, certId, re
             <p className="mt-4 text-sm font-medium text-ink-soft">{t("title")}</p>
             <h3 className="mt-1 font-display text-xl font-medium text-ink [overflow-wrap:anywhere]">{title}</h3>
             <p className="mt-1 text-ink-soft">{t("registeredBy", { name: ownerName, number: versionNo })}</p>
+            {contributors.length > 0 ? (
+              <p className="mt-1 text-ink-soft [overflow-wrap:anywhere]" data-certificate-contributors="">
+                {t("contributors", { handles: new Intl.ListFormat(locale, { type: "conjunction" }).format(contributors) })}
+              </p>
+            ) : null}
           </div>
           <Seal size={104} animate={animate} className="hidden sm:block" />
         </div>

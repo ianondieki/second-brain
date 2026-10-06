@@ -39,6 +39,7 @@ export async function Certificate({ idea, ownerName }: { idea: MyProposal; owner
             registeredAt={current.registered_at}
             stamped={stamped}
             verifyUrl={verifyAddress(certId)}
+            contributors={idea.contributors}
             animate
           />
           <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2" data-no-print="">
