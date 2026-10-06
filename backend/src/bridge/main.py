@@ -31,6 +31,7 @@ from bridge.directory.router import router as directory_router
 from bridge.engagements.interest_router import router as interest_router
 from bridge.engagements.messages_router import router as messages_router
 from bridge.engagements.router import router as engagements_router
+from bridge.events.router import router as events_router
 from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
 from bridge.llm.embeddings import embedder_from_settings
@@ -171,6 +172,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(notifications_router)
     app.include_router(preferences_router)
     app.include_router(quiz_router)
+    app.include_router(events_router)
     clock_router = dev_clock_router(settings)
     if clock_router is not None:
         app.include_router(clock_router)
