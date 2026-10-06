@@ -153,7 +153,12 @@ describe("the composer", () => {
     );
     const { calls } = renderComposer(LIMITS, fakeCalls({ uploadFile }));
     fireEvent.change(document.querySelector("input[type=file]")!, { target: { files: [new File(["%PDF"], "a.pdf", { type: "application/pdf" })] } });
-    const row = document.querySelector<HTMLElement>("[data-pending-file='a.pdf']")!;
+    // The file's row appears once the files' code has loaded (./attach.ts, ./PendingRows.tsx load on first use).
+    const row = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-pending-file='a.pdf']");
+      expect(found).not.toBeNull();
+      return found!;
+    });
     await waitFor(() => expect(row.textContent).toContain("Uploading 30%"));
     expect(within(row).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("30");
     fireEvent.change(screen.getByLabelText("Your message"), { target: { value: "Hi" } });

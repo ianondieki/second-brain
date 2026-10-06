@@ -133,6 +133,7 @@ export type PostRefusal =
   | "tooMany"
   | "conflict"
   | "network"
+  | "attachFailed"
   | "generic";
 
 /** Refusals that are about what was typed: said on the text box itself. */
