@@ -152,7 +152,12 @@ export function PeerList({ initial, niches, relations = {}, locale, calls: given
                       type="button"
                       className={`${overflowItemClass} text-error`}
                       aria-haspopup="dialog"
-                      onClick={() => {
+                      onClick={(event) => {
+                        // The menu closes and its button takes focus before the dialog opens, so Cancel or Escape give
+                        // focus back to the row's menu button (this item is hidden once the menu closes).
+                        const menu = event.currentTarget.closest("details");
+                        if (menu) menu.open = false;
+                        menu?.querySelector("summary")?.focus();
                         setBlockState("idle");
                         setBlocking(peer);
                       }}

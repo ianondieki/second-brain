@@ -137,6 +137,43 @@ describe("the peers list", () => {
     await waitFor(() => expect(document.activeElement).toBe(status));
   });
 
+  // P22-CF UX round 2: the Block item is hidden once its menu closes, so Cancel and Escape give focus to the menu's button.
+  it.each(["Cancel", "Escape"])("Block then %s gives focus back to the row's menu button, with the menu closed", async (how) => {
+    renderWithIntl(<PeerList initial={{ peers: [peer()], next: null, opted_in: true }} niches={NICHES} locale="en" calls={fakeCalls()} />);
+    const menu = rowOf("dev-kb3dysnk").querySelector("[data-peer-menu]") as HTMLDetailsElement;
+    const summary = menu.querySelector("summary") as HTMLElement;
+    menu.open = true;
+    const item = menu.querySelector("[data-block]") as HTMLElement;
+    item.focus();
+    // What had focus as the dialog opened is what it gives focus back to (ConfirmDialog's opener).
+    const showModal = HTMLDialogElement.prototype.showModal;
+    let opener: Element | null = null;
+    HTMLDialogElement.prototype.showModal = function record(this: HTMLDialogElement) {
+      opener = document.activeElement;
+      showModal.call(this);
+    };
+    // In a browser React opens the dialog before the page's document listener closes the menu; keep that listener
+    // out so the item itself must close the menu and move focus first.
+    const stop = (event: Event) => event.stopPropagation();
+    document.body.addEventListener("click", stop);
+    try {
+      fireEvent.click(item);
+    } finally {
+      HTMLDialogElement.prototype.showModal = showModal;
+      document.body.removeEventListener("click", stop);
+    }
+    const dialog = screen.getByRole("dialog", { name: "Block dev-kb3dysnk?" });
+    expect(opener).toBe(summary);
+    expect(menu.open).toBe(false);
+    if (how === "Cancel") fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    else {
+      // A modal dialog's Escape: the browser fires cancel, then closes it (jsdom does neither).
+      fireEvent.keyDown(dialog, { key: "Escape" });
+      (dialog as HTMLDialogElement).close();
+    }
+    await waitFor(() => expect(document.activeElement).toBe(summary));
+  });
+
   it("a failed block stays in the dialog with one sentence", async () => {
     renderWithIntl(
       <PeerList initial={{ peers: [peer()], next: null, opted_in: true }} niches={NICHES} locale="en" calls={fakeCalls({ block: vi.fn(async () => ({ ok: false as const })) })} />,

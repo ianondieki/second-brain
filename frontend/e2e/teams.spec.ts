@@ -140,6 +140,24 @@ test.describe("Peers and team up", () => {
       await expect(row.locator("[data-peer-menu] [data-block]")).toBeHidden();
       await checkWidths(page, info);
       await shot(page, info, "teams-peers");
+      // Block, then Cancel (mouse) or Escape (keyboard): focus goes back to the row's menu button, the menu closed.
+      const rowMenu = row.locator("[data-peer-menu] summary");
+      const confirmBlock = page.getByRole("dialog", { name: `Block ${handleB}?` });
+      await rowMenu.click();
+      await row.locator("[data-peer-menu] [data-block]").click();
+      await expect(confirmBlock).toBeVisible();
+      await confirmBlock.getByRole("button", { name: "Cancel" }).click();
+      await expect(confirmBlock).toBeHidden();
+      await expect(rowMenu).toBeFocused();
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Tab");
+      await expect(row.locator("[data-peer-menu] [data-block]")).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(confirmBlock).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(confirmBlock).toBeHidden();
+      await expect(rowMenu).toBeFocused();
+      await expect(row.locator("[data-peer-menu]")).not.toHaveAttribute("open");
 
       // A invites B on a published problem, found by its words.
       const problems = (await (await page.request.get("/api/problems?limit=1")).json()) as { items: Array<{ id: string; title: string }> };
