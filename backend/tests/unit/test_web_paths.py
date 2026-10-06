@@ -33,10 +33,12 @@ NOT_PAGES = {
     "/assistant": "a request path's segment that proposals/access.py tests",
     "/{}": "a tracker command the demo seed posts to the API (seed/demo/engagements.py)",
 }
-# Links to pages this branch's web app does not have: each is a known gap, reported, never a new one. Empty since P16
-# built /settings/notifications and /help (every email footer); /billing/upgrade (P14-F) and /org/inbox/matches/{id}
-# (P10-F) were pages already. An entry that has become a page fails the test, so the list never goes stale.
-PAGES_NOT_BUILT: dict[str, str] = {}
+# Links to pages this branch's web app does not have: each is a known gap, reported, never a new one. Empty from P16
+# (which built /settings/notifications and /help, every email footer) until P22-B's backend landed before its screens
+# (P22-BF). An entry that has become a page fails the test, so the list never goes stale.
+PAGES_NOT_BUILT: dict[str, str] = {
+    "/dev/events/{}": "the event page N27 links to; P22-BF builds it (REQ-DEV-02)",
+}
 
 
 def routes() -> list[re.Pattern[str]]:
