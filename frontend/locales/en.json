@@ -25,7 +25,8 @@
     "reviewP20org": "[[COPY-REVIEW]] P20-4 (REQ-UX-01..04, the organisation portal and the tracker in Jacaranda): tracker.deadline.left and tracker.deadline.overdue (the whose-turn banner's countdown: the number is the n tag, drawn as a large figure, with the words beside it), tracker.deadline.due and tracker.deadline.was (the date under it); the full sentence tracker.due.* is still what screen readers hear; tracker.milestone.total (the agreement's milestone total, summed from the milestones shown).",
     "reviewP21f1": "[[COPY-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03): shortlist.*, scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
     "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\").",
-    "reviewP22a": "[[COPY-REVIEW]] P22-AF (REQ-DEV-01; D-59): quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks"
+    "reviewP22a": "[[COPY-REVIEW]] P22-AF (REQ-DEV-01; D-59): quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks",
+    "reviewP22b": "[[COPY-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61): week.* (Home's This week strip, /dev/week, the event page with Remind me and Add to calendar, the trend page; week.trend.label.* follow problem.label.*), nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; the field sentences of eventForm.fieldError.* follow the backend's own (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed (the reminder email carries none)"
   },
   "app": {
     "name": "Wazo",
@@ -902,7 +903,8 @@
     "companies": "Companies",
     "ideas": "My ideas",
     "engagements": "Engagements",
-    "problems": "Problems"
+    "problems": "Problems",
+    "events": "Events"
   },
   "companies": {
     "pageTitle": "Companies",
@@ -1000,7 +1002,8 @@
       "research": "Research",
       "moderation": "Moderation",
       "claims": "Claims",
-      "quiz": "Quiz"
+      "quiz": "Quiz",
+      "events": "Events"
     },
     "noSection": "Your staff role has no console section yet.",
     "noSectionAction": "Go to your home page"
@@ -1141,6 +1144,61 @@
       "started": "Started",
       "status": "Status",
       "result": "Result"
+    },
+    "trends": {
+      "heading": "Trends",
+      "lead": "Technology trend cards, drafted each week from official publishers. A published card takes its turn as Home's trend of the day.",
+      "empty": "No trend card is waiting for review.",
+      "draftNow": "Draft trends now",
+      "drafting": "Queuing…",
+      "queued": "Queued. New cards appear here in a few minutes; none are drafted while a card is under 6 days old.",
+      "failed": "The run could not be queued. Try again.",
+      "columns": {
+        "card": "Card",
+        "topic": "Topic",
+        "drafted": "Drafted"
+      },
+      "aiDrafted": "AI-drafted",
+      "seeded": "Seeded example",
+      "status": {
+        "candidate": "Waiting",
+        "published": "Published",
+        "rejected": "Rejected"
+      },
+      "review": {
+        "pageTitle": "Trend card",
+        "back": "Research",
+        "sourcesHeading": "Sources",
+        "sourcesLead": "Each quote as the publisher wrote it, with the phrase the card rests on.",
+        "support": "Supports: {value}",
+        "namedOrgs": "Organisations it names",
+        "confidence": "Confidence",
+        "drafted": "Drafted",
+        "topic": "Topic",
+        "decisionHeading": "Decision",
+        "decisionLead": "Publish puts it in the rotation of Home's trend of the day. A rejected card is never published.",
+        "publish": "Publish",
+        "reject": "Reject",
+        "publishing": "Publishing…",
+        "rejecting": "Rejecting…",
+        "rejectTitle": "Reject this card?",
+        "rejectBody": "A rejected card is never published.",
+        "publishTitle": "Publish this card?",
+        "publishBody": "Developers see it on Home in turn, with its sources.",
+        "cancel": "Go back",
+        "published": "Published. Developers see it on Home in turn.",
+        "rejected": "Rejected.",
+        "decided": "This card was decided on {date}.",
+        "gone": "This trend card is not here.",
+        "goneAction": "Back to Research",
+        "newTab": "(opens in a new tab)"
+      },
+      "refusal": {
+        "unsourced_name": "The card names an organisation that no source names, so it cannot be published. Reject it.",
+        "already_decided": "This card was already decided. The page has been read again.",
+        "not_found": "This trend card is no longer here.",
+        "generic": "Something went wrong, so nothing changed. Try again."
+      }
     }
   },
   "adminModeration": {
@@ -3429,5 +3487,250 @@
       "question_not_found": "This question no longer exists.",
       "signedOut": "You were signed out. Sign in again, then try once more."
     }
+  },
+  "week": {
+    "strip": {
+      "title": "This week",
+      "seeAll": "See the week",
+      "empty": "Nothing near you this week. Online events count too.",
+      "listLabel": "Events near you and the trend of the day",
+      "trend": "Trend"
+    },
+    "row": {
+      "when": "{day} · {time}",
+      "online": "Online",
+      "by": "By {organiser}",
+      "reminderSet": "Reminder set"
+    },
+    "page": {
+      "pageTitle": "This week",
+      "title": "This week",
+      "lead": "Events in your county and online, this week and next. Times are in Nairobi time.",
+      "back": "Home",
+      "empty": "Nothing near you this week or next. Online events count too.",
+      "dayCount": "{count, plural, one {# event} other {# events}}",
+      "trendHeading": "Trend of the day"
+    },
+    "event": {
+      "pageTitle": "Event",
+      "back": "This week",
+      "when": "When",
+      "where": "Where",
+      "organiser": "Organiser",
+      "sameDay": "{day}, {start} to {end}",
+      "range": "{start} to {end}",
+      "nairobi": "Nairobi time",
+      "venue": "{venue}, {county}",
+      "online": "Online",
+      "join": "Join online",
+      "newTab": "(opens in a new tab)",
+      "about": "About this event",
+      "link": "The event's own page",
+      "calendarHeading": "Add to calendar",
+      "ics": "Download the .ics file",
+      "google": "Google Calendar"
+    },
+    "reminder": {
+      "heading": "Reminder",
+      "remind": "Remind me",
+      "reminding": "Setting the reminder…",
+      "decline": "Don't remind me",
+      "declining": "Removing the reminder…",
+      "set": "Reminder set.",
+      "removed": "Reminder removed. Nothing will be sent.",
+      "line": {
+        "both": "An email the day before and a notice here on the morning.",
+        "noConsent": "A notice here on the morning. Email reminders are off in <link>Settings</link>.",
+        "unverified": "A notice here on the morning. Verify your email for the email reminder."
+      },
+      "refusal": {
+        "gone": "This event no longer takes reminders.",
+        "signedOut": "Your session has ended. Sign in again to set a reminder.",
+        "generic": "The reminder could not be saved. Try again."
+      }
+    },
+    "trend": {
+      "pageTitle": "Trend",
+      "back": "This week",
+      "label": {
+        "aiDrafted": "Trend · AI-drafted, human-reviewed on {date}",
+        "seeded": "Trend · Seeded example for the demo (not a live AI result), human-reviewed on {date}"
+      },
+      "sourcesHeading": "Sources",
+      "sourcesCount": "{count, plural, one {# source, quoted as published} other {# sources, quoted as published}}",
+      "publishedOn": "Published {date}",
+      "open": "Read it at {publisher}",
+      "newTab": "(opens in a new tab)"
+    }
+  },
+  "eventForm": {
+    "group": {
+      "what": "The event",
+      "when": "When",
+      "where": "Where"
+    },
+    "title": "Title",
+    "titleHint": "One line, at most {max} characters.",
+    "description": "Description",
+    "descriptionHint": "Plain text: what happens, who it is for and what to bring. Developers read it on the event's page.",
+    "meter": "{current} of {max} characters",
+    "whenHint": "Nairobi time. An event lasts at most 3 days.",
+    "starts": "Starts",
+    "ends": "Ends",
+    "date": "Date",
+    "time": "Time",
+    "online": "Online event",
+    "onlineHint": "On: people join at an address instead of a venue.",
+    "joinUrl": "Join address",
+    "joinUrlHint": "The https:// address people join at.",
+    "venue": "Venue",
+    "venueHint": "The place's name and area, at most {max} characters.",
+    "county": "County",
+    "countyChoose": "Choose a county",
+    "link": "The event's own page (optional)",
+    "linkHint": "An https:// address with more details.",
+    "reviewNote": "Staff review every event before developers see it. Then developers in its county, or everyone for an online event, see it on Home.",
+    "submit": "Post for review",
+    "posting": "Posting…",
+    "cancel": "Cancel",
+    "fieldError": {
+      "blank": "Fill this in.",
+      "too_long": "Keep this to {max} characters or fewer.",
+      "control_character": "Remove the hidden or control characters from this text.",
+      "invalid_url": "Use a full https:// address, such as https://example.com/event.",
+      "unknown_county": "Choose a county from the list.",
+      "start_past": "Choose a start time that has not passed.",
+      "end_before_start": "The event must end after it starts.",
+      "span_too_long": "An event lasts at most 3 days.",
+      "join_url_required": "Add the address people join the online event at.",
+      "venue_required": "Add the venue of the event.",
+      "county_required": "Choose the county of the venue.",
+      "online_has_place": "An online event has no venue or county.",
+      "venue_has_join_url": "An event at a venue has no join address.",
+      "other": "Check this part of the event."
+    },
+    "refusal": {
+      "verification": "{org} can post events once its legal verification is complete.",
+      "orgUnavailable": "{org} cannot post or cancel events while it is suspended or delisted.",
+      "notPoster": "Only the person who posted this event can change it.",
+      "dailyLimit": "{org} has posted as many events as it can today. Try again tomorrow.",
+      "invalid": "Some details of the event need attention. Check the marked fields.",
+      "notCancellable": "This event can no longer be cancelled.",
+      "alreadyDecided": "This event was already decided or cancelled. The page has been read again.",
+      "changedSinceReview": "This event changed since you opened it. The page has been read again: review it once more.",
+      "eventOver": "This event has ended, so it can be rejected but not published.",
+      "organisationUnavailable": "The organisation is no longer verified, or it is suspended or delisted. Reject the event.",
+      "stepUp": "Enter a fresh code from your authenticator app to carry on.",
+      "mfaSetup": "Turn on two-step sign-in to post or cancel events.",
+      "mfaCode": "Enter a code from your authenticator app, then try again.",
+      "notFound": "This event is no longer here.",
+      "forbidden": "Only an owner, admin, signatory or reviewer of {org} can post or cancel its events.",
+      "signedOut": "Your session has ended. Sign in again, then try again.",
+      "network": "We could not reach the server. Check your connection and try again.",
+      "generic": "Something went wrong, so nothing changed. Try again."
+    },
+    "cancelEvent": {
+      "open": "Cancel this event",
+      "title": "Cancel this event?",
+      "body": "Developers no longer see it and no reminder of it is sent. This cannot be undone.",
+      "confirm": "Cancel the event",
+      "cancelling": "Cancelling…",
+      "keep": "Keep it"
+    }
+  },
+  "orgEvents": {
+    "pageTitle": "Events",
+    "title": "Events",
+    "lead": "{org}'s events for developers. Staff review each one before developers see it.",
+    "post": "Post an event",
+    "listLabel": "The organisation's events",
+    "empty": "{org} has not posted an event yet. Post one and developers near it, or everyone for an online event, see it on Home.",
+    "emptyViewer": "{org} has not posted an event yet.",
+    "notEditor": "Only an owner, admin, signatory or reviewer of {org} can post events.",
+    "notVerified": "{org} can post events once its legal verification is complete.",
+    "home": "Go to Home",
+    "back": "Events",
+    "notFound": "This event is not here. It may belong to another organisation.",
+    "newTitle": "Post an event",
+    "newLead": "Developers see it once staff approve it: on Home in its county, or everywhere when it is online.",
+    "status": {
+      "draft": "In review",
+      "published": "Published",
+      "rejected": "Not approved",
+      "cancelled": "Cancelled"
+    },
+    "when": "{day} · {time}",
+    "online": "Online",
+    "posted": "Posted {date}",
+    "stateNote": {
+      "draft": "Staff are reviewing it. Developers do not see it yet.",
+      "published": "Developers in its county, or everyone for an online event, see it on Home and This week.",
+      "rejected": "Staff did not approve it. Developers do not see it.",
+      "cancelled": "It was cancelled. Developers no longer see it."
+    },
+    "facts": {
+      "heading": "Details",
+      "when": "When",
+      "where": "Where",
+      "organiser": "Organiser",
+      "link": "Its own page",
+      "description": "Description",
+      "none": "Not given"
+    },
+    "venue": "{venue}, {county}",
+    "newTab": "(opens in a new tab)",
+    "editNote": "A draft cannot be edited here yet: cancel it and post it again to change it.",
+    "range": "{start} to {end}"
+  },
+  "adminEvents": {
+    "pageTitle": "Events",
+    "title": "Events",
+    "lead": "Events organisations and staff post for developers. Each waits here until it is published or rejected.",
+    "post": "Post a platform event",
+    "tabs": {
+      "label": "Events by status",
+      "draft": "In review",
+      "published": "Published",
+      "closed": "Closed"
+    },
+    "columns": {
+      "event": "Event",
+      "organiser": "Organiser",
+      "when": "When",
+      "status": "Status"
+    },
+    "empty": {
+      "draft": "No event is waiting for review.",
+      "published": "No published event.",
+      "closed": "No event was rejected or cancelled."
+    },
+    "emptyActionWaiting": "See the events in review",
+    "emptyActionPublished": "See the published events",
+    "platform": "Platform",
+    "unlisted": "An organisation no longer listed",
+    "back": "Events",
+    "detailTitle": "Event",
+    "decided": "Decided {date}",
+    "decision": {
+      "heading": "Decision",
+      "lead": "Publish shows it to developers in its county, or to everyone when it is online. Reject keeps it from them.",
+      "publish": "Publish",
+      "reject": "Reject",
+      "publishTitle": "Publish this event?",
+      "publishBody": "Developers in its county, or everyone for an online event, see it on Home from now.",
+      "rejectTitle": "Reject this event?",
+      "rejectBody": "Developers never see it. The organisation sees it as not approved.",
+      "publishing": "Publishing…",
+      "rejecting": "Rejecting…",
+      "cancel": "Go back",
+      "published": "Published. Developers see it now.",
+      "rejected": "Rejected. Developers do not see it."
+    },
+    "newTitle": "Post a platform event",
+    "newLead": "A platform event is posted as Platform. It waits on this queue like any other.",
+    "notAdmin": "Only staff admins post platform events.",
+    "notAdminAction": "Back to Events",
+    "gone": "This event is not here.",
+    "goneAction": "Back to Events"
   }
 }

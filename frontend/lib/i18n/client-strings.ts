@@ -58,6 +58,8 @@ export const CLIENT_STRING_NAMESPACES = [
   "savedSearches",
   "quizPlay",
   "adminQuiz",
+  "eventForm",
+  "adminEvents",
   "security",
   "password",
   "fields",

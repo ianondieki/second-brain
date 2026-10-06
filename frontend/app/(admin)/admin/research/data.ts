@@ -2,6 +2,7 @@ import { serverApi } from "@/lib/api/server";
 
 import { combine, readOptions as options, settle, type Loaded } from "../load";
 import type { AdminNiche, Candidate, Run, Sources } from "./research";
+import type { TrendCandidate, TrendCardDetail } from "./trends/trends";
 
 // Server-side reads of the research admin API (REQ-RES-01; bridge/admin/research.py) through the console's shared
 // loader (../load.ts): the API admits a staff admin with a fresh second factor only.
@@ -53,4 +54,23 @@ export async function getReview(problemId: string): Promise<Loaded<ReviewData>> 
   if (loaded.kind !== "ok") return loaded;
   const [list, nicheList] = loaded.data;
   return { kind: "ok", data: { candidate: list.find((c) => c.id === problemId) ?? null, niches: nicheList } };
+}
+
+/** The trend cards waiting for review (REQ-DEV-02), newest first. */
+export async function getTrendCandidates(): Promise<Loaded<TrendCandidate[]>> {
+  const answer = await serverApi().GET("/api/admin/research/trends", {
+    params: { query: { status: "candidate", limit: 50 } },
+    ...(await options()),
+  });
+  return settle("GET /api/admin/research/trends", { ...answer, data: answer.data?.items });
+}
+
+/** One trend card with its sources; null when there is none with that id (404). */
+export async function getTrendCard(cardId: string): Promise<Loaded<TrendCardDetail | null>> {
+  const answer = await serverApi().GET("/api/admin/research/trends/{card_id}", {
+    params: { path: { card_id: cardId } },
+    ...(await options()),
+  });
+  if (answer.response.status === 404) return { kind: "ok", data: null };
+  return settle("GET /api/admin/research/trends/{card_id}", answer);
 }

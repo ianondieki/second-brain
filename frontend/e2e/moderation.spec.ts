@@ -69,11 +69,11 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     const p6 = demoItemId("proposal");
 
     if (desktop) {
-      // The moderator signs in and lands on Moderation, their one section.
+      // The moderator signs in and lands on Moderation, the first of their two sections (Events: REQ-DEV-02).
       await signInThroughScreens(page, DEMO_MODERATOR, DEMO_PASSWORD);
       await expect(page).toHaveURL(/\/admin\/moderation$/, SERVER_STEP);
       const nav = page.getByRole("navigation", { name: "Staff console" });
-      await expect(nav.getByRole("link")).toHaveText(["Moderation"]);
+      await expect(nav.getByRole("link")).toHaveText(["Moderation", "Events"]);
       await expect(nav.getByRole("link", { name: "Moderation" })).toHaveAttribute("aria-current", "page");
     } else {
       // The admin lands on Research and opens Moderation from the tab bar.

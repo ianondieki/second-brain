@@ -1,7 +1,7 @@
 import { useTranslations } from "next-intl";
 import type { ComponentType, SVGProps } from "react";
 
-import { BriefIcon, InboxIcon } from "./org-icons";
+import { BriefIcon, CalendarIcon, InboxIcon } from "./org-icons";
 import { PortalNav } from "./PortalNav";
 import { EngagementsIcon } from "./tracker/icons";
 import { HomeIcon } from "./ui/icons";
@@ -9,14 +9,15 @@ import { HomeIcon } from "./ui/icons";
 /**
  * The organisation portal's sections (docs/spec/07 item 1: Inbox · Engagements · Problems · Team, at most five; Home
  * holds the second-factor prompt until onboarding lands). Only the built ones are listed: each later screen adds its
- * row here in the spec's order (Problems: the Problem Briefs, REQ-DIR-05; Team waits for its screens). Same look and
- * behaviour as DevNav.
+ * row here in the spec's order (Problems: the Problem Briefs, REQ-DIR-05; Events, REQ-DEV-02, the fifth and last: P22
+ * card B default (6); Team waits for its screens and a free place). Same look and behaviour as DevNav.
  */
 export const ORG_SECTIONS = [
   { key: "home", href: "/org", Icon: HomeIcon },
   { key: "inbox", href: "/org/inbox", Icon: InboxIcon },
   { key: "engagements", href: "/org/engagements", Icon: EngagementsIcon },
   { key: "problems", href: "/org/problems", Icon: BriefIcon },
+  { key: "events", href: "/org/events", Icon: CalendarIcon },
 ] as const satisfies ReadonlyArray<{ key: string; href: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }>;
 
 export type OrgSection = (typeof ORG_SECTIONS)[number]["key"];

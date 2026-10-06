@@ -57,3 +57,14 @@ export function BriefIcon(props: IconProps) {
     </Svg>
   );
 }
+
+/** Events: a calendar page with its two rings and a marked day. */
+export function CalendarIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.25" y="4.25" width="13.5" height="12.5" rx="2" />
+      <path d="M3.25 8.25h13.5M7 2.75v3M13 2.75v3" />
+      <path d="M10.75 11.5h2.5v2.5h-2.5Z" />
+    </Svg>
+  );
+}
