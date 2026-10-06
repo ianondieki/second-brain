@@ -439,7 +439,9 @@ P21 (2026-10-05, the same session after a context summary): the owner asked for 
 implement"; three tracks (Messages, shortlist and compare, saved searches) on the same branch, reviewed to PASS and
 gated; the report is "P21 report" below. P20 and P21 merged into the integration branch as `429a7aa` on the owner's
 instruction. **P22 (2026-10-05, the same session; the owner's three developer-space features, critiqued and cut, the
-cuts accepted):** `tasks/P22.md`, D-58 to D-62, REQ-DEV-01..03; P22-A (Today's five) started with revision 0009.
+cuts accepted):** `tasks/P22.md`, D-58 to D-62, REQ-DEV-01..03; P22-A (Today's five) built and gated (report below); **P22-B (This week, 2026-10-06, the same
+session on Fable 5.1)** built and gated: revision 0010, the trend pipeline, the events backend, the screens (report
+below).
 
 **Next session.** M2 is complete; nothing of the prototype track's plan is left running. The owner's decisions
 come first: D-42 (CodeQL), D-50, D-51 and the open gates in `GATES.md`. Then, by `PLAN.md`: the 0006 items for
@@ -1116,3 +1118,90 @@ merge after this tag, in the order of `docs/platform/prototype-m2-plan.md`.
 | P15 admin queues | done: backend `a5386ad`, screens `a07b269` | M2 |
 | P16 packaging: polish, walkthrough video, README Demo | done: part A `b5c344f`; design system `238b884`; screens `02a1953`, `106f01f`; walkthrough `14e19c7`; README `c6873e8`; frontend depth `fc87608`; backend and tests `a94ab33`, `2bb3d7b`, `5976870`, `866aec2`; ECC review `83e4ed9` | M2 |
 | P17 auth follow-ups 7–8 (BLOCKER fix) | done: backend merged; screens `ad04678` (Cancel setup, new recovery codes) | after M1 |
+
+### P22-B report (2026-10-06): This week, events near you and a technology trend (D-60, D-61)
+
+**Why.** The owner's developer-space brief asked for an agent that scrapes tech events and trends, "near them", with
+calendar booking and email reminders by agents. The critique cut it to submitted, moderated events (D-60), an `.ics`
+file and a Google Calendar link instead of OAuth and agents (D-61), reminders through the reminders engine under
+the consent, and trends as a research-card type from official publishers; the owner accepted the cuts. Card:
+`tasks/P22.md` section B, with the orchestrator's "Defaults taken" paragraph (events as their own table with a
+staff queue; reader rights; the 18:00 email under the reminders consent and the 08:00 in-app notice without it;
+trends as their own table; the fifth organisation and admin nav items).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`, on top of P22-A; five worktree merges):
+
+- **Research** (researcher): 24 dated excerpts from 14 official technology publishers over 8 topics, fetched once
+  with the P11 method (robots.txt, verbatim quotes ≤ 60 words, page-stated dates), note
+  `docs/platform/research/trend-excerpts-2026-10.md`; the licence residual is on the card for the owner.
+- **The trend pipeline** (impl-ai): the TECH allowlist and excerpt list, the `trend_synthesis` task (Sonnet, no tools,
+  one call a week under the caps and kill switch), fifteen checks in code with reason codes (a link in the text, an
+  undeclared name, a number not in a quote, a support not verbatim each discard a draft), excerpts already cited
+  left out of the next week, fakes, a synthetic cassette and an eval (precision and citation validity 1.0).
+- **Revision 0010** (db-migrations): `events`, `event_reminders`, `trend_cards`, `trend_card_sources`, RLS, guard
+  triggers (status moves, immutable columns, content edits on drafts only, `updated_at` set by the database, a
+  county that is a county), six definer functions: a decision takes the `updated_at` the moderator read and refuses
+  a changed or ended event; cancel by the organisation's editors, the platform creator or staff; trend candidates
+  written with 1–5 validated sources; a job-only reader for the weekly job; a reminders-due list; `decided_by`
+  hidden from the app; the downgrade refuses with rows.
+- **The backend** (impl-backend): `/api/orgs/{org}/events` (editors of an E2 organisation post, edit a draft,
+  cancel; a daily cap), `/api/admin/events` (platform events, the queue, decision with `seen`, cancel; step-up and
+  audit; the organisation re-checked on publish), `/api/me/week` (≤ 3 published events in the county or online,
+  this week and next, one statement; the trend of the day; the email gate's answer), the event page, `GET
+  /api/events/{id}/calendar.ics` (a hand-written RFC 5545 VEVENT, escaped and folded, UID stable, byte-stable,
+  `no-store`) and the Google Calendar template link, Remind me and Decline, the `events.remind` job every 15
+  minutes on the shared clock (N26 email at 18:00 the day before, only with the reminders consent and a verified
+  address, the email's calendar link without the description; N27 in-app at 08:00 or two hours before an early
+  start; once each by the deliveries key; a sweep for queued emails of declined or cancelled events; a declined then
+  renewed reminder sends once), trend storage, the weekly `trends.draft` job (Mondays 02:15 UTC, unbound, the 6-day
+  skip and the cited-refs exclusion through the job-only reader), the admin trend routes (decision re-verifying every
+  named organisation against the stored sources: 409 `unsourced_name`; a manual run), the demo seed (four events, a
+  reminder, three trend cards), the regenerated API types.
+- **The screens** (impl-frontend): the Home strip (server-rendered; `/dev` unchanged at 143,994 B), `/dev/week`,
+  `/dev/events/[id]` (Remind me as the one primary action above the fold, the line saying which reminders will
+  come, Add to calendar as two links), `/dev/trends/[id]` (the label, the summary, the sources), `/org/events`
+  (list, form with the Online switch and per-field 422s, detail with cancel; the fifth organisation section),
+  `/admin/events` (In review / Published / Closed tabs, the decision page with step-up and `seen`, a platform-event
+  form; the fifth admin section), the Trends section on `/admin/research` and the candidate page, 246 strings in en
+  and sw under `_meta.reviewP22b`, `e2e/events.spec.ts`.
+
+**Reviews.** The trend pipeline: reviewer CHANGES_REQUIRED (three MAJORs: an undeclared organisation name in the
+text passed, a model-written URL could reach a card, three length bounds untested) then PASS. Revision 0010:
+security-reviewer PASS with four MINORs for the app layer (all closed in the backend); reviewer CHANGES_REQUIRED (two
+MAJORs: a decision not tied to the version the moderator read, `updated_at` writable by the poster) then PASS. The
+backend: security-reviewer PASS with one MINOR; reviewer CHANGES_REQUIRED (two MAJORs: the N26 email's Google link
+carried the description, B1 could not catch a missing published-only filter for a developer who is also a member)
+then PASS with four MINORs, all closed. The screens: reviewer PASS (three MINORs, closed), ux-reviewer PASS (four
+MINORs, closed; axe 0 on 16 routes; Lighthouse 97–100 / 100).
+
+**Gate.** Playwright on the compose stack rebuilt and reset from the merged branch (mobile 360 and desktop, axe):
+205 passed, 4 skipped, 3 failed on stale assertions (the organisation nav had four links, the moderator's console
+no tab bar: both changed by the fifth sections); the two specs corrected (3ff7801) and re-run green (the Briefs spec
+first failed again because the test-clock scenarios had left the stack 45 days ahead, so its deadline read as past;
+after a reset it passed); the test-clock scenarios 4/4. Backend suite on the merged head: 5,275 passed (26.3 min).
+CodeQL run 272 on `0f71c88`: exactly the eight D-42 findings (one JavaScript, seven Python). `pr.yml` run 336 on
+`0f71c88`: the demo story, frontend, hygiene and legacy jobs green (the informational legacy job red as before);
+Playwright red on the three stale assertions above; scanners red on `npm audit` (D-56) and, new, on osv-scanner and
+Trivy for `source-map-js` 1.2.1 (CVE-2026-93749, a fixed release: bumped to 1.2.2 in ccbafb1); the backend job
+cancelled at its 35-minute limit (the seventh time on these runners; the suite passed locally in 26.3 min). Run 337 on `9875423` (the corrected specs and the bump): [[CI-337]]. Design shots
+`docs/demo/screenshots/p22b/` (12 screens, 1440 and 375, light and dark, strict axe 0 on all 48, ≤ 1 primary, no
+sideways scroll). JS budget on every route of the product and Lighthouse: scorecard "P22-B measurements" (every
+route under 150,000 B; Messages unchanged with 373 B left). Demo seed check: four events (three published, one in
+review), two published trend cards and one candidate, Amina's reminder. Traceability PASS.
+
+**Deviations.** (1) The sub-agents sign their commits as the model that wrote them (Opus 5.5), the orchestrator's
+carry the session's attribution (Fable 5.1); every commit carries the session line. (2) Commits over ~300 lines:
+three of the trend pipeline's, two of revision 0010's, several of the backend's, four of the screens' (mostly
+strings and tests). (3) Revision 0010 was amended twice after its first merge on this branch (the job-only reader;
+it is deployed nowhere but reset demo stacks), recorded in its docstring. (4) The admin events queue has three
+tabs (In review, Published, Closed = rejected and cancelled) rather than one per status: four did not fit at 360.
+(5) The demo story ran in CI (green) rather than locally.
+
+**Residuals (on the card).** The trend excerpts' licence check (D-38); the sentence-start MINOR in the trend
+checks (fails closed); no edit of a draft event in the organisation portal (cancel and post again); the admin
+Cancel has no in-place step-up; the reminder job's daily sweep lookup grows with the job queue's history unless
+old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
+
+**For the owner.** D-62 (the collaborator credit wording) still blocks P22-C; D-56 (npm audit) and the CI runner
+question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
+check before release.

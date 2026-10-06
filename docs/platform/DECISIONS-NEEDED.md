@@ -480,10 +480,12 @@ The full entries (why, options, default, what they blocked) are kept below for t
 ### D-61 · Calendar: an `.ics` file and a Google Calendar link now; an OAuth calendar scope deferred (P22-B; REQ-DEV-02)
 - Why: the brief asked for "agents to book their Google Calendar". Principle 3 forbids agents with side-effecting tools, and a calendar write needs a Google OAuth calendar scope (a separate consent, Google's verification of a sensitive scope, token storage). None of it is needed for the outcome.
 - Decision (the owner, 2026-10-05): "Add to calendar" is a deterministic `.ics` download plus a Google Calendar template link (no OAuth, no agent); "Remind me" goes through the reminders engine (one email the day before, one in-app notice the morning of) under the reminders consent (N26, N27). A real calendar write is a later phase if people ask for it.
+- Status: built (P22-B, 2026-10-06; reviewer, security-reviewer and ux-reviewer PASS; see PROGRESS.md "P22-B report").
 
 ### D-60 · Event sources: submitted events now, feed importers later (P22-B; REQ-DEV-02)
 - Why: the brief asked for an agent that scrapes tech events. D-38 already showed that storing short excerpts is a legal question; scraping event sites is more so (terms of service, robots). Official feeds and APIs (Eventbrite, Luma, GDG and community iCal feeds; Meetup's API is paid) are each a new vendor (D-36).
 - Decision (the owner, 2026-10-05): events are submitted by verified organisations' editors and by staff, moderated before they are shown (the Briefs pattern), with the organiser's name and never a logo (principle 4). "Near them" is the profile's county plus an online flag. Technology trends are a research-card type from official publishers, staff-approved and labelled. A feed importer is a separate decision naming the source.
+- Status: built (P22-B, 2026-10-06; reviewer, security-reviewer and ux-reviewer PASS; see PROGRESS.md "P22-B report").
 
 ### D-59 · Today's five: generation, review and the leaderboard (P22-A; REQ-DEV-01)
 - Why: the brief asked for daily agent-made trivia with a leaderboard where "rank is recorded as long as one logs in". A model's answer key is sometimes wrong (a wrong fact taught is worse than no quiz); a public ranking rewards attendance and answer-sharing; a ranking visible to organisations becomes a proxy for competence.
