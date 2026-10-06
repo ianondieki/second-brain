@@ -16,6 +16,9 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
   engagement made from it has expired, once per engagement; a closed tag keeps its status (the owner may relabel one).
 - A quiz question's answer and why (revision 0009, REQ-DEV-01) are readable by no role but the owner: only through
   ``app_quiz_answers``.
+- Revision 0010 (REQ-DEV-02): only bridge_app touches a developer's event reminders (never updating one); trend cards
+  and sources are written by no role but the owner's definers; who decided an event or a trend card is readable by no
+  role but the owner.
 """
 
 from __future__ import annotations
@@ -106,6 +109,45 @@ async def test_no_role_reads_a_quiz_answer_but_through_app_quiz_answers(owner_en
         assert (await conn.execute(text(writes), {"c": column})).scalar_one() is True
         reads = "SELECT has_column_privilege('bridge_app', 'public.quiz_questions', 'prompt', 'SELECT')"
         assert (await conn.execute(text(reads))).scalar_one() is True
+
+
+@pytest.mark.parametrize("privilege", PRIVILEGES)
+async def test_only_bridge_app_touches_event_reminders(owner_engine: AsyncEngine, privilege: str) -> None:
+    """Revision 0010 (REQ-DEV-02): a developer's Remind me rows are read, inserted and deleted by bridge_app only (its
+    RLS binds them to their developer); no other role of the cluster holds any privilege on them, and nobody updates
+    one."""
+    expected = {"bridge_app"} if privilege in ("SELECT", "INSERT", "DELETE") else set()
+    assert await roles_holding(owner_engine, "event_reminders", privilege) == expected
+
+
+@pytest.mark.parametrize("table", ["trend_cards", "trend_card_sources"])
+@pytest.mark.parametrize("privilege", PRIVILEGES)
+async def test_no_role_writes_trend_cards_but_the_definers(
+    owner_engine: AsyncEngine, table: str, privilege: str
+) -> None:
+    """Revision 0010 (REQ-DEV-02): trend cards and their sources are written only by app_create_trend_candidate and
+    app_decide_trend_card (the owner); bridge_app reads them (staff admin every row, developers the published ones) and
+    no other role holds any privilege."""
+    expected = {"bridge_app"} if privilege == "SELECT" else set()
+    assert await roles_holding(owner_engine, table, privilege) == expected
+
+
+@pytest.mark.parametrize("table", ["events", "trend_cards"])
+async def test_no_role_reads_who_decided(owner_engine: AsyncEngine, table: str) -> None:
+    """Revision 0010 (REQ-DEV-02): who decided an event or a trend card is readable by no role of the cluster but the
+    owner (the audit event of the decision names them); bridge_app reads every other column."""
+    async with owner_engine.connect() as conn:
+        readers = await conn.execute(
+            text(
+                "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                " AND r.rolname NOT LIKE 'pg\\_%' AND has_column_privilege(r.oid, CAST(:t AS regclass), 'decided_by',"
+                " 'SELECT')"
+            ),
+            {"t": f"public.{table}"},
+        )
+        assert list(readers.scalars()) == []
+        reads = "SELECT has_column_privilege('bridge_app', CAST(:t AS regclass), 'decided_at', 'SELECT')"
+        assert (await conn.execute(text(reads), {"t": f"public.{table}"})).scalar_one() is True
 
 
 async def test_no_role_reads_or_writes_all_data(owner_engine: AsyncEngine) -> None:

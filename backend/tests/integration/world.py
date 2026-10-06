@@ -5,8 +5,9 @@ tables. Rows are written as the owner role (RLS does not apply to the table owne
 ``bridge_app`` (or the table's ``db_role``) and check isolation.
 
 ``TENANT_ROWS`` must cover every table whose tenancy is org, user, org_or_user or published, ``STAFF_ROWS`` every
-staff table and ``CURATED_ROWS`` every curated one (the quiz's sets and questions, revision 0009: approved rows that
-developers read, rejected ones they do not); the RLS tests fail otherwise, so a new tenant table cannot ship without a
+staff table and ``CURATED_ROWS`` every curated one (the quiz's sets and questions, revision 0009, and the trend cards
+and their sources, revision 0010: approved or published rows that developers read, rejected ones they do not); the
+RLS tests fail otherwise, so a new tenant table cannot ship without a
 fixture and a policy. For the
 PUBLISHED tables each tenant has rows every signed-in user may read (published, clear) and rows only its owner may
 read (drafts, held, hidden, candidate), so the tests prove both halves of the rule.
@@ -28,6 +29,7 @@ FIXTURE = "rls-fixture"  # marks the fixture rows of tables with no tenant colum
 STAFF_CODE = "rls_fixture"  # the same, where the marker column holds a code (research_runs.stop_reason)
 VECTOR_1024 = "CAST(array_fill(CAST(0.001 AS real), ARRAY[1024]) AS vector)"
 QUIZ_TRACE = "rls-fixture"  # marks the quiz fixture sets (llm_trace_id: CURATED tables have no tenant column)
+TREND_TRACE = "rls-fixture"  # marks the trend fixture cards (llm_trace_id), as the quiz sets
 
 
 @dataclass(frozen=True, slots=True)
@@ -416,6 +418,66 @@ async def add_quiz_rows(conn: AsyncConnection, staff_id: UUID, developers: list[
         )
 
 
+async def add_event_rows(conn: AsyncConnection, org_id: UUID, user_id: UUID, staff_id: UUID) -> UUID:
+    """Revision 0010: a published and a draft online event of the organisation, posted by ``user_id`` (the published
+    one decided by staff), and the user's Remind me on the published one, written as the owner. Returns the published
+    event's id."""
+    published = uuid7()
+    for event_id, status in ((published, "published"), (uuid7(), "draft")):
+        await _insert(
+            conn,
+            "INSERT INTO events (id, org_id, created_by, title, description, starts_at, ends_at, online, join_url,"
+            " status, decided_by, decided_at) VALUES (:id, :org, :user, 'RLS event', 'An RLS fixture event.',"
+            " :starts, :ends, true, 'https://meet.example.test/rls', :status, :staff, :decided)",
+            id=event_id,
+            org=org_id,
+            user=user_id,
+            starts=datetime(2031, 3, 4, 6, tzinfo=UTC),
+            ends=datetime(2031, 3, 4, 9, tzinfo=UTC),
+            status=status,
+            staff=staff_id if status == "published" else None,
+            decided=datetime.now(UTC) if status == "published" else None,
+        )
+    await _insert(
+        conn, "INSERT INTO event_reminders (user_id, event_id) VALUES (:user, :event)", user=user_id, event=published
+    )
+    return published
+
+
+async def add_trend_rows(conn: AsyncConnection, staff_id: UUID) -> None:
+    """Revision 0010: a published and a rejected trend card with two sources each, written as the owner (each source
+    joins its card while a candidate, then the card is decided). Rejected, not candidate: a committed candidate would
+    sit in the staff queue of every later test."""
+    for status in ("published", "rejected"):
+        card_id = uuid7()
+        await _insert(
+            conn,
+            "INSERT INTO trend_cards (id, title, summary, topic_slug, llm_trace_id) VALUES (:id, 'RLS trend',"
+            " 'An RLS fixture trend.', 'rls-fixture', :trace)",
+            id=card_id,
+            trace=TREND_TRACE,
+        )
+        for position in (1, 2):
+            await _insert(
+                conn,
+                "INSERT INTO trend_card_sources (id, card_id, position, url, publisher, published_date, retrieved_at,"
+                " quote, excerpt_ref, support) VALUES (:id, :card, :position, 'https://tech.example.test/rls',"
+                " 'RLS Publisher', DATE '2026-01-05', DATE '2026-01-06', 'A quoted line.', :ref, 'The trend.')",
+                id=uuid7(),
+                card=card_id,
+                position=position,
+                ref=f"rls-{position}",
+            )
+        await _insert(
+            conn,
+            "UPDATE trend_cards SET status = :status, decided_by = :staff, decided_at = now(),"
+            " published_at = CASE WHEN :status = 'published' THEN now() END WHERE id = :id",
+            status=status,
+            staff=staff_id,
+            id=card_id,
+        )
+
+
 async def build(conn: AsyncConnection, tag: str) -> World:
     """Create the world inside ``conn`` (owner role). ``tag`` keeps emails and slugs unique per test session."""
     niche_id, plan_id = uuid7(), uuid7()
@@ -755,10 +817,16 @@ async def build(conn: AsyncConnection, tag: str) -> World:
             niche=niche_id,
             staff=staff_id,
         )
+        # --- Schema v8 (revision 0010): the organisation's events and its owner's reminder; absent at older revisions
+        if await has_table(conn, "events"):
+            await add_event_rows(conn, org_id, user_id, staff_id)
         tenants.append(Tenant(user_id, org_id, email, published, draft, held, hidden, published_version, draft_version))
     # --- Schema v7 (revision 0009): the quiz; absent when the world is built at an older revision ---
     if await has_table(conn, "quiz_sets"):
         await add_quiz_rows(conn, staff_id, [tenant.user_id for tenant in tenants])
+    # --- Schema v8 (revision 0010): trend cards; absent when the world is built at an older revision ---
+    if await has_table(conn, "trend_cards"):
+        await add_trend_rows(conn, staff_id)
     # A system LLM call (no user, no organisation): readable by staff admin only.
     await _insert(
         conn,
@@ -921,6 +989,10 @@ TENANT_ROWS: dict[str, Rows] = {
     "quiz_attempts": _rows("quiz_attempts", "t.id::text", NO_ORG, "t.user_id"),
     "quiz_flags": _rows("quiz_flags", "t.id::text", NO_ORG, "t.user_id"),
     "quiz_profiles": _rows("quiz_profiles", "t.user_id::text", NO_ORG, "t.user_id"),
+    # revision 0010: an organisation's events (developers read the published ones, its members all of them); a
+    # developer's reminders are theirs only
+    "events": _rows("events", "t.id::text", "t.org_id", "t.created_by", "t.status = 'published'"),
+    "event_reminders": _rows("event_reminders", "t.user_id::text || t.event_id::text", NO_ORG, "t.user_id"),
 }
 
 # STAFF tables: (key expression, owner query returning the keys of the fixture rows).
@@ -953,5 +1025,16 @@ CURATED_ROWS: dict[str, Rows] = {
         key="quiz_questions.id::text",
         owners="SELECT q.id::text AS key, s.status = 'approved' AS pub FROM quiz_questions q"
         f" JOIN quiz_sets s ON s.id = q.set_id WHERE s.llm_trace_id = '{QUIZ_TRACE}'",
+    ),
+    # revision 0010: the fixture cards' rows; ``pub`` marks the published ones
+    "trend_cards": Rows(
+        key="trend_cards.id::text",
+        owners="SELECT id::text AS key, status = 'published' AS pub FROM trend_cards"
+        f" WHERE llm_trace_id = '{TREND_TRACE}'",
+    ),
+    "trend_card_sources": Rows(
+        key="trend_card_sources.id::text",
+        owners="SELECT s.id::text AS key, c.status = 'published' AS pub FROM trend_card_sources s"
+        f" JOIN trend_cards c ON c.id = s.card_id WHERE c.llm_trace_id = '{TREND_TRACE}'",
     ),
 }
