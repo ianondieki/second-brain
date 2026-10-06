@@ -237,6 +237,23 @@ AS $$
      WHERE s.body <> ''
 $$;
 
+-- Nulls p_user's profile vector, model, version and time, under the profile's row lock (taken even when there is
+-- nothing to clear, so a writer in flight is waited for, or waits). Internal (no EXECUTE grant): the clearer and the
+-- consents trigger, as the owner.
+CREATE FUNCTION profile_embedding_clear(p_user uuid) RETURNS void
+    LANGUAGE plpgsql VOLATILE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    PERFORM 1 FROM public.developer_profiles d WHERE d.user_id = p_user FOR UPDATE;
+    UPDATE public.developer_profiles d
+       SET profile_embedding = NULL, embed_model = NULL, embed_version = NULL, profile_embedded_at = NULL
+     WHERE d.user_id = p_user
+       AND (d.profile_embedding IS NOT NULL OR d.embed_model IS NOT NULL OR d.embed_version IS NOT NULL
+            OR d.profile_embedded_at IS NOT NULL);
+END;
+$$;
+
 -- A page of the developers whose profile vector the worker computes next (REQ-PERS-02; AC-PERS-3: only while the
 -- profiling consent is granted): profiles_to_embed's set, never embedded first, then the oldest vector, then user id.
 -- The worker only (no user bound): a signed-in session learns nothing of other developers' profiles.
@@ -263,6 +280,56 @@ BEGIN
 END;
 $$;
 
+-- Writes p_user's profile vector (REQ-PERS-02; AC-PERS-3): the worker only. The profile's row is locked first, then the
+-- consent read afresh, so a withdrawal in flight (its trigger locks the same row) is waited for and its outcome read;
+-- written with the model, version and now() only while the latest profiling decision is a grant and the user is active
+-- and not staff. Returns whether it wrote.
+CREATE FUNCTION app_set_profile_embedding(p_user uuid, p_vector vector, p_model text, p_version text)
+    RETURNS boolean
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF public.app_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'app_set_profile_embedding: the embedding worker only, with no user bound'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_vector IS NULL OR vector_dims(p_vector) <> 1024 OR vector_norm(p_vector) = 0
+       OR NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40)) THEN
+        RAISE EXCEPTION 'app_set_profile_embedding: a non-zero vector of 1024 dimensions, a model (1 to 80 characters)'
+            ' and a version (1 to 40)' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    PERFORM 1 FROM public.developer_profiles d WHERE d.user_id = p_user FOR UPDATE;
+    IF NOT FOUND THEN
+        RETURN false;
+    END IF;
+    IF NOT public.profile_consent_granted(p_user)
+       OR NOT EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_user AND u.status = 'active' AND u.staff_role IS NULL)
+    THEN
+        RETURN false;
+    END IF;
+    UPDATE public.developer_profiles d
+       SET profile_embedding = p_vector, embed_model = p_model, embed_version = p_version, profile_embedded_at = now()
+     WHERE d.user_id = p_user;
+    RETURN true;
+END;
+$$;
+
+-- Clears p_user's profile vector (REQ-PERS-02; AC-PERS-3, the opt-out): the worker for anyone, or a signed-in user for
+-- their own profile only (the opt-out runs in their request); anyone else is refused.
+CREATE FUNCTION app_clear_profile_embedding(p_user uuid) RETURNS void
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF public.app_user_id() IS NOT NULL AND p_user IS DISTINCT FROM public.app_user_id() THEN
+        RAISE EXCEPTION 'app_clear_profile_embedding: the caller''s own profile, or the embedding worker with no user'
+            ' bound' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    PERFORM public.profile_embedding_clear(p_user);
+END;
+$$;
+
 -- A page of the problems whose vector the worker computes next (REQ-EMB-01): problems_to_embed's set, never embedded
 -- first, then the oldest vector, then id. The worker only (no user bound).
 CREATE FUNCTION app_problems_to_embed(p_model text, p_version text, p_limit integer)
@@ -285,6 +352,38 @@ BEGIN
       FROM public.problems_to_embed(p_model, p_version) s
      ORDER BY s.embedded_at ASC NULLS FIRST, s.problem_id
      LIMIT p_limit;
+END;
+$$;
+
+-- Writes p_problem's vector (REQ-EMB-01): the worker only. The problem's row is locked, then its state read: written
+-- with the model, version and now() only while it is published and clear (a hold or an archive since it was listed
+-- writes nothing). Returns whether it wrote.
+CREATE FUNCTION app_set_problem_embedding(p_problem uuid, p_vector vector, p_model text, p_version text)
+    RETURNS boolean
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_status public.problem_status;
+    v_state public.moderation_state;
+BEGIN
+    IF public.app_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'app_set_problem_embedding: the embedding worker only, with no user bound'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF p_vector IS NULL OR vector_dims(p_vector) <> 1024 OR vector_norm(p_vector) = 0
+       OR NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40)) THEN
+        RAISE EXCEPTION 'app_set_problem_embedding: a non-zero vector of 1024 dimensions, a model (1 to 80 characters)'
+            ' and a version (1 to 40)' USING ERRCODE = 'invalid_parameter_value';
+    END IF;
+    SELECT p.status, p.moderation_state INTO v_status, v_state FROM public.problems p WHERE p.id = p_problem FOR UPDATE;
+    IF NOT FOUND OR v_status <> 'published' OR v_state <> 'clear' THEN
+        RETURN false;
+    END IF;
+    UPDATE public.problems p
+       SET embedding = p_vector, embed_model = p_model, embed_version = p_version, embedded_at = now()
+     WHERE p.id = p_problem;
+    RETURN true;
 END;
 $$;
 
@@ -315,10 +414,14 @@ $$;
 # EXECUTE grants (EXECUTE revoked from PUBLIC first).
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_profiles_to_embed(text, text, integer)": ("bridge_app",),  # the worker, no user bound
+    "app_set_profile_embedding(uuid, vector, text, text)": ("bridge_app",),  # the worker, no user bound
+    "app_clear_profile_embedding(uuid)": ("bridge_app",),  # the worker, or the user's own opt-out
     "app_problems_to_embed(text, text, integer)": ("bridge_app",),  # the worker, no user bound
+    "app_set_problem_embedding(uuid, vector, text, text)": ("bridge_app",),  # the worker, no user bound
     "app_stale_embedding_counts(text, text)": ("bridge_app",),  # the worker's log line, no user bound
 }
 INTERNAL_FUNCTIONS = (
+    "profile_embedding_clear(uuid)",
     "profiles_to_embed(text, text)",
     "problems_to_embed(text, text)",
     "profile_embedding_text(uuid)",
