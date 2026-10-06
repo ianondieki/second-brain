@@ -37,9 +37,10 @@ class DeveloperProfile(TimestampsMixin, Base):
     shared liked niches only through the definers (``app_peers``, ``app_developer_card``), never this row.
 
     Revision 0012 (REQ-PERS-02, REQ-EMB-01): ``profile_embedding`` with its ``embed_model``, ``embed_version`` and
-    ``profile_embedded_at`` is written only by ``app_set_profile_embedding`` (the worker, while the ``profiling``
-    consent is granted) and cleared by ``app_clear_profile_embedding`` and by a withdrawal of that consent (a trigger
-    on ``consents``); bridge_app never updates them. HNSW cosine index ``ix_developer_profiles_profile_embedding``."""
+    ``profile_embedded_at`` and ``profile_embedding_hash`` (the SHA-256 of the text it was computed from) is written
+    only by ``app_set_profile_embedding`` (the worker, while the ``profiling`` consent is granted) and cleared by
+    ``app_clear_profile_embedding`` and by a withdrawal of that consent (a trigger on ``consents``); bridge_app never
+    updates them. HNSW cosine index ``ix_developer_profiles_profile_embedding``."""
 
     __tablename__ = "developer_profiles"
     __table_args__ = (
@@ -68,6 +69,8 @@ class DeveloperProfile(TimestampsMixin, Base):
     embed_version: Mapped[str | None] = mapped_column(String(40))
     # When app_set_profile_embedding wrote the vector (the database's clock); NULL while there is none.
     profile_embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The SHA-256 (hex) of the text the vector was computed from: the vector is stale once the text hashes otherwise.
+    profile_embedding_hash: Mapped[str | None] = mapped_column(Text)
     peers_visible: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     # The database's (developer_profiles_peers_opt_in): read it back after setting peers_visible.
     peers_opted_in_at: Mapped[datetime | None] = mapped_column(

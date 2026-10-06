@@ -3,100 +3,105 @@
 Design: ``docs/platform/tasks/P23.md`` section "P23-1 as built" (D-63 pending: ``app_peers`` is unchanged, the
 embedding serves recommendations only). AC-PERS-3: a withdrawal of the ``profiling`` consent removes the profile's
 vector in its own transaction and no vector is written while the consent is not granted. Additive but for one
-narrowing of an earlier grant, restored on downgrade: two new columns (``developer_profiles.profile_embedded_at``,
-``problems.embedded_at``), two HNSW cosine indexes, fourteen new functions (six granted to bridge_app, six internal,
-two trigger functions) and two triggers. No new table, no enum type, no policy change; nothing else of revisions 0001
-to 0011 is changed or dropped. The downgrade drops the triggers, functions, indexes and the two time columns and
-restores the grant; the vectors themselves (revisions 0001 and 0002's columns) stay where they are. Every vector is
-derived data the worker recomputes from rows that stay, so the downgrade loses nothing anyone wrote and proceeds with
-rows: it nulls nothing and needs no ``-x`` flag (unlike 0010 and 0011's).
+narrowing of an earlier grant, restored on downgrade: four new columns (``developer_profiles.profile_embedded_at`` and
+``profile_embedding_hash``, ``problems.embedded_at`` and ``embedding_hash``), two HNSW cosine indexes, sixteen new
+functions (six granted to bridge_app, nine internal, one trigger function) and one trigger. No new table, no enum
+type, no policy change; nothing else of revisions 0001 to 0011 is changed or dropped. The downgrade drops the trigger,
+functions, indexes and the four new columns and restores the grant; the vectors themselves (revisions 0001 and 0002's
+columns) stay where they are. Every vector is derived data the worker recomputes from rows that stay, so the
+downgrade loses nothing anyone wrote and proceeds with rows: it needs no ``-x`` flag (unlike 0010 and 0011's).
+
+Freshness is content-based: a vector is stored with the SHA-256 (hex) of the exact text it was computed from
+(``profile_embedding_hash``, ``embedding_hash``), and a row is stale when it has no vector, another model or version,
+or a stored hash that is not the hash of the text as it reads now. So any change to what the text is made of (a
+profile edit, a liked niche added, removed or renamed, a proposal published, hidden or with a new teaser, a problem
+edited) makes the row stale, and nothing else does (an ``updated_at`` moved by an unrelated update, a followed niche, a
+weight, a draft). A writer recomputes the text under the row lock and refuses a hash that is no longer the text's, so
+an edit that commits between the listing and the write is never stamped as embedded.
 
 - ``developer_profiles`` (revision 0001; USER, own-row policies unchanged): ``profile_embedded_at`` (when
-  ``app_set_profile_embedding`` wrote the vector, the database's clock; NULL while there is none), readable with the
-  own row like every column (bridge_app's table-wide SELECT and INSERT of revision 0001 cover it, as they cover the
-  vector; profiles are created by the signup with these columns NULL). bridge_app's UPDATE stays revision 0001's
-  and 0011's columns (headline, bio, county_code, updated_at, peers_visible): never the vector, its model and version
-  or its time. Index ``ix_developer_profiles_profile_embedding`` (HNSW, ``vector_cosine_ops``, pgvector's defaults
-  like ``ix_proposals_teaser_embedding``).
-- ``problems`` (revision 0002; PUBLISHED, policies unchanged): ``embedded_at`` likewise. The one narrowing: revisions
-  0002 and 0005 left ``embedding``, ``embed_model`` and ``embed_version`` in bridge_app's column-scoped INSERT and
-  UPDATE, which no code uses; with f1 a cosine against these vectors, a problem's author could plant the vector the
-  ranker reads. This revision revokes both on the three columns (the card: "the column grants stay closed to
-  bridge_app"); ``embedded_at`` is in neither (problems' INSERT and UPDATE are column-scoped). Index
-  ``ix_problems_embedding`` (HNSW, ``vector_cosine_ops``).
+  ``app_set_profile_embedding`` wrote the vector, the database's ``now()``; NULL while there is none; the readers'
+  order) and ``profile_embedding_hash``, readable with the own row like every column (bridge_app's table-wide SELECT
+  and INSERT of revision 0001 cover them, as they cover the vector; profiles are created by the signup with these
+  columns NULL). bridge_app's UPDATE stays revision 0001's and 0011's columns (headline, bio, county_code,
+  updated_at, peers_visible): never the vector, its model, version, time or hash. Index
+  ``ix_developer_profiles_profile_embedding`` (HNSW, ``vector_cosine_ops``, pgvector's defaults like
+  ``ix_proposals_teaser_embedding``).
+- ``problems`` (revision 0002; PUBLISHED, policies unchanged): ``embedded_at`` and ``embedding_hash`` likewise. The
+  one narrowing: revisions 0002 and 0005 left ``embedding``, ``embed_model`` and ``embed_version`` in bridge_app's
+  column-scoped INSERT and UPDATE, which no code uses; with f1 a cosine against these vectors, a problem's author could
+  plant the vector the ranker reads. This revision revokes both on the three columns (the card: "the column grants
+  stay closed to bridge_app"); the two new columns are in neither (problems' INSERT and UPDATE are column-scoped).
+  Index ``ix_problems_embedding`` (HNSW, ``vector_cosine_ops``).
 - ``consents`` (revision 0001; append-only): ``consents_profiling_withdrawn`` (AFTER INSERT, every role, WHEN the row
-  is ``profiling`` and not granted) nulls the profile's vector, model, version and time in the inserting transaction,
-  under the profile's row lock, whatever the app does next. The app also calls ``app_clear_profile_embedding`` in the
-  opt-out request (belt and braces; the second call finds nothing to clear).
-- ``developer_niches`` (revision 0001): ``developer_niches_liked_changed`` (AFTER INSERT OR UPDATE OR DELETE, every
-  role) moves the profile's ``updated_at`` to ``now()`` when a liked niche is added, removed or changed (a weight
-  change, or a followed niche, changes nothing). ``developer_niches`` has no time of its own, so this is how a
-  liked-niche change makes the profile's vector stale (``updated_at`` later than ``profile_embedded_at``).
-
-Staleness compares ``now()``-stamped times: ``updated_at`` (the ORM's ``onupdate``, the moderation definers),
-``proposals.published_at``, ``hidden_at`` and ``updated_at`` (the publish and lifecycle SQL) are all transaction
-times, so ``profile_embedded_at`` and ``embedded_at`` are ``now()`` too, never ``app_clock_now()``: a moved test clock
-(the demo's) would otherwise make every later change look older than the vector.
+  is ``profiling`` and not granted) nulls the profile's vector, model, version, time and hash in the inserting
+  transaction, under the profile's row lock, whatever the app does next. The app also calls
+  ``app_clear_profile_embedding`` in the opt-out request (belt and braces; the second call finds nothing to clear).
+- ``developer_niches`` (revision 0001): no trigger. The text holds the liked niches' names, so the hash sees a liked
+  niche added, removed or renamed without one.
 
 Functions (SECURITY DEFINER unless noted; pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_app where
 listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself; "the worker" is bridge_app with no user bound,
 as revisions 0007 to 0011's jobs; a model or version label is 1 to 80 or 1 to 40 characters, not blank, without a
-control character; a vector has exactly 1,024 dimensions and is not the zero vector (cosine is undefined there; NaN
-and infinities are pgvector's refusals); invalid_parameter_value otherwise, and for a limit outside 1 to 1,000):
+control character; a text hash is 64 lower-case hex digits; a vector has exactly 1,024 dimensions and is not the zero
+vector (cosine is undefined there; NaN and infinities are pgvector's refusals); invalid_parameter_value otherwise, and
+for a limit outside 1 to 1,000):
 
-- ``app_profiles_to_embed(model, version, limit)`` -> (user_id, text): the worker only (insufficient_privilege for a
-  bound session). Developers (a profile; the user active and not staff) whose latest ``profiling`` consent (by
-  ``created_at``, then ``id``: ``bridge.profiles.consents.latest``'s order) is granted and whose vector is stale: none,
-  no ``profile_embedded_at``, another model or version, ``updated_at`` later than ``profile_embedded_at`` (a profile
-  edit or a liked-niche change), or one of their proposals published, hidden, or (while published) changed later than
-  it. ``text``: the headline, the bio, the liked niches' English names (by ``sort_order``, name, id, as
-  ``bridge.profiles.niches.liked``), then the title and problem statement of their five latest published proposals
-  (``status = 'published'``, newest ``published_at`` first; Tier-1 teaser columns only), each NFKC-normalised with
-  every run of whitespace or control characters collapsed to one space and trimmed, empty parts left out, joined by
-  newlines and cut at 8,000 characters. A developer with nothing to embed (an empty text) is not listed. Oldest
+- ``app_profiles_to_embed(model, version, limit)`` -> (user_id, text, text_hash): the worker only
+  (insufficient_privilege for a bound session). Developers (a profile; the user active and not staff) whose latest
+  ``profiling`` consent (by ``created_at``, then ``id``: ``bridge.profiles.consents.latest``'s order) is granted and
+  whose vector is stale: none, another model or version, or a stored hash that is not ``text_hash``. ``text``: the
+  headline, the bio, the liked niches' English names (by ``sort_order``, name, id, as ``bridge.profiles.niches.liked``),
+  then the title and problem statement of their five latest published proposals (``status = 'published'``, newest
+  ``published_at`` first; Tier-1 teaser columns only), each NFKC-normalised with every run of whitespace or control
+  characters collapsed to one space and trimmed, empty parts left out, joined by newlines and cut at 8,000 characters;
+  ``text_hash`` its SHA-256 (UTF-8, hex). A developer with nothing to embed (an empty text) is not listed. Oldest
   ``profile_embedded_at`` first (never embedded first), then user id. Never a developer whose consent is not granted.
-- ``app_set_profile_embedding(user, vector, model, version)`` -> boolean: the worker only. Locks the profile FOR
-  UPDATE first and then reads the consent afresh (a withdrawal in flight holds the same row lock through its trigger,
-  so it is waited for and its outcome read): writes the vector, model, version and ``profile_embedded_at = now()``
-  and returns true only while the latest ``profiling`` consent is granted and the user is active and not staff;
-  false, writing nothing, otherwise (and for a user without a profile).
-- ``app_clear_profile_embedding(user)``: nulls the vector, model, version and time (under the row lock). The worker
-  for any user, or a bound user for their own row only (the opt-out runs in the user's request); insufficient_privilege
-  for anyone else. An unknown user or an empty row is a no-op.
-- ``app_problems_to_embed(model, version, limit)`` -> (problem_id, text): the worker only. Published and clear problems
-  whose vector is stale (none, no ``embedded_at``, another model or version, ``updated_at`` later than
-  ``embedded_at``); ``text`` the title and statement, normalised as above; oldest ``embedded_at`` first (never
-  embedded first), then id.
-- ``app_set_problem_embedding(problem, vector, model, version)`` -> boolean: the worker only. Locks the problem FOR
-  UPDATE and writes the vector, model, version and ``embedded_at = now()`` only while it is published and clear (a
-  hold or archive since it was listed: false, nothing written).
+- ``app_set_profile_embedding(user, vector, model, version, text_hash)`` -> boolean: the worker only. Locks the profile
+  FOR UPDATE first and then reads the consent and the text afresh (a withdrawal in flight holds the same row lock
+  through its trigger, so it is waited for and its outcome read): writes the vector, model, version,
+  ``profile_embedded_at = now()`` and the hash, and returns true, only while the latest ``profiling`` consent is
+  granted, the user is active and not staff, and ``text_hash`` is the hash of the text as it reads now; false, writing
+  nothing, otherwise (and for a user without a profile or with an empty text).
+- ``app_clear_profile_embedding(user)``: nulls the vector, model, version, time and hash (under the row lock). The
+  worker for any user, or a bound user for their own row only (the opt-out runs in the user's request);
+  insufficient_privilege for anyone else. An unknown user or an empty row is a no-op.
+- ``app_problems_to_embed(model, version, limit)`` -> (problem_id, text, text_hash): the worker only. Published and
+  clear problems whose vector is stale (none, another model or version, or a stored hash that is not ``text_hash``);
+  ``text`` the title and statement, normalised as above; oldest ``embedded_at`` first (never embedded first), then id.
+- ``app_set_problem_embedding(problem, vector, model, version, text_hash)`` -> boolean: the worker only. Locks the
+  problem FOR UPDATE and writes the vector, model, version, ``embedded_at = now()`` and the hash only while it is
+  published and clear and ``text_hash`` is its text's hash now (a hold, an archive or an edit since it was listed:
+  false, nothing written).
 - ``app_stale_embedding_counts(model DEFAULT NULL, version DEFAULT NULL)`` -> one row (profiles, problems): the worker
   only; how many rows the two readers would list (for the job's log line). Without a model and version (both or
-  neither) the model rule is left out: rows without a vector or changed since they were embedded.
+  neither) the model rule is left out: rows without a vector or whose text changed since.
 - Internal (no EXECUTE grant; called as the owner): ``embedding_label_is_valid(label, max)``,
-  ``embedding_text_line(text)``, ``profile_consent_granted(user)``, ``profile_embedding_text(user)``,
-  ``profiles_to_embed(model, version)`` and ``problems_to_embed(model, version)`` (the stale sets with their times and
-  texts, unordered; NULL model and version leave the model rule out), ``profile_embedding_clear(user)``.
+  ``embedding_text_line(text)``, ``embedding_text_hash(text)``, ``profile_consent_granted(user)``,
+  ``profile_embedding_text(user)``, ``problem_embedding_text(title, statement)``, ``profiles_to_embed(model,
+  version)`` and ``problems_to_embed(model, version)`` (the stale sets with their times, texts and hashes, unordered;
+  NULL model and version leave the model rule out), ``profile_embedding_clear(user)``.
 
-Lock order: a profile's row lock, then the consent read (the writer; a withdrawal's trigger takes the same row lock);
-a problem's row lock, then its state (the writer; a moderation decision updates the same row).
+Lock order: a profile's row lock, then the consent and text reads (the writer; a withdrawal's trigger takes the same
+row lock); a problem's row lock, then its state and text (the writer; a moderation decision or an edit updates the
+same row). A change to a profile's niches or proposals takes no profile lock: committed before the writer's read, the
+writer sees it (and refuses a stale hash); committed after, the stored hash is the older text's and the row is
+listed again.
 
 Operating rules for the code that uses this schema:
 
-- The job (``embeddings.reembed``, unbound): ``SELECT user_id, text FROM app_profiles_to_embed(:model, :version,
-  :limit)``, embed, then ``SELECT app_set_profile_embedding(:user, CAST(:vector AS vector), :model, :version)`` per
-  row (false: the consent was withdrawn or the account changed meanwhile; skip it, it will not be listed again). The
-  same for problems with ``app_problems_to_embed`` and ``app_set_problem_embedding``. Log
-  ``app_stale_embedding_counts(:model, :version)`` after the run. A row edited between its listing and its write is
-  stamped as embedded with the older text (timestamps, not a content hash): it is picked up at its next change or the
-  next model or version. ``reembed``'s stall check sees a row edited after its write in the same run as stale again:
-  give each run a bound, or skip rows already written in the run, rather than failing.
+- The job (``embeddings.reembed``, unbound): ``SELECT user_id, text, text_hash FROM app_profiles_to_embed(:model,
+  :version, :limit)``, embed ``text``, then ``SELECT app_set_profile_embedding(:user, CAST(:vector AS vector), :model,
+  :version, :text_hash)`` per row with the hash the reader gave. False: the consent was withdrawn, the account changed
+  or the text changed meanwhile; do not count the row as done (a changed text is listed again with its new hash, a
+  withdrawn consent is not). The same for problems with ``app_problems_to_embed`` and ``app_set_problem_embedding``.
+  Log ``app_stale_embedding_counts(:model, :version)`` after the run. The readers build every candidate's text to
+  compare hashes: a run costs one text build per consented developer and per published problem.
 - The opt-out (PUT /consents with ``profiling`` false, bound to the user): record the decision as today (the trigger
   clears the vector in that transaction) and call ``app_clear_profile_embedding(:me)`` in the same transaction.
-- The ranker: use a vector only when it is not NULL, ``embedded_at`` / ``profile_embedded_at`` is set and the model
-  and version are the embedder's, and only for a developer whose ``profiling`` consent is granted (as today's f1 and
-  f9). Never read ``developer_profiles.profile_embedding`` of another user (own-row RLS); a problem's vector is read
-  with the problem.
+- The ranker: use a vector only when it is not NULL, its hash is set and the model and version are the embedder's, and
+  only for a developer whose ``profiling`` consent is granted (as today's f1 and f9). Never read
+  ``developer_profiles.profile_embedding`` of another user (own-row RLS); a problem's vector is read with the problem.
 
 Revision ID: 0012
 Revises: 0011
@@ -123,6 +128,13 @@ PROBLEM_EMBEDDING_PRIVILEGES = (
 NARROW_SQL = f"REVOKE {PROBLEM_EMBEDDING_PRIVILEGES} ON TABLE problems FROM bridge_app;"
 RESTORE_SQL = f"GRANT {PROBLEM_EMBEDDING_PRIVILEGES} ON TABLE problems TO bridge_app;"
 
+# (table, column, type) added by this revision.
+NEW_COLUMNS = (
+    ("developer_profiles", "profile_embedded_at", sa.DateTime(timezone=True)),
+    ("developer_profiles", "profile_embedding_hash", sa.Text()),
+    ("problems", "embedded_at", sa.DateTime(timezone=True)),
+    ("problems", "embedding_hash", sa.Text()),
+)
 INDEXES = (
     ("ix_developer_profiles_profile_embedding", "developer_profiles", "profile_embedding"),
     ("ix_problems_embedding", "problems", "embedding"),
@@ -151,6 +163,15 @@ CREATE FUNCTION embedding_text_line(p_text text) RETURNS text
     SET search_path = pg_catalog, public, pg_temp
 AS $$
     SELECT nullif(btrim(regexp_replace(normalize(p_text, NFKC), '[[:space:][:cntrl:]]+', ' ', 'g')), '')
+$$;
+
+-- The SHA-256 of an embedding's text (its UTF-8 bytes), 64 lower-case hex digits: what a vector is stored with, and
+-- what the readers compare with. Internal (no EXECUTE grant).
+CREATE FUNCTION embedding_text_hash(p_text text) RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT encode(sha256(convert_to(p_text, 'UTF8')), 'hex')
 $$;
 
 -- Whether p_user's latest profiling decision (bridge.profiles.consents.latest's order: created_at, then id) is a
@@ -194,58 +215,65 @@ AS $$
          ORDER BY part.kind, part.n, part.k), E'\n'), 8000)
 $$;
 
--- The developers whose profile vector is stale, with their vector's time and text: a profile whose user is active and
--- not staff, whose latest profiling decision is a grant, with no vector, no time, another model or version (left out
--- when p_model is NULL), an edit or a liked-niche change since (updated_at), or a proposal of theirs published, hidden
--- or (while published) changed since; and a text that is not empty. Unordered. Internal (no EXECUTE grant).
-CREATE FUNCTION profiles_to_embed(p_model text, p_version text)
-    RETURNS TABLE (user_id uuid, embedded_at timestamptz, body text)
+-- The text a problem's vector is computed from: its title and statement, each one embedding_text_line, empty parts
+-- left out, joined by a newline and cut at 8,000 characters; '' when there is nothing. Internal (no EXECUTE grant).
+CREATE FUNCTION problem_embedding_text(p_title text, p_statement text) RETURNS text
     LANGUAGE sql STABLE
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-    WITH stale AS MATERIALIZED (
-        SELECT d.user_id, d.profile_embedded_at
+    SELECT left(array_to_string(ARRAY[public.embedding_text_line(p_title), public.embedding_text_line(p_statement)],
+                                E'\n'), 8000)
+$$;
+
+-- The developers whose profile vector is stale, with their vector's time, their text and its hash: a profile whose
+-- user is active and not staff, whose latest profiling decision is a grant, and whose text is not empty, with no
+-- vector, another model or version (left out when p_model is NULL), or a stored hash that is not the text's. Every
+-- consented developer's text is built to compare. Unordered. Internal (no EXECUTE grant).
+CREATE FUNCTION profiles_to_embed(p_model text, p_version text)
+    RETURNS TABLE (user_id uuid, embedded_at timestamptz, body text, body_hash text)
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    WITH consented AS MATERIALIZED (
+        SELECT d.user_id, d.profile_embedded_at, d.profile_embedding IS NULL AS no_vector, d.embed_model,
+               d.embed_version, d.profile_embedding_hash
           FROM public.developer_profiles d
           JOIN public.users u ON u.id = d.user_id
          WHERE u.status = 'active' AND u.staff_role IS NULL
            AND public.profile_consent_granted(d.user_id)
-           AND (d.profile_embedding IS NULL OR d.profile_embedded_at IS NULL
-                OR (p_model IS NOT NULL
-                    AND (d.embed_model IS DISTINCT FROM p_model OR d.embed_version IS DISTINCT FROM p_version))
-                OR d.updated_at > d.profile_embedded_at
-                OR EXISTS (SELECT 1 FROM public.proposals p
-                            WHERE p.owner_id = d.user_id
-                              AND (p.published_at > d.profile_embedded_at OR p.hidden_at > d.profile_embedded_at
-                                   OR (p.status = 'published' AND p.updated_at > d.profile_embedded_at))))
     )
-    SELECT s.user_id, s.profile_embedded_at, t.body
-      FROM stale s CROSS JOIN LATERAL (SELECT public.profile_embedding_text(s.user_id) AS body) t
+    SELECT c.user_id, c.profile_embedded_at, t.body, t.body_hash
+      FROM consented c
+     CROSS JOIN LATERAL (SELECT b.body, public.embedding_text_hash(b.body) AS body_hash
+                           FROM (SELECT public.profile_embedding_text(c.user_id) AS body) b) t
      WHERE t.body <> ''
+       AND (c.no_vector
+            OR (p_model IS NOT NULL
+                AND (c.embed_model IS DISTINCT FROM p_model OR c.embed_version IS DISTINCT FROM p_version))
+            OR c.profile_embedding_hash IS DISTINCT FROM t.body_hash)
 $$;
 
--- The published and clear problems whose vector is stale (no vector, no time, another model or version (left out when
--- p_model is NULL), or an edit since), with the vector's time and the text: title and statement, each
--- embedding_text_line, joined by a newline and cut at 8,000 characters (an empty text is left out). Unordered.
--- Internal (no EXECUTE grant).
+-- The published and clear problems whose vector is stale, with the vector's time, the text and its hash: a text that
+-- is not empty, with no vector, another model or version (left out when p_model is NULL), or a stored hash that is
+-- not the text's. Unordered. Internal (no EXECUTE grant).
 CREATE FUNCTION problems_to_embed(p_model text, p_version text)
-    RETURNS TABLE (problem_id uuid, embedded_at timestamptz, body text)
+    RETURNS TABLE (problem_id uuid, embedded_at timestamptz, body text, body_hash text)
     LANGUAGE sql STABLE
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-    SELECT s.id, s.embedded_at, s.body
-      FROM (SELECT p.id, p.embedded_at,
-                   left(array_to_string(ARRAY[public.embedding_text_line(p.title),
-                                              public.embedding_text_line(p.statement)], E'\n'), 8000) AS body
-              FROM public.problems p
-             WHERE p.status = 'published' AND p.moderation_state = 'clear'
-               AND (p.embedding IS NULL OR p.embedded_at IS NULL
-                    OR (p_model IS NOT NULL
-                        AND (p.embed_model IS DISTINCT FROM p_model OR p.embed_version IS DISTINCT FROM p_version))
-                    OR p.updated_at > p.embedded_at)) s
-     WHERE s.body <> ''
+    SELECT p.id, p.embedded_at, t.body, t.body_hash
+      FROM public.problems p
+     CROSS JOIN LATERAL (SELECT b.body, public.embedding_text_hash(b.body) AS body_hash
+                           FROM (SELECT public.problem_embedding_text(p.title, p.statement) AS body) b) t
+     WHERE p.status = 'published' AND p.moderation_state = 'clear'
+       AND t.body <> ''
+       AND (p.embedding IS NULL
+            OR (p_model IS NOT NULL
+                AND (p.embed_model IS DISTINCT FROM p_model OR p.embed_version IS DISTINCT FROM p_version))
+            OR p.embedding_hash IS DISTINCT FROM t.body_hash)
 $$;
 
--- Nulls p_user's profile vector, model, version and time, under the profile's row lock (taken even when there is
+-- Nulls p_user's profile vector, model, version, time and hash, under the profile's row lock (taken even when there is
 -- nothing to clear, so a writer in flight is waited for, or waits). Internal (no EXECUTE grant): the clearer and the
 -- consents trigger, as the owner.
 CREATE FUNCTION profile_embedding_clear(p_user uuid) RETURNS void
@@ -255,18 +283,20 @@ AS $$
 BEGIN
     PERFORM 1 FROM public.developer_profiles d WHERE d.user_id = p_user FOR UPDATE;
     UPDATE public.developer_profiles d
-       SET profile_embedding = NULL, embed_model = NULL, embed_version = NULL, profile_embedded_at = NULL
+       SET profile_embedding = NULL, embed_model = NULL, embed_version = NULL, profile_embedded_at = NULL,
+           profile_embedding_hash = NULL
      WHERE d.user_id = p_user
        AND (d.profile_embedding IS NOT NULL OR d.embed_model IS NOT NULL OR d.embed_version IS NOT NULL
-            OR d.profile_embedded_at IS NOT NULL);
+            OR d.profile_embedded_at IS NOT NULL OR d.profile_embedding_hash IS NOT NULL);
 END;
 $$;
 
 -- A page of the developers whose profile vector the worker computes next (REQ-PERS-02; AC-PERS-3: only while the
--- profiling consent is granted): profiles_to_embed's set, never embedded first, then the oldest vector, then user id.
--- The worker only (no user bound): a signed-in session learns nothing of other developers' profiles.
+-- profiling consent is granted), with the text to embed and its hash (handed back to the writer): profiles_to_embed's
+-- set, never embedded first, then the oldest vector, then user id. The worker only (no user bound): a signed-in
+-- session learns nothing of other developers' profiles.
 CREATE FUNCTION app_profiles_to_embed(p_model text, p_version text, p_limit integer)
-    RETURNS TABLE (user_id uuid, text text)
+    RETURNS TABLE (user_id uuid, text text, text_hash text)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
@@ -281,7 +311,7 @@ BEGIN
             ' 1000' USING ERRCODE = 'invalid_parameter_value';
     END IF;
     RETURN QUERY
-    SELECT s.user_id, s.body
+    SELECT s.user_id, s.body, s.body_hash
       FROM public.profiles_to_embed(p_model, p_version) s
      ORDER BY s.embedded_at ASC NULLS FIRST, s.user_id
      LIMIT p_limit;
@@ -289,23 +319,28 @@ END;
 $$;
 
 -- Writes p_user's profile vector (REQ-PERS-02; AC-PERS-3): the worker only. The profile's row is locked first, then the
--- consent read afresh, so a withdrawal in flight (its trigger locks the same row) is waited for and its outcome read;
--- written with the model, version and now() only while the latest profiling decision is a grant and the user is active
--- and not staff. Returns whether it wrote.
-CREATE FUNCTION app_set_profile_embedding(p_user uuid, p_vector vector, p_model text, p_version text)
+-- consent and the text read afresh, so a withdrawal in flight (its trigger locks the same row) is waited for and its
+-- outcome read, and a text changed since the listing is seen; written with the model, version, now() and the hash
+-- only while the latest profiling decision is a grant, the user is active and not staff, and p_text_hash is the hash
+-- of the text as it reads now. Returns whether it wrote.
+CREATE FUNCTION app_set_profile_embedding(p_user uuid, p_vector vector, p_model text, p_version text,
+                                          p_text_hash text)
     RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
+DECLARE
+    v_text text;
 BEGIN
     IF public.app_user_id() IS NOT NULL THEN
         RAISE EXCEPTION 'app_set_profile_embedding: the embedding worker only, with no user bound'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
     IF p_vector IS NULL OR vector_dims(p_vector) <> 1024 OR vector_norm(p_vector) = 0
-       OR NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40)) THEN
-        RAISE EXCEPTION 'app_set_profile_embedding: a non-zero vector of 1024 dimensions, a model (1 to 80 characters)'
-            ' and a version (1 to 40)' USING ERRCODE = 'invalid_parameter_value';
+       OR NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40))
+       OR p_text_hash IS NULL OR p_text_hash !~ '^[0-9a-f]{64}$' THEN
+        RAISE EXCEPTION 'app_set_profile_embedding: a non-zero vector of 1024 dimensions, a model (1 to 80 characters),'
+            ' a version (1 to 40) and the text''s hash' USING ERRCODE = 'invalid_parameter_value';
     END IF;
     PERFORM 1 FROM public.developer_profiles d WHERE d.user_id = p_user FOR UPDATE;
     IF NOT FOUND THEN
@@ -316,8 +351,13 @@ BEGIN
     THEN
         RETURN false;
     END IF;
+    v_text := public.profile_embedding_text(p_user);
+    IF v_text = '' OR public.embedding_text_hash(v_text) <> p_text_hash THEN
+        RETURN false;
+    END IF;
     UPDATE public.developer_profiles d
-       SET profile_embedding = p_vector, embed_model = p_model, embed_version = p_version, profile_embedded_at = now()
+       SET profile_embedding = p_vector, embed_model = p_model, embed_version = p_version, profile_embedded_at = now(),
+           profile_embedding_hash = p_text_hash
      WHERE d.user_id = p_user;
     RETURN true;
 END;
@@ -338,10 +378,10 @@ BEGIN
 END;
 $$;
 
--- A page of the problems whose vector the worker computes next (REQ-EMB-01): problems_to_embed's set, never embedded
--- first, then the oldest vector, then id. The worker only (no user bound).
+-- A page of the problems whose vector the worker computes next (REQ-EMB-01), with the text and its hash:
+-- problems_to_embed's set, never embedded first, then the oldest vector, then id. The worker only (no user bound).
 CREATE FUNCTION app_problems_to_embed(p_model text, p_version text, p_limit integer)
-    RETURNS TABLE (problem_id uuid, text text)
+    RETURNS TABLE (problem_id uuid, text text, text_hash text)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
@@ -356,17 +396,19 @@ BEGIN
             ' 1000' USING ERRCODE = 'invalid_parameter_value';
     END IF;
     RETURN QUERY
-    SELECT s.problem_id, s.body
+    SELECT s.problem_id, s.body, s.body_hash
       FROM public.problems_to_embed(p_model, p_version) s
      ORDER BY s.embedded_at ASC NULLS FIRST, s.problem_id
      LIMIT p_limit;
 END;
 $$;
 
--- Writes p_problem's vector (REQ-EMB-01): the worker only. The problem's row is locked, then its state read: written
--- with the model, version and now() only while it is published and clear (a hold or an archive since it was listed
--- writes nothing). Returns whether it wrote.
-CREATE FUNCTION app_set_problem_embedding(p_problem uuid, p_vector vector, p_model text, p_version text)
+-- Writes p_problem's vector (REQ-EMB-01): the worker only. The problem's row is locked, then its state and text read:
+-- written with the model, version, now() and the hash only while it is published and clear and p_text_hash is the
+-- hash of its text as it reads now (a hold, an archive or an edit since it was listed writes nothing). Returns
+-- whether it wrote.
+CREATE FUNCTION app_set_problem_embedding(p_problem uuid, p_vector vector, p_model text, p_version text,
+                                          p_text_hash text)
     RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -374,29 +416,37 @@ AS $$
 DECLARE
     v_status public.problem_status;
     v_state public.moderation_state;
+    v_text text;
 BEGIN
     IF public.app_user_id() IS NOT NULL THEN
         RAISE EXCEPTION 'app_set_problem_embedding: the embedding worker only, with no user bound'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
     IF p_vector IS NULL OR vector_dims(p_vector) <> 1024 OR vector_norm(p_vector) = 0
-       OR NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40)) THEN
-        RAISE EXCEPTION 'app_set_problem_embedding: a non-zero vector of 1024 dimensions, a model (1 to 80 characters)'
-            ' and a version (1 to 40)' USING ERRCODE = 'invalid_parameter_value';
+       OR NOT (public.embedding_label_is_valid(p_model, 80) AND public.embedding_label_is_valid(p_version, 40))
+       OR p_text_hash IS NULL OR p_text_hash !~ '^[0-9a-f]{64}$' THEN
+        RAISE EXCEPTION 'app_set_problem_embedding: a non-zero vector of 1024 dimensions, a model (1 to 80 characters),'
+            ' a version (1 to 40) and the text''s hash' USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    SELECT p.status, p.moderation_state INTO v_status, v_state FROM public.problems p WHERE p.id = p_problem FOR UPDATE;
+    SELECT p.status, p.moderation_state, public.problem_embedding_text(p.title, p.statement)
+      INTO v_status, v_state, v_text
+      FROM public.problems p WHERE p.id = p_problem FOR UPDATE;
     IF NOT FOUND OR v_status <> 'published' OR v_state <> 'clear' THEN
         RETURN false;
     END IF;
+    IF v_text = '' OR public.embedding_text_hash(v_text) <> p_text_hash THEN
+        RETURN false;
+    END IF;
     UPDATE public.problems p
-       SET embedding = p_vector, embed_model = p_model, embed_version = p_version, embedded_at = now()
+       SET embedding = p_vector, embed_model = p_model, embed_version = p_version, embedded_at = now(),
+           embedding_hash = p_text_hash
      WHERE p.id = p_problem;
     RETURN true;
 END;
 $$;
 
 -- How many rows the two readers would list (the embedding job's log line): the worker only. With a model and version
--- (both or neither) the model rule applies; without, rows with no vector or changed since they were embedded.
+-- (both or neither) the model rule applies; without, rows with no vector or whose text changed since.
 CREATE FUNCTION app_stale_embedding_counts(p_model text DEFAULT NULL, p_version text DEFAULT NULL)
     RETURNS TABLE (profiles bigint, problems bigint)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
@@ -430,61 +480,35 @@ BEGIN
     RETURN NULL;
 END;
 $$;
-
--- A liked niche added, removed or changed (another niche, kind or user; a weight change is none) moves the profile's
--- updated_at to now(), so the profile's vector is stale (developer_niches has no time of its own). Followed niches are
--- not in the text and change nothing. For every role. SECURITY DEFINER: the developer's own UPDATE of updated_at would
--- do, but the owner's cascade and any other path must too.
-CREATE FUNCTION developer_niches_liked_changed() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path = pg_catalog, public, pg_temp
-AS $$
-BEGIN
-    IF TG_OP = 'UPDATE' AND (NEW.user_id, NEW.niche_id, NEW.kind) IS NOT DISTINCT FROM
-                            (OLD.user_id, OLD.niche_id, OLD.kind) THEN
-        RETURN NULL;
-    END IF;
-    IF TG_OP IN ('UPDATE', 'DELETE') AND OLD.kind = 'liked' THEN
-        UPDATE public.developer_profiles d SET updated_at = now()
-         WHERE d.user_id = OLD.user_id AND d.updated_at IS DISTINCT FROM now();
-    END IF;
-    IF TG_OP IN ('INSERT', 'UPDATE') AND NEW.kind = 'liked' THEN
-        UPDATE public.developer_profiles d SET updated_at = now()
-         WHERE d.user_id = NEW.user_id AND d.updated_at IS DISTINCT FROM now();
-    END IF;
-    RETURN NULL;
-END;
-$$;
 """
 
 # EXECUTE grants (EXECUTE revoked from PUBLIC first).
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_profiles_to_embed(text, text, integer)": ("bridge_app",),  # the worker, no user bound
-    "app_set_profile_embedding(uuid, vector, text, text)": ("bridge_app",),  # the worker, no user bound
+    "app_set_profile_embedding(uuid, vector, text, text, text)": ("bridge_app",),  # the worker, no user bound
     "app_clear_profile_embedding(uuid)": ("bridge_app",),  # the worker, or the user's own opt-out
     "app_problems_to_embed(text, text, integer)": ("bridge_app",),  # the worker, no user bound
-    "app_set_problem_embedding(uuid, vector, text, text)": ("bridge_app",),  # the worker, no user bound
+    "app_set_problem_embedding(uuid, vector, text, text, text)": ("bridge_app",),  # the worker, no user bound
     "app_stale_embedding_counts(text, text)": ("bridge_app",),  # the worker's log line, no user bound
 }
 INTERNAL_FUNCTIONS = (
     "profile_embedding_clear(uuid)",
     "profiles_to_embed(text, text)",
     "problems_to_embed(text, text)",
+    "problem_embedding_text(text, text)",
     "profile_embedding_text(uuid)",
     "profile_consent_granted(uuid)",
+    "embedding_text_hash(text)",
     "embedding_text_line(text)",
     "embedding_label_is_valid(text, integer)",
 )
-TRIGGER_FUNCTIONS = ("consents_profiling_withdrawn()", "developer_niches_liked_changed()")
+TRIGGER_FUNCTIONS = ("consents_profiling_withdrawn()",)
 
 TRIGGERS_SQL = r"""
 CREATE TRIGGER consents_profiling_withdrawn
     AFTER INSERT ON consents
     FOR EACH ROW WHEN (NEW.purpose = 'profiling' AND NOT NEW.granted)
     EXECUTE FUNCTION consents_profiling_withdrawn();
-CREATE TRIGGER developer_niches_liked_changed
-    AFTER INSERT OR UPDATE OR DELETE ON developer_niches
-    FOR EACH ROW EXECUTE FUNCTION developer_niches_liked_changed();
 """
 
 
@@ -509,8 +533,8 @@ def _grant_sql() -> str:
 
 
 def upgrade() -> None:
-    op.add_column("developer_profiles", sa.Column("profile_embedded_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("problems", sa.Column("embedded_at", sa.DateTime(timezone=True), nullable=True))
+    for table, column, type_ in NEW_COLUMNS:
+        op.add_column(table, sa.Column(column, type_, nullable=True))
     for name, table, column in INDEXES:
         op.create_index(
             name, table, [column], unique=False, postgresql_using="hnsw", postgresql_ops={column: "vector_cosine_ops"}
@@ -521,14 +545,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Not destructive: the vectors (revisions 0001 and 0002's columns) stay, and what goes (the two times, the indexes,
-    the functions and triggers) is derived data and code. The worker recomputes every vector from rows that stay, so
-    the downgrade proceeds with rows and nulls nothing. bridge_app's INSERT and UPDATE of problems' embedding columns
-    (revisions 0002 and 0005) are granted again."""
-    _run_sql(
-        "DROP TRIGGER developer_niches_liked_changed ON developer_niches;"
-        " DROP TRIGGER consents_profiling_withdrawn ON consents;"
-    )
+    """Not destructive: the vectors (revisions 0001 and 0002's columns) stay, and what goes (the times, the hashes, the
+    indexes, the functions and the trigger) is derived data and code. The worker recomputes every vector from rows that
+    stay, so the downgrade proceeds with rows. bridge_app's INSERT and UPDATE of problems' embedding columns (revisions
+    0002 and 0005) are granted again."""
+    _run_sql("DROP TRIGGER consents_profiling_withdrawn ON consents;")
     _run_sql(
         "\n".join(
             f"DROP FUNCTION {signature};" for signature in (*TRIGGER_FUNCTIONS, *FUNCTION_GRANTS, *INTERNAL_FUNCTIONS)
@@ -536,6 +557,6 @@ def downgrade() -> None:
     )
     for name, table, _column in reversed(INDEXES):
         op.drop_index(name, table_name=table)
-    op.drop_column("problems", "embedded_at")
-    op.drop_column("developer_profiles", "profile_embedded_at")
+    for table, column, _type in reversed(NEW_COLUMNS):
+        op.drop_column(table, column)
     _run_sql(RESTORE_SQL)

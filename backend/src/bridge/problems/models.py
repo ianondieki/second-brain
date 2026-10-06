@@ -86,8 +86,10 @@ class Problem(IdMixin, TimestampsMixin, Base):
     embed_model: Mapped[str | None] = mapped_column(String(80))
     embed_version: Mapped[str | None] = mapped_column(String(40))
     # Revision 0012: the embedding columns are written only by app_set_problem_embedding (the worker, while the problem
-    # is published and clear); bridge_app neither inserts nor updates them. embedded_at is when it wrote them.
+    # is published and clear); bridge_app neither inserts nor updates them. embedded_at is when it wrote them,
+    # embedding_hash the SHA-256 (hex) of the text (title and statement) they were computed from.
     embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    embedding_hash: Mapped[str | None] = mapped_column(Text)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Revision 0005 (research cards only; written by app_create_research_candidate, never by the app role).
     research_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("research_runs.id"), index=True)
