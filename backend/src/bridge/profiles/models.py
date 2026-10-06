@@ -11,6 +11,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    FetchedValue,
     ForeignKey,
     LargeBinary,
     Numeric,
@@ -29,8 +30,16 @@ USER = {"info": {"tenancy": Tenancy.USER, "tenant_column": "user_id"}}
 
 
 class DeveloperProfile(TimestampsMixin, Base):
+    """A developer's profile, their own row only. Revision 0011 (D-58): ``peers_visible`` is the peers switch
+    (default off; bridge_app updates it on the own row) and ``peers_opted_in_at`` the database's (the shared clock when
+    the switch turns on, NULL while off, whatever is sent): another developer sees the handle, headline, county and
+    shared liked niches only through the definers (``app_peers``, ``app_developer_card``), never this row."""
+
     __tablename__ = "developer_profiles"
-    __table_args__ = (USER,)
+    __table_args__ = (
+        CheckConstraint("peers_visible = (peers_opted_in_at IS NOT NULL)", name="peers_opt_in_complete"),
+        USER,
+    )
 
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     handle: Mapped[str] = mapped_column(CIText(), unique=True)
@@ -45,6 +54,11 @@ class DeveloperProfile(TimestampsMixin, Base):
     # docs/spec/08 Embeddings: the model and version that produced the vector, stored per row (re-embed on change).
     embed_model: Mapped[str | None] = mapped_column(String(80))
     embed_version: Mapped[str | None] = mapped_column(String(40))
+    peers_visible: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # The database's (developer_profiles_peers_opt_in): read it back after setting peers_visible.
+    peers_opted_in_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
 
 
 class DeveloperNiche(Base):

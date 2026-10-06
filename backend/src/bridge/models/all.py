@@ -18,6 +18,7 @@ from bridge.profiles import models as profile_models
 from bridge.proposals import models as proposal_models
 from bridge.provenance import models as provenance_models
 from bridge.quiz import models as quiz_models
+from bridge.teams import models as team_models
 from bridge.tenancy import models as tenancy_models
 from bridge.trends import models as trend_models
 
@@ -38,6 +39,7 @@ MODULES = (
     proposal_models,
     provenance_models,
     quiz_models,
+    team_models,
     tenancy_models,
     trend_models,
 )
