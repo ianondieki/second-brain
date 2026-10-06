@@ -6,6 +6,8 @@ import { Icon } from "@/components/ui/status-icons";
  * An overflow menu for the steps a person rarely takes (Block, Leave thread): a native disclosure, so it needs no
  * script, opens with Enter or Space and keeps the reading order. Its button is a 44 px square with three dots and an
  * accessible name; `describedBy` names what it is about (a row's title). The items are buttons the caller gives.
+ * The page closes it on Escape, an outside press or an item's press (./overflow-close.ts). `align="end"` opens it
+ * leftward from its button, for a button near the right edge (it stays inside a 360 px screen).
  */
 export function Overflow({
   label,
@@ -20,7 +22,7 @@ export function Overflow({
   children: ReactNode;
 } & { [key: `data-${string}`]: string }) {
   return (
-    <details className="group relative" {...rest}>
+    <details className="group relative" data-overflow="" {...rest}>
       <summary
         aria-label={label}
         aria-describedby={describedBy}

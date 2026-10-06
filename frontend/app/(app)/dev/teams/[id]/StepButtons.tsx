@@ -16,7 +16,7 @@ export function StepButtons({ credit, more, leave, block }: { credit: string | n
         </button>
       ) : null}
       {leave || block ? (
-        <Overflow label={more} data-thread-menu="">
+        <Overflow label={more} align="end" data-thread-menu="">
           {leave ? (
             <button type="button" className={overflowItemClass} aria-haspopup="dialog" data-step="leave" data-leave="">
               {leave}

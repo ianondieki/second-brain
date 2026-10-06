@@ -11,6 +11,7 @@ import { CheckIcon } from "@/components/ui/status-icons";
 
 import { teamCalls, type TeamCalls } from "../teams/calls";
 import { Overflow, overflowItemClass } from "../teams/Overflow";
+import { closeOverflows } from "../teams/overflow-close";
 import { nameList, nicheNames, type Peer, type PeersPage } from "../teams/teams";
 
 // The Team up sheet loads with the first press of a Team up (its search and form are not needed to read the list).
@@ -54,6 +55,15 @@ export function PeerList({ initial, niches, locale, calls: given }: PeerListProp
   useEffect(() => {
     if (blocking) openConfirm(blockDialog.current);
   }, [blocking]);
+
+  useEffect(() => {
+    document.addEventListener("click", closeOverflows);
+    document.addEventListener("keydown", closeOverflows);
+    return () => {
+      document.removeEventListener("click", closeOverflows);
+      document.removeEventListener("keydown", closeOverflows);
+    };
+  }, []);
 
   async function loadMore() {
     if (!next || more === "busy") return;
