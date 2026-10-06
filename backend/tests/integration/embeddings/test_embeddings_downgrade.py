@@ -61,8 +61,8 @@ async def test_the_downgrade_nulls_the_vectors_and_a_re_upgrade_lists_the_rows_a
     run_alembic(url, lambda config: command.downgrade(config, "0011"))  # no flag: derived data only
     engine = sa.create_engine(url, poolclass=sa.pool.NullPool)
     try:
-        with engine.connect() as conn:
-            assert tuple(conn.execute(sa.text(VECTORS), {"u": user, "p": issue}).one()) == (1, 1)
+        with engine.connect() as sync_conn:
+            assert tuple(sync_conn.execute(sa.text(VECTORS), {"u": user, "p": issue}).one()) == (1, 1)
     finally:
         engine.dispose()
 
