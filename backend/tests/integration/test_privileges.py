@@ -19,6 +19,9 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
 - Revision 0010 (REQ-DEV-02): only bridge_app touches a developer's event reminders (never updating one); trend cards
   and sources are written by no role but the owner's definers; who decided an event or a trend card is readable by no
   role but the owner; only bridge_app executes the weekly trend job's reader ``app_trend_job_state``.
+- Revision 0011 (REQ-DEV-03): only bridge_app touches the team tables (blocks, invitations, threads, messages, read
+  markers, contributor rows), with exactly its matrix; no role but the owner sets a profile's opt-in time, and only
+  bridge_app turns the peers switch; only bridge_app executes the peers and team definers.
 """
 
 from __future__ import annotations
@@ -175,6 +178,71 @@ async def test_only_bridge_app_executes_the_trend_job_state(owner_engine: AsyncE
             {"sig": signature},
         )
         assert sorted(acl.scalars()) == ["bridge_app EXECUTE", "bridge_owner EXECUTE"]
+
+
+TEAM_PRIVILEGES: dict[str, set[str]] = {
+    "developer_blocks": {"SELECT", "INSERT", "DELETE"},
+    "team_invitations": {"SELECT", "INSERT"},
+    "team_threads": {"SELECT"},
+    "team_messages": {"SELECT", "INSERT"},
+    "team_thread_reads": {"SELECT", "INSERT", "UPDATE"},
+    "proposal_contributors": {"SELECT", "INSERT", "UPDATE"},
+}
+
+
+@pytest.mark.parametrize("table", sorted(TEAM_PRIVILEGES))
+@pytest.mark.parametrize("privilege", PRIVILEGES)
+async def test_only_bridge_app_touches_the_team_tables(owner_engine: AsyncEngine, table: str, privilege: str) -> None:
+    """Revision 0011 (REQ-DEV-03, D-58): the blocks, team invitations, threads, messages, read markers and contributor
+    rows are touched by bridge_app alone (its RLS binds every row to developers), with exactly the privileges it needs:
+    threads and decisions are the definers', messages are append-only, a contributor is removed by an UPDATE and never
+    deleted; no other role of the cluster holds any privilege on them."""
+    expected = {"bridge_app"} if privilege in TEAM_PRIVILEGES[table] else set()
+    assert await roles_holding(owner_engine, table, privilege) == expected
+
+
+async def test_the_peers_switch_is_bridge_apps_and_its_time_the_databases(owner_engine: AsyncEngine) -> None:
+    """Revision 0011 (D-58): bridge_app updates ``peers_visible`` (its own profile, by revision 0001's policy) and no
+    role of the cluster but the owner updates ``peers_opted_in_at`` (the trigger sets it, whatever was sent)."""
+    async with owner_engine.connect() as conn:
+        for column, expected in (("peers_visible", ["bridge_app"]), ("peers_opted_in_at", [])):
+            updaters = await conn.execute(
+                text(
+                    "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                    " AND r.rolname NOT LIKE 'pg\\_%'"
+                    " AND has_column_privilege(r.oid, 'public.developer_profiles', :c, 'UPDATE')"
+                ),
+                {"c": column},
+            )
+            assert sorted(updaters.scalars()) == expected, column
+
+
+@pytest.mark.parametrize(
+    "signature",
+    [
+        "public.app_peers(integer, integer)",
+        "public.app_developer_card(uuid)",
+        "public.app_block_developer(uuid)",
+        "public.app_reported_team_message(uuid)",
+        "public.app_contributor_handles(uuid)",
+        "public.team_end_pair(uuid, uuid)",
+    ],
+)
+async def test_only_bridge_app_executes_the_team_definers(owner_engine: AsyncEngine, signature: str) -> None:
+    """Revision 0011: the peers and team definers are executable by bridge_app alone of every role of the cluster,
+    PUBLIC included (the internal ``team_end_pair`` by nobody but the owner)."""
+    async with owner_engine.connect() as conn:
+        callers = await conn.execute(
+            text(
+                "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                " AND r.rolname NOT LIKE 'pg\\_%' AND has_function_privilege(r.oid, :sig, 'EXECUTE')"
+            ),
+            {"sig": signature},
+        )
+        expected = set() if "team_end_pair" in signature else {"bridge_app"}
+        assert set(callers.scalars()) == expected
+        public = "SELECT has_function_privilege('public', :sig, 'EXECUTE')"
+        assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
 
 
 async def test_no_role_reads_or_writes_all_data(owner_engine: AsyncEngine) -> None:

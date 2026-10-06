@@ -1,14 +1,14 @@
-"""Revisions 0001 to 0010 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
+"""Revisions 0001 to 0011 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
 REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08, REQ-ENG-10, REQ-NOT-03, REQ-PROP-03, REQ-ENG-11,
-REQ-REPO-02, REQ-PERS-03, REQ-DEV-01, REQ-DEV-02; docs/spec/08 Migrations and Tenancy; AC-IP-2).
+REQ-REPO-02, REQ-PERS-03, REQ-DEV-01, REQ-DEV-02, REQ-DEV-03; docs/spec/08 Migrations and Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0010, 0009, 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the revision
-before it exactly as it found it), table classification, RLS coverage generated from the ORM metadata, the grant
-matrix of every role, role attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained audit
-log, the evidence triggers of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column grants,
-the schema v5 notes triggers, policies and in-app column grant, the tags policies revision 0007 leaves as they were,
-the schema v6 (revision 0008), v7 (revision 0009) and v8 (revision 0010) policies, triggers and column grants, the
-listed-organisations policy and the Procrastinate schema.
+Migration round trip and drift (each of 0011, 0010, 0009, 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the
+revision before it exactly as it found it), table classification, RLS coverage generated from the ORM metadata, the
+grant matrix of every role, role attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained
+audit log, the evidence triggers of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column
+grants, the schema v5 notes triggers, policies and in-app column grant, the tags policies revision 0007 leaves as they
+were, the schema v6 (revision 0008), v7 (revision 0009), v8 (revision 0010) and v9 (revision 0011) policies,
+triggers and column grants, the listed-organisations policy and the Procrastinate schema.
 The tracker's behaviour (chain, projection, parties, payments, clock) is tested in ``integration/engagements/``;
 schema v4's in ``integration/matching/``, ``integration/problems/`` and ``integration/billing/``; schema v5's (the
 notes' writers and readers, marking read) in ``test_rls.py``; revision 0007's ``app_close_tag(tag, status)`` in
@@ -18,7 +18,8 @@ job) in ``integration/engagements/test_messages_schema.py``, ``integration/engag
 v7's (the quiz: its readers, the attempt and flag rules, rescoring, the board, the job's functions) in
 ``integration/quiz/test_quiz_schema.py``; schema v8's (events, reminders and trend cards: their readers, writers,
 decisions and the reminder job's list) in ``integration/events/test_events_schema.py`` and
-``integration/events/test_trends_schema.py``.
+``integration/events/test_trends_schema.py``; schema v9's (peers, blocks, team invitations, threads and messages,
+reports and contributors) in ``integration/teams/test_peers_schema.py`` and ``integration/teams/test_teams_schema.py``.
 """
 
 from __future__ import annotations
@@ -84,7 +85,7 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "updated_at",
         "county_code",  # revision 0002
     },
-    "developer_profiles": {"headline", "bio", "county_code", "updated_at"},
+    "developer_profiles": {"headline", "bio", "county_code", "updated_at", "peers_visible"},  # 0011: the switch
     # revision 0002: never moderation_state, owners, keys or decisions
     "problems": {
         "title",
@@ -221,6 +222,9 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "join_url",
         "link",
     },
+    # revision 0011: a read marker moves; a contributor is removed (never the keys, the thread or the time added)
+    "team_thread_reads": {"last_read_at"},
+    "proposal_contributors": {"removed_at"},
 }
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
@@ -318,6 +322,15 @@ APP_GRANTS: dict[str, set[str]] = {
     "event_reminders": {S, I, D},
     "trend_cards": {S},
     "trend_card_sources": {S},
+    # revision 0011: a developer's blocks (inserted and lifted, never updated), invitations (decided only through
+    # app_decide_team_invitation), threads (written only by the definers), messages (append-only), read markers and
+    # contributor rows (removed by an UPDATE, never deleted)
+    "developer_blocks": {S, I, D},
+    "team_invitations": {S, I},
+    "team_threads": {S},
+    "team_messages": {S, I},
+    "team_thread_reads": {S, I, U},
+    "proposal_contributors": {S, I, U},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -519,6 +532,32 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "events_guard()": (False, set()),
     "trend_cards_guard()": (False, set()),
     "trend_card_sources_guard()": (False, set()),
+    # revision 0011: peers and team-up (triggers and internal functions: nobody)
+    "app_is_visible_peer(uuid)": (True, {"bridge_app"}),  # the invitations' policy and trigger, the API
+    "app_blocked_either_way(uuid, uuid)": (True, {"bridge_app"}),  # the INSERT policies (the caller a side)
+    "app_team_problem_open(uuid)": (True, {"bridge_app"}),  # the invitations' INSERT policy, the API
+    "app_peers(integer, integer)": (True, {"bridge_app"}),  # a developer who opted in
+    "app_developer_card(uuid)": (True, {"bridge_app"}),  # a developer: a counterpart's or a peer's card
+    "app_blocked_developers()": (True, {"bridge_app"}),  # a developer: their own blocks
+    "app_decide_team_invitation(uuid, text)": (True, {"bridge_app"}),  # the recipient or the sender
+    "app_close_team_thread(uuid, text)": (True, {"bridge_app"}),  # a party
+    "app_block_developer(uuid)": (True, {"bridge_app"}),  # a developer
+    "app_unblock_developer(uuid)": (False, {"bridge_app"}),  # a developer, under the blocks' RLS
+    "app_report_team_message(uuid, text[])": (True, {"bridge_app"}),  # a party's report (fixed limit)
+    "app_reported_team_message(uuid)": (True, {"bridge_app"}),  # staff admin|moderator read the reported message
+    "app_contributor_handles(uuid)": (True, {"bridge_app"}),  # anyone who reads the proposal
+    "team_pair_lock(uuid, uuid)": (False, set()),
+    "team_end_pair(uuid, uuid)": (False, set()),
+    "team_peers_of(uuid)": (False, set()),
+    "developer_profiles_peers_opt_in()": (False, set()),
+    "developer_blocks_pair()": (True, set()),  # ends the pair's invitations and threads
+    "team_invitations_open()": (True, set()),  # reads the pair's blocks
+    "team_invitations_guard()": (False, set()),
+    "team_threads_guard()": (False, set()),
+    "team_thread_visible()": (False, set()),  # the caller's RLS decides
+    "team_messages_open()": (True, set()),  # locks the thread
+    "team_messages_redaction_guard()": (False, set()),
+    "proposal_contributors_guard()": (False, set()),
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -759,15 +798,29 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     for kind in SNAPSHOT:  # additive: every object of 0008 is still there, unchanged
         assert set(at_0008[kind]) <= set(at_0009[kind]), kind
     assert "app_flag_question(uuid,text,text) bridge_app EXECUTE" in at_0009["function_acl"]
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0010"))
+    at_0010 = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_0010[kind] != at_0009[kind]}
+    assert changed == set(SNAPSHOT) - {"enums"}, "0010 adds tables, functions, policies and grants; no enum type"
+    for kind in SNAPSHOT:  # additive: every object of 0009 is still there, unchanged
+        assert set(at_0009[kind]) <= set(at_0010[kind]), kind
+    assert "app_create_trend_candidate(jsonb,jsonb) bridge_app EXECUTE" in at_0010["function_acl"]
+    assert "app_trend_job_state(timestamp with time zone) bridge_app EXECUTE" in at_0010["function_acl"]
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
     run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
     at_head = schema_snapshot(scratch_url)
-    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0009[kind]}
-    assert changed == set(SNAPSHOT) - {"enums"}, "0010 adds tables, functions, policies and grants; no enum type"
-    for kind in SNAPSHOT:  # additive: every object of 0009 is still there, unchanged
-        assert set(at_0009[kind]) <= set(at_head[kind]), kind
-    assert "app_create_trend_candidate(jsonb,jsonb) bridge_app EXECUTE" in at_head["function_acl"]
-    assert "app_trend_job_state(timestamp with time zone) bridge_app EXECUTE" in at_head["function_acl"]
+    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0010[kind]}
+    assert changed == set(SNAPSHOT) - {"enums"}, "0011 adds columns, tables, functions, policies and grants; no enum"
+    for kind in set(SNAPSHOT) - {"policies"}:  # additive: every object of 0010 is still there, unchanged
+        assert set(at_0010[kind]) <= set(at_head[kind]), kind
+    (narrowed,) = set(at_0010["policies"]) - set(at_head["policies"])  # the app's report INSERT, narrowed again
+    assert narrowed.startswith("moderation_cases bridge_app_insert INSERT")
+    assert "developer_profiles.peers_visible bridge_app UPDATE" in at_head["column_acl"]
+    assert "app_peers(integer,integer) bridge_app EXECUTE" in at_head["function_acl"]
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0010"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0011 leaves every object of 0010 exactly as it found it (the report policy included)
+        assert after[kind] == at_0010[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0009"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0010 leaves every object of 0009 exactly as it found it
@@ -1087,6 +1140,7 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     claim_protected |= {"otp_hash", "otp_expires_at", "otp_attempts", "otp_reissues"}
     assert not claim_protected & updatable["org_claims"]
     profile_protected = {"verification_level", "handle", "profile_embedding", "embed_model", "embed_version"}
+    profile_protected |= {"peers_opted_in_at"}  # revision 0011: the database's
     assert not profile_protected & updatable["developer_profiles"]
     projection = {"state", "end_reason", "stage_entered_at", "stage_deadline_at", "ended_at", "lock_version"}
     keys = {"proposal_id", "org_id", "developer_id", "version_id", "origin"}
@@ -1163,6 +1217,20 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
             held = "SELECT has_table_privilege('bridge_app', :t, :p) OR (:p IN ('INSERT', 'UPDATE')"
             held += " AND has_any_column_privilege('bridge_app', :t, :p))"
             assert not await scalar(owner_engine, held, t=table, p=privilege), f"{table} {privilege}"
+    # revision 0011: team messages are append-only like the engagement thread's; invitations and threads change only
+    # through the definers; a block is never updated; a contributor row is never deleted (removed_at instead)
+    for table, privileges in (
+        ("team_messages", ("UPDATE", "DELETE", "TRUNCATE")),
+        ("team_invitations", ("UPDATE", "DELETE", "TRUNCATE")),
+        ("team_threads", ("INSERT", "UPDATE", "DELETE", "TRUNCATE")),
+        ("developer_blocks", ("UPDATE", "TRUNCATE")),
+        ("team_thread_reads", ("DELETE", "TRUNCATE")),
+        ("proposal_contributors", ("DELETE", "TRUNCATE")),
+    ):
+        for privilege in privileges:
+            held = "SELECT has_table_privilege('bridge_app', :t, :p) OR (:p IN ('INSERT', 'UPDATE')"
+            held += " AND has_any_column_privilege('bridge_app', :t, :p))"
+            assert not await scalar(owner_engine, held, t=table, p=privilege), f"{table} {privilege}"
 
 
 async def test_schema_v5_policies_are_exactly_the_notes_and_the_in_app_ones(owner_engine: AsyncEngine) -> None:
@@ -1208,7 +1276,7 @@ async def test_schema_v6_policies_are_exactly_the_planned_ones(owner_engine: Asy
     assert {(row.tablename, row.policyname, row.cmd) for row in found} == expected
     assert {role for row in found for role in row.roles} == {"bridge_app"}
     (report,) = (row for row in found if row.tablename == "moderation_cases" and row.cmd == "INSERT")
-    assert report.with_check.endswith("AND ((subject_type)::text <> 'message'::text))")
+    assert "AND ((subject_type)::text <> 'message'::text)" in report.with_check  # revision 0011 narrows it again
 
 
 async def test_schema_v7_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
@@ -1275,6 +1343,101 @@ async def test_schema_v8_policies_are_exactly_the_planned_ones(owner_engine: Asy
     assert by["trend_card_sources", "SELECT"].qual == (
         "(app_is_staff('{admin}'::staff_role[]) OR (app_is_developer() AND (EXISTS ( SELECT 1\n   FROM trend_cards c\n"
         "  WHERE ((c.id = trend_card_sources.card_id) AND (c.status = 'published'::text))))))"
+    )
+
+
+_V9_PARTY = "((app_user_id() = t.a_user_id) OR (app_user_id() = t.b_user_id))"
+_V9_THREAD = (
+    "(EXISTS ( SELECT 1\n   FROM team_threads t\n  WHERE ((t.id = {table}.thread_id) AND " + _V9_PARTY + "{extra})))"
+)
+_V9_OWNED = (
+    "(EXISTS ( SELECT 1\n   FROM proposals p\n  WHERE ((p.id = proposal_contributors.proposal_id)"
+    " AND (p.owner_id = app_user_id()))))"
+)
+_V9_OWN_READ = (
+    "((user_id = app_user_id()) AND app_is_developer() AND "
+    + _V9_THREAD.format(table="team_thread_reads", extra="")
+    + ")"
+)
+_V9_REMOVE = f"(app_is_developer() AND ((user_id = app_user_id()) OR {_V9_OWNED}))"
+_V9_BLOCKER = "((blocker_user_id = app_user_id()) AND app_is_developer())"
+# Revision 0011's policies, whole (USING, WITH CHECK) per (table, command): each term stays even where another layer
+# already covers it (the triggers' gates, the threads' own policy behind the subqueries, the block invariant).
+V9_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
+    ("developer_blocks", "SELECT"): (_V9_BLOCKER, None),
+    ("developer_blocks", "INSERT"): (None, _V9_BLOCKER),
+    ("developer_blocks", "DELETE"): (_V9_BLOCKER, None),
+    ("team_invitations", "SELECT"): (
+        "(((app_user_id() = from_user_id) OR (app_user_id() = to_user_id)) AND app_is_developer())",
+        None,
+    ),
+    ("team_invitations", "INSERT"): (
+        None,
+        "((from_user_id = app_user_id()) AND app_is_visible_peer(from_user_id) AND app_is_visible_peer(to_user_id)"
+        " AND app_team_problem_open(problem_id) AND (NOT app_blocked_either_way(from_user_id, to_user_id)))",
+    ),
+    ("team_threads", "SELECT"): (
+        "(((app_user_id() = a_user_id) OR (app_user_id() = b_user_id)) AND app_is_developer())",
+        None,
+    ),
+    ("team_messages", "SELECT"): (
+        "(app_is_developer() AND " + _V9_THREAD.format(table="team_messages", extra="") + ")",
+        None,
+    ),
+    ("team_messages", "INSERT"): (
+        None,
+        "((sender_user_id = app_user_id()) AND app_is_developer() AND "
+        + _V9_THREAD.format(
+            table="team_messages",
+            extra=" AND (t.closed_at IS NULL) AND (NOT app_blocked_either_way(t.a_user_id, t.b_user_id))",
+        )
+        + ")",
+    ),
+    ("team_thread_reads", "SELECT"): (_V9_OWN_READ, None),
+    ("team_thread_reads", "INSERT"): (None, _V9_OWN_READ),
+    ("team_thread_reads", "UPDATE"): (_V9_OWN_READ, _V9_OWN_READ),
+    ("proposal_contributors", "SELECT"): (
+        "(app_is_developer() AND ((user_id = app_user_id()) OR (EXISTS ( SELECT 1\n   FROM proposals p\n"
+        "  WHERE (p.id = proposal_contributors.proposal_id)))))",
+        None,
+    ),
+    ("proposal_contributors", "INSERT"): (
+        None,
+        f"(app_is_developer() AND (user_id <> app_user_id()) AND {_V9_OWNED} AND (EXISTS ( SELECT 1\n"
+        "   FROM team_threads t\n  WHERE ((t.id = proposal_contributors.thread_id)"
+        " AND (t.a_user_id = LEAST(app_user_id(), proposal_contributors.user_id))"
+        " AND (t.b_user_id = GREATEST(app_user_id(), proposal_contributors.user_id))))))",
+    ),
+    ("proposal_contributors", "UPDATE"): (_V9_REMOVE, _V9_REMOVE),
+}
+
+
+async def test_schema_v9_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
+    """Revision 0011: each new table has a policy for each command it is granted and no other, every policy is
+    bridge_app's, and each is pinned whole: every reader and writer is a developer; blocks are the blocker's; an
+    invitation is its parties' and sent by a visible peer to a visible peer on an open problem with no block; a thread
+    and its messages are its parties'; a message is posted to an open thread with no block; a read marker is a party's
+    own; a contributor row is read by developers who read the proposal and by the contributor, added by the owner for
+    the other party of one of their threads and removed by either. bridge_app's report INSERT on moderation_cases is
+    narrowed to every subject type but 'message' and 'team_message'."""
+    found = await rows(
+        owner_engine,
+        "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, qual, with_check FROM pg_policies"
+        " WHERE schemaname = 'public' AND tablename = ANY (:tables)",
+        tables=sorted({table for table, _ in V9_POLICIES}),
+    )
+    assert {(row.tablename, row.policyname, row.cmd) for row in found} == {
+        (table, f"bridge_app_{cmd.lower()}", cmd) for table, cmd in V9_POLICIES
+    }
+    assert {role for row in found for role in row.roles} == {"bridge_app"}
+    assert {(row.tablename, row.cmd): (row.qual, row.with_check) for row in found} == V9_POLICIES
+    (report,) = await rows(
+        owner_engine,
+        "SELECT with_check FROM pg_policies WHERE schemaname = 'public' AND tablename = 'moderation_cases'"
+        " AND cmd = 'INSERT'",
+    )
+    assert report.with_check.endswith(
+        "AND ((subject_type)::text <> 'message'::text) AND ((subject_type)::text <> 'team_message'::text))"
     )
 
 
@@ -1457,8 +1620,25 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
                 ("SELECT app_create_trend_candidate('{}', '[]')", "the trend job with no user bound"),
                 ("SELECT app_decide_trend_card(uuid7(), 'publish')", "staff admin only"),
                 ("SELECT * FROM app_trend_job_state(now())", "the weekly trend job only"),
+                # revision 0011: the peers and team definers, each refused to a signed-in user who is no developer
+                ("SELECT count(*) FROM app_peers(20, 0)", "developers who opted in to peers only"),
+                ("SELECT count(*) FROM app_blocked_developers()", "app_blocked_developers: developers only"),
+                ("SELECT app_decide_team_invitation(uuid7(), 'accept')", "no invitation of the caller's"),
+                ("SELECT app_close_team_thread(uuid7(), 'left')", "no thread of the caller's"),
+                ("SELECT app_block_developer(uuid7())", "app_block_developer: developers only"),
+                ("SELECT app_unblock_developer(uuid7())", "app_unblock_developer: developers only"),
+                ("SELECT * FROM app_report_team_message(uuid7(), ARRAY['spam'])", "no team message of the caller's"),
+                ("SELECT * FROM app_reported_team_message(uuid7())", "staff admin or moderator only"),
             ):
                 await expect_error(conn, call, refusal)
+            for call in (  # revision 0011: the answers that say nothing to a caller who is no developer
+                "SELECT app_is_visible_peer(:id) IS FALSE",
+                "SELECT app_blocked_either_way(uuid7(), uuid7()) IS NULL",
+                "SELECT app_team_problem_open(:id) IS FALSE",
+                "SELECT NOT EXISTS (SELECT 1 FROM app_developer_card(:id))",
+                "SELECT app_contributor_handles(:id) IS NULL",
+            ):
+                assert (await conn.execute(sa.text(call), {"id": user_id})).scalar_one() is True, call
             # revision 0005: the definers and CHECK helpers bridge_app may call
             await conn.execute(sa.text("SELECT count(*) FROM app_trend_aggregates(now() - interval '1 day', now())"))
             await conn.execute(sa.text("SELECT app_uuid_set_is_valid(ARRAY[uuid7()], 1, 5)"))
@@ -2115,7 +2295,19 @@ V10_INSERTABLE: dict[str, set[str]] = {
 }
 
 
-@pytest.mark.parametrize(("table", "insertable"), sorted(V10_INSERTABLE.items()))
+# Revision 0011: the columns bridge_app inserts (an invitation's status and times, a thread, a message's time and
+# redaction, a contributor's times are the database's or the definers').
+V11_INSERTABLE: dict[str, set[str]] = {
+    "developer_blocks": {"blocker_user_id", "blocked_user_id"},
+    "team_invitations": {"id", "from_user_id", "to_user_id", "problem_id", "note"},
+    "team_threads": set(),
+    "team_messages": {"id", "thread_id", "sender_user_id", "body"},
+    "team_thread_reads": {"thread_id", "user_id", "last_read_at"},
+    "proposal_contributors": {"proposal_id", "user_id", "thread_id"},
+}
+
+
+@pytest.mark.parametrize(("table", "insertable"), sorted({**V10_INSERTABLE, **V11_INSERTABLE}.items()))
 async def test_schema_v8_insert_columns_are_exactly_the_apps(
     owner_engine: AsyncEngine, table: str, insertable: set[str]
 ) -> None:
@@ -2784,6 +2976,28 @@ V10_TRIGGERS = {
     ("trend_card_sources", "trend_card_sources_no_update"): ("block_mutation", ROW | BEFORE | ON_UPDATE),
 }
 
+# Revision 0011: a profile's opt-in time is the database's; a block takes the pair's lock before its row exists and
+# ends the pair after the policy admitted it; an invitation's sender hears its precise refusals first, and an
+# invitation and a thread change once; a team message follows the engagement thread's pattern (the visibility check
+# first on INSERT, then the open gate; append-only but for the owner's redaction); a contributor is removed once.
+V11_TRIGGERS = {
+    ("developer_profiles", "developer_profiles_peers_opt_in"): (
+        "developer_profiles_peers_opt_in",
+        ROW | BEFORE | ON_INSERT | ON_UPDATE,
+    ),
+    ("developer_blocks", "developer_blocks_0_lock"): ("developer_blocks_pair", ROW | BEFORE | ON_INSERT),
+    ("developer_blocks", "developer_blocks_end_pair"): ("developer_blocks_pair", ROW | ON_INSERT),
+    ("team_invitations", "team_invitations_open"): ("team_invitations_open", ROW | BEFORE | ON_INSERT),
+    ("team_invitations", "team_invitations_guard"): ("team_invitations_guard", ROW | BEFORE | ON_UPDATE),
+    ("team_threads", "team_threads_guard"): ("team_threads_guard", ROW | BEFORE | ON_UPDATE),
+    ("team_messages", "team_messages_0_visible"): ("team_thread_visible", ROW | BEFORE | ON_INSERT),
+    ("team_messages", "team_messages_1_open"): ("team_messages_open", ROW | BEFORE | ON_INSERT),
+    ("team_messages", "team_messages_no_delete"): ("block_mutation", ROW | BEFORE | ON_DELETE),
+    ("team_messages", "team_messages_redaction_guard"): ("team_messages_redaction_guard", ROW | BEFORE | ON_UPDATE),
+    ("team_messages", "team_messages_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE),
+    ("proposal_contributors", "proposal_contributors_guard"): ("proposal_contributors_guard", ROW | BEFORE | ON_UPDATE),
+}
+
 
 async def test_a_published_briefs_text_changes_only_with_a_return_to_review(owner_engine: AsyncEngine) -> None:
     """Revision 0006 (REQ-DIR-05, the P19-B security review): problems_brief_text_guard keeps the moderated text of a
@@ -2831,7 +3045,7 @@ async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine)
         " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
     )
     expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS | V8_TRIGGERS | V9_TRIGGERS
-    expected |= V10_TRIGGERS
+    expected |= V10_TRIGGERS | V11_TRIGGERS
     assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == expected
     assert {row.tgenabled for row in found} == {"O"}
 
