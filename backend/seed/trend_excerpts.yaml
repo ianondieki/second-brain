@@ -1,0 +1,273 @@
+# Official technology-publisher excerpts for the "This week" trend cards (P22-B, REQ-DEV-02, D-60).
+# Fetched ONCE on 2026-10-06 at build time; no runtime scraping. Method, sources, robots.txt findings and caveats:
+# docs/platform/research/trend-excerpts-2026-10.md
+# Same shape as backend/seed/research_excerpts.yaml with `topic_slug` instead of `niche` and `country: TECH`.
+# `quote` is copied verbatim (whitespace-normalised) from the fetched page text, <=60 words, occurs exactly once;
+# `published_date` is a date the page itself states (ISO 8601; for tr-web-003 it is the release date printed in the quote).
+# `source_type` is `official` for every row (the publisher is the project or vendor itself); `publisher_kind` is one of
+# project | vendor | standards | regulator. Fair-use excerpts only. No personal data about private individuals.
+excerpts:
+- id: tr-lng-001
+  topic_slug: languages
+  country: TECH
+  url: https://blog.python.org/2026/10/python-31022-31117/
+  publisher: Python Software Foundation
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-10-01'
+  retrieved_at: '2026-10-06'
+  quote: Python 3.10.22 is the final release of Python 3.10. After five years, the series has reached end of life and will receive no further security updates.
+  topic: Python 3.10 reaches end of life with 3.10.22 (1 Oct 2026)
+- id: tr-lng-002
+  topic_slug: languages
+  country: TECH
+  url: https://blog.python.org/2026/10/python-3150-rc3/
+  publisher: Python Software Foundation
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-10-02'
+  retrieved_at: '2026-10-06'
+  quote: This release, 3.15.0rc3, is the final planned release candidate, containing around 156 bugfixes, build improvements and documentation changes from 82 contributors since 3.15.0rc2.
+  topic: Python 3.15.0rc3 is the final planned release candidate
+- id: tr-lng-003
+  topic_slug: languages
+  country: TECH
+  url: https://go.dev/blog/go1.27
+  publisher: The Go Project
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-08-19'
+  retrieved_at: '2026-10-06'
+  quote: Go 1.27 brings major enhancements across the language, toolchain, runtime, and standard library. Below are some of the key highlights. Language changes Go 1.27 introduces three notable updates to the language specification. First, generic methods are now supported.
+  topic: Go 1.27 released with generic methods
+- id: tr-lng-004
+  topic_slug: languages
+  country: TECH
+  url: https://blog.rust-lang.org/2026/10/02/demoting-i686-windows-targets-to-std-only/
+  publisher: The Rust Project
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-10-02'
+  retrieved_at: '2026-10-06'
+  quote: 'With Rust 1.100.0, the following changes to 32-bit Windows targets will happen: i686-pc-windows-msvc Tier 1 with host tools target will be demoted to Tier 1 without host tools.'
+  topic: Rust 1.100.0 demotes 32-bit Windows MSVC host tools
+- id: tr-web-001
+  topic_slug: web
+  country: TECH
+  url: https://react.dev/blog/2026/09/09/react-19-3
+  publisher: React
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-09-09'
+  retrieved_at: '2026-10-06'
+  quote: React 19.3 is now available on npm! Last year, we shared View Transitions and Fragment Refs as new experimental APIs coming to React. We’re excited to announce that both of these are now stable in React 19.3!
+  topic: React 19.3 stabilises View Transitions and Fragment Refs
+- id: tr-web-002
+  topic_slug: web
+  country: TECH
+  url: https://www.w3.org/news/2026/web-authentication-an-api-for-accessing-public-key-credentials-level-3-is-now-a-w3c-recommendation/
+  publisher: World Wide Web Consortium (W3C)
+  source_type: official
+  publisher_kind: standards
+  published_date: '2026-08-25'
+  retrieved_at: '2026-10-06'
+  quote: 'The Web Authentication Working Group is pleased to publish Web Authentication: An API for accessing Public Key Credentials Level 3 as a W3C Recommendation.'
+  topic: WebAuthn Level 3 becomes a W3C Recommendation (passkeys)
+- id: tr-web-003
+  topic_slug: web
+  country: TECH
+  url: https://developer.mozilla.org/en-US/docs/Mozilla/Firefox/Releases/157
+  publisher: Mozilla (MDN Web Docs)
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-09-29'
+  retrieved_at: '2026-10-06'
+  quote: This article provides information about the changes in Firefox 157 that affect developers. Firefox 157 was released on September 29, 2026.
+  topic: Firefox 157 released (developer release notes)
+- id: tr-cld-001
+  topic_slug: cloud
+  country: TECH
+  url: https://kubernetes.io/blog/2026/08/26/kubernetes-v1-37-release/
+  publisher: Kubernetes
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-08-26'
+  retrieved_at: '2026-10-06'
+  quote: This release consists of 67 enhancements. Of those enhancements, 16 have graduated to Stable, 23 have graduated to Beta, 27 are entering Alpha, and 1 is a deprecation/removal.
+  topic: 'Kubernetes v1.37 release: 67 enhancements'
+- id: tr-cld-002
+  topic_slug: cloud
+  country: TECH
+  url: https://aws.amazon.com/about-aws/whats-new/2026/10/amazon-eks-distro-kubernetes-version-1-37/
+  publisher: Amazon Web Services
+  source_type: official
+  publisher_kind: vendor
+  published_date: '2026-10-02'
+  retrieved_at: '2026-10-06'
+  quote: Starting today, you can create new EKS clusters using version 1.37 and upgrade existing clusters to version 1.37 using the EKS console, the eksctl command line interface, or through an infrastructure-as-code tool.
+  topic: Amazon EKS supports Kubernetes 1.37
+- id: tr-cld-003
+  topic_slug: cloud
+  country: TECH
+  url: https://cloud.google.com/blog/products/storage-data-transfer/storage-intelligence-advisor-and-batch-operations-updates
+  publisher: Google Cloud
+  source_type: official
+  publisher_kind: vendor
+  published_date: '2026-09-25'
+  retrieved_at: '2026-10-06'
+  quote: Storage Intelligence advisor and enhanced storage batch operations are generally available today.
+  topic: Cloud Storage Intelligence advisor and batch operations reach GA
+- id: tr-dat-001
+  topic_slug: databases
+  country: TECH
+  url: https://www.postgresql.org/about/news/postgresql-19-beta-4-released-3386/
+  publisher: PostgreSQL Global Development Group
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-09-24'
+  retrieved_at: '2026-10-06'
+  quote: The next planned release of PostgreSQL 19 is the release candidate, which should occur in early October. Based on testing and evaluation, this means that the PostgreSQL 19 GA may also occur in October.
+  topic: PostgreSQL 19 Beta 4; release candidate and GA expected in October
+- id: tr-dat-002
+  topic_slug: databases
+  country: TECH
+  url: https://www.postgresql.org/about/news/pgvector-087-released-3392/
+  publisher: PostgreSQL Global Development Group
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-10-05'
+  retrieved_at: '2026-10-06'
+  quote: pgvector 0.8.7 is now available. This release fixes a buffer overflow with IVFFlat index builds (CVE-2026-103484), which can lead to arbitrary code execution.
+  topic: pgvector 0.8.7 fixes a buffer overflow (posted by pgvector on postgresql.org)
+- id: tr-dat-003
+  topic_slug: databases
+  country: TECH
+  url: https://aws.amazon.com/about-aws/whats-new/2026/10/aurora-dsql-partial-indexes/
+  publisher: Amazon Web Services
+  source_type: official
+  publisher_kind: vendor
+  published_date: '2026-10-02'
+  retrieved_at: '2026-10-06'
+  quote: Amazon Aurora DSQL now lets you build an index over a specific subset of a table, storing only qualifying rows rather than every row in the entire table, which improves query performance and lowers index storage cost.
+  topic: Amazon Aurora DSQL adds partial indexes
+- id: tr-sec-001
+  topic_slug: security
+  country: TECH
+  url: https://github.blog/changelog/2026-10-02-unvalidated-npm-trusted-publishing-configurations-now-expire/
+  publisher: GitHub
+  source_type: official
+  publisher_kind: vendor
+  published_date: '2026-10-02'
+  retrieved_at: '2026-10-06'
+  quote: Unvalidated npm trusted publishing configurations now expire 48 hours after creation and can no longer authorize publishing. This limits the risk of trusting a repository or project name that changes ownership.
+  topic: npm trusted publishing configurations expire after 48 hours unless validated
+- id: tr-sec-002
+  topic_slug: security
+  country: TECH
+  url: https://blog.rust-lang.org/2026/09/21/github-actions-leaking-secrets-when-miri-output-is-cached/
+  publisher: The Rust Project
+  source_type: official
+  publisher_kind: project
+  published_date: '2026-09-21'
+  retrieved_at: '2026-10-06'
+  quote: The Rust Security Response Team was notified that Miri stores all environment variables to target/, allowing secrets to persist in caches.
+  topic: Miri output cached in GitHub Actions can leak secrets to pull requests
+- id: tr-sec-003
+  topic_slug: security
+  country: TECH
+  url: https://github.blog/changelog/2026-10-05-secret-scanning-adds-detectors-for-lovable-supabase-and-more/
+  publisher: GitHub
+  source_type: official
+  publisher_kind: vendor
+  published_date: '2026-10-05'
+  retrieved_at: '2026-10-06'
+  quote: Secret scanning now detects new secret types from Lovable Labs, Pydantic Services Inc., and Supabase.
+  topic: GitHub secret scanning adds Lovable, Pydantic and Supabase detectors
+- id: tr-mob-001
+  topic_slug: mobile
+  country: TECH
+  url: https://developer.apple.com/news/?id=kkphp5qo
+  publisher: Apple
+  source_type: official
+  publisher_kind: vendor
+  published_date: '2026-10-05'
+  retrieved_at: '2026-10-06'
+  quote: 'iPhone Duo will be available to customers starting October 23, 2026. To get your apps and games ready today, you can: Build or recompile with Xcode Recompile existing apps with Xcode 27.1, which adds development support for iPhone Duo.'
+  topic: 'Apple: iPhone Duo available 23 Oct 2026; Xcode 27.1 adds support'
+- id: tr-mob-002
+  topic_slug: mobile
+  country: TECH
+  url: https://developer.apple.com/news/?id=idsft9ai
+  publisher: Apple
+  source_type: official
+  publisher_kind: vendor
+  published_date: '2026-09-16'
+  retrieved_at: '2026-10-06'
+  quote: Beginning with iOS 27.2 and iPadOS 27.2, developers will have the option to use an alternative version of the App Tracking Transparency system prompt in the EU.
+  topic: 'Apple: alternative App Tracking Transparency prompt in the EU from iOS 27.2'
+- id: tr-ai-001
+  topic_slug: ai
+  country: TECH
+  url: https://github.blog/changelog/2026-10-02-selected-models-in-github-copilot-deprecated/
+  publisher: GitHub
+  source_type: official
+  publisher_kind: vendor
+  published_date: '2026-10-02'
+  retrieved_at: '2026-10-06'
+  quote: As of today, October 2, 2026, we have deprecated the following models across all GitHub Copilot experiences (including Copilot Chat, inline edits, ask and agent modes, and code completions).
+  topic: GitHub Copilot deprecates selected models (2 Oct 2026)
+- id: tr-ai-002
+  topic_slug: ai
+  country: TECH
+  url: https://aws.amazon.com/about-aws/whats-new/2026/09/s3-vectors-introduces-metadata-pre-filtering/
+  publisher: Amazon Web Services
+  source_type: official
+  publisher_kind: vendor
+  published_date: '2026-09-30'
+  retrieved_at: '2026-10-06'
+  quote: Amazon S3 Vectors now supports pre-filtering, which evaluates metadata filters before running similarity search, returning up to 5x more of the matching vectors when your filter is selective.
+  topic: Amazon S3 Vectors adds metadata pre-filtering for RAG and semantic search
+- id: tr-ai-003
+  topic_slug: ai
+  country: TECH
+  url: https://genai.owasp.org/2026/09/01/owasp-genai-security-project-unveils-2026-top-10-for-llm-applications-new-agent-control-standard-and-sponsors-as-community-tops-30000-members/
+  publisher: OWASP Foundation
+  source_type: official
+  publisher_kind: standards
+  published_date: '2026-09-01'
+  retrieved_at: '2026-10-06'
+  quote: The new edition surpassed 10,000 downloads within its first 48 hours, demonstrating the continued demand for practical, community-developed guidance as organizations move AI applications from experimentation into production.
+  topic: OWASP GenAI Security Project releases the 2026 Top 10 for LLM Applications
+- id: tr-ke-001
+  topic_slug: kenya-ict
+  country: TECH
+  url: https://www.ca.go.ke/ca-resolves-82-cent-ict-consumer-complaints-network-quality-and-fraud-top-grievances
+  publisher: Communications Authority of Kenya
+  source_type: official
+  publisher_kind: regulator
+  published_date: '2026-08-06'
+  retrieved_at: '2026-10-06'
+  quote: According to the Authority’s latest Consumer Complaints Report covering April to June 2026, the Authority received 670 escalated consumer complaints, of which 548 were successfully resolved, while the remaining 122 cases are under active regulatory follow-up.
+  topic: 'CA: 670 escalated ICT consumer complaints in Apr-Jun 2026, 548 resolved'
+- id: tr-ke-002
+  topic_slug: kenya-ict
+  country: TECH
+  url: https://www.ca.go.ke/ca-clarifies-new-cyber-cafe-license-rules-and-says-no-browsing-history-will-be-required
+  publisher: Communications Authority of Kenya
+  source_type: official
+  publisher_kind: regulator
+  published_date: '2026-08-13'
+  retrieved_at: '2026-10-06'
+  quote: The new licence conditions were published in the Kenya Gazette Notice Vol. CXXVIII No. 135 on August 7, 2026, and will take effect on September 7, following the statutory 30-day period.
+  topic: 'CA: new licence conditions for cyber cafes and public internet centres, effective 7 Sep 2026'
+- id: tr-ke-003
+  topic_slug: kenya-ict
+  country: TECH
+  url: https://www.ca.go.ke/increased-adoption-smartphones-and-expansion-mobile-network-infrastructure-drive-surge-kenya
+  publisher: Communications Authority of Kenya
+  source_type: official
+  publisher_kind: regulator
+  published_date: '2026-06-17'
+  retrieved_at: '2026-10-06'
+  quote: A report by the Communications Authority of Kenya (CA) indicates that active mobile subscriptions increased by 7.4 per cent to hit 84.1 million during the period under review, pushing the country’s mobile penetration up by 8.2 percentage points to 157.7 per cent.
+  topic: 'CA sector report: 84.1 million active mobile subscriptions in Q3 FY2025/26'

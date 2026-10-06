@@ -1,0 +1,57 @@
+# Source allowlist for official technology publishers (P22-B, REQ-DEV-02, D-60). Same shape as
+# backend/src/bridge/problems/sources/ke.yaml; read by the same loader (country TECH).
+#
+# domains: the only hosts a trend excerpt may come from. A host matches a domain exactly or as a subdomain of it.
+# `publisher` is the independence key and must equal the excerpt's own `publisher`. `official: true` for every row here:
+# each host is the project's, standards body's, regulator's or vendor's own publication channel (never third-party
+# news, an individual's blog or social). In ke.yaml `official` means government or regulator; here it means "the
+# publisher is the subject itself" (a vendor's own news about its product, a project's own release notes), which is
+# the meaning the task asked for. The loader (bridge/problems/research/sources.py) refuses a TECH domain that is not
+# official and a trend excerpt whose source_type is not official; a card naming an organisation must cite a source that
+# names it or is published by it (bridge/problems/trends/checks.py). Hosts are the exact hosts
+# used (www. kept where the page is served from www.); a subdomain such as blog.python.org is listed on its own because
+# python.org and blog.python.org are different servers with different robots.txt files.
+# Source of every host: docs/platform/research/trend-excerpts-2026-10.md (retrieved 2026-10-06).
+#
+# organisations: names the code looks for in a drafted card (same matching rules as ke.yaml). Every vendor named in a
+# quote is listed; Google, Microsoft, Safaricom and KRA are listed although no quote names them (Google Cloud is a
+# publisher; Microsoft owns GitHub; Safaricom and KRA are the Kenyan tech names the card drafter is likely to
+# mention). Aliases that are also common words are written {text: ..., case_sensitive: true}.
+version: 1
+country: TECH
+domains:
+  - {domain: blog.python.org, publisher: Python Software Foundation, official: true}
+  - {domain: go.dev, publisher: The Go Project, official: true}
+  - {domain: blog.rust-lang.org, publisher: The Rust Project, official: true}
+  - {domain: react.dev, publisher: React, official: true}
+  - {domain: www.w3.org, publisher: World Wide Web Consortium (W3C), official: true}
+  - {domain: developer.mozilla.org, publisher: Mozilla (MDN Web Docs), official: true}
+  - {domain: kubernetes.io, publisher: Kubernetes, official: true}
+  - {domain: aws.amazon.com, publisher: Amazon Web Services, official: true}
+  - {domain: cloud.google.com, publisher: Google Cloud, official: true}
+  - {domain: www.postgresql.org, publisher: PostgreSQL Global Development Group, official: true}
+  - {domain: github.blog, publisher: GitHub, official: true}
+  - {domain: genai.owasp.org, publisher: OWASP Foundation, official: true}
+  - {domain: developer.apple.com, publisher: Apple, official: true}
+  - {domain: www.ca.go.ke, publisher: Communications Authority of Kenya, official: true}
+organisations:
+  - {name: Python Software Foundation, aliases: [Python Software Foundation, PSF, {text: Python, case_sensitive: true}, CPython]}
+  - {name: The Go Project, aliases: [Go team, {text: Go, case_sensitive: true}, Golang]}
+  - {name: The Rust Project, aliases: [Rust Foundation, {text: Rust, case_sensitive: true}, Rust Security Response Team, Cargo, Miri]}
+  - {name: React, aliases: [{text: React, case_sensitive: true}, React Foundation, ReactJS]}
+  - {name: World Wide Web Consortium, aliases: [World Wide Web Consortium, W3C, WebAuthn, Web Authentication]}
+  - {name: Mozilla, aliases: [Mozilla, Firefox, MDN]}
+  - {name: Kubernetes, aliases: [Kubernetes, K8s, CNCF, Cloud Native Computing Foundation]}
+  - {name: Amazon Web Services, aliases: [Amazon Web Services, AWS, Amazon, EKS, Aurora DSQL, S3 Vectors, S3 Tables]}
+  - {name: Google, aliases: [Google, Google Cloud, Google Play, Android, Gemini]}
+  - {name: PostgreSQL, aliases: [PostgreSQL, Postgres, pgvector, PgBouncer, Pgpool-II]}
+  - {name: GitHub, aliases: [GitHub, Copilot, GitHub Copilot, GitHub Actions, {text: npm, case_sensitive: true}]}
+  - {name: Microsoft, aliases: [Microsoft, Azure, Xbox]}
+  - {name: OWASP, aliases: [OWASP, OWASP Foundation, OWASP GenAI Security Project]}
+  - {name: Apple, aliases: [{text: Apple, case_sensitive: true}, iPhone, iPadOS, iOS, Xcode, App Store, App Tracking Transparency]}
+  - {name: Lovable, aliases: [{text: Lovable, case_sensitive: true}, Lovable Labs]}
+  - {name: Pydantic, aliases: [Pydantic, Pydantic Services]}
+  - {name: Supabase, aliases: [Supabase]}
+  - {name: Communications Authority of Kenya, aliases: [Communications Authority, CA]}
+  - {name: Safaricom, aliases: [Safaricom, M-Pesa, Mpesa, Daraja]}
+  - {name: Kenya Revenue Authority, aliases: [Kenya Revenue Authority, KRA, eTIMS, iTax]}
