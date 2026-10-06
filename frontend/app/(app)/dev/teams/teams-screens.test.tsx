@@ -15,6 +15,7 @@ import { TeamThread } from "./[id]/TeamThread";
 import type { TeamCalls } from "./calls";
 import { Credits } from "./Credits";
 import { InvitationList } from "./InvitationList";
+import { StatusHost } from "./StatusHost";
 import TeamsPage from "./page";
 import { toThreadPage, type Invitation, type TeamThread as TeamThreadRead, type ThreadSummary } from "./teams";
 
@@ -138,7 +139,7 @@ function teamCalls(overrides: Partial<TeamCalls> = {}): Partial<TeamCalls> {
 describe("the invitations", () => {
   it("lists received ones first with Accept and Decline, sent ones with Withdraw, and no primary action", () => {
     const sent = invitation({ id: "01a11223-4000-7000-8000-000000000002", direction: "sent", note: null, counterpart: { ...BRIAN, handle: "dev-5jtjq2m3" } });
-    renderWithIntl(<InvitationList initial={{ received: [invitation()], sent: [sent] }} calls={teamCalls()} />);
+    renderWithIntl(<StatusHost><InvitationList initial={{ received: [invitation()], sent: [sent] }} calls={teamCalls()} /></StatusHost>);
     const lists = document.querySelectorAll("[data-invitations]");
     expect([...lists].map((list) => list.getAttribute("data-invitations"))).toEqual(["received", "sent"]);
     const card = within(lists[0] as HTMLElement).getByRole("article", { name: "dev-kb3dysnk invited you" });
@@ -150,9 +151,9 @@ describe("the invitations", () => {
     expect(document.querySelector("[data-primary]")).toBeNull();
   });
 
-  it("Accept says the thread is open, links it and takes focus (the line stays: the page is not read again)", async () => {
+  it("Accept says the thread is open above the sections, links it, takes focus and reads the page again", async () => {
     const calls = teamCalls();
-    renderWithIntl(<InvitationList initial={{ received: [invitation()], sent: [] }} calls={calls} />);
+    renderWithIntl(<StatusHost><InvitationList initial={{ received: [invitation()], sent: [] }} calls={calls} /></StatusHost>);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Accept" })));
     expect(calls.accept).toHaveBeenCalledWith(invitation().id);
     const status = screen.getByRole("status");
@@ -160,13 +161,13 @@ describe("the invitations", () => {
     expect(within(status).getByRole("link", { name: "Open the thread" }).getAttribute("href")).toBe("/dev/teams/01a11223-32cd-732d-9755-f7206d3c33e4");
     await waitFor(() => expect(document.activeElement).toBe(status));
     expect(document.querySelector("[data-invitation]")).toBeNull();
-    expect(refresh).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("Decline and Withdraw say so; an invitation already answered says that instead", async () => {
     const sent = invitation({ id: "01a11223-4000-7000-8000-000000000002", direction: "sent" });
     const calls = teamCalls({ withdraw: vi.fn(async () => ({ ok: false as const, refusal: "gone" as const })) });
-    renderWithIntl(<InvitationList initial={{ received: [invitation()], sent: [sent] }} calls={calls} />);
+    renderWithIntl(<StatusHost><InvitationList initial={{ received: [invitation()], sent: [sent] }} calls={calls} /></StatusHost>);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Decline" })));
     expect(screen.getByRole("status").textContent).toBe("Invitation declined.");
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Withdraw" })));

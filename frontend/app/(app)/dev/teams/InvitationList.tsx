@@ -1,39 +1,31 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
-import { Alert } from "@/components/ui/Alert";
-import { Button, standaloneLinkClass } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 
 import { teamCalls, type TeamCalls } from "./calls";
-import { threadHref, type Invitation, type Invitations } from "./teams";
+import { useSay } from "./StatusHost";
+import type { Invitation, Invitations } from "./teams";
 
 type Step = "accept" | "decline" | "withdraw";
-type Said = { kind: "accepted"; name: string; threadId: string } | { kind: "declined" | "withdrawn" | "gone" | "failed" };
 
 /**
  * The pending invitations of /dev/teams (REQ-DEV-03): the ones received first (who, the problem, their note, then
- * Accept and Decline), then the ones sent (Withdraw). Each answer leaves the list and a status line says what
- * happened (it takes focus); after Accept it links the new thread. The page is not read again (that would take the
- * section, and its status line, away with the last card). No button here is the screen's primary action.
+ * Accept and Decline), then the ones sent (Withdraw). Each answer leaves the list, the page's status line
+ * (StatusHost, above the sections) says what happened and takes focus (after Accept it links the new thread), and the
+ * page is read again so Threads follows. No button here is the screen's primary action.
  */
 export function InvitationList({ initial, calls: given }: { initial: Invitations; calls?: Partial<TeamCalls> }) {
   const t = useStrings("teamUp");
   const [calls] = useState<TeamCalls>(() => ({ ...teamCalls(), ...given }));
   const [answered, setAnswered] = useState<Record<string, true>>({});
   const [busy, setBusy] = useState<{ id: string; step: Step } | null>(null);
-  const [said, setSaid] = useState<(Said & { n: number }) | null>(null);
-  const status = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (said) status.current?.focus();
-  }, [said]);
-
-  function say(next: Said) {
-    setSaid((now) => ({ ...next, n: (now?.n ?? 0) + 1 }));
-  }
+  const say = useSay();
+  const router = useRouter();
+  const [, startRefresh] = useTransition();
 
   async function answer(invitation: Invitation, step: Step) {
     if (busy) return;
@@ -45,6 +37,7 @@ export function InvitationList({ initial, calls: given }: { initial: Invitations
     else if (step === "accept" && "threadId" in outcome) {
       say({ kind: "accepted", name: invitation.counterpart?.handle ?? t("invitation.someone"), threadId: String(outcome.threadId) });
     } else say({ kind: step === "withdraw" ? "withdrawn" : "declined" });
+    if (outcome.ok || outcome.refusal === "gone") startRefresh(() => router.refresh());
   }
 
   const received = initial.received.filter((item) => !answered[item.id]);
@@ -52,21 +45,6 @@ export function InvitationList({ initial, calls: given }: { initial: Invitations
 
   return (
     <div className="flex flex-col gap-6">
-      {said ? (
-        <Alert key={said.n} ref={status} tone={said.kind === "failed" || said.kind === "gone" ? "error" : "ok"}>
-          {said.kind === "accepted" ? (
-            <span className="flex flex-col items-start">
-              {t("invitation.accepted", { name: said.name })}
-              <Link href={threadHref(said.threadId)} className={standaloneLinkClass} data-open-thread="">
-                {t("invitation.openThread")}
-              </Link>
-            </span>
-          ) : (
-            t(`invitation.${said.kind}`)
-          )}
-        </Alert>
-      ) : null}
-
       {received.length > 0 ? (
         <ul aria-label={t("invitation.receivedLabel")} className="grid grid-cols-1 gap-4 sm:grid-cols-2" data-invitations="received">
           {received.map((item) => (

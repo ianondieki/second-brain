@@ -17,6 +17,7 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 import { Credits } from "./Credits";
 import { myContributions, myInvitations, myThreads } from "./data";
 import { InvitationList } from "./InvitationList";
+import { StatusHost } from "./StatusHost";
 import { PEERS_PATH, sortThreads, threadHref, type ThreadSummary } from "./teams";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -50,41 +51,42 @@ export default async function TeamsPage() {
       <div className="flex max-w-4xl flex-col gap-12 lg:gap-14">
         <PageHeader back={{ href: PEERS_PATH, label: t("list.back") }} title={t("list.title")} lead={t("list.lead")} />
 
-        {nothing ? (
-          <EmptyState className="-mt-4" data-teams="empty" sentence={t("list.empty")} action={t("list.emptyAction")} href={PEERS_PATH} />
-        ) : (
-          <>
-            {anyInvitation ? (
-              <Section title={t("list.invitations")} headingId="teams-invitations" data-teams="invitations">
-                <ClientStrings strings={strings}>
-                  <InvitationList initial={invitations} />
-                </ClientStrings>
-              </Section>
-            ) : null}
+        {/* The status line of an answer to an invitation sits above the sections, so reading the page again keeps it. */}
+        <ClientStrings strings={strings}>
+          <StatusHost>
+            {nothing ? (
+              <EmptyState className="-mt-4" data-teams="empty" sentence={t("list.empty")} action={t("list.emptyAction")} href={PEERS_PATH} />
+            ) : (
+              <>
+                {anyInvitation ? (
+                  <Section title={t("list.invitations")} headingId="teams-invitations" data-teams="invitations">
+                    <InvitationList initial={invitations} />
+                  </Section>
+                ) : null}
 
-            <Section title={t("list.threads")} headingId="teams-threads" data-teams="threads">
-              {threads.length === 0 ? (
-                <p className="text-ink">{t("list.noThreads")}</p>
-              ) : (
-                <div className="rounded-panel border border-line bg-field px-4 sm:px-6">
-                  <RowList rule={false} aria-label={t("list.threadsLabel")}>
-                    {sortThreads(threads).map((thread) => (
-                      <ThreadRow key={thread.id} thread={thread} />
-                    ))}
-                  </RowList>
-                </div>
-              )}
-            </Section>
+                <Section title={t("list.threads")} headingId="teams-threads" data-teams="threads">
+                  {threads.length === 0 ? (
+                    <p className="text-ink">{t("list.noThreads")}</p>
+                  ) : (
+                    <div className="rounded-panel border border-line bg-field px-4 sm:px-6">
+                      <RowList rule={false} aria-label={t("list.threadsLabel")}>
+                        {sortThreads(threads).map((thread) => (
+                          <ThreadRow key={thread.id} thread={thread} />
+                        ))}
+                      </RowList>
+                    </div>
+                  )}
+                </Section>
 
-            {credits.length > 0 ? (
-              <Section title={t("list.credits")} headingId="teams-credits" description={t("list.creditsLead")} data-teams="credits">
-                <ClientStrings strings={strings}>
-                  <Credits initial={credits} />
-                </ClientStrings>
-              </Section>
-            ) : null}
-          </>
-        )}
+                {credits.length > 0 ? (
+                  <Section title={t("list.credits")} headingId="teams-credits" description={t("list.creditsLead")} data-teams="credits">
+                    <Credits initial={credits} />
+                  </Section>
+                ) : null}
+              </>
+            )}
+          </StatusHost>
+        </ClientStrings>
       </div>
     </SignedInShell>
   );
