@@ -115,6 +115,14 @@ down_revision: str | Sequence[str] | None = "0011"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+# Revisions 0002 (UPDATE) and 0005 (INSERT): bridge_app's column grants on problems' embedding columns, revoked here and
+# granted again on downgrade (a column REVOKE leaves the other columns' grants as they are).
+PROBLEM_EMBEDDING_PRIVILEGES = (
+    "INSERT (embedding, embed_model, embed_version), UPDATE (embedding, embed_model, embed_version)"
+)
+NARROW_SQL = f"REVOKE {PROBLEM_EMBEDDING_PRIVILEGES} ON TABLE problems FROM bridge_app;"
+RESTORE_SQL = f"GRANT {PROBLEM_EMBEDDING_PRIVILEGES} ON TABLE problems TO bridge_app;"
+
 INDEXES = (
     ("ix_developer_profiles_profile_embedding", "developer_profiles", "profile_embedding"),
     ("ix_problems_embedding", "problems", "embedding"),
@@ -409,6 +417,44 @@ BEGIN
            (SELECT count(*) FROM public.problems_to_embed(p_model, p_version));
 END;
 $$;
+
+-- AC-PERS-3 at the database: a profiling decision that is not a grant clears the profile's vector in its own
+-- transaction, whatever the application does next (it also calls app_clear_profile_embedding). For every role (the
+-- trigger's WHEN names the rows). SECURITY DEFINER: bridge_app holds no UPDATE of the vector.
+CREATE FUNCTION consents_profiling_withdrawn() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    PERFORM public.profile_embedding_clear(NEW.user_id);
+    RETURN NULL;
+END;
+$$;
+
+-- A liked niche added, removed or changed (another niche, kind or user; a weight change is none) moves the profile's
+-- updated_at to now(), so the profile's vector is stale (developer_niches has no time of its own). Followed niches are
+-- not in the text and change nothing. For every role. SECURITY DEFINER: the developer's own UPDATE of updated_at would
+-- do, but the owner's cascade and any other path must too.
+CREATE FUNCTION developer_niches_liked_changed() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND (NEW.user_id, NEW.niche_id, NEW.kind) IS NOT DISTINCT FROM
+                            (OLD.user_id, OLD.niche_id, OLD.kind) THEN
+        RETURN NULL;
+    END IF;
+    IF TG_OP IN ('UPDATE', 'DELETE') AND OLD.kind = 'liked' THEN
+        UPDATE public.developer_profiles d SET updated_at = now()
+         WHERE d.user_id = OLD.user_id AND d.updated_at IS DISTINCT FROM now();
+    END IF;
+    IF TG_OP IN ('INSERT', 'UPDATE') AND NEW.kind = 'liked' THEN
+        UPDATE public.developer_profiles d SET updated_at = now()
+         WHERE d.user_id = NEW.user_id AND d.updated_at IS DISTINCT FROM now();
+    END IF;
+    RETURN NULL;
+END;
+$$;
 """
 
 # EXECUTE grants (EXECUTE revoked from PUBLIC first).
@@ -429,7 +475,17 @@ INTERNAL_FUNCTIONS = (
     "embedding_text_line(text)",
     "embedding_label_is_valid(text, integer)",
 )
-TRIGGER_FUNCTIONS: tuple[str, ...] = ()
+TRIGGER_FUNCTIONS = ("consents_profiling_withdrawn()", "developer_niches_liked_changed()")
+
+TRIGGERS_SQL = r"""
+CREATE TRIGGER consents_profiling_withdrawn
+    AFTER INSERT ON consents
+    FOR EACH ROW WHEN (NEW.purpose = 'profiling' AND NOT NEW.granted)
+    EXECUTE FUNCTION consents_profiling_withdrawn();
+CREATE TRIGGER developer_niches_liked_changed
+    AFTER INSERT OR UPDATE OR DELETE ON developer_niches
+    FOR EACH ROW EXECUTE FUNCTION developer_niches_liked_changed();
+"""
 
 
 def _run_sql(script: str) -> None:
@@ -442,7 +498,7 @@ def _run_sql(script: str) -> None:
 
 
 def _grant_sql() -> str:
-    grants: list[str] = []
+    grants = [NARROW_SQL]
     grants += [
         f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC;" for signature in (*INTERNAL_FUNCTIONS, *TRIGGER_FUNCTIONS)
     ]
@@ -460,6 +516,7 @@ def upgrade() -> None:
             name, table, [column], unique=False, postgresql_using="hnsw", postgresql_ops={column: "vector_cosine_ops"}
         )
     _run_sql(FUNCTIONS_SQL)
+    _run_sql(TRIGGERS_SQL)
     _run_sql(_grant_sql())
 
 
@@ -469,6 +526,10 @@ def downgrade() -> None:
     the downgrade proceeds with rows and nulls nothing. bridge_app's INSERT and UPDATE of problems' embedding columns
     (revisions 0002 and 0005) are granted again."""
     _run_sql(
+        "DROP TRIGGER developer_niches_liked_changed ON developer_niches;"
+        " DROP TRIGGER consents_profiling_withdrawn ON consents;"
+    )
+    _run_sql(
         "\n".join(
             f"DROP FUNCTION {signature};" for signature in (*TRIGGER_FUNCTIONS, *FUNCTION_GRANTS, *INTERNAL_FUNCTIONS)
         )
@@ -477,3 +538,4 @@ def downgrade() -> None:
         op.drop_index(name, table_name=table)
     op.drop_column("problems", "embedded_at")
     op.drop_column("developer_profiles", "profile_embedded_at")
+    _run_sql(RESTORE_SQL)
