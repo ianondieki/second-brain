@@ -3813,7 +3813,9 @@
       "block": "Zuia",
       "sameCounty": "Kaunti moja",
       "sharedNiches": "Nyanja mnazoshiriki: {value}",
-      "noHeadline": "Bado hana kichwa"
+      "noHeadline": "Bado hana kichwa",
+      "teaming": "Mnashirikiana",
+      "invitedYou": "Amekualika"
     },
     "list": {
       "more": "Zaidi",

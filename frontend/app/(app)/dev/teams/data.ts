@@ -144,3 +144,29 @@ export async function myPublishedIdeas(): Promise<{ id: string; title: string }[
     return [];
   }
 }
+
+/** What already stands between the caller and a peer: an open thread, an invitation from them, or one to them. */
+export type PeerRelation = { kind: "thread"; id: string } | { kind: "invitedYou" } | { kind: "invited" };
+
+/**
+ * The caller's open threads and pending invitations by the other developer's id, for /dev/peers (a peer they already
+ * team up with, or have an invitation with, shows that instead of Team up). Empty when it cannot be read.
+ */
+export async function peerRelations(): Promise<Record<string, PeerRelation>> {
+  try {
+    const opts = await options();
+    const [threads, invitations] = await Promise.all([
+      serverApi().GET("/api/me/teams", opts),
+      serverApi().GET("/api/me/teams/invitations", opts),
+    ]);
+    const out: Record<string, PeerRelation> = {};
+    for (const item of invitations.data?.sent ?? []) if (item.counterpart) out[item.counterpart.user_id] = { kind: "invited" };
+    for (const item of invitations.data?.received ?? []) if (item.counterpart) out[item.counterpart.user_id] = { kind: "invitedYou" };
+    for (const thread of threads.data?.threads ?? []) {
+      if (thread.open && thread.counterpart) out[thread.counterpart.user_id] = { kind: "thread", id: thread.id };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}

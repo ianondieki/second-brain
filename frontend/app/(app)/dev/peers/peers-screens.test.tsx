@@ -83,6 +83,27 @@ describe("the peers list", () => {
     expect(first.querySelector("[data-peer-menu] [data-block]")?.textContent).toBe("Block");
   });
 
+  it("a peer already teamed up with links the thread; one with an invitation says so instead of Team up", () => {
+    const third = peer({ user_id: "01a11222-e704-715c-94b6-403e7159f447", handle: "dev-third" });
+    renderWithIntl(
+      <PeerList
+        initial={{ peers: [peer(), OTHER, third], next: null, opted_in: true }}
+        niches={NICHES}
+        relations={{
+          [peer().user_id]: { kind: "thread", id: "01a11223-32cd-732d-9755-f7206d3c33e4" },
+          [OTHER.user_id]: { kind: "invitedYou" },
+          [third.user_id]: { kind: "invited" },
+        }}
+        locale="en"
+        calls={fakeCalls()}
+      />,
+    );
+    expect(document.querySelectorAll("[data-team-up]")).toHaveLength(0);
+    expect(within(rowOf("dev-kb3dysnk")).getByRole("link", { name: "Teaming up" }).getAttribute("href")).toBe("/dev/teams/01a11223-32cd-732d-9755-f7206d3c33e4");
+    expect(rowOf("dev-5jtjq2m3").querySelector("[data-relation]")?.textContent).toBe("Invited you");
+    expect(rowOf("dev-third").querySelector("[data-relation]")?.textContent).toBe("Invited");
+  });
+
   it("Team up opens the sheet; once sent the row says Invited and the line takes focus", async () => {
     const calls = fakeCalls();
     renderWithIntl(<PeerList initial={{ peers: [peer()], next: null, opted_in: true }} niches={NICHES} locale="en" calls={calls} />);

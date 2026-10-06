@@ -3813,7 +3813,9 @@
       "block": "Block",
       "sameCounty": "Same county",
       "sharedNiches": "Shared niches: {value}",
-      "noHeadline": "No headline yet"
+      "noHeadline": "No headline yet",
+      "teaming": "Teaming up",
+      "invitedYou": "Invited you"
     },
     "list": {
       "more": "More",

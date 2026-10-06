@@ -1,10 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
-import { Button } from "@/components/ui/Button";
+import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { ConfirmDialog, openConfirm } from "@/components/ui/ConfirmDialog";
 import { RowBase, RowList } from "@/components/ui/RowBase";
 import { CheckIcon } from "@/components/ui/status-icons";
@@ -12,7 +13,8 @@ import { CheckIcon } from "@/components/ui/status-icons";
 import { teamCalls, type TeamCalls } from "../teams/calls";
 import { Overflow, overflowItemClass } from "../teams/Overflow";
 import { closeOverflows } from "../teams/overflow-close";
-import { nameList, nicheNames, type Peer, type PeersPage } from "../teams/teams";
+import type { PeerRelation } from "../teams/data";
+import { nameList, nicheNames, threadHref, type Peer, type PeersPage } from "../teams/teams";
 
 // The Team up sheet loads with the first press of a Team up (its search and form are not needed to read the list).
 const TeamUpSheet = lazy(() => import("./TeamUpSheet").then((m) => ({ default: m.TeamUpSheet })));
@@ -21,6 +23,8 @@ export interface PeerListProps {
   initial: PeersPage;
   /** Niche names by slug (a peer's shared niches come as slugs). */
   niches: Readonly<Record<string, string>>;
+  /** What already stands with a peer (an open thread, an invitation either way), by their id. */
+  relations?: Readonly<Record<string, PeerRelation>>;
   locale: string;
   calls?: Partial<TeamCalls>;
 }
@@ -29,10 +33,11 @@ export interface PeerListProps {
  * The peers of /dev/peers (REQ-DEV-03; D-58): one row each (handle, headline, the niches the two share by name, the
  * county when it is theirs too), "Team up" as each row's one action (a sheet: the problem or Brief, a note, "Send
  * invitation"), then "Invited" with the line saying it was sent, which takes focus. "Block" sits in each row's overflow
- * menu behind a confirmation; a blocked peer leaves the list and a status line says so (it takes focus). "More" adds
+ * menu behind a confirmation; a peer the caller already teams up with shows "Teaming up" (their thread), and one with
+ * an invitation either way "Invited you" or "Invited", instead of Team up; a blocked peer leaves the list and a status line says so (it takes focus). "More" adds
  * the next page of twenty.
  */
-export function PeerList({ initial, niches, locale, calls: given }: PeerListProps) {
+export function PeerList({ initial, niches, relations = {}, locale, calls: given }: PeerListProps) {
   const t = useStrings("teamUp");
   const [calls] = useState<TeamCalls>(() => ({ ...teamCalls(), ...given }));
   const [peers, setPeers] = useState(initial.peers);
@@ -129,6 +134,14 @@ export function PeerList({ initial, niches, locale, calls: given }: PeerListProp
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   {invited[peer.user_id] ? (
                     <InvitedLine name={peer.handle} focus={justSent === peer.user_id} />
+                  ) : relations[peer.user_id]?.kind === "thread" ? (
+                    <Link href={threadHref((relations[peer.user_id] as { id: string }).id)} className={standaloneLinkClass} aria-describedby={titleId} data-relation="thread">
+                      {t("row.teaming")}
+                    </Link>
+                  ) : relations[peer.user_id] ? (
+                    <p className="flex min-h-11 items-center font-semibold text-ink" data-relation={relations[peer.user_id]?.kind}>
+                      {relations[peer.user_id]?.kind === "invitedYou" ? t("row.invitedYou") : t("row.invited")}
+                    </p>
                   ) : (
                     <Button aria-describedby={titleId} aria-haspopup="dialog" onClick={() => setInviting(peer)} data-team-up="">
                       {t("row.teamUp")}

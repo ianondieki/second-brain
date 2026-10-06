@@ -12,7 +12,7 @@ import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
-import { nicheNamesBySlug, peersPage } from "../teams/data";
+import { nicheNamesBySlug, peerRelations, peersPage } from "../teams/data";
 import { PROFILE_SETTINGS_PATH, TEAMS_PATH } from "../teams/teams";
 import { PeerList } from "./PeerList";
 
@@ -32,15 +32,25 @@ export default async function PeersPage() {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const [t, locale, page, niches] = await Promise.all([getTranslations("teams"), getLocale(), peersPage(), nicheNamesBySlug()]);
+  const [t, locale, page, niches, relations] = await Promise.all([
+    getTranslations("teams"),
+    getLocale(),
+    peersPage(),
+    nicheNamesBySlug(),
+    peerRelations(),
+  ]);
+  const visible = page !== "tooMany" && page.opted_in;
 
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <div className="flex max-w-3xl flex-col gap-8">
         <PageHeader back={{ href: "/dev", label: t("peers.back") }} title={t("peers.title")} lead={t("peers.lead")}>
-          <div className="mt-2">
-            <StandaloneLink href={TEAMS_PATH}>{t("peers.teamsLink")}</StandaloneLink>
-          </div>
+          {/* Not visible to peers: the page's one sentence and link are about turning it on, nothing else. */}
+          {visible ? (
+            <div className="mt-2">
+              <StandaloneLink href={TEAMS_PATH}>{t("peers.teamsLink")}</StandaloneLink>
+            </div>
+          ) : null}
         </PageHeader>
 
         {page === "tooMany" ? (
@@ -51,7 +61,7 @@ export default async function PeersPage() {
           <EmptyState data-peers="empty" sentence={t("peers.empty")} action={t("peers.emptyAction")} href={PROFILE_SETTINGS_PATH} />
         ) : (
           <ClientStrings strings={await clientStrings(["teamUp"])}>
-            <PeerList initial={page} niches={niches} locale={locale} />
+            <PeerList initial={page} niches={niches} relations={relations} locale={locale} />
           </ClientStrings>
         )}
       </div>
