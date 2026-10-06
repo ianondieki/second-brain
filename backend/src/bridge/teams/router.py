@@ -3,7 +3,8 @@
 401); a developer who is not a party of an invitation or a thread gets 404 for it.
 
 - ``POST /invitations`` ``{to_user_id, problem_id, note?}``: 201, the invitation. 403 ``peers_off``; 404
-  ``peer_unavailable`` / ``problem_unavailable``; 409 ``already_invited``; 422; 429 ``too_many_invitations``.
+  ``peer_unavailable`` / ``problem_unavailable``; 409 ``already_invited`` (pending, or declined or withdrawn within 30
+  days); 422; 429 ``too_many_invitations`` (10 attempts a day, refused ones included).
 - ``GET /invitations``: pending invitations received and sent.
 - ``POST /invitations/{id}/accept`` (201 ``{thread_id}``), ``/decline``, ``/withdraw`` (204): 403 ``wrong_party``,
   409 ``already_decided`` / ``invitation_unavailable``.
@@ -32,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge import pagination
 from bridge.audit.service import record as audit
-from bridge.auth.deps import Db
+from bridge.auth.deps import Db, SettingsDep
 from bridge.errors import ERROR_RESPONSES, ApiError
 from bridge.teams import errors, invitations, threads
 from bridge.teams.deps import Developer
@@ -72,9 +73,10 @@ def _factory(request: Request) -> async_sessionmaker[AsyncSession]:
 
 
 @router.post("/invitations", status_code=201)
-async def invite(body: InvitationIn, request: Request, live: Developer, db: Db) -> InvitationOut:
+async def invite(body: InvitationIn, request: Request, live: Developer, db: Db, settings: SettingsDep) -> InvitationOut:
     """Invite a peer (or a developer you team up with) to team up on a published problem or Brief."""
-    return await invitations.send(db, _factory(request), live.user.id, body)
+    secret = settings.secret_key.get_secret_value()
+    return await invitations.send(db, _factory(request), secret, live.user.id, body)
 
 
 @router.get("/invitations")

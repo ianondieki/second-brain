@@ -20,6 +20,7 @@ from bridge.engagements.policy import POLICY_FILE, PolicyError
 
 _RANGES: Final[Mapping[str, tuple[int, int]]] = {
     "invitations_per_day": (1, 100),
+    "reinvite_after_days": (1, 365),
     "posts_per_hour": (1, 600),
     "peers_pages_per_hour": (1, 1000),
     "profile_changes_per_day": (1, 100),
@@ -28,11 +29,14 @@ _RANGES: Final[Mapping[str, tuple[int, int]]] = {
 
 @dataclass(frozen=True, slots=True)
 class TeamsPolicy:
-    """``invitations_per_day``: invitations a developer sends in any 24 hours; ``posts_per_hour``: messages a developer
-    writes in one team thread in any hour; ``peers_pages_per_hour``: peers pages a developer who opted in reads in any
-    hour; ``profile_changes_per_day``: changes of the county or the liked niches in any 24 hours."""
+    """``invitations_per_day``: invitation attempts a developer makes in any 24 hours, refused ones included;
+    ``reinvite_after_days``: how long an invitation declined or withdrawn keeps another one for the same pair and
+    problem out; ``posts_per_hour``: messages a developer writes in one team thread in any hour;
+    ``peers_pages_per_hour``: peers pages a developer who opted in reads in any hour; ``profile_changes_per_day``:
+    changes of the county or the liked niches in any 24 hours."""
 
     invitations_per_day: int
+    reinvite_after_days: int
     posts_per_hour: int
     peers_pages_per_hour: int
     profile_changes_per_day: int

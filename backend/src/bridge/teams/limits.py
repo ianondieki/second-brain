@@ -1,13 +1,16 @@
 """The application's limits of peers and team up (REQ-DEV-03; ``teams`` in policy.yaml; the 0011 security review's
 MINOR 5), each a 429 with ``Retry-After`` (whole seconds until the oldest counted action leaves the window).
 
-- Invitations (``invitations_per_day``) and team messages (``posts_per_hour``) count their own rows on the database's
-  clock (``created_at`` is ``app_clock_now()``), under a transaction advisory lock per sender (invitations) or per
-  thread (messages, the engagement thread's pattern), so concurrent requests count one after another.
-- Peers pages (``peers_pages_per_hour``) and changes of the county or the liked niches (``profile_changes_per_day``)
-  leave no row of their own, so each is recorded in the ``login_attempts`` ledger (``bridge.auth.throttle``: an HMAC
-  digest of a purpose and the user's id, never the raw id) and counted there, under a per-user advisory lock. A refused
-  request records nothing; the caller commits the record with the change it allowed.
+- Team messages (``posts_per_hour``) count their own rows on the database's clock (``created_at`` is
+  ``app_clock_now()``), under a transaction advisory lock per thread (the engagement thread's pattern), so concurrent
+  posts count one after another.
+- Invitation attempts (``invitations_per_day``), peers pages (``peers_pages_per_hour``) and changes of the county or
+  the liked niches (``profile_changes_per_day``) are recorded in the ``login_attempts`` ledger
+  (``bridge.auth.throttle``: an HMAC digest of a purpose and the user's id, never the raw id) and counted there, under
+  a per-user advisory lock.
+  A request refused by the limit records nothing. A page or a change is committed with what it allowed; an invitation
+  attempt is committed before the database answers it, so a refused attempt counts too (an attempt that is refused
+  must not be free, or invitations could be used to probe who may be invited).
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ HOUR: Final = timedelta(hours=1)
 DAY: Final = timedelta(hours=24)
 PEERS_PAGE: Final = "teams_peers_page"  # the ledger's purpose labels
 PROFILE_CHANGE: Final = "teams_profile_change"
+INVITATION: Final = "teams_invitation"
 _LOCK: Final = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
 # [[COPY-REVIEW]]
 TOO_MANY_CHANGES: Final = "You have changed your county or niches many times today. Try again tomorrow."

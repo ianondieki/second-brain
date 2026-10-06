@@ -9,7 +9,9 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import UUID
 
+from bridge.config import get_settings
 from bridge.ids import uuid7
+from bridge.teams import limits
 from tests.integration.teams.api_world import (
     BLOCKS,
     INVITATIONS,
@@ -173,9 +175,50 @@ async def test_c3_ten_invitations_a_day(teams: TeamsDb, as_user: Clients) -> Non
     refused = await client.post(INVITATIONS, json={"to_user_id": str(others[10]), "problem_id": str(problem_id)})
     assert code(refused) == (429, "too_many_invitations")
     assert 86000 < int(refused.headers["Retry-After"]) <= 86400
-    # a day later on the shared clock (the module's database: it only moves forward), the sender may invite again
-    await forward(teams, timedelta(hours=25))
+    # a day later (the ledger's attempts leave the 24-hour window), the sender may invite again
+    await _age_attempts(teams, sender, timedelta(hours=25))
     await invite(client, others[10], problem_id)
+
+
+async def _age_attempts(teams: TeamsDb, user: UUID, by: timedelta) -> None:
+    """Move ``user``'s recorded invitation attempts ``by`` into the past (the ledger is on the wall clock)."""
+    keys = limits.ledger_keys(get_settings().secret_key.get_secret_value(), limits.INVITATION, user)
+    await owner_run(
+        teams, "UPDATE login_attempts SET created_at = created_at - :by WHERE email_digest = :e", by=by, e=keys.email
+    )
+
+
+async def test_c3_refused_attempts_count_toward_the_daily_cap(teams: TeamsDb, as_user: Clients) -> None:
+    """Every attempt counts, whatever the database answers: probing whom one may invite is not free."""
+    amina, brian, _ = await pair(teams, "probe")
+    closed = await problem(teams, status="archived")
+    client = await as_user(amina)
+    for nobody in [uuid7() for _ in range(5)]:
+        refused = await client.post(INVITATIONS, json={"to_user_id": str(nobody), "problem_id": str(closed)})
+        assert code(refused) == (404, "problem_unavailable")
+    open_problem = await problem(teams)
+    for nobody in [uuid7() for _ in range(5)]:
+        refused = await client.post(INVITATIONS, json={"to_user_id": str(nobody), "problem_id": str(open_problem)})
+        assert code(refused) == (404, "peer_unavailable")
+    capped = await client.post(INVITATIONS, json={"to_user_id": str(brian), "problem_id": str(open_problem)})
+    assert code(capped) == (429, "too_many_invitations")
+    assert await owner_rows(teams, "SELECT 1 FROM team_invitations WHERE from_user_id = :u", u=amina) == []
+
+
+async def test_c3_no_reinvite_within_thirty_days_of_a_decline_or_withdrawal(teams: TeamsDb, as_user: Clients) -> None:
+    amina, brian, _ = await pair(teams, "again")
+    a, b = await as_user(amina), await as_user(brian)
+    declined_on, withdrawn_on, other = await problem(teams), await problem(teams), await problem(teams)
+    first = await invite(a, brian, declined_on)
+    assert (await b.post(f"{INVITATIONS}/{first['id']}/decline")).status_code == 204
+    second = await invite(a, brian, withdrawn_on)
+    assert (await a.post(f"{INVITATIONS}/{second['id']}/withdraw")).status_code == 204
+    for client, to, problem_id in ((a, brian, declined_on), (b, amina, declined_on), (b, amina, withdrawn_on)):
+        refused = await client.post(INVITATIONS, json={"to_user_id": str(to), "problem_id": str(problem_id)})
+        assert code(refused) == (409, "already_invited")  # the same pair and problem, either way round
+    await invite(a, brian, other)  # another problem is another invitation
+    await forward(teams, timedelta(days=31))
+    await invite(a, brian, declined_on)  # thirty days on, the pair may try again
 
 
 async def test_c3_a_block_ends_everything_and_an_unblock_reopens_nothing(teams: TeamsDb, as_user: Clients) -> None:

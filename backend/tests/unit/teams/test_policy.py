@@ -19,7 +19,11 @@ def data() -> dict[str, Any]:
 
 def test_the_shipped_values() -> None:
     assert load_teams_policy() == TeamsPolicy(
-        invitations_per_day=10, posts_per_hour=60, peers_pages_per_hour=60, profile_changes_per_day=10
+        invitations_per_day=10,
+        reinvite_after_days=30,
+        posts_per_hour=60,
+        peers_pages_per_hour=60,
+        profile_changes_per_day=10,
     )
     assert get_teams_policy() is get_teams_policy()
 
@@ -28,6 +32,7 @@ def test_the_shipped_values() -> None:
     ("key", "value"),
     [
         ("invitations_per_day", 0),
+        ("reinvite_after_days", 366),
         ("posts_per_hour", True),
         ("peers_pages_per_hour", 1001),
         ("profile_changes_per_day", "10"),

@@ -187,7 +187,10 @@ events:
 teams:
   # Peers and team up (REQ-DEV-03; D-58; docs/platform/tasks/P22.md section C). Read by bridge/teams/policy.py. The
   # limits are the application's (revision 0011 leaves them to it); each refusal answers 429 with Retry-After.
-  invitations_per_day: 10           # team-up invitations one developer sends in any 24 hours (too_many_invitations)
+  invitations_per_day: 10           # invitation attempts one developer makes in any 24 hours, refused ones included
+                                    # (too_many_invitations)
+  reinvite_after_days: 30           # an invitation declined or withdrawn this recently blocks another for the same pair
+                                    # and problem (409 already_invited)
   posts_per_hour: 60                # messages one developer writes in one team thread in any hour (too_many_messages)
   peers_pages_per_hour: 60          # pages of the peers list one developer reads in any hour (too_many_peer_pages)
   profile_changes_per_day: 10       # changes of the county or the liked niches in any 24 hours (too_many_profile_changes)

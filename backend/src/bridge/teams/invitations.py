@@ -3,13 +3,15 @@
 - **Send** (``create``): a developer who turned Peers on (403 ``peers_off`` otherwise: their own state) invites a
   peer or a counterpart (``app_is_visible_peer``) to team up on a published problem or a public, published Brief
   (``app_team_problem_open``), with an optional note (``bridge.teams.text``: the contact-details rule does not apply
-  between developers). The database refuses the rest: a problem not open to teams 404 ``problem_unavailable``; a
+  between developers). At most ``teams.invitations_per_day`` attempts in any 24 hours per sender (429
+  ``too_many_invitations``), each counted in the ledger and committed before the database answers it, so refused
+  attempts count as much as sent ones (``bridge.teams.limits``). An invitation between the two on the same problem,
+  either way, declined or withdrawn within ``teams.reinvite_after_days`` is 409 ``already_invited`` (the caller was
+  a party of it). The database refuses the rest: a problem not open to teams 404 ``problem_unavailable``; a
   recipient who is not the sender's peer or counterpart, who turned Peers off, who blocked the sender or whom the
   sender blocked, or an unknown id, all the same 404 ``peer_unavailable`` (nothing tells a block apart); a pending
-  invitation between the two on the same problem, either way, 409 ``already_invited``. At most
-  ``teams.invitations_per_day`` in any 24 hours per sender, withdrawn and refused ones included (429
-  ``too_many_invitations``), counted under the sender's advisory lock on the database's clock. Audited
-  ``team.invited`` (ids only, never the note); N28 to the recipient after the commit.
+  invitation between the two on the same problem, either way, 409 ``already_invited``. Audited ``team.invited`` (ids
+  only, never the note); N28 to the recipient after the commit.
 - **List** (``pending``): the caller's pending invitations, received and sent, each with the other developer's card
   (``app_developer_card``) and the problem's id and title, in one statement.
 - **Decide** (``decide``): accept or decline by the recipient, withdraw by the sender, through
@@ -21,7 +23,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Any, Final, Literal
 from uuid import UUID
 
@@ -49,12 +50,16 @@ TOO_MANY: Final = "You have sent {limit} team-up invitations in the last day. Tr
 YOURSELF: Final = "Invite another developer."
 
 _SENDER: Final = text(
-    "SELECT app_is_visible_peer(app_user_id()) AS opted_in, app_clock_now() AS now,"
-    " (SELECT handle::text FROM developer_profiles WHERE user_id = app_user_id()) AS handle,"
-    " (SELECT count(*) FROM team_invitations WHERE from_user_id = app_user_id()"
-    "   AND created_at > app_clock_now() - make_interval(hours => 24)) AS sent,"
-    " (SELECT min(created_at) FROM team_invitations WHERE from_user_id = app_user_id()"
-    "   AND created_at > app_clock_now() - make_interval(hours => 24)) AS oldest"
+    "SELECT app_is_visible_peer(app_user_id()) AS opted_in,"
+    " (SELECT handle::text FROM developer_profiles WHERE user_id = app_user_id()) AS handle"
+)
+# An invitation of the pair (either way) on the problem, declined or withdrawn within the cool-down (the parties' own).
+_ANSWERED: Final = text(
+    "SELECT EXISTS (SELECT 1 FROM team_invitations i"
+    " WHERE least(i.from_user_id, i.to_user_id) = least(app_user_id(), CAST(:to AS uuid))"
+    " AND greatest(i.from_user_id, i.to_user_id) = greatest(app_user_id(), CAST(:to AS uuid))"
+    " AND i.problem_id = :problem AND i.status IN ('declined', 'withdrawn')"
+    " AND i.decided_at > app_clock_now() - make_interval(days => :days))"
 )
 _INSERT: Final = text(
     "INSERT INTO team_invitations (id, from_user_id, to_user_id, problem_id, note)"
@@ -107,19 +112,28 @@ class Sent:
     sender_handle: str
 
 
-async def create(db: AsyncSession, me: UUID, body: InvitationIn) -> Sent:
+async def create(db: AsyncSession, secret: str, me: UUID, body: InvitationIn) -> Sent:
     """Insert the caller's invitation (see the module docstring); committed."""
     if body.to_user_id == me:
         raise ApiError(422, "cannot_invite_yourself", YOURSELF)
     policy = get_teams_policy()
-    await limits.lock(db, f"team_invitations:{me}")
     sender = (await db.execute(_SENDER)).one()
     if not sender.opted_in:
         raise forbidden("peers_off", errors.PEERS_OFF)
-    if int(sender.sent) >= policy.invitations_per_day:
-        seconds = limits.retry_after(sender.oldest, timedelta(hours=24), sender.now)
-        message = TOO_MANY.format(limit=policy.invitations_per_day)
-        raise limits.too_many("too_many_invitations", message, seconds)
+    await limits.spend(
+        db,
+        secret,
+        purpose=limits.INVITATION,
+        user_id=me,
+        limit=policy.invitations_per_day,
+        window=limits.DAY,
+        code="too_many_invitations",
+        message=TOO_MANY.format(limit=policy.invitations_per_day),
+    )
+    await db.commit()  # the attempt counts whatever the database answers next
+    answered = {"to": body.to_user_id, "problem": body.problem_id, "days": policy.reinvite_after_days}
+    if await db.scalar(_ANSWERED, answered):
+        raise ApiError(409, "already_invited", errors.ALREADY_INVITED)
     invitation_id = uuid7()
     try:
         inserted = (
@@ -157,10 +171,10 @@ async def create(db: AsyncSession, me: UUID, body: InvitationIn) -> Sent:
 
 
 async def send(
-    db: AsyncSession, factory: async_sessionmaker[AsyncSession], me: UUID, body: InvitationIn
+    db: AsyncSession, factory: async_sessionmaker[AsyncSession], secret: str, me: UUID, body: InvitationIn
 ) -> InvitationOut:
     """``create``, then N28 to the recipient."""
-    sent = await create(db, me, body)
+    sent = await create(db, secret, me, body)
     await notices.invited(
         factory,
         invitation_id=sent.invitation.id,
