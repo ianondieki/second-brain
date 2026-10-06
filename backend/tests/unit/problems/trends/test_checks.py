@@ -264,3 +264,45 @@ def test_the_residual_a_lower_case_or_sentence_initial_brand() -> None:
     """Documented residual: a lower-case brand off the allowlist, or a single-capital one opening a sentence, passes
     the code; the staff admin's approval of every card is the backstop."""
     assert unsourced_capitalised("Oracle says hello", "acme tools say so. Oracle agrees.", (), ALLOWLIST) == ()
+
+
+def _summary_of(length: int) -> str:
+    """Four plain sentences of exactly ``length`` characters that pass every other check."""
+    head = (
+        "Unvalidated npm trusted publishing configurations now expire 48 hours after creation. Developers in Kenya"
+        " who publish npm packages should validate each new setup soon after creating it. Teams should review the"
+        " setups they still rely on. They should check "
+    )
+    pad = length - len(head) - len("now.")
+    words = ("them again " * 100)[:pad]
+    if words.endswith(" ") or words.endswith("n"):  # keep the text ending in a whole word
+        words = words[:-1] + "s"
+    return head + words + "now."
+
+
+@pytest.mark.parametrize(("length", "kept"), [(600, True), (601, False)])
+def test_the_summary_bound_is_600_characters(length: int, kept: bool) -> None:
+    summary = _summary_of(length)
+    assert (len(summary), sentence_count(summary)) == (length, 4)
+    result = one(security(summary=summary))
+    assert isinstance(result, KeptTrend) if kept else result == Discarded(Reason.TEXT_OUT_OF_BOUNDS)
+
+
+@pytest.mark.parametrize(("length", "kept"), [(400, True), (401, False)])
+def test_the_support_bound_is_400_characters(length: int, kept: bool) -> None:
+    long_quote = f"{SENT['tr-sec-001'].quote} " + " ".join(f"word{i}" for i in range(120))
+    sent = {**SENT, "tr-sec-001": dataclasses.replace(SENT["tr-sec-001"], quote=long_quote)}
+    support = next(
+        cut for start in range(50) if (cut := long_quote[start : start + length]) == cut.strip()
+    )  # no space at either end, so collapsing keeps every character
+    assert len(support) == length
+    assert support in long_quote  # verbatim: only the bound decides
+    draft = security(citations=(Citation("tr-sec-001", support),))
+    result = check_trend(draft, sent, ALLOWLIST, SCORING, WEEK)
+    assert isinstance(result, KeptTrend) if kept else result == Discarded(Reason.TEXT_OUT_OF_BOUNDS)
+
+
+def test_a_declared_name_is_at_most_200_characters() -> None:
+    name = "GitHub " + "x" * 194
+    assert len(name) == 201
+    assert one(security(named_orgs=(name,))) == Discarded(Reason.TEXT_OUT_OF_BOUNDS)
