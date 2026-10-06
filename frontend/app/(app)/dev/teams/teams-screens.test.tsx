@@ -9,12 +9,14 @@ import { renderWithIntl } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
 import TeamThreadPage from "./[id]/page";
-import { ThreadActions } from "./[id]/ThreadActions";
+import { STEP_STATUS_ID, STEPS_ID } from "./[id]/ids";
+import { StepButtons } from "./[id]/StepButtons";
+import { TeamThread } from "./[id]/TeamThread";
 import type { TeamCalls } from "./calls";
 import { Credits } from "./Credits";
 import { InvitationList } from "./InvitationList";
 import TeamsPage from "./page";
-import type { Invitation, TeamThread, ThreadSummary } from "./teams";
+import { toThreadPage, type Invitation, type TeamThread as TeamThreadRead, type ThreadSummary } from "./teams";
 
 // REQ-DEV-03 (P22-CF; D-58, D-62): /dev/teams (invitations received first with Accept and Decline, sent with
 // Withdraw, each answer said in a status line that takes focus; threads open first; nothing at all is one sentence and
@@ -110,12 +112,12 @@ function summary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   };
 }
 
-function read(overrides: Partial<ThreadSummary> = {}, items: TeamThread["items"] = []): TeamThread {
+function read(overrides: Partial<ThreadSummary> = {}, items: TeamThreadRead["items"] = []): TeamThreadRead {
   const thread = summary(overrides);
   return { thread, can_post: thread.open, max_chars: 4000, last_read_at: null, items, next_cursor: null };
 }
 
-const MESSAGES: TeamThread["items"] = [
+const MESSAGES: TeamThreadRead["items"] = [
   { id: "01a11223-5000-7000-8000-000000000001", mine: true, body: "Thanks for joining.", redacted: false, created_at: "2026-10-06T11:00:00+03:00" },
   { id: "01a11223-5000-7000-8000-000000000002", mine: false, body: "Happy to help.", redacted: false, created_at: "2026-10-06T12:00:00+03:00" },
 ];
@@ -249,7 +251,7 @@ describe("a team thread's page", () => {
     state.thread = read({ open: false, closed_reason: "ended", counterpart: null }, []);
     await open();
     expect(screen.getByRole("heading", { level: 1, name: "A developer" })).toBeTruthy();
-    expect(document.querySelector("[data-thread-actions]")).toBeNull();
+    expect(document.querySelectorAll("[data-thread-actions] button, [data-thread-actions] summary")).toHaveLength(0);
     expect(document.querySelector("[data-thread-closed]")?.textContent).toBe(en.teams.thread.closedEmpty);
   });
 });
@@ -260,11 +262,39 @@ describe("the thread's steps", () => {
     { id: "01a11223-2bee-7111-ad0b-928eac1174b2", title: "Clear loan-fee statements" },
   ];
 
+  // As the page draws them: the buttons are markup under #thread-steps, TeamThread answers their presses.
+  function steps(ideas: typeof IDEAS, calls: Partial<TeamCalls>) {
+    return (
+      <>
+        <div id={STEP_STATUS_ID} className="contents" />
+        <div id={STEPS_ID}>
+          <StepButtons
+            credit={ideas.length > 0 ? "Add as contributor on an idea" : null}
+            more="More options"
+            leave="Leave thread"
+            block="Block dev-kb3dysnk"
+          />
+        </div>
+        <TeamThread
+          threadId={summary().id}
+          initial={toThreadPage(read({}, MESSAGES), "dev-kb3dysnk")}
+          counterpart="dev-kb3dysnk"
+          today="2026-10-06"
+          locale="en"
+          empty={null}
+          person={BRIAN}
+          ideas={ideas}
+          calls={calls}
+        />
+      </>
+    );
+  }
+
   it("credits the other developer on the chosen idea and says so", async () => {
     const calls = teamCalls();
-    renderWithIntl(<ThreadActions threadId={summary().id} counterpart={BRIAN} open ideas={IDEAS} calls={calls} />);
+    renderWithIntl(steps(IDEAS, calls));
     fireEvent.click(screen.getByRole("button", { name: "Add as contributor on an idea" }));
-    const sheet = screen.getByRole("dialog", { name: "Add dev-kb3dysnk as a contributor" });
+    const sheet = await screen.findByRole("dialog", { name: "Add dev-kb3dysnk as a contributor" });
     await act(async () => fireEvent.click(within(sheet).getByRole("button", { name: "Add contributor" })));
     expect(within(sheet).getByRole("alert").textContent).toBe(en.teamUp.credit.choose);
     fireEvent.click(within(sheet).getByRole("radio", { name: IDEAS[0].title }));
@@ -276,11 +306,9 @@ describe("the thread's steps", () => {
   });
 
   it("says a credit given before in one sentence", async () => {
-    renderWithIntl(
-      <ThreadActions threadId={summary().id} counterpart={BRIAN} open ideas={IDEAS} calls={teamCalls({ credit: vi.fn(async () => ({ ok: false as const, refusal: "already" as const })) })} />,
-    );
+    renderWithIntl(steps(IDEAS, teamCalls({ credit: vi.fn(async () => ({ ok: false as const, refusal: "already" as const })) })));
     fireEvent.click(screen.getByRole("button", { name: "Add as contributor on an idea" }));
-    const sheet = screen.getByRole("dialog", { name: "Add dev-kb3dysnk as a contributor" });
+    const sheet = await screen.findByRole("dialog", { name: "Add dev-kb3dysnk as a contributor" });
     fireEvent.click(within(sheet).getByRole("radio", { name: IDEAS[1].title }));
     await act(async () => fireEvent.click(within(sheet).getByRole("button", { name: "Add contributor" })));
     expect(within(sheet).getByRole("alert").textContent).toBe(en.teamUp.credit.already);
@@ -288,15 +316,15 @@ describe("the thread's steps", () => {
 
   it("Leave and Block each ask first, then say so and read the page again", async () => {
     const calls = teamCalls();
-    renderWithIntl(<ThreadActions threadId={summary().id} counterpart={BRIAN} open ideas={[]} calls={calls} />);
+    renderWithIntl(steps([], calls));
     expect(screen.queryByRole("button", { name: "Add as contributor on an idea" })).toBeNull();
     fireEvent.click(document.querySelector("[data-leave]") as HTMLElement);
-    const leave = screen.getByRole("dialog", { name: "Leave this thread?" });
+    const leave = await screen.findByRole("dialog", { name: "Leave this thread?" });
     await act(async () => fireEvent.click(within(leave).getByRole("button", { name: "Leave" })));
     expect(calls.leave).toHaveBeenCalledWith(summary().id);
     expect(screen.getByRole("status").textContent).toBe(en.teamUp.thread.left);
     fireEvent.click(document.querySelector("[data-block]") as HTMLElement);
-    const block = screen.getByRole("dialog", { name: "Block dev-kb3dysnk?" });
+    const block = await screen.findByRole("dialog", { name: "Block dev-kb3dysnk?" });
     await act(async () => fireEvent.click(within(block).getByRole("button", { name: "Block" })));
     expect(calls.block).toHaveBeenCalledWith(BRIAN.user_id);
     const status = screen.getByRole("status");

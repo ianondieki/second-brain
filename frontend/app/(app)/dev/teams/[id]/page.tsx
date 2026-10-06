@@ -19,8 +19,10 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 import { myIdeas } from "../../ideas/data";
 import { teamThread } from "../data";
 import { closedReason, TEAMS_PATH, toThreadPage } from "../teams";
+import { StepButtons } from "./StepButtons";
 import { TeamThread } from "./TeamThread";
-import { ThreadActions, type IdeaChoice } from "./ThreadActions";
+import { STEP_STATUS_ID, STEPS_ID } from "./ids";
+import type { IdeaChoice } from "./ThreadSheets";
 
 export async function generateMetadata({ params }: PageProps<"/dev/teams/[id]">): Promise<Metadata> {
   const t = await getTranslations("teams");
@@ -40,10 +42,17 @@ export default async function TeamThreadPage({ params }: PageProps<"/dev/teams/[
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
   const id = (await params).id;
-  const [t, locale, read, ideas] = await Promise.all([getTranslations("teams"), getLocale(), teamThread(id), myIdeas()]);
+  const [t, tu, locale, read, ideas] = await Promise.all([
+    getTranslations("teams"),
+    getTranslations("teamUp"),
+    getLocale(),
+    teamThread(id),
+    myIdeas(),
+  ]);
   const { thread } = read;
   const name = thread.counterpart?.handle ?? t("list.someone");
   const reason = closedReason(thread);
+  const counterpart = thread.counterpart ? { user_id: thread.counterpart.user_id, handle: thread.counterpart.handle } : null;
   const page = toThreadPage(read, name);
   const empty = page.items.length === 0 && !page.next_cursor;
   // The ideas the other developer can be credited on: the caller's published ones, by their registered title.
@@ -76,13 +85,18 @@ export default async function TeamThreadPage({ params }: PageProps<"/dev/teams/[
         </PageHeader>
 
         <ClientStrings strings={strings}>
-          <div className="-mt-4">
-            <ThreadActions
-              threadId={thread.id}
-              counterpart={thread.counterpart ? { user_id: thread.counterpart.user_id, handle: thread.counterpart.handle } : null}
-              open={thread.open}
-              ideas={published}
-            />
+          {/* The steps' buttons are markup; TeamThread answers their presses and puts a step's dialog and status line
+              in the first box (nothing of the steps ships with the page: docs/spec/07 item 5). */}
+          <div className="-mt-4 flex flex-col gap-4" data-thread-actions="">
+            <div id={STEP_STATUS_ID} className="contents" />
+            <div id={STEPS_ID} className="flex flex-wrap items-center gap-3 empty:hidden">
+              <StepButtons
+                credit={counterpart && published.length > 0 ? tu("credit.add") : null}
+                more={tu("thread.more")}
+                leave={thread.open ? tu("thread.leave") : null}
+                block={counterpart ? tu("thread.block", { name: counterpart.handle }) : null}
+              />
+            </div>
           </div>
 
           <Section
@@ -98,6 +112,8 @@ export default async function TeamThreadPage({ params }: PageProps<"/dev/teams/[
               today={nairobiToday()}
               locale={locale}
               empty={reason ? null : t("thread.empty")}
+              person={counterpart}
+              ideas={published}
             />
             {reason ? (
               <p className="mt-6 flex max-w-[65ch] items-start gap-2 text-ink" data-thread-closed={reason}>

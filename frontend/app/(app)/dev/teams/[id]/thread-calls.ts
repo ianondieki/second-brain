@@ -3,7 +3,7 @@ import { retryMinutes } from "@/components/tracker/messages/thread";
 import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode } from "@/lib/api/error-code";
 
-import { teamPostRefusal, toMessage, toThreadPage } from "../teams";
+import { teamPostRefusal, toMessage, toThreadPage } from "./team-thread";
 
 // The team thread's calls in the shape the engagement thread's parts make them (components/tracker/messages: Thread,
 // Composer, ReportSheet take a `calls` prop): the same steps against /api/me/teams/{thread_id} (REQ-DEV-03), each
