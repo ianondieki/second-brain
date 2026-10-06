@@ -1,9 +1,12 @@
 """P16-E1 item 5 (REQ-FND-01, docs/spec/08 p95 budgets): the developer's main lists and details send as many
 statements with many rows as with few (``tests/integration/query_counts.py``): My ideas, one idea (its linked
-problems and attachments), Discover (Trending and the Opportunity Gap), Recommended for you and Companies."""
+problems and attachments), Discover (Trending and the Opportunity Gap), Recommended for you, Companies and This week
+(P22, REQ-DEV-02)."""
 
 from __future__ import annotations
 
+import json
+from datetime import timedelta
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -15,7 +18,7 @@ from bridge.ids import uuid7
 from tests.integration import world as w
 from tests.integration.matching import trend_world as tw
 from tests.integration.proposals.helpers import Developers, ProposalWorld, create, draft_body, user_of
-from tests.integration.query_counts import LARGE, SMALL, counted
+from tests.integration.query_counts import LARGE, SMALL, counted, show, statements
 
 
 async def test_my_ideas(
@@ -157,3 +160,65 @@ async def test_companies(
     large, body = await counted(client, app_engine, "/api/directory/orgs", params)
     assert sum(len(g["orgs"]) for g in body["groups"]) == LARGE
     assert large == small
+
+
+async def _this_week(owner_engine: AsyncEngine, poster: UUID, count: int) -> None:
+    """``count`` online platform events starting within the hour, published, and ``count`` published trend cards (as
+    the owner: the decision columns written with the status)."""
+    async with owner_engine.begin() as conn:
+        now = (await conn.execute(text("SELECT app_clock_now()"))).scalar_one()
+        for n in range(count):
+            await conn.execute(
+                text(
+                    "INSERT INTO events (id, org_id, created_by, title, description, starts_at, ends_at, online,"
+                    " join_url, status, decided_by, decided_at) VALUES (:id, NULL, :by, :title, 'Query count.', :s,"
+                    " :e, true, 'https://meet.example.test/qc', 'published', :by, now())"
+                ),
+                {"id": uuid7(), "by": poster, "title": f"Query count {n}", "s": now + timedelta(minutes=30 + n),
+                 "e": now + timedelta(hours=2)},
+            )  # fmt: skip
+            source = {
+                "url": "https://example.test/qc",
+                "publisher": "Example",
+                "published_date": "2026-01-01",
+                "retrieved_at": "2026-01-01",
+                "quote": "A quote of the query count.",
+                "excerpt_ref": "qc-1",
+                "support": "the query count",
+            }
+            card = {"title": f"Query count trend {n}", "summary": "A summary.", "topic_slug": "web"}
+            created = await conn.execute(
+                text("SELECT app_create_trend_candidate(CAST(:c AS jsonb), CAST(:s AS jsonb))"),
+                {"c": json.dumps(card), "s": json.dumps([source])},
+            )
+            await conn.execute(
+                text(
+                    "UPDATE trend_cards SET status = 'published', decided_by = :by, decided_at = now(),"
+                    " published_at = now() WHERE id = :id"
+                ),
+                {"by": poster, "id": created.scalar_one()},
+            )
+
+
+async def test_this_week(developers: Developers, owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """REQ-DEV-02 (P22 card B): Home's strip and the week's page send as many statements with 20 events and cards as
+    with 2, and the strip reads the events in one statement and the trend of the day in another."""
+    client = await developers()
+    async with owner_engine.begin() as conn:
+        poster = await w.add_user(conn, f"qc-staff-{uuid4().hex[:8]}@example.test", "Staff", staff_role="admin")
+    await _this_week(owner_engine, poster, SMALL)
+    small, strip = await counted(client, app_engine, "/api/me/week")
+    small_all, listed = await counted(client, app_engine, "/api/me/week/events")
+    assert len(strip["events"]) <= 3
+    assert strip["trend"] is not None
+    assert len(listed["items"]) >= SMALL
+    await _this_week(owner_engine, poster, LARGE - SMALL)
+    large, strip = await counted(client, app_engine, "/api/me/week")
+    large_all, listed = await counted(client, app_engine, "/api/me/week/events")
+    assert len(strip["events"]) == 3
+    assert len(listed["items"]) >= LARGE
+    assert (large, large_all) == (small, small_all)
+    with statements(app_engine) as seen:
+        assert (await client.get("/api/me/week")).status_code == 200
+    assert len([s for s in seen if "FROM events e" in s]) == 1, show(seen)
+    assert len([s for s in seen if "trend_cards" in s]) == 1, show(seen)
