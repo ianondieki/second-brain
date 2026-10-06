@@ -9,7 +9,7 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 import type { ThreadRead } from "./data";
 import { nairobiToday } from "./input";
 import { HashFocus } from "./messages/HashFocus";
-import { Thread } from "./messages/Thread";
+import { EngagementThread } from "./messages/EngagementThread";
 import { isFinished, type Detail } from "./model";
 
 /** The id of the thread's heading: the Messages route opens on it (…/messages#messages-heading; the N18 links too). */
@@ -81,7 +81,7 @@ export async function MessagesTab({ detail, read, trackerHref }: { detail: Detai
     >
       <HashFocus fallback={MESSAGES_HEADING} />
       <ClientStrings strings={await clientStrings(["trackerMessages"])}>
-        <Thread
+        <EngagementThread
           engagementId={detail.id}
           initial={thread}
           today={detail.today ?? nairobiToday()}

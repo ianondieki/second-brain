@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -11,7 +11,6 @@ import { cn } from "@/components/ui/cn";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
-import * as defaultCalls from "./calls";
 import type { ThreadCalls } from "./calls";
 import { Composer } from "./Composer";
 import { FileIcon } from "./FileIcon";
@@ -41,8 +40,8 @@ export interface ThreadProps {
   orgName: string;
   /** The sentence of an empty thread (formatted on the server: it differs by who reads it), or null for none. */
   empty: string | null;
-  /** Tests pass fakes; the real calls otherwise. */
-  calls?: Partial<ThreadCalls>;
+  /** What the thread calls: an engagement's (EngagementThread), a team thread's, or tests' fakes. */
+  calls: ThreadCalls;
 }
 
 /**
@@ -51,11 +50,10 @@ export interface ThreadProps {
  * request; a Report on everyone else's messages; the composer when the caller may post. Opening it marks the thread
  * read up to its newest message.
  */
-export function Thread({ engagementId, initial, today, locale, orgName, empty, calls }: ThreadProps) {
+export function Thread({ engagementId, initial, today, locale, orgName, empty, calls: call }: ThreadProps) {
   const t = useStrings("trackerMessages");
   const router = useRouter();
   const hydrated = useHydrated();
-  const call: ThreadCalls = useMemo(() => ({ ...defaultCalls, ...calls }), [calls]);
   const [messages, setMessages] = useState(initial.items);
   const [cursor, setCursor] = useState(initial.next_cursor);
   const [earlier, setEarlier] = useState<"idle" | "busy" | "failed">("idle");

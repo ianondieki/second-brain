@@ -1,6 +1,7 @@
 import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode } from "@/lib/api/error-code";
 
+import { markRead } from "./mark-read";
 import {
   postRefusal,
   reportRefusal,
@@ -53,18 +54,8 @@ export async function olderPage(engagementId: string, cursor: string, client: Ap
   }
 }
 
-/** Moves the caller's read marker up to a message they have seen. Quiet: a refusal changes nothing on the page. */
-export async function markRead(engagementId: string, upTo: string, client: ApiClient = api): Promise<boolean> {
-  try {
-    const { response } = await client.POST(`${THREAD}/read`, {
-      params: { path: { engagement_id: engagementId } },
-      body: { up_to: upTo },
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
+// Marking read runs as a thread opens, so it lives apart (./mark-read.ts): the thread loads the rest on first use.
+export { markRead };
 
 export type ReportOutcome = { ok: true; created: boolean } | { ok: false; refusal: ReportRefusal };
 
