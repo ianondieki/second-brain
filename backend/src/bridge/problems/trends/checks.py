@@ -8,18 +8,21 @@ The whole answer is refused (``Refused``) when the model flags ``injection_suspe
 flagged answer is used) or drafts no trend (``no_trends``); drafts beyond ``trends.max_cards_per_run`` are discarded
 (``over_card_limit``). Each remaining draft is kept only when, in this order (the reason names the first failure):
 
-1. **Text.** NFKC and whitespace collapsed (``collapse``), then no control, format or default-ignorable character in
-   the title, summary, named organisations or supports (``control_character``); only Latin letters, ASCII digits and
-   no combining marks in the title and summary (``non_latin_text``); a title of 1 to 120 characters, a summary of 1
-   to 600 characters in two to four sentences, at most 10 named organisations of at most 200 characters and every
-   support at most 400 characters (``text_out_of_bounds``; revision 0010's ``trend_cards`` and
-   ``trend_card_sources`` columns).
+1. **Text.** NFKC and whitespace collapsed (``collapse``), then no control, format or default-ignorable character in the
+   title, summary, named organisations or supports (``control_character``); only Latin letters, ASCII digits and no
+   combining marks in the title and summary (``non_latin_text``); no link in the title or summary: a scheme (``://``) or
+   a ``www.`` host (``link_in_text``; a host-like token such as ``github.blog`` is refused after step 3 unless a cited
+   quote carries it verbatim, so "Node.js" copied from a release note stays); a title of 1 to 120 characters, a summary
+   of 1 to 600 characters in two to four sentences, at most 10 named organisations of at most 200 characters and every
+   support at most 400 characters (``text_out_of_bounds``; revision 0010's ``trend_cards`` and ``trend_card_sources``
+   columns).
 2. **Topic.** The ``topic_slug`` is a topic of the excerpts sent in this call (``unknown_topic``).
 3. **Citations.** One to five (``no_citation``, ``too_many_citations``: a card has 1-5 sources); every cited
    ``excerpt_ref`` is an excerpt this call sent, else the draft is discarded (``unknown_excerpt``: an invented
    source). A citation counts only when its support (at least ``trends.min_support_words`` words) appears verbatim in
    the excerpt's quote (``research.checks.verified``); an unverified one is dropped and lowers the extraction
-   agreement; none left is ``no_verified_citation``; a topic no verified source has is ``topic_not_cited``.
+   agreement; none left is ``no_verified_citation``; a topic no verified source has is ``topic_not_cited``; a
+   host-like token in the title or summary that no cited quote carries is ``link_in_text``.
 4. **The research rules** (``research.checks.rule_violation`` on the title and summary): every number with its scale
    in a cited quote (``unsupported_number``); a named organisation needs an official cited source
    (``named_org_without_official``); one official source or two publishers. Every domain of the ``TECH`` allowlist
@@ -69,6 +72,12 @@ MAX_SUPPORT_CHARS: Final = 400  # trend_card_sources.support
 # A sentence ends at . ! or ? followed by the end of the text, or by a space and a capital letter, a digit or an
 # opening quote: "e.g. the" and "3.15" do not end one, "Go 1.27. The" does.
 _SENTENCE_END: Final = re.compile(r"[.!?][\"'\u2019\u201d)]*(?:$|\s+(?=[A-Z0-9\"'\u2018\u201c(]))")
+# A link: a scheme separator anywhere or a "www." host (always refused), or a host-like token: dot-separated labels
+# whose last label is 2 to 24 letters (the length range of IANA top-level domains), as in "github.blog" or
+# "evil.example/login". A host-like token is allowed only when a cited quote carries it verbatim ("Node.js" in a
+# release note); "e.g.", "U.S.", "Inc." and version numbers such as "3.15.0rc3" are not host-like.
+_SCHEME_OR_WWW: Final = re.compile(r"://|(?<![\w.-])www\.", re.IGNORECASE)
+_HOST_LIKE: Final = re.compile(r"(?<![\w.@-])[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}(?![\w-])")
 
 
 class Reason(StrEnum):
@@ -77,6 +86,7 @@ class Reason(StrEnum):
     OVER_CARD_LIMIT = "over_card_limit"
     CONTROL_CHARACTER = "control_character"
     NON_LATIN_TEXT = "non_latin_text"
+    LINK_IN_TEXT = "link_in_text"
     TEXT_OUT_OF_BOUNDS = "text_out_of_bounds"
     UNKNOWN_TOPIC = "unknown_topic"
     NO_CITATION = "no_citation"
@@ -159,6 +169,8 @@ def _text_reason(draft: TrendDraft, title: str, summary: str, names: Sequence[st
         return Reason.CONTROL_CHARACTER
     if non_latin(title) or non_latin(summary):
         return Reason.NON_LATIN_TEXT
+    if _SCHEME_OR_WWW.search(title) or _SCHEME_OR_WWW.search(summary):
+        return Reason.LINK_IN_TEXT
     if (
         not title
         or len(title) > MAX_TITLE_CHARS
@@ -171,6 +183,17 @@ def _text_reason(draft: TrendDraft, title: str, summary: str, names: Sequence[st
     ):
         return Reason.TEXT_OUT_OF_BOUNDS
     return None
+
+
+def unquoted_hosts(fields: Sequence[str], sources: Sequence[Excerpt]) -> tuple[str, ...]:
+    """The host-like tokens of ``fields`` (see ``_HOST_LIKE``) that no cited quote carries verbatim."""
+    quotes = " ".join(e.quote for e in sources)
+    return tuple(
+        token
+        for field in fields
+        for token in _HOST_LIKE.findall(field)
+        if re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w-])", quotes) is None
+    )
 
 
 def unsourced_names(names: Sequence[str], sources: Sequence[Excerpt], allowlist: Allowlist) -> tuple[str, ...]:
@@ -213,6 +236,8 @@ def check_trend(
     sources = tuple(c.excerpt for c in cited)
     if topic not in {e.topic_slug for e in sources}:
         return Discarded(Reason.TOPIC_NOT_CITED)
+    if unquoted_hosts((title, summary), sources):
+        return Discarded(Reason.LINK_IN_TEXT)
     names = named_organisations((title, summary), declared, allowlist)
     if len(names) > MAX_NAMED_ORGS:
         return Discarded(Reason.TEXT_OUT_OF_BOUNDS)

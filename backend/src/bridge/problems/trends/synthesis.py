@@ -116,7 +116,7 @@ def system_prompt(max_cards: int, min_support_words: int) -> str:
         " organisation or project body only when a cited excerpt names it in its quote or publishes it, and list"
         " every name you use in named_orgs; make no claim about a company beyond what a quote states; never name or"
         " describe a private individual; no advice to buy, subscribe or switch, no prices you were not given, no"
-        " speculation, no hype; plain English, Latin letters, no emoji."
+        " speculation, no hype; never write a link, URL or web address; plain English, Latin letters, no emoji."
     )
 
 

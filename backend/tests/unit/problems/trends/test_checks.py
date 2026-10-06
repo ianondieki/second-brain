@@ -73,7 +73,11 @@ def test_a_clean_answer_is_kept_whole_with_its_sources_as_saved() -> None:
 
 REASON_VARIANTS: Final = [
     (name, Reason(name)) for name in fakes.VARIANTS if name in {r.value for r in Reason} and name != "over_card_limit"
-] + [("one_sentence", Reason.TEXT_OUT_OF_BOUNDS), ("named_org_declared_only", Reason.NAMED_ORG_WITHOUT_OFFICIAL)]
+] + [
+    ("one_sentence", Reason.TEXT_OUT_OF_BOUNDS),
+    ("named_org_declared_only", Reason.NAMED_ORG_WITHOUT_OFFICIAL),
+    ("host_in_text", Reason.LINK_IN_TEXT),
+]
 
 
 @pytest.mark.parametrize(("variant", "reason"), REASON_VARIANTS, ids=[v for v, _ in REASON_VARIANTS])
@@ -190,3 +194,32 @@ def test_an_older_source_scores_lower_freshness() -> None:
 )
 def test_sentence_count(text: str, count: int) -> None:
     assert sentence_count(text) == count
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "Unvalidated npm trusted publishing configurations now expire 48 hours after creation. Read more at"
+        " https://evil.example/login today.",
+        "Unvalidated npm trusted publishing configurations now expire 48 hours after creation. See"
+        " www.example.com for the steps.",
+        "Unvalidated npm trusted publishing configurations now expire 48 hours after creation. Log in at"
+        " evil.example/login to check.",
+        "Unvalidated npm trusted publishing configurations now expire 48 hours after creation. Mirror them on"
+        " npm-mirror.co.ke soon.",
+    ],
+)
+def test_a_link_in_the_text_is_refused(summary: str) -> None:
+    assert one(security(summary=summary)) == Discarded(Reason.LINK_IN_TEXT)
+    assert one(security(title=summary.split(". ")[1][:100])) == Discarded(Reason.LINK_IN_TEXT)
+
+
+def test_a_dotted_name_a_cited_quote_carries_is_not_a_link() -> None:
+    quote = f"{SENT['tr-sec-001'].quote} Node.js maintainers should validate theirs."
+    sent = {**SENT, "tr-sec-001": dataclasses.replace(SENT["tr-sec-001"], quote=quote)}
+    draft = security(
+        summary="Unvalidated npm trusted publishing configurations now expire 48 hours after creation. Node.js"
+        " maintainers should validate theirs."
+    )
+    assert isinstance(check_trend(draft, sent, ALLOWLIST, SCORING, WEEK), KeptTrend)
+    assert one(draft) == Discarded(Reason.LINK_IN_TEXT)  # the saved quote does not carry "Node.js"
