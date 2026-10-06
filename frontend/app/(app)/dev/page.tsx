@@ -11,6 +11,7 @@ import { recommendationsState } from "./discover/recommendations";
 import { HomeContent } from "./HomeContent";
 import { myIdeas } from "./ideas/data";
 import { quizCard } from "./quiz/data";
+import { weekStrip } from "./week/data";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("home");
@@ -22,11 +23,12 @@ export default async function DeveloperHome() {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const [engagements, ideas, recommended, quiz] = await Promise.all([
+  const [engagements, ideas, recommended, quiz, week] = await Promise.all([
     myEngagements(),
     myIdeas(),
     recommendations(),
     quizCard(),
+    weekStrip(),
   ]);
   return (
     <HomeContent
@@ -35,6 +37,7 @@ export default async function DeveloperHome() {
       ideas={ideas}
       recommended={recommendationsState(recommended)}
       quiz={quiz}
+      week={week}
     />
   );
 }

@@ -25,7 +25,8 @@
     "reviewP20org": "[[COPY-REVIEW]] [[SW-REVIEW]] P20-4 (REQ-UX-01..04), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.deadline.left na tracker.deadline.overdue (hesabu ya siku kwenye bango la zamu: nambari ni lebo n, huchorwa kubwa, maneno kando yake; mpangilio \"7 siku za kazi zimebaki\" unahitaji ukaguzi), tracker.deadline.due na tracker.deadline.was (tarehe chini yake); tracker.milestone.total (jumla ya hatua za kazi za makubaliano).",
     "reviewP21f1": "[[COPY-REVIEW]] [[SW-REVIEW]] P21-F1 (REQ-REPO-02, REQ-PERS-03), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: shortlist.* (\"orodha fupi\" kwa shortlist), scoutMatches.tabShortlist, savedSearches.*, discover.wordsLabel, discover.wordsLabelBriefs, discover.wordsQuoted, discover.filteredEmptyWords, discover.saveName.*, notificationSettings.preference.*; review round: shortlist.problem.signedOut, savedSearches.heading, savedSearches.alreadyDeleted",
     "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\"). [[SW-REVIEW]] draft Swahili",
-    "reviewP22a": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-AF (REQ-DEV-01; D-59), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks"
+    "reviewP22a": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-AF (REQ-DEV-01; D-59), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks",
+    "reviewP22b": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: week.*, nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; eventForm.fieldError.* follow the backend's own sentences (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed"
   },
   "app": {
     "name": "Wazo",
@@ -3428,6 +3429,81 @@
       "generic": "Haikufanikiwa. Jaribu tena baada ya muda mfupi.",
       "question_not_found": "Swali hili halipo tena.",
       "signedOut": "Umetolewa kwenye akaunti. Ingia tena, kisha ujaribu tena."
+    }
+  },
+  "week": {
+    "strip": {
+      "title": "Wiki hii",
+      "seeAll": "Ona wiki nzima",
+      "empty": "Hakuna tukio karibu nawe wiki hii. Matukio ya mtandaoni yanahesabiwa pia.",
+      "listLabel": "Matukio karibu nawe na mwelekeo wa leo",
+      "trend": "Mwelekeo"
+    },
+    "row": {
+      "when": "{day} · {time}",
+      "online": "Mtandaoni",
+      "by": "Na {organiser}",
+      "reminderSet": "Kikumbusho kimewekwa"
+    },
+    "page": {
+      "pageTitle": "Wiki hii",
+      "title": "Wiki hii",
+      "lead": "Matukio katika kaunti yako na mtandaoni, wiki hii na ijayo. Saa ni za Nairobi.",
+      "back": "Nyumbani",
+      "empty": "Hakuna tukio karibu nawe wiki hii wala ijayo. Matukio ya mtandaoni yanahesabiwa pia.",
+      "dayCount": "Matukio: {count}",
+      "trendHeading": "Mwelekeo wa leo"
+    },
+    "event": {
+      "pageTitle": "Tukio",
+      "back": "Wiki hii",
+      "when": "Lini",
+      "where": "Wapi",
+      "organiser": "Mwandaaji",
+      "sameDay": "{day}, {start} hadi {end}",
+      "range": "{start} hadi {end}",
+      "nairobi": "Saa za Nairobi",
+      "venue": "{venue}, {county}",
+      "online": "Mtandaoni",
+      "join": "Jiunge mtandaoni",
+      "newTab": "(inafunguka katika kichupo kipya)",
+      "about": "Kuhusu tukio hili",
+      "link": "Ukurasa wa tukio lenyewe",
+      "calendarHeading": "Ongeza kwenye kalenda",
+      "ics": "Pakua faili ya .ics",
+      "google": "Kalenda ya Google"
+    },
+    "reminder": {
+      "heading": "Kikumbusho",
+      "remind": "Nikumbushe",
+      "reminding": "Inaweka kikumbusho…",
+      "decline": "Usinikumbushe",
+      "declining": "Inaondoa kikumbusho…",
+      "set": "Kikumbusho kimewekwa.",
+      "removed": "Kikumbusho kimeondolewa. Hakuna kitakachotumwa.",
+      "line": {
+        "both": "Barua pepe siku moja kabla na taarifa hapa asubuhi ya siku hiyo.",
+        "noConsent": "Taarifa hapa asubuhi ya siku hiyo. Vikumbusho vya barua pepe vimezimwa katika <link>Mipangilio</link>.",
+        "unverified": "Taarifa hapa asubuhi ya siku hiyo. Thibitisha barua pepe yako ili upate kikumbusho cha barua pepe."
+      },
+      "refusal": {
+        "gone": "Tukio hili halipokei vikumbusho tena.",
+        "signedOut": "Kipindi chako kimeisha. Ingia tena ili uweke kikumbusho.",
+        "generic": "Kikumbusho hakikuweza kuhifadhiwa. Jaribu tena."
+      }
+    },
+    "trend": {
+      "pageTitle": "Mwelekeo",
+      "back": "Wiki hii",
+      "label": {
+        "aiDrafted": "Mwelekeo · Imeandaliwa na AI, imekaguliwa na mtu tarehe {date}",
+        "seeded": "Mwelekeo · Mfano wa maonyesho (si matokeo halisi ya AI), umekaguliwa na mtu tarehe {date}"
+      },
+      "sourcesHeading": "Vyanzo",
+      "sourcesCount": "Vyanzo: {count}, vimenukuliwa kama vilivyochapishwa",
+      "publishedOn": "Kilichapishwa {date}",
+      "open": "Kisome kwa {publisher}",
+      "newTab": "(inafunguka katika kichupo kipya)"
     }
   }
 }
