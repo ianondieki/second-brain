@@ -29,6 +29,10 @@ import { homeGroups, homeStats } from "./home";
 import { IdeaCard } from "./ideas/IdeaCard";
 import { NEW_PATH, type MyProposalItem } from "./ideas/ideas";
 import { NeedsYouHero } from "./NeedsYouHero";
+import type { QuizCardState } from "./quiz/quiz";
+import { QuizCard } from "./quiz/QuizCard";
+import type { Week } from "./week/week";
+import { WeekStrip } from "./week/WeekStrip";
 
 /** How many of the engagements not waiting on the developer, and of their ideas, Home shows before "All …". */
 const OTHERS_SHOWN = 4;
@@ -40,6 +44,10 @@ export interface HomeContentProps {
   engagements: readonly Summary[];
   ideas: readonly MyProposalItem[];
   recommended: RecommendationsState;
+  /** Today's five (REQ-DEV-01): left out when null or not given (the read failed, or a fixture without it). */
+  quiz?: QuizCardState;
+  /** This week (REQ-DEV-02): left out when null or not given (the read failed, or a fixture without it). */
+  week?: Week | null;
 }
 
 /**
@@ -48,7 +56,7 @@ export interface HomeContentProps {
  * lists of rows side by side on a wide column (the other engagements, the ideas). "New proposal" is the screen's one
  * primary action. The tiles count what the page already reads: no series exists for them yet, so no sparkline.
  */
-export async function HomeContent({ me, engagements, ideas, recommended }: HomeContentProps) {
+export async function HomeContent({ me, engagements, ideas, recommended, quiz = null, week = null }: HomeContentProps) {
   const [t, th, tr, locale] = await Promise.all([
     getTranslations("devHome"),
     getTranslations("home"),
@@ -134,6 +142,10 @@ export async function HomeContent({ me, engagements, ideas, recommended }: HomeC
             </ul>
           </Section>
         ) : null}
+
+        <QuizCard state={quiz} />
+
+        <WeekStrip week={week} />
 
         <RecommendedForYou state={recommended} />
 

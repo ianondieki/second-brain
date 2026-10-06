@@ -1,0 +1,15 @@
+{#- N26, an event tomorrow that the developer asked to be reminded of, plain text (REQUIREMENTS.md §5 N26; REQ-DEV-02;
+    D-61). [[COPY-REVIEW]] ordinary notification copy. Autoescape off: plain text; the title and the place arrive
+    unlinkable. Never the description. -#}
+You asked us to remind you about this event. It is tomorrow.
+
+{{ title }}
+{{ when }}
+{{ place }}
+
+Add to Google Calendar: {{ google_url }}
+Download the calendar file (.ics): {{ ics_url }}
+
+--
+{{ product }} · You get this because you pressed Remind me on this event
+Manage notifications: {{ settings_url }} · Help: {{ help_url }} · Nairobi, Kenya

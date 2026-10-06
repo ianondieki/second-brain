@@ -425,6 +425,7 @@ def test_every_web_paths_builder_makes_a_platform_path() -> None:
         "DEV_ENGAGEMENTS": [web_paths.DEV_ENGAGEMENTS],
         "ORG_ENGAGEMENTS": [web_paths.ORG_ENGAGEMENTS],
         "DEV_DISCOVER": [web_paths.DEV_DISCOVER],
+        "dev_event_path": [web_paths.dev_event_path(uuid4())],  # P22 track B: N27, the morning-of notice
         "discover_path": [  # P21 track C: a saved search's alert; values are query-encoded, too-long words left out
             web_paths.discover_path(view, niche=niche, county=county, words=words)
             for view in ("problems", "briefs")

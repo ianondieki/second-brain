@@ -12,11 +12,13 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 import { AdminShell } from "../AdminShell";
 import { QueueSurface } from "../QueueSurface";
 import { staffContext } from "../staff";
-import { getResearch } from "./data";
+import { getResearch, getTrendCandidates } from "./data";
 import { PageStepUp } from "./PageStepUp";
 import { excerptsByNiche, nicheLabel, runNiches } from "./research";
 import { CandidateRow, RunRow, SavedExcerpts } from "./Sections";
 import { StartRun } from "./StartRun";
+import { DraftTrends } from "./trends/DraftTrends";
+import { TrendRow } from "./trends/TrendRow";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminResearch");
@@ -46,7 +48,7 @@ export default async function ResearchPage() {
   );
   if (role !== "admin") return refused(t("notAdmin"), t("notAdminAction"), "/admin");
 
-  const loaded = await getResearch();
+  const [loaded, trends] = await Promise.all([getResearch(), getTrendCandidates()]);
   if (loaded.kind === "forbidden") return refused(t("notAdmin"), t("notAdminAction"), "/admin");
   const strings = await clientStrings(["adminResearch"]);
   if (loaded.kind === "stepUp") {
@@ -104,6 +106,33 @@ export default async function ResearchPage() {
             <EmptyState rule={false} sentence={t("queue.empty")} action={t("queue.emptyAction")} href="#run-niche" />
           )}
         </Section>
+
+        {/* Technology trends (REQ-DEV-02): the cards waiting, and the weekly drafting started now. */}
+        {trends.kind === "ok" ? (
+          <Section title={t("trends.heading")} headingId="trends" description={t("trends.lead")} data-trends="">
+            <div className="flex flex-col gap-6">
+              {trends.data.length > 0 ? (
+                <QueueSurface>
+                  <DataTable
+                    aria-labelledby="trends"
+                    columns={[t("trends.columns.card"), t("trends.columns.topic"), t("trends.columns.drafted")]}
+                  >
+                    {trends.data.map((card) => (
+                      <TrendRow key={card.id} card={card} />
+                    ))}
+                  </DataTable>
+                </QueueSurface>
+              ) : (
+                <p className="text-ink" data-trends-empty="">
+                  {t("trends.empty")}
+                </p>
+              )}
+              <ClientStrings strings={strings}>
+                <DraftTrends />
+              </ClientStrings>
+            </div>
+          </Section>
+        ) : null}
 
         {runs.length > 0 ? (
           <Section title={t("runs.heading")} headingId="runs">

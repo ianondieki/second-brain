@@ -141,3 +141,23 @@ tasks:
     fallback_model: null         # D-29
     fallback_effort: null
     free_slots: [1, 2, 3]
+  trend_synthesis:              # P22-B: drafts up to three technology trend cards a week from saved excerpts (REQ-DEV-02)
+    model: claude-sonnet-5       # as research_synthesis (D-60: the research pipeline); no tools, nothing is fetched
+    effort: medium
+    max_tokens: 2048             # three short cards with citations; a max_tokens stop is retried once at twice (ADR-005)
+    batchable: false             # one call a week
+    confidential: false          # public input only (official publishers' excerpts) and staff-approved public output
+    purpose: tier1_only          # the saved excerpts are public fields (InputField public=True), never tenant or user data
+    fallback_model: null         # D-29; a refused draft is retried once by the job (bridge.problems.trends.run)
+    fallback_effort: null
+    free_slots: [1, 2, 3]
+  quiz_generation:              # P22-A: drafts the next Nairobi day's five quiz questions from curated docs (REQ-DEV-01)
+    model: claude-haiku-4-5      # D-59: Haiku, no tools; nothing is fetched (the model picks a source id, never a URL)
+    effort: null
+    max_tokens: 2048             # five questions as usually written; a max_tokens stop is retried once at twice (ADR-005)
+    batchable: false             # one call a night (a batch would add a poll job to save a fraction of a cent)
+    confidential: false          # public input only (the curated source list) and public output (staff-approved trivia)
+    purpose: tier1_only          # the curated pages are public fields (InputField public=True), never tenant or user data
+    fallback_model: null         # D-29; a refused draft is retried once by the job (bridge.quiz.run), then the day has none
+    fallback_effort: null
+    free_slots: [1, 2, 3]

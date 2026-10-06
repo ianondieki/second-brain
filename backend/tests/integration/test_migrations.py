@@ -1,19 +1,24 @@
-"""Revisions 0001 to 0008 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
+"""Revisions 0001 to 0010 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
 REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08, REQ-ENG-10, REQ-NOT-03, REQ-PROP-03, REQ-ENG-11,
-REQ-REPO-02, REQ-PERS-03; docs/spec/08 Migrations and Tenancy; AC-IP-2).
+REQ-REPO-02, REQ-PERS-03, REQ-DEV-01, REQ-DEV-02; docs/spec/08 Migrations and Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the revision before it
-exactly as it found it), table classification, RLS coverage generated from the ORM metadata, the grant matrix of every
-role, role attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained audit log, the evidence
-triggers of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column grants, the schema v5 notes
-triggers, policies and in-app column grant, the tags policies revision 0007 leaves as they were, the schema v6
-(revision 0008) policies, triggers and column grants, the listed-organisations policy and the Procrastinate schema.
+Migration round trip and drift (each of 0010, 0009, 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the revision
+before it exactly as it found it), table classification, RLS coverage generated from the ORM metadata, the grant
+matrix of every role, role attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained audit
+log, the evidence triggers of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column grants,
+the schema v5 notes triggers, policies and in-app column grant, the tags policies revision 0007 leaves as they were,
+the schema v6 (revision 0008), v7 (revision 0009) and v8 (revision 0010) policies, triggers and column grants, the
+listed-organisations policy and the Procrastinate schema.
 The tracker's behaviour (chain, projection, parties, payments, clock) is tested in ``integration/engagements/``;
 schema v4's in ``integration/matching/``, ``integration/problems/`` and ``integration/billing/``; schema v5's (the
 notes' writers and readers, marking read) in ``test_rls.py``; revision 0007's ``app_close_tag(tag, status)`` in
 ``test_privileges.py``; schema v6's (the thread, its stage gate and report, the shortlist, saved searches and their
 job) in ``integration/engagements/test_messages_schema.py``, ``integration/engagements/test_messages_race.py``,
-``integration/proposals/test_shortlist_schema.py`` and ``integration/profiles/test_saved_searches_schema.py``.
+``integration/proposals/test_shortlist_schema.py`` and ``integration/profiles/test_saved_searches_schema.py``; schema
+v7's (the quiz: its readers, the attempt and flag rules, rescoring, the board, the job's functions) in
+``integration/quiz/test_quiz_schema.py``; schema v8's (events, reminders and trend cards: their readers, writers,
+decisions and the reminder job's list) in ``integration/events/test_events_schema.py`` and
+``integration/events/test_trends_schema.py``.
 """
 
 from __future__ import annotations
@@ -201,6 +206,21 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     "engagement_message_attachments": {"message_id", "av_status"},
     "engagement_message_reads": {"last_read_at"},
     "saved_searches": {"name", "alerts", "last_alerted_at"},
+    # revision 0009: a developer's quiz settings and streak (never the key or its time)
+    "quiz_profiles": {"leaderboard_opt_in", "current_streak", "best_streak", "last_played_on"},
+    # revision 0010: the poster edits a draft event's content (never its status, decision, organisation, poster or
+    # updated_at: events_guard sets it)
+    "events": {
+        "title",
+        "description",
+        "starts_at",
+        "ends_at",
+        "online",
+        "venue",
+        "county_code",
+        "join_url",
+        "link",
+    },
 }
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
@@ -284,6 +304,20 @@ APP_GRANTS: dict[str, set[str]] = {
     "engagement_message_reads": {S, I, U},
     "org_shortlist": {S, I, D},
     "saved_searches": {S, I, U, D},
+    # revision 0009: the quiz (sets and questions inserted by the job, decided and pulled only through the definers;
+    # attempts append-only; flags only through app_flag_question; a developer's own profile)
+    "quiz_sets": {S, I},
+    "quiz_questions": {S, I},  # SELECT column-scoped: never answer or why (app_quiz_answers)
+    "quiz_attempts": {S, I},
+    "quiz_flags": {S},
+    "quiz_profiles": {S, I, U},
+    # revision 0010: events (posted as drafts, decided and cancelled only through the definers; never deleted), a
+    # developer's reminders (inserted and deleted, never updated), trend cards and sources (read only: written by
+    # app_create_trend_candidate, decided by app_decide_trend_card)
+    "events": {S, I, U},
+    "event_reminders": {S, I, D},
+    "trend_cards": {S},
+    "trend_card_sources": {S},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -455,6 +489,36 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_purge_stale_message_uploads(timestamp with time zone)": (True, {"bridge_app"}),  # the purge job, ditto
     "app_report_message(uuid, text[])": (True, {"bridge_app"}),  # a party's report of one message (fixed limit)
     "app_reported_message(uuid)": (True, {"bridge_app"}),  # staff admin|moderator read the reported message
+    # revision 0009: the quiz (triggers and internal functions: nobody)
+    "app_nairobi_today()": (False, {"bridge_app"}),  # the policies, the API and the job
+    "app_is_developer()": (True, {"bridge_app"}),  # the policies and the API
+    "quiz_attempt_score(uuid, smallint[])": (False, set()),  # the attempts' triggers and the rescore
+    "quiz_rescore_set(uuid)": (False, set()),  # the definer functions below
+    "app_rescore_quiz_set(uuid)": (True, {"bridge_app"}),  # staff admin, or a job with no user bound
+    "app_decide_quiz_set(uuid, text)": (True, {"bridge_app"}),  # staff admin
+    "app_set_quiz_question_status(uuid, text, text)": (True, {"bridge_app"}),  # staff admin
+    "app_flag_question(uuid, text, text)": (True, {"bridge_app"}),  # a developer (fixed limits)
+    "app_quiz_answers(uuid)": (True, {"bridge_app"}),  # after the caller's attempt, or staff admin
+    "app_quiz_set_stats(uuid)": (True, {"bridge_app"}),  # staff admin: a set's attempts in aggregate only
+    "app_quiz_set_detail(uuid)": (True, {"bridge_app"}),  # staff admin: a set's decision and generating call
+    "app_quiz_board()": (True, {"bridge_app"}),  # a developer
+    "app_quiz_day_taken(date)": (True, {"bridge_app"}),  # the quiz job, no user bound
+    "app_quiz_recent_prompt_hashes(date)": (True, {"bridge_app"}),  # the quiz job, no user bound
+    "quiz_sets_guard()": (False, set()),
+    "quiz_questions_guard()": (True, set()),  # the job (no user bound) reads no set
+    "quiz_attempts_score()": (True, set()),  # reads the answers
+    "quiz_attempts_guard()": (False, set()),
+    # revision 0010: events and trend cards (triggers and internal functions: nobody)
+    "app_decide_event(uuid, text, timestamp with time zone)": (True, {"bridge_app"}),  # staff admin or moderator
+    "app_cancel_event(uuid)": (True, {"bridge_app"}),  # staff, or an editor of the event's organisation
+    "app_event_reminders_due(timestamp with time zone)": (True, {"bridge_app"}),  # the reminder job, no user bound
+    "trend_source_is_valid(jsonb)": (False, set()),  # app_create_trend_candidate
+    "app_create_trend_candidate(jsonb, jsonb)": (True, {"bridge_app"}),  # the trend job (no user) or staff admin
+    "app_decide_trend_card(uuid, text)": (True, {"bridge_app"}),  # staff admin
+    "app_trend_job_state(timestamp with time zone)": (True, {"bridge_app"}),  # the weekly trend job, no user bound
+    "events_guard()": (False, set()),
+    "trend_cards_guard()": (False, set()),
+    "trend_card_sources_guard()": (False, set()),
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -682,13 +746,36 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     assert changed == {"functions", "function_acl"}, "0007 replaces app_close_tag, adds one function, nothing else"
     assert "app_close_tag(uuid,tag_status) bridge_app EXECUTE" in at_0007["function_acl"]
     assert "app_engagements_due_for_expiry(timestamp with time zone) bridge_app EXECUTE" in at_0007["function_acl"]
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0008"))
+    at_0008 = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_0008[kind] != at_0007[kind]}
+    assert changed == set(SNAPSHOT) - {"enums"}, "0008 adds tables, functions and policies; no enum type"
+    assert set(at_0007["policies"]) - set(at_0008["policies"]), "0008 narrows the app's report INSERT policy"
+    assert "app_report_message(uuid,text[]) bridge_app EXECUTE" in at_0008["function_acl"]
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0009"))
+    at_0009 = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_0009[kind] != at_0008[kind]}
+    assert changed == set(SNAPSHOT) - {"enums"}, "0009 adds tables, functions, policies and grants; no enum type"
+    for kind in SNAPSHOT:  # additive: every object of 0008 is still there, unchanged
+        assert set(at_0008[kind]) <= set(at_0009[kind]), kind
+    assert "app_flag_question(uuid,text,text) bridge_app EXECUTE" in at_0009["function_acl"]
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
     run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
     at_head = schema_snapshot(scratch_url)
-    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0007[kind]}
-    assert changed == set(SNAPSHOT) - {"enums"}, "0008 adds tables, functions and policies; no enum type"
-    assert set(at_0007["policies"]) - set(at_head["policies"]), "0008 narrows the app's report INSERT policy"
-    assert "app_report_message(uuid,text[]) bridge_app EXECUTE" in at_head["function_acl"]
+    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0009[kind]}
+    assert changed == set(SNAPSHOT) - {"enums"}, "0010 adds tables, functions, policies and grants; no enum type"
+    for kind in SNAPSHOT:  # additive: every object of 0009 is still there, unchanged
+        assert set(at_0009[kind]) <= set(at_head[kind]), kind
+    assert "app_create_trend_candidate(jsonb,jsonb) bridge_app EXECUTE" in at_head["function_acl"]
+    assert "app_trend_job_state(timestamp with time zone) bridge_app EXECUTE" in at_head["function_acl"]
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0009"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0010 leaves every object of 0009 exactly as it found it
+        assert after[kind] == at_0009[kind], kind
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0008"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0009 leaves every object of 0008 exactly as it found it
+        assert after[kind] == at_0008[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0007"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0008 leaves every object of 0007 exactly as it found it (the report policy included)
@@ -1058,6 +1145,24 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
     assert not await scalar(
         owner_engine, "SELECT has_any_column_privilege('bridge_app', 'engagement_messages', 'UPDATE')"
     )
+    for table in ("quiz_attempts", "quiz_flags"):  # revision 0009: an attempt, a flag (rescores are the definer's)
+        for privilege in ("UPDATE", "DELETE", "TRUNCATE"):
+            assert not await scalar(
+                owner_engine, "SELECT has_table_privilege('bridge_app', :t, :p)", t=table, p=privilege
+            )
+        assert not await scalar(owner_engine, "SELECT has_any_column_privilege('bridge_app', :t, 'UPDATE')", t=table)
+    # revision 0010: a reminder is inserted and deleted, never updated; an event is never deleted; the trend tables
+    # are written only by the definers
+    for table, privileges in (
+        ("event_reminders", ("UPDATE", "TRUNCATE")),
+        ("events", ("DELETE", "TRUNCATE")),
+        ("trend_cards", ("INSERT", "UPDATE", "DELETE", "TRUNCATE")),
+        ("trend_card_sources", ("INSERT", "UPDATE", "DELETE", "TRUNCATE")),
+    ):
+        for privilege in privileges:
+            held = "SELECT has_table_privilege('bridge_app', :t, :p) OR (:p IN ('INSERT', 'UPDATE')"
+            held += " AND has_any_column_privilege('bridge_app', :t, :p))"
+            assert not await scalar(owner_engine, held, t=table, p=privilege), f"{table} {privilege}"
 
 
 async def test_schema_v5_policies_are_exactly_the_notes_and_the_in_app_ones(owner_engine: AsyncEngine) -> None:
@@ -1104,6 +1209,73 @@ async def test_schema_v6_policies_are_exactly_the_planned_ones(owner_engine: Asy
     assert {role for row in found for role in row.roles} == {"bridge_app"}
     (report,) = (row for row in found if row.tablename == "moderation_cases" and row.cmd == "INSERT")
     assert report.with_check.endswith("AND ((subject_type)::text <> 'message'::text))")
+
+
+async def test_schema_v7_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
+    """Revision 0009: each quiz table has a policy for each command it is granted and no other; every policy is
+    bridge_app's. Attempts and flags have no UPDATE or DELETE policy (append-only); flags have no INSERT policy
+    (app_flag_question writes them); the job's inserts of sets and questions are for a session with no user bound."""
+    found = await rows(
+        owner_engine,
+        "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, with_check FROM pg_policies"
+        " WHERE schemaname = 'public' AND tablename LIKE 'quiz%'",
+    )
+    commands = {
+        "quiz_sets": ("SELECT", "INSERT"),
+        "quiz_questions": ("SELECT", "INSERT"),
+        "quiz_attempts": ("SELECT", "INSERT"),
+        "quiz_flags": ("SELECT",),
+        "quiz_profiles": ("SELECT", "INSERT", "UPDATE"),
+    }
+    expected = {(table, f"bridge_app_{cmd.lower()}", cmd) for table, cmds in commands.items() for cmd in cmds}
+    assert {(row.tablename, row.policyname, row.cmd) for row in found} == expected
+    assert {role for row in found for role in row.roles} == {"bridge_app"}
+    job = {row.tablename: row.with_check for row in found if row.cmd == "INSERT"}
+    assert job["quiz_sets"].startswith("((app_user_id() IS NULL) AND")
+    assert job["quiz_questions"] == "(app_user_id() IS NULL)"
+
+
+async def test_schema_v8_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
+    """Revision 0010: each new table has a policy for each command it is granted and no other; every policy is
+    bridge_app's. Events have no DELETE policy; reminders no UPDATE; the trend tables SELECT only (the definers
+    write them). The event INSERT and UPDATE policies are the same poster rule, on drafts only; a reminder is inserted
+    only on a published event that has not ended."""
+    found = await rows(
+        owner_engine,
+        "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, qual, with_check FROM pg_policies"
+        " WHERE schemaname = 'public' AND tablename = ANY (:tables)",
+        tables=["events", "event_reminders", "trend_cards", "trend_card_sources"],
+    )
+    commands = {
+        "events": ("SELECT", "INSERT", "UPDATE"),
+        "event_reminders": ("SELECT", "INSERT", "DELETE"),
+        "trend_cards": ("SELECT",),
+        "trend_card_sources": ("SELECT",),
+    }
+    expected = {(table, f"bridge_app_{cmd.lower()}", cmd) for table, cmds in commands.items() for cmd in cmds}
+    assert {(row.tablename, row.policyname, row.cmd) for row in found} == expected
+    assert {role for row in found for role in row.roles} == {"bridge_app"}
+    by = {(row.tablename, row.cmd): row for row in found}
+    insert, update = by["events", "INSERT"], by["events", "UPDATE"]
+    assert insert.with_check == update.qual == update.with_check
+    assert insert.with_check.endswith("AND (status = 'draft'::text))")
+    assert "app_is_member(org_id, '{owner,admin,signatory,reviewer}'::org_role[])" in insert.with_check
+    reminder = by["event_reminders", "INSERT"].with_check
+    assert "(e.status = 'published'::text) AND (e.ends_at > app_clock_now())" in reminder
+    assert by["event_reminders", "SELECT"].qual == by["event_reminders", "DELETE"].qual == "(user_id = app_user_id())"
+    # The readers, pinned whole: each term stays even where another layer already covers it (the review of 0010: the
+    # events' org_id IS NOT NULL, the sources' own status and developer terms behind the cards' policy in the subquery).
+    assert by["events", "SELECT"].qual == (
+        "(app_is_staff('{admin,moderator}'::staff_role[]) OR ((status = 'published'::text) AND app_is_developer())"
+        " OR ((org_id IS NOT NULL) AND app_is_member(org_id) AND ((app_org_id() IS NULL) OR (org_id = app_org_id()))))"
+    )
+    assert by["trend_cards", "SELECT"].qual == (
+        "(app_is_staff('{admin}'::staff_role[]) OR ((status = 'published'::text) AND app_is_developer()))"
+    )
+    assert by["trend_card_sources", "SELECT"].qual == (
+        "(app_is_staff('{admin}'::staff_role[]) OR (app_is_developer() AND (EXISTS ( SELECT 1\n   FROM trend_cards c\n"
+        "  WHERE ((c.id = trend_card_sources.card_id) AND (c.status = 'published'::text))))))"
+    )
 
 
 async def test_tags_keep_revision_0002s_policies(owner_engine: AsyncEngine) -> None:
@@ -1276,6 +1448,17 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
                 conn, "SELECT * FROM app_report_message(uuid7(), ARRAY['spam'])", "no message of the caller's"
             )
             await expect_error(conn, "SELECT * FROM app_reported_message(uuid7())", "staff admin or moderator only")
+            # revision 0010: the event and trend definers, each refused to a signed-in non-staff caller (the job
+            # readers to any signed-in caller)
+            for call, refusal in (
+                ("SELECT app_decide_event(uuid7(), 'publish', now())", "staff admin or moderator only"),
+                ("SELECT app_cancel_event(uuid7())", "no event the caller may cancel"),
+                ("SELECT count(*) FROM app_event_reminders_due(now())", "the event reminder job only"),
+                ("SELECT app_create_trend_candidate('{}', '[]')", "the trend job with no user bound"),
+                ("SELECT app_decide_trend_card(uuid7(), 'publish')", "staff admin only"),
+                ("SELECT * FROM app_trend_job_state(now())", "the weekly trend job only"),
+            ):
+                await expect_error(conn, call, refusal)
             # revision 0005: the definers and CHECK helpers bridge_app may call
             await conn.execute(sa.text("SELECT count(*) FROM app_trend_aggregates(now() - interval '1 day', now())"))
             await conn.execute(sa.text("SELECT app_uuid_set_is_valid(ARRAY[uuid7()], 1, 5)"))
@@ -1817,6 +2000,9 @@ UNREADABLE_COLUMNS: dict[str, str] = {
     "phone_verifications": "otp_hash",
     "users": "subject_salt",
     "llm_calls": "inputs",  # staff admin reads it through app_llm_call_inputs()
+    # revision 0010: who decided an event or a trend card is the audit log's (as the quiz sets', revision 0009)
+    "events": "decided_by",
+    "trend_cards": "decided_by",
 }
 
 
@@ -1914,6 +2100,34 @@ async def test_schema_v6_insert_columns_are_exactly_the_apps(
     assert {row.name for row in insertable} == set(columns) - excluded
     readable = await rows(owner_engine, held, columns=columns, t=f"public.{table}", p="SELECT")
     assert {row.name for row in readable} == set(columns)
+    whole = "SELECT has_table_privilege('bridge_app', CAST(:t AS text), 'INSERT')"
+    assert await scalar(owner_engine, whole, t=f"public.{table}") is False  # column-scoped, never table-wide
+
+
+# Revision 0010: the columns bridge_app inserts (an event is posted as a draft: its status, decision, cancellation and
+# times are the database's; a reminder's time is the database's clock).
+V10_INSERTABLE: dict[str, set[str]] = {
+    "events": {"id", "org_id", "created_by", "title", "description", "starts_at", "ends_at", "online", "venue"}
+    | {"county_code", "join_url", "link"},
+    "event_reminders": {"user_id", "event_id"},
+    "trend_cards": set(),
+    "trend_card_sources": set(),
+}
+
+
+@pytest.mark.parametrize(("table", "insertable"), sorted(V10_INSERTABLE.items()))
+async def test_schema_v8_insert_columns_are_exactly_the_apps(
+    owner_engine: AsyncEngine, table: str, insertable: set[str]
+) -> None:
+    columns = [c.name for c in TABLES[table].columns]
+    found = await rows(
+        owner_engine,
+        "SELECT c.name FROM unnest(CAST(:columns AS text[])) AS c(name)"
+        " WHERE has_column_privilege('bridge_app', CAST(:t AS text), c.name, 'INSERT')",
+        columns=columns,
+        t=f"public.{table}",
+    )
+    assert {row.name for row in found} == insertable
     whole = "SELECT has_table_privilege('bridge_app', CAST(:t AS text), 'INSERT')"
     assert await scalar(owner_engine, whole, t=f"public.{table}") is False  # column-scoped, never table-wide
 
@@ -2550,6 +2764,26 @@ V8_TRIGGERS = {
 }
 V8_THREAD_TABLES = ("engagement_messages", "engagement_message_attachments", "engagement_message_reads")
 
+# Revision 0009: a set changes once (its decision); a question joins a draft and changes only by a pull or restore; an
+# attempt is scored by the database at insert and changes only by its rescore; a flag never changes.
+V9_TRIGGERS = {
+    ("quiz_sets", "quiz_sets_guard"): ("quiz_sets_guard", ROW | BEFORE | ON_UPDATE),
+    ("quiz_questions", "quiz_questions_guard"): ("quiz_questions_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
+    ("quiz_attempts", "quiz_attempts_score"): ("quiz_attempts_score", ROW | BEFORE | ON_INSERT),
+    ("quiz_attempts", "quiz_attempts_guard"): ("quiz_attempts_guard", ROW | BEFORE | ON_UPDATE),
+    ("quiz_flags", "quiz_flags_no_update"): ("block_mutation", ROW | BEFORE | ON_UPDATE),
+}
+
+# Revision 0010: an event's county is a county; its status, organisation and poster change only as the definers do,
+# its content only while a draft; a trend card changes once (its decision); a source joins a candidate card and never
+# changes.
+V10_TRIGGERS = {
+    ("events", "events_guard"): ("events_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
+    ("trend_cards", "trend_cards_guard"): ("trend_cards_guard", ROW | BEFORE | ON_UPDATE),
+    ("trend_card_sources", "trend_card_sources_guard"): ("trend_card_sources_guard", ROW | BEFORE | ON_INSERT),
+    ("trend_card_sources", "trend_card_sources_no_update"): ("block_mutation", ROW | BEFORE | ON_UPDATE),
+}
+
 
 async def test_a_published_briefs_text_changes_only_with_a_return_to_review(owner_engine: AsyncEngine) -> None:
     """Revision 0006 (REQ-DIR-05, the P19-B security review): problems_brief_text_guard keeps the moderated text of a
@@ -2596,7 +2830,8 @@ async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine)
         " FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE NOT t.tgisinternal"
         " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
     )
-    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS | V8_TRIGGERS
+    expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS | V8_TRIGGERS | V9_TRIGGERS
+    expected |= V10_TRIGGERS
     assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == expected
     assert {row.tgenabled for row in found} == {"O"}
 

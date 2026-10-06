@@ -69,11 +69,11 @@ test.describe("walkthrough step 6 (the demo seed)", () => {
     const p6 = demoItemId("proposal");
 
     if (desktop) {
-      // The moderator signs in and lands on Moderation, their one section.
+      // The moderator signs in and lands on Moderation, the first of their two sections (Events: REQ-DEV-02).
       await signInThroughScreens(page, DEMO_MODERATOR, DEMO_PASSWORD);
       await expect(page).toHaveURL(/\/admin\/moderation$/, SERVER_STEP);
       const nav = page.getByRole("navigation", { name: "Staff console" });
-      await expect(nav.getByRole("link")).toHaveText(["Moderation"]);
+      await expect(nav.getByRole("link")).toHaveText(["Moderation", "Events"]);
       await expect(nav.getByRole("link", { name: "Moderation" })).toHaveAttribute("aria-current", "page");
     } else {
       // The admin lands on Research and opens Moderation from the tab bar.
@@ -208,7 +208,10 @@ test.describe("a moderator", () => {
     await signInThroughScreens(page, moderator, PASSWORD);
     await expect(page).toHaveURL(/\/admin\/moderation$/, SERVER_STEP);
     if (info.project.name !== "desktop") {
-      await expect(page.getByRole("navigation", { name: "Staff console" })).toBeHidden(); // one section: no tab bar
+      // Two sections (Moderation and Events, REQ-DEV-02), so the tab bar shows on a phone.
+      const tabs = page.getByRole("navigation", { name: "Staff console" });
+      await expect(tabs).toBeVisible();
+      await expect(tabs.getByRole("link")).toHaveText(["Moderation", "Events"]);
     }
 
     // Claims are the staff admin's.

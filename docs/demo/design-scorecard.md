@@ -282,3 +282,77 @@ one:
 Every cell meets performance ≥ 90 and accessibility ≥ 90; best practices 100 and CLS 0 everywhere. The Messages
 routes' LCP element is the page title (the tracker's `h1`, as on the tracker in P20, 2.6 s); several runs land at
 2.6–2.8 s, above AC-UX-3's 2.5 s, as the tracker's first uncached Slow 4G visit did (D-53).
+
+## P22-A measurements (2026-10-06): Today's five (D-59)
+
+Shots: `frontend/demo/design-shots.spec.ts` with `SHOTS_DIR=docs/demo/screenshots/p22a` (the Home card, the play form,
+the results with a flag, the weekly board opted out and in, the admin queue and a set page), 1440 and 375 px, light
+and dark, against the compose stack reset from this branch; strict axe 0 on every shot, at most one `[data-primary]`,
+no sideways scroll (the ux-reviewer's round: 0 violations on every state at 360, 375 and 1440).
+
+JS budget (`scripts/js-budget.mjs`, gzipped script bodies until idle, 360 px, limit 150,000; production build of this
+branch, fresh developer and staff-admin sessions; the reviewer's and the ux-reviewer's readings agree):
+
+| Route | Bytes | |
+|---|---|---|
+| `/dev` (Home with the card, played or not) | 143,994 | unchanged: the card is server-rendered |
+| `/dev/quiz` (play and results) | 147,824 | ok |
+| `/dev/quiz/board` | 143,662 | ok |
+| `/admin/quiz` | 144,765 | ok |
+| `/admin/quiz/<id>` | 148,361 | ok, 1,639 B left |
+
+Nothing of P22-A loads on the tracker or Messages routes (149,570 and 149,627 B, unchanged).
+
+Lighthouse 12.8.2 (mobile default, Slow 4G, Moto G class; production build; one run per cell; the ux-reviewer's round,
+light; dark follows the same bundles):
+
+| Page | Performance / accessibility / LCP |
+|---|---|
+| `/dev`, not played | 99 / 100 / 1.9 s |
+| `/dev`, played | 98 / 100 / 2.4 s |
+| `/dev/quiz`, play | 99 / 100 / 2.0 s |
+| `/dev/quiz`, results | 99 / 100 / 2.0 s |
+| `/dev/quiz/board` | 99 / 100 / 2.0 s |
+| `/admin/quiz` | 97 / 100 / 2.5 s |
+| `/admin/quiz/<id>` | 99 / 100 / 1.8 s |
+
+Every cell meets performance ≥ 90 and accessibility ≥ 90; best practices 100 where measured.
+
+## P22-B measurements (2026-10-06): This week (D-60, D-61)
+
+Shots: `frontend/demo/design-shots.spec.ts` with `SHOTS_DIR=docs/demo/screenshots/p22b` (the Home strip, the week,
+an event with the reminder on and off, the trend of the day, the organisation's events, its form and one event, the
+staff queue, a draft's page, the research page's Trends section and a candidate: 12 screens), 1440 and 375 px, light
+and dark, against the compose stack reset from this branch; strict axe 0 on every shot (48), at most one
+`[data-primary]`, no sideways scroll (the ux-reviewer's round: 0 violations on 16 routes at 360, 375, 1280 and 1440).
+
+JS budget (`scripts/js-budget.mjs`, gzipped script bodies until idle, 360 px, limit 150,000; the compose stack's
+production build of this branch, the demo's developer, organisation-reviewer and staff-admin sessions; every route of
+the product measured, the new ones below; the rest unchanged):
+
+| Route | Bytes | |
+|---|---|---|
+| `/dev` (Home with the strip) | 143,994 | unchanged: the strip is server-rendered |
+| `/dev/week` | 141,823 | ok |
+| `/dev/events/<id>` | 143,199 | ok |
+| `/dev/trends/<id>` | 141,823 | ok |
+| `/org/events` | 141,823 | ok |
+| `/org/events/new` | 147,431 | ok |
+| `/org/events/<id>` | 146,151 | ok |
+| `/admin/events` | 144,765 | ok |
+| `/admin/events/<id>` | 149,128 | ok, 872 B left |
+| `/admin/events/new` | 147,430 | ok |
+| `/admin/research` (with Trends) | 146,836 | ok |
+| `/admin/research/trends/<id>` | 147,125 | ok |
+
+Nothing of P22-B loads on the tracker or Messages routes (149,570 and 149,627 B, unchanged); the largest route of
+the product stays Messages with 373 B left.
+
+Lighthouse 12.8.2 (mobile default, Slow 4G, Moto G class; production build; the ux-reviewer's round, three runs per
+cell after a cold start):
+
+| Page | Light: performance / accessibility / LCP | Dark |
+|---|---|---|
+| `/dev/week` | 99–100 / 100 / 1.9–2.0 s | 97 / 100 / 2.5 s |
+| `/dev/events/<id>` | 98 / 100 / 2.5 s | 100 / 100 / 1.9 s |
+| `/org/events` | 99 / 100 / 2.0 s | 100 / 100 / 1.9 s |

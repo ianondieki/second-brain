@@ -33,20 +33,34 @@ class Tenancy(StrEnum):
     USER = "user"  # rows belong to one user; RLS by app.user_id
     ORG_OR_USER = "org_or_user"  # rows belong to a user or an organisation (e.g. subscriptions)
     # Owner-scoped content (proposals, problems): the owner reads and writes; every signed-in user reads rows that are
-    # published, not hidden and clear of moderation holds; staff admin|moderator read everything.
+    # published, not hidden and clear of moderation holds; staff admin|moderator read everything. Events (revision
+    # 0010) are of this class with a narrower public half: only developers read the published ones.
     PUBLISHED = "published"
     # Platform staff tables (moderation queue, invitation approvals): app_is_staff() reads and updates; the app inserts.
     STAFF = "staff"
     # Public registration evidence (provenance_records): every reader reads every row (/verify is anonymous); rows are
     # written only by the worker bound to the owner of the version they register.
     EVIDENCE = "evidence"
+    # Platform content a job drafts and staff approve before developers see it (the daily quiz's sets and questions,
+    # revision 0009; the trend cards and their sources, revision 0010): staff admin reads every row; a developer (an
+    # active user with a developer profile and no staff role) reads the approved or published ones; nobody else reads
+    # any (organisation-only accounts and unbound sessions included).
+    CURATED = "curated"
     GLOBAL = "global"  # reference data readable by everyone (niches, plans, holidays, regions)
     SYSTEM = "system"  # internal tables with no tenant (auth credentials, sessions, suppressions, jobs)
 
 
 # Tenancy classes whose tables have Row-Level Security (every other class has none).
 RLS_TENANCIES = frozenset(
-    {Tenancy.ORG, Tenancy.USER, Tenancy.ORG_OR_USER, Tenancy.PUBLISHED, Tenancy.STAFF, Tenancy.EVIDENCE}
+    {
+        Tenancy.ORG,
+        Tenancy.USER,
+        Tenancy.ORG_OR_USER,
+        Tenancy.PUBLISHED,
+        Tenancy.STAFF,
+        Tenancy.EVIDENCE,
+        Tenancy.CURATED,
+    }
 )
 
 

@@ -181,8 +181,10 @@ async def _row(db: AsyncSession, key: str) -> NotificationDelivery | None:
     return row
 
 
-async def _email_block(db: AsyncSession, r: Recipient, kind: str) -> str | None:
-    """Why ``r`` gets no email of ``kind`` (None: they do). Suppressions are ``send_email``'s check."""
+async def email_block(db: AsyncSession, r: Recipient, kind: str) -> str | None:
+    """Why ``r`` gets no email of ``kind`` (None: they do): an unverified address, no ``reminders`` consent, or the
+    kind's email preference off. Suppressions are ``send_email``'s check. EM7's gate, shared with This week's
+    day-before email (N26, ``bridge.events.reminders``) and its screen (``bridge.events.week.email_state``)."""
     if not r.verified:
         return "unverified"
     consent = await latest(db, r.id, ConsentPurpose.REMINDERS)
@@ -298,7 +300,7 @@ async def nudge_one(deps: Deps, r: Recipient, *, today: date, holidays: frozense
         await _sweep(db, r.id, kind, today)
         in_app_done = await _row(db, in_key) is not None
         email_row = await _row(db, email_key)
-        block = await _email_block(db, r, kind)
+        block = await email_block(db, r, kind)
         if block is None:
             plan = await for_subject(db, deps.settings, user_id=r.id)
             block = None if plan.allows("daily_email_reminders") else "plan"
@@ -403,7 +405,7 @@ async def digest_one(deps: Deps, r: Recipient, org_id: UUID, *, today: date, hol
         await _sweep(db, r.id, kind, period, org_id)
         in_app_done = await _row(db, in_key) is not None
         email_row = await _row(db, email_key)
-        block = await _email_block(db, r, kind)
+        block = await email_block(db, r, kind)
         email_open = block is None and not _finished(email_row)
         status = email_row.status if email_row is not None else None
         if in_app_done and not email_open:

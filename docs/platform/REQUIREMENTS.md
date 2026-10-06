@@ -184,6 +184,11 @@ AC-HYG-01..06 are derived from `docs/spec/02-existing-repo.md`. Only the orchest
 | REQ-R2-04 | Remaining Release 2 scope: remaining niches seeded, county-level research runs, KYC vendor (D2 automated), E-CSP advanced e-signature, co-owned proposals with splits, SSO, M-Pesa Ratiba, pipeline analytics, offline tracker, post-disclosure similarity monitor, Swahili live, local companion `--platform` | R13, R22, R40, R43, R15, R53, R02 | — | SHOULD | R2 | R2 | schema hooks kept (`co_owners`, `ots_proof`, `wa_contacts`) | — | DEFERRED (ADR-008) |
 | REQ-R3-01 | Release 3: LTR activation at thresholds, East Africa (Uganda, Tanzania, Rwanda: MTN MoMo, Airtel Money, local registries), success fees/escrow only via a CBK-licensed PSP partner, public API, procurement-friendly government flows | R23, R06, R15 | — | COULD | R3 | R3 | — | — | DEFERRED (ADR-008) |
 
+Owner-authorised additions outside the spec's tables (so outside the check's R-id and AC rules; their acceptance
+tests live on the task card): **REQ-DEV-01** Today's five, **REQ-DEV-02** This week, **REQ-DEV-03** Peers and team up
+(P22, `tasks/P22.md`, D-58 to D-62; N26 and N27 below are P22-B's). The ids are used in commits, code and tests as
+every other REQ-ID is.
+
 ## 4. Acceptance tests (one row per AC or AC clause)
 
 Text is copied from the spec tables; Given/When/Then split only where the original sentence has no explicit keyword.
@@ -298,7 +303,6 @@ Planned tests are file paths under `backend/tests/` or `frontend/e2e/` unless st
 | AC-SEC-5 | REQ-FND-02, REQ-FND-03, REQ-NOT-01 | `pr.yml`, `main.yml` and `make check` on an egress-blocked test runner | the pipelines run | no path performs a real network call to an LLM, email, WhatsApp or payment provider; only the `nightly.yml` evals job may reach `api.anthropic.com` | MUST | 1 | R1 | egress probe job in `pr.yml`; workflow lint over every file in `.github/workflows/` (`main.yml` joins when created in Phase 8) | DONE |
 | AC-SEC-6 | REQ-LLM-01, REQ-CON-01, REQ-PROP-05 | every LLM task fixture, without a live purpose-specific consent (`tier2_llm_assistant` / `tier2_llm_moderation`) | the task runs | no Tier-2 field ever appears in `llm_calls` inputs for that purpose (assertion on every task fixture) | MUST | 2 | R1 | `unit/llm/test_no_tier2_in_llm_calls.py` | TODO |
 | AC-SEC-7 | REQ-SEC-01, REQ-ENG-01 | `FEATURE_DEALS_ENABLED=false` | entering `NDA_PENDING` or any later stage, any `SignatureProvider` call and any payment record are attempted | each returns 403 | MUST | 3 | R1 | `integration/test_feature_flags.py::test_deals_flag` | TODO |
-
 ## 5. Notification matrix N01–N23
 
 Channels: in-app (always on), email (Postmark transactional stream; broadcast stream for digests), WhatsApp (Release 2,
@@ -339,6 +343,8 @@ occur, as sub-rows; DECISIONS-NEEDED D-06 asks whether they get their own ids.
 | N23 | Daily reminder: developer `reminders.dispatch` once at `send_after_hour` (default 07:30 EAT); enterprise `reminders.org_digest` 08:30 (daily or weekly per plan) | Developer with active engagements; org members opted in to the progress digest | email (+ WhatsApp in Release 2); in-app summary on Home | Yes (reminders consent; per-channel; ≤1 per user/day/channel) | EM7 (developer and org versions) |
 | N24 | New problems or Briefs match a saved Discover search (the daily `saved_searches.alert` job, 07:05 EAT; P21, REQ-PERS-03, D-57) | The developer who saved the search (alerts on) | in-app (`saved_search_match`, one per saved search and Nairobi day) | Yes (per saved search: Alerts on/off) | In-app notice with a link to Discover filtered |
 | N25 | Daily digest of saved-search matches (P21, REQ-PERS-03, D-57) | Developers who opted in (`saved_search_digest`, off by default) | email | Yes | Status email: saved search names and counts only, never problem text |
+| N26 | An event the developer asked to be reminded of is tomorrow (P22-B, REQ-DEV-02, D-61) | The developer who pressed Remind me | email (the day before, 18:00 EAT) | Yes (Remind me per event; the reminders consent) | Status email: title, time, place and the calendar links, never the description |
+| N27 | An event the developer asked to be reminded of is today (P22-B, REQ-DEV-02, D-61) | The developer who pressed Remind me | in-app (08:00 EAT) | Yes (Remind me per event) | |
 | (side) | `WITHDRAWN` by developer before agreement (Tier-2 access revoked) | Org | in-app + email | Yes | Status email |
 | (side) | `EM8` verification result (D1/D2/E1/E2 decisions) | The verified user or org admin | in-app + email | Yes | EM8 |
 

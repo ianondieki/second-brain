@@ -30,6 +30,11 @@ SPEC_09_ALLOCATION = {
     "reminder_nudge": {HAIKU},  # reminder & progress-reporter wording (REQ-REM-01)
     "scout_fit_rationale": {SONNET},  # scout fit scoring & rationale (REQ-SCOUT-02)
     "research_synthesis": {SONNET},  # research card synthesis (REQ-RES-01; the prototype sends no tools)
+    # Today's five (REQ-DEV-01): an owner-authorised addition outside spec 09's table; D-59 names Haiku, no tools.
+    "quiz_generation": {HAIKU},
+    # Technology trends (REQ-DEV-02): an owner-authorised addition outside spec 09's table; D-60 names the research
+    # pipeline, so the research synthesis allocation (Sonnet, no tools).
+    "trend_synthesis": {SONNET},
 }
 
 

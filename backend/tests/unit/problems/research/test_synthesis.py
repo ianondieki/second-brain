@@ -90,19 +90,30 @@ def _public_true_calls(path: Path) -> list[int]:
     return lines
 
 
+# The functions allowed to mark a field public, each taking only objects its own loader made from a curated file in
+# the repository: the research agent's saved excerpts, Today's five's curated documentation pages (REQ-DEV-01) and the
+# trends' saved excerpts of official technology publishers (REQ-DEV-02).
+PUBLIC_FIELD_MAKERS = {
+    "problems/research/synthesis.py": ("excerpt_fields", 2),
+    "problems/trends/synthesis.py": ("excerpt_fields", 1),
+    "quiz/generate.py": ("source_fields", 1),
+}
+
+
 def test_no_other_code_marks_a_field_public() -> None:
-    """The P7 rule: ``public=True`` only for saved public excerpts. Any call passing ``public=`` something other than
-    ``False`` outside ``excerpt_fields`` fails here."""
+    """The P7 rule: ``public=True`` only for saved public excerpts and curated quiz pages. Any call passing
+    ``public=`` something other than ``False`` outside the two ``excerpt_fields`` and ``source_fields`` fails here."""
     found = {
         str(path.relative_to(SRC)): lines for path in sorted(SRC.rglob("*.py")) if (lines := _public_true_calls(path))
     }
-    assert set(found) == {"problems/research/synthesis.py"}, found
-    tree = ast.parse(Path(synthesis.__file__).read_text(encoding="utf-8"))
-    function = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "excerpt_fields")
-    assert function.end_lineno is not None
-    lines = found["problems/research/synthesis.py"]
-    assert len(lines) == 2
-    assert all(function.lineno <= line <= function.end_lineno for line in lines)
+    assert set(found) == set(PUBLIC_FIELD_MAKERS), found
+    for relative, (name, count) in PUBLIC_FIELD_MAKERS.items():
+        tree = ast.parse((SRC / relative).read_text(encoding="utf-8"))
+        function = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name)
+        assert function.end_lineno is not None
+        lines = found[relative]
+        assert len(lines) == count, relative
+        assert all(function.lineno <= line <= function.end_lineno for line in lines), relative
 
 
 async def test_each_excerpt_is_framed_in_its_own_block_and_the_call_is_recorded() -> None:

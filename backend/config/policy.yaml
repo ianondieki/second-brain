@@ -154,3 +154,32 @@ briefs:
   # moderation case for staff, so an organisation posts at most this many Briefs per Nairobi day (database clock),
   # whatever its plan allows open at once; the next post answers 429 briefs_daily_limit.
   daily_posts: 20
+
+quiz:
+  # Today's five (REQ-DEV-01; D-59; docs/platform/tasks/P22.md section A). Read by bridge/quiz/policy.py. The nightly
+  # quiz_generation call reads a sample of backend/ai/quiz_sources.yaml; the checks in code (bridge/quiz/checks.py)
+  # decide whether its draft becomes a set; staff approve every set before anyone sees it.
+  sources_per_prompt: 10             # curated pages sent per call (8 to 12), spread over the topics, rotated by date
+  draft_attempts: 2                  # calls per night, exactly 2 (the card): one retry, then the day has no draft
+  no_repeat_days: 60                 # a prompt hash drafted in this many days before refuses the draft (repeated_prompt)
+
+trends:
+  # Technology trends (REQ-DEV-02; D-60; docs/platform/tasks/P22.md section B, default (5)). Read by
+  # bridge/problems/trends/policy.py. A weekly trend_synthesis call drafts up to max_cards_per_run candidates from the
+  # saved excerpts of official technology publishers (backend/seed/trend_excerpts.yaml, allowlist sources/tech.yaml);
+  # the research checks decide (bridge/problems/trends/checks.py, confidence from research.weights and
+  # research.source_quality); staff admins approve every card. Trends age faster than Kenyan problem excerpts.
+  max_excerpts: 12                   # excerpts sent per call, freshest first, spread over the topics
+  max_cards_per_run: 3               # drafts beyond this are discarded (over_card_limit)
+  min_support_words: 4               # a citation's support: at least this many words, verbatim from its quote
+  discard_below: "0.40"              # a card below this confidence is discarded (low_confidence)
+  stale_after_months: 6              # freshness falls from 1 after this many months
+  archive_after_months: 12           # an excerpt this old is never sent and never counts
+  draft_attempts: 2                  # calls per week, exactly 2 (the card): a refused draft is retried once
+
+events:
+  # This week's events (REQ-DEV-02; D-60; docs/platform/tasks/P22.md section B). Read by bridge/events/policy.py. Every
+  # event waits on the staff queue (/admin/events) before developers see it, so an organisation posts at most this many
+  # events per Nairobi day (the shared clock); the next post answers 429 events_daily_limit. Staff's platform events
+  # are not counted.
+  daily_posts: 10

@@ -1,0 +1,251 @@
+"""REQ-DEV-01, REQ-ADM-01 (D-59; P22 card A tests A2 and A6, the staff half): ``/api/admin/quiz/*``.
+
+- Staff admin with a fresh second factor only: signed out and a developer 404, a moderator 403, a stale second
+  factor 403 ``step_up_required``.
+- The queue lists sets newest day first with their flag and pull counts (``status`` filters); a set's page has the
+  answers, whys, sources, the flags by reason with their notes (never who flagged), who decided it and when, its
+  generating call, and its attempts in aggregate only from three attempts on.
+- One decision per set (409 ``already_decided``), an approval needs five questions (409 ``incomplete_set``) and a day
+  that is not over (409 ``day_over``: rejecting stays allowed, and nobody's streak is touched), audited
+  ``quiz.set_decided``; a rejected set is never served. The draft queue lists today's set first.
+- Pull and restore rescore the set's attempts, each audited with the number of scores changed; the same state again
+  is 409; a reason is one line of 1 to 300 characters.
+"""
+
+from __future__ import annotations
+
+from datetime import timedelta
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import text
+
+from bridge.db import create_session_factory
+from bridge.ids import uuid7
+from bridge.quiz.store import store_draft
+from tests.integration.api import make_client
+from tests.integration.quiz.api_world import (
+    ADMIN,
+    KEY,
+    NO_REPEAT_DAYS,
+    TODAY,
+    Clients,
+    QuizDb,
+    accepted_set,
+    approved_set,
+    at,
+    audit_actions,
+    cast,
+    code,
+    decide,
+    draft_set,
+    flag_path,
+    owner_attempt,
+    owner_rows,
+    play,
+    question_ids,
+    scores,
+)
+
+ROUTES: tuple[tuple[str, str, dict[str, Any] | None], ...] = (
+    ("GET", "/sets", None),
+    ("GET", f"/sets/{uuid7()}", None),
+    ("POST", f"/sets/{uuid7()}/decision", {"decision": "approve"}),
+    ("POST", f"/questions/{uuid7()}/pull", {"reason": "Wrong key"}),
+    ("POST", f"/questions/{uuid7()}/restore", None),
+)
+
+
+async def test_every_route_is_staff_admin_only_with_a_fresh_second_factor(quiz: QuizDb, as_user: Clients) -> None:
+    p = await cast(quiz)
+    developer, moderator = await as_user(p.developer), await as_user(p.moderator)
+    stale = await as_user(p.admin, fresh=False)
+    async with make_client(quiz.app) as anonymous:
+        for method, path, body in ROUTES:
+            assert (await anonymous.request(method, ADMIN + path, json=body)).status_code == 404, path
+    for method, path, body in ROUTES:
+        assert (await developer.request(method, ADMIN + path, json=body)).status_code == 404, path
+        assert (await moderator.request(method, ADMIN + path, json=body)).status_code == 403, path
+        assert code(await stale.request(method, ADMIN + path, json=body)) == (403, "step_up_required"), path
+
+
+async def test_one_audited_decision_per_set_and_only_approved_sets_are_served(quiz: QuizDb, as_user: Clients) -> None:
+    monday = quiz.monday()
+    await at(quiz, monday)
+    p = await cast(quiz)
+    admin, dev = await as_user(p.admin), await as_user(p.developer)
+    today = await draft_set(quiz, monday, role="job")
+    queue = (await admin.get(f"{ADMIN}/sets", params={"status": "draft"})).json()["items"]
+    assert [item["id"] for item in queue] == [str(today)]
+    assert code(await dev.get(TODAY)) == (404, "no_quiz")
+    rejected = await admin.post(f"{ADMIN}/sets/{today}/decision", json={"decision": "reject"})
+    assert (rejected.json()["status"], rejected.json()["quiz_date"]) == ("rejected", monday.isoformat())
+    assert code(await admin.post(f"{ADMIN}/sets/{today}/decision", json={"decision": "approve"})) == (
+        409,
+        "already_decided",
+    )
+    assert code(await dev.get(TODAY)) == (404, "no_quiz")  # a rejected set is never served
+    again = await draft_set(quiz, monday, role="job")  # the day is free again
+    approved = await admin.post(f"{ADMIN}/sets/{again}/decision", json={"decision": "approve"})
+    assert approved.json()["status"] == "approved"
+    assert (await dev.get(TODAY)).json()["set_id"] == str(again)
+    for set_id, decision in ((today, "rejected"), (again, "approved")):
+        [event] = await audit_actions(quiz, set_id)
+        assert (event.action, event.actor_kind, event.actor_user_id) == ("quiz.set_decided", "staff", p.admin)
+        assert event.payload == {"decision": decision, "quiz_date": monday.isoformat(), "origin": "model"}
+    async with create_session_factory(quiz.app)() as db:  # the job writes a set and then fails before question 5
+        short = uuid7()
+        await db.execute(
+            text("INSERT INTO quiz_sets (id, quiz_date, origin, llm_trace_id) VALUES (:s, :d, 'model', 't')"),
+            {"s": short, "d": monday + timedelta(days=1)},
+        )
+        await db.commit()
+    assert code(await admin.post(f"{ADMIN}/sets/{short}/decision", json={"decision": "approve"})) == (
+        409,
+        "incomplete_set",
+    )
+    assert code(await admin.post(f"{ADMIN}/sets/{uuid7()}/decision", json={"decision": "approve"})) == (
+        404,
+        "not_found",
+    )
+    assert (await admin.post(f"{ADMIN}/sets/{today}/decision", json={"decision": "maybe"})).status_code == 422
+
+
+async def test_the_queue_and_a_sets_page(quiz: QuizDb, as_user: Clients) -> None:
+    monday = quiz.monday()
+    tuesday = monday + timedelta(days=1)
+    await at(quiz, monday)
+    p = await cast(quiz)
+    admin = await as_user(p.admin)
+    set_id, ids = await approved_set(quiz, monday, p.admin)
+    async with create_session_factory(quiz.app)() as db:
+        await store_draft(
+            db, tuesday, accepted_set(), origin="model", trace_id="quiz:tue:2", no_repeat_days=NO_REPEAT_DAYS
+        )
+    for user, answers in ((p.developer, list(KEY)), (p.other, [*KEY[:4], None])):
+        client = await as_user(user)
+        await play(client, set_id, answers)
+        await client.post(flag_path(ids[1]), json={"reason": "unclear", "note": f"Note of {user.hex[:6]}"})
+    await owner_attempt(quiz, set_id, p.third)  # a third attempt: the aggregates show
+    await (await as_user(p.developer)).post(flag_path(ids[2]), json={"reason": "outdated"})
+    listed = (await admin.get(f"{ADMIN}/sets")).json()["items"]
+    mine = [item for item in listed if item["quiz_date"] in (monday.isoformat(), tuesday.isoformat())]
+    assert [(i["quiz_date"], i["status"], i["origin"], i["flags"], i["pulled"]) for i in mine] == [
+        (tuesday.isoformat(), "draft", "model", 0, 0),
+        (monday.isoformat(), "approved", "seeded", 3, 0),
+    ]
+    only = (await admin.get(f"{ADMIN}/sets", params={"status": "approved"})).json()["items"]
+    assert {i["status"] for i in only} == {"approved"}
+    assert str(set_id) in [i["id"] for i in only]
+    assert (await admin.get(f"{ADMIN}/sets", params={"status": "live"})).status_code == 422
+    page = (await admin.get(f"{ADMIN}/sets/{set_id}")).json()
+    assert (page["decided_by"], page["llm_trace_id"], page["status"]) == (str(p.admin), None, "approved")
+    assert page["decided_at"] is not None
+    assert page["stats"] == {"attempts": 3, "average_score": "3.00", "per_question_correct": [2, 2, 2, 2, 1]}
+    second = page["questions"][1]
+    assert (second["answer"], second["why"], second["flags"], second["flag_reasons"]) == (
+        KEY[1],
+        f"The page says option {KEY[1]} for question 2.",
+        2,
+        {"unclear": 2},
+    )
+    assert sorted(n["note"] for n in second["notes"]) == sorted(f"Note of {u.hex[:6]}" for u in (p.developer, p.other))
+    assert "user_id" not in str(second["notes"])
+    assert page["questions"][2]["flag_reasons"] == {"outdated": 1}
+    assert page["questions"][0]["source_url"] == "https://docs.python.org/3/reference/datamodel.html"
+    drafted = (await admin.get(f"{ADMIN}/sets", params={"status": "draft"})).json()["items"][0]["id"]
+    early = (await admin.get(f"{ADMIN}/sets/{drafted}")).json()
+    assert (early["llm_trace_id"], early["decided_by"], early["stats"]) == (
+        "quiz:tue:2",
+        None,
+        {"attempts": 0, "average_score": None, "per_question_correct": None},
+    )
+    assert code(await admin.get(f"{ADMIN}/sets/{uuid7()}")) == (404, "not_found")
+
+
+async def test_pull_and_restore_rescore_and_are_audited(quiz: QuizDb, as_user: Clients) -> None:
+    monday = quiz.monday()
+    await at(quiz, monday)
+    p = await cast(quiz)
+    admin = await as_user(p.admin)
+    set_id, ids = await approved_set(quiz, monday, p.admin)
+    await play(await as_user(p.developer), set_id, list(KEY))
+    await play(await as_user(p.other), set_id, [None, *KEY[1:]])
+    for body in ({"reason": "  "}, {"reason": "x" * 301}, {"reason": "a\u0000b"}, {}):
+        assert (await admin.post(f"{ADMIN}/questions/{ids[0]}/pull", json=body)).status_code == 422, body
+    pulled = await admin.post(f"{ADMIN}/questions/{ids[0]}/pull", json={"reason": "  The key is   wrong. "})
+    assert pulled.json() == {"question_id": str(ids[0]), "set_id": str(set_id), "status": "pulled", "rescored": 1}
+    assert await scores(quiz, set_id) == {p.developer: 4, p.other: 4}
+    [row] = await owner_rows(quiz, "SELECT status, pulled_reason FROM quiz_questions WHERE id = :q", q=ids[0])
+    assert tuple(row) == ("pulled", "The key is wrong.")
+    assert code(await admin.post(f"{ADMIN}/questions/{ids[0]}/pull", json={"reason": "Again"})) == (
+        409,
+        "already_pulled",
+    )
+    restored = await admin.post(f"{ADMIN}/questions/{ids[0]}/restore")
+    assert restored.json()["rescored"] == 1
+    assert await scores(quiz, set_id) == {p.developer: 5, p.other: 4}
+    assert code(await admin.post(f"{ADMIN}/questions/{ids[0]}/restore")) == (409, "already_live")
+    assert code(await admin.post(f"{ADMIN}/questions/{uuid7()}/restore")) == (404, "not_found")
+    events = await audit_actions(quiz, ids[0])
+    assert [(e.action, e.actor_kind, e.actor_user_id, e.payload) for e in events] == [
+        ("quiz.question_pulled", "staff", p.admin, {"set_id": str(set_id), "rescored": 1, "reason": "staff"}),
+        ("quiz.question_restored", "staff", p.admin, {"set_id": str(set_id), "rescored": 1}),
+    ]
+    listed = (await admin.get(f"{ADMIN}/sets/{set_id}")).json()["questions"][0]
+    assert (listed["status"], listed["pulled_reason"], listed["restored_at"] is not None) == ("live", None, True)
+    draft = await draft_set(quiz, monday + timedelta(days=1), role="job")
+    [first, *_] = await question_ids(quiz, draft)
+    held = await admin.post(f"{ADMIN}/questions/{first}/pull", json={"reason": "Check it first"})
+    assert (held.json()["status"], held.json()["rescored"]) == ("pulled", 0)  # a draft's question, before approval
+
+
+async def test_a_set_whose_day_is_over_is_never_approved_and_streaks_stay(quiz: QuizDb, as_user: Clients) -> None:
+    """Monday played; Tuesday's draft left overnight is not approved on Wednesday (409 ``day_over``: an approved set
+    nobody could play would end every streak); it may still be rejected; the streak stays."""
+    monday = quiz.monday()
+    tuesday, wednesday = monday + timedelta(days=1), monday + timedelta(days=2)
+    await at(quiz, monday)
+    p = await cast(quiz)
+    monday_set, _ = await approved_set(quiz, monday, p.admin)
+    dev = await as_user(p.developer)
+    assert (await play(dev, monday_set, list(KEY))).json()["streak"] == {"current": 1, "best": 1}
+    left = await draft_set(quiz, tuesday, role="job")
+    await approved_set(quiz, wednesday, p.admin)
+    await at(quiz, wednesday)
+    admin = await as_user(p.admin)
+    assert code(await admin.post(f"{ADMIN}/sets/{left}/decision", json={"decision": "approve"})) == (409, "day_over")
+    [row] = await owner_rows(quiz, "SELECT status, decided_at FROM quiz_sets WHERE id = :s", s=left)
+    assert tuple(row) == ("draft", None)
+    assert await audit_actions(quiz, left) == []
+    assert (await dev.get(TODAY)).json()["streak"] == {"current": 1, "best": 1}  # Tuesday had no approved set
+    rejected = await admin.post(f"{ADMIN}/sets/{left}/decision", json={"decision": "reject"})
+    assert rejected.json()["status"] == "rejected"
+    decision = admin.app.openapi()["paths"][f"{ADMIN}/sets/{{set_id}}/decision"]["post"]  # type: ignore[attr-defined]
+    assert "day_over" in decision["responses"]["409"]["description"]
+
+
+async def test_the_draft_queue_lists_todays_set_first(quiz: QuizDb, as_user: Clients) -> None:
+    """Drafts of today and later first, today's first, then drafts of past days, then decided sets newest first."""
+    monday = quiz.monday()
+    day = {name: monday + timedelta(days=n) for n, name in enumerate(("mon", "tue", "wed", "thu", "fri"))}
+    p = await cast(quiz)
+    await at(quiz, day["mon"])
+    approved, _ = await approved_set(quiz, day["mon"], p.admin)
+    stale = await draft_set(quiz, day["tue"], role="job")
+    await at(quiz, day["wed"])
+    rejected = await draft_set(quiz, day["wed"], role="job")
+    await decide(quiz, rejected, p.admin, "rejected")
+    later = await draft_set(quiz, day["fri"], role="job")
+    soon = await draft_set(quiz, day["thu"], role="job")
+    today = await draft_set(quiz, day["wed"], role="job")
+    admin = await as_user(p.admin)
+    mine = {approved, stale, rejected, later, soon, today}
+
+    async def listed(**params: str) -> list[str]:
+        items = (await admin.get(f"{ADMIN}/sets", params=params)).json()["items"]
+        return [item["id"] for item in items if UUID(item["id"]) in mine]
+
+    assert await listed(status="draft") == [str(s) for s in (today, soon, later, stale)]
+    assert await listed() == [str(s) for s in (today, soon, later, stale, rejected, approved)]
+    assert await listed(status="approved") == [str(approved)]

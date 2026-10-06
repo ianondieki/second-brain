@@ -95,7 +95,7 @@ test.describe("a Problem Brief", () => {
     await expect(page).toHaveURL(/\/org$/, SERVER_STEP);
     await expect(page.locator("[data-stat='briefs']")).toContainText("Problem Briefs");
     const nav = page.getByRole("navigation", { name: "Organisation" });
-    expect(await nav.getByRole("link").count()).toBe(4); // Home, Inbox, Engagements, Problems (AC-UX-1: at most 5)
+    expect(await nav.getByRole("link").count()).toBe(5); // Home, Inbox, Engagements, Problems, Events (AC-UX-1: at most 5)
     await nav.getByRole("link", { name: "Problems" }).click();
     await expect(page).toHaveURL(/\/org\/problems$/, SERVER_STEP);
     await expect(nav.getByRole("link", { name: "Problems" })).toHaveAttribute("aria-current", "page");
