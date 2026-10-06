@@ -26,7 +26,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Text, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, FetchedValue, ForeignKey, Index, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from bridge.models.base import Base, IdMixin, Tenancy
@@ -121,7 +121,11 @@ class Event(IdMixin, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    # The database's (events_guard sets it on every content or status change): an ORM edit expires it, so the next
+    # read (a reviewer's ``seen``) is the stored value, never a stale one.
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("app_clock_now()"), server_onupdate=FetchedValue()
+    )
 
 
 class EventReminder(Base):

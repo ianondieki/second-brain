@@ -34,6 +34,11 @@ def messages_path(party: EngagementParty, engagement_id: UUID) -> str:
     return f"{engagement_path(party, engagement_id)}/messages#messages-heading"
 
 
+def dev_event_path(event_id: UUID) -> str:
+    """A published event's page in the developer's portal (the N27 notice's link; P22-B, REQ-DEV-02)."""
+    return f"/dev/events/{event_id}"
+
+
 def org_engagements_path(org_id: UUID) -> str:
     """The organisation's engagements list, for that organisation."""
     return f"{ORG_ENGAGEMENTS}?org={org_id}"

@@ -7,7 +7,8 @@ adds nothing and changes nothing they did: each engagement it did not open in th
 line in the report. P21's beats keep the rule: a shortlist entry people removed is not made again, no saved search is
 added while Amina keeps one of her own, a thread whose engagement ended is left with one line, and a thread one of whose
 writers cannot sign in is not half written. P22's quiz keeps it too: a day that has a set gets nothing, an attempt that
-exists is left, and an opt-in turned off stays off. Own database: the actions end engagements for good.
+exists is left, and an opt-in turned off stays off; and This week: an event cancelled, a reminder declined and a trend
+card rejected in the app stay so. Own database: the actions end engagements for good.
 """
 
 from __future__ import annotations
@@ -42,17 +43,20 @@ from bridge.seed.demo.data import (
     P3,
     SACCO_B,
     SAVED_SEARCH,
+    STAFF_ADMIN,
     TELCO_A,
     THREAD,
     VIEWED,
     DemoThread,
 )
+from bridge.seed.demo.events import DEMO_EVENTS
 from bridge.seed.demo.runtime import in_process_app, signed_in
 from bridge.seed.demo.scouts import SCOUTED
 from bridge.seed.reference import SEED_TABLES, seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
+from tests.integration.demo.test_demo_seed import this_week_lines
 
 NEW_PASSWORD = "amina-changed-it-in-the-app"
 TELCO_REVIEWER, TELCO_SIGNATORY = TELCO_A.seats[1].email, TELCO_A.seats[0].email
@@ -127,12 +131,15 @@ async def test_with_the_flags_off_the_seed_stops_before_deal_steps_and_says_so(
     seeded: tuple[DemoReport, DemoReport],
 ) -> None:
     off, _ = seeded
-    assert off.created[-10:-7] == [  # P21's beats: P1's thread is open at CONTACT_MADE too
+    week = len(this_week_lines())
+    assert off.created[-10 - week : -7 - week] == [  # P21's beats: P1's thread is open at CONTACT_MADE too
         f"thread of {P1.key} with {SACCO_B.legal_name}: {len(THREAD.messages)} messages",
         f"shortlist of {TELCO_A.legal_name}: {SCOUTED.key} by {TELCO_REVIEWER}",
         f"saved search of {AMINA.email}: {SAVED_SEARCH.name}",
     ]
-    assert [line.split(" ")[:2] for line in off.created[-7:]] == [["quiz", "set"]] * 4 + [["quiz", "attempt"]] * 3
+    quiz = [line.split(" ")[:2] for line in off.created[-7 - week : -week]]
+    assert quiz == [["quiz", "set"]] * 4 + [["quiz", "attempt"]] * 3
+    assert off.created[-week:] == this_week_lines()  # P22's This week: flags or not
     assert off.notes == [
         "Tier-2 view skipped: FEATURE_TIER2_ENABLED is off",
         f"{P1.key} with {SACCO_B.legal_name} stopped at CONTACT_MADE: FEATURE_DEALS_ENABLED is off",
@@ -407,3 +414,38 @@ async def test_the_quiz_keeps_what_people_did(
     finally:
         async with owner.begin() as conn:
             await conn.execute(opt_in, {"o": True, "u": amina})
+
+
+async def test_this_week_keeps_what_people_did(
+    seeded: tuple[DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P22 (REQ-DEV-02): Telco A cancelled its Nairobi event, Amina declined her reminder and a staff admin rejected
+    the trend candidate (written as the owner role, as the app's definers would): the seed adds no event, reminder or
+    card while those events have not ended, and signs nobody in."""
+    report = seeded[1]
+    week_rows = (
+        "SELECT (SELECT count(*) FROM events) AS events, (SELECT count(*) FROM event_reminders) AS reminders,"
+        " (SELECT count(*) FROM trend_cards) AS cards"
+    )
+    nairobi = await rows(owner, "SELECT id FROM events WHERE title = :t", t=DEMO_EVENTS[0].title)
+    async with owner.begin() as conn:
+        await conn.execute(
+            text("UPDATE events SET status = 'cancelled', cancelled_at = now() WHERE id = :e"), {"e": nairobi[0].id}
+        )
+        await conn.execute(text("DELETE FROM event_reminders"))
+        await conn.execute(
+            text(
+                "UPDATE trend_cards SET status = 'rejected', decided_by = :a, decided_at = now()"
+                " WHERE status = 'candidate'"
+            ),
+            {"a": report.users[STAFF_ADMIN.email]},
+        )
+    before = await rows(owner, week_rows)
+    audit_before = await rows(owner, "SELECT count(*) FROM audit_events")
+    again = await seed_demo(flags(True), owner_engine=owner, app_engine=app, runtime=runtime)
+    assert [line for line in again.created if line.startswith(("event", "reminder", "county", "trend"))] == []
+    assert not [note for note in again.notes if note.startswith(("event", "trend"))]
+    assert await rows(owner, week_rows) == before
+    assert await rows(owner, "SELECT count(*) FROM audit_events") == audit_before
+    statuses = await rows(owner, "SELECT status FROM events WHERE id = :e", e=nairobi[0].id)
+    assert statuses[0].status == "cancelled"

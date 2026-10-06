@@ -92,8 +92,9 @@ listed in ``FUNCTION_GRANTS``; each refuses with a message naming itself):
   (revision 0008). The reminders of active users on published events that have not ended at ``now`` and start on
   ``now``'s Nairobi day or the next (N27 the morning of, N26 the day before): ids only, a superset the job decides on
   again, bound to each developer.
-- ``app_create_trend_candidate(card, sources)`` -> the card's id: the trend job (bridge_app with no user bound) or a
-  staff admin (the manual run; insufficient_privilege otherwise). ``card`` is an object of ``title``, ``summary``,
+- ``app_create_trend_candidate(card, sources)`` -> the card's id: the trend job (bridge_app with no user bound: the
+  weekly run and a staff admin's manual run alike) or a staff admin (insufficient_privilege otherwise). ``card`` is an
+  object of ``title``, ``summary``,
   ``topic_slug`` (strings) and optionally ``confidence`` (a number of 0 to 1, rounded to three decimals, or null),
   ``llm_trace_id`` (a string or null) and ``named_orgs`` (an array of strings); ``sources`` an array of 1 to 5 objects
   of exactly ``url``, ``publisher``, ``published_date`` and ``retrieved_at`` (YYYY-MM-DD, real dates, retrieved on or
@@ -131,11 +132,12 @@ Operating rules for the code that uses this schema:
   (``bind_tenant``) that reads the reminder and the event again (a cancelled event is gone from a developer's view),
   the consent and preferences as EM7 does, and writes ``notification_deliveries`` and ``in_app_notifications`` under
   that binding, keyed once per kind, developer and event.
-- Trend cards: the weekly job (no user bound) first reads ``app_trend_job_state(now - 6 days)`` (``recent``: nothing
-  is drafted; ``cited_refs``: the excerpts left out of the call; the manual run reads the cards as the staff admin
-  instead), then calls ``app_create_trend_candidate`` with no user bound (the manual run as the staff admin), never
-  with a model-written URL or excerpt id that the code did not take from the publisher list; the database checks the
-  shape, not the allowlist or the research checks.
+- Trend cards: every run of the trend job, the weekly one and a staff admin's manual one alike, has no user bound
+  (the admin who asked for a manual run appears only in the job's log line). It first reads
+  ``app_trend_job_state(now - 6 days)`` (``recent``: nothing is drafted; ``cited_refs``: the excerpts left out of the
+  call), then calls ``app_create_trend_candidate`` with no user bound, never with a model-written URL or excerpt id
+  that the code did not take from the publisher list; the database checks the shape, not the allowlist or the
+  research checks.
 
 Revision ID: 0010
 Revises: 0009
@@ -456,14 +458,14 @@ BEGIN
 END;
 $$;
 
--- The only way a trend card enters the database (REQ-DEV-02; D-60): the weekly trend job (bridge_app with no user
--- bound) or a staff admin's manual run. A candidate (never shown to developers until a staff admin publishes it) with
--- a title of 1 to 120 characters, a summary of 1 to 600 (both trimmed, neither with a control character), a topic slug
--- of lower-case words joined by hyphens (at most 40), an optional confidence (0 to 1, rounded to three decimals), an
--- optional trace id of the generating call and optional named organisations (at most 10 distinct names of 1 to 200
--- characters without a control character), and 1 to 5 valid sources (trend_source_is_valid), written at positions 1
--- to 5 in the order given. Card and sources are written in one call: a refused source leaves nothing behind. The
--- publisher allowlist and the research checks are the application's. Returns the card's id.
+-- The only way a trend card enters the database (REQ-DEV-02; D-60): the trend job (bridge_app with no user bound, the
+-- weekly run and a staff admin's manual run alike) or a staff admin. A candidate (never shown to developers until a
+-- staff admin publishes it) with a title of 1 to 120 characters, a summary of 1 to 600 (both trimmed, neither with a
+-- control character), a topic slug of lower-case words joined by hyphens (at most 40), an optional confidence (0 to 1,
+-- rounded to three decimals), an optional trace id of the generating call and optional named organisations (at most 10
+-- distinct names of 1 to 200 characters without a control character), and 1 to 5 valid sources (trend_source_is_valid),
+-- written at positions 1 to 5 in the order given. Card and sources are written in one call: a refused source leaves
+-- nothing behind. The publisher allowlist and the research checks are the application's. Returns the card's id.
 CREATE FUNCTION app_create_trend_candidate(p_card jsonb, p_sources jsonb) RETURNS uuid
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
@@ -597,7 +599,8 @@ $$;
 -- card that is not rejected (a candidate or a published one) was created at or after p_since (the job's 6-day rule:
 -- then nothing is drafted), and the distinct excerpt ids the sources of every card that is not rejected cite, sorted
 -- (left out of the call; an empty array when there is none). Nothing else of any card: no id, title, status or time.
--- A signed-in session (the manual run's staff admin reads the cards under RLS) is refused, and so is a NULL time.
+-- A signed-in session is refused (every run of the job, a staff admin's manual one too, has no user bound: the
+-- admin appears only in the job's log line), and so is a NULL time.
 CREATE FUNCTION app_trend_job_state(p_since timestamptz)
     RETURNS TABLE (recent boolean, cited_refs text[])
     LANGUAGE plpgsql STABLE SECURITY DEFINER

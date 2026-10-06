@@ -24,7 +24,11 @@ through the API: SACCO B's owner and Amina write three messages on the thread of
 reviewer puts the scout's match on its shortlist, and Amina saves a Discover search of a niche she likes. Last, P22's
 Today's five (``bridge.seed.demo.quiz``): two hand-written sets for yesterday and today, checked and stored as a model's
 would be, today's approved by the demo staff admin (yesterday's by the owner role), with Amina's attempts on both (a
-streak of 2, on the board) and Brian's on today's; no model is called.
+streak of 2, on the board) and Brian's on today's; no model is called. Then P22's This week
+(``bridge.seed.demo.events``): four events posted through the API by Telco A's and SACCO B's reviewers and the staff
+admin, three of them published by the staff admin on the queue (Nairobi City, online, Machakos) and one left a draft,
+Amina's county and her Remind me on the Nairobi one, and three hand-written trend cards through the checks and
+``app_create_trend_candidate``, two of them published by the staff admin; no model is called.
 
 Idempotent, and safe on a demo that was used (``make demo`` runs it on every start): every step looks for what it
 would create (by address, organisation name, a proposal's first title) and skips what exists, so running it twice
@@ -63,6 +67,7 @@ from bridge.seed.demo.data import (
     all_accounts,
 )
 from bridge.seed.demo.engagements import drive
+from bridge.seed.demo.events import DEMO_EVENTS, ensure_event, ensure_trends
 from bridge.seed.demo.follow_ups import ensure_saved_search, ensure_shortlisted, ensure_thread
 from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
 from bridge.seed.demo.queues import seed_queues
@@ -109,7 +114,7 @@ async def seed_demo(
 
     The steps run in the order the module docstring tells, ending with P21's beats (the message thread on Amina's
     engagement with SACCO B, Telco A's shortlist entry after its scout, whose match it is, and Amina's saved search)
-    and P22's Today's five (the two sets, then each attempt)."""
+    and P22's Today's five (the two sets, then each attempt) and This week (the events, then the trend cards)."""
     ensure_demo_allowed(settings)
     runtime = runtime or DemoRuntime.from_settings(settings)
     report = DemoReport()
@@ -165,6 +170,9 @@ async def seed_demo(
         for play in PLAYS:
             attempt = ensure_play(owner_engine, actors, play, fresh[play.email], report)
             await step(f"quiz attempt of {play.email} ({play.day})", attempt)
+        for event in DEMO_EVENTS:
+            await step(f"event {event.key}", ensure_event(owner_engine, actors, event, report))
+        await step("trend cards", ensure_trends(owner_engine, actors, report))
     return report
 
 
