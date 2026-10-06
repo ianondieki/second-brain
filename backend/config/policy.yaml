@@ -176,3 +176,10 @@ trends:
   stale_after_months: 6              # freshness falls from 1 after this many months
   archive_after_months: 12           # an excerpt this old is never sent and never counts
   draft_attempts: 2                  # calls per week, exactly 2 (the card): a refused draft is retried once
+
+events:
+  # This week's events (REQ-DEV-02; D-60; docs/platform/tasks/P22.md section B). Read by bridge/events/policy.py. Every
+  # event waits on the staff queue (/admin/events) before developers see it, so an organisation posts at most this many
+  # events per Nairobi day (the shared clock); the next post answers 429 events_daily_limit. Staff's platform events
+  # are not counted.
+  daily_posts: 10
