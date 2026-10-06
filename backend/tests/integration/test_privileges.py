@@ -269,7 +269,8 @@ async def test_no_role_writes_an_embedding_but_the_owners_definers(
     """Revision 0012: a vector, its model, version and time are written only by app_set_profile_embedding and
     app_set_problem_embedding (and cleared by the profile's clearer and the consents trigger), all the owner's: no role
     of the cluster updates one (revisions 0002 and 0005's UPDATE and INSERT of problems' are revoked), and none inserts
-    a problem's. A profile's are inserted NULL by the signup through revision 0001's table-wide INSERT."""
+    a problem's. bridge_app keeps revision 0001's table-wide INSERT on developer_profiles (the signup's ORM insert names
+    every column), and its INSERT policy admits a new profile only with each of them NULL (review MINOR 3)."""
     async with owner_engine.connect() as conn:
         for privilege in ("UPDATE", "INSERT"):
             writers = await conn.execute(
@@ -284,6 +285,14 @@ async def test_no_role_writes_an_embedding_but_the_owners_definers(
             assert sorted(writers.scalars()) == expected, privilege
         reads = "SELECT has_column_privilege('bridge_app', CAST(:t AS regclass), :c, 'SELECT')"
         assert (await conn.execute(text(reads), {"t": f"public.{table}", "c": column})).scalar_one() is True
+        if table == "developer_profiles":
+            policy = (
+                "SELECT with_check FROM pg_policies WHERE schemaname = 'public' AND tablename = 'developer_profiles'"
+                " AND policyname = 'bridge_app_insert'"
+            )
+            check = (await conn.execute(text(policy))).scalar_one()
+            assert f"({column} IS NULL)" in check
+            assert "(user_id = app_user_id())" in check
 
 
 @pytest.mark.parametrize(

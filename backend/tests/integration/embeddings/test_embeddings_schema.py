@@ -508,6 +508,26 @@ async def test_the_writers_run_at_read_committed_only(owner_engine: AsyncEngine,
         await refused(conn, SET_PROBLEM, match, "25000", **common, problem=issue, text_hash=problem_hash)
 
 
+async def test_a_profile_is_inserted_without_an_embedding(owner_engine: AsyncEngine) -> None:
+    """Given a new user, When bridge_app inserts their profile with a vector, a model, a version, a time or a hash,
+    Then row-level security refuses it (the INSERT policy, review MINOR 3); with all of them NULL, as the signup's ORM
+    insert sends them, the profile is created."""
+    async with t.as_app(owner_engine) as conn:
+        await t.as_owner(conn)
+        user = await w.add_user(conn, f"signup-{uuid7().hex}@example.test", "Signup")
+        insert = (
+            "INSERT INTO developer_profiles (user_id, handle, profile_embedding, embed_model, embed_version,"
+            " profile_embedded_at, profile_embedding_hash) VALUES (:u, :h, CAST(:v AS vector), :m, :ver, :at, :hash)"
+        )
+        nothing = {"v": None, "m": None, "ver": None, "at": None, "hash": None}
+        await t.act(conn, user)
+        now = await t.run(conn, "SELECT now()")
+        for planted in ({"v": vector()}, {"m": MODEL}, {"ver": VERSION}, {"at": now}, {"hash": sha("planted")}):
+            params = {**nothing, **planted, "u": user, "h": f"s-{user.hex}"}
+            await refused(conn, insert, "row-level security", DENIED, **params)
+        assert await t.rowcount(conn, insert, u=user, h=f"s-{user.hex}", **nothing) == 1
+
+
 async def test_the_clearer_serves_the_worker_and_the_own_row_only(owner_engine: AsyncEngine) -> None:
     """Given two embedded developers, When the first clears their own vector, Then it is cleared; When they name the
     other, Then they are refused (insufficient_privilege) and the other's vector stays; When the worker clears the

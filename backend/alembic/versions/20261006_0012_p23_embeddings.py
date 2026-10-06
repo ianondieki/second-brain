@@ -2,12 +2,13 @@
 
 Design: ``docs/platform/tasks/P23.md`` section "P23-1 as built" (D-63 pending: ``app_peers`` is unchanged, the
 embedding serves recommendations only). AC-PERS-3: a withdrawal of the ``profiling`` consent removes the profile's
-vector in its own transaction and no vector is written while the consent is not granted. Additive but for one
-narrowing of an earlier grant, restored on downgrade: four new columns (``developer_profiles.profile_embedded_at`` and
+vector in its own transaction and no vector is written while the consent is not granted. Additive but for two
+narrowings of earlier objects, restored on downgrade (a grant on ``problems``, the INSERT policy of
+``developer_profiles``): four new columns (``developer_profiles.profile_embedded_at`` and
 ``profile_embedding_hash``, ``problems.embedded_at`` and ``embedding_hash``), two HNSW cosine indexes, sixteen new
 functions (six granted to bridge_app, nine internal, one trigger function) and one trigger. No new table, no enum
-type, no policy change; nothing else of revisions 0001 to 0011 is changed or dropped. The downgrade drops the trigger,
-functions, indexes and the four new columns and restores the grant; the vectors themselves (revisions 0001 and 0002's
+type; nothing else of revisions 0001 to 0011 is changed or dropped. The downgrade drops the trigger, functions, indexes
+and the four new columns and restores the grant and the policy; the vectors themselves (revisions 0001 and 0002's
 columns) stay where they are. Every vector is derived data the worker recomputes from rows that stay, so the
 downgrade loses nothing anyone wrote and proceeds with rows: it needs no ``-x`` flag (unlike 0010 and 0011's).
 
@@ -19,16 +20,17 @@ edited) makes the row stale, and nothing else does (an ``updated_at`` moved by a
 weight, a draft). A writer recomputes the text under the row lock and refuses a hash that is no longer the text's, so
 an edit that commits between the listing and the write is never stamped as embedded.
 
-- ``developer_profiles`` (revision 0001; USER, own-row policies unchanged): ``profile_embedded_at`` (when
+- ``developer_profiles`` (revision 0001; USER, own-row policies): ``profile_embedded_at`` (when
   ``app_set_profile_embedding`` wrote the vector, the database's ``now()``; NULL while there is none; the readers'
   order) and ``profile_embedding_hash``, readable with the own row like every column (bridge_app's table-wide SELECT
-  and INSERT of revision 0001 cover them, as they cover the vector; profiles are created by the signup with these
-  columns NULL). bridge_app's UPDATE stays revision 0001's and 0011's columns (headline, bio, county_code,
-  updated_at, peers_visible): never the vector, its model, version, time or hash. Index
-  ``ix_developer_profiles_profile_embedding`` (HNSW, ``vector_cosine_ops``, pgvector's defaults like
-  ``ix_proposals_teaser_embedding``).
+  of revision 0001). Revision 0001's table-wide INSERT covers them too, so the INSERT policy ``bridge_app_insert``
+  gains that a profile is inserted without an embedding: the vector, model, version, time and hash NULL (the signup's
+  ORM insert sends NULLs), so no vector or hash is ever planted at creation. bridge_app's UPDATE stays revision
+  0001's and 0011's columns (headline, bio, county_code, updated_at, peers_visible): never the vector, its model,
+  version, time or hash. Index ``ix_developer_profiles_profile_embedding`` (HNSW, ``vector_cosine_ops``, pgvector's
+  defaults like ``ix_proposals_teaser_embedding``).
 - ``problems`` (revision 0002; PUBLISHED, policies unchanged): ``embedded_at`` and ``embedding_hash`` likewise. The
-  one narrowing: revisions 0002 and 0005 left ``embedding``, ``embed_model`` and ``embed_version`` in bridge_app's
+  grant narrowing: revisions 0002 and 0005 left ``embedding``, ``embed_model`` and ``embed_version`` in bridge_app's
   column-scoped INSERT and UPDATE, which no code uses; with f1 a cosine against these vectors, a problem's author could
   plant the vector the ranker reads. This revision revokes both on the three columns (the card: "the column grants
   stay closed to bridge_app"); the two new columns are in neither (problems' INSERT and UPDATE are column-scoped).
@@ -130,6 +132,14 @@ PROBLEM_EMBEDDING_PRIVILEGES = (
 )
 NARROW_SQL = f"REVOKE {PROBLEM_EMBEDDING_PRIVILEGES} ON TABLE problems FROM bridge_app;"
 RESTORE_SQL = f"GRANT {PROBLEM_EMBEDDING_PRIVILEGES} ON TABLE problems TO bridge_app;"
+
+# Revision 0001's INSERT policy on developer_profiles (the own row), restored on downgrade; this revision adds that a
+# profile is inserted without an embedding.
+PROFILE_INSERT_0001 = "user_id = app_user_id()"
+PROFILE_INSERT = (
+    f"{PROFILE_INSERT_0001} AND profile_embedding IS NULL AND embed_model IS NULL AND embed_version IS NULL"
+    " AND profile_embedded_at IS NULL AND profile_embedding_hash IS NULL"
+)
 
 # (table, column, type) added by this revision.
 NEW_COLUMNS = (
@@ -550,6 +560,7 @@ def upgrade() -> None:
         )
     _run_sql(FUNCTIONS_SQL)
     _run_sql(TRIGGERS_SQL)
+    _run_sql(f"ALTER POLICY bridge_app_insert ON developer_profiles WITH CHECK ({PROFILE_INSERT});")
     _run_sql(_grant_sql())
 
 
@@ -557,7 +568,9 @@ def downgrade() -> None:
     """Not destructive: the vectors (revisions 0001 and 0002's columns) stay, and what goes (the times, the hashes, the
     indexes, the functions and the trigger) is derived data and code. The worker recomputes every vector from rows that
     stay, so the downgrade proceeds with rows. bridge_app's INSERT and UPDATE of problems' embedding columns (revisions
-    0002 and 0005) are granted again."""
+    0002 and 0005) are granted again, and revision 0001's INSERT policy of developer_profiles is restored (first: it
+    names the columns that go)."""
+    _run_sql(f"ALTER POLICY bridge_app_insert ON developer_profiles WITH CHECK ({PROFILE_INSERT_0001});")
     _run_sql("DROP TRIGGER consents_profiling_withdrawn ON consents;")
     _run_sql(
         "\n".join(
