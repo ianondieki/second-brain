@@ -25,6 +25,17 @@ test("the landing's top bar is clean and the hero's story settles, with nothing 
   await expect(hero.getByRole("list", { name: "Stages" }).locator("[aria-current='step']")).toHaveAttribute("data-group", "agreement");
   await expect(hero.locator(".hero-before").first()).toBeHidden();
   await expect(hero.getByText("Your turn")).toBeVisible();
+  await checkScreen(page, { strict: true }); // an item caught mid-reveal is read under reduced motion (screen.ts)
+
+  // Scrolled through, How it works rests fully opaque (globals.css .reveal), and the page passes with its motion on.
+  const reveal = page.locator(".reveal");
+  await expect(reveal).toHaveCount(8);
+  for (const item of await reveal.all()) {
+    await item.scrollIntoViewIfNeeded();
+    await expect(item).toHaveCSS("opacity", "1");
+  }
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  for (const item of await reveal.all()) await expect(item).toHaveCSS("opacity", "1");
   await checkScreen(page, { strict: true });
 });
 
