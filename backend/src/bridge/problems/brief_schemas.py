@@ -9,11 +9,12 @@ member, no contact. The organisation's own shapes add the moderation facts and t
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Any, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from bridge.engagements.calendar import closes_at
 from bridge.matching.schemas import BudgetBandOut
 from bridge.models.enums import BriefStatus, BriefVisibility, ModerationState, ProblemStatus
 from bridge.proposals.schemas import NicheOut, OrgRef
@@ -32,12 +33,23 @@ def _without_default(schema: dict[str, Any]) -> None:
     schema.pop("default", None)
 
 
+DEADLINE_AT = (
+    "The instant the deadline day ends, for a countdown: 23:59:59.999999 in Africa/Nairobi, in UTC; null when there"
+    " is no deadline. Derived from deadline (REQ-TRACK-03); open and ended stay the authority"
+)
+
+
+def _deadline_at(deadline: date | None) -> datetime | None:
+    return None if deadline is None else closes_at(deadline)
+
+
 class BriefFacts(BaseModel):
     """What a developer reads about a Brief beside its problem card."""
 
     org: OrgRef | None = Field(description="The organisation that posted it; null when it is not in the directory")
     budget_band: BudgetBandOut | None = Field(description="The organisation's budget band; null when it gave none")
     deadline: date | None = Field(description="Proposals wanted by this day (Africa/Nairobi); null when none")
+    deadline_at: datetime | None = Field(default=None, description=DEADLINE_AT, json_schema_extra=_without_default)
     open: bool = Field(
         default=False,
         description="Published, not closed, and the deadline unset or not passed (Africa/Nairobi, the platform clock):"
@@ -51,6 +63,11 @@ class BriefFacts(BaseModel):
         " null while it is open and for a Brief not published",
         json_schema_extra=_without_default,
     )
+
+    @model_validator(mode="after")
+    def _derive_deadline_at(self) -> Self:
+        self.deadline_at = _deadline_at(self.deadline)
+        return self
 
 
 class BriefIn(BaseModel):
@@ -96,6 +113,7 @@ class BriefOut(BaseModel):
     visibility: BriefVisibility
     budget_band: BudgetBandOut | None
     deadline: date | None
+    deadline_at: datetime | None = Field(default=None, description=DEADLINE_AT, json_schema_extra=_without_default)
     status: BriefStatus = Field(description="The Brief's own status: closed once the organisation closes it")
     problem_status: ProblemStatus = Field(description="pending_review until staff decide; published or rejected")
     moderation_state: ModerationState
@@ -105,6 +123,11 @@ class BriefOut(BaseModel):
     proposal_count: int = Field(description="Published proposals that link this Brief")
     created_at: datetime
     published_at: datetime | None = Field(description="When staff approved it (null until then)")
+
+    @model_validator(mode="after")
+    def _derive_deadline_at(self) -> Self:
+        self.deadline_at = _deadline_at(self.deadline)
+        return self
 
 
 class BriefPlanOut(BaseModel):
