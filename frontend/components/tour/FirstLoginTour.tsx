@@ -63,6 +63,7 @@ export function FirstLoginTour({ side, initialDone = true, scenes }: { side: Tou
   const id = useId();
   const panel = useRef<HTMLElement>(null);
   const next = useRef<HTMLButtonElement>(null);
+  const pause = useRef<HTMLButtonElement>(null);
   const swipe = useRef<number | null>(null);
   const refocus = useRef(false);
   const clock = useRef({ step: 0, left: TOUR_DWELL_MS });
@@ -76,6 +77,8 @@ export function FirstLoginTour({ side, initialDone = true, scenes }: { side: Tou
     if (n < 0 || n > last || n === index) return;
     // A control that leaves with the step (Back on the first, Skip on the last) hands its focus to Next, not <body>.
     refocus.current = !!panel.current?.contains(document.activeElement);
+    // The step starts its six seconds again, as its progress line does.
+    clock.current = { step: n, left: TOUR_DWELL_MS };
     setFrom(index);
     setIndex(n);
   }
@@ -118,10 +121,14 @@ export function FirstLoginTour({ side, initialDone = true, scenes }: { side: Tou
     };
   }, [running, index]);
 
+  // Focus never falls to <body>: a control that left with the step, or Pause, which the last step hides (it may be
+  // focused when the last step arrives, by Play or by an arrow key), hands focus to Next (Done there).
   useEffect(() => {
-    if (refocus.current && !panel.current?.contains(document.activeElement)) next.current?.focus();
+    const active = document.activeElement;
+    const gone = refocus.current && !panel.current?.contains(active);
+    if (gone || (index === last && active === pause.current)) next.current?.focus();
     refocus.current = false;
-  }, [index]);
+  }, [index, last]);
 
   if (done) return null;
   const key = steps[index];
@@ -156,7 +163,10 @@ export function FirstLoginTour({ side, initialDone = true, scenes }: { side: Tou
         swipe.current = null;
         hold(TOUCH, false);
       }}
-      onFocus={() => hold(FOCUS, true)}
+      onFocus={(e) => {
+        // Keyboard focus holds the slide show; a mouse click that focuses a button does not (it would stop it for good).
+        if (e.target.matches(":focus-visible")) hold(FOCUS, true);
+      }}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget)) hold(FOCUS, false);
       }}
@@ -183,11 +193,12 @@ export function FirstLoginTour({ side, initialDone = true, scenes }: { side: Tou
         ))}
         {reduce ? null : (
           <button
+            ref={pause}
             type="button"
             className={index === last ? "tour-pause invisible" : "tour-pause"}
             aria-label={t("pause")}
             aria-pressed={paused}
-            title={paused ? t("play") : t("pause")}
+            title={t("pause")}
             onClick={() => {
               // Play overrides the hover and focus that come with pressing it; a hidden tab still holds.
               if (paused) setHolds((h) => h & HIDDEN);

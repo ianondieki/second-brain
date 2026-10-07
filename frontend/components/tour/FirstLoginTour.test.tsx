@@ -173,17 +173,72 @@ describe("FirstLoginTour as a slide show", () => {
     expect(title()).toBe("devIdeas");
   });
 
-  it("holds while focus is inside it and resumes when focus leaves", () => {
+  /** Focus the way a keyboard does: the browser matches :focus-visible (jsdom never does). */
+  function keyboardFocus(element: HTMLElement) {
+    const matches = vi.spyOn(element, "matches").mockImplementation((selector: string) => selector === ":focus-visible");
+    element.focus();
+    fireEvent.focus(element);
+    matches.mockRestore();
+  }
+
+  it("holds while keyboard focus is inside it and resumes when focus leaves", () => {
     document.body.innerHTML = '<button id="outside">Outside</button><div id="host"></div>';
     renderWithIntl(<FirstLoginTour side="developer" />, { container: document.getElementById("host")! });
     const next = screen.getByRole("button", { name: "Next" });
-    fireEvent.focus(next);
+    keyboardFocus(next);
     tick(TOUR_DWELL_MS * 2);
     expect(title()).toBe("devHome");
     fireEvent.blur(next, { relatedTarget: document.getElementById("outside") });
     tick(TOUR_DWELL_MS);
     expect(title()).toBe("devIdeas");
     document.body.innerHTML = "";
+  });
+
+  it("keeps going after a mouse click focuses one of its buttons (focus without :focus-visible holds nothing)", () => {
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    const step2 = screen.getByRole("button", { name: "Step 2" });
+    step2.focus();
+    fireEvent.focus(step2); // a click's focus: jsdom, like the browser after a click, does not match :focus-visible
+    fireEvent.click(step2);
+    expect(title()).toBe("devIdeas");
+    expect(screen.getByRole("dialog").hasAttribute("data-held")).toBe(false);
+    tick(TOUR_DWELL_MS);
+    expect(title()).toBe("devTracker");
+  });
+
+  it("starts a step's six seconds again when it comes back, as its progress line does", () => {
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    const dialog = screen.getByRole("dialog");
+    tick(4000);
+    fireEvent.pointerEnter(dialog, { pointerType: "mouse" }); // held with 2 s left on the first step
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.pointerLeave(dialog, { pointerType: "mouse" });
+    tick(TOUR_DWELL_MS - 1);
+    expect(title()).toBe("devHome");
+    tick(1);
+    expect(title()).toBe("devIdeas");
+  });
+
+  it("hands focus from Pause to Done when the last step hides Pause (after Play, or an arrow key)", () => {
+    const first = renderWithIntl(<FirstLoginTour side="developer" />);
+    const pause = screen.getByRole("button", { name: "Pause" });
+    keyboardFocus(pause);
+    fireEvent.click(pause); // paused
+    fireEvent.click(pause); // Play: overrides the focus hold
+    tick(TOUR_DWELL_MS);
+    tick(TOUR_DWELL_MS);
+    expect(title()).toBe("devTracker");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Done" }));
+    first.unmount();
+    resetTour("developer");
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    fireEvent.click(screen.getByRole("button", { name: "Step 2" }));
+    const pause2 = screen.getByRole("button", { name: "Pause" });
+    keyboardFocus(pause2);
+    fireEvent.keyDown(pause2, { key: "ArrowRight" });
+    expect(title()).toBe("devTracker");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Done" }));
   });
 
   it("holds while a finger is on it and while the tab is hidden", () => {
@@ -214,10 +269,11 @@ describe("FirstLoginTour as a slide show", () => {
     expect(pause.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(pause);
     expect(pause.getAttribute("aria-pressed")).toBe("true");
-    expect(pause.getAttribute("title")).toBe("Play");
+    expect(pause.getAttribute("title")).toBe("Pause"); // a toggle keeps its name; the icon shows the state
+    expect(pause.querySelector("svg path")!.getAttribute("d")).toMatch(/^M5 5a2/); // the play triangle
     tick(TOUR_DWELL_MS * 3);
     expect(title()).toBe("devHome");
-    fireEvent.focus(pause); // pressing Play from the keyboard: focus is in the panel, Play still wins
+    keyboardFocus(pause); // pressing Play from the keyboard: focus is in the panel, Play still wins
     fireEvent.click(pause);
     expect(pause.getAttribute("aria-pressed")).toBe("false");
     tick(TOUR_DWELL_MS);
