@@ -1275,6 +1275,10 @@ dialog[data-sheet][open] {
 [data-ticker="strip"] .ticker-item {
   width: 16.5rem;
 }
+/* Home's still list on phones: the items take the column's width. */
+[data-ticker] > ul > .ticker-item {
+  width: auto;
+}
 
 /* The why-panel on the night band (components/landing/Reasons.tsx): a terminal's frame, a step lighter than the band. */
 .terminal {

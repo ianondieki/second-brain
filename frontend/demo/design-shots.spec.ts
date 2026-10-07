@@ -53,7 +53,7 @@ interface Shot {
   path: string;
   who: Who;
   /** The screenshots folder under docs/demo/screenshots/ (default p18). */
-  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c";
+  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c" | "p24";
   /** Only these widths (default SHOT_WIDTHS). */
   widths?: number[];
   /** Shoot this element only (the top bar), not the page. */
@@ -513,6 +513,11 @@ async function threadShown(page: Page) {
 
 const SHOTS: Shot[] = [
   { name: "landing", path: "/", who: "none" },
+  // P24 (D-66): the landing, Explore, Credits and Home again, into docs/demo/screenshots/p24/.
+  { name: "landing", path: "/", who: "none", set: "p24" },
+  { name: "explore", path: "/explore", who: "none", set: "p24" },
+  { name: "credits", path: "/credits", who: "none", set: "p24" },
+  { name: "home", path: "/dev", who: "dev", set: "p24" },
   { name: "home", path: "/dev", who: "dev" },
   { name: "tour", path: "/dev", who: "dev", tour: true, prepare: async (page) => {
       await page.getByRole("dialog").waitFor();

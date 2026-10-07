@@ -4,11 +4,24 @@ import { cn } from "@/components/ui/cn";
 
 /**
  * A vendored photograph (D-66): AVIF with a WebP fallback through <picture>, 800 and 1600 px for the given sizes, the
- * intrinsic width and height (no layout shift), lazy and decoded off the main thread (photographs sit below the fold,
- * never the page's LCP element), and the 24 px blur as the background until it paints. Decorative by default: the
+ * intrinsic width and height (no layout shift), lazy and decoded off the main thread (on the landing they sit below the
+ * fold, never its LCP element; Explore's first one is `eager`), and the 24 px blur as the background until it paints. Decorative by default: the
  * link or heading beside it names the place.
  */
-export function Picture({ photo, sizes, alt = "", className }: { photo: Photo; sizes: string; alt?: string; className?: string }) {
+export function Picture({
+  photo,
+  sizes,
+  alt = "",
+  eager = false,
+  className,
+}: {
+  photo: Photo;
+  sizes: string;
+  alt?: string;
+  /** The page's first photograph, in the first screen (Explore's first county on a phone): fetched at once, early. */
+  eager?: boolean;
+  className?: string;
+}) {
   const base = `${photo.dir}/${photo.slug}`;
   return (
     <picture>
@@ -20,7 +33,8 @@ export function Picture({ photo, sizes, alt = "", className }: { photo: Photo; s
         width={photo.width}
         height={photo.height}
         alt={alt}
-        loading="lazy"
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : undefined}
         decoding="async"
         className={cn("bg-cover bg-center", className)}
         style={{ backgroundImage: `url(${base}-blur.jpg)` }}

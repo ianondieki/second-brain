@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { Picture } from "@/components/landing/Picture";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Lattice } from "@/components/ui/Lattice";
 import { countyAnchor, photoOf } from "@/lib/photos/photos";
 import type { ExploreTeaser, PublicExplore } from "@/lib/public/public-data";
 
@@ -62,7 +63,7 @@ export async function ExploreContent({ explore }: { explore: PublicExplore | nul
               {t("counties")}
             </h2>
             <ul className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {explore.counties.map((county) => {
+              {explore.counties.map((county, index) => {
                 const anchor = countyAnchor(county.name);
                 const photo = photoOf(county.name);
                 return (
@@ -70,9 +71,11 @@ export async function ExploreContent({ explore }: { explore: PublicExplore | nul
                     <article aria-labelledby={`${anchor}-name`} className="flex h-full flex-col overflow-hidden rounded-[1.25rem] border border-line bg-field">
                       <div className="relative">
                         {photo ? (
-                          <Picture photo={photo} sizes="(min-width: 1024px) 23rem, (min-width: 640px) 50vw, 100vw" className="aspect-[16/9] w-full object-cover" />
+                          <Picture photo={photo} eager={index === 0} sizes="(min-width: 1024px) 23rem, (min-width: 640px) 50vw, 100vw" className="aspect-[16/9] w-full object-cover" />
                         ) : (
-                          <span aria-hidden="true" className="block aspect-[16/9] w-full bg-night" />
+                          <span aria-hidden="true" className="flex aspect-[16/9] w-full flex-col justify-start bg-night">
+                            <Lattice />
+                          </span>
                         )}
                         <span aria-hidden="true" className="tile-scrim absolute inset-0" />
                         <div className="on-night absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4">

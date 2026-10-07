@@ -50,8 +50,9 @@ describe("Explore", () => {
     expect(nairobi.textContent).toContain("4 problems");
     const links = within(within(nairobi).getByRole("list", { name: "Newest in Nairobi" })).getAllByRole("link");
     expect(links.map((a) => a.getAttribute("href"))).toEqual(["/problems/p1", "/problems/p2", "/problems/p3"]);
-    // A photograph where one is vendored, decorative and lazy; a plain night block where none is.
-    expect(nairobi.querySelector("img")!.getAttribute("loading")).toBe("lazy");
+    // A photograph where one is vendored, decorative; the first one (a phone's first screen, the LCP) fetched at once,
+    // the rest lazily; a plain night block where none is.
+    expect([nairobi.querySelector("img")!.getAttribute("loading"), nairobi.querySelector("img")!.getAttribute("fetchpriority")]).toEqual(["eager", "high"]);
     expect(container.querySelector("#machakos img")).toBeNull();
     expect(container.querySelector("#machakos")!.textContent).toContain("1 problem");
     const niches = screen.getByRole("heading", { level: 2, name: "By niche" }).parentElement!;

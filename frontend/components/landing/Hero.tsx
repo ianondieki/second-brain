@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { preload } from "react-dom";
 
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Lattice } from "@/components/ui/Lattice";
@@ -12,11 +11,11 @@ import { Stats } from "./Stats";
  * The hero on paper (D-66, after D-55's night hero): the eyebrow, the promise set large in Fraunces with its one
  * italic accent phrase in bloom, the lead, the one primary action and a quieter way to check a certificate; the
  * product panel beside it (below it on phones); then the stats row of product constants. The band ends on the kanga
- * lattice. The italic face is preloaded here only: no other page sets it.
+ * lattice. The italic face is not preloaded: on a first slow visit the accent phrase swaps in from its sized fallback
+ * after the lead (the page's LCP element) has painted.
  */
 export async function Hero() {
   const t = await getTranslations("landing");
-  preload("/fonts/fraunces-italic-v1.woff2", { as: "font", type: "font/woff2", crossOrigin: "anonymous", fetchPriority: "high" });
   return (
     <section aria-labelledby="hero-title" className="relative isolate overflow-hidden">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-12 px-4 pt-12 pb-14 sm:px-6 sm:pt-16 lg:pt-20 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] xl:items-center xl:gap-12 xl:pb-16">

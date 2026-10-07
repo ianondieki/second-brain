@@ -13,7 +13,8 @@ import "./globals.css";
 // Self-hosted faces (public/fonts/LICENCES.md; D-55, D-66; the @font-face rules in globals.css): the faces that paint
 // the first screen's text are preloaded at high priority, ahead of the async scripts, so the headline swaps in early
 // (mobile LCP, AC-UX-3): Fraunces upright (the titles; 46 KB, instanced to opsz 24–144 and wght 400–700) and the text
-// face (Hanken Grotesk, 20 KB). The italic (the landing hero's accent phrase only) is preloaded by the landing's hero.
+// face (Hanken Grotesk, 20 KB). The italic (the landing hero's accent phrase only) is not preloaded (it made no
+// difference to the landing's LCP, the lead paragraph, and it would compete with the faces that do).
 // Bricolage Grotesque (the wordmark and the figures, 34 KB) and the mono face are not preloaded: the wordmark has a
 // sized fallback and the figures sit lower.
 const PRELOADED_FONTS = ["/fonts/fraunces-v1.woff2", "/fonts/hanken-grotesk-v1.woff2"] as const;
