@@ -3982,7 +3982,7 @@
     "hours": "{hours} h {minutes} min",
     "minutes": "{minutes} min",
     "in": "in {time}",
-    "dueIn": "Due {date} · in {time}",
+    "dueIn": "Due {date} · in {time}",
     "closesIn": "Proposals close in {time}",
     "at": "{date}, {time} EAT"
   }

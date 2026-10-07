@@ -140,7 +140,7 @@ test("the deadline counts down in days, hours and minutes on Home and the tracke
     await devPage.goto(`/dev/engagements/${dev.engagementId}`);
     await expectCountdown(devPage, bannerTimer(devPage), dev.engagementId);
     // One deadline, said once: the figure's secondary line carries the date and the time left.
-    await expect(bannerTimer(devPage)).toHaveText(/^Due \d{1,2} \w{3} \d{4} · in /);
+    await expect(bannerTimer(devPage)).toHaveText(/^Due \d{1,2} \w{3} \d{4} · in\u00a0/);
     await expect(bannerTimer(devPage)).not.toHaveAttribute("data-timer", "warm");
     await orgPage.goto(`/org/engagements/${dev.engagementId}`);
     await expectCountdown(orgPage, bannerTimer(orgPage), dev.engagementId);

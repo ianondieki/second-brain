@@ -3982,7 +3982,7 @@
     "hours": "saa {hours} dak {minutes}",
     "minutes": "dak {minutes}",
     "in": "baada ya {time}",
-    "dueIn": "Inatakiwa {date} · baada ya {time}",
+    "dueIn": "Inatakiwa {date} · baada ya {time}",
     "closesIn": "Mapendekezo yatafungwa baada ya {time}",
     "at": "{date}, {time} EAT"
   }

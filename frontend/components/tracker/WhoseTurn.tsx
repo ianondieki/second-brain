@@ -154,7 +154,7 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
         </div>
       </div>
       {figure && detail.due ? (
-        <div className="shrink-0 border-t border-line pt-3 sm:w-40 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
+        <div className="shrink-0 border-t border-line pt-3 sm:w-48 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
           <Countdown due={detail.due} dated={!timeLeft} />
           {timeLeft}
         </div>

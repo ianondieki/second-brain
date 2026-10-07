@@ -8,7 +8,7 @@ import { Countdown } from "./Countdown";
 // Tabular figures; under 24 hours on the viewer's own step ("warm"), the saffron mark before the words (decorative: a
 // pseudo-element, never read out) and the figure in the warm text colour. Here, on the server, not in the bundle.
 const look =
-  "tabular-nums data-[timer=warm]:before:mr-1.5 data-[timer=warm]:before:inline-block data-[timer=warm]:before:size-2 data-[timer=warm]:before:rounded-full data-[timer=warm]:before:bg-flourish data-[timer=warm]:before:align-middle [&[data-timer=warm]>time]:font-semibold [&[data-timer=warm]>time]:text-warm";
+  "tabular-nums data-[timer=warm]:before:mr-1.5 data-[timer=warm]:before:inline-block data-[timer=warm]:before:size-2 data-[timer=warm]:before:rounded-full data-[timer=warm]:before:bg-flourish data-[timer=warm]:before:align-middle [&[data-timer=warm]>time]:font-semibold [&[data-timer=warm]>time]:text-warm [&>time]:whitespace-nowrap";
 
 export interface TimeLeftProps {
   /** The instant the window closes (the API's `due_at`, a Brief's `deadline_at`). */
