@@ -13,7 +13,7 @@ export const LAB_NOW = "2026-10-01T06:36:00.000Z";
 
 /** A stage deadline as the API sends it, with the instant its window closes (the end of the day in Nairobi; P23-3). */
 export function labDue(due_on: string, business_days_left: number): Summary["due"] {
-  return { due_on, business_days_left, overdue: false, due_at: `${due_on}T20:59:59.999Z` } as Summary["due"];
+  return { due_on, business_days_left, overdue: false, due_at: `${due_on}T20:59:59Z` };
 }
 
 export const ME: Me = {

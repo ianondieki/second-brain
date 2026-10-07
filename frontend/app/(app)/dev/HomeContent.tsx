@@ -5,7 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Chip } from "@/components/tracker/Chip";
-import { dueAt, stageChip, type Summary } from "@/components/tracker/model";
+import { stageChip, type Summary } from "@/components/tracker/model";
 import { DueLine } from "@/components/tracker/When";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
@@ -92,7 +92,7 @@ export async function HomeContent({
         ? t("stats.deadlineToday")
         : t("stats.deadlineMeta", { count: due.business_days_left })
     : undefined;
-  const until = due && !due.overdue ? dueAt(due) : null;
+  const until = due && !due.overdue ? due.due_at : undefined;
 
   const tourDone = tourDoneFromCookies(await cookies(), "developer");
   return (

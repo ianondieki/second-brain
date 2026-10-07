@@ -501,14 +501,6 @@ export function kesAmount(minor: number, locale = "en"): string {
 }
 
 /** A moment in Nairobi time, as its date and time parts ("23 Sep 2026", "14:05"); the message adds "EAT". */
-/**
- * The instant a stage's window closes (P23-3; the API's `due_at`, UTC: the end of `due_on` in Nairobi), or null when
- * the API does not send it. Read loosely until lib/api/schema.d.ts is regenerated with the field.
- */
-export function dueAt(due: Due | null | undefined): string | null {
-  return (due as (Due & { due_at?: string | null }) | null | undefined)?.due_at ?? null;
-}
-
 export function eatParts(iso: string, locale = "en"): { date: string; time: string } {
   return nairobiParts(locale, iso);
 }

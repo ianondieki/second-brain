@@ -8,7 +8,7 @@ import { cn } from "@/components/ui/cn";
 import { ChipMark } from "./Chip";
 import { formatDay } from "@/lib/format";
 
-import { dueAt, formatDate, myNextSteps, sideBanner, theirNextSteps, turnOf, type Detail, type SideBanner } from "./model";
+import { formatDate, myNextSteps, sideBanner, theirNextSteps, turnOf, type Detail, type SideBanner } from "./model";
 import { TimeLeft } from "@/components/ui/TimeLeft";
 
 import { DueText } from "./When";
@@ -58,7 +58,7 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
   const figure = countdown && detail.due && (detail.due.overdue ? late > 0 : detail.due.business_days_left > 0);
   // The time left in days, hours and minutes to the end of the due day (P23-3), from the app clock: beside the figure
   // when there is one, under the sentence otherwise. Warm under 24 hours only when the step is the viewer's.
-  const until = detail.due && !detail.due.overdue && !ended && !onHold ? dueAt(detail.due) : null;
+  const until = detail.due && !detail.due.overdue && !ended && !onHold ? detail.due.due_at : undefined;
   const timeLeft =
     now && until ? (
       <TimeLeft

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Chip, ChipMark } from "@/components/tracker/Chip";
-import { dueAt, isFinished, stageChip, type Summary } from "@/components/tracker/model";
+import { isFinished, stageChip, type Summary } from "@/components/tracker/model";
 import { DueLine } from "@/components/tracker/When";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -69,8 +69,8 @@ export function NeedsYouHero({ item, href, action, now }: { item: Summary; href:
               {formatShortDate(locale, due.due_on)}
             </time>
             {/* The time left to the end of the due day (P23-3), the step being the developer's; then the business days. */}
-            {dueAt(due) && now && !due.overdue ? (
-              <TimeLeft until={dueAt(due)!} now={now} labelWhenPast={th("stats.deadlineOverdue")} mine className="mt-1.5 text-sm text-ink-soft" />
+            {due.due_at && now && !due.overdue ? (
+              <TimeLeft until={due.due_at} now={now} labelWhenPast={th("stats.deadlineOverdue")} mine className="mt-1.5 text-sm text-ink-soft" />
             ) : null}
             <span className={cn("mt-1.5 text-sm", due.overdue ? "font-semibold text-error" : "text-ink-soft")}>{when}</span>
           </p>

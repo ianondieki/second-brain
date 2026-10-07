@@ -38,8 +38,8 @@ export async function ProblemCard({
   const country = t("country", { country: problem.country });
   const LabelIcon = label?.key === "aiDrafted" ? PencilIcon : label?.key === "org_brief" ? CompaniesIcon : InfoIcon;
   const brief = problem.brief ?? null;
-  // P23-3: the instant the Brief stops asking (the end of its deadline day in Nairobi), from the regenerated schema.
-  const deadlineAt = brief?.open ? ((brief as { deadline_at?: string | null }).deadline_at ?? null) : null;
+  // P23-3: the instant the Brief stops asking (the end of its deadline day in Nairobi).
+  const deadlineAt = brief?.open ? (brief.deadline_at ?? null) : null;
 
   return (
     <article aria-labelledby="problem-title" data-problem={problem.id} className="flex flex-col gap-10">
