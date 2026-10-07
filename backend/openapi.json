@@ -9816,6 +9816,201 @@
         "title": "ProvenanceOut",
         "type": "object"
       },
+      "PublicCounty": {
+        "properties": {
+          "code": {
+            "description": "ISO 3166-2 code",
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "PublicCounty",
+        "type": "object"
+      },
+      "PublicNiche": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicNicheParent"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The top-level niche it sits under; null for a top level"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "parent"
+        ],
+        "title": "PublicNiche",
+        "type": "object"
+      },
+      "PublicNicheParent": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PublicNicheParent",
+        "type": "object"
+      },
+      "PublicOrganisation": {
+        "properties": {
+          "name": {
+            "description": "The organisation's name as the directory lists it",
+            "title": "Name",
+            "type": "string"
+          },
+          "verification": {
+            "description": "Its verification level (E0 is unclaimed)",
+            "enum": [
+              "unclaimed",
+              "e1",
+              "e2"
+            ],
+            "title": "Verification",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "verification"
+        ],
+        "title": "PublicOrganisation",
+        "type": "object"
+      },
+      "PublicProblem": {
+        "properties": {
+          "affected_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affected Group"
+          },
+          "county": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicCounty"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicNiche"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "organisation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicOrganisation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A Brief's organisation, only while it is listed in the directory; null for every other problem"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it was published",
+            "title": "Posted At"
+          },
+          "seeded": {
+            "description": "True when the demo seed wrote it (a demo deployment, or a seeded example card): label it so",
+            "title": "Seeded",
+            "type": "boolean"
+          },
+          "source": {
+            "description": "Developer-reported, a reviewed research card, or an organisation's Problem Brief",
+            "enum": [
+              "developer",
+              "research",
+              "brief"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "statement": {
+            "title": "Statement",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "statement",
+          "affected_group",
+          "source",
+          "posted_at",
+          "county",
+          "niche",
+          "organisation",
+          "seeded"
+        ],
+        "title": "PublicProblem",
+        "type": "object"
+      },
       "PublishIn": {
         "additionalProperties": false,
         "properties": {
@@ -42156,6 +42351,120 @@
           }
         },
         "summary": "Public Explore",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/api/public/problems/{problem_id}": {
+      "get": {
+        "description": "One published problem anyone may read; 404 for any other id (a draft, a held, archived or rejected problem, an\norganisation's own or invited Brief, a delisted or unverified organisation's Brief, or no problem at all).",
+        "operationId": "public_problem_api_public_problems__problem_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "problem_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Problem Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicProblem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Public Problem",
         "tags": [
           "public"
         ]
