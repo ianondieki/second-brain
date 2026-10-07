@@ -570,6 +570,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "problems_to_embed(text, text)": (False, set()),
     "profile_embedding_clear(uuid)": (False, set()),
     "consents_profiling_withdrawn()": (True, set()),  # clears the vector bridge_app cannot update
+    "consents_created_now()": (False, set()),  # the database's time for a consent decision
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -3073,9 +3074,11 @@ V11_TRIGGERS = {
     ("proposal_contributors", "proposal_contributors_guard"): ("proposal_contributors_guard", ROW | BEFORE | ON_UPDATE),
 }
 # Revision 0012: a profiling decision that is not a grant clears the profile's vector (AFTER, once the consents' policy
-# admitted the row; the trigger's WHEN names the rows). A liked-niche change needs no trigger: the text's hash sees it.
+# admitted the row; the trigger's WHEN names the rows); a decision's time is the database's but for the owner. A
+# liked-niche change needs no trigger: the text's hash sees it.
 V12_TRIGGERS = {
     ("consents", "consents_profiling_withdrawn"): ("consents_profiling_withdrawn", ROW | ON_INSERT),
+    ("consents", "consents_created_now"): ("consents_created_now", ROW | BEFORE | ON_INSERT),
 }
 
 

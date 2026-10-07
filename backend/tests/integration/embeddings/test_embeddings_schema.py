@@ -171,6 +171,26 @@ async def test_only_a_granted_latest_profiling_decision_lists_a_developer(owner_
         assert after.profiles == before.profiles + 2
 
 
+async def test_a_consent_decision_is_timed_by_the_database(owner_engine: AsyncEngine) -> None:
+    """Given a developer, When bridge_app inserts a profiling grant dated a day ahead and then a withdrawal, Then both
+    are stored at the transaction's time, so the withdrawal is the latest decision and the developer is not listed
+    (security MINOR 2, round 3); the table's owner (a seed) keeps the time it sends."""
+    async with t.as_app(owner_engine) as conn:
+        user = await developer(conn, "dated", peers=False, liked=(await niche(conn, "dated"),))
+        insert = (
+            "INSERT INTO consents (id, user_id, purpose, granted, text_version, text_sha256, source, created_at)"
+            " VALUES (:id, :u, 'profiling', :g, 'v1', :sha, 'settings', now() + interval '1 day') RETURNING created_at"
+        )
+        await t.act(conn, user)
+        now = await t.run(conn, "SELECT now()")
+        assert await t.run(conn, insert, id=uuid7(), u=user, g=True, sha=bytes(32)) == now
+        await decide(conn, user, False)  # the settings page's withdrawal, at the database's time
+        assert await listed(conn, user) == set()
+        await t.as_owner(conn)
+        seeded = await t.run(conn, insert, id=uuid7(), u=user, g=True, sha=bytes(32))
+        assert seeded > now  # the owner's own time
+
+
 async def test_staff_suspended_and_empty_profiles_are_never_listed_or_written(owner_engine: AsyncEngine) -> None:
     """Given consented developers who are staff, suspended, or have nothing to embed (no headline, bio, liked niche
     or published proposal), Then none is listed, and the writer writes none of them (an empty text, even with its
