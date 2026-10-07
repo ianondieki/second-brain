@@ -94,7 +94,6 @@
             "enum": [
               "problem_posted",
               "version_registered",
-              "stage_reached",
               "brief_opened"
             ],
             "title": "Kind",
@@ -126,7 +125,7 @@
                 "type": "null"
               }
             ],
-            "description": "The tracker's public stage name, for stage_reached only",
+            "description": "Always null for now: engagement stage events are deferred",
             "title": "Stage"
           },
           "title": {

@@ -202,7 +202,6 @@ def test_the_documented_shapes_are_the_cards() -> None:
     assert schemas["ActivityItem"]["properties"]["kind"]["enum"] == [
         "problem_posted",
         "version_registered",
-        "stage_reached",
         "brief_opened",
     ]
     assert set(schemas["Explore"]["properties"]) == {"totals", "counties", "niches", "seeded"}

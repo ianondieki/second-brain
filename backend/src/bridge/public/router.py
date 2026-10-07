@@ -2,7 +2,7 @@
 REQ-DIR-01, REQ-REPO-02; P24-B). No session needed.
 
 - ``GET /api/public/activity``: the 20 latest public events, anonymised (``bridge.public.feed``): a problem posted, a
-  Brief opened, a proposal version registered (and, once the database offers it, an engagement reaching a stage).
+  Brief opened, a proposal version registered.
 - ``GET /api/public/explore``: published problems anyone may read, counted by county and by top-level niche, with the
   three newest of each.
 

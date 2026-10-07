@@ -13,7 +13,7 @@ while the Brief is published and public: the problem list's rule, ``bridge.probl
 visibility rule); a proposal only while published and clear. Only these columns: ids and times, titles that are
 already public (a problem's or Brief's, a proposal's current teaser title), county and niche names from the reference
 tables, and whether a problem is a seeded example card. Never a person, a handle, an organisation, a statement or any
-other text, and no engagement: ``stage_reached`` needs a definer function that only the db-migrations agent may add.
+other text, and no engagement (stage events are deferred: they need a definer function from db-migrations).
 """
 
 from __future__ import annotations

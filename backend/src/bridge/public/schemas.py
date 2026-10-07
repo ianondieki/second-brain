@@ -13,7 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-ActivityKind = Literal["problem_posted", "version_registered", "stage_reached", "brief_opened"]
+ActivityKind = Literal["problem_posted", "version_registered", "brief_opened"]
 SEEDED_DOC = "True when the demo seed wrote it (a demo deployment, or a seeded example card): label it so"
 
 
@@ -24,7 +24,7 @@ class ActivityItem(BaseModel):
     county: str | None = Field(description="The county's name, when the problem or proposal names one")
     niche: str | None = Field(description='The niche label, e.g. "ICT › Networks & Telecommunications"')
     title: str | None = Field(description="Only a title that is already public: a published problem, Brief or teaser")
-    stage: str | None = Field(description="The tracker's public stage name, for stage_reached only")
+    stage: str | None = Field(description="Always null for now: engagement stage events are deferred")
     seeded: bool = Field(description=SEEDED_DOC)
 
 

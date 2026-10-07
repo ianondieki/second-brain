@@ -1,8 +1,8 @@
 """REQ-UX-03 (P24-B): what the public activity feed and the Explore summary are made of.
 
 The rows as the database returns them become anonymised items (an opaque key, never a record id; a niche label; no
-stage outside stage_reached); ``seeded`` follows the demo seed's marks; Explore groups by county and top-level niche
-with the newest three each, most first.
+stage: stage events are deferred); ``seeded`` follows the demo seed's marks; Explore groups by county and top-level
+niche with the newest three each, most first.
 """
 
 from __future__ import annotations

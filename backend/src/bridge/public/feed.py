@@ -3,8 +3,8 @@ P24-B): rows of ``bridge.public.queries`` made into anonymised items and groups.
 
 **Activity.** ``problem_posted`` (a problem published), ``brief_opened`` (a Brief's problem published: the Brief is
 open to developers) and ``version_registered`` (a published proposal's registered version), newest first, 20 in all.
-``stage_reached`` is in the contract but not listed yet (``bridge.public.queries``). An event's key is a digest of its
-kind and record, never the record's id.
+Engagement stage events are deferred (task card P24, section B), so ``stage`` is always null. An event's key is a
+digest of its kind and record, never the record's id.
 
 **Explore.** Counties with problems and top-level niches with problems (a child niche counts under its parent), most
 first, then by name, each with its three newest; the totals count every readable problem.

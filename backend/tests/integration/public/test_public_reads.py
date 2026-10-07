@@ -231,7 +231,8 @@ async def test_only_public_rows_reach_a_signed_out_visitor(app_engine: AsyncEngi
             assert event_id(kind, problem_id) not in keys
     for version_id in scene.private_versions.values():
         assert event_id("version_registered", version_id) not in keys
-    assert not {item["kind"] for item in activity["items"]} & {"stage_reached"}
+    assert {item["kind"] for item in activity["items"]} <= {"problem_posted", "brief_opened", "version_registered"}
+    assert {item["stage"] for item in activity["items"]} == {None}
     listed = {teaser["id"] for group in explore["counties"] + explore["niches"] for teaser in group["newest"]}
     assert not listed & {str(problem_id) for problem_id in scene.private_problems.values()}
     assert scene.private_county not in {group["code"] for group in explore["counties"]}
