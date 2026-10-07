@@ -50,14 +50,18 @@ async def _aged(conn: AsyncConnection, table: str, key: str, row: UUID, column: 
 
 
 async def test_a_profile_page_skips_empty_texts_and_reaches_vectors_only_when_short(url: URL) -> None:
-    """Given two consented developers with nothing to embed (the smallest ids), two never embedded, one whose vector the
-    owner removed but whose time stays (a day ago), and two embedded with another model (two and three days ago),
-    When the worker reads pages of 1, 2, 4 and 10, Then the empty ones never appear and never shorten a page; the rows
-    without a vector come first (the never embedded, then the one with a time), then the embedded ones oldest first."""
+    """Given two consented developers with nothing to embed (the smallest ids; one without content, left out before
+    any text build, one whose headline is a control character, skipped once its text is built), two never embedded,
+    one whose vector the owner removed but whose time stays (a day ago), and two embedded with another model (two and
+    three days ago), When the worker reads pages of 1, 2, 4 and 10, Then the empty ones never appear and never shorten
+    a page; the rows without a vector come first (the never embedded, then the one with a time), then the embedded
+    ones oldest first."""
     async with rolled_back(url) as conn:
         empties = [await developer(conn, f"empty{n}", peers=False) for n in range(2)]
         for user in empties:
             await decide(conn, user, True)
+        await t.as_owner(conn)  # one has no content at all, one a headline that normalises to nothing
+        await t.run(conn, "UPDATE developer_profiles SET headline = E'\\x07' WHERE user_id = :u", u=empties[1])
         topic = await named_niche(conn, "Pages")
         never = [await developer(conn, f"never{n}", peers=False, liked=(topic,)) for n in range(2)]
         lost, older, oldest = [await developer(conn, label, peers=False, liked=(topic,)) for label in "abc"]
@@ -82,8 +86,8 @@ async def test_a_problem_page_skips_empty_texts_and_reaches_vectors_only_when_sh
         author = await developer(conn, "author", peers=False)
         topic = await named_niche(conn, "Problem pages")
         blank = [await w.add_problem(conn, author, topic) for _ in range(2)]
-        for problem_id in blank:
-            await t.run(conn, "UPDATE problems SET title = ' ', statement = ' ' WHERE id = :id", id=problem_id)
+        for problem_id, title in zip(blank, (" ", "\x07"), strict=True):  # blank, or a control character only
+            await t.run(conn, "UPDATE problems SET title = :t, statement = ' ' WHERE id = :id", t=title, id=problem_id)
         never = [await w.add_problem(conn, author, topic) for _ in range(2)]
         older, oldest = await w.add_problem(conn, author, topic), await w.add_problem(conn, author, topic)
         for problem_id, days in ((older, 2), (oldest, 3)):
