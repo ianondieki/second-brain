@@ -98,17 +98,17 @@ async function dueOf(request: APIRequestContext, id: string): Promise<Due> {
   return due!;
 }
 
-/** The figure a countdown shows ("6 d 14 h 23 m left") in minutes. */
-function shownMinutes(text: string): number {
-  const match = /(?:(\d+) d )?(?:(\d+) h )?(\d+) m/.exec(text);
-  expect(match, `a countdown in "${text}"`).not.toBeNull();
-  return (Number(match![1] ?? 0) * 24 + Number(match![2] ?? 0)) * 60 + Number(match![3]);
+/** The time a countdown shows, in minutes, from its <time>'s ISO 8601 duration ("P6DT14H23M"). */
+function shownMinutes(duration: string): number {
+  const match = /^P(\d+)DT(\d+)H(\d+)M$/.exec(duration);
+  expect(match, `a duration in "${duration}"`).not.toBeNull();
+  return (Number(match![1]) * 24 + Number(match![2])) * 60 + Number(match![3]);
 }
 
 /**
  * P23-3 (REQ-TRACK-03): a countdown on the page counts to the API's `due_at` from the API's own clock (X-App-Now),
- * not the browser's: its <time> carries `due_at` and its figure is the minutes between the two, read just before the
- * page was drawn (a minute or two apart at most).
+ * not the browser's: its <time>'s duration is the minutes between the two, read just before the page was drawn (a
+ * minute or two apart at most), and its title the full instant.
  */
 async function expectCountdown(page: Page, timer: Locator, id: string) {
   const response = await page.request.get(`/api/engagements/${id}`);
@@ -118,8 +118,8 @@ async function expectCountdown(page: Page, timer: Locator, id: string) {
   const due = ((await response.json()) as { due: (Due & { due_at: string }) | null }).due!;
   const expected = Math.floor((Date.parse(due.due_at) - Date.parse(stamp)) / 60_000);
   await page.reload();
-  await expect(timer.locator("time")).toHaveAttribute("datetime", due.due_at);
-  const shown = shownMinutes((await timer.textContent()) ?? "");
+  await expect(timer.locator("time")).toHaveAttribute("title", /EAT$/);
+  const shown = shownMinutes((await timer.locator("time").getAttribute("datetime")) ?? "");
   expect(Math.abs(expected - shown), `${shown} minutes shown, ${expected} expected`).toBeLessThanOrEqual(2);
   return shown;
 }
@@ -134,11 +134,13 @@ test("the deadline counts down in days, hours and minutes on Home and the tracke
     // The review is the organisation's step: the countdown is said to both parties, warm for neither on the developer's side.
     await devPage.goto("/dev");
     await expectCountdown(devPage, homeTimer(devPage), dev.engagementId);
-    await expect(homeTimer(devPage)).toHaveText(/ left$/);
+    await expect(homeTimer(devPage)).toHaveText(/^in (\d+ days? )?(\d+ h )?\d+ min$/);
     await expect(devPage.locator("[data-stat='deadline']")).toHaveAttribute("title", /business day/);
     await checkScreen(devPage, { strict: true });
     await devPage.goto(`/dev/engagements/${dev.engagementId}`);
     await expectCountdown(devPage, bannerTimer(devPage), dev.engagementId);
+    // One deadline, said once: the figure's secondary line carries the date and the time left.
+    await expect(bannerTimer(devPage)).toHaveText(/^Due \d{1,2} \w{3} \d{4} · in /);
     await expect(bannerTimer(devPage)).not.toHaveAttribute("data-timer", "warm");
     await orgPage.goto(`/org/engagements/${dev.engagementId}`);
     await expectCountdown(orgPage, bannerTimer(orgPage), dev.engagementId);

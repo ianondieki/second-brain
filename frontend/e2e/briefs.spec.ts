@@ -178,15 +178,18 @@ test.describe("a Problem Brief", () => {
     await expect(devPage).toHaveURL(new RegExp(`/dev/ideas/new\\?problem=${briefId}$`), SERVER_STEP);
     await expect(devPage.getByText(title).first()).toBeVisible(SERVER_STEP); // the Brief is linked from the start
 
-    // P23-3 (REQ-TRACK-03): its problem page says when submissions close, counted to the Brief's deadline_at (the end
+    // P23-3 (REQ-TRACK-03): its problem page says when proposals close, counted to the Brief's deadline_at (the end
     // of its deadline day in Nairobi) from the API's own clock (X-App-Now).
     const read = await devContext.request.get(`/api/problems/${briefId}`);
     const deadlineAt = ((await read.json()) as { brief: { deadline_at: string } }).brief.deadline_at;
-    expect(read.headers()["x-app-now"], "the API stamps its clock").toBeTruthy();
+    const stamp = read.headers()["x-app-now"];
+    expect(stamp, "the API stamps its clock").toBeTruthy();
+    const expected = Math.floor((Date.parse(deadlineAt) - Date.parse(stamp)) / 60_000);
     await devPage.goto(`/problems/${briefId}`);
     const closes = devPage.locator("[data-problem] dl [data-timer]");
-    await expect(closes).toHaveText(/^Submissions close in (\d+ d )?(\d+ h )?\d+ m$/, SERVER_STEP);
-    await expect(closes.locator("time")).toHaveAttribute("datetime", deadlineAt);
+    await expect(closes).toHaveText(/^Proposals close in (\d+ days? )?(\d+ h )?\d+ min$/, SERVER_STEP);
+    const [, d, h, m] = /^P(\d+)DT(\d+)H(\d+)M$/.exec((await closes.locator("time").getAttribute("datetime")) ?? "") ?? [];
+    expect(Math.abs((Number(d) * 24 + Number(h)) * 60 + Number(m) - expected)).toBeLessThanOrEqual(2);
     await checkScreen(devPage, { strict: true });
 
     // The idea, published through the API with the Brief linked (the editor's own steps are proposal-wizard.spec's).

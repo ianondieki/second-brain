@@ -129,8 +129,8 @@ describe("a Brief's problem card", () => {
     const brief = { org: ORG, budget_band: BAND, deadline: "2026-11-30", deadline_at: deadlineAt, open: true };
     renderWithIntl(await ProblemCard({ problem: detail({ brief } as Partial<ProblemDetail>), now: "2026-11-24T06:36:00Z" }));
     const value = within(document.querySelector("dl")!).getByText("Proposals wanted by").nextElementSibling!;
-    expect(value.textContent).toBe("30 Nov 2026Submissions close in 6 d 14 h 23 m");
-    expect(value.querySelector("time")?.getAttribute("dateTime")).toBe(deadlineAt);
+    expect(value.textContent).toBe("30 Nov 2026Proposals close in 6 days 14 h 23 min");
+    expect(value.querySelector("time")?.getAttribute("dateTime")).toBe("P6DT14H23M");
     expect(value.querySelector("time")?.getAttribute("title")).toBe("30 Nov 2026, 23:59 EAT");
     expect(value.querySelector("[data-timer='open']")).not.toBeNull();
   });

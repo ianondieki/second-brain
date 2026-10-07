@@ -29,7 +29,7 @@
     "reviewP22b": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: week.*, nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; eventForm.fieldError.* follow the backend's own sentences (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed",
     "reviewP23b": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-2 (REQ-UX-01, REQ-UX-03; D-52, D-65), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tour.back, tour.pause, tour.step, tour.stepLabel (vidhibiti vya ziara inayojisogeza); landing.trust.* (mstari chini ya sehemu ya juu: ukweli wanne uliopo tayari kwenye landing.*, bila takwimu wala majina)",
     "reviewP22c": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: teams.*, teamUp.*, profileSettings.*, settingsNav.profile, ideaContributors.*, ideas.contributorsLine, ideas.sheet.contributors; 'Shirikiana' for team up, 'mwaliko' for invitation, 'mchangiaji' for contributor, 'wenzako' for peers; trackerMessages.refusal.attachFailed (faili za kisanduku cha ujumbe hazikupakia)",
-    "reviewP23c": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: countdown.* (muda uliobaki hadi tarehe ya mwisho: vipimo vifupi siku, saa na dak (dakika) kuanzia kipimo kikubwa (countdown.days, .hours, .minutes), countdown.left (\"Zimebaki {time}\"), countdown.closesIn (\"Mapendekezo yanafungwa baada ya {time}\") na countdown.at (saa kamili ya Nairobi katika kichwa cha kipengele cha muda)); je, \"dak\" inafaa kama kifupi cha dakika?"
+    "reviewP23c": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: countdown.* (muda uliobaki hadi tarehe ya mwisho: siku (haibadiliki kwa wingi, hivyo bila ICU plural), saa na dak (dakika) kuanzia kipimo kikubwa (countdown.days, .hours, .minutes), countdown.in (\"baada ya {time}\"), countdown.dueIn (\"Inatakiwa {date} · baada ya {time}\"), countdown.closesIn (\"Mapendekezo yatafungwa baada ya {time}\") na countdown.at (saa kamili ya Nairobi katika kichwa cha kipengele cha muda)); trackerActions.partFailed na .partReload (sehemu ya ukurasa ambayo msimbo wake haukupakia); je, \"dak\" inafaa kama kifupi cha dakika?"
   },
   "app": {
     "name": "Wazo",
@@ -2750,7 +2750,9 @@
       "name": "Jina",
       "email": "Barua pepe",
       "noEmail": "Msanidi programu bado hana barua pepe iliyothibitishwa."
-    }
+    },
+    "partFailed": "Sehemu hii ya ukurasa haikupakia. Pakia ukurasa upya ujaribu tena.",
+    "partReload": "Pakia ukurasa upya"
   },
   "trackerMessages": {
     "you": "Wewe",
@@ -3979,8 +3981,9 @@
     "days": "siku {days} saa {hours} dak {minutes}",
     "hours": "saa {hours} dak {minutes}",
     "minutes": "dak {minutes}",
-    "left": "Zimebaki {time}",
-    "closesIn": "Mapendekezo yanafungwa baada ya {time}",
+    "in": "baada ya {time}",
+    "dueIn": "Inatakiwa {date} · baada ya {time}",
+    "closesIn": "Mapendekezo yatafungwa baada ya {time}",
     "at": "{date}, {time} EAT"
   }
 }

@@ -29,7 +29,7 @@
     "reviewP22b": "[[COPY-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61): week.* (Home's This week strip, /dev/week, the event page with Remind me and Add to calendar, the trend page; week.trend.label.* follow problem.label.*), nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; the field sentences of eventForm.fieldError.* follow the backend's own (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed (the reminder email carries none)",
     "reviewP23b": "[[COPY-REVIEW]] P23-2 (REQ-UX-01, REQ-UX-03; D-52, D-65): tour.back, tour.pause (the slide show's controls; Pause is a toggle whose icon shows the state), tour.step (a step's dot), tour.stepLabel (what a screen reader hears when the step changes); landing.trust.* (the strip under the hero: four of the product's existing truths, restated from landing.lead, landing.who.organisations.point2, landing.faq.verified.a (\"Proposals go only to verified organisations\") and landing.how.stagesTitle; no figures, no names)",
     "reviewP22c": "[[COPY-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62): teams.* (Home's Peers section, /dev/peers, /dev/teams, the team-up thread page), teamUp.* (the peers list, the Team up sheet, invitations, the thread's menu, the contributor sheet and credits), profileSettings.* (Settings > Profile with the Visible to peers sentence the task card fixes), settingsNav.profile, ideaContributors.*, ideas.contributorsLine and ideas.sheet.contributors (D-62 (a): handles only, nothing about shares); the copy says team up, invitation and contributor, never friend, match or connect; the engagement thread's own sentences (trackerMessages.*) serve the team thread's messages and composer; trackerMessages.refusal.attachFailed (the composer's files could not load)",
-    "reviewP23c": "[[COPY-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01): countdown.* (the deadline countdown on Home's Next deadline tile and Needs you card, the tracker's deadline and a Brief's Proposals by line: the short units d, h and m from the largest unit down (countdown.days, .hours, .minutes, each the whole figure so no words are joined in code), countdown.left (\"{time} left\"), countdown.closesIn (\"Submissions close in {time}\") and countdown.at (the full instant in Nairobi time, the time element's title)); past the instant the existing words stay (devHome.stats.deadlineOverdue, tracker.deadline, briefs.state.closed)"
+    "reviewP23c": "[[COPY-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01): countdown.* (the deadline countdown on Home's Next deadline tile and Needs you card, the tracker's deadline and a Brief's Proposals wanted by line: the figure from its largest unit down in words, days with an ICU plural, h and min kept short (countdown.days, .hours, .minutes, each the whole figure so no words are joined in code); countdown.in (\"in {time}\", Home), countdown.dueIn (\"Due {date} · in {time}\", the tracker's one deadline line), countdown.closesIn (\"Proposals close in {time}\") and countdown.at (the full instant in Nairobi time, the time element's title)); past the instant the existing words stay (devHome.stats.deadlineOverdue, tracker.deadline.was, briefs.state.closed); trackerActions.partFailed and .partReload (a part of the tracker whose code did not load: the share, the contact reveal, the code form)"
   },
   "app": {
     "name": "Wazo",
@@ -2750,7 +2750,9 @@
       "name": "Name",
       "email": "Email",
       "noEmail": "The developer has no verified email address yet."
-    }
+    },
+    "partFailed": "This part of the page did not load. Reload the page to try again.",
+    "partReload": "Reload the page"
   },
   "trackerMessages": {
     "you": "You",
@@ -3976,11 +3978,12 @@
     "failed": "Could not remove them. Try again."
   },
   "countdown": {
-    "days": "{days} d {hours} h {minutes} m",
-    "hours": "{hours} h {minutes} m",
-    "minutes": "{minutes} m",
-    "left": "{time} left",
-    "closesIn": "Submissions close in {time}",
+    "days": "{days, plural, one {# day} other {# days}} {hours} h {minutes} min",
+    "hours": "{hours} h {minutes} min",
+    "minutes": "{minutes} min",
+    "in": "in {time}",
+    "dueIn": "Due {date} · in {time}",
+    "closesIn": "Proposals close in {time}",
     "at": "{date}, {time} EAT"
   }
 }

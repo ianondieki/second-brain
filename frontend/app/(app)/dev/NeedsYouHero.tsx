@@ -25,6 +25,7 @@ export function NeedsYouHero({ item, href, action, now }: { item: Summary; href:
   const th = useTranslations("devHome");
   const locale = useLocale();
   const due = item.due && !isFinished(item.state) && item.state !== "ON_HOLD" ? item.due : null;
+  const timed = Boolean(due && due.due_at && now && !due.overdue);
   const when = due
     ? due.overdue
       ? th("stats.deadlineOverdue")
@@ -64,15 +65,17 @@ export function NeedsYouHero({ item, href, action, now }: { item: Summary; href:
       </div>
       <div className="flex flex-wrap items-end justify-between gap-4 border-t border-line pt-4 md:flex-col md:items-end md:border-t-0 md:border-l md:py-1 md:pt-1 md:pl-8">
         {due ? (
-          <p className="flex flex-col md:items-end" data-due={due.overdue ? "overdue" : "open"}>
+          <p className="flex flex-col md:items-end" data-due={due.overdue ? "overdue" : "open"} title={timed ? when ?? undefined : undefined}>
             <time dateTime={due.due_on} className="font-display text-3xl leading-none font-[720] tracking-[-0.03em] whitespace-nowrap text-ink tabular-nums">
               {formatShortDate(locale, due.due_on)}
             </time>
-            {/* The time left to the end of the due day (P23-3), the step being the developer's; then the business days. */}
-            {due.due_at && now && !due.overdue ? (
-              <TimeLeft until={due.due_at} now={now} labelWhenPast={th("stats.deadlineOverdue")} mine className="mt-1.5 text-sm text-ink-soft" />
-            ) : null}
-            <span className={cn("mt-1.5 text-sm", due.overdue ? "font-semibold text-error" : "text-ink-soft")}>{when}</span>
+            {/* One line under the date (P23-3): the time left, the step being the developer's, with the business days in
+                the title as on the Next deadline tile; the business days themselves when the API sends no instant. */}
+            {timed ? (
+              <TimeLeft until={due.due_at!} now={now!} labelWhenPast={th("stats.deadlineOverdue")} mine className="mt-1.5 text-sm text-ink-soft" />
+            ) : (
+              <span className={cn("mt-1.5 text-sm", due.overdue ? "font-semibold text-error" : "text-ink-soft")}>{when}</span>
+            )}
           </p>
         ) : null}
         <span aria-hidden="true" className={buttonClass("secondary", "shrink-0")}>

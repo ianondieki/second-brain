@@ -19,9 +19,10 @@ const DUE = { due_on: "2026-10-07", business_days_left: 4, overdue: false, due_a
 const timer = () => document.querySelector<HTMLElement>("[data-whose-turn] [data-timer]");
 
 describe("the tracker's countdown", () => {
-  it("sits beside the business-days figure, readable (the figure stays a picture of the sentence)", () => {
+  it("is the figure's one secondary line, with the date: one deadline, said once (the figure stays a picture of the sentence)", () => {
     renderWithIntl(<WhoseTurn detail={detail({ due: DUE })} now={NOW} />);
-    expect(timer()?.textContent).toBe("6 d 14 h 23 m left");
+    expect(timer()?.textContent).toBe("Due 7 Oct 2026 · in 6 days 14 h 23 min");
+    expect(document.querySelector("[data-countdown='open']")?.textContent).toBe("4 business days left"); // no second date
     expect(timer()?.closest("[aria-hidden='true']")).toBeNull();
     expect(timer()?.parentElement?.querySelector("[data-countdown='open']")).not.toBeNull();
     expect(timer()?.getAttribute("data-timer")).toBe("open");
@@ -31,7 +32,7 @@ describe("the tracker's countdown", () => {
     renderWithIntl(
       <WhoseTurn detail={detail({ due: DUE, my_party: "org", my_roles: ["reviewer"], whose_turn: ["org"] })} now="2026-10-07T08:00:00.000Z" />,
     );
-    expect(timer()?.textContent).toBe("12 h 59 m left");
+    expect(timer()?.textContent).toBe("Due 7 Oct 2026 · in 12 h 59 min");
     expect(timer()?.getAttribute("data-timer")).toBe("warm");
   });
 
@@ -44,7 +45,7 @@ describe("the tracker's countdown", () => {
     const today = { ...DUE, business_days_left: 0 } as Detail["due"];
     renderWithIntl(<WhoseTurn detail={detail({ due: today })} now="2026-10-07T15:00:00.000Z" />);
     expect(document.querySelector("[data-countdown]")).toBeNull();
-    expect(timer()?.textContent).toBe("5 h 59 m left");
+    expect(timer()?.textContent).toBe("in 5 h 59 min");
     expect(timer()?.closest(".sr-only")).toBeNull();
   });
 

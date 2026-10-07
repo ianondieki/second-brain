@@ -54,9 +54,10 @@ afterEach(() => {
 describe("Home's Next deadline tile", () => {
   it("says the time left as its meta line, the business days in its title", async () => {
     await home([mine()]);
-    expect(tile().textContent).toBe("Next deadline16 Oct6 d 14 h 23 m left");
+    expect(tile().textContent).toBe("Next deadline16 Octin 6 days 14 h 23 min");
     expect(tile().getAttribute("title")).toBe("in 4 business days");
-    expect(tile().querySelector("time")?.getAttribute("dateTime")).toBe(DUE.due_at);
+    expect(tile().querySelector("time")?.getAttribute("dateTime")).toBe("P6DT14H23M");
+    expect(tile().querySelector("time")?.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");
     expect(tile().querySelector("[aria-live]")).toBeNull();
   });
 
@@ -72,21 +73,22 @@ describe("Home's Next deadline tile", () => {
 });
 
 describe("Home's Needs you card", () => {
-  it("says the time left under its date, quiet, then the business days; its chips stay two", () => {
+  it("says the time left as the one line under its date, quiet, the business days in its title; its chips stay two", () => {
     renderWithIntl(<NeedsYouHero item={mine()} href="/dev/engagements/x" action="Open the tracker" now={NOW} />);
     const timer = document.querySelector<HTMLElement>("[data-timer]")!;
-    expect(timer.textContent).toBe("6 d 14 h 23 m left");
+    expect(timer.textContent).toBe("in 6 days 14 h 23 min");
     expect(timer.className).toContain("text-sm");
     expect(timer.className).toContain("text-ink-soft");
     const when = timer.closest("[data-due]")!;
     expect(when.querySelector("time")?.textContent).toBe("16 Oct");
-    expect(when.textContent).toBe("16 Oct6 d 14 h 23 m leftin 4 business days");
+    expect(when.textContent).toBe("16 Octin 6 days 14 h 23 min");
+    expect(when.getAttribute("title")).toBe("in 4 business days");
     expect(document.querySelectorAll("[data-chip]")).toHaveLength(2);
   });
 
   it("takes the warm mark under 24 hours, the step being the developer's", () => {
     renderWithIntl(<NeedsYouHero item={mine()} href="/dev/engagements/x" action="Open the tracker" now="2026-10-16T08:00:00.000Z" />);
-    expect(document.querySelector("[data-timer='warm']")?.textContent).toBe("12 h 59 m left");
+    expect(document.querySelector("[data-timer='warm']")?.textContent).toBe("in 12 h 59 min");
     expect(document.querySelectorAll("[data-chip]")).toHaveLength(2);
   });
 });

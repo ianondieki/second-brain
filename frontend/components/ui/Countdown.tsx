@@ -5,18 +5,36 @@ import { useEffect, useState } from "react";
 const MINUTE = 60_000;
 const DAY = 1_440 * MINUTE;
 
+// The app clock as this page keeps it: the gap between the browser's clock and the freshest server instant any
+// countdown was given (the API's X-App-Now). It lives as long as the page, so a screen drawn from the router's cache
+// or restored from the back/forward cache, whose `now` is old, still counts from the fresher instant; a browser clock
+// set wrong is absorbed by the gap; time asleep is counted, since the browser's clock runs on through it.
+let freshest = -Infinity;
+let gap = 0;
+
+function appTime(served: number): number {
+  if (served > freshest) {
+    freshest = served;
+    gap = Date.now() - served;
+  }
+  return Date.now() - gap;
+}
+
 export interface CountdownProps {
   /** The instant the window closes (ISO 8601). */
   until: string;
-  /** The app clock's instant when the page was drawn (the API's X-App-Now), never the browser's clock. */
+  /** The app clock's instant when the page was drawn (the API's X-App-Now). */
   now: string;
   /** Said instead of the time once `until` is reached ("Overdue", "Closed"). */
   labelWhenPast: string;
-  /** "warm": the step is the viewer's, so under 24 hours the time takes the saffron "your turn" mark. */
+  /** "warm": the step is the viewer's, so under 24 hours the time takes the saffron "your turn" look. */
   tone?: "neutral" | "warm";
-  /** The figure from its largest unit down: `countdown.days`, `.hours`, `.minutes` with their {slots} left in. */
-  units: readonly [string, string, string];
-  /** The sentence around the figure, its {time} slot left in (`countdown.left`, `countdown.closesIn`). */
+  /**
+   * The figure from its largest unit down, with {hours} and {minutes} slots: one day, more days (its number written as
+   * 99, put right here: a plural form chosen by the server's messages), hours, minutes.
+   */
+  units: readonly [string, string, string, string];
+  /** The sentence around the figure, its {time} slot left in (`countdown.in`, `.dueIn`, `.closesIn`). */
   frame: string;
   /** The full instant in words (Nairobi time), the <time>'s title. */
   title: string;
@@ -24,52 +42,60 @@ export interface CountdownProps {
 }
 
 /**
- * Time left to an instant in days, hours and minutes (P23-3). The basis is the server's instant plus the time this
- * page has been open (performance.now(), a monotonic clock), so a browser clock set wrong changes nothing. It
- * re-renders on each whole minute through one timeout chain, paused while the tab is hidden. No live region: a
- * ticking figure is never announced. Past `until` it says `labelWhenPast`.
+ * Time left to an instant in days, hours and minutes (P23-3). The first render is the server's figure, so hydration
+ * matches its HTML; the first tick then waits for the next minute boundary, unless the page's instant is already a
+ * minute or more behind the app clock (a cached or restored page), when it is put right at once. After that it ticks
+ * on each whole minute (one timeout chain), pauses while the tab is hidden, and is recomputed when the tab is shown,
+ * the page is restored or the window regains focus. No live region: a ticking figure is never announced. Past `until`
+ * it says `labelWhenPast`. The look of each state is the caller's className, keyed on data-timer.
  */
 export function Countdown({ until, now, labelWhenPast, tone, units, frame, title, className }: CountdownProps) {
-  const base = Date.parse(until) - Date.parse(now);
-  // The time spent since this basis was drawn; a new basis (a refreshed page's X-App-Now) starts again from nothing.
-  const [elapsed, setElapsed] = useState({ base, spent: 0 });
+  const end = Date.parse(until);
+  const served = Date.parse(now);
+  const [at, setAt] = useState(served);
 
   useEffect(() => {
-    const start = performance.now();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const schedule = (left: number) => {
-      // Just past the next whole minute of what is left, where the floored figure changes.
-      if (left > 0) timer = setTimeout(run, (left % MINUTE) + 1);
+    // Just past the next whole minute of what is left, where the floored figure changes.
+    const schedule = (time: number) => {
+      if (end > time) timer = setTimeout(run, ((end - time) % MINUTE) + 1);
     };
     function run() {
       clearTimeout(timer);
       if (document.hidden) return;
-      const spent = performance.now() - start;
-      setElapsed({ base, spent });
-      schedule(base - spent);
+      const time = appTime(served);
+      setAt(time);
+      schedule(time);
     }
-    schedule(base);
+    const time = appTime(served);
+    if (time - served >= MINUTE) timer = setTimeout(run, 0);
+    else schedule(time);
     document.addEventListener("visibilitychange", run);
+    addEventListener("pageshow", run);
+    addEventListener("focus", run);
     return () => {
       clearTimeout(timer);
       document.removeEventListener("visibilitychange", run);
+      removeEventListener("pageshow", run);
+      removeEventListener("focus", run);
     };
-  }, [base]);
+  }, [end, served]);
 
-  const left = base - (elapsed.base === base ? elapsed.spent : 0);
+  const left = end - Math.max(at, served);
   const total = Math.floor(left / MINUTE);
-  // Keyed by the first letter of each slot ({days}, {hours}, {minutes}).
-  const parts: Record<string, number> = { d: Math.floor(total / 1_440), h: Math.floor(total / 60) % 24, m: total % 60 };
+  const d = Math.floor(total / 1_440);
+  const h = Math.floor(total / 60) % 24;
+  const m = total % 60;
   const [before, after] = frame.split("{time}");
-  // The look of each state ("warm": the saffron mark and the warm figure) is in the caller's className, keyed on
-  // data-timer, so none of it ships in this bundle.
   return (
     <span data-timer={left > 0 ? (tone === "warm" && left < DAY ? "warm" : "open") : "past"} className={className}>
       {left > 0 ? (
         <>
           {before}
-          <time dateTime={until} title={title} suppressHydrationWarning>
-            {units[parts.d ? 0 : parts.h ? 1 : 2].replace(/\{(\w)\w*\}/g, (_, name: string) => String(parts[name]))}
+          <time dateTime={`P${d}DT${h}H${m}M`} title={title} suppressHydrationWarning>
+            {(d ? units[d > 1 ? 1 : 0].replace("99", String(d)) : units[h ? 2 : 3])
+              .replace("{hours}", String(h))
+              .replace("{minutes}", String(m))}
           </time>
           {after}
         </>

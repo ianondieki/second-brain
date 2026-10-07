@@ -17,8 +17,10 @@ export interface TimeLeftProps {
   now: string;
   /** Said once `until` is reached: the screen's existing wording ("Overdue", "Closed"). */
   labelWhenPast: string;
-  /** "6 d 14 h 23 m left" (`left`) or "Submissions close in 6 d 14 h 23 m" (`closesIn`). */
-  sentence?: "left" | "closesIn";
+  /** "in 6 days 14 h 23 min" (`in`), "Due 16 Oct 2026 · in …" (`dueIn`, with `date`) or "Proposals close in …". */
+  sentence?: "in" | "dueIn" | "closesIn";
+  /** The due day in words, for `dueIn`. */
+  date?: string;
   /** The step is the viewer's: under 24 hours the time takes the saffron "your turn" mark. */
   mine?: boolean;
   className?: string;
@@ -29,18 +31,20 @@ export interface TimeLeftProps {
  * for the ticking client part (components/ui/Countdown.tsx) to fill, and the full instant in Nairobi time as the
  * <time>'s title. A server component wherever it is drawn (a shared one under a client-rendered test, too).
  */
-export function TimeLeft({ until, now, labelWhenPast, sentence = "left", mine = false, className }: TimeLeftProps) {
+export function TimeLeft({ until, now, labelWhenPast, sentence = "in", date = "", mine = false, className }: TimeLeftProps) {
   const t = useTranslations("countdown");
   const locale = useLocale();
-  const slots = { days: "{days}", hours: "{hours}", minutes: "{minutes}" };
+  const slots = { hours: "{hours}", minutes: "{minutes}" };
   return (
     <Countdown
       until={until}
       now={now}
       labelWhenPast={labelWhenPast}
       tone={mine ? "warm" : "neutral"}
-      units={[t("days", slots), t("hours", slots), t("minutes", slots)]}
-      frame={t(sentence, { time: "{time}" })}
+      // One day, and more days with their number written as 99 for the client to put right (the plural form is the
+      // message's own choice; the messages carry no other figure).
+      units={[t("days", { ...slots, days: 1 }), t("days", { ...slots, days: 99 }), t("hours", slots), t("minutes", slots)]}
+      frame={t(sentence, { time: "{time}", date })}
       title={t("at", nairobiParts(locale, until))}
       className={cn(look, className)}
     />
