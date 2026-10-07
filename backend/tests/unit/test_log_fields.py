@@ -30,6 +30,7 @@ SAFE_FIELDS = frozenset(
         "attachment_id", "message_id",  # P21: the engagement thread's row ids (REQ-ENG-11)
         "position",  # P22: a quiz question's place in its draft, 1 to 5 (REQ-DEV-01)
         "set_id", "origin",  # P22: a quiz set's row id and its origin, model or seeded (REQ-DEV-01)
+        "refused", "abandoned",  # P23: counts of the re-embed job's refused writes and rows left for the next run
     }
 )  # fmt: skip
 # ``error`` is an exception's type name, or a provider's reply with every address redacted and its length capped
