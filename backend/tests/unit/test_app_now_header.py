@@ -58,6 +58,17 @@ class NoClock:
         raise ProgrammingError("SELECT app_clock_now()", {"secret": "never logged"}, LookupError("no function"))
 
 
+class Counting:
+    """An engine that counts the connections asked of it (each refused, so the header falls back)."""
+
+    def __init__(self) -> None:
+        self.connects = 0
+
+    def connect(self) -> Any:
+        self.connects += 1
+        raise OperationalError("SELECT app_clock_now()", {}, ConnectionRefusedError("down"))
+
+
 class Recorder:
     """Stands in for bridge.main's structlog logger (cached loggers ignore ``capture_logs`` once used)."""
 
@@ -132,14 +143,31 @@ async def test_a_broken_clock_is_logged_and_the_answer_still_carries_the_wall_cl
 async def test_error_answers_carry_it_too() -> None:
     app = failing(create_app(get_settings()))
     async with client_of(app) as client:
-        refused = await client.post("/api/auth/logout")  # no CSRF token: 403 before any route
         unknown = await client.get("/api/no-such-thing")
         invalid = await client.get("/api/p23-3/count", params={"n": "many"})
         broken = await client.get("/api/p23-3/boom")
-    assert [r.status_code for r in (refused, unknown, invalid, broken)] == [403, 404, 422, 500]
-    assert refused.json()["detail"]["code"] == "csrf_failed"
-    for response in (refused, unknown, invalid, broken):
+    assert [r.status_code for r in (unknown, invalid, broken)] == [404, 422, 500]
+    for response in (unknown, invalid, broken):
         assert response.headers[APP_NOW_HEADER] == STAMP
+
+
+async def test_a_request_the_csrf_guard_refuses_costs_no_clock_query_and_gets_no_header() -> None:
+    """Outside production the header costs a pooled connection; a state-changing request without a valid CSRF token
+    (checked first: the guard's own HMAC, no I/O) gets neither, so a flood of them cannot queue real requests."""
+    engine = Counting()
+    app = create_app(get_settings())
+    app.state.engine = engine
+    async with client_of(app) as client:
+        missing = await client.post("/api/auth/logout")
+        client.cookies.set(get_settings().csrf_cookie_name, "nonce.forged")  # the cookie and the header agree; no MAC
+        forged = await client.post("/api/auth/logout", headers={"X-CSRF-Token": "nonce.forged"})
+        assert engine.connects == 0
+        for refused in (missing, forged):
+            assert (refused.status_code, refused.json()["detail"]["code"]) == (403, "csrf_failed")
+            assert APP_NOW_HEADER not in refused.headers
+        allowed = await client.get("/api/auth/csrf")  # a safe method passes the guard: one clock read
+    assert engine.connects == 1
+    assert allowed.headers[APP_NOW_HEADER] == STAMP
 
 
 async def test_only_api_answers_carry_it() -> None:

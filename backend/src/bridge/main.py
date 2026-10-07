@@ -169,16 +169,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     errors.install(app, headers=SECURITY_HEADERS, per_request=app_now_headers)  # one error shape (bridge.errors)
     movable_clock = settings.app_env != "production"  # the dev/test clock never runs in production
 
-    @app.middleware("http")
-    async def csrf_guard(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        """Every state-changing /api request must echo the CSRF cookie in X-CSRF-Token (docs/spec/08 Auth)."""
-        if request.url.path.startswith(API_PREFIX) and not csrf.request_passes(
+    def csrf_passes(request: Request) -> bool:
+        """The CSRF check (an HMAC, no I/O): safe methods pass; a state-changing request echoes its token."""
+        return csrf.request_passes(
             csrf_key,
             method=request.method,
             cookie=request.cookies.get(settings.csrf_cookie_name),
             header=request.headers.get(csrf.HEADER),
             binding=csrf.binding_for(request.cookies.get(settings.session_cookie_name)),
-        ):
+        )
+
+    @app.middleware("http")
+    async def csrf_guard(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        """Every state-changing /api request must echo the CSRF cookie in X-CSRF-Token (docs/spec/08 Auth)."""
+        if request.url.path.startswith(API_PREFIX) and not csrf_passes(request):
             return JSONResponse(
                 status_code=403,
                 content={"detail": {"code": "csrf_failed", "message": "Refresh the page and try again."}},
@@ -194,9 +198,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def app_now(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        """``X-App-Now`` on every /api answer. Added last, it wraps the CSRF guard, so a refusal carries it too; the
-        500 handler reads the same instant from ``request.state`` (``app_now_headers``)."""
-        if not request.url.path.startswith(API_PREFIX):
+        """``X-App-Now`` on every /api answer the CSRF guard lets through, errors included (the 500 handler reads the
+        same instant from ``request.state``: ``app_now_headers``). Outside production reading it takes a pooled
+        connection, so a request the guard will refuse is checked first (the same HMAC, no I/O) and gets neither the
+        query nor the header; the guard still answers its 403. A safe-method request, signed in or not, does cost one
+        clock query outside production (THREAT_MODEL.md D, residual); production never queries for it."""
+        if not request.url.path.startswith(API_PREFIX) or not csrf_passes(request):
             return await call_next(request)
         now = await app_clock_now(getattr(request.app.state, "engine", None), movable=movable_clock)
         request.state.app_now = now
