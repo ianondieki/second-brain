@@ -50,8 +50,9 @@ test("the landing's top bar is clean and the hero's story settles, with nothing 
 });
 
 // P24 (REQ-UX-03, REQ-UX-04; D-66): the landing's new sections say only product constants and label example data; the
-// county strip leads to Explore; Explore (its tiles, or its empty state while the summary cannot be read) and Credits
-// pass strict axe; the manifest makes the site installable.
+// county strip leads to Explore; Explore (its tiles, or its empty state while the summary cannot be read), a problem's
+// public page and Credits pass strict axe; a problem that is not public is not found; the manifest makes the site
+// installable.
 test("the landing's P24 sections, Explore, Credits and the manifest", async ({ page, request }) => {
   await page.goto("/");
   for (const name of ["Built for Kenya's counties", "From an idea to a signed agreement, in three steps", "Every recommendation names its reason"]) {
@@ -75,6 +76,19 @@ test("the landing's P24 sections, Explore, Credits and the manifest", async ({ p
   await expect(page.locator("[data-primary]")).toHaveText("Create an account");
   await expect(page.locator("[data-explore='empty'], [data-explore='none'], #explore-counties")).toHaveCount(1);
   await checkScreen(page, { strict: true });
+
+  // A problem's public page, from its tile (when the summary lists one): one primary action, strict axe.
+  const first = page.locator("section[aria-labelledby='explore-counties'] a[href^='/explore/problems/']").first();
+  if (await first.count()) {
+    const title = (await first.evaluate((link) => link.firstChild?.textContent ?? "")).trim();
+    await first.click();
+    await expect(page).toHaveURL(/\/explore\/problems\//);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
+    await expect(page.locator("[data-primary]")).toHaveText("Create an account to answer this");
+    await checkScreen(page, { strict: true });
+  }
+  const missing = await page.request.get("/explore/problems/0199b000-0000-7000-8000-00000000dead");
+  expect(missing.status()).toBe(404);
 
   await page.goto("/credits");
   const credits = page.locator("[data-credits='photos'] li");

@@ -42,8 +42,11 @@ export const STRIP: readonly Photo[] = [
 /** Explore's county tiles: a second view where a county has one, so the two pages do not repeat each other. */
 const EXPLORE: readonly Photo[] = [photo("nairobi-golden-hour"), photo("mombasa-likoni-ferry"), ...STRIP.slice(2)];
 
+/** Tea country (no one county): Explore's "Nationwide" group, and the tile of a county with no photograph of its own. */
+export const NATIONWIDE: Photo = photo("kenya-tea");
+
 /** Every photograph the site shows, credited on /credits. */
-export const CREDITED: readonly Photo[] = [...new Map([...STRIP, ...EXPLORE].map((p) => [p.slug, p])).values()];
+export const CREDITED: readonly Photo[] = [...new Map([...STRIP, ...EXPLORE, NATIONWIDE].map((p) => [p.slug, p])).values()];
 
 /** A county's anchor on /explore ("Uasin Gishu" → "uasin-gishu"); the same on both pages. */
 export function countyAnchor(name: string): string {
@@ -54,8 +57,8 @@ export function countyAnchor(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** The photograph of a county on Explore, if one is vendored. */
-export function photoOf(county: string): Photo | undefined {
+/** The photograph of a county on Explore: its own where one is vendored, else tea country. */
+export function photoOf(county: string): Photo {
   const anchor = countyAnchor(county);
-  return EXPLORE.find((p) => countyAnchor(p.county) === anchor);
+  return EXPLORE.find((p) => countyAnchor(p.county) === anchor) ?? NATIONWIDE;
 }
