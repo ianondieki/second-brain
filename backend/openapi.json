@@ -27753,7 +27753,7 @@
         ]
       },
       "put": {
-        "description": "Record decisions; each names the text version it was made on (409 if the wording changed since). A purpose\ndecided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``.",
+        "description": "Record decisions; each names the text version it was made on (409 if the wording changed since). A purpose\ndecided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``. ``profiling`` off also\nremoves the profile embedding in the same transaction (AC-PERS-3).",
         "operationId": "set_consents_api_me_consents_put",
         "requestBody": {
           "content": {

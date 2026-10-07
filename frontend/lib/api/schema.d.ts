@@ -1969,7 +1969,8 @@ export interface paths {
         /**
          * Set Consents
          * @description Record decisions; each names the text version it was made on (409 if the wording changed since). A purpose
-         *     decided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``.
+         *     decided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``. ``profiling`` off also
+         *     removes the profile embedding in the same transaction (AC-PERS-3).
          */
         put: operations["set_consents_api_me_consents_put"];
         post?: never;
