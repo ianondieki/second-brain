@@ -402,3 +402,50 @@ async def test_a_slow_public_read_is_cancelled_after_2_seconds(app_engine: Async
         await queries.read(factory, sa.select(sa.func.pg_sleep(3)))
     assert getattr(caught.value.orig, "sqlstate", None) == "57014"
     assert "statement timeout" in str(caught.value.orig)
+
+
+async def test_a_public_problem_page_serves_readable_problems_only(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, scene: Scene
+) -> None:
+    """Given the scene's public problem and public Brief and its private rows (a pending and a held problem, a draft,
+    an invited, an unverified and a delisted organisation's Brief) plus an archived and a rejected problem, When a
+    signed-out visitor opens each page, Then the two public ones answer 200 with the public cache header, the Brief
+    naming its listed organisation and the developer's problem none, never the author; every other id is the same
+    404 (no-store)."""
+    async with owner_engine.begin() as conn:
+        author = await t.run(conn, "SELECT created_by FROM problems WHERE id = :p", p=scene.public_problems["open"])
+        retired = {
+            status: await add_problem(conn, f"P24 {status} {scene.tag}", by=author, niche_id=scene.child, status=status)
+            for status in ("archived", "rejected")
+        }
+        org_name = await t.run(
+            conn,
+            "SELECT o.legal_name FROM organizations o JOIN problems p ON p.org_id = o.id WHERE p.id = :p",
+            p=scene.public_problems["brief"],
+        )
+    person = scene.private_text[:3]  # the author's display name, address and handle
+    async with make_client(app_engine, ip="198.51.100.29") as visitor:
+        pages = {
+            label: await visitor.get(f"/api/public/problems/{pid}") for label, pid in scene.public_problems.items()
+        }
+        refused = {
+            label: await visitor.get(f"/api/public/problems/{pid}")
+            for label, pid in {**scene.private_problems, **retired}.items()
+        }
+    for label, response in pages.items():
+        assert (response.status_code, response.headers["cache-control"]) == (200, "public, max-age=60"), label
+        assert not [text for text in person if text in response.text], label
+    opened, posted = pages["brief"].json(), pages["open"].json()
+    assert (opened["source"], opened["organisation"]) == ("brief", {"name": org_name, "verification": "e2"})
+    assert (opened["title"], opened["statement"]) == (f"P24 brief {scene.tag}", STATEMENT)
+    assert (posted["source"], posted["organisation"]) == ("developer", None)
+    assert posted["county"] == {"code": scene.county, "name": f"P24 County {scene.tag}"}
+    assert posted["niche"] == {
+        "id": str(scene.child),
+        "name": f"P24 Child {scene.tag}",
+        "parent": {"id": str(scene.top), "name": f"P24 Top {scene.tag}"},
+    }
+    for label, response in refused.items():
+        assert response.status_code == 404, label
+        assert response.json() == {"detail": {"code": "not_found", "message": "No such problem."}}, label
+        assert response.headers["cache-control"] == "no-store", label
