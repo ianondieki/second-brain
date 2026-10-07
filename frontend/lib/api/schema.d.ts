@@ -5865,6 +5865,11 @@ export interface components {
              */
             raw: number | null;
             /**
+             * Source
+             * @description f1 only: how it was computed (embedding or keywords); null when it does not apply
+             */
+            source?: ("embedding" | "keywords") | null;
+            /**
              * Value
              * @description Normalised to 0-1; null when the feature does not apply
              */
@@ -5889,7 +5894,7 @@ export interface components {
             niche_match: components["schemas"]["FeatureOut"];
             /** @description f3: your county 1, nationwide 0.5 */
             region_match: components["schemas"]["FeatureOut"];
-            /** @description f1: keywords shared with your profile and proposals (consent only) */
+            /** @description f1 (consent only): the cosine of your profile's and the card's embeddings (raw; the value is max(0, raw)), else the keywords shared with your profile and proposals (raw: their count) */
             semantic_fit: components["schemas"]["FeatureOut"];
             /** @description f4: no data in the prototype; never applies */
             skill_coverage: components["schemas"]["FeatureOut"];

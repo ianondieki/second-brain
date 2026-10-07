@@ -87,12 +87,18 @@ class FeatureOut(BaseModel):
     value: float | None = Field(description="Normalised to 0-1; null when the feature does not apply")
     weight: float
     applies: bool
+    source: Literal["embedding", "keywords"] | None = Field(
+        default=None, description="f1 only: how it was computed (embedding or keywords); null when it does not apply"
+    )
 
 
 class FeaturesOut(BaseModel):
     """The feature vector f1-f10 behind a score (docs/spec/06 6.7)."""
 
-    semantic_fit: FeatureOut = Field(description="f1: keywords shared with your profile and proposals (consent only)")
+    semantic_fit: FeatureOut = Field(
+        description="f1 (consent only): the cosine of your profile's and the card's embeddings (raw; the value is"
+        " max(0, raw)), else the keywords shared with your profile and proposals (raw: their count)"
+    )
     niche_match: FeatureOut = Field(description="f2: liked 1, adjacent 0.5")
     region_match: FeatureOut = Field(description="f3: your county 1, nationwide 0.5")
     skill_coverage: FeatureOut = Field(description="f4: no data in the prototype; never applies")
