@@ -87,8 +87,7 @@
       "units": {
         "days": "days",
         "hours": "hrs",
-        "minutes": "min",
-        "seconds": "sec"
+        "minutes": "min"
       }
     },
     "how": {
@@ -161,7 +160,7 @@
       "action": "Create an account"
     },
     "footer": {
-      "note": "A prototype: every figure on this site is seeded example data.",
+      "note": "A prototype: the product's own figures (its stages, counties and niches) are constants; every problem, Brief, certificate and activity on this site is seeded example data.",
       "help": "Help",
       "terms": "Terms",
       "product": "Product",
@@ -261,7 +260,7 @@
       "title": "Built for Kenya's counties",
       "lead": "Every problem carries the county it comes from. Browse them by place.",
       "all": "Explore all counties",
-      "label": "Counties, moving slowly. Hover or focus to pause."
+      "pause": "Pause the photographs"
     },
     "reasons": {
       "eyebrow": "Discover, explained",
@@ -294,16 +293,16 @@
     "activity": {
       "eyebrow": "On the platform",
       "title": "What's happening",
-      "lead": "The latest public activity: problems posted, versions registered, trackers moving on.",
+      "lead": "The latest public activity: problems posted, versions registered, Briefs opened.",
       "seeded": "Seeded example",
-      "label": "Recent activity, moving slowly. Hover or focus to pause.",
       "listLabel": "Recent activity",
       "kind": {
         "problem_posted": "Problem posted",
         "version_registered": "Version registered",
         "brief_opened": "Brief opened"
       },
-      "nationwide": "Nationwide"
+      "nationwide": "Nationwide",
+      "pause": "Pause the activity"
     }
   },
   "fields": {
@@ -4056,7 +4055,8 @@
     "none": "No published problems yet.",
     "nationwide": "Nationwide",
     "nationwideNote": "Problems that name no single county. Find them by niche below.",
-    "seeded": "Seeded example"
+    "seeded": "Seeded example",
+    "noneHere": "No public problems here yet."
   },
   "credits": {
     "pageTitle": "Credits",
@@ -4064,7 +4064,12 @@
     "lead": "The photographs and typefaces on Wazo are used under their licences. Each is credited here.",
     "photos": "Photographs",
     "fonts": "Typefaces",
-    "fontsBody": "Fraunces, Bricolage Grotesque, Hanken Grotesk and IBM Plex Mono, each under the SIL Open Font License 1.1."
+    "fontsBody": "Fraunces, Bricolage Grotesque, Hanken Grotesk and IBM Plex Mono, each under the SIL Open Font License 1.1.",
+    "attribution": "<work>{title}</work> by {author}, licensed under <deed>{licence}</deed>; {changes}, via Wikimedia Commons.",
+    "changes": {
+      "resized": "resized",
+      "croppedResized": "cropped and resized"
+    }
   },
   "og": {
     "registered": "Registered on Wazo",

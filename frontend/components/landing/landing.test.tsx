@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { act, cleanup, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { createTranslator } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -49,12 +49,16 @@ describe("HeroComposition", () => {
   it("labels the panel as demo data and says the ticking countdown once, in words", () => {
     const { container } = renderWithIntl(<HeroComposition />);
     expect(container.querySelector(".demo-label")!.textContent).toBe("Demo data");
-    // The four boxes are decorative (the minutes and seconds tick in CSS); the words are read instead.
+    // Days, hours and minutes, as the product's countdown (no seconds: nothing moves between the minutes, WCAG 2.2.2);
+    // the boxes are decorative and the words are read instead.
     const boxes = container.querySelectorAll(".due-box");
-    expect(boxes).toHaveLength(4);
+    expect([...boxes].map((box) => box.querySelector(".due-u")!.textContent)).toEqual(["days", "hrs", "min"]);
     expect(boxes[0].parentElement!.getAttribute("aria-hidden")).toBe("true");
     expect(container.querySelector(".due-m")).not.toBeNull();
-    expect(container.querySelector(".due-s")).not.toBeNull();
+    expect(container.querySelector(".due-s")).toBeNull();
+    const css = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
+    expect(css).toMatch(/\.due-m \{\s*counter-reset: due var\(--due-m\);\s*animation: due-m 3600s steps\(60, end\)/);
+    expect(css).not.toMatch(/due-s|steps\(60, end\) -?\d+s infinite;\s*\}\s*\.due-s/);
     expect(container.querySelector(".sr-only")!.textContent).toContain("2 days 14 hours left (example)");
   });
 });
@@ -117,7 +121,7 @@ describe("CountUp", () => {
 });
 
 describe("Counties", () => {
-  it("links six counties to Explore, once for the keyboard and assistive technology", async () => {
+  it("links six counties to Explore by their reference code, once for the keyboard and assistive technology", async () => {
     const { container } = renderWithIntl(<>{await resolveServerTree(<Counties />)}</>);
     const rows = container.querySelectorAll(".pan-row");
     expect(rows).toHaveLength(2);
@@ -125,12 +129,12 @@ describe("Counties", () => {
     for (const link of rows[1].querySelectorAll("a")) expect(link.getAttribute("tabindex")).toBe("-1");
     const links = within(rows[0] as HTMLElement).getAllByRole("link");
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      "/explore#nairobi",
-      "/explore#mombasa",
-      "/explore#kisumu",
-      "/explore#nakuru",
-      "/explore#uasin-gishu",
-      "/explore#kajiado",
+      "/explore#KE-30",
+      "/explore#KE-28",
+      "/explore#KE-17",
+      "/explore#KE-31",
+      "/explore#KE-44",
+      "/explore#KE-10",
     ]);
     expect(links[4].textContent).toBe("Uasin Gishu");
     // Photographs below the fold: lazy, decoded off the main thread, sized, AVIF first.
@@ -139,6 +143,17 @@ describe("Counties", () => {
     expect(img.getAttribute("width")).not.toBeNull();
     expect(rows[0].querySelector("source")!.getAttribute("type")).toBe("image/avif");
     expect(screen.getByRole("link", { name: "Explore all counties" }).getAttribute("href")).toBe("/explore");
+    // A visible Pause for touch (no hover there), pressed while paused, inside the box it holds still.
+    const pause = screen.getByRole("button", { name: "Pause the photographs" });
+    expect(pause.getAttribute("aria-pressed")).toBe("false");
+    expect(pause.closest("[data-motion]")!.contains(rows[0])).toBe(true);
+    fireEvent.click(pause);
+    expect(pause.getAttribute("aria-pressed")).toBe("true");
+    expect(pause.closest("[data-motion]")!.hasAttribute("data-paused")).toBe(true);
+    // Focus on a tile stops the row and makes it scroll, so the tile is never off screen.
+    const css = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
+    expect(css).toMatch(/\.pan:focus-within \.pan-track \{\s*animation: none;/);
+    expect(css).toMatch(/\.pan:focus-within \{\s*overflow-x: auto;/);
   });
 });
 

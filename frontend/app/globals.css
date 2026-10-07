@@ -35,7 +35,9 @@
 }
 /* Fraunces (D-66, P24): the serif display face for page and section titles, upright and italic (the hero's one accent
    phrase). Instanced with fontTools (SOFT and WONK pinned at 0) to what the pages set: the upright to opsz 24–72 (no
-   title is larger than 72 px) and wght 500–700, subset to Basic Latin and punctuation (35 KB); the italic to opsz 40–72
+   title is larger than 72 px) and wght 500–700, with kerning, ligatures and contextual forms, in two files by
+   unicode-range: Basic Latin and punctuation (37 KB, preloaded) and Latin-1 with Latin Extended-A (43 KB, fetched only
+   where a title needs it); the italic to opsz 40–72
    at wght 500, lower-case letters and punctuation only (9 KB: it sets the hero's phrase and nothing else). Every font the first screen uses is fetched before the landing's
    LCP, so their bytes are the LCP budget. The fallback is Times New Roman sized to it. */
 @font-face {
@@ -44,6 +46,16 @@
   font-display: swap;
   font-weight: 500 700;
   font-style: normal;
+  unicode-range: U+0020-007E, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2039-203A, U+20AC, U+2122;
+}
+/* The rest of Latin-1 and Latin Extended-A (Wanjirũ, Zoé) in their own file, fetched only by a page that sets one. */
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-ext-v1.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500 700;
+  font-style: normal;
+  unicode-range: U+00A0-017F;
 }
 @font-face {
   font-family: "Fraunces";
@@ -1092,21 +1104,17 @@ dialog[data-sheet][open] {
   background: var(--flourish);
 }
 
-/* The hero panel's countdown: four boxes, the minutes and seconds ticking from registered integers (no script). The
-   example starts at 2 days 14 h 03 min 27 s: the seconds step every second, the minutes on the 28th. */
+/* The hero panel's countdown: three boxes, days, hours and minutes as the product's countdown says them; the minutes
+   step down once a minute from a registered integer (no script, nothing moving in between: WCAG 2.2.2). The example
+   starts at 2 days 14 h 03 min and steps every 60 s. */
 @property --due-m {
   syntax: "<integer>";
   inherits: false;
   initial-value: 3;
 }
-@property --due-s {
-  syntax: "<integer>";
-  inherits: false;
-  initial-value: 27;
-}
 .due-box {
   display: flex;
-  min-width: 3.25rem;
+  min-width: 3.5rem;
   flex-direction: column;
   align-items: center;
   border-radius: 0.75rem;
@@ -1130,14 +1138,9 @@ dialog[data-sheet][open] {
 }
 .due-m {
   counter-reset: due var(--due-m);
-  animation: due-m 3600s steps(60, end) -3392s infinite;
+  animation: due-m 3600s steps(60, end) -3360s infinite;
 }
-.due-s {
-  counter-reset: due var(--due-s);
-  animation: due-s 60s steps(60, end) -32s infinite;
-}
-.due-m::after,
-.due-s::after {
+.due-m::after {
   content: counter(due, decimal-leading-zero);
 }
 @keyframes due-m {
@@ -1146,14 +1149,6 @@ dialog[data-sheet][open] {
   }
   to {
     --due-m: -1;
-  }
-}
-@keyframes due-s {
-  from {
-    --due-s: 59;
-  }
-  to {
-    --due-s: -1;
   }
 }
 
@@ -1211,8 +1206,20 @@ dialog[data-sheet][open] {
   animation: pan 24s linear infinite;
 }
 .pan:hover .pan-track,
-.pan:focus-within .pan-track {
+[data-motion][data-paused] .pan-track {
   animation-play-state: paused;
+}
+/* A tile with focus is never off screen: the row stops, drops its moving copy and scrolls (MotionToggle brings the
+   tile into view). */
+.pan:focus-within {
+  overflow-x: auto;
+  mask-image: none;
+}
+.pan:focus-within .pan-track {
+  animation: none;
+}
+.pan:focus-within .pan-row + .pan-row {
+  display: none;
 }
 .pan-row {
   display: flex;
@@ -1251,12 +1258,8 @@ dialog[data-sheet][open] {
   animation: pan calc(var(--ticker-items, 10) * 4s) linear infinite;
 }
 .ticker:hover .ticker-track,
-.ticker:focus .ticker-track,
-.ticker:focus-within .ticker-track {
+[data-motion][data-paused] .ticker-track {
   animation-play-state: paused;
-}
-.ticker:focus-visible {
-  mask-image: none;
 }
 .ticker-row {
   display: flex;
@@ -1267,7 +1270,7 @@ dialog[data-sheet][open] {
   display: flex;
   width: 19rem;
   flex-shrink: 0;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
   border: 1px solid var(--line);
   border-radius: 1rem;
@@ -1275,7 +1278,7 @@ dialog[data-sheet][open] {
   padding: 0.75rem 1rem;
 }
 [data-ticker="strip"] .ticker-item {
-  width: 16.5rem;
+  width: 18rem;
 }
 /* Home's still list on phones: the items take the column's width. */
 [data-ticker] > ul > .ticker-item {
@@ -1323,7 +1326,6 @@ dialog[data-sheet][open] {
 
   .seal-draw,
   .due-m,
-  .due-s,
   .count,
   .pan-track,
   .ticker-track,
@@ -1339,16 +1341,27 @@ dialog[data-sheet][open] {
     animation: none !important;
   }
 
-  /* The strip and the ticker stand still: one copy, scrolled sideways (the strip's links and the ticker's box take
-     focus, so the keyboard reaches it). */
-  .pan,
-  .ticker {
+  /* The strip stands still: one copy, scrolled sideways (its links take focus, so the keyboard reaches every tile).
+     The ticker stands still too, its items wrapped into rows. Nothing moves, so there is nothing to pause. */
+  .pan {
     overflow-x: auto;
     mask-image: none;
   }
+  .ticker {
+    mask-image: none;
+  }
+  .ticker-track {
+    width: auto;
+  }
+  .ticker-row {
+    flex-wrap: wrap;
+    justify-content: center;
+    padding-inline: 0.75rem;
+  }
   .pan-row + .pan-row,
-  .ticker-row + .ticker-row {
-    display: none;
+  .ticker-row + .ticker-row,
+  .motion-toggle {
+    display: none !important;
   }
 
   /* The tour's steps crossfade (FirstLoginTour adds .tour-fade); Pause is hidden before the script knows. */

@@ -27,6 +27,7 @@ import { formatShortDate } from "@/lib/format";
 
 import { RecommendedForYou } from "./discover/RecommendedForYou";
 import type { RecommendationsState } from "./discover/recommendations";
+import { MotionToggle } from "@/components/landing/MotionToggle";
 import { Ticker } from "@/components/landing/Ticker";
 import type { PublicActivity } from "@/lib/public/public-data";
 
@@ -151,8 +152,13 @@ export async function HomeContent({
 
         {/* What's happening (P24): the public activity feed under the tiles, labelled when it is the demo seed's. */}
         {activity ? (
-          <Section title={ta("title")} headingId="home-activity" data-home="activity">
-            {activity.seeded ? <p className="demo-label mb-3">{ta("seeded")}</p> : null}
+          <Section title={ta("title")} headingId="home-activity" data-home="activity" data-motion="">
+            <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+              {activity.seeded ? <p className="demo-label">{ta("seeded")}</p> : <span />}
+              <span className="max-sm:hidden">
+                <MotionToggle label={ta("pause")} />
+              </span>
+            </div>
             <Ticker activity={activity} variant="strip" />
           </Section>
         ) : null}

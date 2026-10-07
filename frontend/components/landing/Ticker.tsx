@@ -44,14 +44,14 @@ function Item({ item, now }: { item: ActivityItem; now: string }) {
         <Icon className="size-[1.125rem]" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="flex items-baseline justify-between gap-3 text-xs text-ink-soft">
-          <span className="truncate">{words.what}</span>
-          <time dateTime={item.at} className="shrink-0 tabular-nums">
+        <span className="block text-xs text-ink-soft">{words.what}</span>
+        <span className="mt-0.5 line-clamp-2 text-sm leading-snug font-semibold text-ink">{item.title ?? words.where}</span>
+        <span className="mt-0.5 flex flex-wrap gap-x-2.5 text-xs text-ink-soft">
+          {item.title ? <span>{words.where}</span> : null}
+          <time dateTime={item.at} className="tabular-nums">
             {words.when}
           </time>
         </span>
-        <span className="mt-0.5 block truncate text-sm font-semibold text-ink">{item.title ?? words.where}</span>
-        {item.title ? <span className="block truncate text-xs text-ink-soft">{words.where}</span> : null}
       </span>
     </li>
   );
@@ -91,7 +91,7 @@ export function Ticker({ activity, variant = "page" }: { activity: PublicActivit
           ))}
         </ul>
       ) : null}
-      <div tabIndex={0} role="region" aria-label={t("label")} className={cn("ticker", variant === "strip" && "max-sm:hidden")}>
+      <div className={cn("ticker", variant === "strip" && "max-sm:hidden")}>
         <div aria-hidden="true" className="ticker-track" style={{ "--ticker-items": items.length } as CSSProperties}>
           {[0, 1].map((copy) => (
             <ul key={copy} className="ticker-row">

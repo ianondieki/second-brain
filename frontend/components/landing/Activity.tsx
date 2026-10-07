@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { publicActivity } from "@/lib/public/public-data";
 
+import { MotionToggle } from "./MotionToggle";
 import { Ticker } from "./Ticker";
 
 /**
@@ -13,7 +14,7 @@ export async function Activity() {
   const [t, activity] = await Promise.all([getTranslations("landing.activity"), publicActivity()]);
   if (!activity) return null;
   return (
-    <section aria-labelledby="activity-title" data-activity="" className="overflow-hidden pt-4 pb-20 lg:pb-28">
+    <section aria-labelledby="activity-title" data-activity="" data-motion="" className="overflow-hidden pt-4 pb-20 lg:pb-28">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="eyebrow">{t("eyebrow")}</p>
@@ -22,7 +23,10 @@ export async function Activity() {
           </h2>
           <p className="mt-4 max-w-[56ch] text-lg text-ink-soft">{t("lead")}</p>
         </div>
-        {activity.seeded ? <p className="demo-label self-start lg:self-end">{t("seeded")}</p> : null}
+        <div className="flex items-center gap-3 self-start lg:self-end">
+          {activity.seeded ? <p className="demo-label">{t("seeded")}</p> : null}
+          <MotionToggle label={t("pause")} />
+        </div>
       </div>
       <div className="mt-10">
         <Ticker activity={activity} />

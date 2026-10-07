@@ -11,7 +11,7 @@ const linkClass = "inline-flex min-h-11 items-center text-ink-soft no-underline 
 export async function LandingFooter() {
   const t = await getTranslations("landing");
   const columns = [
-    { id: "product", links: [["#how", t("nav.how")], ["/explore", t("footer.explore")], ["#features", t("footer.features")], ["#faq", t("footer.faq")]] },
+    { id: "product", links: [["/#how", t("nav.how")], ["/explore", t("footer.explore")], ["/#features", t("footer.features")], ["/#faq", t("footer.faq")]] },
     { id: "start", links: [["/signup", t("footer.signUp")], ["/login", t("footer.logIn")], ["/verify", t("footer.verify")]] },
     { id: "about", links: [["/help", t("footer.help")], ["/legal/terms", t("footer.terms")], ["/credits", t("footer.credits")]] },
   ] as const;

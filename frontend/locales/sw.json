@@ -87,8 +87,7 @@
       "units": {
         "days": "siku",
         "hours": "saa",
-        "minutes": "dak",
-        "seconds": "sek"
+        "minutes": "dak"
       }
     },
     "how": {
@@ -161,7 +160,7 @@
       "action": "Fungua akaunti"
     },
     "footer": {
-      "note": "Mfano wa awali: kila takwimu kwenye tovuti hii ni data ya mfano iliyopandwa.",
+      "note": "Mfano wa majaribio: takwimu za bidhaa yenyewe (hatua, kaunti na niche zake) hazibadiliki; kila tatizo, Muhtasari, cheti na shughuli kwenye tovuti hii ni data ya mfano iliyopandwa.",
       "help": "Msaada",
       "terms": "Masharti",
       "product": "Huduma",
@@ -261,7 +260,7 @@
       "title": "Imejengwa kwa kaunti za Kenya",
       "lead": "Kila tatizo linaonyesha kaunti linakotoka. Yavinjari kwa mahali.",
       "all": "Gundua kaunti zote",
-      "label": "Kaunti, zinasogea polepole. Elekeza kipanya au lenga ili kusimamisha."
+      "pause": "Simamisha picha"
     },
     "reasons": {
       "eyebrow": "Gundua, imefafanuliwa",
@@ -294,16 +293,16 @@
     "activity": {
       "eyebrow": "Kwenye jukwaa",
       "title": "Kinachoendelea",
-      "lead": "Shughuli za hivi karibuni za umma: matatizo yaliyowekwa, matoleo yaliyosajiliwa, vifuatiliaji vinavyosonga.",
+      "lead": "Shughuli za hivi karibuni za umma: matatizo yaliyowekwa, matoleo yaliyosajiliwa, Muhtasari zilizofunguliwa.",
       "seeded": "Mfano uliopandwa",
-      "label": "Shughuli za hivi karibuni, zinasogea polepole. Elekeza kipanya au lenga ili kusimamisha.",
       "listLabel": "Shughuli za hivi karibuni",
       "kind": {
         "problem_posted": "Tatizo limewekwa",
         "version_registered": "Toleo limesajiliwa",
         "brief_opened": "Muhtasari umefunguliwa"
       },
-      "nationwide": "Kitaifa"
+      "nationwide": "Kitaifa",
+      "pause": "Simamisha shughuli"
     }
   },
   "fields": {
@@ -4056,7 +4055,8 @@
     "none": "Bado hakuna matatizo yaliyochapishwa.",
     "nationwide": "Kitaifa",
     "nationwideNote": "Matatizo yasiyotaja kaunti moja. Yapate kwa niche hapa chini.",
-    "seeded": "Mfano uliopandwa"
+    "seeded": "Mfano uliopandwa",
+    "noneHere": "Bado hakuna matatizo ya umma hapa."
   },
   "credits": {
     "pageTitle": "Shukrani",
@@ -4064,7 +4064,12 @@
     "lead": "Picha na fonti kwenye Wazo zinatumika chini ya leseni zake. Kila moja imetajwa hapa.",
     "photos": "Picha",
     "fonts": "Fonti",
-    "fontsBody": "Fraunces, Bricolage Grotesque, Hanken Grotesk na IBM Plex Mono, kila moja chini ya SIL Open Font License 1.1."
+    "fontsBody": "Fraunces, Bricolage Grotesque, Hanken Grotesk na IBM Plex Mono, kila moja chini ya SIL Open Font License 1.1.",
+    "attribution": "<work>{title}</work> na {author}, chini ya leseni <deed>{licence}</deed>; {changes}, kupitia Wikimedia Commons.",
+    "changes": {
+      "resized": "imepunguzwa ukubwa",
+      "croppedResized": "imekatwa na kupunguzwa ukubwa"
+    }
   },
   "og": {
     "registered": "Imesajiliwa kwenye Wazo",
