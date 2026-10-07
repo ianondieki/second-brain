@@ -36,6 +36,125 @@
         "title": "AcceptedResponse",
         "type": "object"
       },
+      "ActivityFeed": {
+        "properties": {
+          "generated_at": {
+            "description": "The platform clock when this feed was read (it is cached for 60 s)",
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "items": {
+            "description": "The 20 latest public events, newest first",
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "seeded": {
+            "description": "True when there are events and every one of them is seeded",
+            "title": "Seeded",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "generated_at",
+          "items",
+          "seeded"
+        ],
+        "title": "ActivityFeed",
+        "type": "object"
+      },
+      "ActivityItem": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "county": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The county's name, when the problem or proposal names one",
+            "title": "County"
+          },
+          "id": {
+            "description": "An opaque key for this event, stable between reads (not a record id)",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "problem_posted",
+              "version_registered",
+              "stage_reached",
+              "brief_opened"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The niche label, e.g. \"ICT › Networks & Telecommunications\"",
+            "title": "Niche"
+          },
+          "seeded": {
+            "description": "True when the demo seed wrote it (a demo deployment, or a seeded example card): label it so",
+            "title": "Seeded",
+            "type": "boolean"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The tracker's public stage name, for stage_reached only",
+            "title": "Stage"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only a title that is already public: a published problem, Brief or teaser",
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "at",
+          "county",
+          "niche",
+          "title",
+          "stage",
+          "seeded"
+        ],
+        "title": "ActivityItem",
+        "type": "object"
+      },
       "AdminNicheOut": {
         "properties": {
           "active": {
@@ -5035,6 +5154,183 @@
           "freshness"
         ],
         "title": "ExcerptOut",
+        "type": "object"
+      },
+      "Explore": {
+        "properties": {
+          "counties": {
+            "description": "Counties with problems, most first (then by name)",
+            "items": {
+              "$ref": "#/components/schemas/ExploreCounty"
+            },
+            "title": "Counties",
+            "type": "array"
+          },
+          "niches": {
+            "description": "Top-level niches with problems, most first (then by name)",
+            "items": {
+              "$ref": "#/components/schemas/ExploreNiche"
+            },
+            "title": "Niches",
+            "type": "array"
+          },
+          "seeded": {
+            "description": "True when there are problems and every one of them is seeded",
+            "title": "Seeded",
+            "type": "boolean"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/ExploreTotals"
+          }
+        },
+        "required": [
+          "totals",
+          "counties",
+          "niches",
+          "seeded"
+        ],
+        "title": "Explore",
+        "type": "object"
+      },
+      "ExploreCounty": {
+        "properties": {
+          "code": {
+            "description": "ISO 3166-2 code",
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "newest": {
+            "description": "Its three newest problems",
+            "items": {
+              "$ref": "#/components/schemas/ExploreTeaser"
+            },
+            "title": "Newest",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "count",
+          "newest"
+        ],
+        "title": "ExploreCounty",
+        "type": "object"
+      },
+      "ExploreNiche": {
+        "properties": {
+          "count": {
+            "description": "Problems in the niche or any niche under it",
+            "title": "Count",
+            "type": "integer"
+          },
+          "id": {
+            "description": "The top-level niche's id",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "newest": {
+            "description": "Its three newest problems",
+            "items": {
+              "$ref": "#/components/schemas/ExploreTeaser"
+            },
+            "title": "Newest",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "count",
+          "newest"
+        ],
+        "title": "ExploreNiche",
+        "type": "object"
+      },
+      "ExploreTeaser": {
+        "properties": {
+          "id": {
+            "description": "The problem's id",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The problem's niche label",
+            "title": "Niche"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When it was published",
+            "title": "Posted At"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "niche",
+          "posted_at"
+        ],
+        "title": "ExploreTeaser",
+        "type": "object"
+      },
+      "ExploreTotals": {
+        "properties": {
+          "counties": {
+            "description": "Counties with at least one of them",
+            "title": "Counties",
+            "type": "integer"
+          },
+          "niches": {
+            "description": "Top-level niches with at least one of them",
+            "title": "Niches",
+            "type": "integer"
+          },
+          "problems": {
+            "description": "Published problems anyone may read",
+            "title": "Problems",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "problems",
+          "counties",
+          "niches"
+        ],
+        "title": "ExploreTotals",
         "type": "object"
       },
       "FeatureOut": {
@@ -41659,6 +41955,210 @@
         "summary": "Manifest Json",
         "tags": [
           "provenance"
+        ]
+      }
+    },
+    "/api/public/activity": {
+      "get": {
+        "description": "The 20 latest public events, newest first: never a person, a handle, an organisation or private text.",
+        "operationId": "public_activity_api_public_activity_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityFeed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Public Activity",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/api/public/explore": {
+      "get": {
+        "description": "Published problems by county and by top-level niche, each with its three newest.",
+        "operationId": "public_explore_api_public_explore_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Explore"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Public Explore",
+        "tags": [
+          "public"
         ]
       }
     },
