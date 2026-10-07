@@ -33,6 +33,7 @@ from bridge.public.feed import event_id
 from tests.integration import world as w
 from tests.integration.api import make_client
 from tests.integration.engagements import tracker as t
+from tests.integration.proposals.helpers import Developers, ProposalWorld, create, draft_body, publish, rows
 from tests.integration.query_counts import statements
 from tests.integration.teams.schema_world import county, developer, organisation
 from tests.unit.public.openapi_shape import conforms
@@ -316,3 +317,45 @@ async def test_past_the_limit_an_address_gets_429(
     assert refused.headers["cache-control"] == "no-store"
     async with make_client(app_engine, ip="198.51.100.27") as other:
         assert (await other.get(EXPLORE)).status_code == 200
+
+
+async def test_a_published_proposals_new_problem_puts_its_county_on_explore(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers, proposal_world: ProposalWorld
+) -> None:
+    """Given a developer's teaser in a county that describes a new problem (as the demo seed publishes P1 and P3) and
+    another teaser with no county, When both publish, Then each new problem takes its teaser's county (none:
+    nationwide) and Explore, signed out, lists that county with the problem as its newest."""
+    tag, place = uuid7().hex[-8:], "KE-77"  # the teaser form takes KE-NN codes; no county of the seed is KE-77
+    async with owner_engine.begin() as conn:
+        kenya = "INSERT INTO regions (code, kind, name) VALUES ('KE', 'country', 'Kenya') ON CONFLICT DO NOTHING"
+        await t.run(conn, kenya)
+        await t.run(
+            conn,
+            "INSERT INTO regions (code, parent_code, kind, name) VALUES (:c, 'KE', 'county', :n)",
+            c=place,
+            n=f"P24 Seeded County {tag}",
+        )
+    owner = await developers()
+    made: dict[str | None, str] = {}
+    for county_code in (place, None):
+        body = draft_body(proposal_world, link=False, county_code=county_code)
+        body["new_problem"] = {
+            "title": f"P24 described {tag} {county_code or 'nationwide'}",
+            "statement": "Farmers lose a third of the milk before it reaches a cooler.",
+        }
+        created = await create(owner, body)
+        response = await publish(owner, created["id"])
+        assert response.status_code == 200, response.text
+        made[county_code] = response.json()["new_problem_id"]
+    filed = await rows(
+        owner_engine, "SELECT id::text, county_code FROM problems WHERE id::text = ANY(:ids)", ids=list(made.values())
+    )
+    assert {row.id: row.county_code for row in filed} == {made[place]: place, made[None]: None}
+    async with make_client(app_engine, ip="198.51.100.28") as visitor:
+        response = await visitor.get(EXPLORE)
+    assert response.status_code == 200, response.text
+    explore = response.json()
+    assert explore["counties"], "the counties list is empty"
+    [group] = [group for group in explore["counties"] if group["code"] == place]
+    assert (group["name"], group["count"]) == (f"P24 Seeded County {tag}", 1)
+    assert [teaser["id"] for teaser in group["newest"]] == [made[place]]
