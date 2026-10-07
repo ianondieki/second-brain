@@ -123,7 +123,7 @@ function OrgInboxScene() {
         <p className="text-xs leading-snug font-semibold text-ink">{s("ideaTitle")}</p>
         <p className="mt-2 flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1.5 text-xs text-ink-soft">
-            <Avatar name="Achieng Otieno" size="sm" />
+            <Avatar name="Achieng Otieno" size="sm" className="max-sm:hidden" />
             <span className="truncate">{t("from", { handle: "@achieng" })}</span>
           </span>
           <Badge tone="accent" className="text-xs!">
