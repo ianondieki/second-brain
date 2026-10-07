@@ -21,6 +21,7 @@ from bridge.config import Settings
 from bridge.crypto.envelope import KeyWrapper, key_wrapper_from_settings
 from bridge.db import create_session_factory
 from bridge.integrations.sms import SmsProvider, sms_provider_from_settings
+from bridge.llm.embeddings import Embedder
 from bridge.main import create_app
 from bridge.notifications.email import EmailProvider, provider_from_settings
 from bridge.seed.demo.data import DEMO_PASSWORD, totp_secret
@@ -87,6 +88,7 @@ class DemoRuntime:
     key_wrapper: KeyWrapper
     object_store: ObjectStore
     scanner: Scanner
+    embedder: Embedder | None = None  # the embedding step's; None: built from settings (EMBEDDER) like the job's
 
     @classmethod
     def from_settings(cls, settings: Settings) -> DemoRuntime:
@@ -107,6 +109,9 @@ class DemoReport:
     cert_ids: dict[str, str] = field(default_factory=dict)
     created: list[str] = field(default_factory=list)  # what this run added, in order
     notes: list[str] = field(default_factory=list)  # steps skipped on purpose (a flag off)
+    # P23-1: vectors the embedding job wrote in the last step, per table (derived data, not demo content: never in
+    # ``created``, so a demo people used tops up its vectors without reporting a change)
+    embedded: dict[str, int] = field(default_factory=dict)
 
     def did(self, what: str) -> None:
         self.created.append(what)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
@@ -44,8 +44,8 @@ async def test_max_rows_bounds_one_run() -> None:
 
 async def test_a_table_that_does_not_record_the_version_stalls_loudly() -> None:
     class Forgetful(InMemoryEmbeddingTable):
-        async def save(self, row_id: UUID, vector: Vector, *, model: str, version: str) -> None:
-            return None
+        async def save(self, row: StaleRow, vector: Vector, *, model: str, version: str) -> bool:
+            return True  # claims the write, records nothing
 
     table = Forgetful("broken")
     table.add(uuid4(), "text")

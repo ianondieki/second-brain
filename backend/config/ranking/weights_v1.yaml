@@ -2,9 +2,10 @@
 # 6.7). Loaded and validated by bridge/matching/ranking_config.py: a missing or unknown key, or a value out of range,
 # fails closed (the Discover and recommendation routes answer 500 rather than rank on a silent default).
 #
-# Prototype (prototype-m2-plan.md §6): computed on read in plain Python, no embeddings, no stored scores. The
-# spec's trends.recompute (02:00) and recommendations.recompute (03:00) jobs are not built; the spec's f1 (bge-m3
-# cosine) is a keyword overlap here, f4 (skill coverage) has no data yet and is left out of every score.
+# Prototype (prototype-m2-plan.md §6): computed on read in plain Python, no stored scores. The
+# spec's trends.recompute (02:00) and recommendations.recompute (03:00) jobs are not built; f1 is the cosine of the
+# profile's and the card's embeddings when both exist (P23-1), else a keyword overlap; f4 (skill coverage) has no data
+# yet and is left out of every score.
 version: 1
 
 trending:
@@ -45,7 +46,7 @@ discover:
 ranker:
   version: hybrid-v1
   weights:                    # docs/spec/06 6.7; score = 100·Σw·f / Σ|w| over the features that apply
-    semantic_fit: 0.25        # f1, with the profiling consent only (keyword overlap in the prototype)
+    semantic_fit: 0.25        # f1, profiling consent only: max(0, embedding cosine), else the keyword overlap
     niche_match: 0.15         # f2
     region_match: 0.08        # f3
     skill_coverage: 0.12      # f4, no data yet: never applies

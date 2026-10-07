@@ -32,6 +32,7 @@ IMPORT_PATHS = [
     "bridge.jobs.quiz",
     "bridge.jobs.events",
     "bridge.jobs.trends",
+    "bridge.jobs.embeddings",
 ]
 
 app = App(connector=PsycopgConnector(conninfo=conninfo()), import_paths=IMPORT_PATHS)

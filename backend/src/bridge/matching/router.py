@@ -38,9 +38,10 @@ from bridge.matching.discover_schemas import (
     TrendingOut,
 )
 from bridge.matching.ranking_config import get_ranking
-from bridge.matching.recommendations import recommendations
+from bridge.matching.recommendations import Embedding, recommendations
 from bridge.profiles import niches as liked_niches
 from bridge.profiles.models import DeveloperProfile
+from bridge.proposals.deps import EmbedderDep
 from bridge.teams.limits import spend_profile_change
 
 router = APIRouter(tags=["discover"], responses=ERROR_RESPONSES)
@@ -98,9 +99,10 @@ async def discover_briefs(
 
 
 @router.get("/api/me/recommendations")
-async def my_recommendations(live: CurrentSession, db: Db) -> RecommendationsOut:
+async def my_recommendations(live: CurrentSession, db: Db, embedder: EmbedderDep) -> RecommendationsOut:
     """Research cards and verified organisations' Briefs ranked for you, each explained."""
-    return await recommendations(db, get_ranking(), live.user.id)
+    embedding = Embedding(embedder.model, embedder.version)  # only vectors of the configured embedder are compared
+    return await recommendations(db, get_ranking(), live.user.id, embedding=embedding)
 
 
 async def _niches_out(db: Db, user_id: UUID) -> LikedNichesOut:

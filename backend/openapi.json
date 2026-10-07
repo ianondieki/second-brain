@@ -5013,6 +5013,22 @@
             "description": "The fact behind the feature (f5: the trend z-score; f6: the confidence)",
             "title": "Raw"
           },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "embedding",
+                  "keywords"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "f1 only: how it was computed (embedding or keywords); null when it does not apply",
+            "title": "Source"
+          },
           "value": {
             "anyOf": [
               {
@@ -5068,7 +5084,7 @@
           },
           "semantic_fit": {
             "$ref": "#/components/schemas/FeatureOut",
-            "description": "f1: keywords shared with your profile and proposals (consent only)"
+            "description": "f1 (consent only): the cosine of your profile's and the card's embeddings (raw; the value is max(0, raw)), else the keywords shared with your profile and proposals (raw: their count)"
           },
           "skill_coverage": {
             "$ref": "#/components/schemas/FeatureOut",
@@ -27753,7 +27769,7 @@
         ]
       },
       "put": {
-        "description": "Record decisions; each names the text version it was made on (409 if the wording changed since). A purpose\ndecided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``.",
+        "description": "Record decisions; each names the text version it was made on (409 if the wording changed since). A purpose\ndecided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``. ``profiling`` off also\nremoves the profile embedding in the same transaction (AC-PERS-3).",
         "operationId": "set_consents_api_me_consents_put",
         "requestBody": {
           "content": {
