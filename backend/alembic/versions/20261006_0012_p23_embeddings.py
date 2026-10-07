@@ -579,7 +579,8 @@ $$;
 -- Clears every vector whose text is now empty (REQ-PERS-02, REQ-EMB-01; the job calls it at the start of each run): a
 -- vector computed from text that is all gone would otherwise stay, with its model, version and hash, and the ranker
 -- would use it. Each row is locked and its text read again (the row lock first, then a fresh read, as the writers);
--- the vector, model, version, time and hash go. Returns how many profiles and problems it cleared. The worker only (no
+-- the vector, model, version, time and hash go. Returns how many profiles and problems it cleared (a row another
+-- transaction cleared or deleted while the clearer waited for it counts for nothing). The worker only (no
 -- user bound), at READ COMMITTED only.
 CREATE FUNCTION app_clear_empty_embeddings() RETURNS TABLE (profiles integer, problems integer)
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -587,6 +588,7 @@ CREATE FUNCTION app_clear_empty_embeddings() RETURNS TABLE (profiles integer, pr
 AS $$
 DECLARE
     v_id uuid;
+    v_changed integer;
     v_profiles integer := 0;
     v_problems integer := 0;
 BEGIN
@@ -605,7 +607,8 @@ BEGIN
                SET profile_embedding = NULL, embed_model = NULL, embed_version = NULL, profile_embedded_at = NULL,
                    profile_embedding_hash = NULL
              WHERE d.user_id = v_id AND d.profile_embedding IS NOT NULL;
-            v_profiles := v_profiles + 1;
+            GET DIAGNOSTICS v_changed = ROW_COUNT;  -- 0 when a withdrawal or an erasure cleared it while we waited
+            v_profiles := v_profiles + v_changed;
         END IF;
     END LOOP;
     FOR v_id IN SELECT e.id FROM public.empty_embedded_problems() AS e(id) LOOP
@@ -615,7 +618,8 @@ BEGIN
             UPDATE public.problems p
                SET embedding = NULL, embed_model = NULL, embed_version = NULL, embedded_at = NULL, embedding_hash = NULL
              WHERE p.id = v_id AND p.embedding IS NOT NULL;
-            v_problems := v_problems + 1;
+            GET DIAGNOSTICS v_changed = ROW_COUNT;
+            v_problems := v_problems + v_changed;
         END IF;
     END LOOP;
     RETURN QUERY SELECT v_profiles, v_problems;
