@@ -7,6 +7,8 @@ database of their own (the tests commit).
 Either way the profile ends without a vector while the latest decision is a withdrawal.
 - The problem writer locks the problem before it reads its state: a write racing a moderation hold in flight waits
   for it and, once it commits, writes nothing.
+- ``app_clear_empty_embeddings`` locks each row before it reads its text again: a profile or problem whose text is
+  given back while the clearer waits for it keeps its vector.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from bridge.ids import uuid7
 from tests.integration import world as w
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
 from tests.integration.embeddings.schema_world import (
+    CLEAR_EMPTY,
     CONSENT,
     MODEL,
     SET_PROBLEM,
@@ -34,6 +37,8 @@ from tests.integration.embeddings.schema_world import (
     named_niche,
     problem_text,
     profile_text,
+    set_problem,
+    set_profile,
     sha,
     vector,
 )
@@ -140,6 +145,45 @@ async def test_a_problem_write_racing_a_hold_writes_nothing_once_it_commits(url:
         async with owner.connect() as conn:
             stored = "SELECT embedding IS NULL AND embedded_at IS NULL FROM problems WHERE id = :id"
             assert (await conn.execute(sa.text(stored), {"id": issue})).scalar_one() is True
+    finally:
+        await owner.dispose()
+        await app.dispose()
+
+
+@pytest.mark.parametrize("kind", ["profile", "problem"])
+async def test_a_text_given_back_while_the_empty_clearer_waits_keeps_its_vector(url: URL, kind: str) -> None:
+    owner, app = role_engine(url, "bridge_owner"), role_engine(url, "bridge_app")
+    try:
+        user, _ = await _consented(owner)
+        async with owner.begin() as conn:
+            issue = await w.add_problem(conn, user, await named_niche(conn, "Given back"))
+            assert await set_profile(conn, user)
+            assert await set_problem(conn, issue)
+            await t.as_owner(conn)  # both texts emptied, and committed: the clearer's candidates
+            await t.run(conn, "DELETE FROM developer_niches WHERE user_id = :u", u=user)
+            await t.run(conn, "UPDATE problems SET title = ' ', statement = ' ' WHERE id = :id", id=issue)
+        give_back = {
+            "profile": ("UPDATE developer_profiles SET headline = 'Back again' WHERE user_id = :id", user),
+            "problem": ("UPDATE problems SET title = 'Back again' WHERE id = :id", issue),
+        }[kind]
+        async with owner.connect() as editor, app.connect() as worker:
+            await editor.begin()
+            await t.run(editor, give_back[0], id=give_back[1])  # holds the row lock, not yet committed
+            await worker.begin()
+            await t.act(worker, None)  # its snapshot still sees both texts empty
+            pid = await t.backend_pid(worker)
+            clearing = asyncio.create_task(worker.execute(sa.text(CLEAR_EMPTY)))
+            await t.wait_until_blocked(editor, pid, clearing)  # the clearer waits for the row
+            await editor.commit()
+            cleared = (await clearing).one()
+            await worker.commit()
+        assert tuple(cleared) == ((0, 1) if kind == "profile" else (1, 0))
+        async with owner.connect() as conn:
+            kept = {
+                "profile": "SELECT profile_embedding IS NOT NULL FROM developer_profiles WHERE user_id = :id",
+                "problem": "SELECT embedding IS NOT NULL FROM problems WHERE id = :id",
+            }[kind]
+            assert (await conn.execute(sa.text(kept), {"id": give_back[1]})).scalar_one() is True
     finally:
         await owner.dispose()
         await app.dispose()
