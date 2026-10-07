@@ -9,6 +9,7 @@ import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
 import { tourDoneFromCookies } from "@/components/tour/tour-store";
+import { tourScenes } from "@/components/tour/TourScenes";
 import { orgEngagements } from "@/components/tracker/data";
 import { NeedsYouCard } from "@/components/tracker/NeedsYouCard";
 import { standaloneLinkClass } from "@/components/ui/Button";
@@ -56,10 +57,11 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
   const mfa = me.mfa.enrolled ? "on" : setupNeeded ? "required" : "off";
   const ready = org !== null && !setupNeeded;
 
+  const tourDone = tourDoneFromCookies(await cookies(), "org");
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="home" query={query} />} wide>
       <ClientStrings strings={await clientStrings(["tour"])}>
-        <FirstLoginTour side="org" initialDone={tourDoneFromCookies(await cookies(), "org")} />
+        <FirstLoginTour side="org" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("org")} />
       </ClientStrings>
       <div className="max-w-4xl">
         <PageHeader
