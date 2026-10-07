@@ -13,7 +13,9 @@ from uuid import uuid4
 
 import pytest
 
-from bridge.llm.embeddings import FakeEmbedder, cosine, hashed_vector, vector_with_similarity
+from bridge.config import get_settings
+from bridge.llm import registry as registry_module
+from bridge.llm.embeddings import FAKE_MODEL, FakeEmbedder, cosine, hashed_vector, vector_with_similarity
 from bridge.matching.ranker import SEMANTIC_CHIP_FLOOR, SIMILAR_WORDS, Card, Developer, features, rank
 from bridge.matching.ranking_config import get_ranking
 from bridge.matching.trend_facts import ProblemFact, ProblemSignals
@@ -121,13 +123,36 @@ def test_a_similarity_that_is_not_a_number_falls_back_to_keywords() -> None:
     assert (fit.applies, fit.raw, fit.source) == (True, 3, "keywords")
 
 
-@pytest.mark.parametrize(("cosine", "chip"), [(SEMANTIC_CHIP_FLOOR, True), (0.49, False), (0.3, False), (0.95, True)])
-def test_the_similar_chip_needs_a_cosine_at_the_floor(cosine: float, chip: bool) -> None:
-    """Review round 1: below ``SEMANTIC_CHIP_FLOOR`` (0.5) f1 still counts, max(0, cosine), but the chip is not
-    offered (unrelated texts sit around 0.3 to 0.5 with bge-m3); at or above it, it is."""
-    assert SEMANTIC_CHIP_FLOOR == 0.5
-    [row] = rank([card(NEAR, cosine)], dev(), R, T, NOW)
+FLOORS = registry_module.load(get_settings().llm_models_file).embeddings
+FAKE_FLOOR, BGE_FLOOR = FLOORS.chip_floor(FAKE_MODEL), FLOORS.chip_floor("BAAI/bge-m3")
+
+
+def chip_at(cosine: float, **floor: float) -> bool:
+    [row] = rank([card(NEAR, cosine)], dev(), R, T, NOW, **floor)
     fit = row.features["semantic_fit"]
     assert (fit.applies, fit.value, fit.source) == (True, cosine, "embedding")
-    assert (SIMILAR_WORDS in row.why) is chip
     assert "Close to your profile" not in row.why  # the keyword chip never stands in for the embedding path
+    return SIMILAR_WORDS in row.why
+
+
+def test_the_configured_floors_are_the_fake_s_and_bge_m3_s() -> None:
+    """Review round 1: the floor is per embed_model in ai/models.yaml (``embeddings.chip_floors``)."""
+    assert (FAKE_FLOOR, BGE_FLOOR) == (0.3, 0.6)
+
+
+@pytest.mark.parametrize("floor", [FAKE_FLOOR, BGE_FLOOR], ids=["fake", "bge-m3"])
+def test_the_similar_chip_needs_a_cosine_at_the_configured_floor(floor: float | None) -> None:
+    """Review round 1: below the embed_model's floor f1 still counts, max(0, cosine), but the chip is not offered
+    (unrelated texts sit around 0.3 to 0.5 with bge-m3, about 0 with the bag-of-words fake); at or above it, it is."""
+    assert floor is not None
+    assert chip_at(floor, chip_floor=floor)
+    assert not chip_at(round(floor - 0.01, 2), chip_floor=floor)
+    assert chip_at(0.95, chip_floor=floor)
+    assert not chip_at(0.0, chip_floor=floor)
+
+
+@pytest.mark.parametrize(("cosine", "chip"), [(SEMANTIC_CHIP_FLOOR, True), (SEMANTIC_CHIP_FLOOR - 0.01, False)])
+def test_a_model_without_a_floor_uses_the_default(cosine: float, chip: bool) -> None:
+    assert SEMANTIC_CHIP_FLOOR == 0.5
+    assert FLOORS.chip_floor("another-model") is None
+    assert chip_at(cosine) is chip

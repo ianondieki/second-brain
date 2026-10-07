@@ -25,6 +25,7 @@ import math
 import re
 import threading
 import unicodedata
+from array import array
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -104,9 +105,13 @@ def tokens(text: str) -> list[str]:
     return [t for t in _TOKEN.findall(normalise_text(text)) if len(t) >= MIN_TOKEN_CHARS and t not in STOP_WORDS]
 
 
-@functools.lru_cache(maxsize=8192)
-def _token_vector(token: str, dim: int) -> tuple[float, ...]:
-    return tuple(hashed_vector(token, dim))
+TOKEN_CACHE_SIZE = 1024  # token directions kept per process: 8 KB each as packed doubles, about 8 MB when full
+
+
+@functools.lru_cache(maxsize=TOKEN_CACHE_SIZE)
+def _token_vector(token: str, dim: int) -> bytes:
+    """``hashed_vector(token)`` as packed native doubles: immutable, about 8 KB (a float tuple is about 33 KB)."""
+    return array("d", hashed_vector(token, dim)).tobytes()
 
 
 def bag_of_words_vector(text: str, dim: int = EMBED_DIM) -> Vector:
@@ -122,10 +127,13 @@ def bag_of_words_vector(text: str, dim: int = EMBED_DIM) -> Vector:
     counts: dict[str, int] = {}
     for token in tokens(text):
         counts[token] = counts.get(token, 0) + 1
+    # Portability: tokens are summed in first-occurrence order (dict order) and each component left to right, so
+    # the float sums are reproducible; the norm uses ``fsum`` (correctly rounded). ``math.log`` is the one libm call
+    # (only for a repeated word) and is pinned by a golden test (tests/unit/llm/test_embeddings_bow.py).
     total = [0.0] * dim
     for token, tf in counts.items():
         weight = 1.0 + math.log(tf)
-        for i, x in enumerate(_token_vector(token, dim)):
+        for i, x in enumerate(memoryview(_token_vector(token, dim)).cast("d")):
             total[i] += weight * x
     norm = math.sqrt(math.fsum(x * x for x in total))
     if not counts or norm == 0 or not math.isfinite(norm):

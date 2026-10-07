@@ -28,6 +28,7 @@ from fastapi import APIRouter, Query
 from bridge import pagination
 from bridge.auth.deps import CurrentSession, Db, SettingsDep
 from bridge.errors import ERROR_RESPONSES, not_found
+from bridge.llm import registry as registry_module
 from bridge.matching import discover
 from bridge.matching.discover_schemas import (
     DiscoverBriefsOut,
@@ -37,6 +38,7 @@ from bridge.matching.discover_schemas import (
     RecommendationsOut,
     TrendingOut,
 )
+from bridge.matching.ranker import SEMANTIC_CHIP_FLOOR
 from bridge.matching.ranking_config import get_ranking
 from bridge.matching.recommendations import Embedding, recommendations
 from bridge.profiles import niches as liked_niches
@@ -99,9 +101,13 @@ async def discover_briefs(
 
 
 @router.get("/api/me/recommendations")
-async def my_recommendations(live: CurrentSession, db: Db, embedder: EmbedderDep) -> RecommendationsOut:
+async def my_recommendations(
+    live: CurrentSession, db: Db, embedder: EmbedderDep, settings: SettingsDep
+) -> RecommendationsOut:
     """Research cards and verified organisations' Briefs ranked for you, each explained."""
-    embedding = Embedding(embedder.model, embedder.version)  # only vectors of the configured embedder are compared
+    floor = registry_module.load(settings.llm_models_file).embeddings.chip_floor(embedder.model)
+    # only vectors of the configured embedder are compared; its chip floor comes from ai/models.yaml
+    embedding = Embedding(embedder.model, embedder.version, SEMANTIC_CHIP_FLOOR if floor is None else floor)
     return await recommendations(db, get_ranking(), live.user.id, embedding=embedding)
 
 

@@ -43,9 +43,10 @@ F1Source = Literal["embedding", "keywords"]
 TRENDING_WORDS: Final = "Trending in its niche"
 RISING_WORDS: Final = "Rising in its niche"
 SIMILAR_WORDS: Final = "Similar to your profile"  # [[COPY-REVIEW]] f1's chip on the embedding path
-# The cosine from which the embedding path says "Similar to your profile" (review round 1): below it f1 still counts,
-# max(0, cosine), but no chip; unrelated texts sit around 0.3 to 0.5 with bge-m3 and near 0 with the fake. The
-# per-model value is the owner's decision (DECISIONS-NEEDED.md); a constant here, not a ranking weight.
+# The default cosine from which the embedding path says "Similar to your profile" (review round 1): below it f1 still
+# counts, max(0, cosine), but no chip. The floor is per embed_model in ai/models.yaml (``embeddings.chip_floors``):
+# unrelated texts score about 0.3 to 0.5 with bge-m3, while with the bag-of-words fake unrelated texts score about 0 to
+# 0.06 and related demo texts about 0.3 to 0.45. This default applies only to a model without a configured floor.
 SEMANTIC_CHIP_FLOOR: Final = 0.5
 DECISION_LABELS: Final[Mapping[Decision, str]] = {"pursue": "Pursue", "consider": "Consider", "not_now": "Not now"}
 _WORD: Final = re.compile(r"[a-z0-9]+")
@@ -227,14 +228,16 @@ def why_chips(
     trend: TrendConfig,
     dev: Developer,
     exclude: frozenset[str] = frozenset(),
+    chip_floor: float = SEMANTIC_CHIP_FLOOR,
 ) -> list[str]:
     """The top positive contributions, each only when its fact holds ([[COPY-REVIEW]] the chips). f1's chip names its
-    source: "Similar to your profile" on the embedding path, only from a cosine of ``SEMANTIC_CHIP_FLOOR``; on the
+    source: "Similar to your profile" on the embedding path, only from a cosine of ``chip_floor`` (the embed_model's
+    configured floor, else ``SEMANTIC_CHIP_FLOOR``); on the
     keyword path the developer's past proposals when a shared keyword comes from one, else their profile. A chip that
     repeats one of the pursuit reasons (``exclude``) gives its place to the next."""
     v = {name: (ft.value or 0.0) if ft.applies else 0.0 for name, ft in feats.items()}
     if feats["semantic_fit"].source == "embedding":
-        fit, fit_holds = SIMILAR_WORDS, (feats["semantic_fit"].raw or 0.0) >= SEMANTIC_CHIP_FLOOR
+        fit, fit_holds = SIMILAR_WORDS, (feats["semantic_fit"].raw or 0.0) >= chip_floor
     else:
         card_words = keywords(f"{card.fact.title} {card.fact.statement}", cfg.min_keyword_length)
         fit = "Close to your past proposals" if card_words & dev.proposal_keywords else "Close to your profile"
@@ -311,8 +314,17 @@ def _mmr(pool: Sequence[Ranked], slots: int, cfg: RankerConfig, taken: Counter[U
     return chosen
 
 
-def rank(cards: Sequence[Card], dev: Developer, cfg: RankerConfig, trend: TrendConfig, now: datetime) -> list[Ranked]:
-    """The top ``top_n`` recommendations, deterministic for the same facts."""
+def rank(
+    cards: Sequence[Card],
+    dev: Developer,
+    cfg: RankerConfig,
+    trend: TrendConfig,
+    now: datetime,
+    *,
+    chip_floor: float = SEMANTIC_CHIP_FLOOR,
+) -> list[Ranked]:
+    """The top ``top_n`` recommendations, deterministic for the same facts. ``chip_floor``: the embedder's floor for
+    the "Similar to your profile" chip (``embeddings.chip_floors``)."""
     scored = []
     for card in cards:
         if card.fact.source not in RECOMMENDABLE:
@@ -329,7 +341,7 @@ def rank(cards: Sequence[Card], dev: Developer, cfg: RankerConfig, trend: TrendC
                 features=feats,
                 decision=decision,
                 reasons=tuple(reasons),
-                why=tuple(why_chips(card, feats, cfg, trend, dev, frozenset(reasons))),
+                why=tuple(why_chips(card, feats, cfg, trend, dev, frozenset(reasons), chip_floor)),
                 why_not=why_not(card, feats, dev, cfg),
             )
         )
