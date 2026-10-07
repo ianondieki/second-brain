@@ -560,6 +560,12 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_problems_to_embed(text, text, integer)": (True, {"bridge_app"}),
     "app_set_problem_embedding(uuid, vector, text, text, text)": (True, {"bridge_app"}),
     "app_stale_embedding_counts(text, text)": (True, {"bridge_app"}),
+    "app_clear_empty_embeddings()": (True, {"bridge_app"}),
+    "embedding_is_stale(boolean, text, text, text, text, text, text)": (False, set()),
+    "profile_embedding_candidates()": (False, set()),
+    "problem_embedding_candidates()": (False, set()),
+    "empty_embedded_profiles()": (False, set()),
+    "empty_embedded_problems()": (False, set()),
     "embedding_label_is_valid(text, integer)": (False, set()),
     "embedding_text_line(text)": (False, set()),
     "embedding_text_hash(text)": (False, set()),
@@ -1700,6 +1706,7 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
                 ("SELECT app_set_profile_embedding(:id, NULL, 'm', 'v', 'h')", "the embedding worker only"),
                 ("SELECT app_set_problem_embedding(:id, NULL, 'm', 'v', 'h')", "the embedding worker only"),
                 ("SELECT * FROM app_stale_embedding_counts()", "the embedding worker only"),
+                ("SELECT * FROM app_clear_empty_embeddings()", "the embedding worker only"),
                 ("SELECT app_clear_profile_embedding(uuid7())", "the caller's own profile"),
             ):
                 await expect_error(conn, call, refusal, {"id": user_id})

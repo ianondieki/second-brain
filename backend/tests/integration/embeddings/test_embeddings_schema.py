@@ -31,6 +31,7 @@ from bridge.ids import uuid7
 from tests.integration import world as w
 from tests.integration.embeddings.schema_world import (
     CLEAR,
+    CLEAR_EMPTY,
     COUNTS,
     EMPTY_PROBLEM,
     EMPTY_PROFILE,
@@ -787,3 +788,70 @@ async def test_the_counts_follow_the_readers(owner_engine: AsyncEngine) -> None:
         assert await set_profile(conn, user)
         assert await set_problem(conn, issue)
         assert await counts() == base
+
+
+async def test_vectors_whose_text_became_empty_are_counted_and_cleared(owner_engine: AsyncEngine) -> None:
+    """Given an embedded developer and an embedded problem, When everything their texts are made of is removed (the
+    headline, bio, liked niche and published proposal; the problem's title and statement), Then neither is listed, both
+    are counted, and app_clear_empty_embeddings clears their vector, model, version, time and hash and says so (review
+    MAJOR, round 3); a vector whose text is not empty stays; a bound session and a transaction above READ COMMITTED
+    are refused."""
+    async with t.as_app(owner_engine) as conn:
+        emptied, kept = await consented(conn, "emptied"), await consented(conn, "kept")
+        topic = await niche(conn, "emptied-proposal")
+        await proposal(conn, emptied, topic, title="Teaser", statement="Statement")
+        issue = await w.add_problem(conn, emptied, topic)
+        for user in (emptied, kept):
+            assert await set_profile(conn, user)
+        assert await set_problem(conn, issue)
+
+        async def counts() -> tuple[int, int]:
+            await t.act(conn, None)
+            row = (await conn.execute(sa.text(COUNTS), {"model": MODEL, "version": VERSION})).one()
+            return int(row.profiles), int(row.problems)
+
+        before = await counts()
+        await t.as_owner(conn)
+        await t.run(conn, "UPDATE developer_profiles SET headline = ' ', bio = NULL WHERE user_id = :u", u=emptied)
+        await t.run(conn, "DELETE FROM developer_niches WHERE user_id = :u", u=emptied)
+        await t.run(conn, "UPDATE proposals SET status = 'hidden', hidden_at = now() WHERE owner_id = :u", u=emptied)
+        await t.run(conn, "UPDATE problems SET title = ' ', statement = E'\\n' WHERE id = :id", id=issue)
+        assert await profile_text(conn, emptied) == ""
+        assert await listed(conn, emptied, kept) == set()
+        assert issue not in {row.id for row in await problems(conn)}
+        assert await counts() == (before[0] + 1, before[1] + 1)
+        await t.act(conn, emptied)
+        await refused(conn, CLEAR_EMPTY, WORKER_ONLY, DENIED)
+        await t.act(conn, None)
+        cleared = (await conn.execute(sa.text(CLEAR_EMPTY))).one()
+        assert cleared.profiles >= 1
+        assert cleared.problems >= 1
+        assert await stored_profile(conn, emptied) == EMPTY_PROFILE
+        assert await stored_problem(conn, issue) == EMPTY_PROBLEM
+        assert (await stored_profile(conn, kept))["first"] == 1.0
+        assert await counts() == before  # everything else the clearer cleared was counted before too
+        await t.act(conn, None)
+        assert tuple((await conn.execute(sa.text(CLEAR_EMPTY))).one()) == (0, 0)
+
+
+async def test_the_empty_clearer_runs_at_read_committed_only(owner_engine: AsyncEngine) -> None:
+    """Given a transaction at REPEATABLE READ, When the worker clears empty vectors, Then it is refused
+    (invalid_transaction_state), as the writers are."""
+    async with t.as_app(owner_engine) as conn:
+        await t.run(conn, "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        await t.act(conn, None)
+        await refused(conn, CLEAR_EMPTY, "must run at READ COMMITTED isolation, not REPEATABLE READ", "25000")
+
+
+async def test_erasing_a_developer_with_a_vector_and_niches_cascades(owner_engine: AsyncEngine) -> None:
+    """Given a developer with a profile, a stored vector, liked and followed niches and consent decisions, When their
+    account is deleted (the owner's erasure), Then the cascade removes the profile, the niches and the decisions."""
+    async with t.as_app(owner_engine) as conn:
+        liked, followed = await niche(conn, "cascade-liked"), await niche(conn, "cascade-followed")
+        user = await developer(conn, "cascade", peers=False, liked=(liked,), followed=(followed,))
+        await decide(conn, user, True)
+        assert await set_profile(conn, user)
+        await t.as_owner(conn)
+        await t.run(conn, "DELETE FROM users WHERE id = :u", u=user)
+        for table in ("developer_profiles", "developer_niches", "consents"):
+            assert await t.run(conn, f"SELECT count(*) FROM {table} WHERE user_id = :u", u=user) == 0, table

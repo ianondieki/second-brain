@@ -25,6 +25,7 @@ SET_PROFILE = "SELECT app_set_profile_embedding(:user, CAST(:vector AS vector), 
 SET_PROBLEM = "SELECT app_set_problem_embedding(:problem, CAST(:vector AS vector), :model, :version, :text_hash)"
 CLEAR = "SELECT app_clear_profile_embedding(:user)"
 COUNTS = "SELECT profiles, problems FROM app_stale_embedding_counts(:model, :version)"
+CLEAR_EMPTY = "SELECT profiles, problems FROM app_clear_empty_embeddings()"
 WORKER_ONLY = "the embedding worker only, with no user bound"
 CONSENT = (
     "INSERT INTO consents (id, user_id, purpose, granted, text_version, text_sha256, source)"
