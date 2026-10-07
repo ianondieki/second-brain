@@ -29,7 +29,8 @@
     "reviewP22b": "[[COPY-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61): week.* (Home's This week strip, /dev/week, the event page with Remind me and Add to calendar, the trend page; week.trend.label.* follow problem.label.*), nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; the field sentences of eventForm.fieldError.* follow the backend's own (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed (the reminder email carries none)",
     "reviewP23b": "[[COPY-REVIEW]] P23-2 (REQ-UX-01, REQ-UX-03; D-52, D-65): tour.back, tour.pause (the slide show's controls; Pause is a toggle whose icon shows the state), tour.step (a step's dot), tour.stepLabel (what a screen reader hears when the step changes); landing.trust.* (the strip under the hero: four of the product's existing truths, restated from landing.lead, landing.who.organisations.point2, landing.faq.verified.a (\"Proposals go only to verified organisations\") and landing.how.stagesTitle; no figures, no names)",
     "reviewP22c": "[[COPY-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62): teams.* (Home's Peers section, /dev/peers, /dev/teams, the team-up thread page), teamUp.* (the peers list, the Team up sheet, invitations, the thread's menu, the contributor sheet and credits), profileSettings.* (Settings > Profile with the Visible to peers sentence the task card fixes), settingsNav.profile, ideaContributors.*, ideas.contributorsLine and ideas.sheet.contributors (D-62 (a): handles only, nothing about shares); the copy says team up, invitation and contributor, never friend, match or connect; the engagement thread's own sentences (trackerMessages.*) serve the team thread's messages and composer; trackerMessages.refusal.attachFailed (the composer's files could not load)",
-    "reviewP23c": "[[COPY-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01): countdown.* (the deadline countdown on Home's Next deadline tile and Needs you card, the tracker's deadline and a Brief's Proposals wanted by line: the figure from its largest unit down in words, days with an ICU plural, h and min kept short (countdown.days, .hours, .minutes, each the whole figure so no words are joined in code); countdown.in (\"in {time}\", Home), countdown.dueIn (\"Due {date} · in {time}\", the tracker's one deadline line), countdown.closesIn (\"Proposals close in {time}\") and countdown.at (the full instant in Nairobi time, the time element's title)); past the instant the existing words stay (devHome.stats.deadlineOverdue, tracker.deadline.was, briefs.state.closed); trackerActions.partFailed and .partReload (a part of the tracker whose code did not load: the share, the contact reveal, the code form)"
+    "reviewP23c": "[[COPY-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01): countdown.* (the deadline countdown on Home's Next deadline tile and Needs you card, the tracker's deadline and a Brief's Proposals wanted by line: the figure from its largest unit down in words, days with an ICU plural, h and min kept short (countdown.days, .hours, .minutes, each the whole figure so no words are joined in code); countdown.in (\"in {time}\", Home), countdown.dueIn (\"Due {date} · in {time}\", the tracker's one deadline line), countdown.closesIn (\"Proposals close in {time}\") and countdown.at (the full instant in Nairobi time, the time element's title)); past the instant the existing words stay (devHome.stats.deadlineOverdue, tracker.deadline.was, briefs.state.closed); trackerActions.partFailed and .partReload (a part of the tracker whose code did not load: the share, the contact reveal, the code form)",
+    "reviewP24": "[[COPY-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66): landing.eyebrow, landing.title (the italic accent phrase, its accent tag), landing.sample.demo/due/dueWords/units.*, landing.stats.* (product constants: 5 tracker stages, 47 counties, 16 niches in seed/reference.yaml, 0 contact details before an NDA), landing.counties.*, landing.how.eyebrow/title and the three mono chips (landing.how.*.chip), landing.reasons.* (the values.* are the ranker's own English chip texts, bridge/matching/ranker.py, shown as a seeded example), landing.activity.*, landing.nav.explore, landing.footer.explore/credits, explore.*, credits.*, home.greeting (by the hour of the app clock in Nairobi), og.* (share cards); removed with the strip and the sides panels: landing.trust.*, landing.who.*, landing.nav.organisations, landing.sample.label"
   },
   "app": {
     "name": "Wazo",
@@ -65,7 +66,7 @@
     "track": "Both sides follow one shared tracker, from the first look to an agreed next step."
   },
   "landing": {
-    "title": "Local solutions for the organisations that need them",
+    "title": "Local solutions for the organisations <accent>that need them</accent>",
     "lead": "Developers publish solutions to real problems, with timestamped evidence of what they submitted. Organisations review them under NDA and agree the next step, and both sides follow the same tracker.",
     "signUp": "Create an account",
     "logIn": "Log in",
@@ -80,28 +81,33 @@
       "matchWhy": "Why: in a niche you like",
       "certTitle": "Certificate of authorship",
       "certStatus": "Timestamped",
-      "label": "Illustrative example"
-    },
-    "trust": {
-      "timestamped": "Every version timestamped",
-      "nda": "Full details under one Evaluation NDA",
-      "verified": "Proposals go only to verified organisations",
-      "tracker": "One tracker for both sides"
+      "demo": "Demo data",
+      "due": "Next step due in",
+      "dueWords": "2 days 14 hours left (example)",
+      "units": {
+        "days": "days",
+        "hours": "hrs",
+        "minutes": "min",
+        "seconds": "sec"
+      }
     },
     "how": {
-      "title": "How it works",
+      "title": "From an idea to a signed agreement, in three steps",
       "lead": "Publish once. Then one tracker carries both sides from the first look to a closed project.",
       "publish": {
         "title": "Publish an idea",
-        "body": "Write a public teaser and the confidential details. Each version is registered with a timestamp and a fingerprint."
+        "body": "Write a public teaser and the confidential details. Each version is registered with a timestamp and a fingerprint.",
+        "chip": "version 1 · timestamped · SHA-256"
       },
       "review": {
         "title": "Reviewed under NDA",
-        "body": "Full details are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass. Every opening is recorded, and you can see who looked."
+        "body": "Full details are shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass. Every opening is recorded, and you can see who looked.",
+        "chip": "Evaluation NDA · every opening recorded"
       },
       "track": {
         "title": "Agree the next step",
-        "body": "Interest, contact, agreement, implementation and close: both sides follow the same five stages, with deadlines and reminders."
+        "body": "Interest, contact, agreement, implementation and close: both sides follow the same five stages, with deadlines and reminders.",
+        "chip": "5 stages · one tracker for both sides"
       },
       "stagesTitle": "One tracker, both sides",
       "stagesLead": "The same five stages on both screens, with whose turn it is and what is due.",
@@ -126,24 +132,8 @@
           "title": "Close",
           "body": "The project closes and the history stays with both sides."
         }
-      }
-    },
-    "who": {
-      "title": "Who it is for",
-      "developers": {
-        "title": "For developers",
-        "point1": "Register what you built, with evidence of when.",
-        "point2": "Pitch to companies that work on your problem, or let their scouts find you.",
-        "point3": "See who opened your full proposal, and where each conversation stands.",
-        "action": "Start as a developer"
       },
-      "organisations": {
-        "title": "For organisations",
-        "point1": "A scout agent brings proposals that match your problems to your inbox.",
-        "point2": "Open full proposals under one Evaluation NDA, with a record of who looked.",
-        "point3": "Take a proposal from first look to a signed agreement in one tracker.",
-        "action": "Start as an organisation"
-      }
+      "eyebrow": "How it works"
     },
     "proof": {
       "title": "Proof of authorship, not a promise",
@@ -181,13 +171,15 @@
       "faq": "Questions",
       "signUp": "Create an account",
       "logIn": "Log in",
-      "verify": "Check a certificate"
+      "verify": "Check a certificate",
+      "explore": "Explore",
+      "credits": "Credits"
     },
     "nav": {
       "label": "On this page",
       "how": "How it works",
-      "organisations": "For organisations",
-      "verify": "Check a certificate"
+      "verify": "Check a certificate",
+      "explore": "Explore"
     },
     "hero": {
       "check": "Check a certificate"
@@ -255,6 +247,64 @@
         "q": "Is this the live service?",
         "a": "Not yet. This is a prototype with seeded example data: nothing is paid for, and no email leaves the demo."
       }
+    },
+    "eyebrow": "For developers and organisations in Kenya",
+    "stats": {
+      "label": "The product in four figures",
+      "stages": "Stages on one tracker",
+      "counties": "Counties Wazo knows",
+      "niches": "Niches to follow",
+      "nda": "Contact details shared before an NDA"
+    },
+    "counties": {
+      "eyebrow": "Where the problems come from",
+      "title": "Built for Kenya's counties",
+      "lead": "Every problem carries the county it comes from. Browse them by place.",
+      "all": "Explore all counties",
+      "label": "Counties, moving slowly. Hover or focus to pause."
+    },
+    "reasons": {
+      "eyebrow": "Discover, explained",
+      "title": "Every recommendation names its reason",
+      "lead": "Discover ranks problems for you with a fixed set of rules. Each card says why it is there, and what counts against it, in plain words.",
+      "point1": "Reasons come from your niches, your county and public facts",
+      "point2": "Your own history counts only with your consent",
+      "point3": "Nothing here predicts revenue or profit",
+      "panelTitle": "Why this card",
+      "seeded": "Seeded example",
+      "footer": "Written by rules in code, not by a language model",
+      "keys": {
+        "card": "card",
+        "decision": "decision",
+        "reason": "reason",
+        "why": "why",
+        "whyNot": "why not"
+      },
+      "values": {
+        "card": "Late diesel deliveries darken tower sites",
+        "decision": "Pursue",
+        "reason": "Organisations are looking for this",
+        "why1": "In a niche you like",
+        "why2": "Posted by a verified organisation",
+        "why3": "New this week",
+        "whyNot": "2 proposals already",
+        "fit": "Strong fit for you"
+      }
+    },
+    "activity": {
+      "eyebrow": "On the platform",
+      "title": "What's happening",
+      "lead": "The latest public activity: problems posted, versions registered, trackers moving on.",
+      "seeded": "Seeded example",
+      "label": "Recent activity, moving slowly. Hover or focus to pause.",
+      "listLabel": "Recent activity",
+      "kind": {
+        "problem_posted": "Problem posted",
+        "version_registered": "Version registered",
+        "stage_reached": "A tracker reached {stage}",
+        "brief_opened": "Brief opened"
+      },
+      "nationwide": "Nationwide"
     }
   },
   "fields": {
@@ -437,7 +487,12 @@
     "mfaRequired": "Two-step sign-in is off. Your role needs it, and it takes about two minutes to turn on.",
     "turnOn": "Turn on two-step sign-in",
     "manage": "Manage two-step sign-in",
-    "setUp": "Set up two-step sign-in"
+    "setUp": "Set up two-step sign-in",
+    "greeting": {
+      "morning": "Good morning, {name}",
+      "afternoon": "Good afternoon, {name}",
+      "evening": "Good evening, {name}"
+    }
   },
   "legal": {
     "termsTitle": "Terms of service",
@@ -3985,5 +4040,35 @@
     "dueIn": "Due {date} · in {time}",
     "closesIn": "Proposals close in {time}",
     "at": "{date}, {time} EAT"
+  },
+  "explore": {
+    "pageTitle": "Explore",
+    "eyebrow": "Public problems",
+    "title": "Problems across Kenya",
+    "lead": "Published problems by county and by niche. Open one to read it, or create an account to answer it.",
+    "signUp": "Create an account",
+    "totals": "{problems, plural, one {# problem} other {# problems}} in {counties, plural, one {# county} other {# counties}} and {niches, plural, one {# niche} other {# niches}}",
+    "counties": "By county",
+    "niches": "By niche",
+    "count": "{count, plural, one {# problem} other {# problems}}",
+    "newest": "Newest in {place}",
+    "empty": "Explore cannot load the published problems right now.",
+    "emptyAction": "Back to the home page",
+    "none": "No published problems yet."
+  },
+  "credits": {
+    "pageTitle": "Credits",
+    "title": "Credits",
+    "lead": "The photographs and typefaces on Wazo are used under their licences. Each is credited here.",
+    "photos": "Photographs",
+    "photosNone": "The photographs are being added.",
+    "fonts": "Typefaces",
+    "fontsBody": "Fraunces, Bricolage Grotesque, Hanken Grotesk and IBM Plex Mono, each under the SIL Open Font License 1.1."
+  },
+  "og": {
+    "registered": "Registered on Wazo",
+    "certificate": "Certificate {certId}",
+    "alt": "{title}, on Wazo",
+    "verifyAlt": "Certificate {certId}, registered on Wazo"
   }
 }

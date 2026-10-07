@@ -4,24 +4,28 @@ import { getTranslations } from "next-intl/server";
 import { TopBar } from "@/components/TopBar";
 import { standaloneLinkClass } from "@/components/ui/Button";
 
+import { Suspense } from "react";
+
+import { Activity } from "./Activity";
 import { Closing } from "./Closing";
+import { Counties } from "./Counties";
 import { Features } from "./Features";
 import { Hero } from "./Hero";
 import { HowItWorks } from "./HowItWorks";
 import { LandingFooter } from "./LandingFooter";
 import { Proof } from "./Proof";
 import { Questions } from "./Questions";
-import { Sides } from "./Sides";
-import { Trust } from "./Trust";
+import { Reasons } from "./Reasons";
 
 const sectionLink =
   "inline-flex min-h-11 items-center rounded-full px-4 font-semibold text-ink-soft no-underline hover:bg-wash-soft hover:text-ink";
 
 /**
- * The landing page (D-55, Jacaranda): the night hero with the product, the strip of what every proposal carries, how it works with the tracker's five stages,
- * who it is for, what you can do, proof of authorship with a certificate check, questions, the closing call and the
- * footer. No data read and no script of its own: the page only decides the redirect of a signed-in person. Nothing
- * here claims protection or figures; every product picture is labelled example data.
+ * The landing page (D-66, "Jacaranda in print"): the hero on paper with the product panel and the stats row of
+ * product constants, the county strip, how it works in three numbered steps, the night band with the ranker's
+ * reasons, what you can do, what's happening (the public activity feed, left out when it cannot be read; streamed, so
+ * the page never waits on it), proof of authorship with a certificate check, questions, the closing call and the
+ * footer. Nothing here claims protection or a usage figure; every product picture is labelled example data.
  */
 export async function LandingContent() {
   const t = await getTranslations("landing");
@@ -36,9 +40,9 @@ export async function LandingContent() {
               </a>
             </li>
             <li className="hidden lg:block">
-              <a href="#organisations" className={sectionLink}>
-                {t("nav.organisations")}
-              </a>
+              <Link href="/explore" className={sectionLink}>
+                {t("nav.explore")}
+              </Link>
             </li>
             <li className="hidden lg:block">
               <Link href="/verify" className={sectionLink}>
@@ -55,10 +59,13 @@ export async function LandingContent() {
       </TopBar>
       <main id="main" tabIndex={-1} className="focus:outline-none">
         <Hero />
-        <Trust />
+        <Counties />
         <HowItWorks />
-        <Sides />
+        <Reasons />
         <Features />
+        <Suspense fallback={null}>
+          <Activity />
+        </Suspense>
         <Proof />
         <Questions />
         <Closing />
