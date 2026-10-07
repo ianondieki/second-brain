@@ -10,6 +10,7 @@ Nothing in a response carries a score, Tier-2 text or another owner's text.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import timedelta
 from typing import Any
@@ -20,7 +21,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge import clock
-from bridge.llm.embeddings import FAKE_MODEL
+from bridge.llm.embeddings import FAKE_MODEL, FakeEmbedder, vector_with_similarity
 from bridge.llm.errors import LLMConfigError
 from bridge.proposals import originality, originality_explainer
 from bridge.proposals.assistant import InFlight
@@ -41,12 +42,23 @@ PATH = "/api/me/proposals/{}/originality"
 SENTENCE = "Both teasers are about keeping water flowing to villages when pumps fail."
 
 
+def coined(tag: str, index: int) -> str:
+    """A made-up six-letter word, the same for the same tag and index."""
+    digest = hashlib.sha256(f"{tag}:{index}".encode()).digest()
+    return "".join("bdfgklmnprstvz"[digest[i] % 14] + "aeiou"[digest[i + 1] % 5] for i in (0, 2, 4))
+
+
 def unique_teaser(tag: str) -> dict[str, Any]:
+    """A teaser whose words, stop words aside, are coined from ``tag``: two tags share no token and no shingle, so the
+    fake embedder's bag-of-words vectors of two of them are near-orthogonal (REQ-EMB-01) and only the same tag
+    overlaps, whatever the other tests have published."""
+    w = [coined(tag, i) for i in range(21)]
     return {
-        "title": f"Borehole uptime {tag}",
-        "problem_statement": f"Borehole pumps in {tag} villages fail and nobody hears of it for weeks at a time.",
-        "impact_claims": f"Water back within two days for {tag} households.",
-        "summary": f"Village water committees in {tag} get a text when a borehole pump stops, so repairs start sooner.",
+        "title": f"{w[0].title()} {w[1]} for {tag}",
+        "problem_statement": f"The {w[2]} {w[3]} in {tag} {w[4]} and the {w[5]} {w[6]} for {w[7]} at a {w[8]}.",
+        "impact_claims": f"{w[9].title()} {w[10]} for {tag} {w[11]}.",
+        "summary": f"The {w[12]} {w[13]} in {tag} {w[14]} a {w[15]} when a {w[16]} {w[17]},"
+        f" so {w[18]} {w[19]} {w[20]}.",
     }
 
 
@@ -218,10 +230,11 @@ async def test_a_running_check_answers_busy_and_a_new_day_starts_afresh(
 async def test_a_near_copy_is_found_through_the_stored_buckets(
     developers: Developers, proposal_world: ProposalWorld
 ) -> None:
-    """The fake embedder puts the two texts far apart, so only the LSH buckets in the database can find the copy."""
+    """The submitter's embedder is pinned to put the two texts far apart (the bag-of-words fake would put them close),
+    so only the LSH buckets in the database can find the copy."""
     author, submitter = await developers(), await developers()
     teaser = unique_teaser("Lodwar")  # fixed text: the bucket overlap below is a fact, not a chance
-    near = {**teaser, "summary": teaser["summary"].replace("repairs start sooner", "repairs begin sooner")}
+    near = {**teaser, "summary": " ".join([*teaser["summary"].split()[:-1], "sooner."])}
     theirs, mine = (originality.shingles(originality.submission_text(t)) for t in (teaser, near))
     assert 0.8 <= originality.jaccard(theirs, mine) < 1.0
     assert set(originality.lsh_bands(originality.signature(theirs))) & set(
@@ -230,6 +243,9 @@ async def test_a_near_copy_is_found_through_the_stored_buckets(
     install(author, provider="fake")
     await published(author, proposal_world, **teaser)
     install(submitter, provider="fake")
+    published_vector = FakeEmbedder().vector_for(originality.submission_text(teaser))
+    apart = vector_with_similarity(published_vector, 0.0)
+    submitter.app.state.embedder = FakeEmbedder({originality.submission_text(near): apart})  # type: ignore[attr-defined]
     proposal_id = await new_draft(submitter, proposal_world, **near)
     body = (await check(submitter, proposal_id)).json()
     assert body["band"] == "high_overlap"
