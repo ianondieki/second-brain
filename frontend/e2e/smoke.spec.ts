@@ -63,11 +63,16 @@ test("the landing's P24 sections, Explore, Credits and the manifest", async ({ p
   await expect(page.locator("[data-count-up] dd .sr-only")).toHaveText(["5", "47", "16", "0"]);
   // The strip's first copy is the one the keyboard reaches; the second is hidden from it.
   const kisumu = page.locator(".pan-row").first().getByRole("link", { name: "Kisumu" });
-  await expect(kisumu).toHaveAttribute("href", "/explore#kisumu");
+  await expect(kisumu).toHaveAttribute("href", "/explore#KE-17"); // the county's reference code, Explore's anchor
   await expect(page.locator(".pan-row").nth(1)).toHaveAttribute("aria-hidden", "true");
   // What's happening is there when the feed answers, labelled when seeded; the page stands without it.
   const activity = page.locator("[data-activity]");
-  if (await activity.count()) await expect(activity.getByRole("region")).toHaveAttribute("tabindex", "0");
+  if (await activity.count()) await expect(activity.getByRole("button", { name: "Pause the activity" })).toHaveAttribute("aria-pressed", "false");
+  // The strip pauses with its button (touch has no hover).
+  const pause = page.getByRole("button", { name: "Pause the photographs" });
+  await pause.click();
+  await expect(pause).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".pan-track")).toHaveCSS("animation-play-state", "paused");
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await checkScreen(page, { strict: true });
 
