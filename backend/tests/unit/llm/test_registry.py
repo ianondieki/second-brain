@@ -125,6 +125,14 @@ def test_unknown_task_is_a_config_error() -> None:
         (lambda d: d["embeddings"].update(batch_size=0), "embeddings.batch_size"),
         (lambda d: d["embeddings"].update(model=""), "embeddings.model"),
         (lambda d: d["embeddings"].update(version=1), "embeddings.version"),
+        (lambda d: d["embeddings"].update(chip_floors=0.3), "embeddings.chip_floors must map"),
+        (
+            lambda d: d["embeddings"].update(chip_floors={"fake-shake256": 1.5}),
+            r"chip_floors\.fake-shake256 .*\[0, 1\]",
+        ),
+        (lambda d: d["embeddings"].update(chip_floors={"fake-shake256": -0.1}), "zero or more"),
+        (lambda d: d["embeddings"].update(chip_floors={"fake-shake256": True}), "number"),
+        (lambda d: d["embeddings"].update(chip_floors={"": 0.3}), "chip_floors key"),
         (lambda d: d.update(batch_price_ratio=0), "batch_price_ratio"),
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].pop("output"), "prices need"),
         (lambda d: next(iter(d["models"].values()))["price_usd_per_mtok"].update(input=-1), "zero or more"),
@@ -298,3 +306,15 @@ def test_a_free_slot_lowers_a_task_budget_to_the_free_output_cap() -> None:
 
 def test_a_free_model_key_fits_the_ledger_column() -> None:
     assert len(registry.free_model_key(free_slot(3, "m" * 74))) <= registry.NAME_CHARS
+
+
+def test_the_chip_floor_is_per_embed_model() -> None:
+    """P23-1 review round 1: the "Similar to your profile" floor of each embed_model (``embeddings.chip_floors``);
+    a model without one has none (the ranker's default applies), as does a file without the section."""
+    embeddings = registry.load(get_settings().llm_models_file).embeddings
+    assert embeddings.chip_floor("BAAI/bge-m3") == 0.6
+    assert embeddings.chip_floor("fake-shake256") == 0.3
+    assert embeddings.chip_floor("another-model") is None
+    data = raw()
+    data["embeddings"].pop("chip_floors")
+    assert registry.parse(data).embeddings.chip_floors == {}

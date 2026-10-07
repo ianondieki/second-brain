@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -127,6 +127,12 @@ class EmbeddingPolicy:
     precision: Literal["fp32", "fp16", "int8"]
     batch_size: int
     reembed_batch_size: int
+    # embed_model -> the cosine from which Recommended for you says "Similar to your profile" (P23-1 review round 1);
+    # a model without one gets the ranker's default (``bridge.matching.ranker.SEMANTIC_CHIP_FLOOR``)
+    chip_floors: Mapping[str, float] = field(default_factory=dict)
+
+    def chip_floor(self, embed_model: str) -> float | None:
+        return self.chip_floors.get(embed_model)
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,6 +279,13 @@ def _text(value: Any, where: str) -> str:
     return value
 
 
+def _cosine(value: Any, where: str) -> float:
+    number = _decimal(value, where)
+    if number > 1:
+        raise ValueError(f"{where} must be a cosine in [0, 1]")
+    return float(number)
+
+
 def _positive_int(value: Any, where: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise ValueError(f"{where} must be a positive integer")
@@ -410,6 +423,9 @@ def parse(data: Mapping[str, Any]) -> Registry:
     embed = data["embeddings"]
     if embed["precision"] not in PRECISIONS:
         raise ValueError(f"embeddings.precision must be one of {sorted(PRECISIONS)}")
+    chip_floors = embed.get("chip_floors") or {}
+    if not isinstance(chip_floors, Mapping):
+        raise ValueError("embeddings.chip_floors must map an embed_model to a cosine")
     return Registry(
         models=models,
         tasks=tasks,
@@ -429,6 +445,10 @@ def parse(data: Mapping[str, Any]) -> Registry:
             precision=embed["precision"],
             batch_size=_positive_int(embed["batch_size"], "embeddings.batch_size"),
             reembed_batch_size=_positive_int(embed["reembed_batch_size"], "embeddings.reembed_batch_size"),
+            chip_floors={
+                _text(name, "embeddings.chip_floors key"): _cosine(value, f"embeddings.chip_floors.{name}")
+                for name, value in chip_floors.items()
+            },
         ),
         pricing_status=status,
         free=free,
