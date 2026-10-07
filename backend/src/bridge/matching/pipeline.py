@@ -12,8 +12,8 @@ delivered tags and whether the version links a published problem. Nothing here r
    not a member of the organisation; a saved scout's earlier matches are left out; the publication falls in the
    window (or is the one ``on_new`` proposal). Ordered by (published_at, id), at most ``limits.scan_per_run``.
 2. ``score``: points from ``config/matching/weights_v1.yaml``: include keywords found in the teaser (the prototype's
-   stand-in for the fake embedder's meaningless cosine, simulated), the niche (exact or through its parent), a
-   delivered tag to this organisation and Tier-1 evidence (impact claims, a linked published problem).
+   stand-in for a cosine over proposal vectors, which the scout does not read), the niche (exact or through its
+   parent), a delivered tag to this organisation and Tier-1 evidence (impact claims, a linked published problem).
 3. ``select_top``: scores at or above ``min_fit``, highest first (ties: earlier publication, then id), at most
    ``limit``.
 
