@@ -2,7 +2,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { ComponentType, CSSProperties } from "react";
 
 import { DiscoverIcon } from "@/components/discover-icons";
-import { FileCheckIcon, RouteIcon } from "@/components/icons/lucide";
+import { FileCheckIcon } from "@/components/icons/lucide";
 import { CompaniesIcon } from "@/components/ui/icons";
 import { cn } from "@/components/ui/cn";
 import type { ActivityItem, ActivityKind, PublicActivity } from "@/lib/public/public-data";
@@ -10,9 +10,11 @@ import type { ActivityItem, ActivityKind, PublicActivity } from "@/lib/public/pu
 const ICONS: Record<ActivityKind, ComponentType<{ className?: string }>> = {
   problem_posted: DiscoverIcon,
   version_registered: FileCheckIcon,
-  stage_reached: RouteIcon,
   brief_opened: CompaniesIcon,
 };
+
+/** The items this page knows how to say (an older page meeting a newer API skips a kind it has no words for). */
+const known = (items: readonly ActivityItem[]) => items.filter((item) => Object.hasOwn(ICONS, item.kind));
 
 /** "5 minutes ago", "2 hours ago", "yesterday": from the feed's own instant, in the page's language. */
 export function ago(locale: string, at: string, now: string): string {
@@ -27,7 +29,7 @@ function useItemWords() {
   const t = useTranslations("landing.activity");
   const locale = useLocale();
   return (item: ActivityItem, now: string) => ({
-    what: t(`kind.${item.kind}`, { stage: item.stage ?? "" }),
+    what: t(`kind.${item.kind}`),
     where: item.county ?? t("nationwide"),
     when: ago(locale, item.at, now),
   });
@@ -66,10 +68,11 @@ export function Ticker({ activity, variant = "page" }: { activity: PublicActivit
   const t = useTranslations("landing.activity");
   const words = useItemWords();
   const now = activity.generated_at;
+  const items = known(activity.items);
   return (
     <div data-ticker={variant}>
       <ul aria-label={t("listLabel")} className="sr-only">
-        {activity.items.map((item) => {
+        {items.map((item) => {
           const w = words(item, now);
           return (
             <li key={item.id}>
@@ -83,16 +86,16 @@ export function Ticker({ activity, variant = "page" }: { activity: PublicActivit
       </ul>
       {variant === "strip" ? (
         <ul aria-hidden="true" className="flex flex-col gap-2 sm:hidden">
-          {activity.items.slice(0, 3).map((item) => (
+          {items.slice(0, 3).map((item) => (
             <Item key={item.id} item={item} now={now} />
           ))}
         </ul>
       ) : null}
       <div tabIndex={0} role="region" aria-label={t("label")} className={cn("ticker", variant === "strip" && "max-sm:hidden")}>
-        <div aria-hidden="true" className="ticker-track" style={{ "--ticker-items": activity.items.length } as CSSProperties}>
+        <div aria-hidden="true" className="ticker-track" style={{ "--ticker-items": items.length } as CSSProperties}>
           {[0, 1].map((copy) => (
             <ul key={copy} className="ticker-row">
-              {activity.items.map((item) => (
+              {items.map((item) => (
                 <Item key={item.id} item={item} now={now} />
               ))}
             </ul>

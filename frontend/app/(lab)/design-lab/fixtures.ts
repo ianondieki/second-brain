@@ -228,7 +228,7 @@ export const ACTIVITY: PublicActivity = {
   items: [
     { id: "a1", kind: "problem_posted", at: "2026-10-01T06:24:00Z", county: "Nairobi", niche: "Networks & Telecommunications", title: "Late diesel deliveries darken tower sites", stage: null, seeded: true },
     { id: "a2", kind: "version_registered", at: "2026-10-01T05:51:00Z", county: "Kisumu", niche: "Agriculture", title: "Cold chain for dairy co-ops", stage: null, seeded: true },
-    { id: "a3", kind: "stage_reached", at: "2026-10-01T04:10:00Z", county: "Nakuru", niche: "Agriculture", title: null, stage: "Agreement", seeded: true },
+    { id: "a3", kind: "version_registered", at: "2026-10-01T04:10:00Z", county: "Nakuru", niche: "Agriculture", title: "Milk collection by SMS", stage: null, seeded: true },
     { id: "a4", kind: "brief_opened", at: "2026-09-30T18:00:00Z", county: "Mombasa", niche: "Logistics", title: "Port truck queues cost a day per container", stage: null, seeded: true },
     { id: "a5", kind: "problem_posted", at: "2026-09-30T09:30:00Z", county: "Nairobi", niche: "Microfinance & SACCOs", title: "SACCOs need affordable cyber security and reporting tools", stage: null, seeded: true },
   ],

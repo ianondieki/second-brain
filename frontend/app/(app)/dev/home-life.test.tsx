@@ -36,7 +36,7 @@ const ACTIVITY: PublicActivity = {
   seeded: true,
   items: [
     { id: "a", kind: "problem_posted", at: "2026-10-07T07:28:00Z", county: "Nairobi", niche: "ICT", title: "Late diesel deliveries", stage: null, seeded: true },
-    { id: "b", kind: "stage_reached", at: "2026-10-07T05:40:00Z", county: null, niche: "Health", title: null, stage: "Agreement", seeded: true },
+    { id: "b", kind: "brief_opened", at: "2026-10-07T05:40:00Z", county: null, niche: "Health", title: null, stage: null, seeded: true },
   ],
 };
 
@@ -79,7 +79,7 @@ describe("Home's What's happening", () => {
     const list = within(section).getByRole("list", { name: "Recent activity" });
     expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
       "Late diesel deliveries. Problem posted. Nairobi. 12 minutes ago",
-      "A tracker reached Agreement. Nationwide. 2 hours ago",
+      "Brief opened. Nationwide. 2 hours ago",
     ]);
   });
 
