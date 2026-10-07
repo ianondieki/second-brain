@@ -866,6 +866,125 @@ dialog[data-sheet][open] {
   animation-delay: var(--rise-delay, 0ms);
 }
 
+/*
+ * The hero's story (P23-2; components/landing/HeroComposition.tsx), one sequence of about 2.4 s, CSS only: the tracker
+ * and the certificate rise (0 ms), the scout match slides in from the side (500 ms), the tracker moves from Contact
+ * and NDA to Agreement (900 ms: the "before" layer is wiped off the real stepper in reading order, and the line
+ * between the two stages draws), "Your turn" lights with one saffron pulse (1.4 s), the seal draws its ring (1.5 s).
+ * Wipes and slides, never fades: every word keeps its contrast in every frame. Every rule's resting state is the end
+ * of the story, so reduced motion (and a browser without the animation) shows it in place.
+ */
+.hero-arrive {
+  animation: hero-arrive 700ms var(--ease-out) 500ms both;
+}
+@keyframes hero-arrive {
+  from {
+    transform: translateX(2.5rem);
+    clip-path: inset(-3rem -3rem -3rem 100%);
+  }
+  to {
+    clip-path: inset(-3rem);
+  }
+}
+.hero-chip {
+  justify-items: end;
+}
+.hero-chip > * {
+  grid-area: 1 / 1;
+}
+/* The "before" layer covers what lies under it (the card's own white), then is wiped away. */
+.hero-before {
+  visibility: hidden;
+  animation: hero-wipe-across 600ms var(--ease-out) 900ms both;
+}
+.hero-before > *,
+.hero-before li {
+  background: var(--field);
+}
+.hero-before li:not([data-group="contact_nda"], [data-group="agreement"]) {
+  visibility: hidden;
+}
+@keyframes hero-wipe-across {
+  from {
+    visibility: visible;
+    clip-path: inset(-1rem);
+  }
+  to {
+    visibility: hidden;
+    clip-path: inset(-1rem -1rem -1rem 100%);
+  }
+}
+@keyframes hero-wipe-down {
+  from {
+    visibility: visible;
+    clip-path: inset(-1rem);
+  }
+  to {
+    visibility: hidden;
+    clip-path: inset(100% -1rem -1rem -1rem);
+  }
+}
+@media (width < 64rem) {
+  .hero-steps > .hero-before {
+    animation-name: hero-wipe-down;
+  }
+}
+/* The line from Contact and NDA to Agreement draws as the stage moves: down on phones, across from 1024 px. */
+.hero-steps > ol > li[data-group="contact_nda"] > span:first-child {
+  transform-origin: top;
+  animation: hero-line-down 600ms var(--ease-out) 950ms both;
+}
+@keyframes hero-line-down {
+  from {
+    transform: scaleY(0);
+  }
+}
+@media (width >= 64rem) {
+  .hero-steps > ol > li[data-group="contact_nda"] > span:first-child {
+    transform-origin: left;
+    animation-name: hero-line-across;
+  }
+}
+@keyframes hero-line-across {
+  from {
+    transform: scaleX(0);
+  }
+}
+.hero-turn {
+  animation: hero-turn 900ms var(--ease-out) 1400ms both;
+}
+@keyframes hero-turn {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--flourish) 75%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 14px color-mix(in oklab, var(--flourish) 0%, transparent);
+  }
+}
+[data-hero-visual] .seal-draw {
+  animation-delay: 1500ms;
+}
+
+/*
+ * How it works (P23-2): the three steps and the five stages reveal as they scroll into view, each a little after the
+ * one before (--i), where the browser has scroll-driven animations; elsewhere, and under reduced motion, in place.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry calc(4% + var(--i, 0) * 7%) cover 32%;
+    }
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+}
+
 
 /* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
 @utility code-figures {
@@ -886,7 +1005,11 @@ dialog[data-sheet][open] {
   .seal-draw,
   .tour-enter,
   .tour-lit,
-  .hero-rise {
+  .hero-rise,
+  .hero-arrive,
+  .hero-before,
+  .hero-turn,
+  .hero-steps li > span {
     animation: none !important;
   }
 
