@@ -24,7 +24,9 @@ a second running run of the same niche and country. The admin API then queues ``
    is never a draft. ``injection_suspected`` stops the run (``injection_suspected``) with every draft discarded.
 6. Each draft through ``checks.check_draft``; drafts over ``max_cards_per_run`` are discarded. A kept draft becomes a
    candidate through ``app_create_research_candidate`` (in a savepoint: a database refusal discards that draft only)
-   with its cited sources exactly as saved (URL, publisher, type, dates, verbatim quote, ``excerpt_ref``).
+   with its cited sources exactly as saved (URL, publisher, type, dates, verbatim quote, ``excerpt_ref``) and the
+   county the draft names when it is a county of the run's country in the regions table (``county_of``; otherwise
+   the card is nationwide).
 7. The run is finished: completed (or stopped, failed), counts, input tokens and cost from the call.
 
 The caller commits. ``origin=SEEDED_EXAMPLE`` is the demo seed's path only (dev and test): the same checks on a fixed
@@ -35,6 +37,7 @@ the card a seeded example rather than an AI draft (``bridge.problems.service``).
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -48,7 +51,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bridge.config import Settings
+from bridge.config import DEMO_ENVS, Settings
 from bridge.db import tenant_of
 from bridge.directory.models import Niche
 from bridge.ids import uuid7
@@ -65,13 +68,17 @@ from bridge.problems.research.sources import Catalogue, Excerpt
 
 NAIROBI: Final = ZoneInfo("Africa/Nairobi")
 EXAMPLE_REF_PREFIX: Final = "example:"
-SEED_ENVS: Final = frozenset({"dev", "test"})
 _CLOCK: Final = text("SELECT app_clock_now()")
 _DB_NOW: Final = text("SELECT now()")  # created_at's own clock (the run's start), for the stale-run rule
 _RUN_LOCK: Final = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
 _CREATE: Final = text(
-    "SELECT app_create_research_candidate(:run, :title, :statement, :group, NULL, CAST(:confidence AS numeric),"
+    "SELECT app_create_research_candidate(:run, :title, :statement, :group, :county, CAST(:confidence AS numeric),"
     " CAST(:named AS text[]), CAST(:sources AS jsonb))"
+)
+# A draft's county: a code of this shape, then a county of the run's country in the regions table (else dropped).
+_COUNTY_SHAPE: Final = re.compile(r"[A-Z]{2}-[A-Za-z0-9]{1,5}")
+_KNOWN_COUNTY: Final = text(
+    "SELECT code FROM regions WHERE code = :code AND kind = 'county' AND parent_code = :country"
 )
 _REFUSALS: Final = frozenset({"23514", "22001", "22007", "22008", "22P02", "23502"})  # the definer's data refusals
 log = get_logger(__name__)
@@ -221,7 +228,7 @@ async def execute_run(
     origin: CardOrigin = CardOrigin.LIVE,
 ) -> RunOutcome | None:
     """Run one research run (see the module docstring); None when it is not a running run of the bound admin's."""
-    if origin is CardOrigin.SEEDED_EXAMPLE and settings.app_env not in SEED_ENVS:
+    if origin is CardOrigin.SEEDED_EXAMPLE and settings.app_env not in DEMO_ENVS:
         raise LLMConfigError("seeded example cards exist only in dev and test (the demo seed)")
     run = await db.get(ResearchRun, run_id, with_for_update=True, populate_existing=True)
     if run is None or run.status is not ResearchRunStatus.RUNNING or run.started_by != tenant_of(db)[0]:
@@ -268,7 +275,7 @@ async def execute_run(
         if isinstance(verdict, checks.Discarded):
             discarded.append(verdict.reason)
             continue
-        problem_id = await _create(db, run, verdict, origin)
+        problem_id = await _create(db, run, verdict, origin, await county_of(db, run, draft.county_code))
         if problem_id is None:
             discarded.append("refused_by_database")
         else:
@@ -276,12 +283,28 @@ async def execute_run(
     return await _finish(db, run, ResearchRunStatus.COMPLETED, candidates=created, discarded=discarded, result=result)
 
 
-async def _create(db: AsyncSession, run: ResearchRun, card: checks.Accepted, origin: CardOrigin) -> UUID | None:
+async def county_of(db: AsyncSession, run: ResearchRun, proposed: str | None) -> str | None:
+    """The county a draft names, when it is a county of the run's country in the regions table; None otherwise. The
+    code is the model's answer, so it is data: one of an unknown shape never reaches the database, and an unknown or
+    foreign code is dropped (the card stays, nationwide), never an error. A county run's cards keep the run's county
+    (``app_create_research_candidate``'s rule), so a draft's own county is dropped there too."""
+    if proposed is None or run.county_code is not None or not _COUNTY_SHAPE.fullmatch(proposed):
+        return None
+    known: str | None = await db.scalar(_KNOWN_COUNTY, {"code": proposed, "country": run.country})
+    if known is None:
+        log.info("research.county_dropped", run_id=str(run.id))
+    return known
+
+
+async def _create(
+    db: AsyncSession, run: ResearchRun, card: checks.Accepted, origin: CardOrigin, county: str | None = None
+) -> UUID | None:
     params = {
         "run": run.id,
         "title": card.text.title,
         "statement": card.text.statement,
         "group": card.text.affected_group,
+        "county": county,
         "confidence": str(card.confidence),
         "named": list(card.text.named_orgs),
         "sources": json.dumps([_source(e, origin) for e in card.sources], ensure_ascii=False),

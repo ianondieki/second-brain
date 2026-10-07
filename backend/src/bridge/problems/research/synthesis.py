@@ -53,6 +53,11 @@ class ProblemDraft(BaseModel):
     affected_group: str = Field(description=f"Who faces the problem, at most {MAX_GROUP_CHARS} characters.")
     named_orgs: list[str] = Field(description="Every company, organisation or public body the card names; else empty.")
     citations: list[DraftCitation] = Field(description="The excerpts the card relies on, each with supporting text.")
+    county_code: str | None = Field(
+        default=None,
+        description="The ISO 3166-2 code (such as KE-30) of the one county the cited excerpts place the problem in;"
+        " null when they name none or several.",
+    )
 
     def draft(self) -> Draft:
         return Draft(

@@ -1,11 +1,11 @@
 """Problems for the proposal editor and the problem cards (REQ-PROP-01, REQ-RES-01, REQ-RES-02; docs/spec/06 6.3,
 6.5): the linked-Problem picker (published problems clear of moderation, filtered by niche, country, county and text),
 one card with its cited sources, and "Describe a new problem", which the publish flow turns into a Problem with
-``source=developer``, published at once, labelled "Developer-reported" and queued for moderation
-(``app_open_moderation_case``) without blocking the publication. Row-Level Security already limits reads to what
-the signed-in user may see; the queries repeat the published-and-clear rule so a creator's own held problem is not
-offered as a link or shown on a public teaser, and a research ``candidate`` (readable by staff under RLS) is never
-returned by these public reads (AC-RES-2).
+``source=developer`` in the teaser's county (none: nationwide), published at once, labelled "Developer-reported"
+and queued for moderation (``app_open_moderation_case``) without blocking the publication. Row-Level Security
+already limits reads to what the signed-in user may see; the queries repeat the published-and-clear rule so a
+creator's own held problem is not offered as a link or shown on a public teaser, and a research ``candidate``
+(readable by staff under RLS) is never returned by these public reads (AC-RES-2).
 
 Labels (``label_for``): a developer's problem is "Developer-reported"; a published research card is "AI-drafted,
 human-reviewed on <date>" (docs/spec/06 6.5; the date its review published it, Africa/Nairobi); a card the demo seed
@@ -278,9 +278,9 @@ async def get_published(db: AsyncSession, problem_id: UUID) -> tuple[ProblemRef,
 
 
 _INSERT_DEVELOPER_PROBLEM = text(
-    "INSERT INTO problems (id, source, niche_id, title, statement, status, created_by, moderation_state, published_at)"
-    " VALUES (:id, 'developer', :niche, :title, :statement, 'published', :user, CAST(:moderation AS moderation_state),"
-    " now())"
+    "INSERT INTO problems (id, source, niche_id, county_code, title, statement, status, created_by, moderation_state,"
+    " published_at) VALUES (:id, 'developer', :niche, :county, :title, :statement, 'published', :user,"
+    " CAST(:moderation AS moderation_state), now())"
 )
 _OPEN_CASE = text(
     "SELECT app_open_moderation_case(:subject_type, :subject_id, CAST(:reasons AS text[]),"
@@ -289,12 +289,27 @@ _OPEN_CASE = text(
 
 
 async def create_developer_problem(
-    db: AsyncSession, *, user_id: UUID, niche_id: UUID | None, title: str, statement: str, held: bool
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    niche_id: UUID | None,
+    county_code: str | None,
+    title: str,
+    statement: str,
+    held: bool,
 ) -> UUID:
-    """A developer's new Problem, published at once (held instead when the pre-screen holds it)."""
+    """A developer's new Problem, published at once (held instead when the pre-screen holds it), in ``county_code``:
+    the county of the teaser that describes it (None: nationwide)."""
     problem_id = uuid7()
     moderation = ModerationState.HELD if held else ModerationState.CLEAR
-    params = {"id": problem_id, "niche": niche_id, "title": title, "statement": statement, "user": user_id}
+    params = {
+        "id": problem_id,
+        "niche": niche_id,
+        "county": county_code,
+        "title": title,
+        "statement": statement,
+        "user": user_id,
+    }
     await db.execute(_INSERT_DEVELOPER_PROBLEM, params | {"moderation": moderation.value})
     return problem_id
 
