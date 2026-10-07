@@ -177,7 +177,8 @@ async def set_consents(
     body: dict[ConsentPurpose, ConsentDecision], live: CurrentSession, db: Db, settings: SettingsDep
 ) -> list[ConsentItem]:
     """Record decisions; each names the text version it was made on (409 if the wording changed since). A purpose
-    decided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``."""
+    decided per sign-in (``tier2_llm_assistant``) is refused with 422 ``consent_session_only``. ``profiling`` off also
+    removes the profile embedding in the same transaction (AC-PERS-3)."""
     if any(p in consents.SESSION_ONLY for p in body):
         raise ApiError(422, "consent_session_only", consents.SESSION_ONLY_MESSAGE)
     if body:
@@ -186,6 +187,8 @@ async def set_consents(
             raise ApiError(409, "consent_text_changed", "The consent wording has changed. Reload and choose again.")
         decisions = {p: d.granted for p, d in body.items()}
         await consents.record_decisions(db, settings, user_id=live.user.id, decisions=decisions, source="settings")
+        if decisions.get(ConsentPurpose.PROFILING) is False:  # AC-PERS-3: the profile embedding goes at once
+            await consents.clear_profile_embedding(db, live.user.id)
         await audit(
             db,
             "consent.changed",

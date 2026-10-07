@@ -70,6 +70,8 @@ def print_demo(report: DemoReport) -> None:
         print("demo: already seeded (nothing to add)")
     for key, cert_id in sorted(report.cert_ids.items()):
         print(f"demo: proposal {key} certificate {cert_id}")
+    for table, rows in sorted(report.embedded.items()):
+        print(f"demo: embeddings: {rows} row(s) of {table}")
     print(f"demo: every demo login below uses the dev-only demo password in {DEMO_LOGINS_DOC} (never printed)")
     print("demo: second factor: python -m bridge.demo totp <address>  (make demo-totp from the repository)")
     for email, name, what in all_accounts():

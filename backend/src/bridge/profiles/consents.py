@@ -16,7 +16,7 @@ from typing import Final
 from uuid import UUID
 
 import yaml
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.config import Settings
@@ -125,3 +125,13 @@ async def latest(db: AsyncSession, user_id: UUID, purpose: ConsentPurpose) -> Co
 
 async def has_live_consent(db: AsyncSession, user_id: UUID, purpose: ConsentPurpose) -> bool:
     return (await current(db, user_id))[purpose]
+
+
+_CLEAR_PROFILE_EMBEDDING = text("SELECT app_clear_profile_embedding(:me)")
+
+
+async def clear_profile_embedding(db: AsyncSession, user_id: UUID) -> None:
+    """AC-PERS-3: personalisation off removes the profile embedding in the same transaction as the decision (revision
+    0012's withdrawal trigger clears it too; this is the app's own step). The database function serves the bound user's
+    own row only; a user without a developer profile is a no-op."""
+    await db.execute(_CLEAR_PROFILE_EMBEDDING, {"me": user_id})

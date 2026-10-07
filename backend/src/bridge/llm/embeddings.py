@@ -6,8 +6,10 @@
   it is imported lazily, and the worker image installs it from the CPU-only torch index only after the human
   approves bge-m3 (weights and image size; Docker has 4 GB). The weights are loaded with
   ``local_files_only``: code never downloads them (the image must carry them; the human approves that first).
-- ``FakeEmbedder``: deterministic 1024-dimension unit vectors from a SHAKE-256 hash of the normalised text, for
-  tests and CI. Similar texts are NOT close; ``pin`` and ``vector_with_similarity`` let a test choose vectors.
+- ``FakeEmbedder``: deterministic 1024-dimension bag-of-words unit vectors (``bag_of_words_vector``: SHAKE-256
+  feature hashing of the text's words), for tests, CI and the demo. Texts that share words are close and texts with
+  no shared word are near-orthogonal, but paraphrases are not; ``pin`` and ``vector_with_similarity`` let a test
+  choose vectors.
 - ``VoyageAdapter``: a hosted option behind a DPA flag, off in Release 1 (a stub that refuses).
 
 Every stored vector carries ``embed_model`` and ``embed_version``; when either changes, ``bridge.jobs.reembed``
@@ -17,11 +19,13 @@ re-embeds the rows that differ.
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 import math
 import re
 import threading
 import unicodedata
+from array import array
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -31,11 +35,24 @@ from bridge.llm.registry import EmbeddingPolicy
 
 EMBED_DIM = 1024
 FAKE_MODEL = "fake-shake256"
-FAKE_VERSION = "1"
+FAKE_VERSION = "2"  # 1: one hash of the whole text; 2: bag of words (stored v1 vectors are re-embedded)
 
 Vector = list[float]
 Precision = Literal["fp32", "fp16", "int8"]
 _SPACES = re.compile(r"\s+")
+_TOKEN = re.compile(r"[^\W_]+")  # runs of letters and digits
+MIN_TOKEN_CHARS = 3
+STOP_WORDS = frozenset(
+    {
+        # English
+        "the", "and", "for", "with", "that", "this", "from", "are", "was", "were", "has", "have", "had", "but",
+        "not", "you", "your", "our", "their", "they", "its", "into", "than", "then", "them", "who", "what", "when",
+        "which", "will", "can", "all", "any", "also",
+        # Swahili
+        "na", "kwa", "ya", "wa", "za", "katika", "ni", "hii", "huu", "hiyo", "kama", "lakini", "pia", "sana",
+        "kwamba", "ambayo", "ambao", "kuwa", "cha", "vya",
+    }
+)  # fmt: skip
 
 
 class EmbedderUnavailable(RuntimeError):
@@ -82,6 +99,48 @@ def hashed_vector(text: str, dim: int = EMBED_DIM) -> Vector:
     return unit(values, dim)
 
 
+def tokens(text: str) -> list[str]:
+    """The words of the normalised text that carry meaning: letter/digit runs of at least three characters that are
+    not on the short English and Swahili stop list, in order and with repeats."""
+    return [t for t in _TOKEN.findall(normalise_text(text)) if len(t) >= MIN_TOKEN_CHARS and t not in STOP_WORDS]
+
+
+TOKEN_CACHE_SIZE = 1024  # token directions kept per process: 8 KB each as packed doubles, about 8 MB when full
+
+
+@functools.lru_cache(maxsize=TOKEN_CACHE_SIZE)
+def _token_vector(token: str, dim: int) -> bytes:
+    """``hashed_vector(token)`` as packed native doubles: immutable, about 8 KB (a float tuple is about 33 KB)."""
+    return array("d", hashed_vector(token, dim)).tobytes()
+
+
+def bag_of_words_vector(text: str, dim: int = EMBED_DIM) -> Vector:
+    """A deterministic unit vector of the text's words (feature hashing; hashlib only, so portable).
+
+    Each distinct token (``tokens``) contributes its own SHAKE-256 direction (``hashed_vector(token)``) weighted by
+    ``1 + ln(tf)``; the sum is unit-normalised. Random directions in 1,024 dimensions are near-orthogonal (cosine
+    about 0 with a spread of about 0.03), so the cosine of two texts approximates the weighted overlap of their
+    vocabularies: shared words give a positive cosine (equal word sets give 1, whatever the order or case), texts
+    with no shared word give a cosine near zero. Synonyms and paraphrases are not close: this is a fake, not a model.
+    A text with no token (empty, punctuation, stop words only) falls back to ``hashed_vector(text)``.
+    """
+    counts: dict[str, int] = {}
+    for token in tokens(text):
+        counts[token] = counts.get(token, 0) + 1
+    # Portability: tokens are summed in first-occurrence order (dict order) and each component left to right, so
+    # the float sums are reproducible; the norm uses ``fsum`` (correctly rounded). ``math.log`` is the one libm call
+    # (only for a repeated word) and is pinned by a golden test (tests/unit/llm/test_embeddings_bow.py).
+    total = [0.0] * dim
+    for token, tf in counts.items():
+        weight = 1.0 + math.log(tf)
+        for i, x in enumerate(memoryview(_token_vector(token, dim)).cast("d")):
+            total[i] += weight * x
+    norm = math.sqrt(math.fsum(x * x for x in total))
+    if not counts or norm == 0 or not math.isfinite(norm):
+        return hashed_vector(text, dim)
+    return [x / norm for x in total]
+
+
 def vector_with_similarity(base: Sequence[float], similarity: float, *, seed: str = "orthogonal") -> Vector:
     """A unit vector whose cosine similarity with ``base`` is ``similarity`` (for pinning similar texts in tests)."""
     if not -1.0 <= similarity <= 1.0:
@@ -95,7 +154,8 @@ def vector_with_similarity(base: Sequence[float], similarity: float, *, seed: st
 
 
 class FakeEmbedder:
-    """Deterministic vectors for tests and CI; ``pinned`` (or ``pin``) maps chosen texts to chosen vectors."""
+    """Deterministic vectors for tests, CI and the demo: ``bag_of_words_vector`` of the text, unless ``pinned`` (or
+    ``pin``) maps the normalised text to a chosen vector."""
 
     model = FAKE_MODEL
     version = FAKE_VERSION
@@ -111,7 +171,7 @@ class FakeEmbedder:
         self._pinned[normalise_text(text)] = unit(vector, self.dim)
 
     def vector_for(self, text: str) -> Vector:
-        return self._pinned.get(normalise_text(text)) or hashed_vector(text, self.dim)
+        return self._pinned.get(normalise_text(text)) or bag_of_words_vector(text, self.dim)
 
     async def embed(self, texts: Sequence[str]) -> list[Vector]:
         self.calls.append(list(texts))

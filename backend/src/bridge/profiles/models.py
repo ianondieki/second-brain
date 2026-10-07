@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     FetchedValue,
     ForeignKey,
+    Index,
     LargeBinary,
     Numeric,
     SmallInteger,
@@ -33,11 +34,23 @@ class DeveloperProfile(TimestampsMixin, Base):
     """A developer's profile, their own row only. Revision 0011 (D-58): ``peers_visible`` is the peers switch
     (default off; bridge_app updates it on the own row) and ``peers_opted_in_at`` the database's (the shared clock when
     the switch turns on, NULL while off, whatever is sent): another developer sees the handle, headline, county and
-    shared liked niches only through the definers (``app_peers``, ``app_developer_card``), never this row."""
+    shared liked niches only through the definers (``app_peers``, ``app_developer_card``), never this row.
+
+    Revision 0012 (REQ-PERS-02, REQ-EMB-01): ``profile_embedding`` with its ``embed_model``, ``embed_version`` and
+    ``profile_embedded_at`` and ``profile_embedding_hash`` (the SHA-256 of the text it was computed from) is written
+    only by ``app_set_profile_embedding`` (the worker, while the ``profiling`` consent is granted) and cleared by
+    ``app_clear_profile_embedding`` and by a withdrawal of that consent (a trigger on ``consents``); bridge_app never
+    updates them. HNSW cosine index ``ix_developer_profiles_profile_embedding``."""
 
     __tablename__ = "developer_profiles"
     __table_args__ = (
         CheckConstraint("peers_visible = (peers_opted_in_at IS NOT NULL)", name="peers_opt_in_complete"),
+        Index(
+            "ix_developer_profiles_profile_embedding",
+            "profile_embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"profile_embedding": "vector_cosine_ops"},
+        ),
         USER,
     )
 
@@ -54,6 +67,10 @@ class DeveloperProfile(TimestampsMixin, Base):
     # docs/spec/08 Embeddings: the model and version that produced the vector, stored per row (re-embed on change).
     embed_model: Mapped[str | None] = mapped_column(String(80))
     embed_version: Mapped[str | None] = mapped_column(String(40))
+    # When app_set_profile_embedding wrote the vector (the database's clock); NULL while there is none.
+    profile_embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The SHA-256 (hex) of the text the vector was computed from: the vector is stale once the text hashes otherwise.
+    profile_embedding_hash: Mapped[str | None] = mapped_column(Text)
     peers_visible: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     # The database's (developer_profiles_peers_opt_in): read it back after setting peers_visible.
     peers_opted_in_at: Mapped[datetime | None] = mapped_column(

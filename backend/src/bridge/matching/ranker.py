@@ -11,10 +11,13 @@ evidence confidence, always with at least one reason: a card with 10 or more pro
 Pursue (AC-PERS-2). Why chips are the top positive contributions and the Why-not chip the main drawback, all
 written in code; nothing here predicts revenue or profit.
 
-Prototype (prototype-m2-plan.md §6): no embeddings, so f1 is the share of keywords the card shares with the
-developer's profile and recent proposals (Tier 1); f4 (skill coverage) has no data and never applies. f1 and f9 use
-the developer's own history and apply only with the ``profiling`` consent (AC-PERS-3); without it the ranking uses
-the liked niches, the county the developer gave and public facts only.
+f1 (P23-1): the cosine similarity of the developer's profile embedding and the card's, ``max(0, cosine)``, when both
+vectors exist with the same model and version (``Card.similarity``, read by ``bridge.matching.recommendations`` with
+the profiling consent only); else the share of keywords the card shares with the developer's profile and recent
+proposals (Tier 1), as in the prototype. Each row's f1 records its path (``Feature.source``: ``embedding`` or
+``keywords``) and the Why chip says which. f4 (skill coverage) has no data and never applies. f1 and f9 use the
+developer's own history and apply only with the ``profiling`` consent (AC-PERS-3); without it the ranking uses the
+liked niches, the county the developer gave and public facts only.
 """
 
 from __future__ import annotations
@@ -34,10 +37,17 @@ from bridge.matching.trending import Trend, nairobi_day
 
 RECOMMENDABLE: Final = frozenset({"research_agent", "org_brief"})
 Decision = Literal["pursue", "consider", "not_now"]
+F1Source = Literal["embedding", "keywords"]
 # [[COPY-REVIEW]] "Trending" only where Discover says Trending (z, score and recent actors over the floors); a card
 # whose z-score is high without the actors is "Rising".
 TRENDING_WORDS: Final = "Trending in its niche"
 RISING_WORDS: Final = "Rising in its niche"
+SIMILAR_WORDS: Final = "Similar to your profile"  # [[COPY-REVIEW]] f1's chip on the embedding path
+# The default cosine from which the embedding path says "Similar to your profile" (review round 1): below it f1 still
+# counts, max(0, cosine), but no chip. The floor is per embed_model in ai/models.yaml (``embeddings.chip_floors``):
+# unrelated texts score about 0.3 to 0.5 with bge-m3, while with the bag-of-words fake unrelated texts score about 0 to
+# 0.06 and related demo texts about 0.3 to 0.45. This default applies only to a model without a configured floor.
+SEMANTIC_CHIP_FLOOR: Final = 0.5
 DECISION_LABELS: Final[Mapping[Decision, str]] = {"pursue": "Pursue", "consider": "Consider", "not_now": "Not now"}
 _WORD: Final = re.compile(r"[a-z0-9]+")
 # Words too common in problem statements to say anything about fit.
@@ -67,6 +77,9 @@ class Card:
     fact: ProblemFact
     trend: Trend
     signals: ProblemSignals
+    # The cosine of the developer's profile embedding and this card's (same model and version), read with the
+    # profiling consent only; None when either vector is missing.
+    similarity: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +88,7 @@ class Feature:
     value: float | None
     weight: float
     applies: bool
+    source: F1Source | None = None  # f1 only: which path computed it, when it applies
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,7 +140,13 @@ def features(card: Card, dev: Developer, cfg: RankerConfig, now: datetime) -> di
     def f(name: str, raw: float | None, value: float | None, applies: bool = True) -> tuple[str, Feature]:
         return name, Feature(raw, value if applies else None, w[name], applies)
 
-    shared = len(keywords(f"{card.fact.title} {card.fact.statement}", cfg.min_keyword_length) & dev.keywords)
+    if dev.personalised and card.similarity is not None and math.isfinite(card.similarity):  # f1: both vectors exist
+        fit = Feature(card.similarity, max(0.0, min(1.0, card.similarity)), w["semantic_fit"], True, "embedding")
+    else:  # f1: the keyword share, as before the embeddings
+        shared = len(keywords(f"{card.fact.title} {card.fact.statement}", cfg.min_keyword_length) & dev.keywords)
+        known = dev.personalised and bool(dev.keywords)
+        share = min(1.0, shared / cfg.semantic_saturation) if known else None
+        fit = Feature(shared, share, w["semantic_fit"], known, "keywords" if known else None)
     if card.fact.county_code is None:
         region = cfg.region_national
     else:
@@ -142,12 +162,7 @@ def features(card: Card, dev: Developer, cfg: RankerConfig, now: datetime) -> di
     age = age_days(card, now)
     return dict(
         (
-            f(
-                "semantic_fit",
-                shared,
-                min(1.0, shared / cfg.semantic_saturation),
-                dev.personalised and bool(dev.keywords),
-            ),
+            ("semantic_fit", fit),
             f("niche_match", None, niche_match(card, dev, cfg)),
             f("region_match", None, region, dev.county_code is not None),
             f("skill_coverage", None, None, False),  # no skills data in the prototype
@@ -213,17 +228,24 @@ def why_chips(
     trend: TrendConfig,
     dev: Developer,
     exclude: frozenset[str] = frozenset(),
+    chip_floor: float = SEMANTIC_CHIP_FLOOR,
 ) -> list[str]:
     """The top positive contributions, each only when its fact holds ([[COPY-REVIEW]] the chips). f1's chip names its
-    source: the developer's past proposals when a shared keyword comes from one, else their profile. A chip that
+    source: "Similar to your profile" on the embedding path, only from a cosine of ``chip_floor`` (the embed_model's
+    configured floor, else ``SEMANTIC_CHIP_FLOOR``); on the
+    keyword path the developer's past proposals when a shared keyword comes from one, else their profile. A chip that
     repeats one of the pursuit reasons (``exclude``) gives its place to the next."""
-    card_words = keywords(f"{card.fact.title} {card.fact.statement}", cfg.min_keyword_length)
-    fit = "Close to your past proposals" if card_words & dev.proposal_keywords else "Close to your profile"
     v = {name: (ft.value or 0.0) if ft.applies else 0.0 for name, ft in feats.items()}
+    if feats["semantic_fit"].source == "embedding":
+        fit, fit_holds = SIMILAR_WORDS, (feats["semantic_fit"].raw or 0.0) >= chip_floor
+    else:
+        card_words = keywords(f"{card.fact.title} {card.fact.statement}", cfg.min_keyword_length)
+        fit = "Close to your past proposals" if card_words & dev.proposal_keywords else "Close to your profile"
+        fit_holds = v["semantic_fit"] > 0
     orgs = card.signals.orgs_scouting
     brief = card.signals.brief
     candidates = {
-        "semantic_fit": (fit, v["semantic_fit"] > 0),
+        "semantic_fit": (fit, fit_holds),
         "niche_match": (
             "In a niche you like" if v["niche_match"] >= cfg.niche_liked else "Next to a niche you like",
             v["niche_match"] > 0,
@@ -292,8 +314,17 @@ def _mmr(pool: Sequence[Ranked], slots: int, cfg: RankerConfig, taken: Counter[U
     return chosen
 
 
-def rank(cards: Sequence[Card], dev: Developer, cfg: RankerConfig, trend: TrendConfig, now: datetime) -> list[Ranked]:
-    """The top ``top_n`` recommendations, deterministic for the same facts."""
+def rank(
+    cards: Sequence[Card],
+    dev: Developer,
+    cfg: RankerConfig,
+    trend: TrendConfig,
+    now: datetime,
+    *,
+    chip_floor: float = SEMANTIC_CHIP_FLOOR,
+) -> list[Ranked]:
+    """The top ``top_n`` recommendations, deterministic for the same facts. ``chip_floor``: the embedder's floor for
+    the "Similar to your profile" chip (``embeddings.chip_floors``)."""
     scored = []
     for card in cards:
         if card.fact.source not in RECOMMENDABLE:
@@ -310,7 +341,7 @@ def rank(cards: Sequence[Card], dev: Developer, cfg: RankerConfig, trend: TrendC
                 features=feats,
                 decision=decision,
                 reasons=tuple(reasons),
-                why=tuple(why_chips(card, feats, cfg, trend, dev, frozenset(reasons))),
+                why=tuple(why_chips(card, feats, cfg, trend, dev, frozenset(reasons), chip_floor)),
                 why_not=why_not(card, feats, dev, cfg),
             )
         )

@@ -26,6 +26,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     Numeric,
     String,
@@ -53,6 +54,12 @@ class Problem(IdMixin, TimestampsMixin, Base):
         UniqueConstraint("id", "org_id"),  # target of problem_briefs (problem_id, org_id)
         CheckConstraint("app_text_set_is_valid(named_orgs, 10, 200)", name="named_orgs_valid"),
         CheckConstraint("research_run_id IS NULL OR source = 'research_agent'", name="research_run_only_for_research"),
+        Index(
+            "ix_problems_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
         {"info": {"tenancy": Tenancy.PUBLISHED, "tenant_column": "org_id", "user_column": "created_by"}},
     )
 
@@ -78,6 +85,11 @@ class Problem(IdMixin, TimestampsMixin, Base):
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
     embed_model: Mapped[str | None] = mapped_column(String(80))
     embed_version: Mapped[str | None] = mapped_column(String(40))
+    # Revision 0012: the embedding columns are written only by app_set_problem_embedding (the worker, while the problem
+    # is published and clear); bridge_app neither inserts nor updates them. embedded_at is when it wrote them,
+    # embedding_hash the SHA-256 (hex) of the text (title and statement) they were computed from.
+    embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    embedding_hash: Mapped[str | None] = mapped_column(Text)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Revision 0005 (research cards only; written by app_create_research_candidate, never by the app role).
     research_run_id: Mapped[UUID | None] = mapped_column(ForeignKey("research_runs.id"), index=True)

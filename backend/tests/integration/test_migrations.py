@@ -1,14 +1,16 @@
-"""Revisions 0001 to 0011 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
+"""Revisions 0001 to 0012 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
 REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08, REQ-ENG-10, REQ-NOT-03, REQ-PROP-03, REQ-ENG-11,
-REQ-REPO-02, REQ-PERS-03, REQ-DEV-01, REQ-DEV-02, REQ-DEV-03; docs/spec/08 Migrations and Tenancy; AC-IP-2).
+REQ-REPO-02, REQ-PERS-03, REQ-DEV-01, REQ-DEV-02, REQ-DEV-03, REQ-PERS-02, REQ-EMB-01; docs/spec/08 Migrations and
+Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0011, 0010, 0009, 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the
+Migration round trip and drift (each of 0012, 0011, 0010, 0009, 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the
 revision before it exactly as it found it), table classification, RLS coverage generated from the ORM metadata, the
 grant matrix of every role, role attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained
 audit log, the evidence triggers of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column
 grants, the schema v5 notes triggers, policies and in-app column grant, the tags policies revision 0007 leaves as they
 were, the schema v6 (revision 0008), v7 (revision 0009), v8 (revision 0010) and v9 (revision 0011) policies,
-triggers and column grants, the listed-organisations policy and the Procrastinate schema.
+triggers and column grants, schema v10's (revision 0012) embedding columns, indexes, functions and narrowed problems
+grants, the listed-organisations policy and the Procrastinate schema.
 The tracker's behaviour (chain, projection, parties, payments, clock) is tested in ``integration/engagements/``;
 schema v4's in ``integration/matching/``, ``integration/problems/`` and ``integration/billing/``; schema v5's (the
 notes' writers and readers, marking read) in ``test_rls.py``; revision 0007's ``app_close_tag(tag, status)`` in
@@ -19,7 +21,9 @@ v7's (the quiz: its readers, the attempt and flag rules, rescoring, the board, t
 ``integration/quiz/test_quiz_schema.py``; schema v8's (events, reminders and trend cards: their readers, writers,
 decisions and the reminder job's list) in ``integration/events/test_events_schema.py`` and
 ``integration/events/test_trends_schema.py``; schema v9's (peers, blocks, team invitations, threads and messages,
-reports and contributors) in ``integration/teams/test_peers_schema.py`` and ``integration/teams/test_teams_schema.py``.
+reports and contributors) in ``integration/teams/test_peers_schema.py`` and ``integration/teams/test_teams_schema.py``;
+schema v10's (the embedding readers, writers and clearer, the consent and liked-niche triggers) in
+``integration/embeddings/test_embeddings_schema.py``.
 """
 
 from __future__ import annotations
@@ -86,19 +90,8 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "county_code",  # revision 0002
     },
     "developer_profiles": {"headline", "bio", "county_code", "updated_at", "peers_visible"},  # 0011: the switch
-    # revision 0002: never moderation_state, owners, keys or decisions
-    "problems": {
-        "title",
-        "statement",
-        "affected_group",
-        "niche_id",
-        "country",
-        "county_code",
-        "embedding",
-        "embed_model",
-        "embed_version",
-        "updated_at",
-    },
+    # revision 0002: never moderation_state, owners, keys or decisions; revision 0012: never the embedding columns
+    "problems": {"title", "statement", "affected_group", "niche_id", "country", "county_code", "updated_at"},
     "problem_briefs": {"visibility", "budget_band", "deadline", "status", "updated_at"},
     "proposals": {
         "status",
@@ -559,6 +552,32 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "team_messages_open()": (True, set()),  # locks the thread
     "team_messages_redaction_guard()": (False, set()),
     "proposal_contributors_guard()": (False, set()),
+    # revision 0012: profile and problem embeddings (the worker with no user bound; the clearer also for the own row;
+    # internal and trigger functions: nobody)
+    "app_profiles_to_embed(text, text, integer)": (True, {"bridge_app"}),
+    "app_set_profile_embedding(uuid, vector, text, text, text)": (True, {"bridge_app"}),
+    "app_clear_profile_embedding(uuid)": (True, {"bridge_app"}),
+    "app_problems_to_embed(text, text, integer)": (True, {"bridge_app"}),
+    "app_set_problem_embedding(uuid, vector, text, text, text)": (True, {"bridge_app"}),
+    "app_stale_embedding_counts(text, text)": (True, {"bridge_app"}),
+    "app_clear_empty_embeddings()": (True, {"bridge_app"}),
+    "embedding_is_stale(boolean, text, text, text, text, text, text)": (False, set()),
+    "profile_embedding_candidates()": (False, set()),
+    "problem_embedding_candidates()": (False, set()),
+    "empty_embedded_profiles()": (False, set()),
+    "empty_embedded_problems()": (False, set()),
+    "embedding_label_is_valid(text, integer)": (False, set()),
+    "embedding_text_line(text)": (False, set()),
+    "embedding_text_hash(text)": (False, set()),
+    "problem_embedding_text(text, text)": (False, set()),
+    "problem_is_readable(uuid)": (False, set()),
+    "profile_consent_granted(uuid)": (False, set()),
+    "profile_embedding_text(uuid)": (False, set()),
+    "profiles_to_embed(text, text)": (False, set()),
+    "problems_to_embed(text, text)": (False, set()),
+    "profile_embedding_clear(uuid)": (False, set()),
+    "consents_profiling_withdrawn()": (True, set()),  # clears the vector bridge_app cannot update
+    "consents_created_now()": (False, set()),  # the database's time for a consent decision
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -807,17 +826,50 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
         assert set(at_0009[kind]) <= set(at_0010[kind]), kind
     assert "app_create_trend_candidate(jsonb,jsonb) bridge_app EXECUTE" in at_0010["function_acl"]
     assert "app_trend_job_state(timestamp with time zone) bridge_app EXECUTE" in at_0010["function_acl"]
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0011"))
+    at_0011 = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_0011[kind] != at_0010[kind]}
+    assert changed == set(SNAPSHOT) - {"enums"}, "0011 adds columns, tables, functions, policies and grants; no enum"
+    for kind in set(SNAPSHOT) - {"policies"}:  # additive: every object of 0010 is still there, unchanged
+        assert set(at_0010[kind]) <= set(at_0011[kind]), kind
+    (narrowed,) = set(at_0010["policies"]) - set(at_0011["policies"])  # the app's report INSERT, narrowed again
+    assert narrowed.startswith("moderation_cases bridge_app_insert INSERT")
+    assert "developer_profiles.peers_visible bridge_app UPDATE" in at_0011["column_acl"]
+    assert "app_peers(integer,integer) bridge_app EXECUTE" in at_0011["function_acl"]
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
     run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
     at_head = schema_snapshot(scratch_url)
-    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0010[kind]}
-    assert changed == set(SNAPSHOT) - {"enums"}, "0011 adds columns, tables, functions, policies and grants; no enum"
-    for kind in set(SNAPSHOT) - {"policies"}:  # additive: every object of 0010 is still there, unchanged
-        assert set(at_0010[kind]) <= set(at_head[kind]), kind
-    (narrowed,) = set(at_0010["policies"]) - set(at_head["policies"])  # the app's report INSERT, narrowed again
-    assert narrowed.startswith("moderation_cases bridge_app_insert INSERT")
-    assert "developer_profiles.peers_visible bridge_app UPDATE" in at_head["column_acl"]
-    assert "app_peers(integer,integer) bridge_app EXECUTE" in at_head["function_acl"]
+    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0011[kind]}
+    # 0012 adds columns, indexes, functions and a trigger and narrows one grant and one policy: no table or enum
+    assert changed == {"columns", "indexes", "functions", "triggers", "column_acl", "function_acl", "policies"}
+    for kind in set(SNAPSHOT) - {"column_acl", "policies"}:  # additive: every object of 0011 is still there, unchanged
+        assert set(at_0011[kind]) <= set(at_head[kind]), kind
+    (narrowed,) = set(at_0011["policies"]) - set(at_head["policies"])  # a profile is inserted without an embedding
+    assert narrowed.startswith("developer_profiles bridge_app_insert INSERT")
+    revoked = set(at_0011["column_acl"]) - set(at_head["column_acl"])  # bridge_app writes no problem embedding
+    assert revoked == {
+        f"problems.{column} bridge_app {privilege}"
+        for column in ("embedding", "embed_model", "embed_version")
+        for privilege in ("INSERT", "UPDATE")
+    }
+    assert set(at_head["columns"]) - set(at_0011["columns"]) == {
+        "developer_profiles.profile_embedded_at timestamp with time zone",
+        "developer_profiles.profile_embedding_hash text",
+        "problems.embedded_at timestamp with time zone",
+        "problems.embedding_hash text",
+        "ix_developer_profiles_profile_embedding.profile_embedding vector(1024)",  # the indexes' own columns
+        "ix_problems_embedding.embedding vector(1024)",
+    }
+    assert set(at_head["indexes"]) - set(at_0011["indexes"]) == {
+        "CREATE INDEX ix_developer_profiles_profile_embedding ON public.developer_profiles USING hnsw"
+        " (profile_embedding vector_cosine_ops)",
+        "CREATE INDEX ix_problems_embedding ON public.problems USING hnsw (embedding vector_cosine_ops)",
+    }
+    assert "app_profiles_to_embed(text,text,integer) bridge_app EXECUTE" in at_head["function_acl"]
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0011"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0012 leaves every object of 0011 exactly as it found it (the problems grants included)
+        assert after[kind] == at_0011[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0010"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0011 leaves every object of 0010 exactly as it found it (the report policy included)
@@ -1142,7 +1194,10 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     assert not claim_protected & updatable["org_claims"]
     profile_protected = {"verification_level", "handle", "profile_embedding", "embed_model", "embed_version"}
     profile_protected |= {"peers_opted_in_at"}  # revision 0011: the database's
+    profile_protected |= {"profile_embedded_at", "profile_embedding_hash"}  # revision 0012: the writer's
     assert not profile_protected & updatable["developer_profiles"]
+    # revision 0012: app_set_problem_embedding's (revisions 0002 and 0005 granted the first three; 0012 revokes them)
+    assert not {"embedding", "embed_model", "embed_version", "embedded_at", "embedding_hash"} & updatable["problems"]
     projection = {"state", "end_reason", "stage_entered_at", "stage_deadline_at", "ended_at", "lock_version"}
     keys = {"proposal_id", "org_id", "developer_id", "version_id", "origin"}
     assert not (projection | keys) & updatable["engagements"]  # the chain's projection is the database's (0003)
@@ -1171,9 +1226,22 @@ async def test_bridge_app_cannot_update_protected_columns(app_engine: AsyncEngin
             "embed_model = 'x'",
             "embed_version = 'x'",
             "profile_embedding = NULL",
+            "profile_embedded_at = NULL",  # revision 0012
+            "profile_embedding_hash = NULL",
         ):
             await expect_error(
                 conn, f"UPDATE developer_profiles SET {assignment} WHERE user_id = :id", "permission denied", by_user
+            )
+        for assignment in (
+            "embedding = NULL",
+            "embed_model = 'x'",
+            "embed_version = 'x'",
+            "embedded_at = NULL",
+            "embedding_hash = NULL",
+        ):
+            # revision 0012: a problem's vector is app_set_problem_embedding's, its author's own problem included
+            await expect_error(
+                conn, f"UPDATE problems SET {assignment} WHERE created_by = :id", "permission denied", by_user
             )
         await expect_error(conn, "UPDATE organizations SET verification = 'e2'", "permission denied")
         await expect_error(conn, "DELETE FROM memberships", "permission denied")
@@ -1632,8 +1700,19 @@ async def test_pg_temp_shadowing_cannot_hijack_definer_functions(database_url: U
                 ("SELECT app_unblock_developer(uuid7())", "app_unblock_developer: developers only"),
                 ("SELECT * FROM app_report_team_message(uuid7(), ARRAY['spam'])", "no team message of the caller's"),
                 ("SELECT * FROM app_reported_team_message(uuid7())", "staff admin or moderator only"),
+                # revision 0012: the embedding worker's readers, writers and count, refused to any signed-in caller
+                ("SELECT count(*) FROM app_profiles_to_embed('m', 'v', 10)", "the embedding worker only"),
+                ("SELECT count(*) FROM app_problems_to_embed('m', 'v', 10)", "the embedding worker only"),
+                ("SELECT app_set_profile_embedding(:id, NULL, 'm', 'v', 'h')", "the embedding worker only"),
+                ("SELECT app_set_problem_embedding(:id, NULL, 'm', 'v', 'h')", "the embedding worker only"),
+                ("SELECT * FROM app_stale_embedding_counts()", "the embedding worker only"),
+                ("SELECT * FROM app_clear_empty_embeddings()", "the embedding worker only"),
+                ("SELECT app_clear_profile_embedding(uuid7())", "the caller's own profile"),
             ):
-                await expect_error(conn, call, refusal)
+                await expect_error(conn, call, refusal, {"id": user_id})
+            await conn.execute(  # revision 0012: the caller's own opt-out (a user with no profile: nothing to clear)
+                sa.text("SELECT app_clear_profile_embedding(:id)"), {"id": user_id}
+            )
             for call in (  # revision 0011: the answers that say nothing to a caller who is no developer
                 "SELECT app_is_visible_peer(:id) IS FALSE",
                 "SELECT app_blocked_either_way(uuid7(), uuid7()) IS NULL",
@@ -2229,7 +2308,9 @@ async def test_bridge_app_inserts_every_users_column_but_demo_account(owner_engi
 # app_create_research_candidate() writes, and a scout run's start, the database's clock (never forward- or back-dated).
 # Revision 0006: a note's time, the database's clock too, and its redaction (D-54), the owner's.
 DEFINER_ONLY_COLUMNS: dict[str, set[str]] = {
-    "problems": {"research_run_id", "named_orgs"},
+    # Revision 0012: a problem's vector, its model, version and time are app_set_problem_embedding's.
+    "problems": {"research_run_id", "named_orgs", "embedding", "embed_model", "embed_version", "embedded_at"}
+    | {"embedding_hash"},
     "problem_sources": {"excerpt_ref"},
     "agent_runs": {"started_at"},
     "engagement_notes": {"created_at", "redacted_at", "redacted_by"},  # D-54: a redaction is the owner's
@@ -3000,6 +3081,13 @@ V11_TRIGGERS = {
     ("team_messages", "team_messages_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE),
     ("proposal_contributors", "proposal_contributors_guard"): ("proposal_contributors_guard", ROW | BEFORE | ON_UPDATE),
 }
+# Revision 0012: a profiling decision that is not a grant clears the profile's vector (AFTER, once the consents' policy
+# admitted the row; the trigger's WHEN names the rows); a decision's time is the database's but for the owner. A
+# liked-niche change needs no trigger: the text's hash sees it.
+V12_TRIGGERS = {
+    ("consents", "consents_profiling_withdrawn"): ("consents_profiling_withdrawn", ROW | ON_INSERT),
+    ("consents", "consents_created_now"): ("consents_created_now", ROW | BEFORE | ON_INSERT),
+}
 
 
 async def test_a_published_briefs_text_changes_only_with_a_return_to_review(owner_engine: AsyncEngine) -> None:
@@ -3048,7 +3136,7 @@ async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine)
         " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
     )
     expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS | V8_TRIGGERS | V9_TRIGGERS
-    expected |= V10_TRIGGERS | V11_TRIGGERS
+    expected |= V10_TRIGGERS | V11_TRIGGERS | V12_TRIGGERS
     assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == expected
     assert {row.tgenabled for row in found} == {"O"}
 

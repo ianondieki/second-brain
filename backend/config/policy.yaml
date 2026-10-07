@@ -194,3 +194,10 @@ teams:
   posts_per_hour: 60                # messages one developer writes in one team thread in any hour (too_many_messages)
   peers_pages_per_hour: 60          # pages of the peers list one developer reads in any hour (too_many_peer_pages)
   profile_changes_per_day: 10       # changes of the county or the liked niches in any 24 hours (too_many_profile_changes)
+
+embeddings:
+  # Profile and problem embeddings for the ranker's f1 (REQ-PERS-01, REQ-PERS-02, REQ-EMB-01; P23.md "P23-1 as
+  # built"). Read by bridge/embeddings/policy.py. The embeddings.reembed job runs every 15 minutes on the worker and
+  # embeds the stale rows of each table (developer profiles with the profiling consent, readable problems) in batches
+  # of ai/models.yaml embeddings.reembed_batch_size; the rest wait for the next run.
+  max_rows_per_run: 500             # rows of each table one run tries at most, refused writes included

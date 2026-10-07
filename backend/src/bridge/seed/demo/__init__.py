@@ -32,7 +32,10 @@ Amina's county and her Remind me on the Nairobi one, and three hand-written tren
 team up (``bridge.seed.demo.teams``): two more demo developers (Zawadi, Juma) signed up with the others; Amina, Brian
 (in her county, two shared niches) and Zawadi (Mombasa, one shared niche) turn Peers on and Juma does not; Amina's
 accepted invitation to Brian on P2's problem with a four-message thread, Brian credited on P2, and Zawadi's pending
-invitation to Amina, each through the API.
+invitation to Amina, each through the API. Last of all (P23-1), one pass of the embedding job
+(``bridge.embeddings.worker``, the configured embedder: the fake in dev and test) as the unbound worker, so Amina's
+profile (the only one with the profiling consent) and the readable problems have vectors for Recommended for you; what
+it wrote goes to ``DemoReport.embedded``, and a later run writes only what changed since.
 
 Idempotent, and safe on a demo that was used (``make demo`` runs it on every start): every step looks for what it
 would create (by address, organisation name, a proposal's first title) and skips what exists, so running it twice
@@ -47,9 +50,11 @@ from __future__ import annotations
 from collections.abc import Awaitable
 from contextlib import AsyncExitStack
 
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge.config import Settings
+from bridge.embeddings.worker import EmbeddingsRuntime, run_embeddings
+from bridge.llm.embeddings import Embedder
 from bridge.seed.demo.accounts import (
     accept_master_terms,
     enrol_totp,
@@ -184,7 +189,22 @@ async def seed_demo(
         await step("team-up", ensure_team(owner_engine, actors, report))
         await step("contributor", ensure_contributor(owner_engine, actors, report))
         await step("pending team-up", ensure_pending_invitation(owner_engine, actors, report))
+        await step("embeddings", _embeddings(settings, factory, runtime.embedder, report))
     return report
+
+
+async def _embeddings(
+    settings: Settings, factory: async_sessionmaker[AsyncSession], embedder: Embedder | None, report: DemoReport
+) -> None:
+    """P23-1: one pass of the embedding job (idempotent: the hashes say what is fresh)."""
+    run = await run_embeddings(EmbeddingsRuntime(settings, factory=factory, embedder=embedder).deps())
+    if run.unavailable:
+        report.notes.append("embeddings: the configured embedder cannot run here; recommendations use keywords")
+    for name in run.failed:
+        report.notes.append(f"embeddings: the pass over {name} failed (see the log); the job tries again")
+    for table in run.tables:
+        if table.rows:
+            report.embedded[table.table] = table.rows
 
 
 async def _free_plans(owner_engine: AsyncEngine, settings: Settings) -> None:
