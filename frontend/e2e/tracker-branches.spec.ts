@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Browser, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Browser, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 import { appToday, plusDays } from "./support/clock";
 import { checkScreen } from "./support/screen";
@@ -97,6 +97,58 @@ async function dueOf(request: APIRequestContext, id: string): Promise<Due> {
   expect(due, "a stage deadline").not.toBeNull();
   return due!;
 }
+
+/** The figure a countdown shows ("6 d 14 h 23 m left") in minutes. */
+function shownMinutes(text: string): number {
+  const match = /(?:(\d+) d )?(?:(\d+) h )?(\d+) m/.exec(text);
+  expect(match, `a countdown in "${text}"`).not.toBeNull();
+  return (Number(match![1] ?? 0) * 24 + Number(match![2] ?? 0)) * 60 + Number(match![3]);
+}
+
+/**
+ * P23-3 (REQ-TRACK-03): a countdown on the page counts to the API's `due_at` from the API's own clock (X-App-Now),
+ * not the browser's: its <time> carries `due_at` and its figure is the minutes between the two, read just before the
+ * page was drawn (a minute or two apart at most).
+ */
+async function expectCountdown(page: Page, timer: Locator, id: string) {
+  const response = await page.request.get(`/api/engagements/${id}`);
+  expect(response.ok()).toBeTruthy();
+  const stamp = response.headers()["x-app-now"];
+  expect(stamp, "the API stamps its clock on every response").toBeTruthy();
+  const due = ((await response.json()) as { due: (Due & { due_at: string }) | null }).due!;
+  const expected = Math.floor((Date.parse(due.due_at) - Date.parse(stamp)) / 60_000);
+  await page.reload();
+  await expect(timer.locator("time")).toHaveAttribute("datetime", due.due_at);
+  const shown = shownMinutes((await timer.textContent()) ?? "");
+  expect(Math.abs(expected - shown), `${shown} minutes shown, ${expected} expected`).toBeLessThanOrEqual(2);
+  return shown;
+}
+
+const homeTimer = (page: Page) => page.locator("[data-stat='deadline'] [data-timer]");
+const bannerTimer = (page: Page) => banner(page).locator("[data-timer]");
+
+test("the deadline counts down in days, hours and minutes on Home and the tracker, from the API's clock", async ({ page, browser }, info) => {
+  test.setTimeout(120_000);
+  const { dev, devPage, orgPage, close } = await scene(page, browser, info);
+  try {
+    // The review is the organisation's step: the countdown is said to both parties, warm for neither on the developer's side.
+    await devPage.goto("/dev");
+    await expectCountdown(devPage, homeTimer(devPage), dev.engagementId);
+    await expect(homeTimer(devPage)).toHaveText(/ left$/);
+    await expect(devPage.locator("[data-stat='deadline']")).toHaveAttribute("title", /business day/);
+    await checkScreen(devPage, { strict: true });
+    await devPage.goto(`/dev/engagements/${dev.engagementId}`);
+    await expectCountdown(devPage, bannerTimer(devPage), dev.engagementId);
+    await expect(bannerTimer(devPage)).not.toHaveAttribute("data-timer", "warm");
+    await orgPage.goto(`/org/engagements/${dev.engagementId}`);
+    await expectCountdown(orgPage, bannerTimer(orgPage), dev.engagementId);
+    // No live region: a ticking figure is never announced.
+    await expect(banner(orgPage).locator("[aria-live]")).toHaveCount(0);
+    await checkScreen(orgPage, { strict: true });
+  } finally {
+    await close();
+  }
+});
 
 test("the organisation asks a question, the developer answers it, both read it in the History", async ({ page, browser }, info) => {
   test.setTimeout(180_000);
@@ -292,6 +344,21 @@ test.describe("on the test clock", () => {
       expect(after.due_on > before.due_on, `${before.due_on} → ${after.due_on}`).toBe(true);
       await expect(banner(devPage).locator("[data-due]")).toContainText(`${after.business_days_left} business days left`);
       await checkScreen(devPage, { strict: true });
+    } finally {
+      await close();
+    }
+  });
+
+  test("the countdown follows the moved clock, never the browser's", async ({ page, browser }, info) => {
+    test.setTimeout(120_000);
+    const { dev, devPage, close } = await scene(page, browser, info);
+    try {
+      await devPage.goto("/dev");
+      const before = await expectCountdown(devPage, homeTimer(devPage), dev.engagementId);
+      await advance(devPage.request, 1);
+      // The due day is the review's, unchanged; a day less is left on the app clock (the browser's has not moved).
+      const after = await expectCountdown(devPage, homeTimer(devPage), dev.engagementId);
+      expect(Math.abs(before - after - 24 * 60), `${before} then ${after} minutes`).toBeLessThanOrEqual(3);
     } finally {
       await close();
     }
