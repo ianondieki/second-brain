@@ -921,8 +921,9 @@ dialog[data-sheet][open] {
 }
 /* The "before" layer covers what lies under it (the card's own white), then is wiped away. */
 .hero-before {
+  --wipe-to: inset(-1rem -1rem -1rem 100%);
   visibility: hidden;
-  animation: hero-wipe-across 600ms var(--ease-out) 900ms both;
+  animation: hero-wipe 600ms var(--ease-out) 900ms both;
 }
 .hero-before > *,
 .hero-before li {
@@ -931,50 +932,42 @@ dialog[data-sheet][open] {
 .hero-before li:not([data-group="contact_nda"], [data-group="agreement"]) {
   visibility: hidden;
 }
-@keyframes hero-wipe-across {
+/* One keyframe at every width (a viewport that crosses 1024 px never replays it): the wipe's end comes from
+   --wipe-to, across the stepper from 1024 px and down it below. */
+@keyframes hero-wipe {
   from {
     visibility: visible;
     clip-path: inset(-1rem);
   }
   to {
     visibility: hidden;
-    clip-path: inset(-1rem -1rem -1rem 100%);
+    clip-path: var(--wipe-to);
   }
 }
-@keyframes hero-wipe-down {
-  from {
-    visibility: visible;
-    clip-path: inset(-1rem);
-  }
-  to {
-    visibility: hidden;
-    clip-path: inset(100% -1rem -1rem -1rem);
-  }
+.hero-steps > .hero-before {
+  --wipe-to: inset(100% -1rem -1rem -1rem);
 }
-@media (width < 64rem) {
+@media (width >= 64rem) {
   .hero-steps > .hero-before {
-    animation-name: hero-wipe-down;
+    --wipe-to: inset(-1rem -1rem -1rem 100%);
   }
 }
-/* The line from Contact and NDA to Agreement draws as the stage moves: down on phones, across from 1024 px. */
+/* The line from Contact and NDA to Agreement draws as the stage moves: down on phones, across from 1024 px (one
+   keyframe; the axis comes from --line-from). */
 .hero-steps > ol > li[data-group="contact_nda"] > span:first-child {
+  --line-from: scaleY(0);
   transform-origin: top;
-  animation: hero-line-down 600ms var(--ease-out) 950ms both;
-}
-@keyframes hero-line-down {
-  from {
-    transform: scaleY(0);
-  }
+  animation: hero-line 600ms var(--ease-out) 950ms both;
 }
 @media (width >= 64rem) {
   .hero-steps > ol > li[data-group="contact_nda"] > span:first-child {
+    --line-from: scaleX(0);
     transform-origin: left;
-    animation-name: hero-line-across;
   }
 }
-@keyframes hero-line-across {
+@keyframes hero-line {
   from {
-    transform: scaleX(0);
+    transform: var(--line-from);
   }
 }
 .hero-turn {
@@ -994,14 +987,18 @@ dialog[data-sheet][open] {
 
 /*
  * How it works (P23-2): the three steps and the five stages reveal as they scroll into view, each a little after the
- * one before (--i), where the browser has scroll-driven animations; elsewhere, and under reduced motion, in place.
+ * one before (--i), and are fully opaque once wholly on screen, where the browser has scroll-driven animations;
+ * elsewhere, in print and under reduced motion, in place.
  */
 @supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
+  @media screen and (prefers-reduced-motion: no-preference) {
+    /* It starts as the item's top edge meets the bottom of the screen (where the switch to transparent cannot be
+       seen) and is done by the time the item is wholly on screen, so nothing the reader can see rests faded. No
+       fill: outside that range the item is simply itself, so full-page captures and print show it whole. */
     .reveal {
-      animation: reveal linear both;
+      animation: reveal linear none;
       animation-timeline: view();
-      animation-range: entry calc(4% + var(--i, 0) * 7%) cover 32%;
+      animation-range: entry 0% entry calc(64% + var(--i, 0) * 9%);
     }
   }
 }
