@@ -1,7 +1,9 @@
 """REQ-PERS-02, REQ-EMB-01: a write the table refuses is not counted as done (bridge/jobs/reembed.py). A row whose text
 changed between the listing and the write comes back with its new hash and is embedded again; a row that keeps changing
 is tried at most 1 + ``MAX_RETRIES`` times in one run and then left for the next run; a row that left the set is simply
-not listed again. None of these is a stall."""
+not listed again. A row written in this run that comes back with the same hash (its vector cleared since: a consent
+withdrawn and granted again) is one more try, abandoned after ``MAX_RETRIES``. None of these is a stall: only a table
+that keeps no hash stalls loudly when a written row comes back."""
 
 from __future__ import annotations
 
@@ -28,7 +30,7 @@ class EditedOnce(InMemoryEmbeddingTable):
     """The text of ``row`` changes once, just before its first write (an edit that commits mid-run)."""
 
     def __init__(self, row: UUID) -> None:
-        super().__init__("edited")
+        super().__init__("edited", hashed=True)
         self.row, self.edited = row, False
 
     async def save(self, row: StaleRow, vector: Vector, *, model: str, version: str) -> bool:
@@ -42,7 +44,7 @@ class Restless(InMemoryEmbeddingTable):
     """The text of ``row`` changes before every write (or only before the first ``settles_after`` writes)."""
 
     def __init__(self, row: UUID, settles_after: int | None = None) -> None:
-        super().__init__("restless")
+        super().__init__("restless", hashed=True)
         self.row, self.writes, self.settles_after = row, 0, settles_after
 
     async def save(self, row: StaleRow, vector: Vector, *, model: str, version: str) -> bool:
@@ -57,7 +59,7 @@ class Withdrawn(InMemoryEmbeddingTable):
     """``row`` leaves the set before its write (a consent withdrawn, a problem held): refused, never listed again."""
 
     def __init__(self, row: UUID) -> None:
-        super().__init__("withdrawn")
+        super().__init__("withdrawn", hashed=True)
         self.row = row
 
     async def save(self, row: StaleRow, vector: Vector, *, model: str, version: str) -> bool:
@@ -88,8 +90,8 @@ async def test_a_row_that_never_settles_is_tried_three_times_then_left_for_the_n
     others = [uuid4() for _ in range(5)]
     for n, other in enumerate(others):
         table.add(other, f"steady {n}")
-    with capture_logs() as logs:
-        report = await reembed(table, FakeEmbedder(), batch_size=2)
+    with capture_logs() as logs:  # a finite cap: without the abandoned-row exclusion the run ends (and fails) at 50
+        report = await reembed(table, FakeEmbedder(), batch_size=2, max_rows=50)
     assert table.writes == 1 + MAX_RETRIES == 3
     assert (report.rows, report.refused, report.abandoned) == (5, 3, 1)
     assert all(table.rows[other].model == FAKE_MODEL for other in others)  # the page saw past the abandoned row
@@ -100,7 +102,7 @@ async def test_a_row_that_never_settles_is_tried_three_times_then_left_for_the_n
         ("restless", 2, "info"),
         ("restless", 3, "info"),
     ]
-    again = await reembed(table, FakeEmbedder(), batch_size=2)  # the next run tries it again
+    again = await reembed(table, FakeEmbedder(), batch_size=2, max_rows=50)  # the next run tries it again
     assert (again.rows, again.refused, again.abandoned) == (0, 3, 1)
 
 
@@ -117,7 +119,7 @@ async def test_a_row_edited_after_its_write_is_embedded_again_not_a_stall() -> N
     """Freshness is by content: a row written in this run and edited before the next page comes back with another hash;
     it is embedded again (the same hash again would be a table that did not record the write: a stall)."""
     row = uuid4()
-    table = InMemoryEmbeddingTable("profiles")
+    table = InMemoryEmbeddingTable("profiles", hashed=True)
     table.add(row, "before")
     embedder = FakeEmbedder()
 
@@ -141,3 +143,56 @@ async def test_a_row_written_on_its_last_try_is_written_not_abandoned() -> None:
     assert table.writes == 1 + MAX_RETRIES
     assert (report.rows, report.refused, report.abandoned) == (1, MAX_RETRIES, 0)
     assert table.rows[row].model == FAKE_MODEL
+
+
+class Regranted(InMemoryEmbeddingTable):
+    """``row``'s vector is cleared after each of its first ``clears`` writes (profiling withdrawn and granted again):
+    it comes back with the hash it was written for."""
+
+    def __init__(self, row: UUID, clears: int) -> None:
+        super().__init__("regranted", hashed=True)
+        self.row, self.clears = row, clears
+
+    async def save(self, row: StaleRow, vector: Vector, *, model: str, version: str) -> bool:
+        wrote = await super().save(row, vector, model=model, version=version)
+        if row.id == self.row and self.clears:
+            self.clears -= 1
+            self.rows[row.id].vector = None
+        return wrote
+
+
+async def test_a_row_cleared_after_its_write_is_tried_again_not_a_stall() -> None:
+    """The reviewer's case: four stale rows, batches of one, the first cleared after its write and listed again with
+    the same hash: it is written again and the other three are written; nothing raises."""
+    row = uuid4()
+    table = Regranted(row, clears=1)
+    table.add(row, "toggled")
+    others = [uuid4() for _ in range(3)]
+    for n, other in enumerate(others):
+        table.add(other, f"steady {n}")
+    report = await reembed(table, FakeEmbedder(), batch_size=1, max_rows=50)
+    assert (report.rows, report.refused, report.abandoned) == (4, 0, 0)
+    assert all(stored.vector is not None for stored in table.rows.values())
+
+
+async def test_a_row_cleared_after_every_write_is_abandoned_after_its_retries() -> None:
+    """A toggling user cannot hold a run: the row is tried 1 + MAX_RETRIES times, then left; the rest is written."""
+    row = uuid4()
+    table = Regranted(row, clears=100)
+    table.add(row, "toggled")
+    table.add(uuid4(), "steady")
+    report = await reembed(table, FakeEmbedder(), batch_size=1, max_rows=50)
+    assert (report.rows, report.abandoned) == (2, 1)
+    assert table.clears == 100 - (1 + MAX_RETRIES)
+
+
+async def test_a_hashed_table_that_never_records_abandons_its_rows_without_an_error() -> None:
+    class Forgetful(InMemoryEmbeddingTable):
+        async def save(self, row: StaleRow, vector: Vector, *, model: str, version: str) -> bool:
+            return True  # claims the write, records nothing
+
+    table = Forgetful("forgetful", hashed=True)
+    for n in range(2):
+        table.add(uuid4(), f"text {n}")
+    report = await reembed(table, FakeEmbedder(), batch_size=1, max_rows=50)
+    assert (report.rows, report.abandoned, report.batches) == (2, 2, 2 * (1 + MAX_RETRIES))
