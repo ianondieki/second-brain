@@ -87,7 +87,8 @@ class PublicNiche(BaseModel):
 
 
 class PublicOrganisation(BaseModel):
-    name: str = Field(description="The organisation's name as the directory lists it")
+    """Only the level: the directory is signed-in today, so no organisation's name reaches a signed-out visitor."""
+
     verification: Literal["unclaimed", "e1", "e2"] = Field(description="Its verification level (E0 is unclaimed)")
 
 
@@ -103,6 +104,6 @@ class PublicProblem(BaseModel):
     county: PublicCounty | None
     niche: PublicNiche | None
     organisation: PublicOrganisation | None = Field(
-        description="A Brief's organisation, only while it is listed in the directory; null for every other problem"
+        description="A Brief's organisation's level while it is listed in the directory; null for every other problem"
     )
     seeded: bool = Field(description=SEEDED_DOC)

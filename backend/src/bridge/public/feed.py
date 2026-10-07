@@ -11,7 +11,7 @@ first, then by name, each with its three newest; the totals count every readable
 
 **A problem page.** One readable problem (``None`` for any other id, the route's 404): its published text, its
 source in the API's words (developer, research, brief), its county and niche (with the parent), and a Brief's
-organisation only while it is listed (the statement's join decides; an organisation is shown only with a Brief).
+organisation's level only while it is listed (the statement's join decides; only with a Brief, never a name).
 
 **Seeded.** The demo seed runs only where ``APP_ENV`` is dev or test (``bridge.config.DEMO_ENVS``), so
 there every row is the seed's (or a local developer's); elsewhere a row is seeded only when it carries the seed's own
@@ -131,7 +131,7 @@ async def explore(factory: async_sessionmaker[AsyncSession], *, demo: bool) -> E
 
 def problem_page(row: Any, *, demo: bool) -> PublicProblem:
     source = ProblemSource(row.source)
-    brief = source is ProblemSource.ORG_BRIEF and row.org_name is not None
+    brief = source is ProblemSource.ORG_BRIEF and row.org_verification is not None
     return PublicProblem(
         id=row.id,
         title=row.title,
@@ -147,7 +147,7 @@ def problem_page(row: Any, *, demo: bool) -> PublicProblem:
             name=row.niche_name,
             parent=None if row.parent_id is None else PublicNicheParent(id=row.parent_id, name=row.parent_name),
         ),
-        organisation=PublicOrganisation(name=row.org_name, verification=str(row.org_verification)) if brief else None,
+        organisation=PublicOrganisation(verification=str(row.org_verification)) if brief else None,
         seeded=demo or bool(row.example),
     )
 

@@ -37,14 +37,13 @@ def row(**overrides: Any) -> SimpleNamespace:
         "niche_name": "Networks & Telecommunications",
         "parent_id": TOP,
         "parent_name": "ICT",
-        "org_name": "Telco A (fixture)",
         "org_verification": OrgVerification.E2,
         "example": False,
     }
     return SimpleNamespace(**(values | overrides))
 
 
-def test_a_briefs_page_names_its_listed_organisation() -> None:
+def test_a_briefs_page_gives_its_listed_organisation_level_only() -> None:
     found = row()
     page = feed.problem_page(found, demo=False)
     assert page.model_dump() == {
@@ -56,7 +55,7 @@ def test_a_briefs_page_names_its_listed_organisation() -> None:
         "posted_at": AT,
         "county": {"code": "KE-30", "name": "Nairobi City"},
         "niche": {"id": CHILD, "name": "Networks & Telecommunications", "parent": {"id": TOP, "name": "ICT"}},
-        "organisation": {"name": "Telco A (fixture)", "verification": "e2"},
+        "organisation": {"verification": "e2"},
         "seeded": False,
     }
 
@@ -65,7 +64,7 @@ def test_a_briefs_page_names_its_listed_organisation() -> None:
     ("overrides", "source"),
     [
         pytest.param(
-            {"source": ProblemSource.ORG_BRIEF, "org_name": None, "org_verification": None},
+            {"source": ProblemSource.ORG_BRIEF, "org_verification": None},
             "brief",
             id="brief-of-an-organisation-not-found-listed",
         ),
@@ -97,7 +96,7 @@ def test_a_page_is_seeded_as_its_problem_is(demo: bool, example: bool, seeded: b
 
 
 async def test_the_loader_reads_one_problem_as_the_public_reader(monkeypatch: pytest.MonkeyPatch) -> None:
-    found = row(source=ProblemSource.DEVELOPER, org_name=None, org_verification=None)
+    found = row(source=ProblemSource.DEVELOPER, org_verification=None)
     asked: list[str] = []
 
     async def read(factory: Any, statement: Any) -> list[Any]:
@@ -130,5 +129,7 @@ def test_the_statement_reads_one_readable_problem_and_a_listed_organisation_only
         " problems.source = 'org_brief'",
     ):
         assert clause in text, clause
-    for column in ("created_by", "display_name", "email", "handle", "owner", "slug", "verified_domain", "named_orgs"):
+    private = ("created_by", "display_name", "email", "handle", "owner", "slug", "verified_domain", "named_orgs")
+    private += ("legal_name",)
+    for column in private:
         assert column not in text, column

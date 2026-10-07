@@ -9886,12 +9886,8 @@
         "type": "object"
       },
       "PublicOrganisation": {
+        "description": "Only the level: the directory is signed-in today, so no organisation's name reaches a signed-out visitor.",
         "properties": {
-          "name": {
-            "description": "The organisation's name as the directory lists it",
-            "title": "Name",
-            "type": "string"
-          },
           "verification": {
             "description": "Its verification level (E0 is unclaimed)",
             "enum": [
@@ -9904,7 +9900,6 @@
           }
         },
         "required": [
-          "name",
           "verification"
         ],
         "title": "PublicOrganisation",
@@ -9957,7 +9952,7 @@
                 "type": "null"
               }
             ],
-            "description": "A Brief's organisation, only while it is listed in the directory; null for every other problem"
+            "description": "A Brief's organisation's level while it is listed in the directory; null for every other problem"
           },
           "posted_at": {
             "anyOf": [

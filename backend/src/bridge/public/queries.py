@@ -17,8 +17,8 @@ tables, and whether a problem is a seeded example card. Never a person, a handle
 other text, and no engagement (stage events are deferred: they need a definer function from db-migrations).
 
 **One problem** (``problem_statement``): the same predicate on one id, with the problem's own published text
-(statement, affected group) and, for a Brief, its organisation's name and level only through a join that matches a
-listed organisation (unclaimed, E1 or E2, not delisted): the name the directory lists. Still no person or handle.
+(statement, affected group) and, for a Brief, its organisation's level only through a join that matches a
+listed organisation (unclaimed, E1 or E2, not delisted); never its name, nor a person or handle.
 """
 
 from __future__ import annotations
@@ -157,7 +157,7 @@ def activity_statement() -> Select[Any]:
 
 def problem_statement(problem_id: UUID) -> Select[Any]:
     """One readable problem: its public fields, place, niche (with its parent) and, for a Brief, its listed
-    organisation's name and level (none for anything else)."""
+    organisation's level (never its name: the directory is signed-in today; none for anything else)."""
     listed = and_(_Listed.id == Problem.org_id, _Listed.verification.in_(LISTED_LEVELS), _Listed.delisted_at.is_(None))
     return (
         select(
@@ -173,7 +173,6 @@ def problem_statement(problem_id: UUID) -> Select[Any]:
             Niche.name_en.label("niche_name"),
             _Parent.id.label("parent_id"),
             _Parent.name_en.label("parent_name"),
-            _Listed.legal_name.label("org_name"),
             _Listed.verification.label("org_verification"),
             example_card().label("example"),
         )

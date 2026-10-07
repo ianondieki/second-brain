@@ -423,7 +423,7 @@ async def test_a_public_problem_page_serves_readable_problems_only(
             "SELECT o.legal_name FROM organizations o JOIN problems p ON p.org_id = o.id WHERE p.id = :p",
             p=scene.public_problems["brief"],
         )
-    person = scene.private_text[:3]  # the author's display name, address and handle
+    person = (*scene.private_text[:3], org_name)  # the author's display name, address and handle; the organisation
     async with make_client(app_engine, ip="198.51.100.29") as visitor:
         pages = {
             label: await visitor.get(f"/api/public/problems/{pid}") for label, pid in scene.public_problems.items()
@@ -436,7 +436,7 @@ async def test_a_public_problem_page_serves_readable_problems_only(
         assert (response.status_code, response.headers["cache-control"]) == (200, "public, max-age=60"), label
         assert not [text for text in person if text in response.text], label
     opened, posted = pages["brief"].json(), pages["open"].json()
-    assert (opened["source"], opened["organisation"]) == ("brief", {"name": org_name, "verification": "e2"})
+    assert (opened["source"], opened["organisation"]) == ("brief", {"verification": "e2"})
     assert (opened["title"], opened["statement"]) == (f"P24 brief {scene.tag}", STATEMENT)
     assert (posted["source"], posted["organisation"]) == ("developer", None)
     assert posted["county"] == {"code": scene.county, "name": f"P24 County {scene.tag}"}
