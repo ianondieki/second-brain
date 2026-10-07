@@ -44,10 +44,21 @@ describe("TopBar", () => {
     );
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("link", { name: "Wazo" }).getAttribute("href")).toBe("/org?org=1");
-    // The lattice band is the header's first child; the bar holds the brand (wordmark and the prototype badge) and the control.
-    const bar = header.lastElementChild!;
-    expect([...bar.children].map((child) => child.textContent)).toEqual(["WazoPrototype", "Account"]);
+    // The header is the bar alone: the wordmark and the control (D-65).
+    expect(header.children).toHaveLength(1);
+    const bar = header.firstElementChild!;
+    expect([...bar.children].map((child) => child.textContent)).toEqual(["Wazo", "Account"]);
     expect(bar.className.split(" ")).toContain("justify-between");
+  });
+
+  it("reads as the product: no Prototype badge and no lattice band, the wordmark at 30 px (D-65)", async () => {
+    await renderTree(<TopBar />);
+    const header = screen.getByRole("banner");
+    expect(header.querySelector("[data-prototype-badge]")).toBeNull();
+    expect(header.querySelector("[data-lattice]")).toBeNull();
+    expect(within(header).queryByText("Prototype")).toBeNull();
+    expect(header.querySelector("[data-wordmark] svg")!.getAttribute("width")).toBe("30");
+    expect(header.className.split(" ")).toEqual(expect.arrayContaining(["border-b", "border-line", "bg-field"]));
   });
 
   it("is not sticky, so it never covers what has focus", async () => {

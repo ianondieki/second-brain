@@ -52,8 +52,7 @@
       "system": "System",
       "light": "Light",
       "dark": "Dark"
-    },
-    "prototypeBadge": "Prototype"
+    }
   },
   "panel": {
     "title": "How it works",

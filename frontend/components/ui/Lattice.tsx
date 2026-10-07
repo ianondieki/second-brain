@@ -1,7 +1,7 @@
 import { cn } from "./cn";
 
 /**
- * The kanga-cut lattice band (D-52: the one East African signature): a 6 px two-tone edge on the top bar, the
+ * The kanga-cut lattice band (D-52: the one East African signature): a 6 px two-tone edge on the
  * landing hero's frame, the certificate sheet and empty-state art. Decorative, never behind text.
  */
 export function Lattice({ className }: { className?: string }) {

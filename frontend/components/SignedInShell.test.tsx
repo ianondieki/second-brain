@@ -43,6 +43,9 @@ describe("SignedInShell", () => {
     expect(within(header).getByRole("link", { name: "Plan & billing" })).toBeTruthy();
     expect(header.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(main).getByRole("heading", { level: 1, name: "My ideas" })).toBeTruthy();
+    // D-65: the signed-in top bar carries no Prototype badge and no lattice band.
+    expect(within(header).queryByText("Prototype")).toBeNull();
+    expect(header.querySelector("[data-lattice]")).toBeNull();
   });
 
   it("puts the bell, with the unread count read on the server, before the account menu (P19-C)", async () => {
