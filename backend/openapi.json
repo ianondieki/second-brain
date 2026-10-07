@@ -1,5 +1,14 @@
 {
   "components": {
+    "headers": {
+      "X-App-Now": {
+        "description": "The platform clock when the request was answered, in ISO 8601 UTC with a Z (to the millisecond): on every /api response, errors included, except a state-changing request refused for its CSRF token. Count deadlines (due_at, deadline_at) down from it, not from the device's clock; in dev and test it follows the test clock.",
+        "schema": {
+          "format": "date-time",
+          "type": "string"
+        }
+      }
+    },
     "schemas": {
       "AcceptedOut": {
         "properties": {
@@ -723,6 +732,19 @@
             "description": "Proposals wanted by this day (Africa/Nairobi); null when none",
             "title": "Deadline"
           },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The instant the deadline day ends, for a countdown: 23:59:59.999999 in Africa/Nairobi, in UTC; null when there is no deadline. Derived from deadline (REQ-TRACK-03); open and ended stay the authority",
+            "title": "Deadline At"
+          },
           "ended": {
             "anyOf": [
               {
@@ -951,6 +973,19 @@
               }
             ],
             "title": "Deadline"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The instant the deadline day ends, for a countdown: 23:59:59.999999 in Africa/Nairobi, in UTC; null when there is no deadline. Derived from deadline (REQ-TRACK-03); open and ended stay the authority",
+            "title": "Deadline At"
           },
           "id": {
             "description": "The Brief's problem id (its page is GET /api/problems/{id} once published)",
@@ -3690,10 +3725,17 @@
         "type": "object"
       },
       "DueOut": {
+        "description": "The current step's deadline: by the end of ``due_on`` in Africa/Nairobi.",
         "properties": {
           "business_days_left": {
             "title": "Business Days Left",
             "type": "integer"
+          },
+          "due_at": {
+            "description": "The instant the window closes, for a countdown: the stage deadline (the end of due_on in Africa/Nairobi, 23:59:59 local), in UTC; overdue is true exactly once it has passed",
+            "format": "date-time",
+            "title": "Due At",
+            "type": "string"
           },
           "due_on": {
             "format": "date",
