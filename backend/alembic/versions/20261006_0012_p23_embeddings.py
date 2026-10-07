@@ -6,9 +6,9 @@ vector in its own transaction and no vector is written while the consent is not 
 narrowings of earlier objects, restored on downgrade (a grant on ``problems``, the INSERT policy of
 ``developer_profiles``): four new columns (``developer_profiles.profile_embedded_at`` and
 ``profile_embedding_hash``, ``problems.embedded_at`` and ``embedding_hash``), two HNSW cosine indexes, sixteen new
-functions (six granted to bridge_app, nine internal, one trigger function) and one trigger. No new table, no enum
+functions (six granted to bridge_app, nine internal, two trigger functions) and two triggers. No new table, no enum
 type; nothing else of revisions 0001 to 0011 is changed or dropped. The downgrade nulls every vector with its model
-and version on both tables, then drops the trigger, functions, indexes and the four new columns and restores the grant
+and version on both tables, then drops the triggers, functions, indexes and the four new columns and restores the grant
 and the policy. Every vector is derived data the worker recomputes from rows that stay (the profiles, niches,
 proposals and problems), and without its hash nothing would say which text a vector came from, so the downgrade
 clears them rather than keep vectors 0011 cannot judge; it loses nothing anyone wrote and proceeds with rows, needing
@@ -41,8 +41,12 @@ an edit that commits between the listing and the write is never stamped as embed
 - ``consents`` (revision 0001; append-only): ``consents_profiling_withdrawn`` (AFTER INSERT, every role, WHEN the row
   is ``profiling`` and not granted) nulls the profile's vector, model, version, time and hash in the inserting
   transaction and moves ``updated_at`` to ``now()``, always writing the row (even without a vector), whatever the app
-  does next. The app also calls
-  ``app_clear_profile_embedding`` in the opt-out request (belt and braces; the second call finds nothing to clear).
+  does next. The app also calls ``app_clear_profile_embedding`` in the opt-out request (belt and braces; the second
+  call finds nothing to clear). ``consents_created_now`` (BEFORE INSERT, SECURITY INVOKER) sets ``created_at`` to
+  ``now()`` for every writer but the table's owner (a seed or a backfill keeps its own time): bridge_app's INSERT is
+  table-wide, and ``created_at`` decides which decision is the latest, so a future-dated grant followed by a
+  withdrawal would otherwise leave the grant "latest" and the profile embeddable again. The latest decision is then
+  the last inserted (then the highest id within one transaction, as ``bridge.profiles.consents.latest`` orders).
 - ``developer_niches`` (revision 0001): no trigger. The text holds the liked niches' names, so the hash sees a liked
   niche added, removed or renamed without one.
 
@@ -502,6 +506,23 @@ BEGIN
     RETURN NULL;
 END;
 $$;
+
+-- A consent decision's time is the database's for every writer but the table's owner (a seed or a backfill keeps its
+-- own): the latest decision (created_at, then id) is then the last inserted, whatever a client sends, so a
+-- future-dated grant cannot outlive a later withdrawal. SECURITY INVOKER: current_user is the writer (as
+-- engagement_notes_redaction_guard() of revision 0006).
+CREATE FUNCTION consents_created_now() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF current_user <> (SELECT pg_catalog.pg_get_userbyid(c.relowner) FROM pg_catalog.pg_class c WHERE c.oid = TG_RELID)
+    THEN
+        NEW.created_at := now();
+    END IF;
+    RETURN NEW;
+END;
+$$;
 """
 
 # EXECUTE grants (EXECUTE revoked from PUBLIC first).
@@ -524,13 +545,16 @@ INTERNAL_FUNCTIONS = (
     "embedding_text_line(text)",
     "embedding_label_is_valid(text, integer)",
 )
-TRIGGER_FUNCTIONS = ("consents_profiling_withdrawn()",)
+TRIGGER_FUNCTIONS = ("consents_profiling_withdrawn()", "consents_created_now()")
 
 TRIGGERS_SQL = r"""
 CREATE TRIGGER consents_profiling_withdrawn
     AFTER INSERT ON consents
     FOR EACH ROW WHEN (NEW.purpose = 'profiling' AND NOT NEW.granted)
     EXECUTE FUNCTION consents_profiling_withdrawn();
+CREATE TRIGGER consents_created_now
+    BEFORE INSERT ON consents
+    FOR EACH ROW EXECUTE FUNCTION consents_created_now();
 """
 
 
@@ -580,7 +604,7 @@ def downgrade() -> None:
         " WHERE embedding IS NOT NULL OR embed_model IS NOT NULL OR embed_version IS NOT NULL;"
     )
     _run_sql(f"ALTER POLICY bridge_app_insert ON developer_profiles WITH CHECK ({PROFILE_INSERT_0001});")
-    _run_sql("DROP TRIGGER consents_profiling_withdrawn ON consents;")
+    _run_sql("DROP TRIGGER consents_profiling_withdrawn ON consents; DROP TRIGGER consents_created_now ON consents;")
     _run_sql(
         "\n".join(
             f"DROP FUNCTION {signature};" for signature in (*TRIGGER_FUNCTIONS, *FUNCTION_GRANTS, *INTERNAL_FUNCTIONS)
