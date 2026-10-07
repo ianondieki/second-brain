@@ -46,7 +46,7 @@ describe("Trust", () => {
     expect(items.map((item) => item.textContent)).toEqual([
       "Every version timestamped",
       "Full details under one Evaluation NDA",
-      "Organisations verified with registration documents",
+      "Proposals go only to verified organisations",
       "One tracker for both sides",
     ]);
     for (const item of items) {
