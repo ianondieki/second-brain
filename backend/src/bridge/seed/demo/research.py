@@ -53,6 +53,8 @@ SEEDED_EXAMPLE_MODEL: Final = "seeded-example"  # Result.model of the fixed answ
 
 # Written by hand from the saved excerpts (backend/seed/research_excerpts.yaml), one card per niche. They name no
 # organisation (D-45) and use only figures the cited quotes carry; the checks in code verify both on every seed run.
+# Each names a county (ISO 3166-2) so the demo's Explore page has places to show; the pipeline keeps it only when it
+# is a county in the regions table (``pipeline.county_of``).
 SEEDED_ANSWERS: Final[Mapping[str, Mapping[str, Any]]] = {
     "networks-telecommunications": {
         "title": "Smaller operators struggle with call termination charges",
@@ -63,6 +65,7 @@ SEEDED_ANSWERS: Final[Mapping[str, Mapping[str, Any]]] = {
             " calls and payments across networks."
         ),
         "affected_group": "Smaller mobile operators and their customers",
+        "county_code": "KE-30",  # Nairobi City: a plausible place for the demo, not a fact the excerpts state
         "citations": (
             ("ke-tel-001", "share in the mobile money market had slimmed to 89 percent"),
             ("ke-tel-002", "decline from the previous Sh0.41 to Sh0.37"),
@@ -78,6 +81,7 @@ SEEDED_ANSWERS: Final[Mapping[str, Mapping[str, Any]]] = {
             " inputs and stock after dry spells."
         ),
         "affected_group": "Grain farmers in drought-hit areas",
+        "county_code": "KE-44",  # Uasin Gishu: a plausible place for the demo, not a fact the excerpts state
         "citations": (
             ("ke-agr-001", "national food production projected to decline by between 30 and 40 per cent"),
             ("ke-agr-002", "import 25 million 90-kilogramme bags of maize"),
@@ -94,6 +98,7 @@ SEEDED_ANSWERS: Final[Mapping[str, Mapping[str, Any]]] = {
             " claims correctly."
         ),
         "affected_group": "Clinics and small hospitals",
+        "county_code": "KE-17",  # Kisumu: a plausible place for the demo, not a fact the excerpts state
         "citations": (
             ("ke-hlt-003", "integrate their systems with the national digital health infrastructure"),
             ("ke-hlt-004", "fail to execute new agreements under the 2026\u20132029 contracting cycle"),
@@ -112,6 +117,7 @@ SEEDED_ANSWERS: Final[Mapping[str, Mapping[str, Any]]] = {
             " SACCOs lack affordable tools for both."
         ),
         "affected_group": "Deposit-taking SACCOs and their members",
+        "county_code": "KE-30",  # Nairobi City: a plausible place for the demo, not a fact the excerpts state
         "citations": (
             ("ke-sac-001", "total assets held by regulated Saccos to Sh1.21 trillion"),
             ("ke-sac-004", "quality of regulatory data, financial reporting, audit concerns, cybersecurity"),
@@ -129,6 +135,7 @@ def seeded_answer(niche: str) -> synthesis.ResearchSynthesis:
         affected_group=card["affected_group"],
         named_orgs=[],
         citations=[synthesis.DraftCitation(excerpt_id=i, supporting_text=t) for i, t in card["citations"]],
+        county_code=card["county_code"],
     )
     return synthesis.ResearchSynthesis(injection_suspected=False, problems=[draft])
 

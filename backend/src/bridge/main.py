@@ -59,6 +59,7 @@ from bridge.proposals.pitch_router import router as pitch_router
 from bridge.proposals.router import router as proposals_router
 from bridge.proposals.shortlist_router import router as shortlist_router
 from bridge.provenance.router import router as provenance_router
+from bridge.public.router import router as public_router
 from bridge.quiz.router import router as quiz_router
 from bridge.teams.contributors import router as contributors_router
 from bridge.teams.peers import router as peers_router
@@ -225,6 +226,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(quiz_admin_router)
     app.include_router(events_admin_router)
     app.include_router(provenance_router)
+    app.include_router(public_router)
     app.include_router(pitch_router)
     app.include_router(proposals_router)
     app.include_router(assistant_router)
