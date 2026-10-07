@@ -9,7 +9,9 @@ written, cleared and is still stale (``app_stale_embedding_counts``). Freshness 
 liked-niche, proposal or problem edit is picked up by the next run with no marking code.
 
 An embedder that cannot run here (``EmbedderUnavailable``: sentence-transformers or the weights missing) logs one line
-and ends the run; the next run, 15 minutes later, tries again (no retry storm). The runtime is built from settings on
+(the exception's class and the model, never the weights' path) and ends the run; the next run, 15 minutes later, tries
+again (no retry storm). Any other failure of one table's pass is logged and the other table still runs; the counts are
+logged, then the job fails (``EmbeddingsRunFailed``) so the failure is visible. The runtime is built from settings on
 first use and kept: the embedder loads its weights once per worker process, not once per run.
 """
 
@@ -42,9 +44,16 @@ class EmbeddingsDeps:
 @dataclass(frozen=True, slots=True)
 class RunReport:
     cleared: PerTable
-    tables: tuple[ReembedReport, ...]  # the profiles', then the problems' (fewer when the embedder could not run)
+    tables: tuple[
+        ReembedReport, ...
+    ]  # the profiles', then the problems' (fewer when one failed or the embedder could not run)
     stale: PerTable | None = None  # rows still stale after the run; None when the embedder could not run
     unavailable: bool = False
+    failed: tuple[str, ...] = ()  # tables whose pass raised (the other still ran; the job then fails)
+
+
+class EmbeddingsRunFailed(RuntimeError):
+    """A table's pass raised; the other table ran and the counts were logged first."""
 
 
 class EmbeddingsRuntime:
@@ -75,20 +84,25 @@ class EmbeddingsRuntime:
 
 
 async def run_embeddings(deps: EmbeddingsDeps) -> RunReport:
-    """Clear the vectors of emptied texts, then embed what is stale in each table (see the module docstring)."""
+    """Clear the vectors of emptied texts, then embed what is stale in each table (see the module docstring). A table
+    whose pass raises is logged and left; the other still runs and the counts are logged either way."""
     cleared = await clear_empty(deps.factory)
     reports: list[ReembedReport] = []
-    try:
-        for table in (ProfileEmbeddingTable(deps.factory), ProblemEmbeddingTable(deps.factory)):
+    failed: list[str] = []
+    for table in (ProfileEmbeddingTable(deps.factory), ProblemEmbeddingTable(deps.factory)):
+        try:
             reports.append(await reembed(table, deps.embedder, batch_size=deps.batch_size, max_rows=deps.max_rows))
-    except EmbedderUnavailable as exc:
-        log.warning("embeddings.unavailable", reason=str(exc), model=deps.embedder.model)
-        return RunReport(cleared, tuple(reports), unavailable=True)
+        except EmbedderUnavailable as exc:
+            log.warning("embeddings.unavailable", error_type=type(exc).__name__, model=deps.embedder.model)
+            return RunReport(cleared, tuple(reports), unavailable=True, failed=tuple(failed))
+        except Exception as exc:  # one table's failure must not stop the other's pass
+            log.error("embeddings.table_failed", table=table.name, error_type=type(exc).__name__)
+            failed.append(table.name)
     stale = await stale_counts(deps.factory, model=deps.embedder.model, version=deps.embedder.version)
-    profiles, problems = reports
-    for report, cleared_rows, stale_rows in (
-        (profiles, cleared.profiles, stale.profiles),
-        (problems, cleared.problems, stale.problems),
+    written = {report.table: report.rows for report in reports}
+    for name, cleared_rows, stale_rows in (
+        (ProfileEmbeddingTable.name, cleared.profiles, stale.profiles),
+        (ProblemEmbeddingTable.name, cleared.problems, stale.problems),
     ):
-        log.info("embeddings.run", table=report.table, rows=report.rows, cleared=cleared_rows, stale=stale_rows)
-    return RunReport(cleared, (profiles, problems), stale)
+        log.info("embeddings.run", table=name, rows=written.get(name, 0), cleared=cleared_rows, stale=stale_rows)
+    return RunReport(cleared, tuple(reports), stale, failed=tuple(failed))

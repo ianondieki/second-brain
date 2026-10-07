@@ -26,7 +26,14 @@ from bridge.llm.embeddings import FAKE_MODEL, FAKE_VERSION, EmbedderUnavailable,
 from bridge.logging import get_logger
 from tests.integration import world as w
 from tests.integration.embeddings.job_world import Interrupting, committed, consented_developer, deps, problem, profile
-from tests.integration.embeddings.schema_world import EMPTY_PROBLEM, EMPTY_PROFILE, named_niche, problem_text, sha
+from tests.integration.embeddings.schema_world import (
+    EMPTY_PROBLEM,
+    EMPTY_PROFILE,
+    decide,
+    named_niche,
+    problem_text,
+    sha,
+)
 from tests.integration.engagements import tracker as t
 from tests.integration.teams.schema_world import developer
 
@@ -190,7 +197,7 @@ async def test_an_embedder_that_cannot_run_ends_the_run_with_one_line(
 
     class Missing(FakeEmbedder):
         async def embed(self, texts: Sequence[str]) -> list[Vector]:
-            raise EmbedderUnavailable("bge-m3 weights are not available locally")
+            raise EmbedderUnavailable("bge-m3 weights are not available locally at /srv/operator/models/bge-m3")
 
     user = await consented_developer(job_owner, "unavailable")
     missing = Missing()
@@ -198,8 +205,81 @@ async def test_an_embedder_that_cannot_run_ends_the_run_with_one_line(
         report = await run_embeddings(deps(job_app, missing))
     assert (report.unavailable, report.tables, report.stale) == (True, (), None)
     warnings = [e for e in logs if e["log_level"] == "warning"]
-    assert [(e["event"], e["model"]) for e in warnings] == [("embeddings.unavailable", FAKE_MODEL)]
+    assert [(e["event"], e["error_type"], e["model"]) for e in warnings] == [
+        ("embeddings.unavailable", "EmbedderUnavailable", FAKE_MODEL)
+    ]
+    assert "/srv/operator" not in repr(logs)  # the class and the model only, never the operator's local path
     assert not [e for e in logs if e["event"] == "embeddings.run"]
     assert await profile(job_owner, user) == EMPTY_PROFILE
     await run_embeddings(deps(job_app))
     assert (await profile(job_owner, user))["embed_model"] == FAKE_MODEL
+
+
+async def test_profiling_toggled_after_a_write_never_stops_the_run(
+    job_owner: AsyncEngine, job_app: AsyncEngine
+) -> None:
+    """Review round 1: Given four stale consented profiles and batches of one, When the first written profile's owner
+    turns profiling off and on again before the next batch (its vector cleared; listed again with the same hash),
+    Then that profile is tried again, the other three are written, the problems table is processed and both count
+    lines are logged; nothing raises."""
+    await run_embeddings(deps(job_app))  # settle what other tests left, so the first row written is one of ours
+    users = [await consented_developer(job_owner, f"toggle{n}") for n in range(4)]
+    async with committed(job_owner) as conn:
+        author = await developer(conn, "toggle-author", peers=False)
+        published = await w.add_problem(conn, author, await named_niche(conn, "Problems of the toggle"))
+
+    async def toggle_the_first_written() -> None:
+        async with committed(job_owner) as conn:
+            first_written = await t.run(
+                conn,
+                "SELECT user_id FROM developer_profiles WHERE profile_embedded_at IS NOT NULL"
+                " AND user_id = ANY(:users) ORDER BY profile_embedded_at DESC LIMIT 1",
+                users=users,
+            )
+        assert first_written in users
+        for granted in (False, True):  # two requests: the withdrawal's trigger clears the vector
+            async with committed(job_owner) as conn:
+                await decide(conn, first_written, granted)
+
+    class ToggleOnSecondBatch(FakeEmbedder):
+        async def embed(self, texts: Sequence[str]) -> list[Vector]:
+            if len(self.calls) == 1:
+                await toggle_the_first_written()
+            return await super().embed(texts)
+
+    with capture_logs() as logs:
+        report = await run_embeddings(deps(job_app, ToggleOnSecondBatch(), batch_size=1))
+    assert (report.failed, [r.table for r in report.tables]) == ((), ["developer_profiles", "problems"])
+    for user in users:
+        assert (await profile(job_owner, user))["embed_model"] == FAKE_MODEL
+    assert (await problem(job_owner, published))["embed_model"] == FAKE_MODEL
+    assert [e["table"] for e in logs if e["event"] == "embeddings.run"] == ["developer_profiles", "problems"]
+
+
+async def test_a_table_whose_pass_fails_leaves_the_other_and_the_counts(
+    job_owner: AsyncEngine, job_app: AsyncEngine
+) -> None:
+    """Given a stale profile and a stale problem and an embedder that breaks on its first call, When the job runs,
+    Then the profiles' pass fails and is logged, the problems are still embedded and both count lines are logged."""
+
+    class BreaksOnce(FakeEmbedder):
+        async def embed(self, texts: Sequence[str]) -> list[Vector]:
+            if not self.calls:
+                self.calls.append(list(texts))
+                raise RuntimeError("the encoder crashed")
+            return await super().embed(texts)
+
+    await run_embeddings(deps(job_app))  # settle what other tests left
+    user = await consented_developer(job_owner, "broken")
+    async with committed(job_owner) as conn:
+        author = await developer(conn, "broken-author", peers=False)
+        published = await w.add_problem(conn, author, await named_niche(conn, "Problems of the failure"))
+    with capture_logs() as logs:
+        report = await run_embeddings(deps(job_app, BreaksOnce()))
+    assert report.failed == ("developer_profiles",)
+    assert [r.table for r in report.tables] == ["problems"]
+    errors = [(e["event"], e["table"], e["error_type"]) for e in logs if e["log_level"] == "error"]
+    assert errors == [("embeddings.table_failed", "developer_profiles", "RuntimeError")]
+    assert [e["table"] for e in logs if e["event"] == "embeddings.run"] == ["developer_profiles", "problems"]
+    assert await profile(job_owner, user) == EMPTY_PROFILE
+    assert (await problem(job_owner, published))["embed_model"] == FAKE_MODEL

@@ -10,7 +10,8 @@ import pytest
 
 from bridge.config import get_settings
 from bridge.embeddings.policy import EmbeddingsPolicy
-from bridge.embeddings.worker import EmbeddingsDeps, EmbeddingsRuntime
+from bridge.embeddings.tables import PerTable
+from bridge.embeddings.worker import EmbeddingsDeps, EmbeddingsRunFailed, EmbeddingsRuntime, RunReport
 from bridge.jobs import embeddings as jobs
 from bridge.jobs.app import IMPORT_PATHS, app
 from bridge.llm import registry as registry_module
@@ -30,8 +31,9 @@ def test_the_job_runs_every_15_minutes_one_run_at_a_time() -> None:
 async def test_the_task_runs_a_pass_on_the_installed_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[EmbeddingsDeps] = []
 
-    async def run(deps: EmbeddingsDeps) -> None:
+    async def run(deps: EmbeddingsDeps) -> RunReport:
         calls.append(deps)
+        return RunReport(PerTable(0, 0), (), PerTable(0, 0))
 
     monkeypatch.setattr(jobs, "run_embeddings", run)
     factory: Any = object()
@@ -63,3 +65,19 @@ def test_production_refuses_the_fake_embedder() -> None:
     settings = get_settings().model_copy(update={"app_env": "production", "embedder": "fake"})
     with pytest.raises(ValueError, match="production"):
         EmbeddingsRuntime(settings).deps()
+
+
+async def test_a_table_that_failed_fails_the_job_after_the_pass(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The pass ran both tables and logged the counts; the job then fails so the failure is visible (no retry)."""
+
+    async def run(deps: EmbeddingsDeps) -> RunReport:
+        return RunReport(PerTable(0, 0), (), PerTable(1, 0), failed=("developer_profiles",))
+
+    monkeypatch.setattr(jobs, "run_embeddings", run)
+    factory: Any = object()
+    jobs.use_runtime(EmbeddingsRuntime(get_settings(), factory=factory, embedder=FakeEmbedder(), batch_size=1))
+    try:
+        with pytest.raises(EmbeddingsRunFailed, match="developer_profiles"):
+            await jobs.reembed(timestamp=0)
+    finally:
+        jobs.use_runtime(None)

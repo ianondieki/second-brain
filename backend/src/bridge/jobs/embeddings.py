@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from bridge.embeddings.worker import EmbeddingsRuntime, run_embeddings
+from bridge.embeddings.worker import EmbeddingsRunFailed, EmbeddingsRuntime, run_embeddings
 from bridge.jobs.app import app
 
 TASK: Final = "embeddings.reembed"
@@ -39,4 +39,6 @@ def use_runtime(value: EmbeddingsRuntime | None) -> None:
 @app.task(name=TASK, queue=QUEUE, lock=LOCK)
 async def reembed(timestamp: int) -> None:
     del timestamp  # the rows' hashes decide what is stale, not the job's own time
-    await run_embeddings(runtime().deps())
+    report = await run_embeddings(runtime().deps())
+    if report.failed:
+        raise EmbeddingsRunFailed(f"embedding pass failed for {', '.join(report.failed)}")

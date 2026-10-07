@@ -197,6 +197,8 @@ async def _embeddings(settings: Settings, factory: async_sessionmaker[AsyncSessi
     run = await run_embeddings(EmbeddingsRuntime(settings, factory=factory).deps())
     if run.unavailable:
         report.notes.append("embeddings: the configured embedder cannot run here; recommendations use keywords")
+    for name in run.failed:
+        report.notes.append(f"embeddings: the pass over {name} failed (see the log); the job tries again")
     for table in run.tables:
         if table.rows:
             report.embedded[table.table] = table.rows
