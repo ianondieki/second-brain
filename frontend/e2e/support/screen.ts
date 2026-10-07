@@ -9,11 +9,18 @@ export async function settled(page: Page) {
   await expect(page).toHaveTitle(/\S/);
   // A colour transition still running (a button that just changed variant, 150 ms) would let axe measure a colour
   // halfway between two states; wait for every finite animation and transition to finish first. Infinite ones (a
-  // pending hint's pulse) never finish and are left out.
+  // pending hint's pulse) never finish and are left out, and so are scroll-driven ones (the landing's reveal, P23-2),
+  // which follow the scroll position rather than time and stay "running" while they are attached (checkScreen makes
+  // sure axe still reads those items: see revealsAtRest).
   await page.waitForFunction(() =>
     document
       .getAnimations()
-      .every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity),
+      .every(
+        (a) =>
+          a.playState !== "running" ||
+          a.effect?.getTiming().iterations === Infinity ||
+          !(a.timeline instanceof DocumentTimeline),
+      ),
   );
 }
 
@@ -25,8 +32,19 @@ export async function settled(page: Page) {
  * its title). `strict`: no axe violation of any impact at all (minor and moderate too), the P16 polish's rule for the
  * screens it finished (docs/platform/tasks/P16-C1.md, item 7).
  */
+/**
+ * Items that reveal on scroll (globals.css .reveal) are partly transparent while they come into view, and axe skips what it
+ * cannot see. When any is not fully opaque where the page stands, the axe pass runs under reduced motion, where they
+ * sit in place; a page scrolled through first (e2e/smoke.spec.ts) is checked with its motion as it is.
+ */
+async function revealsAtRest(page: Page): Promise<boolean> {
+  return page.evaluate(() => [...document.querySelectorAll(".reveal")].every((el) => getComputedStyle(el).opacity === "1"));
+}
+
 export async function checkScreen(page: Page, { exclude = [], strict = false }: { exclude?: string[]; strict?: boolean } = {}) {
   await settled(page);
+  const reduce = !(await revealsAtRest(page));
+  if (reduce) await page.emulateMedia({ reducedMotion: "reduce" });
   let axe = new AxeBuilder({ page }).withTags([
     "wcag2a",
     "wcag2aa",
@@ -37,6 +55,7 @@ export async function checkScreen(page: Page, { exclude = [], strict = false }: 
   ]);
   for (const selector of exclude) axe = axe.exclude(selector);
   const results = await axe.analyze();
+  if (reduce) await page.emulateMedia({ reducedMotion: null });
   const failing = strict
     ? results.violations
     : results.violations.filter((v) => v.impact === "serious" || v.impact === "critical");

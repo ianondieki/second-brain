@@ -88,8 +88,8 @@ body. Body measure ≤ 68 ch. Figures are tabular wherever they line up.
 ### Landing (1440)
 
 ```
-╔═ lattice band (bloom/saffron) ═══════════════════════════════════════════════════════════╗
-  [W] Wazo        How it works   For organisations   Check a certificate        Log in
+  [W] Wazo (30 px)  How it works   For organisations   Check a certificate        Log in
+───────────────────────────────────── white band, hairline ──────────────────────────────────
 ██ NIGHT ██████████████████████████████████████████████████████████████████████████████████
 █  Local solutions                              ┌ tracker card (white) ──────────────┐    █
 █  for the organisations                        │ Cold chain for dairy co-ops  ◉ turn │    █
@@ -114,6 +114,10 @@ body. Body measure ≤ 68 ch. Figures are tabular wherever they line up.
 ██ footer (night) wordmark · product, developers, organisations, trust columns · theme ██
 ```
 
+Top bar (D-65, P23-2): the lattice band and the "Prototype" badge left the top bar; it is a quiet white band with a
+hairline, the wordmark at 30 px and at most one control on the right. The lattice frames the hero's foot, the
+certificate sheet and the footer; the honesty label lives with the demo data (the footer's sentence, "Seeded example").
+
 Phones (375): one column; the hero headline at 44 px over four balanced lines ("organisations" sets the
 limit at 360 px); the composition shows the tracker card and the
 certificate; the stage line becomes a vertical list; every grid becomes one column, in reading order.
@@ -121,8 +125,8 @@ certificate; the stage line becomes a vertical list; every grid becomes one colu
 ### Portals (operate)
 
 ```
-╔ lattice ═══════════════════════════════════════════════════════════════════════╗
- [W] Wazo  Prototype                                         (bell)  (avatar ▾)
+ [W] Wazo (30 px)                                            (bell)  (avatar ▾)
+──────────────────────────── white band, hairline ─────────────────────────────────
  ┌ rail ─────────┐  Page title (Bricolage 40)                      [Primary]
  │ ▣ Home        │  one-line lead
  │ ◎ Discover    │  ┌ stat ┐┌ stat ┐┌ stat ┐┌ stat ┐   figures in Bricolage 36

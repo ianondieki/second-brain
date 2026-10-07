@@ -27,6 +27,7 @@
     "reviewP21f2": "[[COPY-REVIEW]] P21-F2 (REQ-ENG-11, AC-TRACK-9, N18): tracker.tabs.messages, tracker.unread, tracker.messages.* (toTracker: the Messages route's link to the turn card's buttons), tracker.history.message, tracker.history.messageSide, trackerMessages.* (the thread, its files and the report sheet; contains_contact says contact details go through the tracker's contact step first), adminModeration.kind.message, adminModeration.untitled.message, adminModeration.outcome.dismissed/upheld, adminModeration.decidedBy.dismissed/upheld, adminModeration.decidedOn.dismissed/upheld, adminModeration.message.*, notificationSettings.preference.engagement.n18 (the N18 email row; the page reads preference.KIND, here engagement.n18) Review round: tracker.messages.toTracker reworded \"Open the Tracker tab\" (shown only when it is the viewer's turn, and as the not-open state's one action), tracker.messages.endedBeforeOpen, tracker.messages.emptyViewer; trackerMessages.refusal.tooMany.one/other and trackerMessages.file.limit.one/other (plural by Intl.PluralRules in the browser: client namespaces take no ICU plurals); dev Discover's save button reads \"Save\". Re-review round: tracker.messages.readOnlyEmpty (an ended, empty thread: nothing \"stays here to read\"). [[SW-REVIEW]] draft Swahili",
     "reviewP22a": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-AF (REQ-DEV-01; D-59), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: quiz.*, quizPlay.*, adminQuiz.*, admin.nav.quiz; review round: quiz.topic.*, wording of the leads, no-quiz sentence and marks",
     "reviewP22b": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: week.*, nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; eventForm.fieldError.* follow the backend's own sentences (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed",
+    "reviewP23b": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-2 (REQ-UX-01, REQ-UX-03; D-52, D-65), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tour.back, tour.pause, tour.step, tour.stepLabel (vidhibiti vya ziara inayojisogeza); landing.trust.* (mstari chini ya sehemu ya juu: ukweli wanne uliopo tayari kwenye landing.*, bila takwimu wala majina)",
     "reviewP22c": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: teams.*, teamUp.*, profileSettings.*, settingsNav.profile, ideaContributors.*, ideas.contributorsLine, ideas.sheet.contributors; 'Shirikiana' for team up, 'mwaliko' for invitation, 'mchangiaji' for contributor, 'wenzako' for peers; trackerMessages.refusal.attachFailed (faili za kisanduku cha ujumbe hazikupakia)"
   },
   "app": {
@@ -52,8 +53,7 @@
       "system": "Mfumo",
       "light": "Mwanga",
       "dark": "Giza"
-    },
-    "prototypeBadge": "Mfano wa awali"
+    }
   },
   "panel": {
     "title": "Jinsi inavyofanya kazi",
@@ -80,6 +80,12 @@
       "certTitle": "Cheti cha uandishi",
       "certStatus": "Imewekwa muhuri wa wakati",
       "label": "Mfano wa kuonyesha"
+    },
+    "trust": {
+      "timestamped": "Kila toleo lina muhuri wa wakati",
+      "nda": "Maelezo kamili chini ya NDA moja ya tathmini",
+      "verified": "Mapendekezo huenda kwa mashirika yaliyothibitishwa pekee",
+      "tracker": "Kifuatiliaji kimoja kwa pande zote mbili"
     },
     "how": {
       "title": "Jinsi inavyofanya kazi",
@@ -2991,6 +2997,10 @@
     "skip": "Ruka ziara",
     "next": "Inayofuata",
     "done": "Nimemaliza",
+    "back": "Rudi",
+    "pause": "Sitisha",
+    "step": "Hatua {number}",
+    "stepLabel": "Hatua {current} kati ya {total}: {title}",
     "devHome": {
       "title": "Hii ndiyo nyumbani kwako",
       "body": "Kinachokusubiri huja kwanza: zamu yako kwenye ushirikiano, tarehe ya mwisho, pendekezo linalostahili kuangaliwa."

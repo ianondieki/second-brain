@@ -19,6 +19,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { ClientStrings } from "@/components/ClientStrings";
 import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
 import { tourDoneFromCookies } from "@/components/tour/tour-store";
+import { tourScenes } from "@/components/tour/TourScenes";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { needsMfaSetup, type Me } from "@/lib/auth/routing";
 import { formatShortDate } from "@/lib/format";
@@ -72,10 +73,11 @@ export async function HomeContent({ me, engagements, ideas, recommended, quiz = 
   const mfa = me.mfa.enrolled ? "on" : needsMfaSetup(me.mfa) ? "required" : "off";
   const rowHref = (id: string) => `${ENGAGEMENTS_PATH}/${encodeURIComponent(id)}`;
 
+  const tourDone = tourDoneFromCookies(await cookies(), "developer");
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <ClientStrings strings={await clientStrings(["tour"])}>
-        <FirstLoginTour side="developer" initialDone={tourDoneFromCookies(await cookies(), "developer")} />
+        <FirstLoginTour side="developer" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("developer")} />
       </ClientStrings>
       <div className="max-w-4xl">
         <PageHeader
