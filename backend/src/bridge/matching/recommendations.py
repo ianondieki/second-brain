@@ -31,7 +31,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge.errors import not_found
 from bridge.matching.discover import niches, problem_out, trend_out
 from bridge.matching.discover_schemas import FeatureOut, FeaturesOut, PursuitOut, Recommendation, RecommendationsOut
-from bridge.matching.ranker import DECISION_LABELS, RECOMMENDABLE, Card, Developer, keywords, rank
+from bridge.matching.ranker import (
+    DECISION_LABELS,
+    RECOMMENDABLE,
+    SEMANTIC_CHIP_FLOOR,
+    Card,
+    Developer,
+    keywords,
+    rank,
+)
 from bridge.matching.ranking_config import RankingConfig
 from bridge.matching.trend_facts import board, load
 from bridge.models.enums import ConsentPurpose
@@ -66,10 +74,12 @@ _SIMILARITY = text(
 
 @dataclass(frozen=True, slots=True)
 class Embedding:
-    """The configured embedder's model and version: only vectors of these are compared."""
+    """The configured embedder's model and version (only vectors of these are compared) and its floor for the
+    "Similar to your profile" chip (``embeddings.chip_floors`` in ai/models.yaml, else the ranker's default)."""
 
     model: str
     version: str
+    chip_floor: float = SEMANTIC_CHIP_FLOOR
 
 
 async def developer(db: AsyncSession, user_id: UUID, cfg: RankingConfig) -> Developer:
@@ -114,7 +124,8 @@ async def recommendations(
     ids = [pid for pid, fact in b.facts.problems.items() if fact.source in RECOMMENDABLE]
     near = await similarities(db, user_id, ids, embedding) if dev.personalised and embedding is not None else {}
     cards = [Card(b.facts.problems[pid], b.problems[pid], b.signals[pid], near.get(pid)) for pid in ids]
-    rows = rank(cards, dev, cfg.ranker, cfg.trending, b.facts.now)
+    floor = embedding.chip_floor if embedding is not None else SEMANTIC_CHIP_FLOOR
+    rows = rank(cards, dev, cfg.ranker, cfg.trending, b.facts.now, chip_floor=floor)
     items = [
         Recommendation(
             problem=problem_out(r.card.fact, tree),

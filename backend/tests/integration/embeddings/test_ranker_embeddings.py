@@ -92,15 +92,16 @@ async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
     niches = {
         "Near": world.niche,
         "Far": world.niche,
+        "Middle": world.niche,
         "Other model": world.sibling,
         "Unhashed": world.sibling,
         "Zeroed": world.sibling,
     }
-    near, far, other_model, unhashed, zeroed = [
+    near, far, middle, other_model, unhashed, zeroed = [
         await research_card(owner_engine, niche, county="KE-30", title=f"{label} solar irrigation pumps")
         for label, niche in niches.items()
     ]
-    made.extend((near, far, other_model, unhashed, zeroed))
+    made.extend((near, far, middle, other_model, unhashed, zeroed))
     developer = await developers()
     me = user_of(developer)
     await personalised(developer, world)
@@ -109,7 +110,8 @@ async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
     fake = FakeEmbedder({await profile_text(owner_engine, me): base})
     fake.pin(await problem_text(owner_engine, near), vector_with_similarity(base, 0.9, seed="near"))
     fake.pin(await problem_text(owner_engine, far), vector_with_similarity(base, 0.1, seed="far"))
-    await embed(app_engine, owner_engine, fake, me, near, far, other_model, unhashed, zeroed)
+    fake.pin(await problem_text(owner_engine, middle), vector_with_similarity(base, 0.4, seed="middle"))
+    await embed(app_engine, owner_engine, fake, me, near, far, middle, other_model, unhashed, zeroed)
     zero = "[" + ",".join(["0"] * 1024) + "]"
     async with owner_engine.begin() as conn:
         await conn.execute(text("UPDATE problems SET embed_model = 'another-model' WHERE id = :p"), {"p": other_model})
@@ -119,17 +121,18 @@ async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
         )
 
     items = await recommended(developer)
-    close, distant = items[str(near)], items[str(far)]
+    close, distant, between = items[str(near)], items[str(far)], items[str(middle)]
     assert close["position"] < distant["position"]
     assert close["score"] > distant["score"]
-    for item, cosine in ((close, 0.9), (distant, 0.1)):
+    for item, cosine in ((close, 0.9), (distant, 0.1), (between, 0.4)):
         fit = item["features"]["semantic_fit"]
         assert (fit["applies"], fit["source"]) == (True, "embedding")
         assert fit["raw"] == pytest.approx(cosine, abs=1e-4)  # float32 vectors
         assert fit["value"] == pytest.approx(cosine, abs=1e-4)
     assert SIMILAR_WORDS in close["why"]
     assert "Close to your profile" not in close["why"]
-    assert SIMILAR_WORDS not in distant["why"]  # 0.1 is under SEMANTIC_CHIP_FLOOR
+    assert SIMILAR_WORDS not in distant["why"]  # 0.1 is under the fake's configured floor (0.3)
+    assert SIMILAR_WORDS in between["why"]  # the route uses the fake's floor (0.3), not the default (0.5)
     for fallback in (other_model, unhashed, zeroed):
         fit = items[str(fallback)]["features"]["semantic_fit"]
         assert (fit["applies"], fit["source"], fit["raw"]) == (True, "keywords", 4)  # solar, irrigation, pumps, farmers
