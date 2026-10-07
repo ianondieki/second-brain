@@ -4045,7 +4045,7 @@
     "title": "Problems across Kenya",
     "lead": "Published problems by county and by niche. Open one to read it, or create an account to answer it.",
     "signUp": "Create an account",
-    "totals": "{problems, plural, one {# problem} other {# problems}} in {counties, plural, one {# county} other {# counties}} and {niches, plural, one {# niche} other {# niches}}",
+    "totals": "{problems, plural, one {# problem} other {# problems}} across {counties, plural, one {# county} other {# counties}} with problems and {niches, plural, one {# niche} other {# niches}}",
     "counties": "By county",
     "niches": "By niche",
     "count": "{count, plural, one {# problem} other {# problems}}",

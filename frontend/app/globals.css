@@ -35,7 +35,7 @@
 }
 /* Fraunces (D-66, P24): the serif display face for page and section titles, upright and italic (the hero's one accent
    phrase). Instanced with fontTools (SOFT and WONK pinned at 0) to what the pages set: the upright to opsz 24–72 (no
-   title is larger than 72 px) and wght 500–700, with kerning, ligatures and contextual forms, in two files by
+   title is larger than 72 px) and wght 500–700, with kerning and ligatures, in two files by
    unicode-range: Basic Latin and punctuation (37 KB, preloaded) and Latin-1 with Latin Extended-A (43 KB, fetched only
    where a title needs it); the italic to opsz 40–72
    at wght 500, lower-case letters and punctuation only (9 KB: it sets the hero's phrase and nothing else). Every font the first screen uses is fetched before the landing's

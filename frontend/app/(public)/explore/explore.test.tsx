@@ -46,7 +46,7 @@ describe("Explore", () => {
   it("shows the counties as anchored tiles with their counts and newest three, then the niches", async () => {
     const { container } = await explore(EXPLORE);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Problems across Kenya");
-    expect(container.querySelector("[data-explore='totals']")!.textContent).toBe("7 problems in 2 counties and 2 nichesSeeded example");
+    expect(container.querySelector("[data-explore='totals']")!.textContent).toBe("7 problems across 2 counties with problems and 2 nichesSeeded example");
     const nairobi = container.querySelector<HTMLElement>("[id='KE-30']")!;
     expect(within(nairobi).getByRole("heading", { level: 3 }).textContent).toBe("Nairobi City");
     expect(nairobi.textContent).toContain("4 problems");

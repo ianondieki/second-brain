@@ -4045,7 +4045,7 @@
     "title": "Matatizo kote Kenya",
     "lead": "Matatizo yaliyochapishwa kwa kaunti na kwa niche. Fungua moja ulisome, au fungua akaunti ili ulijibu.",
     "signUp": "Fungua akaunti",
-    "totals": "{problems, plural, one {# tatizo} other {# matatizo}} katika {counties, plural, one {# kaunti} other {# kaunti}} na {niches, plural, one {# niche} other {# niche}}",
+    "totals": "{problems, plural, one {# tatizo} other {# matatizo}} katika {counties, plural, one {# kaunti} other {# kaunti}} zenye matatizo na {niches, plural, one {# niche} other {# niche}}",
     "counties": "Kwa kaunti",
     "niches": "Kwa niche",
     "count": "{count, plural, one {# tatizo} other {# matatizo}}",
