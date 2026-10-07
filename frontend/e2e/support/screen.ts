@@ -9,11 +9,17 @@ export async function settled(page: Page) {
   await expect(page).toHaveTitle(/\S/);
   // A colour transition still running (a button that just changed variant, 150 ms) would let axe measure a colour
   // halfway between two states; wait for every finite animation and transition to finish first. Infinite ones (a
-  // pending hint's pulse) never finish and are left out.
+  // pending hint's pulse) never finish and are left out, and so are scroll-driven ones (the landing's reveal, P23-2),
+  // which follow the scroll position rather than time and stay "running" while they are attached.
   await page.waitForFunction(() =>
     document
       .getAnimations()
-      .every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity),
+      .every(
+        (a) =>
+          a.playState !== "running" ||
+          a.effect?.getTiming().iterations === Infinity ||
+          !(a.timeline instanceof DocumentTimeline),
+      ),
   );
 }
 
