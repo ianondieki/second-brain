@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { forwardHeaders, serverApi } from "@/lib/api/server";
 import type { components } from "@/lib/api/schema";
 
@@ -46,8 +48,11 @@ export type ProblemRead = { kind: "found"; problem: PublicProblem } | { kind: "n
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** One public problem: found, not public (404, or an id that cannot be one: no request), or the API did not answer. */
-export async function publicProblem(id: string): Promise<ProblemRead> {
+/**
+ * One public problem: found, not public (404, or an id that cannot be one: no request), or the API did not answer.
+ * Once per request (React.cache): the page and its metadata share the read.
+ */
+export const publicProblem = cache(async function publicProblem(id: string): Promise<ProblemRead> {
   if (!UUID.test(id)) return { kind: "notFound" };
   try {
     const { data, response } = await serverApi().GET("/api/public/problems/{problem_id}", {
@@ -59,7 +64,7 @@ export async function publicProblem(id: string): Promise<ProblemRead> {
   } catch {
     return { kind: "unavailable" };
   }
-}
+});
 
 /** "ICT › Networks & Telecommunications", or the top-level niche alone. */
 export function nicheLabel(niche: PublicProblem["niche"]): string | null {

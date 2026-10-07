@@ -11,8 +11,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Credits (D-66): every photograph on the site with its attribution line as its licence asks (public/photos/CREDITS.md
- * holds the full record), and the typefaces with their licence. Server-rendered text only.
+ * Credits (D-66): every photograph the site shows, with its attribution as its licence asks: the work's title linked to
+ * its Commons file page, the author, the licence linked to its deed and what was changed (public/photos/CREDITS.md holds
+ * the full record); then the typefaces with their licence. Server-rendered text only.
  */
 export default async function CreditsPage() {
   const t = await getTranslations("credits");
@@ -31,7 +32,24 @@ export default async function CreditsPage() {
                 <Picture photo={photo} sizes="7rem" className="aspect-[4/3] w-full rounded-lg object-cover" />
                 <div>
                   <p className="font-semibold text-ink">{photo.caption}</p>
-                  <p className="mt-1 text-sm text-ink-soft [overflow-wrap:anywhere]">{photo.credit}</p>
+                  <p className="mt-1 text-sm text-ink-soft [overflow-wrap:anywhere]" data-credit={photo.slug}>
+                    {t.rich("attribution", {
+                      title: photo.title,
+                      author: photo.author,
+                      licence: photo.licence,
+                      changes: t(photo.changes === "resized" ? "changes.resized" : "changes.croppedResized"),
+                      work: (chunks) => (
+                        <a href={photo.source_url} rel="noopener" className="font-semibold text-ink underline decoration-1 underline-offset-2 hover:decoration-2">
+                          {chunks}
+                        </a>
+                      ),
+                      deed: (chunks) => (
+                        <a href={photo.licence_url} rel="license noopener" className="text-ink underline decoration-1 underline-offset-2 hover:decoration-2">
+                          {chunks}
+                        </a>
+                      ),
+                    })}
+                  </p>
                 </div>
               </li>
             ))}

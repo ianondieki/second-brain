@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
+import { preload } from "react-dom";
 
 import { Picture } from "@/components/landing/Picture";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { countyAnchor, NATIONWIDE, photoOf, type Photo } from "@/lib/photos/photos";
-import type { ExploreTeaser, PublicExplore } from "@/lib/public/public-data";
+import { Lattice } from "@/components/ui/Lattice";
+import { countyAnchor, NATIONWIDE, photoOf, STRIP, type Photo } from "@/lib/photos/photos";
+import type { ExploreCounty, ExploreTeaser, PublicExplore } from "@/lib/public/public-data";
 
 /** A problem's public page (app/(public)/explore/problems/[id]). */
 export const problemHref = (id: string) => `/explore/problems/${encodeURIComponent(id)}`;
@@ -26,12 +28,20 @@ function Newest({ items, label, niche = true }: { items: readonly ExploreTeaser[
   );
 }
 
-/** A county's tile: its photograph (or tea country's) with the name and count over a night gradient, then its content. */
-function Tile({ anchor, name, count, photo, eager = false, children }: { anchor: string; name: string; count: string; photo: Photo; eager?: boolean; children: ReactNode }) {
+const TILE_SIZES = "(min-width: 1024px) 23rem, (min-width: 640px) 50vw, 100vw";
+
+/** A county's tile: its photograph (or the night band with the lattice) with the name and count over a night gradient. */
+function Tile({ anchor, name, count, photo, eager = false, children }: { anchor: string; name: string; count: string; photo?: Photo; eager?: boolean; children: ReactNode }) {
   return (
     <article aria-labelledby={`${anchor}-name`} className="flex h-full flex-col overflow-hidden rounded-[1.25rem] border border-line bg-field">
       <div className="relative">
-        <Picture photo={photo} eager={eager} sizes="(min-width: 1024px) 23rem, (min-width: 640px) 50vw, 100vw" className="aspect-[16/9] w-full object-cover" />
+        {photo ? (
+          <Picture photo={photo} eager={eager} sizes={TILE_SIZES} className="aspect-[16/9] w-full object-cover" />
+        ) : (
+          <span aria-hidden="true" className="flex aspect-[16/9] w-full flex-col bg-night">
+            <Lattice />
+          </span>
+        )}
         <span aria-hidden="true" className="tile-scrim absolute inset-0" />
         <div className="on-night absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4">
           <h3 id={`${anchor}-name`} className="font-display text-2xl leading-tight font-[560]">
@@ -46,14 +56,38 @@ function Tile({ anchor, name, count, photo, eager = false, children }: { anchor:
 }
 
 /**
- * Explore (D-66; public): the published problems by county, each county a tile with its photograph (tea country's
- * where it has none of its own; the name over a night gradient) and its count, the newest three titles under it as
- * links to their public pages, the problems that name no county as "Nationwide"; then the niches as rows. "Seeded
+ * The counties to show: the API's (by its code, most problems first), then any of the landing strip's six it left out
+ * (no public problem there yet), so every strip link lands on a tile.
+ */
+export function countiesShown(counties: readonly ExploreCounty[]): ExploreCounty[] {
+  const listed = new Set(counties.map((county) => county.code));
+  return [...counties, ...STRIP.filter((county) => !listed.has(county.code)).map((county) => ({ code: county.code, name: county.name, count: 0, newest: [] }))];
+}
+
+/**
+ * Explore (D-66; public): the published problems by county (keyed by the reference code, the anchor the landing's
+ * strip links to), each county a tile with its photograph where one is vendored (else the night band with the
+ * lattice; the name over a night gradient) and its count, the newest three titles under it as links to their public
+ * pages; the strip's counties with no problem yet say so; the problems that name no county are "Nationwide", on the
+ * tea-country photograph; then the niches as rows. "Seeded
  * example" when the summary is the demo seed's. One primary action, "Create an account". When GET /api/public/explore cannot be read, one sentence and one
  * way back.
  */
 export async function ExploreContent({ explore }: { explore: PublicExplore | null }) {
   const t = await getTranslations("explore");
+  const counties = explore ? countiesShown(explore.counties) : [];
+  // The first tile's photograph is a phone's LCP: fetched from the head, at high priority, in the format it will use.
+  const first = counties[0] ? photoOf(counties[0].code) : undefined;
+  if (first) {
+    const base = `${first.dir}/${first.slug}`;
+    preload(`${base}-800.avif`, {
+      as: "image",
+      type: "image/avif",
+      imageSrcSet: `${base}-800.avif 800w, ${base}-1600.avif 1600w`,
+      imageSizes: TILE_SIZES,
+      fetchPriority: "high",
+    });
+  }
   // Problems that name no county are not in any county group: the remainder of the total is the nationwide group.
   const nationwide = explore ? explore.totals.problems - explore.counties.reduce((sum, county) => sum + county.count, 0) : 0;
   return (
@@ -86,16 +120,20 @@ export async function ExploreContent({ explore }: { explore: PublicExplore | nul
               {t("counties")}
             </h2>
             <ul className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {explore.counties.map((county, index) => (
-                <li key={county.code} id={countyAnchor(county.name)} className="scroll-mt-6">
+              {counties.map((county, index) => (
+                <li key={county.code} id={countyAnchor(county.code)} className="scroll-mt-6">
                   <Tile
-                    anchor={countyAnchor(county.name)}
+                    anchor={countyAnchor(county.code)}
                     name={county.name}
                     count={t("count", { count: county.count })}
-                    photo={photoOf(county.name)}
+                    photo={photoOf(county.code)}
                     eager={index === 0}
                   >
-                    <Newest items={county.newest} label={t("newest", { place: county.name })} />
+                    {county.newest.length > 0 ? (
+                      <Newest items={county.newest} label={t("newest", { place: county.name })} />
+                    ) : (
+                      <p className="text-sm text-ink-soft">{t("noneHere")}</p>
+                    )}
                   </Tile>
                 </li>
               ))}
