@@ -5,10 +5,13 @@ REQ-DIR-01, REQ-REPO-02; P24-B). No session needed.
   Brief opened, a proposal version registered.
 - ``GET /api/public/explore``: published problems anyone may read, counted by county and by top-level niche, with the
   three newest of each.
+- ``GET /api/public/problems/{problem_id}``: one of those problems (Explore's links): its published text, place and
+  niche, and a Brief's organisation while it is listed; 404 (``no-store``) for any other id, never saying why.
 
-Both are the same for everyone, so each API worker keeps one copy for 60 seconds (one database read per minute per
-worker) and says ``Cache-Control: public, max-age=60``. A fresh copy is served before anything touches the database,
-so it still answers while the database is down. Only a miss (no fresh copy) counts against its client address on the
+Each is the same for everyone, so each API worker keeps one copy for 60 seconds (one database read per minute per
+worker; per problem, for at most ``PROBLEM_CACHE_CAP`` problems, the least recently read leaving first) and says
+``Cache-Control: public, max-age=60``. A fresh copy is served before anything touches the database, so it still
+answers while the database is down. Only a miss (no fresh copy) counts against its client address on the
 login-attempt ledger, as ``/api/verify`` does (``verify.allow``: keyed digests of the address only), 60 a minute per
 route, and past that it is 429 ``rate_limited`` (``no-store``) and nothing is read; a failed read is a 500
 (``no-store``) and nothing is cached.
@@ -21,16 +24,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic
 from typing import Final
+from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
 
 from bridge import clock
 from bridge.auth.deps import Db, SettingsDep, client_ip
-from bridge.errors import ERROR_RESPONSES, ApiError
+from bridge.errors import ERROR_RESPONSES, ApiError, not_found
 from bridge.provenance import verify
 from bridge.public import feed
-from bridge.public.cache import Cached
-from bridge.public.schemas import ActivityFeed, Explore
+from bridge.public.cache import Cached, Keyed
+from bridge.public.schemas import ActivityFeed, Explore, PublicProblem
 
 router = APIRouter(prefix="/api/public", tags=["public"], responses=ERROR_RESPONSES)
 
@@ -39,19 +43,27 @@ PUBLIC_CACHE: Final = "public, max-age=60"
 READS_PER_MINUTE: Final = 60  # per client address and route; a page view reads each once
 ACTIVITY_PURPOSE: Final = "public-activity"
 EXPLORE_PURPOSE: Final = "public-explore"
+PROBLEM_PURPOSE: Final = "public-problem"
+PROBLEM_CACHE_CAP: Final = 256  # problem pages held per worker
+NO_SUCH_PROBLEM: Final = "No such problem."  # the signed-in problem route's words (bridge.problems.router)
 
 
 @dataclass(frozen=True, slots=True)
 class PublicCaches:
     activity: Cached[ActivityFeed]
     explore: Cached[Explore]
+    problems: Keyed[UUID, PublicProblem]
 
 
 def caches(request: Request) -> PublicCaches:
     """This worker's caches (one per app; made on the first public read)."""
     found: PublicCaches | None = getattr(request.app.state, "public_caches", None)
     if found is None:
-        found = PublicCaches(Cached(CACHE_SECONDS, now=monotonic), Cached(CACHE_SECONDS, now=monotonic))
+        found = PublicCaches(
+            Cached(CACHE_SECONDS, now=monotonic),
+            Cached(CACHE_SECONDS, now=monotonic),
+            Keyed(CACHE_SECONDS, cap=PROBLEM_CACHE_CAP, now=monotonic),
+        )
         request.app.state.public_caches = found
     return found
 
@@ -107,5 +119,28 @@ async def public_explore(request: Request, response: Response, db: Db, settings:
     result = await _served(
         request, db, settings, caches(request).explore, lambda: feed.explore(factory, demo=demo), EXPLORE_PURPOSE
     )
+    response.headers["Cache-Control"] = PUBLIC_CACHE
+    return result
+
+
+@router.get("/problems/{problem_id}")
+async def public_problem(
+    problem_id: UUID, request: Request, response: Response, db: Db, settings: SettingsDep
+) -> PublicProblem:
+    """One published problem anyone may read; 404 for any other id (a draft, a held, archived or rejected problem, an
+    organisation's own or invited Brief, a delisted or unverified organisation's Brief, or no problem at all)."""
+    factory, demo, pages = request.app.state.session_factory, feed.demo_deployment(settings), caches(request).problems
+
+    async def load() -> PublicProblem:
+        page = await feed.problem(factory, problem_id, demo=demo)
+        if page is None:
+            raise not_found(NO_SUCH_PROBLEM)
+        return page
+
+    try:
+        result = await _served(request, db, settings, pages.slot(problem_id), load, PROBLEM_PURPOSE)
+    except ApiError:
+        pages.drop(problem_id)  # nothing found (or refused): the id keeps no slot
+        raise
     response.headers["Cache-Control"] = PUBLIC_CACHE
     return result
