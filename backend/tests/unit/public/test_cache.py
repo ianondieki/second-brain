@@ -8,7 +8,7 @@ import asyncio
 
 import pytest
 
-from bridge.public.cache import Cached
+from bridge.public.cache import Cached, Keyed
 
 
 class Clock:
@@ -81,3 +81,39 @@ async def test_a_failed_load_is_not_remembered() -> None:
 def test_the_ttl_must_be_positive() -> None:
     with pytest.raises(ValueError, match="positive"):
         Cached[int](0)
+
+
+async def test_a_keyed_cache_keeps_one_value_per_key() -> None:
+    keyed: Keyed[str, int] = Keyed(60, cap=4, now=Clock())
+    first, again = keyed.slot("a"), keyed.slot("a")
+    assert first is again
+    assert keyed.slot("b") is not first
+    load = Loader()
+    assert await first.get(load) == 1
+    assert keyed.slot("a").fresh() == 1
+    assert keyed.slot("b").fresh() is None
+
+
+def test_a_keyed_cache_holds_at_most_cap_keys_dropping_the_least_recently_used() -> None:
+    keyed: Keyed[int, int] = Keyed(60, cap=256, now=Clock())
+    slots = {key: keyed.slot(key) for key in range(256)}
+    keyed.slot(0)  # used again: now the most recent
+    keyed.slot(256)  # one key too many: the least recently used (1) leaves
+    assert len(keyed) == 256
+    assert keyed.slot(0) is slots[0]
+    assert keyed.slot(2) is slots[2]
+    assert keyed.slot(1) is not slots[1]  # made again
+    assert len(keyed) == 256
+
+
+def test_a_dropped_key_is_forgotten_and_the_arguments_are_checked() -> None:
+    keyed: Keyed[str, int] = Keyed(60, cap=2, now=Clock())
+    slot = keyed.slot("a")
+    keyed.drop("a")
+    keyed.drop("never")
+    assert len(keyed) == 0
+    assert keyed.slot("a") is not slot
+    with pytest.raises(ValueError, match="cap"):
+        Keyed[str, int](60, cap=0)
+    with pytest.raises(ValueError, match="positive"):
+        Keyed[str, int](0, cap=1)
