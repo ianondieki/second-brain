@@ -8,6 +8,14 @@ import type { Me } from "@/lib/auth/routing";
 // a product screen (test/ fixtures cannot be imported under app/, so these are the lab's own copies). Every figure is
 // a demo figure and the screens label them so.
 
+/** The lab's app-clock instant (the API's X-App-Now on a real page), so the countdowns read the same every time. */
+export const LAB_NOW = "2026-10-01T06:36:00.000Z";
+
+/** A stage deadline as the API sends it, with the instant its window closes (the end of the day in Nairobi; P23-3). */
+export function labDue(due_on: string, business_days_left: number): Summary["due"] {
+  return { due_on, business_days_left, overdue: false, due_at: `${due_on}T20:59:59.999Z` } as Summary["due"];
+}
+
 export const ME: Me = {
   side: "developer",
   memberships: [],
@@ -50,7 +58,7 @@ export function summary(overrides: Partial<Summary> = {}): Summary {
     end_reason: null,
     stage_entered_at: "2026-09-28T09:05:00Z",
     stage_deadline_at: "2026-10-07T20:59:59Z",
-    due: { due_on: "2026-10-07", business_days_left: 4, overdue: false },
+    due: labDue("2026-10-07", 4),
     ended_at: null,
     lock_version: 7,
     whose_turn: ["developer", "org"],
@@ -89,7 +97,7 @@ export const HOME_ENGAGEMENTS: Summary[] = [
     stage_label: "Under review",
     stage_group: "review",
     whose_turn: ["org"],
-    due: { due_on: "2026-10-03", business_days_left: 2, overdue: false },
+    due: labDue("2026-10-03", 2),
   }),
   summary({
     id: "0199b000-0000-7000-8000-00000000e003",

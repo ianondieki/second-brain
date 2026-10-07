@@ -4,7 +4,7 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { EngagementScreen } from "@/components/tracker/EngagementScreen";
 import type { Detail } from "@/components/tracker/model";
 
-import { DETAIL, ME } from "../fixtures";
+import { DETAIL, LAB_NOW, labDue, ME } from "../fixtures";
 
 /** The tracker's side states (REQ-ENG-10 part) on the fixture engagement: `?variant=question|question-org|hold|answered`. */
 const QUESTION = {
@@ -33,7 +33,7 @@ export const TRACKER_VARIANTS: Record<string, Detail> = {
     whose_turn: ["developer"],
     awaiting: [{ command: "answer_info", party: "developer" }],
     actions: ["answer_info", "withdraw"],
-    due: { due_on: "2026-10-15", business_days_left: 9, overdue: false },
+    due: labDue("2026-10-15", 9),
     notes: [QUESTION],
   },
   "question-org": {
@@ -47,7 +47,7 @@ export const TRACKER_VARIANTS: Record<string, Detail> = {
     whose_turn: ["developer"],
     awaiting: [{ command: "answer_info", party: "developer" }],
     actions: ["cancel_request"],
-    due: { due_on: "2026-10-15", business_days_left: 9, overdue: false },
+    due: labDue("2026-10-15", 9),
     notes: [QUESTION],
   },
   hold: {
@@ -59,7 +59,7 @@ export const TRACKER_VARIANTS: Record<string, Detail> = {
     whose_turn: [],
     awaiting: [],
     actions: ["resume", "withdraw"],
-    due: { due_on: "2026-10-21", business_days_left: 13, overdue: false },
+    due: labDue("2026-10-21", 13),
     notes: [{ kind: "hold", body: "Our budget committee meets on 20 October.", by: "org", at: "2026-10-02T08:00:00Z", resume_at: "2026-10-21" }],
   },
   answered: {
@@ -73,7 +73,7 @@ export const TRACKER_VARIANTS: Record<string, Detail> = {
     whose_turn: ["org"],
     awaiting: [{ command: "approve", party: "org" }],
     actions: ["request_info", "pause", "decline"],
-    due: { due_on: "2026-10-20", business_days_left: 11, overdue: false },
+    due: labDue("2026-10-20", 11),
     notes: [QUESTION, ANSWER],
     side_limits: { questions_left: 1, holds_left: 2, hold_days_left: 60 },
     today: "2026-10-05",
@@ -86,7 +86,7 @@ export function TrackerScreen({ variant }: { variant?: string }) {
   const org = detail.my_party === "org";
   return (
     <SignedInShell homeHref={org ? "/org" : "/dev"} nav={org ? <OrgNav current="engagements" /> : <DevNav current="engagements" />} wide>
-      <EngagementScreen detail={detail} me={ME} tab="tracker" doc={null} basePath={org ? "/org/engagements" : "/dev/engagements"} />
+      <EngagementScreen detail={detail} me={ME} tab="tracker" doc={null} basePath={org ? "/org/engagements" : "/dev/engagements"} now={LAB_NOW} />
     </SignedInShell>
   );
 }
