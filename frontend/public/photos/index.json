@@ -1,0 +1,82 @@
+[
+  {
+    "slug": "nairobi-skyline",
+    "county": "Nairobi",
+    "caption": "Nairobi's central business district skyline under a blue sky",
+    "width": 1600,
+    "height": 900,
+    "credit": "Photo: Tall Black, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+  },
+  {
+    "slug": "nairobi-golden-hour",
+    "county": "Nairobi",
+    "caption": "Nairobi skyline at golden hour from the KICC rooftop",
+    "width": 1600,
+    "height": 1200,
+    "credit": "Photo: Lebu Ayiga, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+  },
+  {
+    "slug": "nairobi-jacaranda",
+    "county": "Nairobi",
+    "caption": "Fallen jacaranda blossoms carpeting the ground in Nairobi",
+    "width": 1600,
+    "height": 1067,
+    "credit": "Photo: McKay Savage from London, UK, CC BY 2.0 (resized), via Wikimedia Commons"
+  },
+  {
+    "slug": "mombasa-old-town",
+    "county": "Mombasa",
+    "caption": "Old Town Mombasa across the water, with dhows and the import dock",
+    "width": 1600,
+    "height": 900,
+    "credit": "Photo: Martin Chomba, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+  },
+  {
+    "slug": "mombasa-likoni-ferry",
+    "county": "Mombasa",
+    "caption": "The Likoni ferry crossing Kilindini Harbour, Mombasa",
+    "width": 1600,
+    "height": 900,
+    "credit": "Photo: Victor Ochieng, CC BY-SA 2.0 (resized), via Wikimedia Commons"
+  },
+  {
+    "slug": "kisumu-lake-victoria",
+    "county": "Kisumu",
+    "caption": "Lakeside gazebos and palms seen from a boat on Lake Victoria at Kisumu",
+    "width": 1600,
+    "height": 900,
+    "credit": "Photo: Yashvi1919, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+  },
+  {
+    "slug": "nakuru-lake",
+    "county": "Nakuru",
+    "caption": "Lake Nakuru seen across green grassland through acacia trees",
+    "width": 1600,
+    "height": 828,
+    "credit": "Photo: Diego Delso, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+  },
+  {
+    "slug": "eldoret-town",
+    "county": "Uasin Gishu",
+    "caption": "Eldoret town street after rain, with minibuses and a mosque frontage",
+    "width": 1600,
+    "height": 1199,
+    "credit": "Photo: Daryona, CC BY-SA 3.0 (resized), via Wikimedia Commons"
+  },
+  {
+    "slug": "rongai-market",
+    "county": "Kajiado",
+    "caption": "A market stall of pineapples, coconuts, cassava and other produce in Ongata Rongai",
+    "width": 1600,
+    "height": 1067,
+    "credit": "Photo: safaritravelplus (CC0, public domain dedication; resized), via Wikimedia Commons"
+  },
+  {
+    "slug": "kenya-tea",
+    "county": "Kenya",
+    "caption": "Tea bushes in bright light on a Kenyan tea farm",
+    "width": 1600,
+    "height": 800,
+    "credit": "Photo: SeanTwice (CC0, public domain dedication; cropped and resized), via Wikimedia Commons"
+  }
+]
