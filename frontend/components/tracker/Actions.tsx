@@ -10,6 +10,7 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { confirmStepUp, runCommand, type Refusal } from "./calls";
 import type { Member } from "./CommandForm";
+import { LazyStepUp } from "./lazy";
 import {
   commandRequest,
   isEndingCommand,
@@ -22,12 +23,14 @@ import {
   type SheetCommand,
   type SideLimits,
 } from "./model";
-import { StepUp } from "./StepUp";
 
 // The forms load when one opens (docs/spec/07 item 5: the tracker stays within the JS budget); they never render on
 // the server, so React.lazy adds no layout shift.
 const CommandForm = lazy(() => import("./CommandForm").then((m) => ({ default: m.CommandForm })));
 const SideSheet = lazy(() => import("./SideSheet").then((m) => ({ default: m.SideSheet })));
+// The fresh-code form only a signature, endorsement or payment asks for (403 step_up_required): loaded when asked, and
+// said in one sentence if its chunk cannot load (components/tracker/lazy.tsx).
+const StepUp = LazyStepUp;
 
 export interface ActionsProps {
   engagementId: string;
@@ -283,6 +286,7 @@ export function Actions(props: ActionsProps) {
       ) : null}
 
       {mode.kind === "stepUp" ? (
+        <Suspense fallback={<p className="text-ink-soft">{t("busy")}</p>}>
         <StepUp
           enrolled={props.enrolled}
           onCancel={cancel}
@@ -293,6 +297,7 @@ export function Actions(props: ActionsProps) {
           }}
           confirmImpl={props.confirmImpl}
         />
+        </Suspense>
       ) : null}
     </section>
       )}

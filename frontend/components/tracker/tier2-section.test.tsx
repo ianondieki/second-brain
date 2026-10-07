@@ -90,7 +90,8 @@ describe("the full-proposal section", () => {
 
   it("offers the developer the share, as a secondary action", async () => {
     await section(orgInterest({ my_party: "developer" }));
-    expect(screen.getByRole("button", { name: "Share the full proposal" })).toBeTruthy();
+    // The share loads with its own chunk (components/tracker/lazy.tsx).
+    expect(await screen.findByRole("button", { name: "Share the full proposal" })).toBeTruthy();
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
   });
 

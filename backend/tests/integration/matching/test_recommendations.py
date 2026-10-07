@@ -85,7 +85,9 @@ async def test_only_approved_cards_and_briefs_with_their_z_score_and_confidence(
     rising = await research_card(owner_engine, world.niche, source_days=history, age_days=100, confidence="0.870")
     candidate = await research_card(owner_engine, world.niche, status="candidate", title="Candidate card")
     reported = await developer_problem(owner_engine, world.author, world.niche, age_days=1)
-    posted = await brief(owner_engine, world.sibling)
+    # Outside rising's family (Transport, not Farming): a sibling Brief costs rising MMR overlap, and against the
+    # session database's other cards (after engagements/ and problems/ ran) it then falls out of the top 10.
+    posted = await brief(owner_engine, world.elsewhere)
     developer = await developers()
     await onboard(developer, world)
     body = await recommended(developer)

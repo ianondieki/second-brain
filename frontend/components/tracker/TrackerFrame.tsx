@@ -66,7 +66,7 @@ export async function TrackerHeader({ detail, basePath, query }: { detail: Detai
  * caller's buttons, or on the Messages tab the way to them) in a band that hides while it is empty. Raised and edged
  * with the lattice when it is the viewer's turn; a flat card otherwise.
  */
-export function TurnCard({ detail, children }: { detail: Detail; children?: ReactNode }) {
+export function TurnCard({ detail, now, children }: { detail: Detail; now?: string; children?: ReactNode }) {
   const turn = turnOf(detail, detail.my_party);
   const yours = turn.kind === "you" || turn.kind === "both";
   return (
@@ -75,7 +75,7 @@ export function TurnCard({ detail, children }: { detail: Detail; children?: Reac
       className={cn("mt-8 max-w-3xl overflow-hidden rounded-panel border border-line bg-field", yours && "shadow-card")}
     >
       {yours ? <Lattice /> : null}
-      <WhoseTurn detail={detail} />
+      <WhoseTurn detail={detail} now={now} />
       {children ? <div className="border-t border-line p-5 has-[>div:empty]:hidden sm:px-7 sm:py-6">{children}</div> : null}
     </div>
   );

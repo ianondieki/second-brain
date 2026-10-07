@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { myEngagements } from "@/components/tracker/data";
-import { requireMe } from "@/lib/api/server";
+import { appNow, requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
 import { recommendations } from "./discover/data";
@@ -41,6 +41,7 @@ export default async function DeveloperHome() {
       quiz={quiz}
       week={week}
       peers={peers}
+      now={appNow()}
     />
   );
 }

@@ -12,7 +12,7 @@ password, a code, free text; REQ-SEC-03).
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from http import HTTPStatus
 from typing import Any, Final
 
@@ -116,13 +116,19 @@ async def validation_error(request: Request, exc: Exception) -> Response:
     return JSONResponse({"detail": jsonable_encoder(errors)}, status_code=422)
 
 
-def install(app: FastAPI, *, headers: Mapping[str, str]) -> None:
+def install(
+    app: FastAPI,
+    *,
+    headers: Mapping[str, str],
+    per_request: Callable[[Request], Mapping[str, str]] | None = None,
+) -> None:
     """Every error in one shape: the framework's HTTP errors, and an unexpected exception as a 500 with a fixed body
-    (never the exception's text; Starlette still raises it after answering, so it is logged). ``headers`` go on the
-    500, which the app's middlewares never see."""
+    (never the exception's text; Starlette still raises it after answering, so it is logged). ``headers``, and
+    ``per_request``'s for the request that failed, go on the 500, which the app's middlewares never see."""
 
     async def server_error(request: Request, exc: Exception) -> Response:
-        return JSONResponse({"detail": INTERNAL_ERROR}, status_code=500, headers=dict(headers))
+        extra = per_request(request) if per_request is not None else {}
+        return JSONResponse({"detail": INTERNAL_ERROR}, status_code=500, headers={**headers, **extra})
 
     app.add_exception_handler(StarletteHTTPException, http_error)
     app.add_exception_handler(RequestValidationError, validation_error)

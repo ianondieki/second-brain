@@ -9,7 +9,7 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 import { tier2ShareState } from "./data";
 import { eatParts, isFinished, type Detail } from "./model";
 import { SHARE_ORIGINS } from "./share";
-import { ShareTier2 } from "./ShareTier2";
+import { LazyShareTier2 } from "./lazy";
 
 /**
  * The full proposal on an engagement an organisation opened (REQ-ENG-04; docs/spec/06 6.9 stage 0, "Tier 2 by manual
@@ -66,7 +66,7 @@ export async function Tier2Section({
   if (isFinished(detail.state)) return null;
   return (
     <ClientStrings strings={await clientStrings(["tier2Share"])}>
-      <ShareTier2 engagementId={detail.id} orgName={detail.org_name} enrolled={enrolled} />
+      <LazyShareTier2 engagementId={detail.id} orgName={detail.org_name} enrolled={enrolled} />
     </ClientStrings>
   );
 }

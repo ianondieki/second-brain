@@ -12,6 +12,8 @@ export interface StatTileProps {
   /** A recent series, when the data exists; otherwise the tile shows the value alone. */
   spark?: readonly number[];
   href?: string;
+  /** A fuller reading of the figure as the tile's title (Home's deadline tile: the business days left). */
+  title?: string;
   className?: string;
   "data-stat"?: string;
 }

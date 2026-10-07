@@ -119,7 +119,8 @@ describe("the step-up for signatures, endorsements and payments (ADR-002)", () =
     const confirmImpl = vi.fn(async () => ({ ok: true as const }));
     renderActions(signing(), { runImpl, confirmImpl });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign the mutual NDA" })));
-    expect(screen.getByText("Confirm with the code from your authenticator app to continue.")).toBeTruthy();
+    // The step-up form loads with its own chunk (React.lazy), like the tracker's other forms.
+    expect(await screen.findByText("Confirm with the code from your authenticator app to continue.")).toBeTruthy();
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
     fireEvent.change(screen.getByLabelText("Authenticator code"), { target: { value: "123 456" } });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Confirm and continue" })));
@@ -133,7 +134,7 @@ describe("the step-up for signatures, endorsements and payments (ADR-002)", () =
     const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "stepUp", status: 403 }));
     renderActions(signing(), { runImpl, confirmImpl: async () => ({ ok: true }) });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign the mutual NDA" })));
-    fireEvent.change(screen.getByLabelText("Authenticator code"), { target: { value: "123456" } });
+    fireEvent.change(await screen.findByLabelText("Authenticator code"), { target: { value: "123456" } });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Confirm and continue" })));
     expect(runImpl).toHaveBeenCalledTimes(2);
     expect(screen.getByRole("alert").textContent).toBe("Nothing was sent. Try again in a moment.");
@@ -144,7 +145,7 @@ describe("the step-up for signatures, endorsements and payments (ADR-002)", () =
     const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "stepUp", status: 403 }));
     renderActions(signing(), { runImpl, confirmImpl: async () => ({ ok: false, invalidCode: true }) });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign the mutual NDA" })));
-    fireEvent.change(screen.getByLabelText("Authenticator code"), { target: { value: "000000" } });
+    fireEvent.change(await screen.findByLabelText("Authenticator code"), { target: { value: "000000" } });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Confirm and continue" })));
     expect(runImpl).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Enter the 6-digit code from your authenticator app.")).toBeTruthy();
@@ -156,7 +157,7 @@ describe("the step-up for signatures, endorsements and payments (ADR-002)", () =
     const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "stepUp", status: 403 }));
     const { unmount } = renderActions(signing(), { runImpl, confirmImpl });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign the mutual NDA" })));
-    fireEvent.change(screen.getByLabelText("Authenticator code"), { target: { value: "123456" } });
+    fireEvent.change(await screen.findByLabelText("Authenticator code"), { target: { value: "123456" } });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Confirm and continue" })));
     const cancel = screen.getByRole("button", { name: "Cancel" });
     expect(cancel.getAttribute("aria-disabled")).toBe("true");
@@ -171,7 +172,7 @@ describe("the step-up for signatures, endorsements and payments (ADR-002)", () =
     const runImpl = vi.fn<Run>(async () => ({ ok: false, refusal: "stepUp", status: 403 }));
     renderActions(signing(), { runImpl, confirmImpl: async () => ({ ok: true }) });
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Sign the mutual NDA" })));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel" }));
     expect(screen.queryByLabelText("Authenticator code")).toBeNull();
     expect(runImpl).toHaveBeenCalledTimes(1);
   });

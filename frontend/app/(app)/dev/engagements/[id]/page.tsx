@@ -8,7 +8,7 @@ import { engagement } from "@/components/tracker/data";
 import { asDocumentKind, asTab, EngagementScreen } from "@/components/tracker/EngagementScreen";
 import { Refused } from "@/components/tracker/Refused";
 import { messagesHref } from "@/components/tracker/TrackerFrame";
-import { requireMe } from "@/lib/api/server";
+import { appNow, requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
 const BASE_PATH = "/dev/engagements";
@@ -38,6 +38,7 @@ export default async function DeveloperEngagementPage({ params, searchParams }: 
           tab={asTab(query.tab)}
           doc={asDocumentKind(query.doc)}
           basePath={BASE_PATH}
+          now={appNow()}
         />
       ) : (
         <Refused refusal={found.refusal} backHref={BASE_PATH} />

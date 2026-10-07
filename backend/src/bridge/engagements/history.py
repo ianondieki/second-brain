@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Final
 from uuid import UUID
 
@@ -196,6 +196,18 @@ async def _shown(db: AsyncSession, engagements: Sequence[Engagement], *, develop
     )
 
 
+def due_out(deadline: datetime, now: datetime, holidays: frozenset[date]) -> DueOut:
+    """The current step's deadline: its business days from ``now`` and ``due_at``, the deadline itself in UTC, the
+    very instant ``overdue`` is tested against (REQ-TRACK-03), so a countdown and the flag never disagree."""
+    d = sm.due(deadline, now, holidays)
+    return DueOut(
+        due_on=d.due_on,
+        due_at=deadline.astimezone(UTC),
+        business_days_left=d.business_days_left,
+        overdue=d.overdue,
+    )
+
+
 def _summary(
     engagement: Engagement,
     loaded: Loaded,
@@ -212,8 +224,7 @@ def _summary(
     developer = (shown.developers.get(engagement.developer_id) if named else handle) or HANDLE_FALLBACK
     due = None
     if engagement.stage_deadline_at is not None and engagement.ended_at is None:
-        d = sm.due(engagement.stage_deadline_at, now, holidays)
-        due = DueOut(due_on=d.due_on, business_days_left=d.business_days_left, overdue=d.overdue)
+        due = due_out(engagement.stage_deadline_at, now, holidays)
     return EngagementSummary(
         id=engagement.id,
         proposal_id=engagement.proposal_id,
