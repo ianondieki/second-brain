@@ -13,7 +13,41 @@ import type { paths } from "./schema";
 // Server-side calls go straight to FastAPI (same default as the /api rewrite in next.config.ts).
 const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 
-export const serverApi = () => createClient<paths>({ baseUrl: apiOrigin });
+/**
+ * The app clock for this request (P23-3): the first `X-App-Now` instant an API response carried, so the page's
+ * countdowns count from the platform's clock (the demo and test clocks move it), never the browser's. Per request
+ * (React.cache, never across requests).
+ */
+const requestClock = cache((): { now: string | null } => ({ now: null }));
+
+/** Keeps the first valid `X-App-Now` of this request (an ISO 8601 instant); anything else is ignored. */
+export function recordAppNow(response: Response): void {
+  const stamp = response.headers.get("x-app-now");
+  const at = stamp ? Date.parse(stamp) : Number.NaN;
+  const clock = requestClock();
+  if (clock.now === null && Number.isFinite(at)) clock.now = new Date(at).toISOString();
+}
+
+/**
+ * The app clock's instant for this page, read once: the API's `X-App-Now` from this request's calls, else (an API
+ * that does not send it, or no call made yet) this server's own clock, fixed for the rest of the request. Never the
+ * browser's clock.
+ */
+export function appNow(): string {
+  const clock = requestClock();
+  clock.now ??= new Date().toISOString();
+  return clock.now;
+}
+
+export const serverApi = () =>
+  createClient<paths>({
+    baseUrl: apiOrigin,
+    fetch: async (request) => {
+      const response = await globalThis.fetch(request);
+      recordAppNow(response);
+      return response;
+    },
+  });
 
 /** The Cookie header carrying this request's session, or undefined (signed out). */
 async function sessionCookie(): Promise<string | undefined> {
