@@ -66,8 +66,11 @@ revision 0001's audit trigger):
   then the title and problem statement of their five latest published proposals (``status = 'published'``, newest
   ``published_at`` first; Tier-1 teaser columns only), each NFKC-normalised with every run of whitespace or control
   characters collapsed to one space and trimmed, empty parts left out, joined by newlines and cut at 8,000 characters;
-  ``text_hash`` its SHA-256 (UTF-8, hex). A developer with nothing to embed (an empty text) is not listed. Oldest
-  ``profile_embedded_at`` first (never embedded first), then user id. Never a developer whose consent is not granted.
+  ``text_hash`` its SHA-256 (UTF-8, hex). A developer with nothing to embed (an empty text) is not listed. Two
+  stages: the developers without a vector first (never embedded first, then the oldest ``profile_embedded_at``, then
+  user id), then, only while the page is not full, those with a vector whose model or version differs or whose text
+  changed (oldest ``profile_embedded_at`` first, then user id); a text is built only for the developers looked at.
+  Never a developer whose consent is not granted.
 - ``app_set_profile_embedding(user, vector, model, version, text_hash)`` -> boolean: the worker only. Locks the profile
   FOR UPDATE first and then reads the consent and the text afresh (a withdrawal in flight holds the same row lock
   through its trigger, so it is waited for and its outcome read): writes the vector, model, version,
@@ -80,8 +83,8 @@ revision 0001's audit trigger):
 - ``app_problems_to_embed(model, version, limit)`` -> (problem_id, text, text_hash): the worker only. Problems every
   signed-in developer may read (``problem_is_readable``: published and clear; an organisation's only while it is
   listed; a Brief's only while the Brief is published), whose vector is stale (none, another model or version, or a
-  stored hash that is not ``text_hash``); ``text`` the title and statement, normalised as above; oldest
-  ``embedded_at`` first (never embedded first), then id.
+  stored hash that is not ``text_hash``); ``text`` the title and statement, normalised as above; the same two
+  stages by ``embedded_at``, then id.
 - ``app_set_problem_embedding(problem, vector, model, version, text_hash)`` -> boolean: the worker only. Locks the
   problem FOR UPDATE and writes the vector, model, version, ``embedded_at = now()`` and the hash only while it is
   readable and ``text_hash`` is its text's hash now (a hold, an archive, a Brief back in draft, a delisting or an edit
@@ -109,8 +112,11 @@ Operating rules for the code that uses this schema:
   :version, :text_hash)`` per row with the hash the reader gave. False: the consent was withdrawn, the account changed
   or the text changed meanwhile; do not count the row as done (a changed text is listed again with its new hash, a
   withdrawn consent is not). The same for problems with ``app_problems_to_embed`` and ``app_set_problem_embedding``.
-  Log ``app_stale_embedding_counts(:model, :version)`` after the run. The readers build every candidate's text to
-  compare hashes: a run costs one text build per consented developer and per published problem.
+  Log ``app_stale_embedding_counts(:model, :version)`` after the run. Cost: a page of the first stage (rows without a
+  vector) builds only its own rows' texts (and those of rows skipped for an empty text), so a backfill costs about
+  one text build per row; the second stage (rows with a vector, reached only when the first leaves the page short)
+  builds one text per embedded row it looks at, so a call that finds nothing stale costs one text build per embedded
+  row; the counts build one text per candidate.
 - The opt-out (PUT /consents with ``profiling`` false, bound to the user): record the decision as today (the trigger
   clears the vector in that transaction) and call ``app_clear_profile_embedding(:me)`` in the same transaction.
 - The ranker: use a vector only when it is not NULL, its hash is set and the model and version are the embedder's, and
@@ -247,32 +253,48 @@ AS $$
                                 E'\n'), 8000)
 $$;
 
--- The developers whose profile vector is stale, with their vector's time, their text and its hash: a profile whose
--- user is active and not staff, whose latest profiling decision is a grant, and whose text is not empty, with no
--- vector, another model or version (left out when p_model is NULL), or a stored hash that is not the text's. Every
--- consented developer's text is built to compare. Unordered. Internal (no EXECUTE grant).
-CREATE FUNCTION profiles_to_embed(p_model text, p_version text)
-    RETURNS TABLE (user_id uuid, embedded_at timestamptz, body text, body_hash text)
+-- Whether a row's vector is stale: its text is not empty, and it has no vector, another model or version (left out
+-- when p_model is NULL), or a stored hash that is not the text's. The one staleness rule of both tables, the readers
+-- and the counts. Internal (no EXECUTE grant).
+CREATE FUNCTION embedding_is_stale(p_vector_missing boolean, p_stored_model text, p_stored_version text,
+                                   p_stored_hash text, p_text text, p_model text, p_version text) RETURNS boolean
     LANGUAGE sql STABLE
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-    WITH consented AS MATERIALIZED (
-        SELECT d.user_id, d.profile_embedded_at, d.profile_embedding IS NULL AS no_vector, d.embed_model,
-               d.embed_version, d.profile_embedding_hash
-          FROM public.developer_profiles d
-          JOIN public.users u ON u.id = d.user_id
-         WHERE u.status = 'active' AND u.staff_role IS NULL
-           AND public.profile_consent_granted(d.user_id)
-    )
-    SELECT c.user_id, c.profile_embedded_at, t.body, t.body_hash
-      FROM consented c
-     CROSS JOIN LATERAL (SELECT b.body, public.embedding_text_hash(b.body) AS body_hash
-                           FROM (SELECT public.profile_embedding_text(c.user_id) AS body) b) t
-     WHERE t.body <> ''
-       AND (c.no_vector
+    SELECT p_text <> ''
+       AND (p_vector_missing
             OR (p_model IS NOT NULL
-                AND (c.embed_model IS DISTINCT FROM p_model OR c.embed_version IS DISTINCT FROM p_version))
-            OR c.profile_embedding_hash IS DISTINCT FROM t.body_hash)
+                AND (p_stored_model IS DISTINCT FROM p_model OR p_stored_version IS DISTINCT FROM p_version))
+            OR p_stored_hash IS DISTINCT FROM public.embedding_text_hash(p_text))
+$$;
+
+-- The developers whose profile may be embedded, without their text (no text is built here): a profile whose user is
+-- active and not staff and whose latest profiling decision is a grant, with its vector's time, whether it has no
+-- vector, and its model, version and hash. Internal (no EXECUTE grant).
+CREATE FUNCTION profile_embedding_candidates()
+    RETURNS TABLE (user_id uuid, embedded_at timestamptz, vector_missing boolean, stored_model text,
+                   stored_version text, stored_hash text)
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT d.user_id, d.profile_embedded_at, d.profile_embedding IS NULL, d.embed_model::text, d.embed_version::text,
+           d.profile_embedding_hash
+      FROM public.developer_profiles d
+      JOIN public.users u ON u.id = d.user_id
+     WHERE u.status = 'active' AND u.staff_role IS NULL
+       AND public.profile_consent_granted(d.user_id)
+$$;
+
+-- Every developer whose profile vector is stale (embedding_is_stale over profile_embedding_candidates): one text build
+-- per candidate. The counts only. Internal (no EXECUTE grant).
+CREATE FUNCTION profiles_to_embed(p_model text, p_version text) RETURNS SETOF uuid
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT c.user_id
+      FROM public.profile_embedding_candidates() c
+     WHERE public.embedding_is_stale(c.vector_missing, c.stored_model, c.stored_version, c.stored_hash,
+                                     public.profile_embedding_text(c.user_id), p_model, p_version)
 $$;
 
 -- Whether every signed-in developer may read p_problem now, as bridge.matching.trend_facts reads the recommendable
@@ -295,24 +317,31 @@ AS $$
                 OR EXISTS (SELECT 1 FROM public.problem_briefs b WHERE b.problem_id = p.id AND b.status = 'published')))
 $$;
 
--- The readable problems (problem_is_readable) whose vector is stale, with the vector's time, the text and its hash: a
--- text that is not empty, with no vector, another model or version (left out when p_model is NULL), or a stored hash
--- that is not the text's. Unordered. Internal (no EXECUTE grant).
-CREATE FUNCTION problems_to_embed(p_model text, p_version text)
-    RETURNS TABLE (problem_id uuid, embedded_at timestamptz, body text, body_hash text)
+-- The problems that may be embedded (problem_is_readable), with their title and statement (the text is built by the
+-- caller), the vector's time, whether there is no vector, and its model, version and hash. Internal (no EXECUTE
+-- grant).
+CREATE FUNCTION problem_embedding_candidates()
+    RETURNS TABLE (problem_id uuid, embedded_at timestamptz, vector_missing boolean, stored_model text,
+                   stored_version text, stored_hash text, title text, statement text)
     LANGUAGE sql STABLE
     SET search_path = pg_catalog, public, pg_temp
 AS $$
-    SELECT p.id, p.embedded_at, t.body, t.body_hash
+    SELECT p.id, p.embedded_at, p.embedding IS NULL, p.embed_model::text, p.embed_version::text, p.embedding_hash,
+           p.title::text, p.statement
       FROM public.problems p
-     CROSS JOIN LATERAL (SELECT b.body, public.embedding_text_hash(b.body) AS body_hash
-                           FROM (SELECT public.problem_embedding_text(p.title, p.statement) AS body) b) t
      WHERE public.problem_is_readable(p.id)
-       AND t.body <> ''
-       AND (p.embedding IS NULL
-            OR (p_model IS NOT NULL
-                AND (p.embed_model IS DISTINCT FROM p_model OR p.embed_version IS DISTINCT FROM p_version))
-            OR p.embedding_hash IS DISTINCT FROM t.body_hash)
+$$;
+
+-- Every problem whose vector is stale (embedding_is_stale over problem_embedding_candidates). The counts only.
+-- Internal (no EXECUTE grant).
+CREATE FUNCTION problems_to_embed(p_model text, p_version text) RETURNS SETOF uuid
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT c.problem_id
+      FROM public.problem_embedding_candidates() c
+     WHERE public.embedding_is_stale(c.vector_missing, c.stored_model, c.stored_version, c.stored_hash,
+                                     public.problem_embedding_text(c.title, c.statement), p_model, p_version)
 $$;
 
 -- Nulls p_user's profile vector, model, version, time and hash and moves updated_at to now(): the row is always
@@ -330,14 +359,21 @@ AS $$
 $$;
 
 -- A page of the developers whose profile vector the worker computes next (REQ-PERS-02; AC-PERS-3: only while the
--- profiling consent is granted), with the text to embed and its hash (handed back to the writer): profiles_to_embed's
--- set, never embedded first, then the oldest vector, then user id. The worker only (no user bound): a signed-in
+-- profiling consent is granted), with the text to embed and its hash (handed back to the writer). Two stages, so a page
+-- costs only the texts it looks at: first the developers without a vector (never embedded first, then the oldest
+-- time, then user id; a text is built for each until the page is full, an empty one skipped), then, only while the
+-- page is not full, the developers with a vector whose model or version differs or whose text changed (oldest time
+-- first, then user id; one text build per embedded developer looked at). The worker only (no user bound): a signed-in
 -- session learns nothing of other developers' profiles.
 CREATE FUNCTION app_profiles_to_embed(p_model text, p_version text, p_limit integer)
     RETURNS TABLE (user_id uuid, text text, text_hash text)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
+DECLARE
+    v_row record;
+    v_body pg_catalog.text;
+    v_taken integer := 0;
 BEGIN
     IF public.app_user_id() IS NOT NULL THEN
         RAISE EXCEPTION 'app_profiles_to_embed: the embedding worker only, with no user bound'
@@ -348,11 +384,18 @@ BEGIN
         RAISE EXCEPTION 'app_profiles_to_embed: a model (1 to 80 characters), a version (1 to 40) and a limit of 1 to'
             ' 1000' USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    RETURN QUERY
-    SELECT s.user_id, s.body, s.body_hash
-      FROM public.profiles_to_embed(p_model, p_version) s
-     ORDER BY s.embedded_at ASC NULLS FIRST, s.user_id
-     LIMIT p_limit;
+    FOR v_row IN
+        SELECT c.* FROM public.profile_embedding_candidates() c
+         ORDER BY c.vector_missing DESC, c.embedded_at ASC NULLS FIRST, c.user_id
+    LOOP
+        EXIT WHEN v_taken >= p_limit;
+        v_body := public.profile_embedding_text(v_row.user_id);
+        IF public.embedding_is_stale(v_row.vector_missing, v_row.stored_model, v_row.stored_version,
+                                     v_row.stored_hash, v_body, p_model, p_version) THEN
+            RETURN QUERY SELECT v_row.user_id, v_body, public.embedding_text_hash(v_body);
+            v_taken := v_taken + 1;
+        END IF;
+    END LOOP;
 END;
 $$;
 
@@ -421,13 +464,19 @@ BEGIN
 END;
 $$;
 
--- A page of the problems whose vector the worker computes next (REQ-EMB-01), with the text and its hash:
--- problems_to_embed's set, never embedded first, then the oldest vector, then id. The worker only (no user bound).
+-- A page of the problems whose vector the worker computes next (REQ-EMB-01), with the text and its hash: as
+-- app_profiles_to_embed, the problems without a vector first (never embedded first, then the oldest time, then id),
+-- then, only while the page is not full, those with a vector whose model or version differs or whose text changed
+-- (oldest time first, then id); a text is built only for the problems looked at. The worker only (no user bound).
 CREATE FUNCTION app_problems_to_embed(p_model text, p_version text, p_limit integer)
     RETURNS TABLE (problem_id uuid, text text, text_hash text)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
+DECLARE
+    v_row record;
+    v_body pg_catalog.text;
+    v_taken integer := 0;
 BEGIN
     IF public.app_user_id() IS NOT NULL THEN
         RAISE EXCEPTION 'app_problems_to_embed: the embedding worker only, with no user bound'
@@ -438,11 +487,18 @@ BEGIN
         RAISE EXCEPTION 'app_problems_to_embed: a model (1 to 80 characters), a version (1 to 40) and a limit of 1 to'
             ' 1000' USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    RETURN QUERY
-    SELECT s.problem_id, s.body, s.body_hash
-      FROM public.problems_to_embed(p_model, p_version) s
-     ORDER BY s.embedded_at ASC NULLS FIRST, s.problem_id
-     LIMIT p_limit;
+    FOR v_row IN
+        SELECT c.* FROM public.problem_embedding_candidates() c
+         ORDER BY c.vector_missing DESC, c.embedded_at ASC NULLS FIRST, c.problem_id
+    LOOP
+        EXIT WHEN v_taken >= p_limit;
+        v_body := public.problem_embedding_text(v_row.title, v_row.statement);
+        IF public.embedding_is_stale(v_row.vector_missing, v_row.stored_model, v_row.stored_version,
+                                     v_row.stored_hash, v_body, p_model, p_version) THEN
+            RETURN QUERY SELECT v_row.problem_id, v_body, public.embedding_text_hash(v_body);
+            v_taken := v_taken + 1;
+        END IF;
+    END LOOP;
 END;
 $$;
 
@@ -557,6 +613,9 @@ INTERNAL_FUNCTIONS = (
     "profile_embedding_clear(uuid)",
     "profiles_to_embed(text, text)",
     "problems_to_embed(text, text)",
+    "profile_embedding_candidates()",
+    "problem_embedding_candidates()",
+    "embedding_is_stale(boolean, text, text, text, text, text, text)",
     "problem_embedding_text(text, text)",
     "problem_is_readable(uuid)",
     "profile_embedding_text(uuid)",
