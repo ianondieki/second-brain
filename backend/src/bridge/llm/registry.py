@@ -423,8 +423,10 @@ def parse(data: Mapping[str, Any]) -> Registry:
     embed = data["embeddings"]
     if embed["precision"] not in PRECISIONS:
         raise ValueError(f"embeddings.precision must be one of {sorted(PRECISIONS)}")
-    chip_floors = embed.get("chip_floors") or {}
-    if not isinstance(chip_floors, Mapping):
+    chip_floors = embed.get("chip_floors")
+    if chip_floors is None:
+        chip_floors = {}
+    elif not isinstance(chip_floors, Mapping):
         raise ValueError("embeddings.chip_floors must map an embed_model to a cosine")
     return Registry(
         models=models,

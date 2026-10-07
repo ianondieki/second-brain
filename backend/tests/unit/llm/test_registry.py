@@ -126,6 +126,8 @@ def test_unknown_task_is_a_config_error() -> None:
         (lambda d: d["embeddings"].update(model=""), "embeddings.model"),
         (lambda d: d["embeddings"].update(version=1), "embeddings.version"),
         (lambda d: d["embeddings"].update(chip_floors=0.3), "embeddings.chip_floors must map"),
+        (lambda d: d["embeddings"].update(chip_floors=0), "embeddings.chip_floors must map"),
+        (lambda d: d["embeddings"].update(chip_floors=[]), "embeddings.chip_floors must map"),
         (
             lambda d: d["embeddings"].update(chip_floors={"fake-shake256": 1.5}),
             r"chip_floors\.fake-shake256 .*\[0, 1\]",
@@ -317,4 +319,6 @@ def test_the_chip_floor_is_per_embed_model() -> None:
     assert embeddings.chip_floor("another-model") is None
     data = raw()
     data["embeddings"].pop("chip_floors")
+    assert registry.parse(data).embeddings.chip_floors == {}
+    data["embeddings"]["chip_floors"] = None  # an empty YAML key
     assert registry.parse(data).embeddings.chip_floors == {}
