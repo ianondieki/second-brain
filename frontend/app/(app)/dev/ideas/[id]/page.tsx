@@ -42,10 +42,19 @@ import { ideaContributors } from "../../teams/data";
 import { WhoHasSeen } from "./WhoHasSeen";
 
 export async function generateMetadata({ params }: PageProps<"/dev/ideas/[id]">): Promise<Metadata> {
-  const t = await getTranslations("ideas");
-  const idea = await myIdea((await params).id).catch(() => null);
+  const [t, tOg] = await Promise.all([getTranslations("ideas"), getTranslations("og")]);
+  const id = (await params).id;
+  const idea = await myIdea(id).catch(() => null);
   const version = idea ? (idea.current ?? idea.draft) : null;
-  return { title: version?.teaser.title || t("pageTitle") };
+  const title = version?.teaser.title || t("pageTitle");
+  // The share card (P24, app/og/idea): only a published teaser has one (the route answers 404 for anything else).
+  const shared = idea?.current?.teaser.title;
+  return {
+    title,
+    openGraph: shared
+      ? { title: shared, images: [{ url: `/og/idea/${encodeURIComponent(id)}`, width: 1200, height: 630, alt: tOg("alt", { title: shared }) }] }
+      : undefined,
+  };
 }
 
 /** The version the page shows: the published one when there is one, else the draft. */
