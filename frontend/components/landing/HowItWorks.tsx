@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import type { CSSProperties } from "react";
 
 import { EngagementsIcon } from "@/components/tracker/icons";
 import { IdeasIcon } from "@/components/ui/icons";
@@ -12,10 +13,14 @@ const STEPS = [
 
 const STAGES = ["review", "contact", "agreement", "implementation", "close"] as const;
 
+/** Its place in the reveal (globals.css .reveal): each item a little after the one before. */
+const order = (i: number) => ({ "--i": i }) as CSSProperties;
+
 /**
  * How it works (D-55): the three steps a person takes, numbered because they are a sequence, then the tracker's five
  * stages as one line, the product's spine: the same stages on both sides' screens. The line runs across from 1024 px
- * and down the left edge below.
+ * and down the left edge below. Both reveal as they scroll into view where the browser has scroll-driven
+ * animations (CSS only; in place elsewhere and under reduced motion).
  */
 export async function HowItWorks() {
   const t = await getTranslations("landing.how");
@@ -30,7 +35,7 @@ export async function HowItWorks() {
         </div>
         <ol className="mt-14 grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-8 lg:mt-16">
           {STEPS.map(({ key, Icon }, index) => (
-            <li key={key} className="flex flex-col">
+            <li key={key} className="reveal flex flex-col" style={order(index)}>
               <span aria-hidden="true" className="font-display text-[3.5rem] leading-none font-[780] tracking-[-0.04em] text-accent tabular-nums">
                 {index + 1}
               </span>
@@ -50,8 +55,9 @@ export async function HowItWorks() {
             {STAGES.map((stage, index) => (
               <li
                 key={stage}
+                style={order(index)}
                 className={
-                  "relative pl-10 lg:pt-12 lg:pl-0 " +
+                  "reveal relative pl-10 lg:pt-12 lg:pl-0 " +
                   // The line: down the left on phones, across the top from 1024 px; it stops at the last stage.
                   "before:absolute before:top-7 before:-bottom-8 before:left-[0.9375rem] before:w-0.5 before:bg-accent-line last:before:hidden " +
                   "lg:before:top-[0.9375rem] lg:before:right-[-1.5rem] lg:before:bottom-auto lg:before:left-8 lg:before:h-0.5 lg:before:w-auto"

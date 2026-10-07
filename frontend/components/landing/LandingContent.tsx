@@ -12,12 +12,13 @@ import { LandingFooter } from "./LandingFooter";
 import { Proof } from "./Proof";
 import { Questions } from "./Questions";
 import { Sides } from "./Sides";
+import { Trust } from "./Trust";
 
 const sectionLink =
   "inline-flex min-h-11 items-center rounded-full px-4 font-semibold text-ink-soft no-underline hover:bg-wash-soft hover:text-ink";
 
 /**
- * The landing page (D-55, Jacaranda): the night hero with the product, how it works with the tracker's five stages,
+ * The landing page (D-55, Jacaranda): the night hero with the product, the strip of what every proposal carries, how it works with the tracker's five stages,
  * who it is for, what you can do, proof of authorship with a certificate check, questions, the closing call and the
  * footer. No data read and no script of its own: the page only decides the redirect of a signed-in person. Nothing
  * here claims protection or figures; every product picture is labelled example data.
@@ -54,6 +55,7 @@ export async function LandingContent() {
       </TopBar>
       <main id="main" tabIndex={-1} className="focus:outline-none">
         <Hero />
+        <Trust />
         <HowItWorks />
         <Sides />
         <Features />
