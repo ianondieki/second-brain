@@ -471,6 +471,28 @@ The full entries (why, options, default, what they blocked) are kept below for t
 - Owner's choice (2026-10-01): name **Wazo**; direction C (Editorial trust) as the base with B's kanga-cut lattice as the single East African signature (header band, certificate edge, landing hero, empty states; never behind text); C's dark mode. Step 2 must change layout and hierarchy, not only tokens.
 - Status: step 1 delivered; step 2 (the design system and the four showpiece screens: landing, Home, tracker, certificate) delivered 2026-10-01 for review before the roll-out to the remaining screens (`docs/platform/tasks/P18-design-directions.md`).
 
+### D-66 · "Jacaranda in print": the serif display face, the paper canvas and photographs (P24; REQ-UX-01..04, D-55)
+- Why: the owner (2026-10-07) wants a landing and a home that read as a world-class product and sell the idea, giving
+  three references: hackathon.genai.works (a white page with a mint wash, Inter, stat rows, a featured card with a live
+  countdown, photo cards of past events, logo walls, a closing band), basix-venture-route.vercel.app (a cream page,
+  Fraunces serif display with an italic accent word, IBM Plex Sans and Mono, deep green, a hero with a product panel
+  beside the headline, a stats row, three numbered step cards with mono chips, a dark band with a terminal-style
+  reasoning panel, partner tiles, a dark footer) and a Kenyan real-estate page (cream, serif, a photographic hero with a
+  search card, county tiles with photographs, numbered steps, a dark band with a dashboard preview). What they share:
+  a serif display with an italic accent, a warm paper canvas, numbered three-step cards, a real product panel in the
+  hero, stat rows, photographs in tiles, a dark preview band, something alive on the page, a strong closing band.
+- Decision (the owner's brief, taken by the orchestrator as D-66): Jacaranda's colours stay (bloom, night, saffron,
+  petal; D-55) and the kit stays; the display face for page and section titles becomes a serif with a true italic
+  (Fraunces, OFL, self-hosted, subset), with one italic accent phrase in the hero; Bricolage Grotesque keeps the
+  wordmark and the figures; the light canvas warms from the cool violet-white to paper (`#F7F4ED`), cards stay white,
+  the night band stays; small mono eyebrow labels return, at most one per section, because every reference the owner
+  gave uses them (the brief wins over the skill's default list); licensed photographs (Wikimedia Commons CC0/CC BY/CC
+  BY-SA, credited on a photo-credits page, vendored as AVIF/WebP, never hot-linked) appear in a county strip on the
+  landing and on the public Explore page; no third-party logos (principle 4); no fabricated figures (every stat is a
+  product constant or a seeded figure labelled as such).
+- Status: P24 builds it; the P20 design document gains a P24 addendum; the P18/P20 "cream + serif" avoidance note is
+  superseded by the owner's references.
+
 ### D-65 · The "Prototype" badge and the lattice band leave the top bar (P23-2; REQ-UX-01, D-52, D-55)
 - Why: the owner (2026-10-07) wants the top bar to read as a product: the Wazo wordmark clear, no "Prototype" word, no
   colour lining. The badge was P18's honesty label (one per screen) and the lattice band the kanga border on every
