@@ -732,6 +732,19 @@
             "description": "Proposals wanted by this day (Africa/Nairobi); null when none",
             "title": "Deadline"
           },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The instant the deadline day ends, for a countdown: 23:59:59.999999 in Africa/Nairobi, in UTC; null when there is no deadline. Derived from deadline (REQ-TRACK-03); open and ended stay the authority",
+            "title": "Deadline At"
+          },
           "ended": {
             "anyOf": [
               {
@@ -960,6 +973,19 @@
               }
             ],
             "title": "Deadline"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The instant the deadline day ends, for a countdown: 23:59:59.999999 in Africa/Nairobi, in UTC; null when there is no deadline. Derived from deadline (REQ-TRACK-03); open and ended stay the authority",
+            "title": "Deadline At"
           },
           "id": {
             "description": "The Brief's problem id (its page is GET /api/problems/{id} once published)",
@@ -3699,10 +3725,17 @@
         "type": "object"
       },
       "DueOut": {
+        "description": "The current step's deadline: by the end of ``due_on`` in Africa/Nairobi.",
         "properties": {
           "business_days_left": {
             "title": "Business Days Left",
             "type": "integer"
+          },
+          "due_at": {
+            "description": "The instant the window closes, for a countdown: the end of due_on in Africa/Nairobi (23:59:59.999999 local), in UTC. overdue stays the authority for whether it has passed",
+            "format": "date-time",
+            "title": "Due At",
+            "type": "string"
           },
           "due_on": {
             "format": "date",

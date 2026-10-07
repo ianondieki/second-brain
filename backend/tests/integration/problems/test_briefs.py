@@ -150,6 +150,7 @@ async def test_a_brief_waits_for_review_then_reaches_developers_with_its_organis
         assert (early.status_code, early.json()["detail"]["code"]) == (409, "brief_not_published")
         assert created["budget_band"] == {"code": "500k_2m", "label": "KES 500,000 to 2 million"}
         assert created["deadline"] == body["deadline"]
+        assert created["deadline_at"] == f"{body['deadline']}T20:59:59.999999Z"  # REQ-TRACK-03: the day's end, EAT
         assert created["proposal_count"] == 0
         listed = (await viewer.get(path(world.org.id))).json()  # any member reads the organisation's Briefs
         assert [item["id"] for item in listed["items"]] == [brief_id]
@@ -172,6 +173,7 @@ async def test_a_brief_waits_for_review_then_reaches_developers_with_its_organis
             "org": org_ref,
             "budget_band": {"code": "500k_2m", "label": "KES 500,000 to 2 million"},
             "deadline": body["deadline"],
+            "deadline_at": created["deadline_at"],
             "open": True,
             "ended": None,
         }
@@ -355,7 +357,7 @@ async def test_a_brief_is_public_text_and_its_form_is_checked(
             assert "telco.example.com" not in response.text
         assert await briefs_count(owner_engine, world.org.id) == 0
         ok = await post(reviewer, world.org.id, await form(owner_engine, world.niche, deadline=None, budget_band=None))
-        assert (ok["deadline"], ok["budget_band"], ok["visibility"]) == (None, None, "public")
+        assert (ok["deadline"], ok["deadline_at"], ok["budget_band"], ok["visibility"]) == (None, None, None, "public")
 
 
 async def test_an_org_negative_brief_is_held_for_the_moderator(
@@ -388,8 +390,9 @@ async def test_the_band_and_deadline_change_until_the_brief_closes(
         assert moved.status_code == 200, moved.text
         assert moved.json()["budget_band"]["code"] == "over_10m"
         assert moved.json()["deadline"] == later
+        assert moved.json()["deadline_at"] == f"{later}T20:59:59.999999Z"  # moves with the day it is derived from
         cleared = (await reviewer.patch(one, json={"deadline": None})).json()
-        assert (cleared["deadline"], cleared["budget_band"]["code"]) == (None, "over_10m")
+        assert (cleared["deadline"], cleared["deadline_at"], cleared["budget_band"]["code"]) == (None, None, "over_10m")
         past = await reviewer.patch(one, json={"deadline": (day - timedelta(days=1)).isoformat()})
         assert (past.status_code, past.json()["detail"]["code"]) == (422, "invalid_brief")
         unknown = await reviewer.patch(one, json={"budget_band": "a_lot"})

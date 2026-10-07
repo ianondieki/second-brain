@@ -29,7 +29,7 @@ from bridge.audit.service import record as audit
 from bridge.auth.models import User
 from bridge.engagements import chain, documents
 from bridge.engagements import state_machine as sm
-from bridge.engagements.calendar import add_business_days, local_date
+from bridge.engagements.calendar import add_business_days, closes_at, local_date
 from bridge.engagements.commands import agreement_document
 from bridge.engagements.models import (
     Agreement,
@@ -213,7 +213,9 @@ def _summary(
     due = None
     if engagement.stage_deadline_at is not None and engagement.ended_at is None:
         d = sm.due(engagement.stage_deadline_at, now, holidays)
-        due = DueOut(due_on=d.due_on, business_days_left=d.business_days_left, overdue=d.overdue)
+        due = DueOut(
+            due_on=d.due_on, due_at=closes_at(d.due_on), business_days_left=d.business_days_left, overdue=d.overdue
+        )
     return EngagementSummary(
         id=engagement.id,
         proposal_id=engagement.proposal_id,

@@ -116,8 +116,22 @@ class ResumeBody(CommandBody):
     reason: str = Field(min_length=1, max_length=500, pattern=ONE_LINE)
 
 
+def _due_at_optional_in_web_types(schema: dict[str, Any]) -> None:
+    """``due_at`` is always sent; left out of ``required`` it stays optional in the generated web types, so clients
+    adopt it at their own pace (the ``_without_default`` convention of the other always-sent fields)."""
+    schema["required"] = [name for name in schema["required"] if name != "due_at"]
+
+
 class DueOut(BaseModel):
+    """The current step's deadline: by the end of ``due_on`` in Africa/Nairobi."""
+
+    model_config = ConfigDict(json_schema_extra=_due_at_optional_in_web_types)
+
     due_on: date
+    due_at: datetime = Field(
+        description="The instant the window closes, for a countdown: the end of due_on in Africa/Nairobi"
+        " (23:59:59.999999 local), in UTC. overdue stays the authority for whether it has passed"
+    )
     business_days_left: int
     overdue: bool
 

@@ -16,7 +16,7 @@ silently miss every holiday.
 from __future__ import annotations
 
 from collections.abc import Collection
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Final
 from zoneinfo import ZoneInfo
 
@@ -35,6 +35,12 @@ def local_date(ts: datetime) -> date:
     if ts.tzinfo is None or ts.utcoffset() is None:
         raise ValueError("local_date needs a timezone-aware datetime")
     return ts.astimezone(NAIROBI).date()
+
+
+def closes_at(d: date) -> datetime:
+    """The instant a window that runs to the end of the Nairobi day `d` closes: 23:59:59.999999 local, in UTC (a
+    deadline's countdown, REQ-TRACK-03). The day's flags (`overdue`, a Brief's `past_deadline`) stay the authority."""
+    return datetime.combine(_plain_date(d), time.max, tzinfo=NAIROBI).astimezone(UTC)
 
 
 def is_business_day(d: date, holidays: Collection[date]) -> bool:
