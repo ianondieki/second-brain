@@ -135,7 +135,7 @@ def features(card: Card, dev: Developer, cfg: RankerConfig, now: datetime) -> di
     def f(name: str, raw: float | None, value: float | None, applies: bool = True) -> tuple[str, Feature]:
         return name, Feature(raw, value if applies else None, w[name], applies)
 
-    if dev.personalised and card.similarity is not None:  # f1: both vectors exist
+    if dev.personalised and card.similarity is not None and math.isfinite(card.similarity):  # f1: both vectors exist
         fit = Feature(card.similarity, max(0.0, min(1.0, card.similarity)), w["semantic_fit"], True, "embedding")
     else:  # f1: the keyword share, as before the embeddings
         shared = len(keywords(f"{card.fact.title} {card.fact.statement}", cfg.min_keyword_length) & dev.keywords)

@@ -82,18 +82,25 @@ async def recommended(developer: httpx.AsyncClient) -> dict[str, dict[str, Any]]
 async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers, made: list[UUID]
 ) -> None:
-    """Given a consented developer and four otherwise alike cards in liked niches: one whose vector is close to the
-    profile's (cosine 0.9) and one far (0.1) in the same niche, one with another model's vector and one whose vector
-    lost its hash, When recommendations are requested, Then the close card ranks above the far one with "Similar to
-    your profile" and both record f1 from the embeddings; the other two fall back to the keyword share."""
+    """Given a consented developer and five otherwise alike cards in liked niches: one whose vector is close to the
+    profile's (cosine 0.9) and one far (0.1) in the same niche, one with another model's vector, one whose vector lost
+    its hash and one whose vector the owner zeroed (no cosine), When recommendations are requested, Then the close card
+    ranks above the far one with "Similar to your profile" and both record f1 from the embeddings; the other three fall
+    back to the keyword share."""
     world = await build(owner_engine)
     # at most three cards of one niche in the top ten: the close and far ones in one, the fallbacks in another
-    niches = {"Near": world.niche, "Far": world.niche, "Other model": world.sibling, "Unhashed": world.sibling}
-    near, far, other_model, unhashed = [
+    niches = {
+        "Near": world.niche,
+        "Far": world.niche,
+        "Other model": world.sibling,
+        "Unhashed": world.sibling,
+        "Zeroed": world.sibling,
+    }
+    near, far, other_model, unhashed, zeroed = [
         await research_card(owner_engine, niche, county="KE-30", title=f"{label} solar irrigation pumps")
         for label, niche in niches.items()
     ]
-    made.extend((near, far, other_model, unhashed))
+    made.extend((near, far, other_model, unhashed, zeroed))
     developer = await developers()
     me = user_of(developer)
     await personalised(developer, world)
@@ -102,10 +109,14 @@ async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
     fake = FakeEmbedder({await profile_text(owner_engine, me): base})
     fake.pin(await problem_text(owner_engine, near), vector_with_similarity(base, 0.9, seed="near"))
     fake.pin(await problem_text(owner_engine, far), vector_with_similarity(base, 0.1, seed="far"))
-    await embed(app_engine, owner_engine, fake, me, near, far, other_model, unhashed)
+    await embed(app_engine, owner_engine, fake, me, near, far, other_model, unhashed, zeroed)
+    zero = "[" + ",".join(["0"] * 1024) + "]"
     async with owner_engine.begin() as conn:
         await conn.execute(text("UPDATE problems SET embed_model = 'another-model' WHERE id = :p"), {"p": other_model})
         await conn.execute(text("UPDATE problems SET embedding_hash = NULL WHERE id = :p"), {"p": unhashed})
+        await conn.execute(
+            text("UPDATE problems SET embedding = CAST(:z AS vector) WHERE id = :p"), {"z": zero, "p": zeroed}
+        )
 
     items = await recommended(developer)
     close, distant = items[str(near)], items[str(far)]
@@ -118,7 +129,7 @@ async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
         assert fit["value"] == pytest.approx(cosine, abs=1e-4)
     assert SIMILAR_WORDS in close["why"]
     assert "Close to your profile" not in close["why"]
-    for fallback in (other_model, unhashed):
+    for fallback in (other_model, unhashed, zeroed):
         fit = items[str(fallback)]["features"]["semantic_fit"]
         assert (fit["applies"], fit["source"], fit["raw"]) == (True, "keywords", 4)  # solar, irrigation, pumps, farmers
         assert SIMILAR_WORDS not in items[str(fallback)]["why"]

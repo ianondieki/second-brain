@@ -20,6 +20,7 @@ The developer's context, all read as the developer under Row-Level Security:
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
@@ -97,9 +98,11 @@ async def developer(db: AsyncSession, user_id: UUID, cfg: RankingConfig) -> Deve
 async def similarities(
     db: AsyncSession, user_id: UUID, problem_ids: Sequence[UUID], embedding: Embedding
 ) -> dict[UUID, float]:
-    """Each card's cosine similarity with the developer's profile, where both vectors may be used (one statement)."""
+    """Each card's cosine similarity with the developer's profile, where both vectors may be used (one statement). A
+    similarity that is not a number (a zero vector, which revision 0012's writers refuse) is left out: keywords then."""
     params = {"user": user_id, "ids": list(problem_ids), "model": embedding.model, "version": embedding.version}
-    return {row.id: float(row.similarity) for row in (await db.execute(_SIMILARITY, params)).all()}
+    found = {row.id: row.similarity for row in (await db.execute(_SIMILARITY, params)).all()}
+    return {pid: float(value) for pid, value in found.items() if value is not None and math.isfinite(value)}
 
 
 async def recommendations(

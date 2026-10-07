@@ -113,3 +113,9 @@ def test_without_the_consent_neither_path_applies() -> None:
     assert (fit.applies, fit.value, fit.source) == (False, None, None)
     keywords_only = features(card(NEAR), dev(keywords=frozenset()), R, NOW)["semantic_fit"]
     assert (keywords_only.applies, keywords_only.source) == (False, None)
+
+
+def test_a_similarity_that_is_not_a_number_falls_back_to_keywords() -> None:
+    """A zero vector has no cosine (revision 0012's writers refuse one): f1 never reads NaN as a perfect fit."""
+    fit = features(card("Solar irrigation pumps break down", float("nan")), dev(), R, NOW)["semantic_fit"]
+    assert (fit.applies, fit.raw, fit.source) == (True, 3, "keywords")
