@@ -391,7 +391,8 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-06, session 6): none. P22-C merged as `3316909` on the owner's instruction (merge commit of
+**Open branches** (2026-10-07, session 6): `claude/fervent-mccarthy-0zyqn2` carries P23-1 (revision 0012, the embeddings job, the
+ranker's cosine f1, the word-based fake), gated and unmerged, waiting on the owner's word. P22-C merged as `3316909` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `aecc694`); integration head before it `efb9326`. Earlier the same day: P22-A and
 P22-B merged together as `ed0bff5` (at `2ace097`); integration head before it `feb01e9`.
 Earlier the same session: P20 and P21 merged together as `429a7aa` (at `9218fce`); integration head before it `5c3db9d`.
@@ -1211,6 +1212,94 @@ old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
 **For the owner.** D-62 (the collaborator credit wording) still blocks P22-C; D-56 (npm audit) and the CI runner
 question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
 check before release.
+
+### P23-1 report (2026-10-07): profile and problem embeddings for real (D-63, D-64)
+
+**Why.** The owner's "iterate and refine" mandate after P22-C; P23 item 1 on `tasks/P23.md`: neither
+`developer_profiles.profile_embedding` nor `problems.embedding` was ever written in the prototype, so the ranker's f1
+("semantic fit") was a keyword share everywhere and T2.2's embeddings were a promise. Card: `tasks/P23.md` "P23-1 as
+built" (the orchestrator's defaults, D-63 pending: peers unchanged; D-64 raised during the reviews).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`, on top of P22-C; four worktree merges):
+
+- **Revision 0012** (db-migrations, four review rounds): HNSW cosine indexes on both vector columns; a content hash
+  per table (`profile_embedding_hash`, `embedding_hash`: SHA-256 of the normalised text, computed in SQL, so
+  freshness is by content and an edit that commits between a listing and a write is never lost) with the embedded
+  times; seven owner-run definer functions for the unbound worker only (a bound session gets insufficient_privilege):
+  two stale-rows readers returning `(id, text, text_hash)` (never-embedded rows first, texts built only for a page's
+  rows; a profile only under a granted `profiling` consent, from headline, bio, liked niche names and the last five
+  published teasers; a problem only when published, clear and readable by every signed-in developer: organisation
+  listed, an `org_brief` only with a published, public Brief), two writers that take the hash back, recompute the
+  text under the row lock and return false on a mismatch (READ COMMITTED only), the own-row clearer the opt-out
+  calls, a clearer of embedded rows whose text became empty, and the stale counts; a withdrawal trigger that always
+  nulls the vector; `consents.created_at` pinned by the database for every writer but the owner; the signup INSERT
+  policy refuses a vector; the `problems` embedding grants closed to the app role; the downgrade nulls the derived
+  columns. Fifteen internal functions and two triggers carry no grant; every function pins `search_path`.
+- **The backend** (impl-backend): `bridge/embeddings/` (the table adapters over the definers, the policy section
+  `embeddings.max_rows_per_run: 500`, the per-process embedder runtime), `embeddings.reembed` every 15 minutes on the
+  `default` queue under the lock `embeddings:reembed`, unbound: the empty-text clearer first, then profiles, then
+  problems, batches from `ai/models.yaml`, a false write never counted as done (a row re-listed with the same hash
+  costs one more try and is abandoned for the run after three), a failed table never stops the other, both count
+  lines logged, `EmbedderUnavailable` one warning; PUT `/api/me/consents` turning `profiling` off calls the clearer
+  in the same transaction (the trigger is the backstop); the ranker's f1 is `max(0, cosine)` over the developer's own
+  profile vector and the cards' vectors in one SQL statement, only when both carry the configured model and version
+  and a hash, else the keyword share as before; `features.semantic_fit.source` records which path; the chip "Similar
+  to your profile" ([[COPY-REVIEW]]) only from a per-model `chip_floors` cosine in `ai/models.yaml` (the fake 0.3,
+  bge-m3 0.6; the constant 0.5 as the default); the demo seed's last step runs one job pass; the regenerated API
+  types (`source` only; no vector or hash reaches any response).
+- **The fake embedder** (impl-ai): bag-of-words vectors (letters/digits tokens, a 54-word English+Swahili stop list,
+  1 + ln(tf) weights over per-token SHAKE-256 unit vectors, `fsum` norm, a 1,024-entry compact token cache of about
+  8 MB), `FAKE_VERSION` 2 so stored v1 vectors are re-embedded; the demo's related cards score 0.34–0.44 against
+  Amina's profile and unrelated ones 0.02–0.06, so the chip now means something in the demo; the originality API
+  tests' teasers got disjoint vocabularies (no threshold loosened, no test deleted).
+
+**Reviews.** Revision 0012: reviewer CHANGES_REQUIRED (one MAJOR: timestamp freshness lost an edit between
+listing and write; three MINORs) → CHANGES_REQUIRED (one MAJOR: an emptied text kept its vector; four MINORs) → PASS
+(four MINORs) → PASS; security-reviewer PASS (two MINORs: the signup INSERT admitted a vector; the downgrade) → PASS
+(three MINORs: a draft Brief's and a delisted organisation's problem were embedded; a client-supplied consent time
+reordered the decision history; orphaned vectors) → CHANGES_REQUIRED (one MAJOR: an invited-only Brief's problem was
+embedded, the readable predicate having copied `trend_facts`' SQL without the RLS layer it runs under) → PASS. The
+backend: reviewer CHANGES_REQUIRED (two MAJORs: a consent toggled during a run stopped the whole run, and the chip
+had no floor; four MINORs) → PASS (two MINORs, closed); security-reviewer PASS (one MINOR: the unavailable-embedder
+log echoed the model path, closed). The fake: reviewer CHANGES_REQUIRED (one MAJOR: a 270 MB token cache per
+process; three MINORs including the demo never reaching the chip floor) → CHANGES_REQUIRED (an order-dependent
+ranker test from the backend round; a falsy-shape gap in the models registry) → PASS. Four new threat-model rows.
+
+**Gate.** Playwright on the compose stack rebuilt from the merged branch `5ef44f8` and reset (mobile 360 and desktop,
+axe): 212 passed, 4 skipped, 0 failed (27.8 min); the test-clock scenarios 4/4; `demo.py reset` and `e2e-env` clean;
+after the reset the seed holds 1 of 4 profile vectors (only Amina carries the `profiling` consent) and 9 of 9 problem
+vectors, all `fake-shake256` v2, stale counts 0/0, the job registered at `*/15 * * * *`. Backend on the merged head:
+lint, format and `mypy --strict` clean; the affected suites 1,274 passed, the targeted embeddings/matching/demo sets
+825 and 1,113 passed in the fix rounds, the whole suite 5,633 passed on the backend worktree before the merge
+(`-p no:randomly`). JS budgets unchanged (`/dev` 143,994 B, `/dev/discover` 147,721 B, `/settings/notifications`
+144,899 B of 150,000). CodeQL run 281 on `f5f8fc8` and run 282 on `5ef44f8`: exactly the eight D-42 findings (one
+JavaScript, seven Python). `pr.yml` run 346 on `f5f8fc8` (revision 0012 alone): frontend, Playwright with the clock
+scenarios, the demo story, hygiene and legacy green; scanners red on `npm audit` only (D-56); the backend job
+cancelled at its 35-minute limit (the tenth time; P23 item 10). Run 347 on `5ef44f8`: frontend, Playwright with the clock scenarios, the demo story, hygiene and both legacy jobs
+green; scanners red on `npm audit` only (D-56); the backend job cancelled at its 35-minute limit (the eleventh time;
+the suite passes locally: shard or raise, P23 item 10, the owner's call).
+
+**Deviations and residuals.**
+- In the demo, Amina's three related problems (cosine 0.34–0.42 under the word-based fake) are the ones her own
+  ideas already pursue, so they are not recommended, and the cards she is shown sit at 0.03–0.13: f1 runs on the
+  embedding path for every card (`source: "embedding"`) but no card reaches the 0.3 chip floor, so "Similar to your
+  profile" does not appear in the demo story. A demo problem in one of her niches that she has not pursued would show
+  it (a P23 fit-and-finish item, not a defect).
+- D-64 (the owner): the chip floor per model is a tuning constant (the fake 0.3, bge-m3 0.6 until measured); f1's
+  value stays `max(0, cosine)`, so under bge-m3 every vector-carrying card would gain about 0.3–0.5 of f1 over a
+  keyword-path card in a mixed list until the calibration in D-64 (b)+(c) lands before the first bge-m3 deployment.
+- D-63 (the owner): peers unchanged; the consent sentence's coverage of headline and bio is a `[[COPY-REVIEW]]`
+  question on `consents.yaml`.
+- The sub-agents' commits carry the Opus 5.5 attribution line (P23 item 9); the orchestrator's carry Fable 5.1.
+- Each reader call still builds the text of every embedded row it compares (one build per vector-holding row per
+  call; the never-embedded stage costs only its own rows); the clearer and the counts add one pass each per run.
+  Fine at the prototype's scale; a stored hash on the text's inputs would remove it later.
+- A consent withdrawn and re-granted within one run costs the row one retry (abandoned after three), never the run.
+- No frontend change: the chip reaches the card as API text under the existing `[[COPY-REVIEW]]` pattern.
+
+**Status.** Gate reached: every review PASS, the local gate green, CI as above. `claude/fervent-mccarthy-0zyqn2` at the
+report's commit is ready to merge into `claude/eloquent-hypatia-aa3577` on the owner's word (nothing merged there yet).
+Next on the P23 card: item 2 onwards; the owner's decisions D-63 and D-64.
 
 ### P22-C report (2026-10-06): Peers and team up (D-58, D-62)
 
