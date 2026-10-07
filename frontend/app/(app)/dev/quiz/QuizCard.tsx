@@ -41,7 +41,7 @@ export async function QuizCard({ state }: { state: QuizCardState }) {
               score: attempt.score,
               total: attempt.out_of,
               streak: state.today.streak.current,
-              fig: (chunks) => <span className="mr-1 font-display text-2xl font-[680] tracking-[-0.02em] tabular-nums">{chunks}</span>,
+              fig: (chunks) => <span className="mr-1 font-figure text-2xl font-[680] tracking-[-0.02em] tabular-nums">{chunks}</span>,
             })}
           </p>
           <Marks marks={outcomes(state.today, attempt)} />

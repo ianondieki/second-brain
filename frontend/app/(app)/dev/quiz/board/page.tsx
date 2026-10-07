@@ -52,7 +52,7 @@ export default async function BoardPage() {
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <div className="flex max-w-3xl flex-col gap-10">
         <PageHeader back={{ href: QUIZ_PATH, label: t("board.back") }} title={t("board.title")} lead={t("board.lead")}>
-          <p className="mt-3 font-display text-lg font-[620] text-ink tabular-nums" data-board-dates="">
+          <p className="mt-3 font-figure text-lg font-[620] text-ink tabular-nums" data-board-dates="">
             {dates}
           </p>
         </PageHeader>
@@ -91,7 +91,7 @@ export default async function BoardPage() {
                   className={cn("flex min-h-14 items-center gap-4 px-4 py-3 sm:px-6", row.you && "bg-accent-wash")}
                 >
                   <span className="sr-only">{t("board.rank", { rank: row.rank })}</span>
-                  <span aria-hidden="true" className="w-8 shrink-0 font-display text-xl font-[680] text-ink tabular-nums">
+                  <span aria-hidden="true" className="w-8 shrink-0 font-figure text-xl font-[680] text-ink tabular-nums">
                     {row.rank}
                   </span>
                   <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere] text-ink">

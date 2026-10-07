@@ -24,7 +24,7 @@ export function StatTile({ label, value, meta, spark, href, className, ...rest }
     <>
       <span className="text-sm font-semibold text-ink-soft">{label}</span>
       <span className="mt-2 flex items-end justify-between gap-3">
-        <span className="font-display text-2xl leading-none font-[720] tracking-[-0.03em] whitespace-nowrap text-ink tabular-nums">{value}</span>
+        <span className="font-figure text-2xl leading-none font-[720] tracking-[-0.03em] whitespace-nowrap text-ink tabular-nums">{value}</span>
         {spark ? <Sparkline values={spark} className="mb-1 shrink-0" /> : null}
       </span>
       {meta ? <span className="mt-2 text-sm text-ink-soft">{meta}</span> : null}

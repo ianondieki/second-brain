@@ -160,3 +160,32 @@ Before building, the plan was compared with what any similar brief produces:
 Every role, label, `data-*` hook and string key the tests and the product rely on; the one primary action per screen;
 ≤ 2 chips per card; 44 px targets; 360 px first; the 150 KB gzipped JS budget per route (styling moves into CSS
 component classes, which also takes bytes out of the client bundles); English and Swahili parity; demo-honesty labels.
+
+## P24 addendum: "Jacaranda in print" (D-66, 2026-10-07)
+
+The owner's three references (a venture-routing site, a hackathon site, a Kenyan real-estate page) share a serif
+display with an italic accent, a warm paper canvas, numbered three-step cards, a real product panel in the hero, a
+stats row, photographs in tiles, a dark preview band and something alive on the page. D-66 takes those over the
+avoidance notes above; everything else in this document stands.
+
+- **Type.** Titles (h1, h2, section and card titles on the landing) move to **Fraunces** (OFL; opsz 24–144, wght
+  400–700, upright and italic, about 46 KB each; `public/fonts/LICENCES.md`), `--font-display`. Bricolage Grotesque
+  keeps the wordmark and the figures as `--font-figure` (stat tiles, deadline dates, prices, countdown digits).
+  Hanken stays for text, IBM Plex Mono for codes, the eyebrows and the why-panel. The hero carries one italic accent
+  phrase in bloom ("that need them").
+- **Canvas.** Light `--paper` warms from `#F7F6FB` to `#F7F4ED`; `--line` to `#E5DFD2`. Every text token keeps AA on
+  it (ink 15.8:1, ink-soft 6.1:1, bloom 6.6:1, ochre 5.5:1, leaf 5.0:1, error 6.0:1). Dark mode is unchanged.
+- **Eyebrows** return (`.eyebrow`: mono, 12 px, letter-spaced capitals, ink-soft), at most one per section.
+- **The honesty label** (`.demo-label`: a saffron-washed pill with a dot) captions example data: "Demo data" on the
+  hero panel, "Seeded example" on the why-panel and the activity feed. It is a caption, not one of a card's chips.
+- **Landing order.** Top bar (How it works, Explore, Check a certificate, Log in) · the hero on paper with the
+  product panel in a petal frame · the stats row of product constants · the lattice · the county photo strip · How it
+  works as three numbered cards with mono chips · the night band "Every recommendation names its reason" with the
+  terminal why-panel (the ranker's own texts) · What you can do · What's happening · Proof · Questions · the closing
+  band · the footer (with Explore and Credits). The trust strip and the two "who it is for" panels left the page.
+- **Motion** (one moment per part, CSS first, still under reduced motion): the hero story plus the panel's countdown
+  ticking its minutes and seconds (registered integer properties); the stats counting up once (a 0.4 KB client box
+  sets `data-run`); the county strip's 24 s pan; the activity ticker's marquee (paused on hover and focus, the
+  moving row hidden from assistive technology, a visually hidden list instead); Home's "Your turn" breathing twice.
+- **Photographs** only in the county strip, on Explore and the share cards: licensed, credited on `/credits`, AVIF
+  with a WebP fallback, lazy, below the fold, never the LCP element.

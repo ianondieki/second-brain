@@ -22,12 +22,12 @@ export function LogoMark({ size = 28, className }: { size?: number; className?: 
   );
 }
 
-/** The mark and the name "Wazo" in the display face: the product's signature on every top bar, sheet and email. */
+/** The mark and the name "Wazo" in the figure face (Bricolage; D-66): the product's signature on every top bar, sheet and email. */
 export function Wordmark({ size = 28, className }: { size?: number; className?: string }) {
   return (
     <span className={cn("inline-flex items-center gap-2", className)} data-wordmark="">
       <LogoMark size={size} />
-      <span className="font-display leading-none font-[760] tracking-[-0.035em] text-ink" style={{ fontSize: size * 0.92 }}>
+      <span className="font-figure leading-none font-[760] tracking-[-0.035em] text-ink" style={{ fontSize: size * 0.92 }}>
         Wazo
       </span>
     </span>
