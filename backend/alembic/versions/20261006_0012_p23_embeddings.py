@@ -5,8 +5,8 @@ embedding serves recommendations only). AC-PERS-3: a withdrawal of the ``profili
 vector in its own transaction and no vector is written while the consent is not granted. Additive but for two
 narrowings of earlier objects, restored on downgrade (a grant on ``problems``, the INSERT policy of
 ``developer_profiles``): four new columns (``developer_profiles.profile_embedded_at`` and
-``profile_embedding_hash``, ``problems.embedded_at`` and ``embedding_hash``), two HNSW cosine indexes, sixteen new
-functions (six granted to bridge_app, nine internal, two trigger functions) and two triggers. No new table, no enum
+``profile_embedding_hash``, ``problems.embedded_at`` and ``embedding_hash``), two HNSW cosine indexes, eighteen new
+functions (six granted to bridge_app, ten internal, two trigger functions) and two triggers. No new table, no enum
 type; nothing else of revisions 0001 to 0011 is changed or dropped. The downgrade nulls every vector with its model
 and version on both tables, then drops the triggers, functions, indexes and the four new columns and restores the grant
 and the policy. Every vector is derived data the worker recomputes from rows that stay (the profiles, niches,
@@ -77,21 +77,23 @@ revision 0001's audit trigger):
 - ``app_clear_profile_embedding(user)``: nulls the vector, model, version, time and hash and moves ``updated_at`` (the
   row is always written, so it is locked). The worker for any user, or a bound user for their own row only (the
   opt-out runs in the user's request); insufficient_privilege for anyone else. An unknown user is a no-op.
-- ``app_problems_to_embed(model, version, limit)`` -> (problem_id, text, text_hash): the worker only. Published and
-  clear problems whose vector is stale (none, another model or version, or a stored hash that is not ``text_hash``);
-  ``text`` the title and statement, normalised as above; oldest ``embedded_at`` first (never embedded first), then id.
+- ``app_problems_to_embed(model, version, limit)`` -> (problem_id, text, text_hash): the worker only. Problems every
+  signed-in developer may read (``problem_is_readable``: published and clear; an organisation's only while it is
+  listed; a Brief's only while the Brief is published), whose vector is stale (none, another model or version, or a
+  stored hash that is not ``text_hash``); ``text`` the title and statement, normalised as above; oldest
+  ``embedded_at`` first (never embedded first), then id.
 - ``app_set_problem_embedding(problem, vector, model, version, text_hash)`` -> boolean: the worker only. Locks the
   problem FOR UPDATE and writes the vector, model, version, ``embedded_at = now()`` and the hash only while it is
-  published and clear and ``text_hash`` is its text's hash now (a hold, an archive or an edit since it was listed:
-  false, nothing written).
+  readable and ``text_hash`` is its text's hash now (a hold, an archive, a Brief back in draft, a delisting or an edit
+  since it was listed: false, nothing written).
 - ``app_stale_embedding_counts(model DEFAULT NULL, version DEFAULT NULL)`` -> one row (profiles, problems): the worker
   only; how many rows the two readers would list (for the job's log line). Without a model and version (both or
   neither) the model rule is left out: rows without a vector or whose text changed since.
 - Internal (no EXECUTE grant; called as the owner): ``embedding_label_is_valid(label, max)``,
   ``embedding_text_line(text)``, ``embedding_text_hash(text)``, ``profile_consent_granted(user)``,
-  ``profile_embedding_text(user)``, ``problem_embedding_text(title, statement)``, ``profiles_to_embed(model,
-  version)`` and ``problems_to_embed(model, version)`` (the stale sets with their times, texts and hashes, unordered;
-  NULL model and version leave the model rule out), ``profile_embedding_clear(user)``.
+  ``profile_embedding_text(user)``, ``problem_embedding_text(title, statement)``, ``problem_is_readable(problem)``,
+  ``profiles_to_embed(model, version)`` and ``problems_to_embed(model, version)`` (the stale sets with their times,
+  texts and hashes, unordered; NULL model and version leave the model rule out), ``profile_embedding_clear(user)``.
 
 Lock order: a profile's row lock, then the consent and text reads (the writer; a withdrawal's trigger writes the same
 row, so either waits for the other: at READ COMMITTED the writer then reads the withdrawal, and the withdrawal clears
@@ -273,9 +275,29 @@ AS $$
             OR c.profile_embedding_hash IS DISTINCT FROM t.body_hash)
 $$;
 
--- The published and clear problems whose vector is stale, with the vector's time, the text and its hash: a text that
--- is not empty, with no vector, another model or version (left out when p_model is NULL), or a stored hash that is
--- not the text's. Unordered. Internal (no EXECUTE grant).
+-- Whether every signed-in developer may read p_problem now, as bridge.matching.trend_facts reads the recommendable
+-- problems: published and clear; an organisation's problem only while the organisation is listed (unclaimed, E1 or E2,
+-- not delisted); a Brief's problem only while its Brief is published (staff may approve the problem of a draft Brief,
+-- which stays its organisation's). The Brief's deadline is a ranking filter, not a reading one, and is left to the
+-- ranker. A problem is embedded only once it is readable. Internal (no EXECUTE grant).
+CREATE FUNCTION problem_is_readable(p_problem uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.problems p
+         WHERE p.id = p_problem AND p.status = 'published' AND p.moderation_state = 'clear'
+           AND (p.org_id IS NULL
+                OR EXISTS (SELECT 1 FROM public.organizations o
+                            WHERE o.id = p.org_id AND o.verification IN ('unclaimed', 'e1', 'e2')
+                              AND o.delisted_at IS NULL))
+           AND (p.source <> 'org_brief'
+                OR EXISTS (SELECT 1 FROM public.problem_briefs b WHERE b.problem_id = p.id AND b.status = 'published')))
+$$;
+
+-- The readable problems (problem_is_readable) whose vector is stale, with the vector's time, the text and its hash: a
+-- text that is not empty, with no vector, another model or version (left out when p_model is NULL), or a stored hash
+-- that is not the text's. Unordered. Internal (no EXECUTE grant).
 CREATE FUNCTION problems_to_embed(p_model text, p_version text)
     RETURNS TABLE (problem_id uuid, embedded_at timestamptz, body text, body_hash text)
     LANGUAGE sql STABLE
@@ -285,7 +307,7 @@ AS $$
       FROM public.problems p
      CROSS JOIN LATERAL (SELECT b.body, public.embedding_text_hash(b.body) AS body_hash
                            FROM (SELECT public.problem_embedding_text(p.title, p.statement) AS body) b) t
-     WHERE p.status = 'published' AND p.moderation_state = 'clear'
+     WHERE public.problem_is_readable(p.id)
        AND t.body <> ''
        AND (p.embedding IS NULL
             OR (p_model IS NOT NULL
@@ -424,10 +446,10 @@ BEGIN
 END;
 $$;
 
--- Writes p_problem's vector (REQ-EMB-01): the worker only. The problem's row is locked, then its state and text read:
--- written with the model, version, now() and the hash only while it is published and clear and p_text_hash is the
--- hash of its text as it reads now (a hold, an archive or an edit since it was listed writes nothing). Returns
--- whether it wrote.
+-- Writes p_problem's vector (REQ-EMB-01): the worker only. The problem's row is locked, then its readability and text
+-- read: written with the model, version, now() and the hash only while it is readable (problem_is_readable) and
+-- p_text_hash is the hash of its text as it reads now (a hold, an archive, a Brief back in draft, a delisting or an
+-- edit since it was listed writes nothing). Returns whether it wrote.
 CREATE FUNCTION app_set_problem_embedding(p_problem uuid, p_vector vector, p_model text, p_version text,
                                           p_text_hash text)
     RETURNS boolean
@@ -435,8 +457,6 @@ CREATE FUNCTION app_set_problem_embedding(p_problem uuid, p_vector vector, p_mod
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
-    v_status public.problem_status;
-    v_state public.moderation_state;
     v_text text;
 BEGIN
     IF public.app_user_id() IS NOT NULL THEN
@@ -454,10 +474,9 @@ BEGIN
         RAISE EXCEPTION 'app_set_problem_embedding: a non-zero vector of 1024 dimensions, a model (1 to 80 characters),'
             ' a version (1 to 40) and the text''s hash' USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    SELECT p.status, p.moderation_state, public.problem_embedding_text(p.title, p.statement)
-      INTO v_status, v_state, v_text
+    SELECT public.problem_embedding_text(p.title, p.statement) INTO v_text
       FROM public.problems p WHERE p.id = p_problem FOR UPDATE;
-    IF NOT FOUND OR v_status <> 'published' OR v_state <> 'clear' THEN
+    IF NOT FOUND OR NOT public.problem_is_readable(p_problem) THEN
         RETURN false;
     END IF;
     IF v_text = '' OR public.embedding_text_hash(v_text) <> p_text_hash THEN
@@ -539,6 +558,7 @@ INTERNAL_FUNCTIONS = (
     "profiles_to_embed(text, text)",
     "problems_to_embed(text, text)",
     "problem_embedding_text(text, text)",
+    "problem_is_readable(uuid)",
     "profile_embedding_text(uuid)",
     "profile_consent_granted(uuid)",
     "embedding_text_hash(text)",
