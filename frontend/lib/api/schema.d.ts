@@ -4220,6 +4220,11 @@ export interface components {
              */
             deadline: string | null;
             /**
+             * Deadline At
+             * @description The instant the deadline day ends, for a countdown: 23:59:59.999999 in Africa/Nairobi, in UTC; null when there is no deadline. Derived from deadline (REQ-TRACK-03); open and ended stay the authority
+             */
+            deadline_at?: string | null;
+            /**
              * Ended
              * @description Why it no longer asks for proposals, on the same day as open: closed (the organisation closed it) or past_deadline (published, not closed, its deadline before today in Africa/Nairobi on the platform clock); null while it is open and for a Brief not published
              */
@@ -4316,6 +4321,11 @@ export interface components {
             created_at: string;
             /** Deadline */
             deadline: string | null;
+            /**
+             * Deadline At
+             * @description The instant the deadline day ends, for a countdown: 23:59:59.999999 in Africa/Nairobi, in UTC; null when there is no deadline. Derived from deadline (REQ-TRACK-03); open and ended stay the authority
+             */
+            deadline_at?: string | null;
             /**
              * Id
              * Format: uuid
@@ -5317,10 +5327,19 @@ export interface components {
             problem_ids?: string[] | null;
             teaser?: components["schemas"]["TeaserIn"] | null;
         };
-        /** DueOut */
+        /**
+         * DueOut
+         * @description The current step's deadline: by the end of ``due_on`` in Africa/Nairobi.
+         */
         DueOut: {
             /** Business Days Left */
             business_days_left: number;
+            /**
+             * Due At
+             * Format: date-time
+             * @description The instant the window closes, for a countdown: the stage deadline (the end of due_on in Africa/Nairobi, 23:59:59 local), in UTC; overdue is true exactly once it has passed
+             */
+            due_at?: string;
             /**
              * Due On
              * Format: date
@@ -9915,7 +9934,10 @@ export interface components {
     responses: never;
     parameters: never;
     requestBodies: never;
-    headers: never;
+    headers: {
+        /** @description The platform clock when the request was answered, in ISO 8601 UTC with a Z (to the millisecond): on every /api response, errors included, except a state-changing request refused for its CSRF token. Count deadlines (due_at, deadline_at) down from it, not from the device's clock; in dev and test it follows the test clock. */
+        "X-App-Now": string;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;

@@ -9,6 +9,8 @@ import { ChipMark } from "./Chip";
 import { formatDay } from "@/lib/format";
 
 import { formatDate, myNextSteps, sideBanner, theirNextSteps, turnOf, type Detail, type SideBanner } from "./model";
+import { TimeLeft } from "@/components/ui/TimeLeft";
+
 import { DueText } from "./When";
 
 /**
@@ -17,7 +19,7 @@ import { DueText } from "./When";
  * parties apart from the wording of "you". A side state is said here, on the stage where it occurred (never an extra
  * step): the open question, the hold with its reason and date, an expiry in words, the answer that resumed the stage.
  */
-export function WhoseTurn({ detail }: { detail: Detail }) {
+export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
   const t = useTranslations("tracker");
   const steps = useTranslations("trackerActions");
   const locale = useLocale();
@@ -54,6 +56,23 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
   const late = detail.due ? Math.abs(detail.due.business_days_left) : 0;
   // The countdown as a figure ("7 business days left") when it is a count; "due today" stays a sentence.
   const figure = countdown && detail.due && (detail.due.overdue ? late > 0 : detail.due.business_days_left > 0);
+  // The time left in days, hours and minutes to the moment the window closes (P23-3), from the app clock. Under the
+  // figure it is the figure's one secondary line ("Due 16 Oct 2026 · in 7 days 6 h 2 min"), in place of "Due …";
+  // under the sentence otherwise ("in 5 h 59 min"). Warm under 24 hours only when the step is the viewer's.
+  const until = detail.due && !detail.due.overdue && !ended && !onHold ? detail.due.due_at : undefined;
+  const dueDate = detail.due ? formatDate(detail.due.due_on, locale) : "";
+  const timeLeft =
+    now && until ? (
+      <TimeLeft
+        until={until}
+        now={now}
+        labelWhenPast={figure ? t("deadline.was", { date: dueDate }) : t("chip.overdue")}
+        sentence={figure ? "dueIn" : "in"}
+        date={dueDate}
+        mine={awaited.has(detail.my_party)}
+        className={figure ? "mt-1 block text-sm text-ink-soft sm:mt-0" : "text-sm text-ink-soft"}
+      />
+    ) : null;
   return (
     <section
       aria-labelledby="whose-turn"
@@ -131,9 +150,15 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
               <DueText due={detail.due} className={detail.due.overdue ? "font-semibold text-error" : "text-ink-soft"} />
             </p>
           ) : null}
+          {timeLeft && !figure ? <p>{timeLeft}</p> : null}
         </div>
       </div>
-      {figure && detail.due ? <Countdown due={detail.due} /> : null}
+      {figure && detail.due ? (
+        <div className="shrink-0 border-t border-line pt-3 sm:w-48 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
+          <Countdown due={detail.due} dated={!timeLeft} />
+          {timeLeft}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -142,7 +167,7 @@ export function WhoseTurn({ detail }: { detail: Detail }) {
  * The stage's countdown as a figure (the display face, tabular): business days left, or overdue in the error colour
  * with its mark. A picture of the sentence beside it (aria-hidden): the sentence is what is read out.
  */
-function Countdown({ due }: { due: Detail["due"] & object }) {
+function Countdown({ due, dated }: { due: Detail["due"] & object; dated: boolean }) {
   const t = useTranslations("tracker");
   const locale = useLocale();
   const count = Math.abs(due.business_days_left);
@@ -160,12 +185,13 @@ function Countdown({ due }: { due: Detail["due"] & object }) {
       aria-hidden="true"
       data-countdown={due.overdue ? "overdue" : "open"}
       className={cn(
-        "grid shrink-0 grid-cols-[auto_1fr] items-center gap-x-4 border-t border-line pt-3 text-sm leading-snug font-semibold sm:w-40 sm:grid-cols-1 sm:items-start sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6",
+        "grid grid-cols-[auto_1fr] items-center gap-x-4 text-sm leading-snug font-semibold sm:grid-cols-1 sm:items-start",
         due.overdue ? "text-error" : "text-ink",
       )}
     >
       {t.rich(due.overdue ? "deadline.overdue" : "deadline.left", { count, n: figure })}
-      <span className="font-normal text-ink-soft">{t(due.overdue ? "deadline.was" : "deadline.due", { date })}</span>
+      {/* The date, unless the countdown's own line ("Due … · in …") says it. */}
+      {dated ? <span className="font-normal text-ink-soft">{t(due.overdue ? "deadline.was" : "deadline.due", { date })}</span> : null}
     </div>
   );
 }

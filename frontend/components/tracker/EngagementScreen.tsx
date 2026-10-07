@@ -17,7 +17,7 @@ import type { Me } from "@/lib/auth/routing";
 
 import { Actions } from "./Actions";
 import { documentLinkClass } from "./document-link";
-import { ContactReveal } from "./ContactReveal";
+import { LazyContactReveal } from "./lazy";
 import { engagementDocument, engagementHistory, orgMembers } from "./data";
 import { Agreements, ContactPerson, Payments, Signatures } from "./Deal";
 import { Endorsements } from "./Endorsements";
@@ -63,6 +63,8 @@ export interface EngagementScreenProps {
   basePath: string;
   /** "?org=<id>" when an organisation member of several chose one (kept on every link), else "". */
   query?: string;
+  /** The app clock's instant for this page (lib/api/server.ts appNow): the deadline's countdown counts from it. */
+  now?: string;
 }
 
 
@@ -71,7 +73,7 @@ export interface EngagementScreenProps {
  * 5-group stepper, the caller's buttons (from the API's `actions` only), then the Tracker, Documents and History tabs.
  * Only the buttons and the contact reveal differ between the developer and the organisation.
  */
-export async function EngagementScreen({ detail, me, tab, doc, basePath, query = "" }: EngagementScreenProps) {
+export async function EngagementScreen({ detail, me, tab, doc, basePath, query = "", now }: EngagementScreenProps) {
   const t = await getTranslations("tracker");
   const locale = await getLocale();
   // The history and, for an approver, the organisation's members are read together.
@@ -95,7 +97,7 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
 
       {/* The caller's buttons share the turn card with the next step. Actions stays mounted whatever is left to do (it
           keeps its own "Done" status and focus after a refresh); its band hides while it is empty. */}
-      <TurnCard detail={detail}>
+      <TurnCard detail={detail} now={now}>
         <Actions
           engagementId={detail.id}
           lockVersion={detail.lock_version}
@@ -161,7 +163,7 @@ async function TrackerTab({ detail, me }: { detail: Detail; me: Me }) {
       {detail.contact ? (
         <div className="flex flex-col gap-4">
           <ContactPerson detail={detail} />
-          {namedContact ? <ContactReveal engagementId={detail.id} /> : null}
+          {namedContact ? <LazyContactReveal engagementId={detail.id} /> : null}
         </div>
       ) : null}
       <Agreements detail={detail} />

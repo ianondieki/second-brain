@@ -122,6 +122,26 @@ describe("a Brief's problem card", () => {
     expect(screen.getByText("Proposals wanted by").nextElementSibling?.textContent).toBe(en.problem.noDeadline);
   });
 
+  // P23-3 (REQ-TRACK-03): while the Brief is open, the time left to the end of its deadline day in Nairobi, from the
+  // page's app-clock instant; once it is not open, no countdown (ProblemStart says why).
+  const deadlineAt = "2026-11-30T20:59:59.999Z";
+  it("says when submissions close, in days, hours and minutes, while the Brief is open", async () => {
+    const brief = { org: ORG, budget_band: BAND, deadline: "2026-11-30", deadline_at: deadlineAt, open: true };
+    renderWithIntl(await ProblemCard({ problem: detail({ brief } as Partial<ProblemDetail>), now: "2026-11-24T06:36:00Z" }));
+    const value = within(document.querySelector("dl")!).getByText("Proposals wanted by").nextElementSibling!;
+    expect(value.textContent).toBe("30 Nov 2026Proposals close in 6 days 14 h 23 min");
+    expect(value.querySelector("time")?.getAttribute("dateTime")).toBe("P6DT14H23M");
+    expect(value.querySelector("time")?.getAttribute("title")).toBe("30 Nov 2026, 23:59 EAT");
+    expect(value.querySelector("[data-timer='open']")).not.toBeNull();
+  });
+
+  it("shows no countdown once the Brief is not open", async () => {
+    const brief = { org: ORG, budget_band: BAND, deadline: "2026-11-30", deadline_at: deadlineAt, open: false, ended: "past_deadline" };
+    renderWithIntl(await ProblemCard({ problem: detail({ brief } as Partial<ProblemDetail>), now: "2026-12-01T06:36:00Z" }));
+    expect(document.querySelector("[data-timer]")).toBeNull();
+    expect(within(document.querySelector("dl")!).getByText("Proposals wanted by").nextElementSibling?.textContent).toBe("30 Nov 2026");
+  });
+
   it("shows no Brief facts on another problem", async () => {
     render(await ProblemCard({ problem: detail({ source: "developer", label: "Developer-reported", org: null, brief: null }) }));
     expect(screen.queryByText("Budget band")).toBeNull();

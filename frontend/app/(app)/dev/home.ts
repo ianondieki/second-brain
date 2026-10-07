@@ -26,6 +26,8 @@ export interface HomeStats {
   /** The soonest deadline among the active engagements, and whose it is. */
   nextDue: Summary["due"];
   nextDueId: string | null;
+  /** Whether that deadline is the developer's own step (the countdown's warm mark under 24 hours). */
+  nextDueMine: boolean;
 }
 
 /** The four figures of Home's stat tiles, from what the page already reads. */
@@ -47,5 +49,6 @@ export function homeStats(engagements: readonly Summary[], ideas: readonly MyPro
     active: active.length,
     nextDue: withDue[0]?.due ?? null,
     nextDueId: withDue[0]?.id ?? null,
+    nextDueMine: owed.length > 0,
   };
 }
