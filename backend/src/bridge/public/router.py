@@ -7,13 +7,16 @@ REQ-DIR-01, REQ-REPO-02; P24-B). No session needed.
   three newest of each.
 
 Both are the same for everyone, so each API worker keeps one copy for 60 seconds (one database read per minute per
-worker) and says ``Cache-Control: public, max-age=60``. Every request still counts against its client address on the
+worker) and says ``Cache-Control: public, max-age=60``. A fresh copy is served before anything touches the database,
+so it still answers while the database is down. Only a miss (no fresh copy) counts against its client address on the
 login-attempt ledger, as ``/api/verify`` does (``verify.allow``: keyed digests of the address only), 60 a minute per
-route; past that it is 429 ``rate_limited`` (``no-store``) and nothing is read.
+route, and past that it is 429 ``rate_limited`` (``no-store``) and nothing is read; a failed read is a 500
+(``no-store``) and nothing is cached.
 """
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from time import monotonic
@@ -60,6 +63,17 @@ async def _throttle(db: Db, settings: SettingsDep, request: Request, *, purpose:
         raise ApiError(429, "rate_limited", "Too many requests from this address. Wait a minute and try again.")
 
 
+async def _served[T](
+    request: Request, db: Db, settings: SettingsDep, cached: Cached[T], load: Callable[[], Awaitable[T]], purpose: str
+) -> T:
+    """The fresh copy without touching the database; on a miss, the rate limit, then one load for this worker."""
+    hit = cached.fresh()
+    if hit is None:
+        await _throttle(db, settings, request, purpose=purpose)
+        hit = await cached.get(load)
+    return hit
+
+
 def _platform_now(request: Request) -> datetime:
     """The instant ``X-App-Now`` carries for this request (the platform clock), else the wall clock."""
     moment = getattr(request.state, "app_now", None)
@@ -69,13 +83,19 @@ def _platform_now(request: Request) -> datetime:
 @router.get("/activity")
 async def public_activity(request: Request, response: Response, db: Db, settings: SettingsDep) -> ActivityFeed:
     """The 20 latest public events, newest first: never a person, a handle, an organisation or private text."""
-    await _throttle(db, settings, request, purpose=ACTIVITY_PURPOSE)
     factory, demo, generated_at = (
         request.app.state.session_factory,
         feed.demo_deployment(settings),
         _platform_now(request),
     )
-    result = await caches(request).activity.get(lambda: feed.activity(factory, generated_at=generated_at, demo=demo))
+    result = await _served(
+        request,
+        db,
+        settings,
+        caches(request).activity,
+        lambda: feed.activity(factory, generated_at=generated_at, demo=demo),
+        ACTIVITY_PURPOSE,
+    )
     response.headers["Cache-Control"] = PUBLIC_CACHE
     return result
 
@@ -83,8 +103,9 @@ async def public_activity(request: Request, response: Response, db: Db, settings
 @router.get("/explore")
 async def public_explore(request: Request, response: Response, db: Db, settings: SettingsDep) -> Explore:
     """Published problems by county and by top-level niche, each with its three newest."""
-    await _throttle(db, settings, request, purpose=EXPLORE_PURPOSE)
     factory, demo = request.app.state.session_factory, feed.demo_deployment(settings)
-    result = await caches(request).explore.get(lambda: feed.explore(factory, demo=demo))
+    result = await _served(
+        request, db, settings, caches(request).explore, lambda: feed.explore(factory, demo=demo), EXPLORE_PURPOSE
+    )
     response.headers["Cache-Control"] = PUBLIC_CACHE
     return result

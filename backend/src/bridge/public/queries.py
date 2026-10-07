@@ -5,7 +5,8 @@ REQ-DIR-01, REQ-REPO-02; P24-B; docs/spec/06 6.1, 6.2).
 with no user bound. These reads bind ``PUBLIC_READER``, the nil UUID, which is never an account (account ids are
 UUIDv7, made by the server): RLS then shows exactly what every signed-in user may read and nothing more (no row is
 owned by it, it is a member of no organisation, invited to no Brief and not staff), so a bug in a predicate here can
-never reach a draft, a held row, an organisation's own Brief or an invited one. The transaction is READ ONLY.
+never reach a draft, a held row, an organisation's own Brief or an invited one. The transaction is READ ONLY, and its
+statements are cancelled after ``READ_TIMEOUT`` (2 s).
 
 **What is read.** On top of RLS each statement repeats the public predicate: a problem only while
 ``problem_is_readable`` (revision 0012) would say so (published, clear, no organisation or a listed one, a Brief's only
@@ -62,6 +63,8 @@ FEED_SIZE: Final = 20
 NEWEST: Final = 3  # problems per county and per niche on Explore
 PUBLIC_READER: Final = UUID(int=0)  # the nil UUID: never an account
 _READ_ONLY = text("SET TRANSACTION READ ONLY")
+READ_TIMEOUT: Final = "2s"  # a public read never holds a connection longer (its waiters get a 500, nothing cached)
+_TIMEOUT = text(f"SET LOCAL statement_timeout = '{READ_TIMEOUT}'")
 _Parent = aliased(Niche)
 _Poster = aliased(Organization)
 _Brief = aliased(ProblemBrief)
@@ -186,9 +189,11 @@ def explore_statement() -> Select[Any]:
 
 
 async def read(factory: async_sessionmaker[AsyncSession], statement: Select[Any]) -> Sequence[Any]:
-    """``statement``'s rows, read as the public reader in a read-only transaction of its own."""
+    """``statement``'s rows, read as the public reader in a read-only transaction of its own, cancelled by the
+    database after ``READ_TIMEOUT``."""
     async with factory() as session:
         await bind_tenant(session, user_id=PUBLIC_READER)
         async with session.begin():
             await session.execute(_READ_ONLY)
+            await session.execute(_TIMEOUT)
             return (await session.execute(statement)).all()

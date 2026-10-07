@@ -1,9 +1,10 @@
 """REQ-UX-03 (P24-B): ``GET /api/public/activity`` and ``GET /api/public/explore`` as routes, without a database.
 
 Both answer a signed-out visitor, say ``Cache-Control: public, max-age=60``, read once a minute per worker (the second
-call within the minute costs no load), count every read against the client address like the other public reads
-(429 ``rate_limited`` past the limit, never cached), stamp the feed with the platform clock, tell the reads whether
-this is a demo deployment, and return exactly the shapes the OpenAPI document gives.
+call within the minute touches neither the database nor the rate limit, so it still answers while the database is
+down), count a miss against the client address like the other public reads (429 ``rate_limited`` past the limit, never
+cached; a failed read is a 500, ``no-store``), stamp the feed with the platform clock, tell the reads whether this is
+a demo deployment, and return exactly the shapes the OpenAPI document gives.
 """
 
 from __future__ import annotations
@@ -80,12 +81,12 @@ class Scene:
 
 
 @asynccontextmanager
-async def client(settings: Settings | None = None) -> AsyncIterator[httpx.AsyncClient]:
+async def client(settings: Settings | None = None, *, raise_errors: bool = True) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(settings or get_settings())
     app.state.session_factory = "the session factory"
     db = FakeDb()
     app.dependency_overrides[get_session] = lambda: db
-    transport = httpx.ASGITransport(app=app, client=("203.0.113.7", 4000))
+    transport = httpx.ASGITransport(app=app, client=("203.0.113.7", 4000), raise_app_exceptions=raise_errors)
     async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as http:
         http.app = app  # type: ignore[attr-defined]
         yield http
@@ -114,7 +115,34 @@ async def test_two_reads_within_the_minute_cost_one_load(monkeypatch: pytest.Mon
         first, second = await http.get(path), await http.get(path)
     assert first.json() == second.json()
     assert len(scene.loads) == 1
-    assert len(scene.throttled) == 2  # the cache never skips the rate limit
+    assert len(scene.throttled) == 1  # a fresh copy costs no rate-limit write either
+
+
+@pytest.mark.parametrize("path", PATHS)
+async def test_a_fresh_copy_answers_while_the_database_is_down_and_a_miss_then_fails_uncached(
+    monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    scene = Scene(monkeypatch)
+    ticks = [0.0, 30.0, 61.0]  # after the first load; the read during the outage; after the minute
+
+    def now() -> float:
+        return ticks.pop(0) if len(ticks) > 1 else ticks[0]
+
+    async def down(*_: Any, **__: Any) -> Any:
+        raise ConnectionRefusedError("database down")
+
+    monkeypatch.setattr(router, "monotonic", now)
+    async with client(raise_errors=False) as http:
+        first = await http.get(path)
+        monkeypatch.setattr(verify, "allow", down)
+        monkeypatch.setattr(feed, "activity", down)
+        monkeypatch.setattr(feed, "explore", down)
+        during = await http.get(path)
+        stale = await http.get(path)
+    assert (during.status_code, during.headers["cache-control"]) == (200, "public, max-age=60")
+    assert during.json() == first.json()
+    assert (stale.status_code, stale.headers["cache-control"]) == (500, "no-store")
+    assert len(scene.loads) == 1
 
 
 async def test_the_cache_expires_after_a_minute(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -132,7 +160,7 @@ async def test_the_cache_expires_after_a_minute(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.parametrize(("path", "purpose"), list(zip(PATHS, ("public-activity", "public-explore"), strict=True)))
-async def test_every_read_counts_against_the_client_address(
+async def test_a_miss_counts_against_the_client_address(
     monkeypatch: pytest.MonkeyPatch, path: str, purpose: str
 ) -> None:
     scene = Scene(monkeypatch)

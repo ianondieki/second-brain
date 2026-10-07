@@ -3,7 +3,7 @@
 The statements are compiled for PostgreSQL: they read only public columns, under the same public predicate as the
 problem list and ``problem_is_readable`` (published, clear, a listed organisation, a Brief published and public), and
 list registered versions of published, clear proposals only. ``read`` runs them as the public reader (the nil UUID,
-never an account) in a read-only transaction of its own.
+never an account) in a read-only transaction of its own whose statements the database cancels after 2 seconds.
 """
 
 from __future__ import annotations
@@ -105,7 +105,7 @@ class Session:
         return SimpleNamespace(all=lambda: self.rows)
 
 
-async def test_the_reads_run_as_the_public_reader_in_a_read_only_transaction() -> None:
+async def test_the_reads_run_as_the_public_reader_in_a_read_only_transaction_with_a_2_second_timeout() -> None:
     log: list[str] = []
     sessions: list[Session] = []
 
@@ -116,6 +116,6 @@ async def test_the_reads_run_as_the_public_reader_in_a_read_only_transaction() -
     assert await queries.read(factory, queries.activity_statement()) == ["a row"]  # type: ignore[arg-type]
     assert sessions[0].info["bridge.tenant"] == (queries.PUBLIC_READER, None)
     assert UUID(int=0) == queries.PUBLIC_READER  # never a user: account ids are UUIDv7
-    assert log[:2] == ["begin", "SET TRANSACTION READ ONLY"]
-    assert log[2].startswith("SELECT feed.row_id, feed.kind")
-    assert log[3:] == ["close", "close"]  # the transaction, then the session
+    assert log[:3] == ["begin", "SET TRANSACTION READ ONLY", "SET LOCAL statement_timeout = '2s'"]
+    assert log[3].startswith("SELECT feed.row_id, feed.kind")
+    assert log[4:] == ["close", "close"]  # the transaction, then the session

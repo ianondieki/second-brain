@@ -12,7 +12,8 @@ database, signed out.
   ``Cache-Control: public, max-age=60`` and have the OpenAPI document's shapes.
 
 Each test builds its own rows (committed: the API reads in its own connections) and asserts about them only, by their
-event keys and ids: other modules' rows are in the same database.
+event keys and ids: other modules' rows are in the same database. The reader's 2-second timeout cancels a slow
+statement.
 """
 
 from __future__ import annotations
@@ -24,11 +25,13 @@ from uuid import UUID
 import httpx
 import pytest
 import sqlalchemy as sa
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from bridge.config import get_settings
+from bridge.db import create_session_factory
 from bridge.ids import uuid7
-from bridge.public import router
+from bridge.public import queries, router
 from bridge.public.feed import event_id
 from tests.integration import world as w
 from tests.integration.api import make_client
@@ -293,25 +296,26 @@ async def test_two_reads_within_the_minute_cost_one_query(
     app_engine: AsyncEngine, scene: Scene, path: str, query: str
 ) -> None:
     """Given a fresh API worker, When the same public read is asked twice, Then the database answers the first only
-    (the second costs the rate-limit ledger and the clock, never the problems)."""
+    (the second costs at most the clock: neither the problems nor the rate-limit ledger)."""
     async with make_client(app_engine, ip="198.51.100.25") as client:
         with statements(app_engine) as first:
             body = await read(client, path, scene)
         with statements(app_engine) as second:
             assert await read(client, path, scene) == body
     assert sum(query in statement for statement in first) == 1
-    assert not [statement for statement in second if "problems" in statement or "proposal" in statement]
+    assert not [s for s in second if any(table in s for table in ("problems", "proposal", "login_attempts"))]
 
 
 async def test_past_the_limit_an_address_gets_429(
     monkeypatch: pytest.MonkeyPatch, app_engine: AsyncEngine, scene: Scene
 ) -> None:
-    """Given a limit of 2 reads a minute, When one address reads a third time, Then it gets 429 rate_limited (not
-    cached), while another address still reads."""
+    """Given a limit of 2 reads a minute, When one address misses the cache a third time, Then it gets 429
+    rate_limited (not cached), while another address still reads."""
     monkeypatch.setattr(router, "READS_PER_MINUTE", 2)
     async with make_client(app_engine, ip="198.51.100.26") as client:
         for _ in range(2):
             await read(client, EXPLORE, scene)
+            del client.app.state.public_caches  # type: ignore[attr-defined]  # the next read is a miss
         refused = await client.get(EXPLORE)
     assert refused.status_code == 429
     assert refused.json()["detail"]["code"] == "rate_limited"
@@ -360,3 +364,13 @@ async def test_a_published_proposals_new_problem_puts_its_county_on_explore(
     [group] = [group for group in explore["counties"] if group["code"] == place]
     assert (group["name"], group["count"]) == (f"P24 Seeded County {tag}", 1)
     assert [teaser["id"] for teaser in group["newest"]] == [made[place]]
+
+
+async def test_a_slow_public_read_is_cancelled_after_2_seconds(app_engine: AsyncEngine) -> None:
+    """Given a statement slower than the reader's timeout, When the public reader runs it, Then the database cancels
+    it (query_canceled) instead of holding the connection."""
+    factory = create_session_factory(app_engine)
+    with pytest.raises(DBAPIError) as caught:
+        await queries.read(factory, sa.select(sa.func.pg_sleep(3)))
+    assert getattr(caught.value.orig, "sqlstate", None) == "57014"
+    assert "statement timeout" in str(caught.value.orig)

@@ -38,6 +38,17 @@ async def test_a_second_read_within_the_ttl_is_served_from_memory() -> None:
     assert load.calls == 1
 
 
+async def test_a_peek_never_loads() -> None:
+    clock, load = Clock(), Loader()
+    cached: Cached[int] = Cached(60, now=clock)
+    assert cached.fresh() is None
+    await cached.get(load)
+    assert cached.fresh() == 1
+    clock.now += 60
+    assert cached.fresh() is None
+    assert load.calls == 1
+
+
 async def test_a_read_after_the_ttl_loads_again() -> None:
     clock, load = Clock(), Loader()
     cached: Cached[int] = Cached(60, now=clock)

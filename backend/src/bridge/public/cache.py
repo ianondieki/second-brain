@@ -26,6 +26,11 @@ class Cached[T]:
         entry = self._entry
         return entry if entry is not None and self._now() < entry[0] else None
 
+    def fresh(self) -> T | None:
+        """The held value while it is fresh, else None (nothing is loaded). For values that are never None."""
+        entry = self._fresh()
+        return None if entry is None else entry[1]
+
     async def get(self, load: Callable[[], Awaitable[T]]) -> T:
         """The held value while it is fresh; otherwise ``load()`` once (other readers wait for it) and hold that."""
         entry = self._fresh()
