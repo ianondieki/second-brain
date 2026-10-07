@@ -9,7 +9,7 @@ import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
 import { BackLink } from "@/components/ui/BackLink";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { requireMe } from "@/lib/api/server";
+import { appNow, requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 
 import { DISCOVER_PATH } from "../../dev/discover/discover";
@@ -44,6 +44,7 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
           <ProblemCard
             problem={problem}
             countyName={problem.county_code ? counties.get(problem.county_code) : null}
+            now={appNow()}
             action={
               developer ? <ProblemStart problem={problem} /> : undefined
             }

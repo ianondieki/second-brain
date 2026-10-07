@@ -16,7 +16,7 @@ vi.mock("next-intl/server", () => ({
   getLocale: async () => "en",
 }));
 const mocks = vi.hoisted(() => ({ me: vi.fn(), problem: vi.fn(), counties: vi.fn() }));
-vi.mock("@/lib/api/server", () => ({ requireMe: mocks.me }));
+vi.mock("@/lib/api/server", () => ({ requireMe: mocks.me, appNow: () => "2026-10-07T09:00:00.000Z" }));
 vi.mock("@/components/problem/data", () => ({ getProblem: mocks.problem, getCountyNames: mocks.counties }));
 
 type ShellProps = { homeHref: string; nav?: ReactElement; wide?: boolean };
@@ -45,16 +45,18 @@ describe("the problem card's region", () => {
     mocks.problem.mockResolvedValue({ id: "p-1", title: "A Brief", county_code: "KE-30", country: "KE", citations: [] });
     mocks.counties.mockResolvedValue(new Map([["KE-30", "Nairobi City"]]));
     const element = await ProblemPage({ params: Promise.resolve({ id: "p-1" }), searchParams: Promise.resolve({}) } as never);
-    const found: Array<{ countyName?: string | null }> = [];
+    const found: Array<{ countyName?: string | null; now?: string }> = [];
     const walk = (node: unknown) => {
       if (Array.isArray(node)) node.forEach(walk);
       else if (isValidElement(node)) {
-        const props = node.props as { countyName?: string | null; children?: unknown };
+        const props = node.props as { countyName?: string | null; now?: string; children?: unknown };
         if (node.type === ProblemCard) found.push(props);
         walk(props.children);
       }
     };
     walk((element as ReactElement<{ children?: unknown }>).props.children);
     expect(found.map((props) => props.countyName)).toEqual(["Nairobi City"]);
+    // P23-3: the app clock's instant for the page (X-App-Now), for an open Brief's countdown.
+    expect(found.map((props) => props.now)).toEqual(["2026-10-07T09:00:00.000Z"]);
   });
 });

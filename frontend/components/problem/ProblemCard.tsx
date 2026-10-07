@@ -6,6 +6,7 @@ import { Lattice } from "@/components/ui/Lattice";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
+import { TimeLeft } from "@/components/ui/TimeLeft";
 
 import { Citations } from "./Citations";
 import { confidenceWords, formatDate, problemLabel, type ProblemDetail } from "./problem";
@@ -21,19 +22,24 @@ export async function ProblemCard({
   problem,
   action,
   countyName,
+  now,
 }: {
   problem: ProblemDetail;
   action?: ReactNode;
   /** The county's name for the problem's county code (the code is shown when it is not given). */
   countyName?: string | null;
+  /** The app clock's instant for this page (lib/api/server.ts appNow): an open Brief's countdown counts from it. */
+  now?: string;
 }) {
-  const t = await getTranslations("problem");
+  const [t, tb] = await Promise.all([getTranslations("problem"), getTranslations("briefs")]);
   const locale = await getLocale();
   const label = problemLabel(problem, locale);
   const confidence = confidenceWords(locale, problem.confidence);
   const country = t("country", { country: problem.country });
   const LabelIcon = label?.key === "aiDrafted" ? PencilIcon : label?.key === "org_brief" ? CompaniesIcon : InfoIcon;
   const brief = problem.brief ?? null;
+  // P23-3: the instant the Brief stops asking (the end of its deadline day in Nairobi), from the regenerated schema.
+  const deadlineAt = brief?.open ? ((brief as { deadline_at?: string | null }).deadline_at ?? null) : null;
 
   return (
     <article aria-labelledby="problem-title" data-problem={problem.id} className="flex flex-col gap-10">
@@ -74,6 +80,16 @@ export async function ProblemCard({
               </Description>
               <Description label={t("deadline")}>
                 {brief.deadline ? formatDate(locale, brief.deadline) : <span className="text-ink-soft">{t("noDeadline")}</span>}
+                {/* While it is open, the time left (P23-3); once it is not, ProblemStart says why in its own words. */}
+                {deadlineAt && now ? (
+                  <TimeLeft
+                    until={deadlineAt}
+                    now={now}
+                    labelWhenPast={tb("state.closed")}
+                    sentence="closesIn"
+                    className="mt-0.5 block text-sm text-ink-soft"
+                  />
+                ) : null}
               </Description>
             </>
           ) : null}
