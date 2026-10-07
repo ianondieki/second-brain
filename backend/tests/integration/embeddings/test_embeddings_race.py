@@ -8,7 +8,8 @@ Either way the profile ends without a vector while the latest decision is a with
 - The problem writer locks the problem before it reads its state: a write racing a moderation hold in flight waits
   for it and, once it commits, writes nothing.
 - ``app_clear_empty_embeddings`` locks each row before it reads its text again: a profile or problem whose text is
-  given back while the clearer waits for it keeps its vector.
+  given back while the clearer waits for it keeps its vector, and a profile a withdrawal or an erasure clears while
+  the clearer waits counts for nothing.
 """
 
 from __future__ import annotations
@@ -184,6 +185,36 @@ async def test_a_text_given_back_while_the_empty_clearer_waits_keeps_its_vector(
                 "problem": "SELECT embedding IS NOT NULL FROM problems WHERE id = :id",
             }[kind]
             assert (await conn.execute(sa.text(kept), {"id": give_back[1]})).scalar_one() is True
+    finally:
+        await owner.dispose()
+        await app.dispose()
+
+
+@pytest.mark.parametrize("meanwhile", ["withdrawal", "erasure"])
+async def test_a_row_cleared_while_the_empty_clearer_waits_is_not_counted(url: URL, meanwhile: str) -> None:
+    owner, app = role_engine(url, "bridge_owner"), role_engine(url, "bridge_app")
+    try:
+        user, _ = await _consented(owner)
+        async with owner.begin() as conn:
+            assert await set_profile(conn, user)
+            await t.as_owner(conn)  # the text emptied and committed: the clearer's candidate
+            await t.run(conn, "DELETE FROM developer_niches WHERE user_id = :u", u=user)
+        async with app.connect() as other, app.connect() as worker:
+            await other.begin()
+            if meanwhile == "withdrawal":  # the consents trigger clears the vector and holds the row
+                await t.act(other, user)
+                await t.run(other, CONSENT, **_withdrawal(user))
+            else:  # the owner's erasure deletes the profile with the user
+                await t.as_owner(other)
+                await t.run(other, "DELETE FROM users WHERE id = :u", u=user)
+            await worker.begin()
+            await t.act(worker, None)  # its snapshot still sees the vector
+            pid = await t.backend_pid(worker)
+            clearing = asyncio.create_task(worker.execute(sa.text(CLEAR_EMPTY)))
+            await t.wait_until_blocked(other, pid, clearing)  # the clearer waits for the row
+            await other.commit()
+            assert tuple((await clearing).one()) == (0, 0)
+            await worker.commit()
     finally:
         await owner.dispose()
         await app.dispose()
