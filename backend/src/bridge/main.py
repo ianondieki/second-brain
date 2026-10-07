@@ -6,14 +6,18 @@ import importlib
 import importlib.util
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, Final
 
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncEngine
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from bridge import __version__, errors
+from bridge import __version__, clock, errors
 from bridge.admin.claims import router as claims_admin_router
 from bridge.admin.events import router as events_admin_router
 from bridge.admin.quiz import router as quiz_admin_router
@@ -65,6 +69,17 @@ from bridge.tenancy.router import router as orgs_router
 API_PREFIX = "/api"
 TEST_CLOCK_MODULE = "bridge.testclock"
 
+# Every /api answer carries the platform clock (REQ-TRACK-03): a page counts a deadline down from it, never from the
+# browser's clock alone, so the dev/test clock (make demo-clock, the e2e clock scenarios) moves the countdown too.
+APP_NOW_HEADER: Final = "X-App-Now"
+APP_NOW_DOC: Final = {
+    "description": "The platform clock when the request was answered, in ISO 8601 UTC with a Z (to the millisecond):"
+    " on every /api response, errors included. Count deadlines (due_at, deadline_at) down from it, not from the"
+    " device's clock; in dev and test it follows the test clock.",
+    "schema": {"type": "string", "format": "date-time"},
+}
+_APP_CLOCK = text("SELECT app_clock_now()")
+
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -81,6 +96,34 @@ def dev_clock_router(settings: Settings) -> APIRouter | None:
         return None
     router: APIRouter = importlib.import_module(TEST_CLOCK_MODULE).build_router(settings)
     return router
+
+
+async def app_clock_now(engine: AsyncEngine | None, *, movable: bool) -> datetime:
+    """The platform clock for ``X-App-Now``. Where the dev/test clock may move it (every environment but production)
+    it is the database's ``app_clock_now()``; a production database never enables that clock, so there it is the wall
+    clock without a query. Without a database (an app built without its lifespan, or the database down) it is the wall
+    clock: the header is for display, and ``overdue`` and ``past_deadline`` stay the authority."""
+    if movable and engine is not None:
+        try:
+            async with engine.connect() as conn:  # autocommit: one statement, no BEGIN or ROLLBACK round trips
+                autocommit = await conn.execution_options(isolation_level="AUTOCOMMIT")
+                now: datetime = (await autocommit.execute(_APP_CLOCK)).scalar_one()
+                return now
+        except SQLAlchemyError:
+            pass  # the request itself reports the database; the header falls back to the wall clock
+    return clock.utcnow()
+
+
+def stamp(moment: datetime) -> str:
+    """``moment`` as ``X-App-Now`` carries it: ISO 8601 in UTC with a Z, to the millisecond."""
+    return moment.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def app_now_headers(request: Request) -> dict[str, str]:
+    """``X-App-Now`` as the middleware read it for this request (none outside /api): the 500 handler's, which runs
+    outside every middleware."""
+    moment: datetime | None = getattr(request.state, "app_now", None)
+    return {} if moment is None else {APP_NOW_HEADER: stamp(moment)}
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -120,7 +163,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.responsiveness = NoResponsivenessData()  # the directory score has no data until Phase 3
-    errors.install(app, headers=SECURITY_HEADERS)  # one error shape (bridge.errors)
+    errors.install(app, headers=SECURITY_HEADERS, per_request=app_now_headers)  # one error shape (bridge.errors)
+    movable_clock = settings.app_env != "production"  # the dev/test clock never runs in production
 
     @app.middleware("http")
     async def csrf_guard(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
@@ -143,6 +187,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response = await call_next(request)
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
+        return response
+
+    @app.middleware("http")
+    async def app_now(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        """``X-App-Now`` on every /api answer. Added last, it wraps the CSRF guard, so a refusal carries it too; the
+        500 handler reads the same instant from ``request.state`` (``app_now_headers``)."""
+        if not request.url.path.startswith(API_PREFIX):
+            return await call_next(request)
+        now = await app_clock_now(getattr(request.app.state, "engine", None), movable=movable_clock)
+        request.state.app_now = now
+        response = await call_next(request)
+        response.headers[APP_NOW_HEADER] = stamp(now)
         return response
 
     app.include_router(health.router)
@@ -193,7 +249,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if app.openapi_schema:
             return app.openapi_schema
         schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
-        schema.setdefault("components", {})["securitySchemes"] = {
+        schema.setdefault("components", {})["headers"] = {APP_NOW_HEADER: APP_NOW_DOC}
+        schema["components"]["securitySchemes"] = {
             "session": {"type": "apiKey", "in": "cookie", "name": settings.session_cookie_name},
             "csrf": {"type": "apiKey", "in": "header", "name": csrf.HEADER},
         }
