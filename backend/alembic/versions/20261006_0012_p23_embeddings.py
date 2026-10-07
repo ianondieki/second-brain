@@ -5,8 +5,8 @@ embedding serves recommendations only). AC-PERS-3: a withdrawal of the ``profili
 vector in its own transaction and no vector is written while the consent is not granted. Additive but for two
 narrowings of earlier objects, restored on downgrade (a grant on ``problems``, the INSERT policy of
 ``developer_profiles``): four new columns (``developer_profiles.profile_embedded_at`` and
-``profile_embedding_hash``, ``problems.embedded_at`` and ``embedding_hash``), two HNSW cosine indexes, eighteen new
-functions (six granted to bridge_app, ten internal, two trigger functions) and two triggers. No new table, no enum
+``profile_embedding_hash``, ``problems.embedded_at`` and ``embedding_hash``), two HNSW cosine indexes, twenty-four new
+functions (seven granted to bridge_app, fifteen internal, two trigger functions) and two triggers. No new table, no enum
 type; nothing else of revisions 0001 to 0011 is changed or dropped. The downgrade nulls every vector with its model
 and version on both tables, then drops the triggers, functions, indexes and the four new columns and restores the grant
 and the policy. Every vector is derived data the worker recomputes from rows that stay (the profiles, niches,
@@ -89,14 +89,22 @@ revision 0001's audit trigger):
   problem FOR UPDATE and writes the vector, model, version, ``embedded_at = now()`` and the hash only while it is
   readable and ``text_hash`` is its text's hash now (a hold, an archive, a Brief back in draft, a delisting or an edit
   since it was listed: false, nothing written).
+- ``app_clear_empty_embeddings()`` -> one row (profiles, problems): the worker only, at READ COMMITTED only; clears
+  (vector, model, version, time and hash) every profile and problem holding a vector whose text is now empty (all it
+  was computed from removed: never listed, since an empty text is not embedded), each under its row lock with its text
+  read again, and says how many. One text build per row holding a vector.
 - ``app_stale_embedding_counts(model DEFAULT NULL, version DEFAULT NULL)`` -> one row (profiles, problems): the worker
-  only; how many rows the two readers would list (for the job's log line). Without a model and version (both or
+  only; how many rows the two readers would list plus how many ``app_clear_empty_embeddings`` would clear (for the
+  job's log line). Without a model and version (both or
   neither) the model rule is left out: rows without a vector or whose text changed since.
 - Internal (no EXECUTE grant; called as the owner): ``embedding_label_is_valid(label, max)``,
   ``embedding_text_line(text)``, ``embedding_text_hash(text)``, ``profile_consent_granted(user)``,
   ``profile_embedding_text(user)``, ``problem_embedding_text(title, statement)``, ``problem_is_readable(problem)``,
-  ``profiles_to_embed(model, version)`` and ``problems_to_embed(model, version)`` (the stale sets with their times,
-  texts and hashes, unordered; NULL model and version leave the model rule out), ``profile_embedding_clear(user)``.
+  ``embedding_is_stale(...)`` (the one staleness rule), ``profile_embedding_candidates()`` and
+  ``problem_embedding_candidates()`` (who may be embedded, without a text built), ``profiles_to_embed(model,
+  version)`` and ``problems_to_embed(model, version)`` (the stale sets, for the counts; NULL model and version leave
+  the model rule out), ``empty_embedded_profiles()`` and ``empty_embedded_problems()`` (vectors whose text is empty
+  now), ``profile_embedding_clear(user)``.
 
 Lock order: a profile's row lock, then the consent and text reads (the writer; a withdrawal's trigger writes the same
 row, so either waits for the other: at READ COMMITTED the writer then reads the withdrawal, and the withdrawal clears
@@ -107,7 +115,8 @@ the row is listed again.
 
 Operating rules for the code that uses this schema:
 
-- The job (``embeddings.reembed``, unbound): ``SELECT user_id, text, text_hash FROM app_profiles_to_embed(:model,
+- The job (``embeddings.reembed``, unbound) starts each run with ``SELECT * FROM app_clear_empty_embeddings()``
+  (its own transaction, READ COMMITTED), then ``SELECT user_id, text, text_hash FROM app_profiles_to_embed(:model,
   :version, :limit)``, embed ``text``, then ``SELECT app_set_profile_embedding(:user, CAST(:vector AS vector), :model,
   :version, :text_hash)`` per row with the hash the reader gave. False: the consent was withdrawn, the account changed
   or the text changed meanwhile; do not count the row as done (a changed text is listed again with its new hash, a
@@ -546,8 +555,74 @@ BEGIN
 END;
 $$;
 
--- How many rows the two readers would list (the embedding job's log line): the worker only. With a model and version
--- (both or neither) the model rule applies; without, rows with no vector or whose text changed since.
+-- The profiles and problems holding a vector whose text is empty now (all it was computed from removed): never listed
+-- (an empty text is not embedded), so app_clear_empty_embeddings clears them and the counts count them. One text build
+-- per row holding a vector. Internal (no EXECUTE grant).
+CREATE FUNCTION empty_embedded_profiles() RETURNS SETOF uuid
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT d.user_id FROM public.developer_profiles d
+     WHERE d.profile_embedding IS NOT NULL AND public.profile_embedding_text(d.user_id) = ''
+$$;
+
+CREATE FUNCTION empty_embedded_problems() RETURNS SETOF uuid
+    LANGUAGE sql STABLE
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT p.id FROM public.problems p
+     WHERE p.embedding IS NOT NULL AND public.problem_embedding_text(p.title, p.statement) = ''
+$$;
+
+-- Clears every vector whose text is now empty (REQ-PERS-02, REQ-EMB-01; the job calls it at the start of each run): a
+-- vector computed from text that is all gone would otherwise stay, with its model, version and hash, and the ranker
+-- would use it. Each row is locked and its text read again (the row lock first, then a fresh read, as the writers);
+-- the vector, model, version, time and hash go. Returns how many profiles and problems it cleared. The worker only (no
+-- user bound), at READ COMMITTED only.
+CREATE FUNCTION app_clear_empty_embeddings() RETURNS TABLE (profiles integer, problems integer)
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_id uuid;
+    v_profiles integer := 0;
+    v_problems integer := 0;
+BEGIN
+    IF public.app_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'app_clear_empty_embeddings: the embedding worker only, with no user bound'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF current_setting('transaction_isolation') <> 'read committed' THEN
+        RAISE EXCEPTION 'app_clear_empty_embeddings: must run at READ COMMITTED isolation, not %',
+            upper(current_setting('transaction_isolation')) USING ERRCODE = 'invalid_transaction_state';
+    END IF;
+    FOR v_id IN SELECT e.id FROM public.empty_embedded_profiles() AS e(id) LOOP
+        PERFORM 1 FROM public.developer_profiles d WHERE d.user_id = v_id FOR UPDATE;
+        IF public.profile_embedding_text(v_id) = '' THEN
+            UPDATE public.developer_profiles d
+               SET profile_embedding = NULL, embed_model = NULL, embed_version = NULL, profile_embedded_at = NULL,
+                   profile_embedding_hash = NULL
+             WHERE d.user_id = v_id AND d.profile_embedding IS NOT NULL;
+            v_profiles := v_profiles + 1;
+        END IF;
+    END LOOP;
+    FOR v_id IN SELECT e.id FROM public.empty_embedded_problems() AS e(id) LOOP
+        PERFORM 1 FROM public.problems p WHERE p.id = v_id FOR UPDATE;
+        IF (SELECT public.problem_embedding_text(p.title, p.statement) FROM public.problems p WHERE p.id = v_id) = ''
+        THEN
+            UPDATE public.problems p
+               SET embedding = NULL, embed_model = NULL, embed_version = NULL, embedded_at = NULL, embedding_hash = NULL
+             WHERE p.id = v_id AND p.embedding IS NOT NULL;
+            v_problems := v_problems + 1;
+        END IF;
+    END LOOP;
+    RETURN QUERY SELECT v_profiles, v_problems;
+END;
+$$;
+
+-- How many rows the two readers would list, and how many vectors app_clear_empty_embeddings would clear (the embedding
+-- job's log line): the worker only. With a model and version (both or neither) the model rule applies; without, rows
+-- with no vector or whose text changed since.
 CREATE FUNCTION app_stale_embedding_counts(p_model text DEFAULT NULL, p_version text DEFAULT NULL)
     RETURNS TABLE (profiles bigint, problems bigint)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
@@ -564,8 +639,10 @@ BEGIN
             USING ERRCODE = 'invalid_parameter_value';
     END IF;
     RETURN QUERY
-    SELECT (SELECT count(*) FROM public.profiles_to_embed(p_model, p_version)),
-           (SELECT count(*) FROM public.problems_to_embed(p_model, p_version));
+    SELECT (SELECT count(*) FROM public.profiles_to_embed(p_model, p_version))
+           + (SELECT count(*) FROM public.empty_embedded_profiles()),
+           (SELECT count(*) FROM public.problems_to_embed(p_model, p_version))
+           + (SELECT count(*) FROM public.empty_embedded_problems());
 END;
 $$;
 
@@ -608,6 +685,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_problems_to_embed(text, text, integer)": ("bridge_app",),  # the worker, no user bound
     "app_set_problem_embedding(uuid, vector, text, text, text)": ("bridge_app",),  # the worker, no user bound
     "app_stale_embedding_counts(text, text)": ("bridge_app",),  # the worker's log line, no user bound
+    "app_clear_empty_embeddings()": ("bridge_app",),  # the worker at the start of each run, no user bound
 }
 INTERNAL_FUNCTIONS = (
     "profile_embedding_clear(uuid)",
@@ -616,6 +694,8 @@ INTERNAL_FUNCTIONS = (
     "profile_embedding_candidates()",
     "problem_embedding_candidates()",
     "embedding_is_stale(boolean, text, text, text, text, text, text)",
+    "empty_embedded_profiles()",
+    "empty_embedded_problems()",
     "problem_embedding_text(text, text)",
     "problem_is_readable(uuid)",
     "profile_embedding_text(uuid)",
