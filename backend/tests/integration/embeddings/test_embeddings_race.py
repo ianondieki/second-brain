@@ -8,8 +8,8 @@ Either way the profile ends without a vector while the latest decision is a with
 - The problem writer locks the problem before it reads its state: a write racing a moderation hold in flight waits
   for it and, once it commits, writes nothing.
 - ``app_clear_empty_embeddings`` locks each row before it reads its text again: a profile or problem whose text is
-  given back while the clearer waits for it keeps its vector, and a profile a withdrawal or an erasure clears while
-  the clearer waits counts for nothing.
+  given back while the clearer waits for it keeps its vector, and a row a withdrawal, an erasure or another run of
+  the clearer clears while it waits counts for nothing.
 """
 
 from __future__ import annotations
@@ -215,6 +215,41 @@ async def test_a_row_cleared_while_the_empty_clearer_waits_is_not_counted(url: U
             await other.commit()
             assert tuple((await clearing).one()) == (0, 0)
             await worker.commit()
+    finally:
+        await owner.dispose()
+        await app.dispose()
+
+
+@pytest.mark.parametrize("kind", ["profile", "problem"])
+async def test_overlapping_empty_clearers_count_each_row_once(url: URL, kind: str) -> None:
+    """Two runs of the job overlap: the first clears an emptied profile (or problem) and holds its row; the second,
+    which already listed it, waits for the row and, once the first commits, clears and counts nothing."""
+    owner, app = role_engine(url, "bridge_owner"), role_engine(url, "bridge_app")
+    try:
+        user, _ = await _consented(owner)
+        async with owner.begin() as conn:
+            issue = await w.add_problem(conn, user, await named_niche(conn, "Overlap"))
+            if kind == "profile":  # one text emptied and committed, with its vector
+                assert await set_profile(conn, user)
+                await t.as_owner(conn)
+                await t.run(conn, "DELETE FROM developer_niches WHERE user_id = :u", u=user)
+            else:
+                assert await set_problem(conn, issue)
+                await t.as_owner(conn)
+                await t.run(conn, "UPDATE problems SET title = ' ', statement = ' ' WHERE id = :id", id=issue)
+        cleared = (1, 0) if kind == "profile" else (0, 1)
+        async with app.connect() as first, app.connect() as second:
+            await first.begin()
+            await t.act(first, None)
+            assert tuple((await first.execute(sa.text(CLEAR_EMPTY))).one()) == cleared
+            await second.begin()
+            await t.act(second, None)  # its snapshot still sees the vector
+            pid = await t.backend_pid(second)
+            clearing = asyncio.create_task(second.execute(sa.text(CLEAR_EMPTY)))
+            await t.wait_until_blocked(first, pid, clearing)
+            await first.commit()
+            assert tuple((await clearing).one()) == (0, 0)
+            await second.commit()
     finally:
         await owner.dispose()
         await app.dispose()
