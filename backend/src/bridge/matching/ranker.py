@@ -43,6 +43,10 @@ F1Source = Literal["embedding", "keywords"]
 TRENDING_WORDS: Final = "Trending in its niche"
 RISING_WORDS: Final = "Rising in its niche"
 SIMILAR_WORDS: Final = "Similar to your profile"  # [[COPY-REVIEW]] f1's chip on the embedding path
+# The cosine from which the embedding path says "Similar to your profile" (review round 1): below it f1 still counts,
+# max(0, cosine), but no chip; unrelated texts sit around 0.3 to 0.5 with bge-m3 and near 0 with the fake. The
+# per-model value is the owner's decision (DECISIONS-NEEDED.md); a constant here, not a ranking weight.
+SEMANTIC_CHIP_FLOOR: Final = 0.5
 DECISION_LABELS: Final[Mapping[Decision, str]] = {"pursue": "Pursue", "consider": "Consider", "not_now": "Not now"}
 _WORD: Final = re.compile(r"[a-z0-9]+")
 # Words too common in problem statements to say anything about fit.
@@ -225,19 +229,20 @@ def why_chips(
     exclude: frozenset[str] = frozenset(),
 ) -> list[str]:
     """The top positive contributions, each only when its fact holds ([[COPY-REVIEW]] the chips). f1's chip names its
-    source: "Similar to your profile" on the embedding path; on the keyword path the developer's past proposals when a
-    shared keyword comes from one, else their profile. A chip that repeats one of the pursuit reasons (``exclude``)
-    gives its place to the next."""
+    source: "Similar to your profile" on the embedding path, only from a cosine of ``SEMANTIC_CHIP_FLOOR``; on the
+    keyword path the developer's past proposals when a shared keyword comes from one, else their profile. A chip that
+    repeats one of the pursuit reasons (``exclude``) gives its place to the next."""
+    v = {name: (ft.value or 0.0) if ft.applies else 0.0 for name, ft in feats.items()}
     if feats["semantic_fit"].source == "embedding":
-        fit = SIMILAR_WORDS
+        fit, fit_holds = SIMILAR_WORDS, (feats["semantic_fit"].raw or 0.0) >= SEMANTIC_CHIP_FLOOR
     else:
         card_words = keywords(f"{card.fact.title} {card.fact.statement}", cfg.min_keyword_length)
         fit = "Close to your past proposals" if card_words & dev.proposal_keywords else "Close to your profile"
-    v = {name: (ft.value or 0.0) if ft.applies else 0.0 for name, ft in feats.items()}
+        fit_holds = v["semantic_fit"] > 0
     orgs = card.signals.orgs_scouting
     brief = card.signals.brief
     candidates = {
-        "semantic_fit": (fit, v["semantic_fit"] > 0),
+        "semantic_fit": (fit, fit_holds),
         "niche_match": (
             "In a niche you like" if v["niche_match"] >= cfg.niche_liked else "Next to a niche you like",
             v["niche_match"] > 0,

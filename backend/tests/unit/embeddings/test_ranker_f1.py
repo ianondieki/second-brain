@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 
 from bridge.llm.embeddings import FakeEmbedder, cosine, hashed_vector, vector_with_similarity
-from bridge.matching.ranker import SIMILAR_WORDS, Card, Developer, features, rank
+from bridge.matching.ranker import SEMANTIC_CHIP_FLOOR, SIMILAR_WORDS, Card, Developer, features, rank
 from bridge.matching.ranking_config import get_ranking
 from bridge.matching.trend_facts import ProblemFact, ProblemSignals
 from bridge.matching.trending import Trend
@@ -119,3 +119,15 @@ def test_a_similarity_that_is_not_a_number_falls_back_to_keywords() -> None:
     """A zero vector has no cosine (revision 0012's writers refuse one): f1 never reads NaN as a perfect fit."""
     fit = features(card("Solar irrigation pumps break down", float("nan")), dev(), R, NOW)["semantic_fit"]
     assert (fit.applies, fit.raw, fit.source) == (True, 3, "keywords")
+
+
+@pytest.mark.parametrize(("cosine", "chip"), [(SEMANTIC_CHIP_FLOOR, True), (0.49, False), (0.3, False), (0.95, True)])
+def test_the_similar_chip_needs_a_cosine_at_the_floor(cosine: float, chip: bool) -> None:
+    """Review round 1: below ``SEMANTIC_CHIP_FLOOR`` (0.5) f1 still counts, max(0, cosine), but the chip is not
+    offered (unrelated texts sit around 0.3 to 0.5 with bge-m3); at or above it, it is."""
+    assert SEMANTIC_CHIP_FLOOR == 0.5
+    [row] = rank([card(NEAR, cosine)], dev(), R, T, NOW)
+    fit = row.features["semantic_fit"]
+    assert (fit.applies, fit.value, fit.source) == (True, cosine, "embedding")
+    assert (SIMILAR_WORDS in row.why) is chip
+    assert "Close to your profile" not in row.why  # the keyword chip never stands in for the embedding path
