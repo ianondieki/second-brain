@@ -66,7 +66,7 @@ export function NeedsYouHero({ item, href, action, now }: { item: Summary; href:
       <div className="flex flex-wrap items-end justify-between gap-4 border-t border-line pt-4 md:flex-col md:items-end md:border-t-0 md:border-l md:py-1 md:pt-1 md:pl-8">
         {due ? (
           <p className="flex flex-col md:items-end" data-due={due.overdue ? "overdue" : "open"} title={timed ? when ?? undefined : undefined}>
-            <time dateTime={due.due_on} className="font-display text-3xl leading-none font-[720] tracking-[-0.03em] whitespace-nowrap text-ink tabular-nums">
+            <time dateTime={due.due_on} className="font-figure text-3xl leading-none font-[720] tracking-[-0.03em] whitespace-nowrap text-ink tabular-nums">
               {formatShortDate(locale, due.due_on)}
             </time>
             {/* One line under the date (P23-3): the time left, the step being the developer's, with the business days in

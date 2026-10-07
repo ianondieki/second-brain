@@ -28,9 +28,14 @@ function segment(value: string): string {
 const NOT_INDEXED: Metadata["robots"] = { index: false, follow: false };
 
 export async function generateMetadata({ params }: PageProps<"/verify/[certId]">): Promise<Metadata> {
-  const t = await getTranslations("verify");
+  const [t, tOg] = await Promise.all([getTranslations("verify"), getTranslations("og")]);
   const certId = normaliseCertId(segment((await params).certId));
-  return { title: certId ? t("recordTitle", { certId }) : t("pageTitle"), robots: NOT_INDEXED };
+  return {
+    title: certId ? t("recordTitle", { certId }) : t("pageTitle"),
+    robots: NOT_INDEXED,
+    // The share card (P24, app/og/verify): the id and "Registered on Wazo"; it answers 404 for an unknown id.
+    openGraph: certId ? { images: [{ url: `/og/verify/${certId}`, width: 1200, height: 630, alt: tOg("verifyAlt", { certId }) }] } : undefined,
+  };
 }
 
 /**

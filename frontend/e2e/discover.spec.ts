@@ -216,7 +216,7 @@ test.describe("a new developer", () => {
   });
 
   test("an empty filtered list is one sentence and one action", async ({ page }, info) => {
-    await page.goto("/dev/discover?county=KE-47&niche=basic-education");
+    await page.goto("/dev/discover?county=KE-25&niche=basic-education");
     await expectEmptyState(page, "Nothing here for this niche and county yet.", "Clear filters");
     await checkWidths(page, info);
     await page.locator("[data-empty-state]").getByRole("link", { name: "Clear filters" }).click();

@@ -23,7 +23,7 @@ test("the first-login tour shows once, slides on, pauses, goes back, can be skip
   await expect(first).not.toHaveAttribute("aria-modal", "true");
   await expect(page.locator("[data-primary]")).toHaveCount(1); // the page's own, not the tour's buttons
   await expect(page.locator("[data-tour] [data-primary]")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
 
   // Six seconds on: the next step slides in, and the live region says so; focus stays where it was.
   await page.mouse.move(0, 0);
@@ -32,7 +32,7 @@ test("the first-login tour shows once, slides on, pauses, goes back, can be skip
   await expect(page.locator("[data-tour] [aria-live='polite']")).toHaveText("Step 2 of 3: Every idea gets a certificate");
 
   // Pause holds it however long the clock runs.
-  const pause = page.getByRole("button", { name: "Pause" });
+  const pause = page.getByRole("button", { name: "Pause", exact: true });
   await pause.click();
   await expect(pause).toHaveAttribute("aria-pressed", "true");
   await page.mouse.move(0, 0);

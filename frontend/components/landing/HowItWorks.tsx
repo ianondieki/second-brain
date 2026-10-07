@@ -1,80 +1,46 @@
 import { getTranslations } from "next-intl/server";
 import type { CSSProperties } from "react";
 
-import { EngagementsIcon } from "@/components/tracker/icons";
-import { IdeasIcon } from "@/components/ui/icons";
-import { LockIcon } from "@/components/ui/status-icons";
+const STEPS = ["publish", "review", "track"] as const;
 
-const STEPS = [
-  { key: "publish", Icon: IdeasIcon },
-  { key: "review", Icon: LockIcon },
-  { key: "track", Icon: EngagementsIcon },
-] as const;
-
-const STAGES = ["review", "contact", "agreement", "implementation", "close"] as const;
-
-/** Its place in the reveal (globals.css .reveal): each item a little after the one before. */
+/** Its place in the reveal (globals.css .reveal): each card a little after the one before. */
 const order = (i: number) => ({ "--i": i }) as CSSProperties;
 
 /**
- * How it works (D-55): the three steps a person takes, numbered because they are a sequence, then the tracker's five
- * stages as one line, the product's spine: the same stages on both sides' screens. The line runs across from 1024 px
- * and down the left edge below. Both reveal as they scroll into view where the browser has scroll-driven
- * animations (CSS only; in place elsewhere and under reduced motion).
+ * How it works (D-66, after Basix's three steps): three numbered cards, because the steps are a sequence, each with a
+ * rule carrying its number in the mono face, the step in words and a mono chip quoting the product's own terms. The
+ * cards reveal as they scroll into view where the browser has scroll-driven animations (CSS only; in place elsewhere
+ * and under reduced motion).
  */
 export async function HowItWorks() {
   const t = await getTranslations("landing.how");
   return (
-    <section id="how" aria-labelledby="how-title" className="py-20 lg:py-28">
+    <section id="how" aria-labelledby="how-title" className="border-y border-line bg-field py-20 lg:py-28">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-        <div className="max-w-3xl">
-          <h2 id="how-title" className="text-3xl text-ink lg:text-4xl">
-            {t("title")}
-          </h2>
-          <p className="mt-4 max-w-[56ch] text-lg text-ink-soft">{t("lead")}</p>
+        <div className="grid grid-cols-1 gap-x-12 gap-y-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-end">
+          <div>
+            <p className="eyebrow">{t("eyebrow")}</p>
+            <h2 id="how-title" className="mt-4 max-w-[22ch] text-3xl text-ink lg:text-4xl">
+              {t("title")}
+            </h2>
+          </div>
+          <p className="max-w-[46ch] text-ink-soft lg:pb-1.5">{t("lead")}</p>
         </div>
-        <ol className="mt-14 grid grid-cols-1 gap-10 md:grid-cols-3 md:gap-8 lg:mt-16">
-          {STEPS.map(({ key, Icon }, index) => (
-            <li key={key} className="reveal flex flex-col" style={order(index)}>
-              <span aria-hidden="true" className="font-display text-[3.5rem] leading-none font-[780] tracking-[-0.04em] text-accent tabular-nums">
-                {index + 1}
+        <ol className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-5 lg:mt-14">
+          {STEPS.map((key, index) => (
+            <li key={key} className="reveal flex flex-col rounded-[1.25rem] border border-line bg-paper p-6 sm:p-7" style={order(index)}>
+              <span aria-hidden="true" className="flex items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent font-mono text-sm text-on-accent">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="h-px flex-1 bg-line" />
               </span>
-              <h3 className="mt-5 flex items-center gap-2.5 font-display text-xl font-[680] tracking-[-0.015em] text-ink">
-                <Icon aria-hidden="true" className="size-5 shrink-0 text-accent" />
-                {t(`${key}.title`)}
-              </h3>
-              <p className="mt-2.5 max-w-[42ch] text-ink-soft">{t(`${key}.body`)}</p>
+              <h3 className="mt-6 font-display text-[1.375rem] leading-snug font-[580] tracking-[-0.01em] text-ink">{t(`${key}.title`)}</h3>
+              <p className="mt-2.5 flex-1 text-ink-soft">{t(`${key}.body`)}</p>
+              <p className="mt-6 self-start rounded-lg border border-line bg-field px-3 py-1.5 font-mono text-xs text-ink-soft">{t(`${key}.chip`)}</p>
             </li>
           ))}
         </ol>
-
-        <div className="mt-16 rounded-[1.75rem] border border-line bg-field p-6 sm:p-8 lg:mt-20 lg:p-12">
-          <h3 className="font-display text-2xl font-[700] tracking-[-0.02em] text-ink">{t("stagesTitle")}</h3>
-          <p className="mt-2 max-w-[60ch] text-ink-soft">{t("stagesLead")}</p>
-          <ol className="mt-10 grid grid-cols-1 gap-8 lg:grid-cols-5 lg:gap-6">
-            {STAGES.map((stage, index) => (
-              <li
-                key={stage}
-                style={order(index)}
-                className={
-                  "reveal relative pl-10 lg:pt-12 lg:pl-0 " +
-                  // The line: down the left on phones, across the top from 1024 px; it stops at the last stage.
-                  "before:absolute before:top-7 before:-bottom-8 before:left-[0.9375rem] before:w-0.5 before:bg-accent-line last:before:hidden " +
-                  "lg:before:top-[0.9375rem] lg:before:right-[-1.5rem] lg:before:bottom-auto lg:before:left-8 lg:before:h-0.5 lg:before:w-auto"
-                }
-              >
-                <span
-                  aria-hidden="true"
-                  className="absolute top-0 left-0 flex size-8 items-center justify-center rounded-full bg-accent font-display text-sm font-[760] text-on-accent tabular-nums"
-                >
-                  {index + 1}
-                </span>
-                <p className="font-semibold text-ink">{t(`stages.${stage}.title`)}</p>
-                <p className="mt-1.5 text-sm text-ink-soft">{t(`stages.${stage}.body`)}</p>
-              </li>
-            ))}
-          </ol>
-        </div>
       </div>
     </section>
   );

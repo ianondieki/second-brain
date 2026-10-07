@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { myEngagements } from "@/components/tracker/data";
 import { appNow, requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
+import { publicActivity } from "@/lib/public/public-data";
 
 import { recommendations } from "./discover/data";
 import { recommendationsState } from "./discover/recommendations";
@@ -24,13 +25,14 @@ export default async function DeveloperHome() {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const [engagements, ideas, recommended, quiz, week, peers] = await Promise.all([
+  const [engagements, ideas, recommended, quiz, week, peers, activity] = await Promise.all([
     myEngagements(),
     myIdeas(),
     recommendations(),
     quizCard(),
     weekStrip(),
     homePeers(),
+    publicActivity(),
   ]);
   return (
     <HomeContent
@@ -42,6 +44,7 @@ export default async function DeveloperHome() {
       week={week}
       peers={peers}
       now={appNow()}
+      activity={activity}
     />
   );
 }

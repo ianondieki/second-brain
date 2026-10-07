@@ -7,9 +7,9 @@
  */
 @font-face {
   font-family: "Bricolage Grotesque";
-  src: url("/fonts/bricolage-grotesque-v1.woff2") format("woff2");
+  src: url("/fonts/bricolage-grotesque-v2.woff2") format("woff2");
   font-display: swap;
-  font-weight: 500 800;
+  font-weight: 600 800;
 }
 @font-face {
   font-family: "Bricolage Grotesque Fallback";
@@ -33,6 +33,45 @@
   line-gap-override: 0%;
   size-adjust: 99.12%;
 }
+/* Fraunces (D-66, P24): the serif display face for page and section titles, upright and italic (the hero's one accent
+   phrase). Instanced with fontTools (SOFT and WONK pinned at 0) to what the pages set: the upright to opsz 24–72 (no
+   title is larger than 72 px) and wght 500–700, with kerning and ligatures, in two files by
+   unicode-range: Basic Latin and punctuation (37 KB, preloaded) and Latin-1 with Latin Extended-A (43 KB, fetched only
+   where a title needs it); the italic to opsz 40–72
+   at wght 500, lower-case letters and punctuation only (9 KB: it sets the hero's phrase and nothing else). Every font the first screen uses is fetched before the landing's
+   LCP, so their bytes are the LCP budget. The fallback is Times New Roman sized to it. */
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-v1.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500 700;
+  font-style: normal;
+  unicode-range: U+0020-007E, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2039-203A, U+20AC, U+2122;
+}
+/* The rest of Latin-1 and Latin Extended-A (Wanjirũ, Zoé) in their own file, fetched only by a page that sets one. */
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-ext-v1.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500 700;
+  font-style: normal;
+  unicode-range: U+00A0-017F;
+}
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-italic-v1.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500;
+  font-style: italic;
+}
+@font-face {
+  font-family: "Fraunces Fallback";
+  src: local("Times New Roman");
+  ascent-override: 84.88%;
+  descent-override: 22.13%;
+  line-gap-override: 0%;
+  size-adjust: 115.22%;
+}
 @font-face {
   font-family: "IBM Plex Mono";
   src: url("/fonts/ibm-plex-mono-latin-v1.woff2") format("woff2");
@@ -43,24 +82,24 @@
 /*
  * Design tokens (docs/platform/design/p20-design-system.md; D-55): "Jacaranda". Bloom violet is the accent, saffron
  * (from the kanga) the warm second, night the deep violet of the landing's bands. Token names are the P18 ones, so
- * every component reads the new world unchanged. Light values live on :root; dark ones on html[data-theme="dark"]
+ * every component reads the new world unchanged. P24 (D-66) warms the light canvas to paper. Light values live on :root; dark ones on html[data-theme="dark"]
  * and, for a system preference with no choice made, under prefers-color-scheme. Contrast ratios are against --paper.
  */
 :root {
-  --paper: #f7f6fb; /* the canvas: a cool, faintly violet white */
+  --paper: #f7f4ed; /* the canvas: paper, warm (D-66; was a cool violet white) */
   --field: #ffffff; /* inputs, cards, sheets */
-  --ink: #1b1730; /* text and icons: a violet ink, 16.1:1 */
-  --ink-soft: #5e5873; /* secondary text and input borders, 6.3:1 */
-  --line: #e4e1ee; /* hairlines and dividers */
+  --ink: #1b1730; /* text and icons: a violet ink, 15.8:1 */
+  --ink-soft: #5e5873; /* secondary text and input borders, 6.1:1 (6.7:1 on white) */
+  --line: #e5dfd2; /* hairlines and dividers, warmed with the paper (decorative; controls take ink-soft borders) */
   --bezel: var(--ink); /* the drawn phone's frame (checkout) */
-  --accent: #5a3fc0; /* bloom: primary buttons, links, focus ring, current step, 6.7:1 (white on it 7.2:1) */
+  --accent: #5a3fc0; /* bloom: primary buttons, links, focus ring, current step, 6.6:1 (white on it 7.2:1) */
   --accent-wash: #efebfc; /* petal: selected rows, the active nav item, info notices; bloom on it 6.2:1 */
   --flourish: #f4b53f; /* saffron: "Your turn", the lattice's second tone, the night calls; ink on it 9.5:1, never text */
-  --warm: #8a5800; /* ochre: warm text on light (success notices, a warm badge's words), 5.6:1 */
+  --warm: #8a5800; /* ochre: warm text on light (success notices, a warm badge's words), 5.5:1 */
   --warm-wash: #fdf3dc; /* success notice background */
   --on-warm: #1b1730; /* text on a saffron fill */
-  --ok: #12784a; /* leaf: success, always with an icon and words, 5.1:1 */
-  --error: #b3261e; /* errors, always with an icon and words, 6.1:1 */
+  --ok: #12784a; /* leaf: success, always with an icon and words, 5.0:1 */
+  --error: #b3261e; /* errors, always with an icon and words, 6.0:1 */
   --on-accent: #ffffff; /* text and icons on --accent (7.2:1) */
   --on-ok: #ffffff; /* text and icons on --ok (5.4:1) */
   /* Night: the landing's bands, the footer, the auth panel. The same in both modes (it reads as a band on either). */
@@ -193,7 +232,9 @@ html[data-theme="dark"] {
 @theme {
   /* Self-hosted faces (public/fonts/LICENCES.md; the @font-face rules at the top of this file). */
   --font-sans: "Hanken Grotesk", "Hanken Grotesk Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Bricolage Grotesque", "Bricolage Grotesque Fallback", "Hanken Grotesk", system-ui, sans-serif;
+  /* D-66 (P24): titles in Fraunces; Bricolage keeps the wordmark and the figures (font-figure). */
+  --font-display: "Fraunces", "Fraunces Fallback", Georgia, "Times New Roman", serif;
+  --font-figure: "Bricolage Grotesque", "Bricolage Grotesque Fallback", "Hanken Grotesk", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Radii: inputs; cards, sheets and panels. Buttons and chips are pills (rounded-full). */
@@ -262,17 +303,20 @@ html[data-theme="dark"] {
     line-height: 1.6;
   }
 
+  /* Titles in Fraunces (D-66): a true serif with optical sizes, so a 24 px section title and a 72 px headline each get
+     their own cut; set a little lighter and looser than the grotesque was. */
   h1,
   h2 {
     font-family: var(--font-display);
-    font-weight: 680;
-    letter-spacing: -0.02em;
+    font-weight: 580;
+    letter-spacing: -0.012em;
+    font-optical-sizing: auto;
     text-wrap: balance;
   }
 
   h1 {
-    font-weight: 720;
-    letter-spacing: -0.028em;
+    font-weight: 600;
+    letter-spacing: -0.02em;
   }
 
   /* Row and card titles wrap where they must, never balanced onto two short lines (the owner's nit on Home). */
@@ -865,16 +909,17 @@ dialog[data-sheet][open] {
 [data-hero-visual] [data-stepper] p {
   font-size: 0.8125rem;
   line-height: 1.4;
+  hyphens: auto;
 }
 [data-hero-visual] [data-stepper] p + p {
   font-size: 0.8125rem;
 }
-/* The one light behind the hero's product cards (D-55): a soft bloom light with a breath of saffron, on the
-   night band. A light, not a wash: it sits behind the cards only. */
+/* The one light behind the hero's product panel (D-55, D-66): a soft bloom light with a breath of saffron, on the
+   paper. A light, not a wash: it sits behind the panel only. */
 .hero-glow {
   background:
-    radial-gradient(42% 46% at 58% 42%, rgb(123 96 255 / 0.42), transparent 72%),
-    radial-gradient(30% 32% at 30% 82%, rgb(244 181 63 / 0.16), transparent 70%);
+    radial-gradient(46% 50% at 60% 40%, rgb(123 96 255 / 0.2), transparent 72%),
+    radial-gradient(30% 32% at 28% 86%, rgb(244 181 63 / 0.14), transparent 70%);
 }
 
 /* The landing's one authored moment: the three product cards rise into place in sequence on load (each card sets
@@ -1011,6 +1056,258 @@ dialog[data-sheet][open] {
 }
 
 
+/*
+ * P24 (D-66, "Jacaranda in print"): the eyebrow, the hero's accent phrase, the honesty label, and the landing's and
+ * Home's moving parts. Each moving part is CSS (the stats row's start aside, a few lines of script), has its resting
+ * state as the default, and stands still under reduced motion (the block at the end of this file).
+ */
+
+/* An eyebrow: a small mono label over a section title, at most one per section (D-66; every reference the owner gave
+   uses them). Letter-spaced capitals in the mono face, in the secondary ink. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* The hero's one italic accent phrase, in bloom (D-66). */
+.hero-accent {
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+}
+
+/* "Demo data", "Seeded example": the honesty label on example data. Not a chip (it is the data's caption). */
+.demo-label {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  background: var(--warm-wash);
+  padding: 0.125rem 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--warm);
+  white-space: nowrap;
+}
+.demo-label::before {
+  content: "";
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: var(--flourish);
+}
+
+/* The hero panel's countdown: three boxes, days, hours and minutes as the product's countdown says them; the minutes
+   step down once a minute from a registered integer (no script, nothing moving in between: WCAG 2.2.2). The example
+   starts at 2 days 14 h 03 min and steps every 60 s. */
+@property --due-m {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 3;
+}
+.due-box {
+  display: flex;
+  min-width: 3.5rem;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 0.75rem;
+  background: var(--field);
+  padding: 0.375rem 0.5rem 0.3125rem;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.due-n {
+  font-family: var(--font-figure);
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.due-u {
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+.due-m {
+  counter-reset: due var(--due-m);
+  animation: due-m 3600s steps(60, end) -3360s infinite;
+}
+.due-m::after {
+  content: counter(due, decimal-leading-zero);
+}
+@keyframes due-m {
+  from {
+    --due-m: 59;
+  }
+  to {
+    --due-m: -1;
+  }
+}
+
+/* The stats row's figures (components/landing/Stats.tsx): the server's figure, counted up from 0 once the row is half on
+   screen (CountUp sets data-run). Before the script runs they wait at 0 for at most 4 s, then stand at their figure,
+   so a page whose script never arrives still shows them. */
+@property --n {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 0;
+}
+.count {
+  --n: var(--to);
+  counter-reset: n var(--n);
+  font-variant-numeric: tabular-nums;
+}
+.count::after {
+  content: counter(n);
+}
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  [data-count-up]:not([data-run]) .count {
+    animation: count-wait 0s 4s both;
+  }
+  [data-count-up][data-run] .count {
+    animation: count-up 1400ms var(--ease-out) both;
+  }
+}
+@keyframes count-wait {
+  from {
+    --n: 0;
+  }
+  to {
+    --n: var(--to);
+  }
+}
+@keyframes count-up {
+  from {
+    --n: 0;
+  }
+  to {
+    --n: var(--to);
+  }
+}
+
+/* The county strip (components/landing/Counties.tsx): two copies of the row pan once every 24 s, from the first tile
+   to the second copy's first, so the loop has no seam; hovering or focusing the strip pauses it. The edges fade into
+   the paper. Under reduced motion the second copy goes and the row scrolls sideways. */
+.pan {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+.pan-track {
+  display: flex;
+  width: max-content;
+  animation: pan 24s linear infinite;
+}
+.pan:hover .pan-track,
+[data-motion][data-paused] .pan-track {
+  animation-play-state: paused;
+}
+/* A tile with focus is never off screen: the row stops, drops its moving copy and scrolls (MotionToggle brings the
+   tile into view). */
+.pan:focus-within {
+  overflow-x: auto;
+  mask-image: none;
+}
+.pan:focus-within .pan-track {
+  animation: none;
+}
+.pan:focus-within .pan-row + .pan-row {
+  display: none;
+}
+.pan-row {
+  display: flex;
+  gap: 1rem;
+  padding-inline-end: 1rem;
+}
+.pan-tile {
+  width: 15rem;
+  flex-shrink: 0;
+}
+@media (width >= 64rem) {
+  .pan-tile {
+    width: 18rem;
+  }
+}
+@keyframes pan {
+  to {
+    transform: translateX(-50%);
+  }
+}
+/* The night gradient under a county's name: the name keeps AA on any photograph. */
+.tile-scrim {
+  background: linear-gradient(180deg, transparent 38%, rgb(30 22 64 / 0.55) 62%, rgb(30 22 64 / 0.92));
+}
+
+/* "What's happening" (components/landing/Ticker.tsx): the same loop as the strip, slower (one item about every 4 s),
+   paused while hovered or focused; the box shows its focus ring. */
+.ticker {
+  overflow: hidden;
+  border-radius: 1rem;
+  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+}
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: pan calc(var(--ticker-items, 10) * 4s) linear infinite;
+}
+.ticker:hover .ticker-track,
+[data-motion][data-paused] .ticker-track {
+  animation-play-state: paused;
+}
+.ticker-row {
+  display: flex;
+  gap: 0.75rem;
+  padding-inline-end: 0.75rem;
+}
+.ticker-item {
+  display: flex;
+  width: 19rem;
+  flex-shrink: 0;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--field);
+  padding: 0.75rem 1rem;
+}
+[data-ticker="strip"] .ticker-item {
+  width: 18rem;
+}
+/* Home's still list on phones: the items take the column's width. */
+[data-ticker] > ul > .ticker-item {
+  width: auto;
+}
+
+/* The why-panel on the night band (components/landing/Reasons.tsx): a terminal's frame, a step lighter than the band. */
+.terminal {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  background: color-mix(in oklab, var(--night) 82%, #3a2f66);
+  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.6);
+}
+
+/* Home's "Your turn" (P24): the mark breathes twice when the page opens (a saffron ring that widens and fades), then
+   rests. */
+[data-home="needs-you"] [data-chip="turn"] {
+  animation: turn-pulse 2s var(--ease-out) 600ms 2 backwards;
+}
+@keyframes turn-pulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--flourish) 70%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 10px color-mix(in oklab, var(--flourish) 0%, transparent);
+  }
+}
+
 /* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
 @utility code-figures {
   font-variant-numeric: tabular-nums;
@@ -1028,6 +1325,11 @@ dialog[data-sheet][open] {
   }
 
   .seal-draw,
+  .due-m,
+  .count,
+  .pan-track,
+  .ticker-track,
+  [data-home="needs-you"] [data-chip="turn"],
   .tour-enter,
   .tour-lit,
   .tour-spark,
@@ -1037,6 +1339,29 @@ dialog[data-sheet][open] {
   .hero-turn,
   .hero-steps li > span {
     animation: none !important;
+  }
+
+  /* The strip stands still: one copy, scrolled sideways (its links take focus, so the keyboard reaches every tile).
+     The ticker stands still too, its items wrapped into rows. Nothing moves, so there is nothing to pause. */
+  .pan {
+    overflow-x: auto;
+    mask-image: none;
+  }
+  .ticker {
+    mask-image: none;
+  }
+  .ticker-track {
+    width: auto;
+  }
+  .ticker-row {
+    flex-wrap: wrap;
+    justify-content: center;
+    padding-inline: 0.75rem;
+  }
+  .pan-row + .pan-row,
+  .ticker-row + .ticker-row,
+  .motion-toggle {
+    display: none !important;
   }
 
   /* The tour's steps crossfade (FirstLoginTour adds .tour-fade); Pause is hidden before the script knows. */

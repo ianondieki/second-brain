@@ -175,7 +175,7 @@ function Countdown({ due, dated }: { due: Detail["due"] & object; dated: boolean
   // One message, the figure tagged in it (<n>), so each language places its words around the number. A grid: the
   // figure beside its words on phones, above them from 640 px.
   const figure = (chunks: ReactNode) => (
-    <span className="row-span-2 flex items-center gap-2 font-display text-3xl leading-none font-bold tabular-nums sm:row-span-1 sm:mb-1 sm:text-4xl">
+    <span className="row-span-2 flex items-center gap-2 font-figure text-3xl leading-none font-bold tabular-nums sm:row-span-1 sm:mb-1 sm:text-4xl">
       {due.overdue ? <ChipMark kind="overdue" className="size-6" /> : null}
       {chunks}
     </span>

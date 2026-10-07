@@ -156,7 +156,7 @@ async function PlanCard({
           <p
             className={cn(
               "tabular-nums",
-              kind === "notSold" ? "text-sm text-ink-soft" : "font-display text-xl font-[680] tracking-[-0.02em] text-ink",
+              kind === "notSold" ? "text-sm text-ink-soft" : "font-figure text-xl font-[680] tracking-[-0.02em] text-ink",
             )}
           >
             {price}

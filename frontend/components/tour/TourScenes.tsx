@@ -52,14 +52,14 @@ function DevHomeScene() {
       <div className="relative h-[7.5rem]">
         <div className={`${card} absolute top-0 left-0 w-[58%]`}>
           <p className="text-xs font-semibold text-ink-soft">{t("ideas")}</p>
-          <p className="mt-1 font-display text-2xl leading-none font-[720] text-ink tabular-nums">3</p>
+          <p className="mt-1 font-figure text-2xl leading-none font-[720] text-ink tabular-nums">3</p>
         </div>
         <div className={`${card} tour-raise tour-lit absolute right-0 bottom-0 w-[62%] ring-2 ring-accent`}>
           <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
             <span className="size-2 shrink-0 rounded-full bg-flourish" />
             {t("needsYou")}
           </p>
-          <p className="mt-1 font-display text-2xl leading-none font-[720] text-accent tabular-nums">1</p>
+          <p className="mt-1 font-figure text-2xl leading-none font-[720] text-accent tabular-nums">1</p>
         </div>
       </div>
     </Stage>

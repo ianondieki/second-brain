@@ -391,7 +391,7 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-07, session 6): none. P23-3 merged into the integration branch (see the P23-3 report). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
+**Open branches** (2026-10-07, session 6): none. P24 merged into the integration branch (the feature branch at `0eba708` plus the docs and screenshot commit; the merge commit is recorded below once made; see the P24 report). P23-3 merged into the integration branch (see the P23-3 report). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
 before it `fbaa3dd`); from P23-2 on, a gated phase is merged into the integration branch without waiting for the owner's
 word (the owner, 2026-10-07). P23-1 merged as `4883047` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `68d5826`); integration head before it `e651622`. P22-C merged as `3316909` on the owner's instruction (merge commit of
@@ -1214,6 +1214,69 @@ old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
 **For the owner.** D-62 (the collaborator credit wording) still blocks P22-C; D-56 (npm audit) and the CI runner
 question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
 check before release.
+
+### P24 report (2026-10-07): "Jacaranda in print": the seductive landing, Explore, a living Home, share cards (D-66)
+
+**Why.** The owner, with three references (hackathon.genai.works, basix-venture-route.vercel.app, a Kenyan real-estate
+landing): a world-class, seductive UI; sections that move and show life; cute images from the internet where relevant;
+more features like a real full-stack engineer; "/loop until you achieve the goal". Card: `tasks/P24.md` (the acceptance
+list is the bar); direction D-66 ("Jacaranda in print": Fraunces titles with one italic accent, the paper canvas, mono
+eyebrows, licensed photographs, honest stats, one orchestrated motion per surface).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2` at `0eba708`; three worktrees, merges `479b204`,
+`28a3e72`, `1bcc704`; 45 commits, 161 files): the card's "Status" section lists it in full. In short: ten licensed
+Kenyan photographs, credited; three public read routes (`/api/public/activity`, `/api/public/explore`,
+`/api/public/problems/{id}`) read by a nil-UUID public reader under RLS with the public predicate repeated, cached
+and rate-limited; developer-posted problems and research cards now carry a county; the landing rebuilt in the D-66
+order (hero with the live product panel and a minute-only countdown, the counting stats row, the county photo strip
+with a Pause button, numbered steps with mono chips, the dark reasons band from the ranker's real chip texts, the
+"What's happening" marquee, Proof, Questions, the closing band, the footer with Credits); `/explore`,
+`/explore/problems/[id]` and `/credits` as public pages; Home with the greeting by the app clock's hour, the "Your
+turn" pulse and the activity strip; share cards for the problem and verify pages; the web app manifest.
+
+**Reviews.** Backend: reviewer CHANGES_REQUIRED (MAJOR: `stage_reached` promised but unbuilt; the nil-UUID reader
+needed security sign-off; MINOR: rate limit before the cache, order-dependent tests, predicate tests by SQL text)
+→ second round CHANGES_REQUIRED on the stale generated API types only → fixed in the merge; security-reviewer PASS
+(no leakage; four MINORs: the nil-UUID invariant unenforced, no statement timeout, `login_attempts` growth, no threat
+rows; the last three closed, the first a next-revision item). The orchestrator removed the organisation name from the
+problem read before merging (the directory is signed-in today). Frontend: reviewer CHANGES_REQUIRED (MAJOR: counties
+keyed by name against the API's "Nairobi City"; next/og fetching Google fonts for "ĩ"; Credits without licence and
+source links) → PASS (two MINORs closed: the calt claim, the totals line); ux-reviewer CHANGES_REQUIRED (eight MAJORs:
+strip focus off-screen, the seconds countdown, no pause on touch, footer anchors, `/explore` LCP, the tea photograph
+under other counties' names, Credits, the Home strip truncation) → PASS with the dark `/` LCP re-measured on a quiet
+host (gate: 2.34 s).
+
+**Gate** (compose stack rebuilt and reset from the merged branch). Playwright mobile 360 and desktop with axe: first
+run 215 passed, 3 failed (the tour test's "Pause" now matches Home's activity Pause too; the empty-Discover test's filter
+now lists the moderation scene's West Pokot problem, a direct consequence of county inheritance), both test-only fixes
+in `2bad442`, rerun 218 passed, 6 skipped; clock scenarios 6/6; `demo.py reset` and `e2e-env` clean (the first chain
+clobbered `.env.e2e` by redirecting the command's banner into it: fixed in the script). JS budgets, Lighthouse and axe
+in the card's table: landing LCP 2.37 s light, 2.34 s dark, performance 93–100 and accessibility 100 on every route,
+all routes under 150,000 B. Screenshot set `docs/demo/screenshots/p24/` (landing, explore, credits, home, tour,
+org-home at 375 and 1440, light and dark) and the README walkthrough set re-recorded. CodeQL run 290 on `0eba708`:
+exactly the eight D-42 findings (one JavaScript, seven Python). `pr.yml` run 354 on `4c1a191`: frontend, demo story,
+hygiene and both legacy jobs green; Playwright red on the three tests above; backend red on one mypy error in the
+orchestrator's test edit (fixed in `0eba708`); scanners red on `npm audit` and `osv-scanner` (D-56); run 355 on
+`0eba708`: frontend, Playwright with the clock scenarios, the demo story, hygiene and both legacy jobs green; scanners
+red on `npm audit` and `osv-scanner` (D-56); the informational no-skip-list legacy job red as always; the backend job
+still running toward its 35-minute limit at the time of writing (P23 item 10, the owner's call).
+
+**Deviations and residuals** (also on the card): `/explore` LCP 2.60 s dark with the first photograph as the LCP
+element (performance ≥ 90 met; the card requires ≤ 2.5 s on `/` only); the hero countdown updates once a minute with
+no pause control; `stage_reached` and the two database hardening items wait for the next db-migrations revision;
+the ticker cannot link items (opaque event keys); Swahili screenshots not taken (`SWAHILI_LIVE = false`); the ranker
+chip texts stay English in `sw.json` and `_meta.reviewP24` is the owner's copy and Swahili review; the seeded
+research cards' counties are demo choices; the implementers' commits were re-signed to the session's attribution
+lines by the orchestrator (the agents sign as Opus 5.5 on their own).
+
+**For the owner's machine.** `python infra/demo/demo.py reset --yes` rebuilds the images with Docker's cache; a stale
+page after a pull means the build context was old (pull first), and a forced rebuild is
+`docker compose -p bridge-demo --env-file infra/demo/.env -f infra/docker-compose.dev.yml -f infra/docker-compose.demo.yml build --no-cache web`
+followed by the reset.
+
+**Status.** Gate reached: reviewer, security-reviewer and ux-reviewer PASS, the local gate green, CI as above. Merged
+into the integration branch under the standing rule (the merge commit is recorded under "Open branches").
+
 
 ### P23-3 report (2026-10-07): the deadline countdown in days, hours and minutes
 

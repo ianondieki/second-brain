@@ -339,8 +339,9 @@ async def publish(
         text_fields = {"title": new_problem["title"], "statement": new_problem["statement"]}
         problem_screen = await prescreen.screen(ScreenInput(text_fields, org_names))
         niche = new_problem.get("niche_id") or row.niche_id
+        # The problem is where the teaser says it is: its county, or nationwide when the teaser names none.
         new_problem_id = await problems.create_developer_problem(
-            db, user_id=user_id, niche_id=niche, held=problem_screen.hold, **text_fields
+            db, user_id=user_id, niche_id=niche, county_code=row.county_code, held=problem_screen.hold, **text_fields
         )
         await db.execute(_LINK, {"version": version_id, "problem": new_problem_id})
         classifier = None if problem_screen.classifier is None else json.dumps(problem_screen.classifier)

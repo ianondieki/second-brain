@@ -217,7 +217,8 @@ test("the demo story, from a fresh make demo-reset", async ({ page, browser }) =
 
   await test.step("Developer: Amina's first login, the tour, then Home, Discover and My ideas", async () => {
     await signIn(page, AMINA, /\/dev$/);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Welcome, Amina Wanjiru");
+    // P24: the greeting follows the hour of the app clock in Nairobi.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^Good (morning|afternoon|evening), Amina Wanjiru$/);
     // The first-login tour (D-52): three steps, never a modal; a fresh browser has not seen it.
     const tour = page.getByRole("dialog", { name: "This is your home" });
     await expect(tour).toBeVisible();

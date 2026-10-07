@@ -52,3 +52,16 @@ export function homeStats(engagements: readonly Summary[], ideas: readonly MyPro
     nextDueMine: owed.length > 0,
   };
 }
+
+export type DayPart = "morning" | "afternoon" | "evening";
+
+/**
+ * Home's greeting by the hour in Nairobi (P24) of the app clock's instant (the API's X-App-Now, so the demo and test
+ * clocks move it too): morning from 05:00, afternoon from 12:00, evening from 17:00 until 05:00.
+ */
+export function dayPart(now: string): DayPart {
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: "Africa/Nairobi" }).format(new Date(now)));
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 17) return "afternoon";
+  return "evening";
+}

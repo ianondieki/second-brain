@@ -22,6 +22,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 MIN_SECRET_CHARS = 32
 
 AppEnv = Literal["dev", "test", "staging", "production"]
+# Where the demo seed and its seeded examples may exist (bridge.seed.demo.runtime refuses every other APP_ENV). Here,
+# not in the demo package, so code that ships in every image (the public feed's seeded flag) reads the same set.
+DEMO_ENVS: Final[frozenset[str]] = frozenset({"dev", "test"})
 PaymentProviderName = Literal["fake"]
 LLMProvider = Literal["fake", "free", "anthropic"]
 ResponseFormat = Literal["none", "json_object", "json_schema"]

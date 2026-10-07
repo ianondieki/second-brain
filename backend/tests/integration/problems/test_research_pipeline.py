@@ -41,6 +41,7 @@ from tests.integration.problems.research_rig import (
     run_row,
     start,
 )
+from tests.integration.teams.schema_world import county
 
 TELECOM = "networks-telecommunications"
 
@@ -319,6 +320,26 @@ async def test_drafts_over_the_card_limit_are_discarded(
     outcome = await execute(app_engine, research_world, run_id, runtime, policy=policy)
     assert outcome is not None
     assert (len(outcome.candidates), outcome.discarded) == (1, ("over_card_limit",))
+
+
+async def test_a_card_keeps_a_county_of_the_regions_table_and_drops_any_other(
+    research_world: ResearchWorld, app_engine: AsyncEngine, owner_engine: AsyncEngine
+) -> None:
+    """Given drafts naming a county in the regions table, an unknown county and none (P24-B follow-up), When the run
+    saves them, Then the first card is in its county and the other two are nationwide: an unknown code is dropped,
+    never an error."""
+    async with owner_engine.begin() as conn:
+        known = await county(conn, "Research County")
+    runtime = llm_runtime(
+        answer(dict(TELECOM_DRAFT, county_code=known), dict(TELECOM_DRAFT, county_code="KE-99"), TELECOM_DRAFT)
+    )
+    policy = dataclasses.replace(get_research_policy(), max_cards_per_run=3)
+    run_id = await start(app_engine, research_world, TELECOM)
+    outcome = await execute(app_engine, research_world, run_id, runtime, policy=policy)
+    assert outcome is not None
+    assert (len(outcome.candidates), outcome.discarded) == (3, ())
+    cards = {card.id: card.county_code for card in await candidates_of(owner_engine, run_id)}
+    assert [cards[card] for card in outcome.candidates] == [known, None, None]
 
 
 async def test_a_database_refusal_discards_that_draft_only(

@@ -45,7 +45,7 @@ export async function QuizResults({ today, attempt }: { today: QuizToday; attemp
             score: attempt.score,
             total: attempt.out_of,
             fig: (chunks) => (
-              <span className="mr-1 font-display text-3xl font-[680] tracking-[-0.02em] tabular-nums">{chunks}</span>
+              <span className="mr-1 font-figure text-3xl font-[680] tracking-[-0.02em] tabular-nums">{chunks}</span>
             ),
           })}
         </p>

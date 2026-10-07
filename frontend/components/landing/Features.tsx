@@ -20,7 +20,7 @@ function BellIcon(props: IconProps) {
 function Feature({ title, body, className, children }: { title: string; body: string; className?: string; children: ReactNode }) {
   return (
     <article className={cn("flex flex-col rounded-[1.5rem] border border-line bg-field p-5 sm:p-8", className)}>
-      <h3 className="font-display text-xl font-[700] tracking-[-0.015em] text-ink lg:text-2xl">{title}</h3>
+      <h3 className="font-display text-xl leading-snug font-[580] tracking-[-0.01em] text-ink lg:text-[1.625rem]">{title}</h3>
       <p className="mt-2 max-w-[48ch] text-ink-soft">{body}</p>
       <div aria-hidden="true" className="mt-6 flex-1 rounded-2xl border border-line bg-paper p-3.5 sm:mt-7 sm:p-5">
         {children}

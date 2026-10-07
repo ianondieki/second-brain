@@ -3770,6 +3770,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Activity
+         * @description The 20 latest public events, newest first: never a person, a handle, an organisation or private text.
+         */
+        get: operations["public_activity_api_public_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/explore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Explore
+         * @description Published problems by county and by top-level niche, each with its three newest.
+         */
+        get: operations["public_explore_api_public_explore_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/problems/{problem_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Problem
+         * @description One published problem anyone may read; 404 for any other id (a draft, a held, archived or rejected problem, an
+         *     organisation's own or invited Brief, a delisted or unverified organisation's Brief, or no problem at all).
+         */
+        get: operations["public_problem_api_public_problems__problem_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transparency": {
         parameters: {
             query?: never;
@@ -3904,6 +3965,68 @@ export interface components {
              * @constant
              */
             status: "check_email";
+        };
+        /** ActivityFeed */
+        ActivityFeed: {
+            /**
+             * Generated At
+             * Format: date-time
+             * @description The platform clock when this feed was read (it is cached for 60 s)
+             */
+            generated_at: string;
+            /**
+             * Items
+             * @description The 20 latest public events, newest first
+             */
+            items: components["schemas"]["ActivityItem"][];
+            /**
+             * Seeded
+             * @description True when there are events and every one of them is seeded
+             */
+            seeded: boolean;
+        };
+        /** ActivityItem */
+        ActivityItem: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * County
+             * @description The county's name, when the problem or proposal names one
+             */
+            county: string | null;
+            /**
+             * Id
+             * @description An opaque key for this event, stable between reads (not a record id)
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "problem_posted" | "version_registered" | "brief_opened";
+            /**
+             * Niche
+             * @description The niche label, e.g. "ICT › Networks & Telecommunications"
+             */
+            niche: string | null;
+            /**
+             * Seeded
+             * @description True when the demo seed wrote it (a demo deployment, or a seeded example card): label it so
+             */
+            seeded: boolean;
+            /**
+             * Stage
+             * @description Always null for now: engagement stage events are deferred
+             */
+            stage: string | null;
+            /**
+             * Title
+             * @description Only a title that is already public: a published problem, Brief or teaser
+             */
+            title: string | null;
         };
         /** AdminNicheOut */
         AdminNicheOut: {
@@ -5874,6 +5997,102 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** Explore */
+        Explore: {
+            /**
+             * Counties
+             * @description Counties with problems, most first (then by name)
+             */
+            counties: components["schemas"]["ExploreCounty"][];
+            /**
+             * Niches
+             * @description Top-level niches with problems, most first (then by name)
+             */
+            niches: components["schemas"]["ExploreNiche"][];
+            /**
+             * Seeded
+             * @description True when there are problems and every one of them is seeded
+             */
+            seeded: boolean;
+            totals: components["schemas"]["ExploreTotals"];
+        };
+        /** ExploreCounty */
+        ExploreCounty: {
+            /**
+             * Code
+             * @description ISO 3166-2 code
+             */
+            code: string;
+            /** Count */
+            count: number;
+            /** Name */
+            name: string;
+            /**
+             * Newest
+             * @description Its three newest problems
+             */
+            newest: components["schemas"]["ExploreTeaser"][];
+        };
+        /** ExploreNiche */
+        ExploreNiche: {
+            /**
+             * Count
+             * @description Problems in the niche or any niche under it
+             */
+            count: number;
+            /**
+             * Id
+             * Format: uuid
+             * @description The top-level niche's id
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Newest
+             * @description Its three newest problems
+             */
+            newest: components["schemas"]["ExploreTeaser"][];
+        };
+        /** ExploreTeaser */
+        ExploreTeaser: {
+            /**
+             * Id
+             * Format: uuid
+             * @description The problem's id
+             */
+            id: string;
+            /**
+             * Niche
+             * @description The problem's niche label
+             */
+            niche: string | null;
+            /**
+             * Posted At
+             * @description When it was published
+             */
+            posted_at: string | null;
+            /** Title */
+            title: string;
+        };
+        /** ExploreTotals */
+        ExploreTotals: {
+            /**
+             * Counties
+             * @description Counties with at least one of them
+             */
+            counties: number;
+            /**
+             * Niches
+             * @description Top-level niches with at least one of them
+             */
+            niches: number;
+            /**
+             * Problems
+             * @description Published problems anyone may read
+             */
+            problems: number;
+        };
         /** FeatureOut */
         FeatureOut: {
             /** Applies */
@@ -7714,6 +7933,84 @@ export interface components {
             status: "timestamped" | "timestamp_pending";
             /** Verify Path */
             verify_path: string;
+        };
+        /** PublicCounty */
+        PublicCounty: {
+            /**
+             * Code
+             * @description ISO 3166-2 code
+             */
+            code: string;
+            /** Name */
+            name: string;
+        };
+        /** PublicNiche */
+        PublicNiche: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** @description The top-level niche it sits under; null for a top level */
+            parent: components["schemas"]["PublicNicheParent"] | null;
+        };
+        /** PublicNicheParent */
+        PublicNicheParent: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PublicOrganisation
+         * @description Only the level: the directory is signed-in today, so no organisation's name reaches a signed-out visitor.
+         */
+        PublicOrganisation: {
+            /**
+             * Verification
+             * @description Its verification level (E0 is unclaimed)
+             * @enum {string}
+             */
+            verification: "unclaimed" | "e1" | "e2";
+        };
+        /** PublicProblem */
+        PublicProblem: {
+            /** Affected Group */
+            affected_group: string | null;
+            county: components["schemas"]["PublicCounty"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            niche: components["schemas"]["PublicNiche"] | null;
+            /** @description A Brief's organisation's level while it is listed in the directory; null for every other problem */
+            organisation: components["schemas"]["PublicOrganisation"] | null;
+            /**
+             * Posted At
+             * @description When it was published
+             */
+            posted_at: string | null;
+            /**
+             * Seeded
+             * @description True when the demo seed wrote it (a demo deployment, or a seeded example card): label it so
+             */
+            seeded: boolean;
+            /**
+             * Source
+             * @description Developer-reported, a reviewed research card, or an organisation's Problem Brief
+             * @enum {string}
+             */
+            source: "developer" | "research" | "brief";
+            /** Statement */
+            statement: string;
+            /** Title */
+            title: string;
         };
         /** PublishIn */
         PublishIn: {
@@ -31258,6 +31555,284 @@ export interface operations {
             };
             /** @description No key to open it on this server */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    public_activity_api_public_activity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityFeed"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    public_explore_api_public_explore_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Explore"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    public_problem_api_public_problems__problem_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                problem_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicProblem"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
