@@ -567,6 +567,258 @@ dialog[data-sheet][open] {
   animation: tour-enter var(--motion-base) var(--ease-out) both;
 }
 
+/*
+ * The first-login tour as a slide show (components/tour/FirstLoginTour.tsx, P23-2). The panel is raised (an overlay's
+ * shadow) and sits in the page's flow. Its head is the three steps' buttons, each a thin line that fills over the six
+ * seconds a step stays (the progress line), and Pause; every step shares one grid cell, so the panel keeps the height
+ * of its tallest step. A step slides in from the side it comes from while the last one leaves to the other side.
+ */
+.tour {
+  margin-bottom: 2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--field);
+  color: var(--ink);
+  padding: 0.5rem 1.25rem 1.25rem;
+  box-shadow: var(--shadow-overlay);
+}
+@media (width >= 40rem) {
+  .tour {
+    max-width: 48rem;
+    padding: 0.5rem 1.5rem 1.5rem;
+  }
+}
+.tour-head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-inline-end: -0.75rem;
+}
+.tour-seg {
+  display: flex;
+  flex: 1;
+  min-height: 2.75rem;
+  align-items: center;
+  padding-inline: 0.25rem;
+  border-radius: 9999px;
+}
+.tour-seg i {
+  display: block;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--line);
+}
+.tour-seg i::after {
+  content: "";
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.tour-seg[data-done] i::after {
+  transform: none;
+}
+.tour-seg:hover i {
+  background: var(--accent-line);
+}
+.tour-seg[aria-current] i::after {
+  animation: tour-fill 6s linear both;
+}
+.tour[data-held] .tour-seg[aria-current] i::after {
+  animation-play-state: paused;
+}
+/* The last step and reduced motion: nothing advances, the line stands full to where the person is. */
+.tour-seg[aria-current]:has(+ .tour-pause.invisible) i::after,
+.tour-fade .tour-seg[aria-current] i::after {
+  animation: none;
+  transform: none;
+}
+@keyframes tour-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+.tour-pause {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: var(--ink-soft);
+}
+.tour-pause:hover,
+.tour-pause[aria-pressed="true"] {
+  background: var(--wash-soft);
+  color: var(--accent);
+}
+.tour-pause svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.tour-slides {
+  display: grid;
+  margin-top: 0.5rem;
+  overflow: hidden;
+  touch-action: pan-y;
+  --tour-from: 2.5rem;
+}
+.tour-slides[data-back] {
+  --tour-from: -2.5rem;
+}
+.tour-slide {
+  display: grid;
+  grid-area: 1 / 1;
+  align-content: start;
+  gap: 1.25rem;
+  visibility: hidden;
+}
+@media (width >= 40rem) {
+  .tour-slide {
+    grid-template-columns: 19rem minmax(0, 1fr);
+    align-items: center;
+    gap: 1.75rem;
+  }
+}
+.tour-slide[data-slide="on"],
+.tour-slide[data-slide="in"] {
+  visibility: visible;
+}
+.tour-slide[data-slide="in"] {
+  animation: tour-in 420ms var(--ease-out) both;
+}
+.tour-slide[data-slide="out"] {
+  animation: tour-out 420ms var(--ease-out) both;
+}
+@keyframes tour-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--tour-from));
+  }
+}
+@keyframes tour-out {
+  from {
+    visibility: visible;
+    opacity: 1;
+  }
+  to {
+    visibility: hidden;
+    opacity: 0;
+    transform: translateX(calc(var(--tour-from) * -1));
+  }
+}
+/* Reduced motion: a crossfade in place, nothing slides. */
+.tour-fade .tour-slide[data-slide="in"] {
+  animation-name: tour-fade-in;
+}
+.tour-fade .tour-slide[data-slide="out"] {
+  animation-name: tour-fade-out;
+}
+@keyframes tour-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes tour-fade-out {
+  from {
+    visibility: visible;
+    opacity: 1;
+  }
+  to {
+    visibility: hidden;
+    opacity: 0;
+  }
+}
+.tour-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+/* A scene (components/tour/TourScenes.tsx): the step's icon in a petal disc with the saffron spark, in the corner of a
+   canvas stage, the miniature over the rest. Its one lit part answers once when the slide arrives (and the seal
+   draws then); a slide that is not showing holds its animations back, so they play when it does. */
+.tour-stage {
+  position: relative;
+  height: 9.75rem;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.tour-disc {
+  position: absolute;
+  top: 50%;
+  left: 0.875rem;
+  display: flex;
+  width: 5.75rem;
+  height: 5.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  transform: translateY(-50%);
+}
+/* The spark over the icon's crown, as on the mark (components/brand/Logo.tsx). */
+.tour-disc::after {
+  content: "";
+  position: absolute;
+  top: 0.3rem;
+  left: calc(50% - 0.4375rem);
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  background: var(--flourish);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+/* The miniature lies over the disc's far edge only: the icon stays whole. */
+.tour-mini {
+  position: absolute;
+  top: 50%;
+  right: 0.875rem;
+  left: 5.375rem;
+  transform: translateY(-50%);
+}
+@media (width >= 40rem) {
+  .tour-stage {
+    height: 10.5rem;
+  }
+}
+.tour-slide:not([data-slide="on"], [data-slide="in"]) .tour-stage * {
+  animation-name: none !important;
+}
+.tour-lit {
+  animation: tour-lit 1.1s var(--ease-out) 380ms both;
+}
+@keyframes tour-lit {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--flourish) 70%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px color-mix(in oklab, var(--flourish) 0%, transparent);
+  }
+}
+.tour-arrive {
+  animation-name: tour-lit, tour-arrive;
+  animation-duration: 1.1s, 520ms;
+}
+@keyframes tour-arrive {
+  from {
+    transform: translateY(-0.75rem);
+  }
+}
+
 /* The seal on the certificate sheet draws its ring once; reduced motion shows it drawn. */
 @keyframes seal-draw {
   from {
@@ -633,7 +885,16 @@ dialog[data-sheet][open] {
 
   .seal-draw,
   .tour-enter,
+  .tour-lit,
   .hero-rise {
     animation: none !important;
+  }
+
+  /* The tour's steps crossfade (FirstLoginTour adds .tour-fade); Pause is hidden before the script knows. */
+  .tour-slide[data-slide] {
+    animation-duration: 240ms !important;
+  }
+  .tour-pause {
+    display: none !important;
   }
 }
