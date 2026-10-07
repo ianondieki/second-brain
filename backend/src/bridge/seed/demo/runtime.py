@@ -21,6 +21,7 @@ from bridge.config import Settings
 from bridge.crypto.envelope import KeyWrapper, key_wrapper_from_settings
 from bridge.db import create_session_factory
 from bridge.integrations.sms import SmsProvider, sms_provider_from_settings
+from bridge.llm.embeddings import Embedder
 from bridge.main import create_app
 from bridge.notifications.email import EmailProvider, provider_from_settings
 from bridge.seed.demo.data import DEMO_PASSWORD, totp_secret
@@ -87,6 +88,7 @@ class DemoRuntime:
     key_wrapper: KeyWrapper
     object_store: ObjectStore
     scanner: Scanner
+    embedder: Embedder | None = None  # the embedding step's; None: built from settings (EMBEDDER) like the job's
 
     @classmethod
     def from_settings(cls, settings: Settings) -> DemoRuntime:

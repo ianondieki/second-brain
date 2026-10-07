@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterator, Sequence
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,7 @@ from bridge.db import create_session_factory
 from bridge.demo import __main__ as demo_command
 from bridge.engagements import message_notify, notify
 from bridge.integrations.sms import FakeSmsProvider
-from bridge.llm.embeddings import FAKE_MODEL, FAKE_VERSION
+from bridge.llm.embeddings import FAKE_MODEL, FAKE_VERSION, FakeEmbedder, Vector
 from bridge.models.enums import EngagementState
 from bridge.notifications.email import FakeEmailProvider
 from bridge.proposals.sanitise import contact_codes
@@ -1128,6 +1129,46 @@ async def test_the_last_step_embeds_amina_and_the_problems_once(
     ):
         mine = (await amina.call("GET", "/api/me/recommendations")).json()
     assert "embedding" in {item["features"]["semantic_fit"]["source"] for item in mine["items"]}
+
+
+async def test_an_embedding_pass_that_fails_leaves_a_note_and_the_seed_completes(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P23-1 (confirmation review): Given Amina's profile stale again (her headline edited) and an embedder that breaks
+    on its first call (the profiles' pass), When the seed runs, Then it completes; the report notes the failed pass and
+    adds nothing; the problems' pass still ran; Amina's earlier vector is left as it was. Her headline is restored."""
+
+    class BreaksOnce(FakeEmbedder):
+        async def embed(self, texts: Sequence[str]) -> list[Vector]:
+            if not self.calls:
+                self.calls.append(list(texts))
+                raise RuntimeError("the encoder crashed")
+            return await super().embed(texts)
+
+    amina = seeded[0].users[AMINA.email]
+    [before] = await rows(
+        owner, "SELECT headline, profile_embedding_hash FROM developer_profiles WHERE user_id = :u", u=amina
+    )
+    async with owner.begin() as conn:
+        await conn.execute(
+            text("UPDATE developer_profiles SET headline = 'Edited for the test' WHERE user_id = :u"), {"u": amina}
+        )
+    try:
+        broken = replace(runtime, embedder=BreaksOnce())
+        report = await seed_demo(demo_settings(), owner_engine=owner, app_engine=app, runtime=broken)
+        assert report.created == []
+        assert report.notes == [
+            "embeddings: the pass over developer_profiles failed (see the log); the job tries again"
+        ]
+        assert "developer_profiles" not in report.embedded
+        [after] = await rows(owner, "SELECT profile_embedding_hash FROM developer_profiles WHERE user_id = :u", u=amina)
+        assert after.profile_embedding_hash == before.profile_embedding_hash  # the old vector is left, stale
+    finally:
+        async with owner.begin() as conn:
+            await conn.execute(
+                text("UPDATE developer_profiles SET headline = :h WHERE user_id = :u"),
+                {"h": before.headline, "u": amina},
+            )
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:

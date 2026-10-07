@@ -54,6 +54,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge.config import Settings
 from bridge.embeddings.worker import EmbeddingsRuntime, run_embeddings
+from bridge.llm.embeddings import Embedder
 from bridge.seed.demo.accounts import (
     accept_master_terms,
     enrol_totp,
@@ -188,13 +189,15 @@ async def seed_demo(
         await step("team-up", ensure_team(owner_engine, actors, report))
         await step("contributor", ensure_contributor(owner_engine, actors, report))
         await step("pending team-up", ensure_pending_invitation(owner_engine, actors, report))
-        await step("embeddings", _embeddings(settings, factory, report))
+        await step("embeddings", _embeddings(settings, factory, runtime.embedder, report))
     return report
 
 
-async def _embeddings(settings: Settings, factory: async_sessionmaker[AsyncSession], report: DemoReport) -> None:
+async def _embeddings(
+    settings: Settings, factory: async_sessionmaker[AsyncSession], embedder: Embedder | None, report: DemoReport
+) -> None:
     """P23-1: one pass of the embedding job (idempotent: the hashes say what is fresh)."""
-    run = await run_embeddings(EmbeddingsRuntime(settings, factory=factory).deps())
+    run = await run_embeddings(EmbeddingsRuntime(settings, factory=factory, embedder=embedder).deps())
     if run.unavailable:
         report.notes.append("embeddings: the configured embedder cannot run here; recommendations use keywords")
     for name in run.failed:
