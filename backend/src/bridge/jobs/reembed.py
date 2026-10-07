@@ -13,8 +13,10 @@ left the set (a consent withdrawn, a problem held). A refusal is not an error an
 changed text is listed again with its new hash and embedded again, at most ``MAX_RETRIES`` more times in one run (a
 text that keeps changing waits for the next run). A row of a table that keeps hashes may also come back after its
 write with the same hash (its vector cleared since: profiling withdrawn and granted again): one more try too, and
-abandoned for the run after ``MAX_RETRIES``, so no user's toggling can stop a run. Only a table that keeps no hash
-raises ``ReembedStalled`` when a written row comes back: its ``save`` did not record the write.
+abandoned for the run after ``MAX_RETRIES``, so no user's toggling can stop a run; a written row abandoned so is not
+counted as written and is logged at warning level (``embeddings.reembed.not_kept``: a table whose writes do not hold
+is loud). Only a table that keeps no hash raises ``ReembedStalled`` when a written row comes back: its ``save`` did
+not record the write.
 """
 
 from __future__ import annotations
@@ -58,7 +60,7 @@ class EmbeddingTable(Protocol):
 @dataclass(frozen=True, slots=True)
 class ReembedReport:
     table: str
-    rows: int  # rows written
+    rows: int  # rows written in this run and not abandoned since (a write that did not hold is not counted)
     batches: int
     refused: int = 0  # writes the table refused (each logged as skipped)
     abandoned: int = 0  # rows out of tries in this run (1 + MAX_RETRIES) and still stale: left for the next run
@@ -101,17 +103,21 @@ async def reembed(
                 if tries[row.id] > MAX_RETRIES:
                     given_up.add(row.id)
         batches += 1
+    not_kept = given_up & written.keys()  # written in this run, then stale again until out of tries
+    if not_kept:
+        log.warning("embeddings.reembed.not_kept", table=table.name, count=len(not_kept))
+    kept = len(written.keys() - given_up)
     log.info(
         "embeddings.reembed",
         table=table.name,
-        rows=len(written),
+        rows=kept,
         batches=batches,
         refused=refused,
         abandoned=len(given_up),
         model=embedder.model,
         version=embedder.version,
     )
-    return ReembedReport(table.name, len(written), batches, refused, len(given_up))
+    return ReembedReport(table.name, kept, batches, refused, len(given_up))
 
 
 def text_hash(text: str) -> str:

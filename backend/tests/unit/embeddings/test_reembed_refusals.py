@@ -181,9 +181,12 @@ async def test_a_row_cleared_after_every_write_is_abandoned_after_its_retries() 
     table = Regranted(row, clears=100)
     table.add(row, "toggled")
     table.add(uuid4(), "steady")
-    report = await reembed(table, FakeEmbedder(), batch_size=1, max_rows=50)
-    assert (report.rows, report.abandoned) == (2, 1)
+    with capture_logs() as logs:
+        report = await reembed(table, FakeEmbedder(), batch_size=1, max_rows=50)
+    assert (report.rows, report.abandoned) == (1, 1)  # the toggled row's writes did not hold: not counted as written
     assert table.clears == 100 - (1 + MAX_RETRIES)
+    lost = [(e["table"], e["count"], e["log_level"]) for e in logs if e["event"] == "embeddings.reembed.not_kept"]
+    assert lost == [("regranted", 1, "warning")]
 
 
 async def test_a_hashed_table_that_never_records_abandons_its_rows_without_an_error() -> None:
@@ -194,5 +197,8 @@ async def test_a_hashed_table_that_never_records_abandons_its_rows_without_an_er
     table = Forgetful("forgetful", hashed=True)
     for n in range(2):
         table.add(uuid4(), f"text {n}")
-    report = await reembed(table, FakeEmbedder(), batch_size=1, max_rows=50)
-    assert (report.rows, report.abandoned, report.batches) == (2, 2, 2 * (1 + MAX_RETRIES))
+    with capture_logs() as logs:
+        report = await reembed(table, FakeEmbedder(), batch_size=1, max_rows=50)
+    assert (report.rows, report.abandoned, report.batches) == (0, 2, 2 * (1 + MAX_RETRIES))
+    lost = [(e["table"], e["count"], e["log_level"]) for e in logs if e["event"] == "embeddings.reembed.not_kept"]
+    assert lost == [("forgetful", 2, "warning")]  # loud: written rows that came back until they ran out of tries
