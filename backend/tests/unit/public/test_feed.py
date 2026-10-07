@@ -81,6 +81,16 @@ def test_the_feed_is_seeded_only_when_every_item_is() -> None:
     assert feed.activity_feed([seeded], NOW).generated_at == NOW
 
 
+def test_the_feed_and_the_demo_seed_read_one_set_of_demo_environments() -> None:
+    from bridge import config
+    from bridge.problems.research import pipeline
+    from bridge.seed.demo import runtime
+
+    assert vars(runtime)["DEMO_ENVS"] is config.DEMO_ENVS
+    assert vars(pipeline)["DEMO_ENVS"] is config.DEMO_ENVS
+    assert {"dev", "test"} == config.DEMO_ENVS
+
+
 def test_a_deployment_is_a_demo_only_where_the_demo_seed_may_run() -> None:
     assert [feed.demo_deployment(SimpleNamespace(app_env=env)) for env in ("dev", "test", "staging", "production")] == [  # type: ignore[arg-type]
         True,

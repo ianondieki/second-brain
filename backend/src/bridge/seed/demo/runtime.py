@@ -17,7 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from bridge.auth import totp
-from bridge.config import Settings
+from bridge.config import DEMO_ENVS, Settings
 from bridge.crypto.envelope import KeyWrapper, key_wrapper_from_settings
 from bridge.db import create_session_factory
 from bridge.integrations.sms import SmsProvider, sms_provider_from_settings
@@ -28,7 +28,6 @@ from bridge.seed.demo.data import DEMO_PASSWORD, totp_secret
 from bridge.storage.objects import ObjectStore, object_store_from_settings
 from bridge.storage.scanner import Scanner, scanner_from_settings
 
-DEMO_ENVS: Final = frozenset({"dev", "test"})
 SEED_METHOD: Final = "demo_seed"  # the signup method recorded in the auth.signup audit event
 SEED_USER_AGENT: Final = "bridge-demo-seed"
 BASE_URL: Final = "https://demo-seed.localhost"  # in process only (ASGI transport): nothing listens here

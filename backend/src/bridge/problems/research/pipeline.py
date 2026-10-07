@@ -51,7 +51,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bridge.config import Settings
+from bridge.config import DEMO_ENVS, Settings
 from bridge.db import tenant_of
 from bridge.directory.models import Niche
 from bridge.ids import uuid7
@@ -68,7 +68,6 @@ from bridge.problems.research.sources import Catalogue, Excerpt
 
 NAIROBI: Final = ZoneInfo("Africa/Nairobi")
 EXAMPLE_REF_PREFIX: Final = "example:"
-SEED_ENVS: Final = frozenset({"dev", "test"})
 _CLOCK: Final = text("SELECT app_clock_now()")
 _DB_NOW: Final = text("SELECT now()")  # created_at's own clock (the run's start), for the stale-run rule
 _RUN_LOCK: Final = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
@@ -229,7 +228,7 @@ async def execute_run(
     origin: CardOrigin = CardOrigin.LIVE,
 ) -> RunOutcome | None:
     """Run one research run (see the module docstring); None when it is not a running run of the bound admin's."""
-    if origin is CardOrigin.SEEDED_EXAMPLE and settings.app_env not in SEED_ENVS:
+    if origin is CardOrigin.SEEDED_EXAMPLE and settings.app_env not in DEMO_ENVS:
         raise LLMConfigError("seeded example cards exist only in dev and test (the demo seed)")
     run = await db.get(ResearchRun, run_id, with_for_update=True, populate_existing=True)
     if run is None or run.status is not ResearchRunStatus.RUNNING or run.started_by != tenant_of(db)[0]:

@@ -9,7 +9,7 @@ digest of its kind and record, never the record's id.
 **Explore.** Counties with problems and top-level niches with problems (a child niche counts under its parent), most
 first, then by name, each with its three newest; the totals count every readable problem.
 
-**Seeded.** The demo seed runs only where ``APP_ENV`` is dev or test (``bridge.seed.demo.runtime.DEMO_ENVS``), so
+**Seeded.** The demo seed runs only where ``APP_ENV`` is dev or test (``bridge.config.DEMO_ENVS``), so
 there every row is the seed's (or a local developer's); elsewhere a row is seeded only when it carries the seed's own
 mark: a research card whose every cited source is a saved demo excerpt (``excerpt_ref`` starting ``example:``, the
 rule behind the cards' "Seeded example" label). ``users.demo_account`` is readable only by its own user, so it is not
@@ -21,12 +21,12 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, Final
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from bridge.config import Settings
+from bridge.config import DEMO_ENVS, Settings
 from bridge.directory.service import niche_label
 from bridge.public.queries import NEWEST, activity_statement, explore_statement, read
 from bridge.public.schemas import (
@@ -38,8 +38,6 @@ from bridge.public.schemas import (
     ExploreTeaser,
     ExploreTotals,
 )
-
-DEMO_ENVS: Final = frozenset({"dev", "test"})  # where the demo seed may run (bridge.seed.demo.runtime)
 
 
 def demo_deployment(settings: Settings) -> bool:
