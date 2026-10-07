@@ -43,16 +43,16 @@ import { WhoHasSeen } from "./WhoHasSeen";
 
 export async function generateMetadata({ params }: PageProps<"/dev/ideas/[id]">): Promise<Metadata> {
   const [t, tOg] = await Promise.all([getTranslations("ideas"), getTranslations("og")]);
-  const id = (await params).id;
-  const idea = await myIdea(id).catch(() => null);
+  const idea = await myIdea((await params).id).catch(() => null);
   const version = idea ? (idea.current ?? idea.draft) : null;
   const title = version?.teaser.title || t("pageTitle");
-  // The share card (P24, app/og/idea): only a published teaser has one (the route answers 404 for anything else).
-  const shared = idea?.current?.teaser.title;
+  // The share card (P24): a crawler has no session, so the card is the certificate's public one (app/og/verify: its id and
+  // "Registered on Wazo"); an idea with no certificate yet has none.
+  const certId = idea?.current?.cert_id;
   return {
     title,
-    openGraph: shared
-      ? { title: shared, images: [{ url: `/og/idea/${encodeURIComponent(id)}`, width: 1200, height: 630, alt: tOg("alt", { title: shared }) }] }
+    openGraph: certId
+      ? { images: [{ url: `/og/verify/${encodeURIComponent(certId)}`, width: 1200, height: 630, alt: tOg("verifyAlt", { certId }) }] }
       : undefined,
   };
 }
