@@ -19,9 +19,9 @@ from typing import Any
 import httpx
 import pytest
 from fastapi import APIRouter, FastAPI
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
-from bridge import clock
+from bridge import clock, main
 from bridge.config import get_settings
 from bridge.errors import ERROR_RESPONSES
 from bridge.main import APP_NOW_HEADER, create_app
@@ -49,6 +49,23 @@ class Down:
 
     def connect(self) -> Any:
         raise OperationalError("SELECT app_clock_now()", {}, ConnectionRefusedError("down"))
+
+
+class NoClock:
+    """An engine whose database has no app_clock_now() (a broken or missing dev/test clock)."""
+
+    def connect(self) -> Any:
+        raise ProgrammingError("SELECT app_clock_now()", {"secret": "never logged"}, LookupError("no function"))
+
+
+class Recorder:
+    """Stands in for bridge.main's structlog logger (cached loggers ignore ``capture_logs`` once used)."""
+
+    def __init__(self) -> None:
+        self.events: list[tuple[str, str, dict[str, Any]]] = []
+
+    def warning(self, event: str, **fields: Any) -> None:
+        self.events.append(("warning", event, fields))
 
 
 @asynccontextmanager
@@ -96,6 +113,20 @@ async def test_without_a_database_it_falls_back_to_the_wall_clock(engine: object
         response = await client.get("/api/auth/csrf")
     assert response.status_code == 200, response.text
     assert response.headers[APP_NOW_HEADER] == STAMP
+
+
+async def test_a_broken_clock_is_logged_and_the_answer_still_carries_the_wall_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = Recorder()
+    monkeypatch.setattr(main, "log", recorder)
+    app = create_app(get_settings())
+    app.state.engine = NoClock()
+    async with client_of(app) as client:
+        response = await client.get("/api/auth/csrf")
+    assert response.status_code == 200, response.text
+    assert response.headers[APP_NOW_HEADER] == STAMP  # never a 500 for the header's sake
+    assert recorder.events == [("warning", "app_now.fallback", {"error_type": "ProgrammingError"})]
 
 
 async def test_error_answers_carry_it_too() -> None:

@@ -40,7 +40,7 @@ from bridge.events.router import router as events_router
 from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
 from bridge.llm.embeddings import embedder_from_settings
-from bridge.logging import configure_logging
+from bridge.logging import configure_logging, get_logger
 from bridge.matching.matches import router as matches_router
 from bridge.matching.router import router as discover_router
 from bridge.matching.scouts import router as scouts_router
@@ -68,6 +68,7 @@ from bridge.tenancy.router import router as orgs_router
 
 API_PREFIX = "/api"
 TEST_CLOCK_MODULE = "bridge.testclock"
+log = get_logger(__name__)
 
 # Every /api answer carries the platform clock (REQ-TRACK-03): a page counts a deadline down from it, never from the
 # browser's clock alone, so the dev/test clock (make demo-clock, the e2e clock scenarios) moves the countdown too.
@@ -102,15 +103,17 @@ async def app_clock_now(engine: AsyncEngine | None, *, movable: bool) -> datetim
     """The platform clock for ``X-App-Now``. Where the dev/test clock may move it (every environment but production)
     it is the database's ``app_clock_now()``; a production database never enables that clock, so there it is the wall
     clock without a query. Without a database (an app built without its lifespan, or the database down) it is the wall
-    clock: the header is for display, and ``overdue`` and ``past_deadline`` stay the authority."""
+    clock, logged as ``app_now.fallback``: the header is for display, and ``overdue`` and ``past_deadline`` stay the
+    authority."""
     if movable and engine is not None:
         try:
             async with engine.connect() as conn:  # autocommit: one statement, no BEGIN or ROLLBACK round trips
                 autocommit = await conn.execution_options(isolation_level="AUTOCOMMIT")
                 now: datetime = (await autocommit.execute(_APP_CLOCK)).scalar_one()
                 return now
-        except SQLAlchemyError:
-            pass  # the request itself reports the database; the header falls back to the wall clock
+        except SQLAlchemyError as exc:
+            # Never a 500 for the header's sake; a broken or missing dev/test clock shows in the log (the class only).
+            log.warning("app_now.fallback", error_type=type(exc).__name__)
     return clock.utcnow()
 
 
