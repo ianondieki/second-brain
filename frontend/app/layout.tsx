@@ -10,16 +10,20 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 import "./globals.css";
 
-// Self-hosted faces (public/fonts/LICENCES.md; D-55; the @font-face rules in globals.css): the two faces that paint
-// above the fold are preloaded at high priority, ahead of the async scripts, so the headline swaps in early (mobile
-// LCP, AC-UX-3). The display face (Bricolage Grotesque) is instanced to one width and optical size over weights
-// 500–800 (34 KB, from 132); the text face (Hanken Grotesk) to the weights in use (400–700; 20 KB); the mono face
-// (fingerprints and codes, below the fold) is not preloaded.
-const PRELOADED_FONTS = ["/fonts/bricolage-grotesque-v1.woff2", "/fonts/hanken-grotesk-v1.woff2"] as const;
+// Self-hosted faces (public/fonts/LICENCES.md; D-55, D-66; the @font-face rules in globals.css): the faces that paint
+// the first screen's text are preloaded at high priority, ahead of the async scripts, so the headline swaps in early
+// (mobile LCP, AC-UX-3): Fraunces upright (the titles; 35 KB, instanced to opsz 24–72 and wght 500–700) and the text
+// face (Hanken Grotesk, 20 KB). The italic (9 KB, the landing hero's accent phrase only) is preloaded by the hero.
+// Bricolage Grotesque (the wordmark and the figures, 21 KB) and the mono face are not preloaded: the wordmark has a
+// sized fallback and the figures sit lower.
+const PRELOADED_FONTS = ["/fonts/fraunces-v1.woff2", "/fonts/hanken-grotesk-v1.woff2"] as const;
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("app");
+  const origin = process.env.NEXT_PUBLIC_SITE_ORIGIN;
   return {
+    // The site's public origin (frontend/.env.example) makes the share cards' addresses absolute (P24).
+    metadataBase: origin ? new URL(origin) : undefined,
     title: { default: t("workingTitle"), template: t("titleTemplate") },
     description: t("tagline"),
   };
@@ -28,8 +32,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   // The browser chrome colour cannot read a CSS variable: keep these equal to --paper in app/globals.css.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fbfaf6" },
-    { media: "(prefers-color-scheme: dark)", color: "#131412" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f4ed" },
+    { media: "(prefers-color-scheme: dark)", color: "#100c1d" },
   ],
   colorScheme: "light dark",
 };

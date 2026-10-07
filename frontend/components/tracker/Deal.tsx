@@ -129,7 +129,7 @@ function AgreementVersion({
               <span className="font-semibold text-ink">{t("milestone.total")}</span>
               <Kes
                 minor={agreement.milestones.reduce((sum, m) => sum + m.amount_kes_minor, 0)}
-                className="font-display text-xl font-bold text-ink"
+                className="font-figure text-xl font-bold text-ink"
               />
             </p>
           ) : null}
@@ -157,7 +157,7 @@ function MilestoneRow({
         <span className="font-semibold text-ink">
           {t("milestone.name", { number: milestone.seq, deliverable: milestone.deliverable })}
         </span>
-        <Kes minor={milestone.amount_kes_minor} className="font-display text-lg font-semibold text-ink" />
+        <Kes minor={milestone.amount_kes_minor} className="font-figure text-lg font-semibold text-ink" />
       </p>
       <p className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink-soft">
         {live ? <Chip kind={MILESTONE_CHIP[milestone.state]}>{t(`milestone.state.${milestone.state}`)}</Chip> : null}
@@ -247,7 +247,7 @@ export function Payments({ payments }: { payments: Payment[] }) {
             <Row
               key={p.id}
               data-payment={confirmed ? "confirmed" : "recorded"}
-              title={<Kes minor={p.amount_kes_minor} className="font-display text-xl font-bold" />}
+              title={<Kes minor={p.amount_kes_minor} className="font-figure text-xl font-bold" />}
               badges={[
                 <Chip key="state" kind={confirmed ? "completed" : "current"}>
                   {confirmed ? t("payment.confirmed") : t("payment.recorded")}

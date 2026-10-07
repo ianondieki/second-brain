@@ -29,7 +29,8 @@
     "reviewP22b": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-BF (REQ-DEV-02; D-60, D-61), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: week.*, nav.events, orgEvents.*, eventForm.*, admin.nav.events, adminEvents.*, adminResearch.trends.*; eventForm.fieldError.* follow the backend's own sentences (bridge/events/text.py MESSAGES); nothing promises that an event's description is emailed",
     "reviewP23b": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-2 (REQ-UX-01, REQ-UX-03; D-52, D-65), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tour.back, tour.pause, tour.step, tour.stepLabel (vidhibiti vya ziara inayojisogeza); landing.trust.* (mstari chini ya sehemu ya juu: ukweli wanne uliopo tayari kwenye landing.*, bila takwimu wala majina)",
     "reviewP22c": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: teams.*, teamUp.*, profileSettings.*, settingsNav.profile, ideaContributors.*, ideas.contributorsLine, ideas.sheet.contributors; 'Shirikiana' for team up, 'mwaliko' for invitation, 'mchangiaji' for contributor, 'wenzako' for peers; trackerMessages.refusal.attachFailed (faili za kisanduku cha ujumbe hazikupakia)",
-    "reviewP23c": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: countdown.* (muda uliobaki hadi tarehe ya mwisho: siku (haibadiliki kwa wingi, hivyo bila ICU plural), saa na dak (dakika) kuanzia kipimo kikubwa (countdown.days, .hours, .minutes), countdown.in (\"baada ya {time}\"), countdown.dueIn (\"Inatakiwa {date} · baada ya {time}\"), countdown.closesIn (\"Mapendekezo yatafungwa baada ya {time}\") na countdown.at (saa kamili ya Nairobi katika kichwa cha kipengele cha muda)); trackerActions.partFailed na .partReload (sehemu ya ukurasa ambayo msimbo wake haukupakia); je, \"dak\" inafaa kama kifupi cha dakika?"
+    "reviewP23c": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: countdown.* (muda uliobaki hadi tarehe ya mwisho: siku (haibadiliki kwa wingi, hivyo bila ICU plural), saa na dak (dakika) kuanzia kipimo kikubwa (countdown.days, .hours, .minutes), countdown.in (\"baada ya {time}\"), countdown.dueIn (\"Inatakiwa {date} · baada ya {time}\"), countdown.closesIn (\"Mapendekezo yatafungwa baada ya {time}\") na countdown.at (saa kamili ya Nairobi katika kichwa cha kipengele cha muda)); trackerActions.partFailed na .partReload (sehemu ya ukurasa ambayo msimbo wake haukupakia); je, \"dak\" inafaa kama kifupi cha dakika?",
+    "reviewP24": "[[COPY-REVIEW]] [[SW-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: landing.eyebrow, landing.title (kifungu cha italiki, lebo yake ya accent), landing.sample.*, landing.stats.*, landing.counties.*, landing.how.* (vibandiko vitatu), landing.reasons.* (values.* ni maandishi ya Kiingereza ya mpangaji kama bidhaa inavyoyaonyesha; je, yabaki kwa Kiingereza?), landing.activity.*, landing.nav.explore, landing.footer.*, explore.*, credits.*, home.greeting (asubuhi/mchana/jioni kwa saa ya Nairobi), og.*; \"niche\" imeachwa kama ilivyo katika sehemu nyingine za programu; explore.nationwide/nationwideNote/seeded, problemPage.*, og.problemAlt"
   },
   "app": {
     "name": "Wazo",
@@ -65,7 +66,7 @@
     "track": "Pande zote mbili hufuata kifuatiliaji kimoja, kuanzia mtazamo wa kwanza hadi hatua inayofuata mliyokubaliana."
   },
   "landing": {
-    "title": "Suluhisho za ndani kwa mashirika yanayozihitaji",
+    "title": "Suluhisho za ndani kwa mashirika <accent>yanayozihitaji</accent>",
     "lead": "Wasanidi programu huchapisha suluhisho za matatizo halisi, pamoja na ushahidi wenye muhuri wa wakati wa walichowasilisha. Mashirika huzikagua chini ya NDA na kukubaliana hatua inayofuata, na pande zote mbili hufuata kifuatiliaji kimoja.",
     "signUp": "Fungua akaunti",
     "logIn": "Ingia",
@@ -80,28 +81,32 @@
       "matchWhy": "Kwa nini: katika niche unayopenda",
       "certTitle": "Cheti cha uandishi",
       "certStatus": "Imewekwa muhuri wa wakati",
-      "label": "Mfano wa kuonyesha"
-    },
-    "trust": {
-      "timestamped": "Kila toleo lina muhuri wa wakati",
-      "nda": "Maelezo kamili chini ya NDA moja ya tathmini",
-      "verified": "Mapendekezo huenda kwa mashirika yaliyothibitishwa pekee",
-      "tracker": "Kifuatiliaji kimoja kwa pande zote mbili"
+      "demo": "Data ya mfano",
+      "due": "Hatua inayofuata baada ya",
+      "dueWords": "Zimebaki siku 2 na saa 14 (mfano)",
+      "units": {
+        "days": "siku",
+        "hours": "saa",
+        "minutes": "dak"
+      }
     },
     "how": {
-      "title": "Jinsi inavyofanya kazi",
+      "title": "Kutoka wazo hadi makubaliano yaliyotiwa saini, kwa hatua tatu",
       "lead": "Chapisha mara moja. Kisha kifuatiliaji kimoja huwabeba pande zote mbili tangu mtazamo wa kwanza hadi mradi kufungwa.",
       "publish": {
         "title": "Chapisha wazo",
-        "body": "Andika muhtasari wa umma na maelezo ya siri. Kila toleo husajiliwa na muhuri wa wakati na alama ya kidole."
+        "body": "Andika muhtasari wa umma na maelezo ya siri. Kila toleo husajiliwa na muhuri wa wakati na alama ya kidole.",
+        "chip": "toleo 1 · muhuri wa wakati · SHA-256"
       },
       "review": {
         "title": "Hukaguliwa chini ya NDA",
-        "body": "Maelezo kamili huonyeshwa kwa watu waliothibitishwa katika mashirika yaliyokubali NDA yetu, pamoja na wafanyakazi wa jukwaa kupitia ufikiaji wa dharura (break-glass) unaorekodiwa na ambao mmiliki hujulishwa. Kila ufunguaji hurekodiwa, na unaweza kuona ni nani aliyeangalia."
+        "body": "Maelezo kamili huonyeshwa kwa watu waliothibitishwa katika mashirika yaliyokubali NDA yetu, pamoja na wafanyakazi wa jukwaa kupitia ufikiaji wa dharura (break-glass) unaorekodiwa na ambao mmiliki hujulishwa. Kila ufunguaji hurekodiwa, na unaweza kuona ni nani aliyeangalia.",
+        "chip": "NDA ya Tathmini · kila ufunguzi unarekodiwa"
       },
       "track": {
         "title": "Kubaliana hatua inayofuata",
-        "body": "Nia, mawasiliano, makubaliano, utekelezaji na kufunga: pande zote mbili hufuata hatua tano zilezile, na tarehe za mwisho na vikumbusho."
+        "body": "Nia, mawasiliano, makubaliano, utekelezaji na kufunga: pande zote mbili hufuata hatua tano zilezile, na tarehe za mwisho na vikumbusho.",
+        "chip": "hatua 5 · kifuatiliaji kimoja kwa pande zote"
       },
       "stagesTitle": "Kifuatiliaji kimoja, pande mbili",
       "stagesLead": "Hatua zilezile tano kwenye skrini zote mbili, pamoja na zamu ya nani na kinachohitajika.",
@@ -126,24 +131,8 @@
           "title": "Kufunga",
           "body": "Mradi hufungwa na historia hubaki kwa pande zote mbili."
         }
-      }
-    },
-    "who": {
-      "title": "Ni kwa ajili ya nani",
-      "developers": {
-        "title": "Kwa wasanidi programu",
-        "point1": "Sajili ulichojenga, na ushahidi wa lini.",
-        "point2": "Wasilisha kwa kampuni zinazoshughulikia tatizo lako, au acha skauti zao zikupate.",
-        "point3": "Ona ni nani aliyefungua pendekezo lako kamili, na mazungumzo yako yalipofikia.",
-        "action": "Anza kama msanidi programu"
       },
-      "organisations": {
-        "title": "Kwa mashirika",
-        "point1": "Wakala wa skauti huleta mapendekezo yanayolingana na matatizo yenu kwenye kikasha chenu.",
-        "point2": "Fungua mapendekezo kamili chini ya NDA moja ya tathmini, na rekodi ya nani aliyeangalia.",
-        "point3": "Peleka pendekezo kutoka mtazamo wa kwanza hadi makubaliano yaliyosainiwa katika kifuatiliaji kimoja.",
-        "action": "Anza kama shirika"
-      }
+      "eyebrow": "Jinsi inavyofanya kazi"
     },
     "proof": {
       "title": "Ushahidi wa uandishi, si ahadi",
@@ -171,7 +160,7 @@
       "action": "Fungua akaunti"
     },
     "footer": {
-      "note": "Mfano wa awali: kila takwimu kwenye tovuti hii ni data ya mfano iliyopandwa.",
+      "note": "Mfano wa majaribio: takwimu za bidhaa yenyewe (hatua, kaunti na niche zake) hazibadiliki; kila tatizo, Muhtasari, cheti na shughuli kwenye tovuti hii ni data ya mfano iliyopandwa.",
       "help": "Msaada",
       "terms": "Masharti",
       "product": "Huduma",
@@ -181,13 +170,15 @@
       "faq": "Maswali",
       "signUp": "Fungua akaunti",
       "logIn": "Ingia",
-      "verify": "Kagua cheti"
+      "verify": "Kagua cheti",
+      "explore": "Gundua",
+      "credits": "Shukrani"
     },
     "nav": {
       "label": "Kwenye ukurasa huu",
       "how": "Jinsi inavyofanya kazi",
-      "organisations": "Kwa mashirika",
-      "verify": "Kagua cheti"
+      "verify": "Kagua cheti",
+      "explore": "Gundua"
     },
     "hero": {
       "check": "Kagua cheti"
@@ -255,6 +246,63 @@
         "q": "Je, hii ni huduma halisi?",
         "a": "Bado. Hiki ni kielelezo chenye data ya mfano: hakuna kinacholipiwa, na hakuna barua pepe inayotoka kwenye onyesho."
       }
+    },
+    "eyebrow": "Kwa wasanidi programu na mashirika nchini Kenya",
+    "stats": {
+      "label": "Bidhaa kwa takwimu nne",
+      "stages": "Hatua kwenye kifuatiliaji kimoja",
+      "counties": "Kaunti ambazo Wazo inazijua",
+      "niches": "Niche za kufuatilia",
+      "nda": "Mawasiliano yanayotolewa kabla ya NDA"
+    },
+    "counties": {
+      "eyebrow": "Matatizo yanakotoka",
+      "title": "Imejengwa kwa kaunti za Kenya",
+      "lead": "Kila tatizo linaonyesha kaunti linakotoka. Yavinjari kwa mahali.",
+      "all": "Gundua kaunti zote",
+      "pause": "Simamisha picha"
+    },
+    "reasons": {
+      "eyebrow": "Gundua, imefafanuliwa",
+      "title": "Kila pendekezo linataja sababu yake",
+      "lead": "Gundua hupanga matatizo kwa ajili yako kwa kanuni zisizobadilika. Kila kadi inasema kwa nini iko hapo, na kinachoipunguzia alama, kwa maneno rahisi.",
+      "point1": "Sababu zinatokana na niche zako, kaunti yako na ukweli wa umma",
+      "point2": "Historia yako inahesabiwa tu kwa idhini yako",
+      "point3": "Hakuna hapa kinachotabiri mapato au faida",
+      "panelTitle": "Kwa nini kadi hii",
+      "seeded": "Mfano uliopandwa",
+      "footer": "Imeandikwa na kanuni kwenye msimbo, si na modeli ya lugha",
+      "keys": {
+        "card": "kadi",
+        "decision": "uamuzi",
+        "reason": "sababu",
+        "why": "kwa nini",
+        "whyNot": "kwa nini sivyo"
+      },
+      "values": {
+        "card": "Late diesel deliveries darken tower sites",
+        "decision": "Pursue",
+        "reason": "Organisations are looking for this",
+        "why1": "In a niche you like",
+        "why2": "Posted by a verified organisation",
+        "why3": "New this week",
+        "whyNot": "2 proposals already",
+        "fit": "Strong fit for you"
+      }
+    },
+    "activity": {
+      "eyebrow": "Kwenye jukwaa",
+      "title": "Kinachoendelea",
+      "lead": "Shughuli za hivi karibuni za umma: matatizo yaliyowekwa, matoleo yaliyosajiliwa, Muhtasari zilizofunguliwa.",
+      "seeded": "Mfano uliopandwa",
+      "listLabel": "Shughuli za hivi karibuni",
+      "kind": {
+        "problem_posted": "Tatizo limewekwa",
+        "version_registered": "Toleo limesajiliwa",
+        "brief_opened": "Muhtasari umefunguliwa"
+      },
+      "nationwide": "Kitaifa",
+      "pause": "Simamisha shughuli"
     }
   },
   "fields": {
@@ -437,7 +485,12 @@
     "mfaRequired": "Kuingia kwa hatua mbili kumezimwa. Jukumu lako linakihitaji, na kukiwasha huchukua takriban dakika mbili.",
     "turnOn": "Washa kuingia kwa hatua mbili",
     "manage": "Simamia kuingia kwa hatua mbili",
-    "setUp": "Weka kuingia kwa hatua mbili"
+    "setUp": "Weka kuingia kwa hatua mbili",
+    "greeting": {
+      "morning": "Habari za asubuhi, {name}",
+      "afternoon": "Habari za mchana, {name}",
+      "evening": "Habari za jioni, {name}"
+    }
   },
   "legal": {
     "termsTitle": "Masharti ya huduma",
@@ -3985,5 +4038,65 @@
     "dueIn": "Inatakiwa {date} · baada ya {time}",
     "closesIn": "Mapendekezo yatafungwa baada ya {time}",
     "at": "{date}, {time} EAT"
+  },
+  "explore": {
+    "pageTitle": "Gundua",
+    "eyebrow": "Matatizo ya umma",
+    "title": "Matatizo kote Kenya",
+    "lead": "Matatizo yaliyochapishwa kwa kaunti na kwa niche. Fungua moja ulisome, au fungua akaunti ili ulijibu.",
+    "signUp": "Fungua akaunti",
+    "totals": "{problems, plural, one {# tatizo} other {# matatizo}} katika {counties, plural, one {# kaunti} other {# kaunti}} na {niches, plural, one {# niche} other {# niche}}",
+    "counties": "Kwa kaunti",
+    "niches": "Kwa niche",
+    "count": "{count, plural, one {# tatizo} other {# matatizo}}",
+    "newest": "Mapya zaidi katika {place}",
+    "empty": "Gundua haiwezi kupakia matatizo yaliyochapishwa kwa sasa.",
+    "emptyAction": "Rudi kwenye ukurasa wa mwanzo",
+    "none": "Bado hakuna matatizo yaliyochapishwa.",
+    "nationwide": "Kitaifa",
+    "nationwideNote": "Matatizo yasiyotaja kaunti moja. Yapate kwa niche hapa chini.",
+    "seeded": "Mfano uliopandwa",
+    "noneHere": "Bado hakuna matatizo ya umma hapa."
+  },
+  "credits": {
+    "pageTitle": "Shukrani",
+    "title": "Shukrani",
+    "lead": "Picha na fonti kwenye Wazo zinatumika chini ya leseni zake. Kila moja imetajwa hapa.",
+    "photos": "Picha",
+    "fonts": "Fonti",
+    "fontsBody": "Fraunces, Bricolage Grotesque, Hanken Grotesk na IBM Plex Mono, kila moja chini ya SIL Open Font License 1.1.",
+    "attribution": "<work>{title}</work> na {author}, chini ya leseni <deed>{licence}</deed>; {changes}, kupitia Wikimedia Commons.",
+    "changes": {
+      "resized": "imepunguzwa ukubwa",
+      "croppedResized": "imekatwa na kupunguzwa ukubwa"
+    }
+  },
+  "og": {
+    "registered": "Imesajiliwa kwenye Wazo",
+    "certificate": "Cheti {certId}",
+    "verifyAlt": "Cheti {certId}, kimesajiliwa kwenye Wazo",
+    "problemAlt": "{title}, tatizo kwenye Wazo"
+  },
+  "problemPage": {
+    "back": "Rudi kwenye Gundua",
+    "source": {
+      "developer": "Limeripotiwa na msanidi programu",
+      "research": "Kadi ya utafiti yenye vyanzo",
+      "brief": "Muhtasari wa Tatizo"
+    },
+    "nationwide": "Kitaifa",
+    "posted": "Liliwekwa {date}",
+    "organisation": {
+      "e2": "Limewekwa na shirika lililothibitishwa",
+      "e1": "Limewekwa na shirika lililothibitisha kikoa chake",
+      "unclaimed": "Limewekwa na shirika lililoorodheshwa"
+    },
+    "seeded": "Mfano uliopandwa",
+    "statement": "Tatizo",
+    "affected": "Linawaathiri nani",
+    "answer": "Fungua akaunti ili ulijibu",
+    "haveAccount": "Una akaunti tayari? <login>Ingia</login>",
+    "lead": "Wasanidi programu hujibu matatizo kama haya kwa pendekezo, linalowekwa muhuri wa wakati wanapolichapisha.",
+    "unavailable": "Tatizo hili haliwezi kupakiwa kwa sasa."
   }
 }

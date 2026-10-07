@@ -365,7 +365,7 @@ function Confirm({
         <h2 id="checkout-step" ref={headingRef} tabIndex={-1} className="text-lg text-ink focus:outline-none">
           {t("youPay")}
         </h2>
-        <p className="mt-1 font-display text-2xl font-bold text-ink tabular-nums" data-price="">
+        <p className="mt-1 font-figure text-2xl font-bold text-ink tabular-nums" data-price="">
           {props.price}
         </p>
         {props.sample ? <div className="mt-2">{props.sample}</div> : null}

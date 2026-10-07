@@ -43,7 +43,7 @@ export async function AuthShell({ children, topBarAction }: AuthShellProps) {
                 <li key={key} className="flex gap-4">
                   <span
                     aria-hidden="true"
-                    className="flex size-10 shrink-0 items-center justify-center rounded-full bg-flourish font-display text-lg font-[760] text-night tabular-nums"
+                    className="flex size-10 shrink-0 items-center justify-center rounded-full bg-flourish font-figure text-lg font-[760] text-night tabular-nums"
                   >
                     {index + 1}
                   </span>

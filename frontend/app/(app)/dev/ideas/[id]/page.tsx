@@ -42,10 +42,19 @@ import { ideaContributors } from "../../teams/data";
 import { WhoHasSeen } from "./WhoHasSeen";
 
 export async function generateMetadata({ params }: PageProps<"/dev/ideas/[id]">): Promise<Metadata> {
-  const t = await getTranslations("ideas");
+  const [t, tOg] = await Promise.all([getTranslations("ideas"), getTranslations("og")]);
   const idea = await myIdea((await params).id).catch(() => null);
   const version = idea ? (idea.current ?? idea.draft) : null;
-  return { title: version?.teaser.title || t("pageTitle") };
+  const title = version?.teaser.title || t("pageTitle");
+  // The share card (P24): a crawler has no session, so the card is the certificate's public one (app/og/verify: its id and
+  // "Registered on Wazo"); an idea with no certificate yet has none.
+  const certId = idea?.current?.cert_id;
+  return {
+    title,
+    openGraph: certId
+      ? { images: [{ url: `/og/verify/${encodeURIComponent(certId)}`, width: 1200, height: 630, alt: tOg("verifyAlt", { certId }) }] }
+      : undefined,
+  };
 }
 
 /** The version the page shows: the published one when there is one, else the draft. */

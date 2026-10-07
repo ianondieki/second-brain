@@ -7,13 +7,13 @@ import { Lattice } from "@/components/ui/Lattice";
 
 const linkClass = "inline-flex min-h-11 items-center text-ink-soft no-underline hover:text-ink hover:underline";
 
-/** The footer (D-55), on the night band: the wordmark and the prototype's note, three short link lists, the theme switch. */
+/** The footer (D-55, D-66), on the night band: the wordmark and the prototype's note, three short link lists (with Explore and the photo credits), the theme switch. */
 export async function LandingFooter() {
   const t = await getTranslations("landing");
   const columns = [
-    { id: "product", links: [["#how", t("nav.how")], ["#features", t("footer.features")], ["#faq", t("footer.faq")]] },
+    { id: "product", links: [["/#how", t("nav.how")], ["/explore", t("footer.explore")], ["/#features", t("footer.features")], ["/#faq", t("footer.faq")]] },
     { id: "start", links: [["/signup", t("footer.signUp")], ["/login", t("footer.logIn")], ["/verify", t("footer.verify")]] },
-    { id: "about", links: [["/help", t("footer.help")], ["/legal/terms", t("footer.terms")]] },
+    { id: "about", links: [["/help", t("footer.help")], ["/legal/terms", t("footer.terms")], ["/credits", t("footer.credits")]] },
   ] as const;
   return (
     <footer className="on-night bg-night">

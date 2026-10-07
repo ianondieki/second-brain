@@ -9,7 +9,7 @@
 // (DECISIONS-NEEDED D-28).
 //
 // Usage, against a production build (the `make dev` web container, or `npm run build && npm run start`):
-//   npm run budget                                        the default routes: / /login /signup /settings/security
+//   npm run budget                                        the default routes: / /explore /credits /login /signup /settings/security
 //   npm run budget -- /dev/ideas/new --first-edit         named routes (the leading slash is optional)
 //   npm run budget -- /org --allow-skip                   a redirect is a skip, not a failure
 //   npm run budget -- /dev/ideas/<id>/edit --press="Suggest a clearer teaser"   after pressing a button
@@ -23,7 +23,7 @@ import { chromium } from "@playwright/test";
 import { gzipSync } from "node:zlib";
 
 const BUDGET_BYTES = 150_000;
-const DEFAULT_ROUTES = ["/", "/login", "/signup", "/settings/security"];
+const DEFAULT_ROUTES = ["/", "/explore", "/credits", "/login", "/signup", "/settings/security"];
 const SETTLE_MS = 1500; // after "networkidle", for chunks requested by effects that run once the page is idle
 
 const base = new URL(process.env.BUDGET_BASE_URL ?? "http://localhost:3000");

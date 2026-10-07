@@ -46,7 +46,7 @@ export function QueueSummary({ figures }: { figures: readonly SummaryFigure[] })
           className="flex items-baseline justify-between gap-4 sm:flex-col sm:justify-start sm:gap-1 sm:px-6 sm:first:pl-0 sm:last:pr-0"
         >
           <dt className="text-sm font-medium text-ink-soft">{figure.label}</dt>
-          <dd className="font-display text-xl leading-none font-[680] tracking-[-0.02em] text-ink tabular-nums sm:text-2xl">
+          <dd className="font-figure text-xl leading-none font-[680] tracking-[-0.02em] text-ink tabular-nums sm:text-2xl">
             {figure.value}
           </dd>
         </div>

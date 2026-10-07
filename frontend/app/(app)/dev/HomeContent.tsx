@@ -27,7 +27,11 @@ import { formatShortDate } from "@/lib/format";
 
 import { RecommendedForYou } from "./discover/RecommendedForYou";
 import type { RecommendationsState } from "./discover/recommendations";
-import { homeGroups, homeStats } from "./home";
+import { MotionToggle } from "@/components/landing/MotionToggle";
+import { Ticker } from "@/components/landing/Ticker";
+import type { PublicActivity } from "@/lib/public/public-data";
+
+import { dayPart, homeGroups, homeStats } from "./home";
 import { IdeaCard } from "./ideas/IdeaCard";
 import { NEW_PATH, type MyProposalItem } from "./ideas/ideas";
 import { NeedsYouHero } from "./NeedsYouHero";
@@ -54,12 +58,15 @@ export interface HomeContentProps {
   week?: Week | null;
   /** Peers (REQ-DEV-03): left out when null or not given (the read failed, or a fixture without it). */
   peers?: PeersPage | null;
-  /** The app clock's instant for this page (lib/api/server.ts appNow): the countdowns count from it. */
+  /** The app clock's instant for this page (lib/api/server.ts appNow): the countdowns and the greeting read it. */
   now?: string;
+  /** What's happening (P24, GET /api/public/activity): left out when null or not given (the read failed, or empty). */
+  activity?: PublicActivity | null;
 }
 
 /**
- * Developer Home (docs/spec/07 item 1; D-52, P20): four stat tiles, then what needs the developer as the page's one
+ * Developer Home (docs/spec/07 item 1; D-52, P20, P24): the greeting by the time of day, four stat tiles, what's
+ * happening on the platform (a slow strip, "Seeded example" on demo data), then what needs the developer as the page's one
  * raised card each (the deadline as a figure, one way in), "Recommended for you" three across, then the rest as two
  * lists of rows side by side on a wide column (the other engagements, the ideas). "New proposal" is the screen's one
  * primary action. The tiles count what the page already reads: no series exists for them yet, so no sparkline.
@@ -73,11 +80,13 @@ export async function HomeContent({
   week = null,
   peers = null,
   now = new Date().toISOString(),
+  activity = null,
 }: HomeContentProps) {
-  const [t, th, tr, locale] = await Promise.all([
+  const [t, th, tr, ta, locale] = await Promise.all([
     getTranslations("devHome"),
     getTranslations("home"),
     getTranslations("tracker"),
+    getTranslations("landing.activity"),
     getLocale(),
   ]);
   const { waiting, others } = homeGroups(engagements);
@@ -102,7 +111,7 @@ export async function HomeContent({
       </ClientStrings>
       <div className="max-w-4xl">
         <PageHeader
-          title={th("title", { name: me.user.display_name })}
+          title={th(`greeting.${dayPart(now)}`, { name: me.user.display_name })}
           lead={t("lead")}
           action={
             <ButtonLink href={NEW_PATH} variant="primary">
@@ -140,6 +149,19 @@ export async function HomeContent({
             </li>
           </ul>
         </section>
+
+        {/* What's happening (P24): the public activity feed under the tiles, labelled when it is the demo seed's. */}
+        {activity ? (
+          <Section title={ta("title")} headingId="home-activity" data-home="activity" data-motion="">
+            <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+              {activity.seeded ? <p className="demo-label">{ta("seeded")}</p> : <span />}
+              <span className="max-sm:hidden">
+                <MotionToggle label={ta("pause")} />
+              </span>
+            </div>
+            <Ticker activity={activity} variant="strip" />
+          </Section>
+        ) : null}
 
         {/* Two-step sign-in: a notice only while it is off (the status needs no section of its own when it is on). */}
         {mfa !== "on" ? (
