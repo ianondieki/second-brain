@@ -1,11 +1,13 @@
-"""REQ-TRACK-03 (P23-3): every /api response carries ``X-App-Now``, the platform clock in ISO 8601 UTC with a ``Z``.
+"""REQ-TRACK-03 (P23-3): every /api response the CSRF check lets through carries ``X-App-Now``, the platform clock in
+ISO 8601 UTC with a ``Z``.
 
 A page counts a deadline down from this instant, never from the browser's clock alone. Where the dev/test clock can
 move the platform clock (every environment but production) it is the database's ``app_clock_now()`` (the moved clock:
 tests/integration/engagements/test_app_now.py); production's database never enables that clock, so there it is the
 wall clock without a query. Without a database (an app built without its lifespan, or the database down) it falls back
-to the wall clock: the header is for display, and ``overdue`` and ``past_deadline`` stay the authority. Error
-answers carry it too (a refused CSRF token, an unknown path, a validation error, an unexpected failure).
+to the wall clock and logs why: the header is for display, and ``overdue`` and ``past_deadline`` stay the authority.
+Error answers carry it too (an unknown path, a validation error, an unexpected failure); a request the CSRF guard
+refuses gets neither the clock query nor the header.
 """
 
 from __future__ import annotations

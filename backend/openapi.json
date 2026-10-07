@@ -2,7 +2,7 @@
   "components": {
     "headers": {
       "X-App-Now": {
-        "description": "The platform clock when the request was answered, in ISO 8601 UTC with a Z (to the millisecond): on every /api response, errors included. Count deadlines (due_at, deadline_at) down from it, not from the device's clock; in dev and test it follows the test clock.",
+        "description": "The platform clock when the request was answered, in ISO 8601 UTC with a Z (to the millisecond): on every /api response, errors included, except a state-changing request refused for its CSRF token. Count deadlines (due_at, deadline_at) down from it, not from the device's clock; in dev and test it follows the test clock.",
         "schema": {
           "format": "date-time",
           "type": "string"

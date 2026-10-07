@@ -75,8 +75,9 @@ log = get_logger(__name__)
 APP_NOW_HEADER: Final = "X-App-Now"
 APP_NOW_DOC: Final = {
     "description": "The platform clock when the request was answered, in ISO 8601 UTC with a Z (to the millisecond):"
-    " on every /api response, errors included. Count deadlines (due_at, deadline_at) down from it, not from the"
-    " device's clock; in dev and test it follows the test clock.",
+    " on every /api response, errors included, except a state-changing request refused for its CSRF token. Count"
+    " deadlines (due_at, deadline_at) down from it, not from the device's clock; in dev and test it follows the test"
+    " clock.",
     "schema": {"type": "string", "format": "date-time"},
 }
 _APP_CLOCK = text("SELECT app_clock_now()")
