@@ -129,11 +129,53 @@ async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
         assert fit["value"] == pytest.approx(cosine, abs=1e-4)
     assert SIMILAR_WORDS in close["why"]
     assert "Close to your profile" not in close["why"]
+    assert SIMILAR_WORDS not in distant["why"]  # 0.1 is under SEMANTIC_CHIP_FLOOR
     for fallback in (other_model, unhashed, zeroed):
         fit = items[str(fallback)]["features"]["semantic_fit"]
         assert (fit["applies"], fit["source"], fit["raw"]) == (True, "keywords", 4)  # solar, irrigation, pumps, farmers
         assert SIMILAR_WORDS not in items[str(fallback)]["why"]
     assert all(item["why"] and item["pursuit"]["reasons"] for item in items.values())  # AC-PERS-1, AC-PERS-2
+
+
+@pytest.mark.parametrize(
+    ("change", "why"),
+    [
+        ("embed_model = 'another-model'", "the profile's vector is of another model"),
+        ("embed_version = 'another-version'", "the profile's vector is of another version"),
+        ("profile_embedding_hash = NULL", "the profile's vector has no hash"),
+    ],
+)
+async def test_a_profile_vector_the_ranker_may_not_use_leaves_every_card_on_keywords(
+    owner_engine: AsyncEngine,
+    app_engine: AsyncEngine,
+    developers: Developers,
+    made: list[UUID],
+    change: str,
+    why: str,
+) -> None:
+    """Review round 1: the profile side of revision 0012's rule. Given cards with usable vectors, When the profile's
+    vector is of another model or version or has lost its hash, Then no card is compared: every f1 is the keyword
+    share."""
+    world = await build(owner_engine)
+    cards = [
+        await research_card(owner_engine, niche, county="KE-30", title="Solar irrigation pumps fail")
+        for niche in (world.niche, world.sibling)
+    ]
+    made.extend(cards)
+    developer = await developers()
+    me = user_of(developer)
+    await personalised(developer, world)
+    await embed(app_engine, owner_engine, FakeEmbedder(), me, *cards)
+    mine = [str(card) for card in cards]
+    before = await recommended(developer)
+    assert [before[card]["features"]["semantic_fit"]["source"] for card in mine] == ["embedding", "embedding"]
+    async with owner_engine.begin() as conn:
+        await conn.execute(text(f"UPDATE developer_profiles SET {change} WHERE user_id = :u"), {"u": me})
+    after = await recommended(developer)
+    for card in mine:
+        fit = after[card]["features"]["semantic_fit"]
+        assert (fit["applies"], fit["source"]) == (True, "keywords"), why
+        assert SIMILAR_WORDS not in after[card]["why"], why
 
 
 async def test_the_vector_path_sends_as_many_statements_for_20_cards_as_for_2(
