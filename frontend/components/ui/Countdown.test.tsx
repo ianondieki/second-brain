@@ -106,6 +106,17 @@ describe("Countdown", () => {
     expect(text(stale)).toBe("in 6 days 13 h 43 min");
   });
 
+  it("never sets the clock back for an instant newer than the last but behind the clock (a page prefetched earlier)", () => {
+    countdown();
+    cleanup();
+    act(() => vi.advanceTimersByTime(30 * MIN));
+    // Fetched at NOW + 20 min, first shown at NOW + 30 min.
+    const { container } = countdown({ now: at(20) });
+    expect(text(container)).toBe("in 6 days 14 h 3 min"); // the server's figure first: hydration matches its HTML
+    act(() => vi.advanceTimersByTime(0));
+    expect(text(container)).toBe("in 6 days 13 h 53 min");
+  });
+
   it("counts the time asleep: the browser's clock moves on while no timer runs, and showing the tab puts it right", () => {
     const { container } = countdown();
     vi.setSystemTime(new Date(Date.parse(NOW) + 3 * 60 * MIN)); // three hours asleep, no timer fired
@@ -187,7 +198,7 @@ describe("TimeLeft (the words for Countdown)", () => {
     const [left, closes, due, one] = container.querySelectorAll("[data-timer]");
     expect(left.textContent).toBe("in 6 days 14 h 23 min");
     expect(closes.textContent).toBe("Proposals close in 6 days 14 h 23 min");
-    expect(due.textContent).toBe("Due 16 Oct 2026 · in 6 days 14 h 23 min");
+    expect(due.textContent).toBe("Due 16 Oct 2026 · in\u00a06 days 14 h 23 min"); // "in" stays with the time
     expect(one.textContent).toBe("in 1 day 0 h 2 min");
     // UNTIL is 2026-10-16T20:59Z: 23:59 on 16 Oct in Nairobi.
     expect(left.querySelector("time")?.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");
@@ -203,6 +214,6 @@ describe("TimeLeft (the words for Countdown)", () => {
     const [left, closes, due] = container.querySelectorAll("[data-timer]");
     expect(left.textContent).toBe("baada ya siku 6 saa 14 dak 23");
     expect(closes.textContent).toBe("Mapendekezo yatafungwa baada ya siku 6 saa 14 dak 23");
-    expect(due.textContent).toBe("Inatakiwa 16 Oct 2026 · baada ya siku 6 saa 14 dak 23");
+    expect(due.textContent).toBe("Inatakiwa 16 Oct 2026 · baada ya\u00a0siku 6 saa 14 dak 23");
   });
 });

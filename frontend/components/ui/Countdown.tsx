@@ -5,18 +5,15 @@ import { useEffect, useState } from "react";
 const MINUTE = 60_000;
 const DAY = 1_440 * MINUTE;
 
-// The app clock as this page keeps it: the gap between the browser's clock and the freshest server instant any
-// countdown was given (the API's X-App-Now). It lives as long as the page, so a screen drawn from the router's cache
-// or restored from the back/forward cache, whose `now` is old, still counts from the fresher instant; a browser clock
-// set wrong is absorbed by the gap; time asleep is counted, since the browser's clock runs on through it.
-let freshest = -Infinity;
-let gap = 0;
+// The app clock as this page keeps it: the browser's clock less a gap, taken from the first server instant a
+// countdown was given (the API's X-App-Now) and moved only by an instant ahead of the clock's own reading. It lives as
+// long as the page, so a screen drawn from the router's cache, prefetched earlier or restored from the back/forward
+// cache, whose `now` is old (even if newer than the last one seen), never sets it back; a browser clock set wrong is
+// absorbed by the gap; time asleep is counted, since the browser's clock runs on through it.
+let gap: number | null = null;
 
 function appTime(served: number): number {
-  if (served > freshest) {
-    freshest = served;
-    gap = Date.now() - served;
-  }
+  if (gap === null || served > Date.now() - gap) gap = Date.now() - served;
   return Date.now() - gap;
 }
 
