@@ -391,8 +391,8 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-07, session 6): `claude/fervent-mccarthy-0zyqn2` carries P23-1 (revision 0012, the embeddings job, the
-ranker's cosine f1, the word-based fake), gated and unmerged, waiting on the owner's word. P22-C merged as `3316909` on the owner's instruction (merge commit of
+**Open branches** (2026-10-07, session 6): none. P23-1 merged as `4883047` on the owner's instruction (merge commit of
+`claude/fervent-mccarthy-0zyqn2` at `68d5826`); integration head before it `e651622`. P22-C merged as `3316909` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `aecc694`); integration head before it `efb9326`. Earlier the same day: P22-A and
 P22-B merged together as `ed0bff5` (at `2ace097`); integration head before it `feb01e9`.
 Earlier the same session: P20 and P21 merged together as `429a7aa` (at `9218fce`); integration head before it `5c3db9d`.
@@ -1297,9 +1297,8 @@ the suite passes locally: shard or raise, P23 item 10, the owner's call).
 - A consent withdrawn and re-granted within one run costs the row one retry (abandoned after three), never the run.
 - No frontend change: the chip reaches the card as API text under the existing `[[COPY-REVIEW]]` pattern.
 
-**Status.** Gate reached: every review PASS, the local gate green, CI as above. `claude/fervent-mccarthy-0zyqn2` at the
-report's commit is ready to merge into `claude/eloquent-hypatia-aa3577` on the owner's word (nothing merged there yet).
-Next on the P23 card: item 2 onwards; the owner's decisions D-63 and D-64.
+**Status.** Gate reached: every review PASS, the local gate green, CI as above. Merged into the integration branch as
+`4883047` on the owner's instruction (2026-10-07). Next on the P23 card: item 2 onwards; the owner's decisions D-63 and D-64.
 
 ### P22-C report (2026-10-06): Peers and team up (D-58, D-62)
 
