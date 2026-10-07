@@ -57,7 +57,7 @@ from tests.integration.embeddings.schema_world import (
     vector,
 )
 from tests.integration.engagements import tracker as t
-from tests.integration.teams.schema_world import developer, org_only, refused
+from tests.integration.teams.schema_world import developer, org_only, organisation, refused
 
 INVALID = "22023"
 DENIED = "42501"
@@ -649,6 +649,48 @@ async def test_problems_listed_are_published_and_clear_with_their_text(owner_eng
             await t.as_owner(conn)
             await t.run(conn, f"UPDATE problems SET {change} WHERE id = :id", id=ids["open"])
             assert {row.id for row in await problems(conn)} & mine == {ids["open"]}, change
+
+
+async def test_a_problem_is_embedded_only_once_developers_may_read_it(owner_engine: AsyncEngine) -> None:
+    """Given an E2 organisation's problems approved by staff (published and clear): one whose Brief is still a draft,
+    one whose organisation is then delisted and one whose organisation loses its verification, When the worker lists
+    problems, Then none is listed and the writer writes none (security MINOR 1, round 3; trend_facts' predicate, so a
+    problem is embedded only once the recommender may show it: a developer of another organisation reads no draft
+    Brief's problem); once the Brief is published and the organisations listed and verified again, each is listed and
+    written."""
+    async with t.as_app(owner_engine) as conn:
+        member = await developer(conn, "briefer", peers=False)
+        reader = await developer(conn, "reader", peers=False)
+        topic = await niche(conn, "briefs")
+        orgs, ids = {}, {}
+        for label in ("draft", "delisted", "unverified"):
+            orgs[label] = await organisation(conn, f"emb-{label}")
+            await t.member(conn, orgs[label], member, "{owner,admin}")
+            ids[label] = await w.add_problem(conn, member, topic, org_id=orgs[label])
+            await t.run(
+                conn,
+                "INSERT INTO problem_briefs (problem_id, org_id, visibility, status) VALUES (:p, :o, 'public',"
+                " CAST(:s AS brief_status))",
+                p=ids[label],
+                o=orgs[label],
+                s="draft" if label == "draft" else "published",
+            )
+        await t.run(conn, "UPDATE organizations SET delisted_at = now() WHERE id = :o", o=orgs["delisted"])
+        await t.run(conn, "UPDATE organizations SET verification = 'pending' WHERE id = :o", o=orgs["unverified"])
+        mine = set(ids.values())
+        assert not {row.id for row in await problems(conn)} & mine
+        for problem_id in mine:
+            assert await set_problem(conn, problem_id) is False
+            assert await stored_problem(conn, problem_id) == EMPTY_PROBLEM
+        await t.act(conn, reader)
+        assert await t.run(conn, "SELECT count(*) FROM problems WHERE id = :id", id=ids["draft"]) == 0
+        await t.as_owner(conn)  # moderation publishes the Brief; the organisations are listed and verified again
+        await t.run(conn, "UPDATE problem_briefs SET status = 'published' WHERE problem_id = :p", p=ids["draft"])
+        await t.run(conn, "UPDATE organizations SET delisted_at = NULL WHERE id = :o", o=orgs["delisted"])
+        await t.run(conn, "UPDATE organizations SET verification = 'e2' WHERE id = :o", o=orgs["unverified"])
+        assert {row.id for row in await problems(conn)} & mine == mine
+        for problem_id in mine:
+            assert await set_problem(conn, problem_id) is True
 
 
 async def test_problems_never_embedded_first_then_the_oldest_and_never_a_blank_one(owner_engine: AsyncEngine) -> None:

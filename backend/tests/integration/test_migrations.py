@@ -564,6 +564,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "embedding_text_line(text)": (False, set()),
     "embedding_text_hash(text)": (False, set()),
     "problem_embedding_text(text, text)": (False, set()),
+    "problem_is_readable(uuid)": (False, set()),
     "profile_consent_granted(uuid)": (False, set()),
     "profile_embedding_text(uuid)": (False, set()),
     "profiles_to_embed(text, text)": (False, set()),

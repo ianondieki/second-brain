@@ -310,6 +310,7 @@ async def test_no_role_writes_an_embedding_but_the_owners_definers(
         ("public.profile_consent_granted(uuid)", set()),
         ("public.embedding_text_hash(text)", set()),
         ("public.problem_embedding_text(text, text)", set()),
+        ("public.problem_is_readable(uuid)", set()),
     ],
 )
 async def test_only_bridge_app_executes_the_embedding_definers(
