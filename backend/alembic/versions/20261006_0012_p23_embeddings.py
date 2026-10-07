@@ -12,8 +12,8 @@ and version on both tables, then drops the triggers, functions, indexes and the 
 and the policy. Every vector is derived data the worker recomputes from rows that stay (the profiles, niches,
 proposals and problems), and without its hash nothing would say which text a vector came from, so the downgrade
 clears them rather than keep vectors 0011 cannot judge; it loses nothing anyone wrote and proceeds with rows, needing
-no ``-x`` flag (unlike 0010 and 0011's). After a re-upgrade every consented profile and published problem is listed
-again.
+no ``-x`` flag (unlike 0010 and 0011's). After a re-upgrade every consented profile and readable problem
+(``problem_is_readable``) is listed again.
 
 Freshness is content-based: a vector is stored with the SHA-256 (hex) of the exact text it was computed from
 (``profile_embedding_hash``, ``embedding_hash``), and a row is stale when it has no vector, another model or version,
@@ -80,11 +80,11 @@ revision 0001's audit trigger):
 - ``app_clear_profile_embedding(user)``: nulls the vector, model, version, time and hash and moves ``updated_at`` (the
   row is always written, so it is locked). The worker for any user, or a bound user for their own row only (the
   opt-out runs in the user's request); insufficient_privilege for anyone else. An unknown user is a no-op.
-- ``app_problems_to_embed(model, version, limit)`` -> (problem_id, text, text_hash): the worker only. Problems every
-  signed-in developer may read (``problem_is_readable``: published and clear; an organisation's only while it is
-  listed; a Brief's only while the Brief is published), whose vector is stale (none, another model or version, or a
-  stored hash that is not ``text_hash``); ``text`` the title and statement, normalised as above; the same two
-  stages by ``embedded_at``, then id.
+- ``app_problems_to_embed(model, version, limit)`` -> (problem_id, text, text_hash): the worker only. Problems the
+  recommender may show any developer (``problem_is_readable``: published and clear; an organisation's only while it
+  is listed; a Brief's only while the Brief is published and public), whose vector is stale (none, another model or
+  version, or a stored hash that is not ``text_hash``); ``text`` the title and statement, normalised as above; the
+  same two stages by ``embedded_at``, then id.
 - ``app_set_problem_embedding(problem, vector, model, version, text_hash)`` -> boolean: the worker only. Locks the
   problem FOR UPDATE and writes the vector, model, version, ``embedded_at = now()`` and the hash only while it is
   readable and ``text_hash`` is its text's hash now (a hold, an archive, a Brief back in draft, a delisting or an edit
@@ -306,11 +306,12 @@ AS $$
                                      public.profile_embedding_text(c.user_id), p_model, p_version)
 $$;
 
--- Whether every signed-in developer may read p_problem now, as bridge.matching.trend_facts reads the recommendable
--- problems: published and clear; an organisation's problem only while the organisation is listed (unclaimed, E1 or E2,
--- not delisted); a Brief's problem only while its Brief is published (staff may approve the problem of a draft Brief,
--- which stays its organisation's). The Brief's deadline is a ranking filter, not a reading one, and is left to the
--- ranker. A problem is embedded only once it is readable. Internal (no EXECUTE grant).
+-- Whether the recommender may show p_problem to any developer now, as bridge.matching.trend_facts reads the
+-- recommendable problems, narrowed to what any developer reads: published and clear; an organisation's problem only
+-- while the organisation is listed (unclaimed, E1 or E2, not delisted); a Brief's problem only while its Brief is
+-- published and public (revision 0006's app_brief_problem_is_public: a draft Brief's problem, approved by staff, stays
+-- its organisation's; an invited Brief's is its invitees'). The Brief's deadline is a ranking filter, not a reading
+-- one, and is left to the ranker. A problem is embedded only once it is readable. Internal (no EXECUTE grant).
 CREATE FUNCTION problem_is_readable(p_problem uuid) RETURNS boolean
     LANGUAGE sql STABLE
     SET search_path = pg_catalog, public, pg_temp
@@ -323,7 +324,8 @@ AS $$
                             WHERE o.id = p.org_id AND o.verification IN ('unclaimed', 'e1', 'e2')
                               AND o.delisted_at IS NULL))
            AND (p.source <> 'org_brief'
-                OR EXISTS (SELECT 1 FROM public.problem_briefs b WHERE b.problem_id = p.id AND b.status = 'published')))
+                OR EXISTS (SELECT 1 FROM public.problem_briefs b
+                            WHERE b.problem_id = p.id AND b.status = 'published' AND b.visibility = 'public')))
 $$;
 
 -- The problems that may be embedded (problem_is_readable), with their title and statement (the text is built by the
