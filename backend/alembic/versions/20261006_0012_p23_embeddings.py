@@ -121,11 +121,15 @@ Operating rules for the code that uses this schema:
   :version, :text_hash)`` per row with the hash the reader gave. False: the consent was withdrawn, the account changed
   or the text changed meanwhile; do not count the row as done (a changed text is listed again with its new hash, a
   withdrawn consent is not). The same for problems with ``app_problems_to_embed`` and ``app_set_problem_embedding``.
-  Log ``app_stale_embedding_counts(:model, :version)`` after the run. Cost: a page of the first stage (rows without a
-  vector) builds only its own rows' texts (and those of rows skipped for an empty text), so a backfill costs about
-  one text build per row; the second stage (rows with a vector, reached only when the first leaves the page short)
-  builds one text per embedded row it looks at, so a call that finds nothing stale costs one text build per embedded
-  row; the counts build one text per candidate.
+  Log ``app_stale_embedding_counts(:model, :version)`` after the run. Cost, in text builds: candidates whose text is
+  certainly empty (no visible headline or bio, no liked niche, no published proposal; a problem whose title and
+  statement are blank) are left out before any. A page of the first stage (rows without a vector) builds its own
+  rows' texts, plus those of rows it skips because their text normalises to empty although they have content (rare:
+  control or compatibility characters only; such a row is rebuilt by every page that reaches it, about (N / limit)
+  times E over a backfill of N rows with E of them); the second stage (rows with a vector, reached only when the first
+  leaves the page short) builds one text per embedded row it looks at, so a call that finds nothing stale costs one
+  per embedded row. Each run also pays one per row holding a vector for ``app_clear_empty_embeddings`` and one per
+  candidate and per row holding a vector for ``app_stale_embedding_counts``.
 - The opt-out (PUT /consents with ``profiling`` false, bound to the user): record the decision as today (the trigger
   clears the vector in that transaction) and call ``app_clear_profile_embedding(:me)`` in the same transaction.
 - The ranker: use a vector only when it is not NULL, its hash is set and the model and version are the embedder's, and
@@ -279,7 +283,9 @@ $$;
 
 -- The developers whose profile may be embedded, without their text (no text is built here): a profile whose user is
 -- active and not staff and whose latest profiling decision is a grant, with its vector's time, whether it has no
--- vector, and its model, version and hash. Internal (no EXECUTE grant).
+-- vector, and its model, version and hash. A profile whose text is certainly empty (no headline or bio with a
+-- character that is not whitespace, no liked niche, no published proposal) is left out without a text build, so a
+-- consented developer who has not onboarded never costs a page anything. Internal (no EXECUTE grant).
 CREATE FUNCTION profile_embedding_candidates()
     RETURNS TABLE (user_id uuid, embedded_at timestamptz, vector_missing boolean, stored_model text,
                    stored_version text, stored_hash text)
@@ -292,6 +298,9 @@ AS $$
       JOIN public.users u ON u.id = d.user_id
      WHERE u.status = 'active' AND u.staff_role IS NULL
        AND public.profile_consent_granted(d.user_id)
+       AND (d.headline ~ '[^[:space:]]' OR d.bio ~ '[^[:space:]]'
+            OR EXISTS (SELECT 1 FROM public.developer_niches l WHERE l.user_id = d.user_id AND l.kind = 'liked')
+            OR EXISTS (SELECT 1 FROM public.proposals p WHERE p.owner_id = d.user_id AND p.status = 'published'))
 $$;
 
 -- Every developer whose profile vector is stale (embedding_is_stale over profile_embedding_candidates): one text build
@@ -329,8 +338,8 @@ AS $$
 $$;
 
 -- The problems that may be embedded (problem_is_readable), with their title and statement (the text is built by the
--- caller), the vector's time, whether there is no vector, and its model, version and hash. Internal (no EXECUTE
--- grant).
+-- caller), the vector's time, whether there is no vector, and its model, version and hash. A problem whose title and
+-- statement are both whitespace is certainly empty and left out. Internal (no EXECUTE grant).
 CREATE FUNCTION problem_embedding_candidates()
     RETURNS TABLE (problem_id uuid, embedded_at timestamptz, vector_missing boolean, stored_model text,
                    stored_version text, stored_hash text, title text, statement text)
@@ -341,6 +350,7 @@ AS $$
            p.title::text, p.statement
       FROM public.problems p
      WHERE public.problem_is_readable(p.id)
+       AND (p.title ~ '[^[:space:]]' OR p.statement ~ '[^[:space:]]')
 $$;
 
 -- Every problem whose vector is stale (embedding_is_stale over problem_embedding_candidates). The counts only.
