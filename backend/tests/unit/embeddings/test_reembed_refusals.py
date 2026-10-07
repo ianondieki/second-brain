@@ -8,10 +8,20 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID, uuid4
 
+import pytest
 from structlog.testing import capture_logs
 
+from bridge.jobs import reembed as reembed_module
 from bridge.jobs.reembed import MAX_RETRIES, InMemoryEmbeddingTable, StaleRow, reembed
 from bridge.llm.embeddings import FAKE_MODEL, FAKE_VERSION, FakeEmbedder, Vector
+from bridge.logging import get_logger
+
+
+@pytest.fixture(autouse=True)
+def fresh_logger(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A logger of the test's own: one cached under an earlier logging configuration (``create_app`` configures it
+    again in other tests) would not reach ``capture_logs``."""
+    monkeypatch.setattr(reembed_module, "log", get_logger(reembed_module.__name__))
 
 
 class EditedOnce(InMemoryEmbeddingTable):

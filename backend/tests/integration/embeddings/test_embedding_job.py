@@ -17,10 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from structlog.testing import capture_logs
 
 from bridge.db import create_session_factory
+from bridge.embeddings import worker
 from bridge.embeddings.tables import PerTable, ProblemEmbeddingTable, ProfileEmbeddingTable
 from bridge.embeddings.worker import run_embeddings
+from bridge.jobs import reembed as reembed_module
 from bridge.jobs.reembed import StaleRow, reembed
 from bridge.llm.embeddings import FAKE_MODEL, FAKE_VERSION, EmbedderUnavailable, FakeEmbedder, Vector
+from bridge.logging import get_logger
 from tests.integration import world as w
 from tests.integration.embeddings.job_world import Interrupting, committed, consented_developer, deps, problem, profile
 from tests.integration.embeddings.schema_world import EMPTY_PROBLEM, EMPTY_PROFILE, named_niche, problem_text, sha
@@ -28,6 +31,14 @@ from tests.integration.engagements import tracker as t
 from tests.integration.teams.schema_world import developer
 
 FAKE = (FAKE_MODEL, FAKE_VERSION)
+
+
+@pytest.fixture(autouse=True)
+def fresh_loggers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Loggers of the test's own: one cached under an earlier logging configuration (the demo seed runs the job, and
+    ``create_app`` configures logging again in later tests) would not reach ``capture_logs``."""
+    for module in (reembed_module, worker):
+        monkeypatch.setattr(module, "log", get_logger(module.__name__))
 
 
 def first(vector: Vector) -> object:
