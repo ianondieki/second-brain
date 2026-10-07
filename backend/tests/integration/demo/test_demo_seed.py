@@ -39,6 +39,7 @@ from bridge.db import create_session_factory
 from bridge.demo import __main__ as demo_command
 from bridge.engagements import message_notify, notify
 from bridge.integrations.sms import FakeSmsProvider
+from bridge.llm.embeddings import FAKE_MODEL, FAKE_VERSION
 from bridge.models.enums import EngagementState
 from bridge.notifications.email import FakeEmailProvider
 from bridge.proposals.sanitise import contact_codes
@@ -84,7 +85,7 @@ from bridge.seed.demo.events import DEMO_EVENTS, PUBLISHED_TRENDS, SEEDED_TRENDS
 from bridge.seed.demo.follow_ups import SHORTLISTED
 from bridge.seed.demo.queues import CLAIMED, HELD
 from bridge.seed.demo.quiz import SEEDED_SETS, nairobi_today
-from bridge.seed.demo.research import SEEDED_ANSWERS
+from bridge.seed.demo.research import SEEDED_ANSWERS, seeded_niches
 from bridge.seed.demo.runtime import in_process_app, signed_in
 from bridge.seed.demo.scouts import SCOUT_KEYWORDS, SCOUT_NICHE, SCOUTED
 from bridge.seed.demo.teams import CONTRIBUTOR, PEERS, PENDING, TEAM
@@ -1092,6 +1093,41 @@ async def test_peers_and_team_up_have_a_scene(
     assert idea["contributors"] == [handle[0]]
     [waiting] = invitations["received"]
     assert (waiting["counterpart"]["user_id"], waiting["note"]) == (str(zawadi), PENDING.note)
+
+
+# ------------------------------------------------------------------------------------------------------ embeddings
+
+
+async def test_the_last_step_embeds_amina_and_the_problems_once(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P23-1 (REQ-PERS-02): the seed ends with one pass of the embedding job with the fake embedder, so the demo has
+    vectors: Amina, the only developer with the profiling consent, has a profile vector and nobody else does; the
+    problems the recommender may show have theirs; the later runs embed nothing (the hashes are fresh); Amina's
+    recommendations compare her profile's vector with the cards'."""
+    first, second, third = seeded
+    assert first.embedded["developer_profiles"] == 1
+    assert first.embedded["problems"] >= len(seeded_niches())  # at least the approved research cards
+    assert (second.embedded, third.embedded) == ({}, {})
+    profiles = await rows(
+        owner,
+        "SELECT u.email, d.embed_model, d.embed_version, d.profile_embedding_hash IS NOT NULL AS hashed"
+        " FROM developer_profiles d JOIN users u ON u.id = d.user_id WHERE d.profile_embedding IS NOT NULL",
+    )
+    assert [tuple(row) for row in profiles] == [(AMINA.email, FAKE_MODEL, FAKE_VERSION, True)]
+    cards = await rows(
+        owner,
+        "SELECT count(*) FILTER (WHERE embedding IS NOT NULL AND embed_model = :m) AS embedded, count(*) AS total"
+        " FROM problems WHERE source = 'research_agent' AND status = 'published' AND moderation_state = 'clear'",
+        m=FAKE_MODEL,
+    )
+    assert cards[0].embedded == cards[0].total >= len(seeded_niches())
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, AMINA.email) as amina,
+    ):
+        mine = (await amina.call("GET", "/api/me/recommendations")).json()
+    assert "embedding" in {item["features"]["semantic_fit"]["source"] for item in mine["items"]}
 
 
 def test_every_proposal_owner_and_pitched_organisation_is_in_the_dataset() -> None:

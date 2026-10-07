@@ -107,6 +107,9 @@ class DemoReport:
     cert_ids: dict[str, str] = field(default_factory=dict)
     created: list[str] = field(default_factory=list)  # what this run added, in order
     notes: list[str] = field(default_factory=list)  # steps skipped on purpose (a flag off)
+    # P23-1: vectors the embedding job wrote in the last step, per table (derived data, not demo content: never in
+    # ``created``, so a demo people used tops up its vectors without reporting a change)
+    embedded: dict[str, int] = field(default_factory=dict)
 
     def did(self, what: str) -> None:
         self.created.append(what)
