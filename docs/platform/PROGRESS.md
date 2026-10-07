@@ -391,7 +391,7 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-07, session 6): none. P24 merged into the integration branch (the feature branch at `0eba708` plus the docs and screenshot commit; the merge commit is recorded below once made; see the P24 report). P23-3 merged into the integration branch (see the P23-3 report). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
+**Open branches** (2026-10-07, session 6): none. P24 merged into the integration branch as `18e9fa9` (the feature branch at `4dcf057`; integration head before it `1e789b5`; see the P24 report). P23-3 merged into the integration branch (see the P23-3 report). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
 before it `fbaa3dd`); from P23-2 on, a gated phase is merged into the integration branch without waiting for the owner's
 word (the owner, 2026-10-07). P23-1 merged as `4883047` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `68d5826`); integration head before it `e651622`. P22-C merged as `3316909` on the owner's instruction (merge commit of
@@ -1275,7 +1275,7 @@ page after a pull means the build context was old (pull first), and a forced reb
 followed by the reset.
 
 **Status.** Gate reached: reviewer, security-reviewer and ux-reviewer PASS, the local gate green, CI as above. Merged
-into the integration branch under the standing rule (the merge commit is recorded under "Open branches").
+into the integration branch under the standing rule as `18e9fa9`.
 
 
 ### P23-3 report (2026-10-07): the deadline countdown in days, hours and minutes

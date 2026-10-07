@@ -490,7 +490,7 @@ The full entries (why, options, default, what they blocked) are kept below for t
   BY-SA, credited on a photo-credits page, vendored as AVIF/WebP, never hot-linked) appear in a county strip on the
   landing and on the public Explore page; no third-party logos (principle 4); no fabricated figures (every stat is a
   product constant or a seeded figure labelled as such).
-- Status: built in P24 (feature branch `0eba708`, gated 2026-10-07: reviewer, security-reviewer and ux-reviewer PASS; see PROGRESS.md "P24 report") and merged into the integration branch (commit recorded there); P24 builds it; the P20 design document gains a P24 addendum; the P18/P20 "cream + serif" avoidance note is
+- Status: built in P24 (feature branch `0eba708`, gated 2026-10-07: reviewer, security-reviewer and ux-reviewer PASS; see PROGRESS.md "P24 report") and merged into the integration branch as `18e9fa9`; the P20 design document gains a P24 addendum; the P18/P20 "cream + serif" avoidance note is
   superseded by the owner's references.
 
 ### D-65 · The "Prototype" badge and the lattice band leave the top bar (P23-2; REQ-UX-01, D-52, D-55)
