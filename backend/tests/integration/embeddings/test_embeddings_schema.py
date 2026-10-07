@@ -192,6 +192,28 @@ async def test_a_consent_decision_is_timed_by_the_database(owner_engine: AsyncEn
         assert seeded > now  # the owner's own time
 
 
+async def test_any_one_kind_of_content_is_enough_to_be_listed(owner_engine: AsyncEngine) -> None:
+    """Given consented developers whose only content is a headline, a bio, a liked niche or a published proposal (and
+    a problem whose only content is its title or its statement), Then each is listed: the readers' cheap filter for
+    certainly empty texts (round 4) leaves out only rows with none of them."""
+    async with t.as_app(owner_engine) as conn:
+        topic = await niche(conn, "only")
+        only = {label: await developer(conn, f"only-{label}", peers=False) for label in ("headline", "bio", "proposal")}
+        only["niche"] = await developer(conn, "only-niche", peers=False, liked=(topic,))
+        await t.as_owner(conn)
+        await t.run(conn, "UPDATE developer_profiles SET headline = 'Builder' WHERE user_id = :u", u=only["headline"])
+        await t.run(conn, "UPDATE developer_profiles SET bio = 'Builds things' WHERE user_id = :u", u=only["bio"])
+        await proposal(conn, only["proposal"], topic, title="Teaser", statement="Statement")
+        for user in only.values():
+            await decide(conn, user, True)
+        assert await listed(conn, *only.values()) == set(only.values())
+        await t.as_owner(conn)
+        titled, stated = [await w.add_problem(conn, only["niche"], topic) for _ in range(2)]
+        await t.run(conn, "UPDATE problems SET statement = ' ' WHERE id = :id", id=titled)
+        await t.run(conn, "UPDATE problems SET title = ' ' WHERE id = :id", id=stated)
+        assert {row.id for row in await problems(conn)} >= {titled, stated}
+
+
 async def test_staff_suspended_and_empty_profiles_are_never_listed_or_written(owner_engine: AsyncEngine) -> None:
     """Given consented developers who are staff, suspended, or have nothing to embed (no headline, bio, liked niche
     or published proposal), Then none is listed, and the writer writes none of them (an empty text, even with its
