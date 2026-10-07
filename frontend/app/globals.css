@@ -997,7 +997,8 @@ dialog[data-sheet][open] {
        fill: outside that range the item is simply itself, so full-page captures and print show it whole. */
     .reveal {
       animation: reveal linear none;
-      animation-timeline: view();
+      /* An inset of 0: the view ignores the page's scroll padding, so the range ends exactly at wholly on screen. */
+      animation-timeline: view(block 0px);
       animation-range: entry 0% entry calc(64% + var(--i, 0) * 9%);
     }
   }

@@ -36,6 +36,15 @@ test("the landing's top bar is clean and the hero's story settles, with nothing 
   }
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   for (const item of await reveal.all()) await expect(item).toHaveCSS("opacity", "1");
+  // The strictest rest: the last stage just wholly on screen (its bottom at the viewport's bottom) is fully opaque.
+  for (const size of [{ width: 375, height: 800 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(size);
+    await page.evaluate(() => {
+      const last = [...document.querySelectorAll(".reveal")].at(-1)!;
+      window.scrollTo(0, window.scrollY + last.getBoundingClientRect().bottom - window.innerHeight);
+    });
+    await expect(reveal.last()).toHaveCSS("opacity", "1");
+  }
   await checkScreen(page, { strict: true });
 });
 
