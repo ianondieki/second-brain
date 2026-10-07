@@ -10,7 +10,7 @@ import { tourScenes } from "./TourScenes";
 afterEach(cleanup);
 
 describe("tourScenes", () => {
-  it.each(["developer", "org"] as const)("draws three decorative scenes for the %s side, each with its icon and one lit part", (side) => {
+  it.each(["developer", "org"] as const)("draws three decorative scenes for the %s side, each with its icon, its spark, one lit part and one raised part", (side) => {
     const { container } = renderWithIntl(<>{tourScenes(side)}</>);
     const stages = [...container.querySelectorAll(".tour-stage")];
     expect(stages).toHaveLength(3);
@@ -18,8 +18,10 @@ describe("tourScenes", () => {
       expect(stage.getAttribute("aria-hidden")).toBe("true");
       const icon = stage.querySelector(".tour-disc svg")!;
       expect(icon.getAttribute("viewBox")).toBe("0 0 24 24");
-      expect(icon.getAttribute("stroke-width")).toBe("1.75");
+      expect(icon.getAttribute("stroke-width")).toBe("1.5"); // the display size draws a lighter line
+      expect(stage.querySelector(".tour-disc .tour-spark")).not.toBeNull();
       expect(stage.querySelectorAll(".tour-lit, [data-seal]").length).toBe(1);
+      expect(stage.querySelectorAll(".tour-raise").length).toBe(1); // one raised part, the rest flat
     }
   });
 
