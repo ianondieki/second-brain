@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderToString } from "react-dom/server";
@@ -7,7 +7,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import en from "@/locales/en.json";
 import { renderWithIntl } from "@/test/intl";
 
-import { FirstLoginTour } from "./FirstLoginTour";
+import { FirstLoginTour, TOUR_DWELL_MS } from "./FirstLoginTour";
 import { finishTour, resetTour, tourCookie, tourDoneFromCookies, tourStorageKey, TOUR_INIT_SCRIPT } from "./tour-store";
 
 // The first-login tour (D-52; docs/spec/07): three steps, skippable from the first, remembered in this browser.
@@ -121,5 +121,177 @@ describe("FirstLoginTour", () => {
     first.unmount();
     renderWithIntl(<FirstLoginTour side="org" />);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+// P23-2: the tour as a slide show. Steps slide on a six-second cadence, hold still while the person is with it, and
+// stop at the last; Back, Next, the steps' buttons, Pause, a swipe and the arrow keys move it; reduced motion
+// crossfades and never advances on its own.
+describe("FirstLoginTour as a slide show", () => {
+  const title = () => screen.getByRole("dialog").getAttribute("data-tour");
+  const tick = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+  const live = () => document.querySelector("[aria-live='polite']")!.textContent;
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+  });
+
+  it("advances every six seconds, says so in a polite live region without moving focus, and stops at the last step", () => {
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    expect(title()).toBe("devHome");
+    expect(live()).toBe("Step 1 of 3: This is your home");
+    tick(TOUR_DWELL_MS - 1);
+    expect(title()).toBe("devHome");
+    tick(1);
+    expect(title()).toBe("devIdeas");
+    expect(screen.getByRole("dialog", { name: "Every idea gets a certificate" })).toBeTruthy();
+    expect(live()).toBe("Step 2 of 3: Every idea gets a certificate");
+    expect(document.activeElement).toBe(document.body);
+    tick(TOUR_DWELL_MS);
+    expect(title()).toBe("devTracker");
+    tick(TOUR_DWELL_MS * 3);
+    expect(title()).toBe("devTracker"); // no loop
+    expect(screen.getByRole("button", { name: "Done" })).toBeTruthy();
+  });
+
+  it("holds while hovered and resumes with the time that was left", () => {
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    const dialog = screen.getByRole("dialog");
+    tick(4000);
+    fireEvent.pointerEnter(dialog, { pointerType: "mouse" });
+    expect(dialog.hasAttribute("data-held")).toBe(true);
+    tick(TOUR_DWELL_MS * 2);
+    expect(title()).toBe("devHome");
+    fireEvent.pointerLeave(dialog, { pointerType: "mouse" });
+    expect(dialog.hasAttribute("data-held")).toBe(false);
+    tick(1999);
+    expect(title()).toBe("devHome");
+    tick(1);
+    expect(title()).toBe("devIdeas");
+  });
+
+  it("holds while focus is inside it and resumes when focus leaves", () => {
+    document.body.innerHTML = '<button id="outside">Outside</button><div id="host"></div>';
+    renderWithIntl(<FirstLoginTour side="developer" />, { container: document.getElementById("host")! });
+    const next = screen.getByRole("button", { name: "Next" });
+    fireEvent.focus(next);
+    tick(TOUR_DWELL_MS * 2);
+    expect(title()).toBe("devHome");
+    fireEvent.blur(next, { relatedTarget: document.getElementById("outside") });
+    tick(TOUR_DWELL_MS);
+    expect(title()).toBe("devIdeas");
+    document.body.innerHTML = "";
+  });
+
+  it("holds while a finger is on it and while the tab is hidden", () => {
+    renderWithIntl(<FirstLoginTour side="org" />);
+    const dialog = screen.getByRole("dialog");
+    fireEvent.pointerDown(dialog, { pointerType: "touch", clientX: 100 });
+    tick(TOUR_DWELL_MS * 2);
+    expect(title()).toBe("orgInbox");
+    fireEvent.pointerUp(dialog, { pointerType: "touch", clientX: 105 }); // a tap, not a swipe
+    expect(title()).toBe("orgInbox");
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    tick(TOUR_DWELL_MS * 2);
+    expect(title()).toBe("orgInbox");
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    tick(TOUR_DWELL_MS);
+    expect(title()).toBe("orgNda");
+  });
+
+  it("has a visible Pause toggle that stops it, and Play that starts it again", () => {
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    const pause = screen.getByRole("button", { name: "Pause" });
+    expect(pause.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(pause);
+    expect(pause.getAttribute("aria-pressed")).toBe("true");
+    expect(pause.getAttribute("title")).toBe("Play");
+    tick(TOUR_DWELL_MS * 3);
+    expect(title()).toBe("devHome");
+    fireEvent.focus(pause); // pressing Play from the keyboard: focus is in the panel, Play still wins
+    fireEvent.click(pause);
+    expect(pause.getAttribute("aria-pressed")).toBe("false");
+    tick(TOUR_DWELL_MS);
+    expect(title()).toBe("devIdeas");
+  });
+
+  it("moves with Back, Next and the steps' own buttons; Back is not on the first step", () => {
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    const dots = ["Step 1", "Step 2", "Step 3"].map((name) => screen.getByRole("button", { name }));
+    expect(dots[0].getAttribute("aria-current")).toBe("step");
+    fireEvent.click(dots[2]);
+    expect(title()).toBe("devTracker");
+    expect(dots[2].getAttribute("aria-current")).toBe("step");
+    expect(dots[0].hasAttribute("data-done")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(title()).toBe("devIdeas");
+    expect(screen.getByRole("dialog").querySelector(".tour-slides")!.hasAttribute("data-back")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(title()).toBe("devTracker");
+  });
+
+  it("hands focus to Next when the focused Back leaves with the first step", () => {
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    const back = screen.getByRole("button", { name: "Back" });
+    back.focus();
+    fireEvent.click(back);
+    expect(title()).toBe("devHome");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Next" }));
+  });
+
+  it("moves with a sideways swipe of 40 px or more, and with the arrow keys inside it", () => {
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    const dialog = screen.getByRole("dialog");
+    fireEvent.pointerDown(dialog, { pointerType: "touch", clientX: 200 });
+    fireEvent.pointerUp(dialog, { pointerType: "touch", clientX: 161 });
+    expect(title()).toBe("devHome"); // 39 px: not yet
+    fireEvent.pointerDown(dialog, { pointerType: "touch", clientX: 200 });
+    fireEvent.pointerUp(dialog, { pointerType: "touch", clientX: 150 });
+    expect(title()).toBe("devIdeas");
+    fireEvent.pointerDown(dialog, { pointerType: "touch", clientX: 100 });
+    fireEvent.pointerUp(dialog, { pointerType: "touch", clientX: 180 });
+    expect(title()).toBe("devHome");
+    fireEvent.keyDown(screen.getByRole("button", { name: "Next" }), { key: "ArrowRight" });
+    expect(title()).toBe("devIdeas");
+    fireEvent.keyDown(screen.getByRole("button", { name: "Next" }), { key: "ArrowLeft" });
+    expect(title()).toBe("devHome");
+  });
+
+  it("under reduced motion crossfades, never advances on its own and has no Pause", () => {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    renderWithIntl(<FirstLoginTour side="developer" />);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.classList.contains("tour-fade")).toBe(true);
+    expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
+    tick(TOUR_DWELL_MS * 3);
+    expect(title()).toBe("devHome");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(title()).toBe("devIdeas");
+  });
+
+  it("shows only the current step to assistive technology, with the scene it is given", () => {
+    renderWithIntl(<FirstLoginTour side="developer" scenes={[<i key="a" data-scene="a" />, <i key="b" data-scene="b" />, <i key="c" data-scene="c" />]} />);
+    const slides = [...screen.getByRole("dialog").querySelectorAll<HTMLElement>(".tour-slide")];
+    expect(slides.map((slide) => slide.getAttribute("aria-hidden"))).toEqual([null, "true", "true"]);
+    expect(slides.map((slide) => slide.hasAttribute("inert"))).toEqual([false, true, true]);
+    expect(slides[0].querySelector("[data-scene='a']")).not.toBeNull();
+    expect(within(slides[0]).getByRole("heading", { name: "This is your home" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(slides.map((slide) => slide.getAttribute("data-slide"))).toEqual(["out", "in", null]);
   });
 });
