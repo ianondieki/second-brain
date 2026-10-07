@@ -391,8 +391,7 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-07, session 6): `claude/fervent-mccarthy-0zyqn2` carries P23-3 (merged on the feature branch,
-its gate running). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
+**Open branches** (2026-10-07, session 6): none. P23-3 merged into the integration branch (see the P23-3 report). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
 before it `fbaa3dd`); from P23-2 on, a gated phase is merged into the integration branch without waiting for the owner's
 word (the owner, 2026-10-07). P23-1 merged as `4883047` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `68d5826`); integration head before it `e651622`. P22-C merged as `3316909` on the owner's instruction (merge commit of
@@ -1215,6 +1214,75 @@ old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
 **For the owner.** D-62 (the collaborator credit wording) still blocks P22-C; D-56 (npm audit) and the CI runner
 question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
 check before release.
+
+### P23-3 report (2026-10-07): the deadline countdown in days, hours and minutes
+
+**Why.** The owner: "add the project submission dashboard closes timer with days, hours, minutes to help the developer
+be alert with the project he is currently doing for a particular company." Card: `tasks/P23.md` section "P23-3" with
+the orchestrator's "Defaults taken" (what counts down, where it shows, the app clock as the basis, honesty and
+accessibility rules).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`; two worktree merges, `7afa60f` backend and `dc3a878`
+frontend):
+
+- **Backend** (impl-backend): every /api answer carries `X-App-Now`, the platform clock in ISO 8601 UTC, so a page
+  counts down from the app's time and the dev/test clock (`make demo-clock`, the e2e clock scenarios) moves the
+  countdown too; outside production the middleware reads the database's `app_clock_now()` on its own short connection
+  after the CSRF check (a refused request costs no query and gets no header), in production the wall clock with no
+  query, and on a database error the wall clock with a warning logged; `DueOut.due_at` is the engagement step's
+  `stage_deadline_at` in UTC, the exact instant `overdue` turns true; a Brief's `deadline_at` is the end of its
+  deadline day in Nairobi, with `past_deadline` flipping at the next local midnight; a pre-existing order-dependent
+  ranking test (`rising` falling out of the top 10 after the engagements and problems suites) fixed by posting its
+  Brief in another niche family. A threat-model row for the per-request clock query outside production.
+- **Frontend** (impl-frontend): `components/ui/Countdown.tsx`, a client component that keeps one page-wide gap between
+  the browser clock and the freshest server instant (adopted only when ahead of the running clock; rechecked on
+  visibilitychange, pageshow and focus, so back-navigation, prefetched pages and device sleep never show more time
+  than is left), ticks on the minute, pauses while hidden, announces nothing (no live region), renders a `<time>` with
+  the ISO duration and the full instant in its title, in tabular numerals, with the warm "Your turn" mark under 24 h
+  only when the step is the viewer's and the existing "Overdue"/closed wording past the instant. It reads
+  "in 7 days 6 h 2 min" (ICU plural; "14 h 23 min" under a day) on Home's "Next deadline" tile (the business days in
+  the tile's title) and the "Needs you" card, "Due 16 Oct 2026 · in 7 days 6 h 2 min" under the tracker's business-days
+  figure for both parties (one deadline, never two "left"s), and "Proposals close in 28 days 6 h 12 min" on a Brief's
+  problem page. The tracker's step-up, Tier-2 share and contact reveal now load in their own chunks behind a failure
+  fallback (a sentence plus reload; a refused step has not run), which pays for the countdown: the route went from
+  149,990 B to 147,149 B. Strings `countdown.*` en/sw under `_meta.reviewP23c`.
+
+**Reviews.** Backend: reviewer CHANGES_REQUIRED (two MAJORs: the order-dependent test, the silent clock fallback;
+three MINORs including `due_at` on the exact overdue instant) → PASS; security-reviewer PASS with two MINORs (the
+query before the CSRF guard; the silent fallback), both closed. Frontend: reviewer CHANGES_REQUIRED (two MAJORs: the
+basis reset on every mount so a back-navigation showed the old figure; the lazy parts could fail into the route's
+error boundary) → PASS (one MINOR: adopt a served instant only when ahead, closed); ux-reviewer CHANGES_REQUIRED
+(three MAJORs: the drifting basis, two "left" figures reading as two deadlines, the "d h m" units; four MINORs) →
+PASS (one MINOR: the desktop wrap after "in", closed).
+
+**Gate.** Playwright on the compose stack rebuilt and reset from the merged branch `dc3a878` (mobile 360 and desktop,
+axe): 214 passed, 6 skipped, 2 failed in `verify.spec.ts`, both the gate harness's own fault (it read the certificate id
+of the previous seed; the spec passes 14/14 on the reset stack); the test-clock scenarios 6/6 (the countdown's clock test
+among them); `demo.py reset` and `e2e-env` clean; vectors reseeded. JS budgets (gzipped): `/dev` 144,951 B, `/org`
+144,064 B, `/` 139,503 B, Amina's tracker 147,150 B (from 149,990 B before the lazy split), `/dev/discover` 147,721 B,
+`/settings/notifications` 144,899 B, the Brief page 142,320 B, all under 150,000. Axe strict 0 on Home, the tracker and
+the Brief page at 360 and 1440, light and dark, with the countdown rendered (both reviewers). CodeQL run 286 on
+`dc3a878`: exactly the eight D-42 findings. `pr.yml` run 351 on `dc3a878`: frontend, Playwright with the clock
+scenarios, the demo story, hygiene and both legacy jobs green; scanners red on `npm audit` only (D-56); the backend
+job cancelled at its 35-minute limit (the thirteenth time; P23 item 10, the owner's call).
+
+**Deviations and residuals.**
+- Outside production every safe /api request costs one clock query on its own short connection (about 1.6 ms); a
+  CSRF-refused request costs none; production never queries (THREAT_MODEL row 52). The dev/test clock stays the
+  honest basis for `make demo-clock`.
+- `due_at` is the step's exact deadline instant (`stage_deadline_at`), so "Overdue" and the countdown turn together;
+  a Brief's `deadline_at` is the end of its deadline day in Nairobi, with `past_deadline` at the next local midnight.
+- The organisation portal's Needs-us card, the engagement list rows and the Messages tab carry no countdown (the
+  tracker's line serves both sides); a P23 fit-and-finish item if wanted.
+- The existing lazy CommandForm and SideSheet still have no failure fallback (pre-existing; the three new lazy parts
+  have one).
+- Copy and Swahili review of `_meta.reviewP23c` (`countdown.*`: "in {time}", "Due {date} · in {time}", "Proposals
+  close in {time}", the units; sw "Inatakiwa {date}", "yatafungwa") is the owner's.
+- The implementer's commits carry the Opus 5.5 attribution line (P23 item 9).
+
+**Status.** Gate reached: reviewer, security-reviewer and ux-reviewer PASS, the local gate green, CI as above. Merged into
+the integration branch under the standing rule (the owner, 2026-10-07: gated phases merge without waiting).
+
 
 ### P23-2 report (2026-10-07): the sliding tour with real icons, the clean top bar, the landing craft (D-65)
 
