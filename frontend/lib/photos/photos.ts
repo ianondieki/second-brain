@@ -1,16 +1,18 @@
-// The photographs (D-66): licensed Kenyan photographs vendored under public/photos (AVIF and WebP at 800 and 1600 px,
-// a 24 px blur), described by public/photos/index.json and credited on /credits. Until those files are merged, two
-// placeholders drawn for the layout (public/placeholders, no credit) stand in, so the pages keep their real shape.
+import index from "@/public/photos/index.json";
+
+// The photographs (D-66): licensed Kenyan photographs from Wikimedia Commons vendored under public/photos (AVIF and
+// WebP at 800 and 1600 px, a 24 px blur), described by public/photos/index.json, with their full record in
+// public/photos/CREDITS.md and their attribution lines on /credits.
 
 /** One photograph as public/photos/index.json describes it. */
 export interface PhotoEntry {
   slug: string;
-  /** The county it shows, by name ("Nairobi", "Uasin Gishu"). */
+  /** The county it shows, by name ("Nairobi", "Uasin Gishu"); "Kenya" for a photograph of no one county. */
   county: string;
   caption: string;
   width: number;
   height: number;
-  /** The exact attribution line to show (title, author, licence); empty for a placeholder. */
+  /** The exact attribution line to show (author, licence, source). */
   credit: string;
 }
 
@@ -19,20 +21,29 @@ export interface Photo extends PhotoEntry {
   dir: string;
 }
 
-const PLACEHOLDER = { dir: "/placeholders", width: 1600, height: 1067, credit: "" } as const;
+const ALL: ReadonlyMap<string, Photo> = new Map((index as PhotoEntry[]).map((entry) => [entry.slug, { ...entry, dir: "/photos" }]));
+
+function photo(slug: string): Photo {
+  const found = ALL.get(slug);
+  if (!found) throw new Error(`No photograph ${slug} in public/photos/index.json`);
+  return found;
+}
 
 /** The six counties of the landing's strip, in order, each with its photograph. */
 export const STRIP: readonly Photo[] = [
-  { ...PLACEHOLDER, slug: "dusk", county: "Nairobi", caption: "" },
-  { ...PLACEHOLDER, slug: "hills", county: "Nakuru", caption: "" },
-  { ...PLACEHOLDER, slug: "dusk", county: "Mombasa", caption: "" },
-  { ...PLACEHOLDER, slug: "hills", county: "Kisumu", caption: "" },
-  { ...PLACEHOLDER, slug: "dusk", county: "Uasin Gishu", caption: "" },
-  { ...PLACEHOLDER, slug: "hills", county: "Kiambu", caption: "" },
-];
+  "nairobi-jacaranda",
+  "mombasa-old-town",
+  "kisumu-lake-victoria",
+  "nakuru-lake",
+  "eldoret-town",
+  "rongai-market",
+].map(photo);
 
-/** The credited photographs (the /credits page): none while the placeholders stand in. */
-export const CREDITED: readonly Photo[] = STRIP.filter((photo) => photo.credit !== "");
+/** Explore's county tiles: a second view where a county has one, so the two pages do not repeat each other. */
+const EXPLORE: readonly Photo[] = [photo("nairobi-golden-hour"), photo("mombasa-likoni-ferry"), ...STRIP.slice(2)];
+
+/** Every photograph the site shows, credited on /credits. */
+export const CREDITED: readonly Photo[] = [...new Map([...STRIP, ...EXPLORE].map((p) => [p.slug, p])).values()];
 
 /** A county's anchor on /explore ("Uasin Gishu" → "uasin-gishu"); the same on both pages. */
 export function countyAnchor(name: string): string {
@@ -43,8 +54,8 @@ export function countyAnchor(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** The photograph of a county, if one is vendored. */
+/** The photograph of a county on Explore, if one is vendored. */
 export function photoOf(county: string): Photo | undefined {
   const anchor = countyAnchor(county);
-  return STRIP.find((photo) => countyAnchor(photo.county) === anchor);
+  return EXPLORE.find((p) => countyAnchor(p.county) === anchor);
 }

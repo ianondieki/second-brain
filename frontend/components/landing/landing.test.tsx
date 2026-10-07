@@ -126,11 +126,11 @@ describe("Counties", () => {
     const links = within(rows[0] as HTMLElement).getAllByRole("link");
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/explore#nairobi",
-      "/explore#nakuru",
       "/explore#mombasa",
       "/explore#kisumu",
+      "/explore#nakuru",
       "/explore#uasin-gishu",
-      "/explore#kiambu",
+      "/explore#kajiado",
     ]);
     expect(links[4].textContent).toBe("Uasin Gishu");
     // Photographs below the fold: lazy, decoded off the main thread, sized, AVIF first.
