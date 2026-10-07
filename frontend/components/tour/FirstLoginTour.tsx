@@ -29,6 +29,9 @@ const FOCUS = 2;
 const TOUCH = 4;
 const HIDDEN = 8;
 
+/** The time now, read only inside effects and their cleanups (the dwell clock). */
+const now = () => Date.now();
+
 const REDUCE = "(prefers-reduced-motion: reduce)";
 function subscribeMotion(change: () => void) {
   const query = typeof matchMedia === "function" ? matchMedia(REDUCE) : null;
@@ -110,14 +113,14 @@ export function FirstLoginTour({ side, initialDone = true, scenes }: { side: Tou
   useEffect(() => {
     if (!running) return;
     if (clock.current.step !== index) clock.current = { step: index, left: TOUR_DWELL_MS };
-    const started = Date.now();
+    const started = now();
     const timer = setTimeout(() => {
       setFrom(index);
       setIndex(index + 1);
     }, clock.current.left);
     return () => {
       clearTimeout(timer);
-      if (clock.current.step === index) clock.current.left -= Date.now() - started;
+      if (clock.current.step === index) clock.current.left -= now() - started;
     };
   }, [running, index]);
 
