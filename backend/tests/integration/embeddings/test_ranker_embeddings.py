@@ -6,6 +6,7 @@ for 20 cards with vectors as for 2."""
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID
 
@@ -25,6 +26,16 @@ from tests.integration.proposals.helpers import Developers, rows, user_of
 from tests.integration.query_counts import LARGE, SMALL, counted
 
 HEADLINE = "I build solar irrigation pumps for smallholder farmers"
+
+
+@pytest.fixture
+async def made(owner_engine: AsyncEngine) -> AsyncIterator[list[UUID]]:
+    """The cards a test makes, archived when it ends: fresh cards left published in the shared database would crowd
+    the recommendations other tests read (their top ten is drawn from every recommendable card)."""
+    cards: list[UUID] = []
+    yield cards
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE problems SET status = 'archived' WHERE id = ANY(:ids)"), {"ids": cards})
 
 
 async def personalised(developer: httpx.AsyncClient, world: TrendWorld) -> None:
@@ -69,13 +80,12 @@ async def recommended(developer: httpx.AsyncClient) -> dict[str, dict[str, Any]]
 
 
 async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
-    owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers, made: list[UUID]
 ) -> None:
     """Given a consented developer and four otherwise alike cards in liked niches: one whose vector is close to the
     profile's (cosine 0.9) and one far (0.1) in the same niche, one with another model's vector and one whose vector
-    lost its hash, When
-    recommendations are requested, Then the close card ranks above the far one with "Similar to your profile" and both
-    record f1 from the embeddings; the other two fall back to the keyword share."""
+    lost its hash, When recommendations are requested, Then the close card ranks above the far one with "Similar to
+    your profile" and both record f1 from the embeddings; the other two fall back to the keyword share."""
     world = await build(owner_engine)
     # at most three cards of one niche in the top ten: the close and far ones in one, the fallbacks in another
     niches = {"Near": world.niche, "Far": world.niche, "Other model": world.sibling, "Unhashed": world.sibling}
@@ -83,6 +93,7 @@ async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
         await research_card(owner_engine, niche, county="KE-30", title=f"{label} solar irrigation pumps")
         for label, niche in niches.items()
     ]
+    made.extend((near, far, other_model, unhashed))
     developer = await developers()
     me = user_of(developer)
     await personalised(developer, world)
@@ -115,7 +126,7 @@ async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
 
 
 async def test_the_vector_path_sends_as_many_statements_for_20_cards_as_for_2(
-    owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers, made: list[UUID]
 ) -> None:
     world = await build(owner_engine)
     developer = await developers()
@@ -127,6 +138,7 @@ async def test_the_vector_path_sends_as_many_statements_for_20_cards_as_for_2(
 
     async def add(count: int) -> None:
         cards = [await research_card(owner_engine, liked[n % 3], county="KE-30", age_days=n + 1) for n in range(count)]
+        made.extend(cards)
         await embed(app_engine, owner_engine, fake, me, *cards)
         mine.update(str(card) for card in cards)
 
@@ -136,5 +148,5 @@ async def test_the_vector_path_sends_as_many_statements_for_20_cards_as_for_2(
     assert sources == {"embedding"}
     await add(LARGE - SMALL)
     large, body = await counted(developer, app_engine, "/api/me/recommendations")
-    assert len(body["items"]) == 10
+    assert len(body["items"]) >= 9  # three a liked niche at most, and the exploration slot when a card is outside them
     assert large == small
