@@ -479,7 +479,7 @@ The full entries (why, options, default, what they blocked) are kept below for t
   footer's sentence ("A prototype: every figure on this site is seeded example data."), the "Seeded example" and
   "Illustrative example" labels on demo data, and the help page's wording. The lattice keeps framing the hero's foot,
   the certificate sheet and the footer.
-- Status: P23-2 builds it; the P20 design document's top-bar diagram is updated in the same change.
+- Status: built in P23-2 (`0e7b564`, gated 2026-10-07); the P20 design document's top-bar diagrams carry the note.
 
 ### D-64 · The "Similar to your profile" chip floor and f1's calibration per embedding model (P23-1; REQ-PERS-01, REQ-EMB-01)
 - Why: with real vectors, f1 is the cosine between the developer's profile and the card. Cosine has a model-specific baseline: unrelated texts sit near 0 under the word-based fake (dev, CI, the demo) but at roughly 0.3–0.5 under bge-m3 (ADR-005), where "related" starts around 0.6. The P23-1 review found the chip offered for any cosine above zero, which with bge-m3 would label nearly every card "Similar to your profile", and f1's contribution would lift every vector-carrying card above the keyword-path cards in a mixed list.

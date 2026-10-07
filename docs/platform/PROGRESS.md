@@ -391,7 +391,8 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-07, session 6): none. P23-1 merged as `4883047` on the owner's instruction (merge commit of
+**Open branches** (2026-10-07, session 6): `claude/fervent-mccarthy-0zyqn2` carries P23-2 (gated, waiting on the owner's
+word) and P23-3 (in build). P23-1 merged as `4883047` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `68d5826`); integration head before it `e651622`. P22-C merged as `3316909` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `aecc694`); integration head before it `efb9326`. Earlier the same day: P22-A and
 P22-B merged together as `ed0bff5` (at `2ace097`); integration head before it `feb01e9`.
@@ -1212,6 +1213,83 @@ old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
 **For the owner.** D-62 (the collaborator credit wording) still blocks P22-C; D-56 (npm audit) and the CI runner
 question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
 check before release.
+
+### P23-2 report (2026-10-07): the sliding tour with real icons, the clean top bar, the landing craft (D-65)
+
+**Why.** The owner, looking at the P23-1 build on their machine: make the first-login tour dynamic ("something
+sliding, not just clicking Next") with real icons instead of the drawn signpost; make the top bar's Wazo come out
+clear, without the word Prototype and without the colour lining; elegant and captivating, like a real frontend
+engineer's work; the landing page like a real product that can sell the idea to funders. Card: `tasks/P23.md` section
+"P23-2" with the orchestrator's "Defaults taken"; D-65 records the badge and the band leaving the top bar.
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`, one worktree merge `0e7b564`, 17 commits):
+
+- **Icons**: Lucide v0.544.0 (ISC), downloaded by the orchestrator and vendored as React components for the eleven
+  icons used (`components/icons/lucide.tsx`, every path matching upstream), with `frontend/THIRD_PARTY_NOTICES.md`;
+  no package, no CDN, no icon font.
+- **The tour** (`components/tour/`): still D-52's three non-modal steps in the page's flow, skippable from the first,
+  remembered, with the page's one primary action untouched; now a slide show. Each step is a composed scene rendered
+  on the server (a 112 px petal disc with a soft radial light, a hairline ring, the 72 px icon and the saffron spark
+  that draws in on arrival; beside it a miniature of the screen the step introduces, turned 2°, with the night-tinted
+  shadow on its lit part only: the "Need you" tile, the certificate with its seal, the stepper with "Your turn"; for
+  organisations the arriving inbox row, the lock over a teaser, the stepper). Steps slide sideways on a 6-second
+  cadence with a three-segment progress line whose segments are the step buttons; it pauses while hovered, touched,
+  keyboard-focused or hidden, stops at the last step, and offers Back, Next, Pause (aria-pressed, the icon shows the
+  state), Skip and Done, swipe on touch and the arrow keys; a polite live region announces each step once; reduced
+  motion crossfades and never auto-advances. The panel's height is fixed, so the page under it never moves (CLS
+  0.0004 over 15 s). It adds 447 B to Home.
+- **The top bar** (`TopBarBase.tsx`): the Prototype badge and the lattice band gone (D-65; the key
+  `shell.prototypeBadge` removed from both locales), the wordmark at 30 px on a white band with a hairline, 65 px
+  tall, not sticky, at most one control on the right. The P20 design document's diagrams carry a D-65 note.
+- **The landing** (`components/landing/*`, `globals.css`): a 2.4-second CSS story on load (the tracker card advances
+  from Contact and NDA to Agreement, "Your turn" pulses once, the scout match slides in, the seal draws; wipes and
+  slides rather than fades so every frame passes axe; one keyframe per part so a resize replays nothing; in place
+  under reduced motion); "How it works" and the five-stage line reveal as they scroll into view
+  (`animation-timeline: view(block 0px)` behind `@supports`, opaque once wholly on screen, plain where unsupported);
+  a four-item trust strip under the hero from the product's own truths (every version timestamped, full details
+  under one Evaluation NDA, proposals go only to verified organisations, one tracker for both sides); the copy
+  otherwise unchanged; new strings under `_meta.reviewP23b` `[[COPY-REVIEW]]`/`[[SW-REVIEW]]`, en/sw parity.
+- **Tests**: vitest 1,931 (new: the slide show's timers, holds, focus hand-offs, reduced motion, the scenes, the
+  landing, the top bar); `e2e/tour.spec.ts` on Playwright's paused clock (advance, Pause holds, Back, Skip
+  remembers; mobile-360 and desktop); `e2e/smoke.spec.ts` scrolls "How it works" through and asserts every item
+  opaque, with the strict axe pass run under reduced motion only when an item is caught mid-reveal.
+
+**Reviews.** reviewer CHANGES_REQUIRED (two MAJORs: focus fell to body when Pause hid on the last step; the
+scroll-reveal left "How it works" invisible to axe and to full-page captures; two MINORs: the dwell clock drifted
+after Back, a mouse click's focus hold stopped the show for good) → the reveal still faded at rest because `view()`
+followed the page's scroll padding → PASS on `view(block 0px)`. ux-reviewer CHANGES_REQUIRED (one MAJOR: the same
+reveal, measured at 0.66 opacity on fully visible text at 375; three MINORs: the hero wipe replayed across 1024 px,
+the trust line overclaimed, the Pause tooltip disagreed with its name) → the same remaining item → PASS (all eight
+items at opacity 1 once wholly on screen at 375×800, 1440×900 and 360×640; no replay; axe 0 at both widths, light and
+dark, with and without reduced motion).
+
+**Gate.** Playwright on the compose stack rebuilt from the merged branch `0e7b564` (mobile 360 and desktop, axe; the
+tour spec on a paused clock, the smoke spec scrolling "How it works" through): 214 passed, 4 skipped, 0 failed (32
+min); the test-clock scenarios 4/4; `demo.py reset` and `e2e-env` clean; vectors reseeded (1/4 profiles, 9/9
+problems). JS budgets: `/dev` 144,486 B (the tour +447 B), `/dev/discover` 147,721 B, `/settings/notifications`
+144,899 B, `/` 139,503 B, `/org` 144,022 B, `/login` 148,059 B of 150,000. Lighthouse (mobile default, Slow 4G):
+`/` light 97–99 / 100, LCP 2.2–2.6 s; dark 97 / 100, 2.5 s; `/dev` 95–99 / 100, 2.2–2.7 s (the LCP element is the
+page title; the same page without the tour reads the same, D-53's band). CodeQL run 285 on `0e7b564`: exactly the
+eight D-42 findings (one JavaScript, seven Python). `pr.yml` run 350 on `0e7b564`: frontend, Playwright with the
+clock scenarios, the demo story, hygiene and both legacy jobs green; scanners red on `npm audit` only (D-56); the
+backend job cancelled at its 35-minute limit (the twelfth time; P23 item 10). The recorded walkthrough and the P23
+design-shot set (`docs/demo/screenshots/p23/`) were refreshed from the reset stack after the gate.
+
+**Deviations and residuals.**
+- D-65 taken on the owner's instruction: the "Prototype" badge and the lattice band left the top bar; the footer's
+  sentence and the "Seeded example" labels keep the honesty where the data is.
+- The hero's LCP sits at 2.5–2.6 s on some runs (D-53's band); the P23-2 animations are CSS only and did not move it.
+- The tour panel is 451 px tall at 360, so Home's primary action sits just above the tab bar on the first visit
+  (the ux-reviewer's note; acceptable, one screen).
+- Copy and Swahili review of `_meta.reviewP23b` (the tour's Back/Pause/step labels, the trust strip's four lines) is
+  the owner's.
+- The implementer's commits carry the Opus 5.5 attribution line (P23 item 9).
+
+**Status.** Gate reached: reviewer and ux-reviewer PASS, the local gate green, CI as above; the README's screenshot set
+and the walkthrough video re-recorded from the reset stack; `docs/demo/screenshots/p23/` holds the landing, Home, the
+tour and the organisation Home at 375 and 1440, light and dark. `claude/fervent-mccarthy-0zyqn2` is ready to merge into
+`claude/eloquent-hypatia-aa3577` on the owner's word; P23-3 (the deadline countdown) is in build on the same branch.
+
 
 ### P23-1 report (2026-10-07): profile and problem embeddings for real (D-63, D-64)
 
