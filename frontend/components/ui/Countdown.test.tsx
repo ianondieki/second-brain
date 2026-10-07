@@ -51,7 +51,6 @@ describe("Countdown", () => {
     expect(text(container)).toBe("6 d 14 h 23 m left");
     expect(time(container)?.getAttribute("dateTime")).toBe(UNTIL);
     expect(time(container)?.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");
-    expect(time(container)?.className).toContain("tabular-nums");
     expect(container.querySelector("[aria-live], [role='status'], [role='timer']")).toBeNull();
   });
 
@@ -127,8 +126,6 @@ describe("Countdown", () => {
     const soon = new Date(Date.parse(NOW) + 23 * 60 * MIN).toISOString();
     const warm = countdown({ until: soon, tone: "warm" }).container;
     expect(warm.querySelector("[data-timer='warm']")).not.toBeNull();
-    expect(warm.querySelector("[aria-hidden='true']")?.className).toContain("bg-flourish");
-    expect(time(warm)?.className).toContain("text-warm");
     expect(text(warm)).toBe("23 h 0 m left");
     cleanup();
     expect(countdown({ until: soon, tone: "neutral" }).container.querySelector("[data-timer='open']")).not.toBeNull();
@@ -157,6 +154,11 @@ describe("TimeLeft (the words for Countdown)", () => {
     expect(closes.textContent).toBe("Submissions close in 6 d 14 h 23 m");
     // UNTIL is 2026-10-16T20:59Z: 23:59 on 16 Oct in Nairobi.
     expect(left.querySelector("time")?.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");
+    // Tabular figures; the warm look (the saffron mark, a pseudo-element, and the warm figure) keyed on data-timer.
+    expect(left.className).toContain("tabular-nums");
+    expect(left.className).toContain("data-[timer=warm]:before:bg-flourish");
+    expect(left.className).toContain("[&[data-timer=warm]>time]:text-warm");
+    expect(left.querySelector("[aria-hidden]")).toBeNull();
   });
 
   it("words the figure in Swahili", () => {

@@ -57,26 +57,25 @@ export function Countdown({ until, now, labelWhenPast, tone, units, frame, title
   }, [base]);
 
   const left = base - (elapsed.base === base ? elapsed.spent : 0);
-  if (!(left > 0)) {
-    return (
-      <span data-timer="past" className={className} suppressHydrationWarning>
-        {labelWhenPast}
-      </span>
-    );
-  }
   const total = Math.floor(left / MINUTE);
-  const parts: Record<string, number> = { days: Math.floor(total / 1_440), hours: Math.floor((total % 1_440) / 60), minutes: total % 60 };
-  const figure = units[parts.days ? 0 : parts.hours ? 1 : 2].replace(/\{(\w+)\}/g, (slot, name: string) => String(parts[name] ?? slot));
-  const warm = tone === "warm" && left < DAY;
+  // Keyed by the first letter of each slot ({days}, {hours}, {minutes}).
+  const parts: Record<string, number> = { d: Math.floor(total / 1_440), h: Math.floor(total / 60) % 24, m: total % 60 };
   const [before, after] = frame.split("{time}");
+  // The look of each state ("warm": the saffron mark and the warm figure) is in the caller's className, keyed on
+  // data-timer, so none of it ships in this bundle.
   return (
-    <span data-timer={warm ? "warm" : "open"} className={className}>
-      {warm ? <span aria-hidden="true" className="mr-1.5 inline-block size-2 rounded-full bg-flourish" /> : null}
-      {before}
-      <time dateTime={until} title={title} className={warm ? "font-semibold text-warm tabular-nums" : "tabular-nums"} suppressHydrationWarning>
-        {figure}
-      </time>
-      {after}
+    <span data-timer={left > 0 ? (tone === "warm" && left < DAY ? "warm" : "open") : "past"} className={className}>
+      {left > 0 ? (
+        <>
+          {before}
+          <time dateTime={until} title={title} suppressHydrationWarning>
+            {units[parts.d ? 0 : parts.h ? 1 : 2].replace(/\{(\w)\w*\}/g, (_, name: string) => String(parts[name]))}
+          </time>
+          {after}
+        </>
+      ) : (
+        labelWhenPast
+      )}
     </span>
   );
 }

@@ -2,7 +2,13 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { nairobiParts } from "@/lib/format";
 
+import { cn } from "./cn";
 import { Countdown } from "./Countdown";
+
+// Tabular figures; under 24 hours on the viewer's own step ("warm"), the saffron mark before the words (decorative: a
+// pseudo-element, never read out) and the figure in the warm text colour. Here, on the server, not in the bundle.
+const look =
+  "tabular-nums data-[timer=warm]:before:mr-1.5 data-[timer=warm]:before:inline-block data-[timer=warm]:before:size-2 data-[timer=warm]:before:rounded-full data-[timer=warm]:before:bg-flourish data-[timer=warm]:before:align-middle [&[data-timer=warm]>time]:font-semibold [&[data-timer=warm]>time]:text-warm";
 
 export interface TimeLeftProps {
   /** The instant the window closes (the API's `due_at`, a Brief's `deadline_at`). */
@@ -36,7 +42,7 @@ export function TimeLeft({ until, now, labelWhenPast, sentence = "left", mine = 
       units={[t("days", slots), t("hours", slots), t("minutes", slots)]}
       frame={t(sentence, { time: "{time}" })}
       title={t("at", nairobiParts(locale, until))}
-      className={className}
+      className={cn(look, className)}
     />
   );
 }
