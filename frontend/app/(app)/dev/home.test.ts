@@ -30,7 +30,7 @@ describe("homeStats", () => {
     ];
     const idea = (over: Record<string, unknown>) => ({ id: "x", title: "t", status: "published", moderation_state: "clear", niche: null, cert_id: null, current_version_no: 1, has_draft: false, published_at: null, updated_at: "2026-10-01T00:00:00Z", ...over }) as never;
     const stats = homeStats(engagements, [idea({}), idea({ status: "draft" }), idea({ has_draft: true }), idea({ status: "hidden" })]);
-    expect(stats).toEqual({ ideas: 3, published: 2, drafts: 1, changes: 1, engagements: 3, active: 2, nextDue: engagements[0].due, nextDueId: "a" });
+    expect(stats).toEqual({ ideas: 3, published: 2, drafts: 1, changes: 1, engagements: 3, active: 2, nextDue: engagements[0].due, nextDueId: "a", nextDueMine: true });
   });
 
   it("has no deadline when no active engagement carries one", async () => {
@@ -46,5 +46,7 @@ describe("homeStats", () => {
     expect(homeStats([held], []).nextDue).toBeNull();
     const theirs = summary({ id: "t", state: "UNDER_REVIEW", whose_turn: ["org"], due: { due_on: "2026-10-20", business_days_left: 12, overdue: false } });
     expect(homeStats([held, theirs], []).nextDueId).toBe("t");
+    // The organisation's step: the countdown stays neutral under 24 hours (P23-3).
+    expect(homeStats([held, theirs], []).nextDueMine).toBe(false);
   });
 });

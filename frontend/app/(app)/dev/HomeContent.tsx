@@ -5,7 +5,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Chip } from "@/components/tracker/Chip";
-import { stageChip, type Summary } from "@/components/tracker/model";
+import { dueAt, stageChip, type Summary } from "@/components/tracker/model";
 import { DueLine } from "@/components/tracker/When";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
+import { TimeLeft } from "@/components/ui/TimeLeft";
 import { ClientStrings } from "@/components/ClientStrings";
 import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
 import { tourDoneFromCookies } from "@/components/tour/tour-store";
@@ -53,6 +54,8 @@ export interface HomeContentProps {
   week?: Week | null;
   /** Peers (REQ-DEV-03): left out when null or not given (the read failed, or a fixture without it). */
   peers?: PeersPage | null;
+  /** The app clock's instant for this page (lib/api/server.ts appNow): the countdowns count from it. */
+  now?: string;
 }
 
 /**
@@ -61,7 +64,16 @@ export interface HomeContentProps {
  * lists of rows side by side on a wide column (the other engagements, the ideas). "New proposal" is the screen's one
  * primary action. The tiles count what the page already reads: no series exists for them yet, so no sparkline.
  */
-export async function HomeContent({ me, engagements, ideas, recommended, quiz = null, week = null, peers = null }: HomeContentProps) {
+export async function HomeContent({
+  me,
+  engagements,
+  ideas,
+  recommended,
+  quiz = null,
+  week = null,
+  peers = null,
+  now = new Date().toISOString(),
+}: HomeContentProps) {
   const [t, th, tr, locale] = await Promise.all([
     getTranslations("devHome"),
     getTranslations("home"),
@@ -72,6 +84,15 @@ export async function HomeContent({ me, engagements, ideas, recommended, quiz = 
   const stats = homeStats(engagements, ideas);
   const mfa = me.mfa.enrolled ? "on" : needsMfaSetup(me.mfa) ? "required" : "off";
   const rowHref = (id: string) => `${ENGAGEMENTS_PATH}/${encodeURIComponent(id)}`;
+  const due = stats.nextDue;
+  const dueWords = due
+    ? due.overdue
+      ? t("stats.deadlineOverdue")
+      : due.business_days_left === 0
+        ? t("stats.deadlineToday")
+        : t("stats.deadlineMeta", { count: due.business_days_left })
+    : undefined;
+  const until = due && !due.overdue ? dueAt(due) : null;
 
   const tourDone = tourDoneFromCookies(await cookies(), "developer");
   return (
@@ -108,15 +129,12 @@ export async function HomeContent({ me, engagements, ideas, recommended, quiz = 
                 data-stat="deadline"
                 label={t("stats.deadline")}
                 value={stats.nextDue ? formatShortDate(locale, stats.nextDue.due_on) : t("stats.deadlineNone")}
+                // The time left in days, hours and minutes (P23-3) when the API gives the instant, the business days
+                // then in the tile's title; otherwise the business days as the meta line.
                 meta={
-                  stats.nextDue
-                    ? stats.nextDue.overdue
-                      ? t("stats.deadlineOverdue")
-                      : stats.nextDue.business_days_left === 0
-                        ? t("stats.deadlineToday")
-                        : t("stats.deadlineMeta", { count: stats.nextDue.business_days_left })
-                    : undefined
+                  until ? <TimeLeft until={until} now={now} labelWhenPast={t("stats.deadlineOverdue")} mine={stats.nextDueMine} /> : dueWords
                 }
+                title={until ? dueWords : undefined}
                 href={stats.nextDueId ? rowHref(stats.nextDueId) : undefined}
               />
             </li>
@@ -142,7 +160,7 @@ export async function HomeContent({ me, engagements, ideas, recommended, quiz = 
             <ul className="flex flex-col gap-4">
               {waiting.map((item) => (
                 <li key={item.id}>
-                  <NeedsYouHero item={item} href={rowHref(item.id)} action={t("openTracker")} />
+                  <NeedsYouHero item={item} href={rowHref(item.id)} action={t("openTracker")} now={now} />
                 </li>
               ))}
             </ul>

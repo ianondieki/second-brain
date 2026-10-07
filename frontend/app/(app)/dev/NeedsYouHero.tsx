@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Chip, ChipMark } from "@/components/tracker/Chip";
-import { isFinished, stageChip, type Summary } from "@/components/tracker/model";
+import { dueAt, isFinished, stageChip, type Summary } from "@/components/tracker/model";
 import { DueLine } from "@/components/tracker/When";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
@@ -10,6 +10,7 @@ import { buttonClass } from "@/components/ui/Button";
 import { Card, cardLinkClass } from "@/components/ui/Card";
 import { LinkPending } from "@/components/ui/LinkPending";
 import { cn } from "@/components/ui/cn";
+import { TimeLeft } from "@/components/ui/TimeLeft";
 import { formatShortDate } from "@/lib/format";
 
 /**
@@ -19,7 +20,7 @@ import { formatShortDate } from "@/lib/format";
  * resumes) and an ended engagement none either: they keep the tracker's own line. The org portal keeps the shared
  * NeedsYouCard; this is the developer's Home only.
  */
-export function NeedsYouHero({ item, href, action }: { item: Summary; href: string; action: string }) {
+export function NeedsYouHero({ item, href, action, now }: { item: Summary; href: string; action: string; now?: string }) {
   const t = useTranslations("tracker");
   const th = useTranslations("devHome");
   const locale = useLocale();
@@ -67,6 +68,10 @@ export function NeedsYouHero({ item, href, action }: { item: Summary; href: stri
             <time dateTime={due.due_on} className="font-display text-3xl leading-none font-[720] tracking-[-0.03em] whitespace-nowrap text-ink tabular-nums">
               {formatShortDate(locale, due.due_on)}
             </time>
+            {/* The time left to the end of the due day (P23-3), the step being the developer's; then the business days. */}
+            {dueAt(due) && now && !due.overdue ? (
+              <TimeLeft until={dueAt(due)!} now={now} labelWhenPast={th("stats.deadlineOverdue")} mine className="mt-1.5 text-sm text-ink-soft" />
+            ) : null}
             <span className={cn("mt-1.5 text-sm", due.overdue ? "font-semibold text-error" : "text-ink-soft")}>{when}</span>
           </p>
         ) : null}
