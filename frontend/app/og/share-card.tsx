@@ -22,6 +22,21 @@ function loadFaces() {
   return faces;
 }
 
+// What the two embedded faces draw (public/fonts/og: Basic Latin and typographic punctuation; the Fraunces cut adds
+// Latin-1's letters, but NFKD below takes accents off first). next/og fetches a font from the network for any glyph its
+// fonts lack, and an emoji image from a CDN: neither may happen (a card must never send a title to a third party, and
+// the deployment's egress is closed), so every text is reduced to what the faces cover before it is drawn.
+const COVERED = /[\u0020-\u007E\u2013\u2014\u2018\u2019\u201C\u201D\u2026]/u;
+
+/** "Maji safi Kĩambu 🌞" → "Maji safi Kiambu": accents off (NFKD, marks dropped), anything else uncovered dropped. */
+export function toCoverage(text: string): string {
+  return [...text.normalize("NFKD").replace(/\p{M}/gu, "")]
+    .filter((char) => COVERED.test(char))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export interface ShareCardProps {
   /** The big line: the teaser's public title, or the certificate id. */
   title: string;
@@ -42,7 +57,10 @@ function Mark() {
 }
 
 /** The card as a PNG response, cached for an hour by browsers and previews. */
-export async function shareCard({ title, line, code = false }: ShareCardProps): Promise<ImageResponse> {
+export async function shareCard(props: ShareCardProps): Promise<ImageResponse> {
+  const title = toCoverage(props.title) || "Wazo";
+  const line = props.line ? toCoverage(props.line) || null : null;
+  const code = props.code ?? false;
   const [fraunces, bricolage] = await loadFaces();
   return new ImageResponse(
     (

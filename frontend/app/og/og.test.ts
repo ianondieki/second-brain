@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { createTranslator } from "next-intl";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
 
@@ -17,6 +17,7 @@ vi.mock("next-intl/server", () => ({
 }));
 
 const { GET: problemCard } = await import("./problem/[id]/route");
+const { toCoverage } = await import("./share-card");
 const { GET: verifyCard } = await import("./verify/[id]/route");
 
 const SEEDED = "0199b000-0000-7000-8000-0000000000aa";
@@ -43,6 +44,7 @@ beforeEach(() => {
   problem.mockReset();
   lookup.mockReset();
 });
+afterEach(() => vi.unstubAllGlobals());
 
 describe("GET /og/problem/<id>", () => {
   it("draws a public problem's title and niche as a PNG", async () => {
@@ -53,6 +55,21 @@ describe("GET /og/problem/<id>", () => {
     expect(await isPng(response)).toBe(true);
     expect(problem).toHaveBeenCalledWith(SEEDED);
   }, 30_000);
+
+  it("never fetches a font or an emoji: a title outside the embedded faces is reduced to them, and still drawn", async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 599 }));
+    vi.stubGlobal("fetch", fetch);
+    for (const title of ["Maji safi Kĩambu", "Solar 🌞 pumps for Wanjirũ's farm", "🌞🌞"]) {
+      problem.mockResolvedValue({ kind: "found", problem: { ...PROBLEM, title, niche: { id: "n", name: "Énergie ☀️", parent: null } } });
+      const response = await problemCard(new Request("http://x/og/problem"), ctx(SEEDED));
+      expect(response.status, title).toBe(200);
+      expect(await isPng(response)).toBe(true);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+    expect(toCoverage("Maji safi Kĩambu")).toBe("Maji safi Kiambu");
+    expect(toCoverage("Solar 🌞 pumps — Zoé’s")).toBe("Solar pumps — Zoe’s");
+    expect(toCoverage("🌞")).toBe("");
+  }, 60_000);
 
   it("answers 404 with no image for a problem that is not public, or when the API cannot say", async () => {
     for (const kind of ["notFound", "unavailable"]) {
