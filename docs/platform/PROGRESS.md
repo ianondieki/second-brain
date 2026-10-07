@@ -391,8 +391,10 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-07, session 6): `claude/fervent-mccarthy-0zyqn2` carries P23-2 (gated, waiting on the owner's
-word) and P23-3 (in build). P23-1 merged as `4883047` on the owner's instruction (merge commit of
+**Open branches** (2026-10-07, session 6): `claude/fervent-mccarthy-0zyqn2` carries P23-3 (merged on the feature branch,
+its gate running). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
+before it `fbaa3dd`); from P23-2 on, a gated phase is merged into the integration branch without waiting for the owner's
+word (the owner, 2026-10-07). P23-1 merged as `4883047` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `68d5826`); integration head before it `e651622`. P22-C merged as `3316909` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `aecc694`); integration head before it `efb9326`. Earlier the same day: P22-A and
 P22-B merged together as `ed0bff5` (at `2ace097`); integration head before it `feb01e9`.
@@ -1287,8 +1289,8 @@ design-shot set (`docs/demo/screenshots/p23/`) were refreshed from the reset sta
 
 **Status.** Gate reached: reviewer and ux-reviewer PASS, the local gate green, CI as above; the README's screenshot set
 and the walkthrough video re-recorded from the reset stack; `docs/demo/screenshots/p23/` holds the landing, Home, the
-tour and the organisation Home at 375 and 1440, light and dark. `claude/fervent-mccarthy-0zyqn2` is ready to merge into
-`claude/eloquent-hypatia-aa3577` on the owner's word; P23-3 (the deadline countdown) is in build on the same branch.
+tour and the organisation Home at 375 and 1440, light and dark. Merged into the integration branch as `0b2a5fd`
+(2026-10-07); P23-3 (the deadline countdown) follows on its own gate.
 
 
 ### P23-1 report (2026-10-07): profile and problem embeddings for real (D-63, D-64)
