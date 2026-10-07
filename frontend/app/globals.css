@@ -7,9 +7,9 @@
  */
 @font-face {
   font-family: "Bricolage Grotesque";
-  src: url("/fonts/bricolage-grotesque-v1.woff2") format("woff2");
+  src: url("/fonts/bricolage-grotesque-v2.woff2") format("woff2");
   font-display: swap;
-  font-weight: 500 800;
+  font-weight: 600 800;
 }
 @font-face {
   font-family: "Bricolage Grotesque Fallback";
@@ -34,20 +34,22 @@
   size-adjust: 99.12%;
 }
 /* Fraunces (D-66, P24): the serif display face for page and section titles, upright and italic (the hero's one accent
-   phrase). Instanced with fontTools to opsz 24–144 and wght 400–700 (SOFT and WONK pinned at 0), subset to Latin (the
-   italic to ASCII and punctuation: it sets the hero's phrase only); the fallback is Times New Roman sized to it. */
+   phrase). Instanced with fontTools (SOFT and WONK pinned at 0) to what the pages set: the upright to opsz 24–72 (no
+   title is larger than 72 px) and wght 500–700, subset to Basic Latin and punctuation (35 KB); the italic to opsz 40–72
+   at wght 500, lower-case letters and punctuation only (9 KB: it sets the hero's phrase and nothing else). Every font the first screen uses is fetched before the landing's
+   LCP, so their bytes are the LCP budget. The fallback is Times New Roman sized to it. */
 @font-face {
   font-family: "Fraunces";
   src: url("/fonts/fraunces-v1.woff2") format("woff2");
   font-display: swap;
-  font-weight: 400 700;
+  font-weight: 500 700;
   font-style: normal;
 }
 @font-face {
   font-family: "Fraunces";
   src: url("/fonts/fraunces-italic-v1.woff2") format("woff2");
   font-display: swap;
-  font-weight: 400 700;
+  font-weight: 500;
   font-style: italic;
 }
 @font-face {

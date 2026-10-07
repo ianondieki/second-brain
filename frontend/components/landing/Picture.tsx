@@ -5,7 +5,8 @@ import { cn } from "@/components/ui/cn";
 /**
  * A vendored photograph (D-66): AVIF with a WebP fallback through <picture>, 800 and 1600 px for the given sizes, the
  * intrinsic width and height (no layout shift), lazy and decoded off the main thread (on the landing they sit below the
- * fold, never its LCP element; Explore's first one is `eager`), and the 24 px blur as the background until it paints. Decorative by default: the
+ * fold, never its LCP element; Explore's first one is `eager`), and the night colour until it paints (not the 24 px
+ * blur: six more requests before the landing's first paint, which are LCP budget on Slow 4G). Decorative by default: the
  * link or heading beside it names the place.
  */
 export function Picture({
@@ -36,8 +37,7 @@ export function Picture({
         loading={eager ? "eager" : "lazy"}
         fetchPriority={eager ? "high" : undefined}
         decoding="async"
-        className={cn("bg-cover bg-center", className)}
-        style={{ backgroundImage: `url(${base}-blur.jpg)` }}
+        className={cn("bg-night", className)}
       />
     </picture>
   );

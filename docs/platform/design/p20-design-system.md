@@ -169,7 +169,7 @@ stats row, photographs in tiles, a dark preview band and something alive on the 
 avoidance notes above; everything else in this document stands.
 
 - **Type.** Titles (h1, h2, section and card titles on the landing) move to **Fraunces** (OFL; opsz 24–144, wght
-  400–700, upright and italic, about 46 KB each; `public/fonts/LICENCES.md`), `--font-display`. Bricolage Grotesque
+  500–700 upright at opsz 24–72, 35 KB, and an italic at 500 for the accent phrase, 9 KB; `public/fonts/LICENCES.md`; Bricolage becomes `bricolage-grotesque-v2.woff2`, Basic Latin, wght 600–800, 21 KB), `--font-display`. Bricolage Grotesque
   keeps the wordmark and the figures as `--font-figure` (stat tiles, deadline dates, prices, countdown digits).
   Hanken stays for text, IBM Plex Mono for codes, the eyebrows and the why-panel. The hero carries one italic accent
   phrase in bloom ("that need them").
