@@ -1,8 +1,10 @@
-"""The public activity feed and the Explore summary as the API returns them (REQ-UX-03, P24-B).
+"""The public activity feed, the Explore summary and a public problem page as the API returns them (REQ-UX-03,
+P24-B).
 
-Anonymised by construction: no field can carry a person, a handle, an organisation or private text. ``title`` is a
-published problem's or Brief's title, or a published proposal's teaser title; places and niches are the reference
-tables' names.
+The feed and Explore are anonymised by construction: no field can carry a person, a handle, an organisation or private
+text. ``title`` is a published problem's or Brief's title, or a published proposal's teaser title; places and niches
+are the reference tables' names. A problem page adds the published problem's own text (statement, affected group) and,
+for a Brief only, its organisation's directory name and level while it is listed; never a person or a handle.
 """
 
 from __future__ import annotations
@@ -66,3 +68,41 @@ class Explore(BaseModel):
     counties: list[ExploreCounty] = Field(description="Counties with problems, most first (then by name)")
     niches: list[ExploreNiche] = Field(description="Top-level niches with problems, most first (then by name)")
     seeded: bool = Field(description="True when there are problems and every one of them is seeded")
+
+
+class PublicCounty(BaseModel):
+    code: str = Field(description="ISO 3166-2 code")
+    name: str
+
+
+class PublicNicheParent(BaseModel):
+    id: UUID
+    name: str
+
+
+class PublicNiche(BaseModel):
+    id: UUID
+    name: str
+    parent: PublicNicheParent | None = Field(description="The top-level niche it sits under; null for a top level")
+
+
+class PublicOrganisation(BaseModel):
+    name: str = Field(description="The organisation's name as the directory lists it")
+    verification: Literal["unclaimed", "e1", "e2"] = Field(description="Its verification level (E0 is unclaimed)")
+
+
+class PublicProblem(BaseModel):
+    id: UUID
+    title: str
+    statement: str
+    affected_group: str | None
+    source: Literal["developer", "research", "brief"] = Field(
+        description="Developer-reported, a reviewed research card, or an organisation's Problem Brief"
+    )
+    posted_at: datetime | None = Field(description="When it was published")
+    county: PublicCounty | None
+    niche: PublicNiche | None
+    organisation: PublicOrganisation | None = Field(
+        description="A Brief's organisation, only while it is listed in the directory; null for every other problem"
+    )
+    seeded: bool = Field(description=SEEDED_DOC)

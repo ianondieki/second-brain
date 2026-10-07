@@ -15,6 +15,10 @@ visibility rule); a proposal only while published and clear. Only these columns:
 already public (a problem's or Brief's, a proposal's current teaser title), county and niche names from the reference
 tables, and whether a problem is a seeded example card. Never a person, a handle, an organisation, a statement or any
 other text, and no engagement (stage events are deferred: they need a definer function from db-migrations).
+
+**One problem** (``problem_statement``): the same predicate on one id, with the problem's own published text
+(statement, affected group) and, for a Brief, its organisation's name and level only through a join that matches a
+listed organisation (unclaimed, E1 or E2, not delisted): the name the directory lists. Still no person or handle.
 """
 
 from __future__ import annotations
@@ -68,6 +72,7 @@ _TIMEOUT = text(f"SET LOCAL statement_timeout = '{READ_TIMEOUT}'")
 _Parent = aliased(Niche)
 _Poster = aliased(Organization)
 _Brief = aliased(ProblemBrief)
+_Listed = aliased(Organization)
 _PROBLEM_POSTED = literal_column("'problem_posted'", Text)
 _BRIEF_OPENED = literal_column("'brief_opened'", Text)
 _VERSION_REGISTERED = literal_column("'version_registered'", Text)
@@ -148,6 +153,36 @@ def activity_statement() -> Select[Any]:
     )
     merged = union_all(problems, versions).subquery("feed")
     return select(merged).order_by(merged.c.at.desc(), merged.c.row_id.desc()).limit(FEED_SIZE)
+
+
+def problem_statement(problem_id: UUID) -> Select[Any]:
+    """One readable problem: its public fields, place, niche (with its parent) and, for a Brief, its listed
+    organisation's name and level (none for anything else)."""
+    listed = and_(_Listed.id == Problem.org_id, _Listed.verification.in_(LISTED_LEVELS), _Listed.delisted_at.is_(None))
+    return (
+        select(
+            Problem.id,
+            Problem.title,
+            Problem.statement,
+            Problem.affected_group,
+            Problem.source,
+            Problem.published_at,
+            Problem.county_code,
+            Region.name.label("county_name"),
+            Niche.id.label("niche_id"),
+            Niche.name_en.label("niche_name"),
+            _Parent.id.label("parent_id"),
+            _Parent.name_en.label("parent_name"),
+            _Listed.legal_name.label("org_name"),
+            _Listed.verification.label("org_verification"),
+            example_card().label("example"),
+        )
+        .outerjoin(Region, Region.code == Problem.county_code)
+        .outerjoin(Niche, Niche.id == Problem.niche_id)
+        .outerjoin(_Parent, _Parent.id == Niche.parent_id)
+        .outerjoin(_Listed, and_(listed, Problem.source == ProblemSource.ORG_BRIEF))
+        .where(Problem.id == problem_id, readable_problem())
+    )
 
 
 def explore_statement() -> Select[Any]:

@@ -1,5 +1,5 @@
-"""The public activity feed and the Explore summary as visitors see them (REQ-UX-03, REQ-DIR-01, REQ-REPO-02;
-P24-B): rows of ``bridge.public.queries`` made into anonymised items and groups.
+"""The public activity feed, the Explore summary and a public problem page as visitors see them (REQ-UX-03,
+REQ-DIR-01, REQ-REPO-02; P24-B): rows of ``bridge.public.queries`` made into anonymised items, groups and pages.
 
 **Activity.** ``problem_posted`` (a problem published), ``brief_opened`` (a Brief's problem published: the Brief is
 open to developers) and ``version_registered`` (a published proposal's registered version), newest first, 20 in all.
@@ -9,11 +9,15 @@ digest of its kind and record, never the record's id.
 **Explore.** Counties with problems and top-level niches with problems (a child niche counts under its parent), most
 first, then by name, each with its three newest; the totals count every readable problem.
 
+**A problem page.** One readable problem (``None`` for any other id, the route's 404): its published text, its
+source in the API's words (developer, research, brief), its county and niche (with the parent), and a Brief's
+organisation only while it is listed (the statement's join decides; an organisation is shown only with a Brief).
+
 **Seeded.** The demo seed runs only where ``APP_ENV`` is dev or test (``bridge.config.DEMO_ENVS``), so
 there every row is the seed's (or a local developer's); elsewhere a row is seeded only when it carries the seed's own
 mark: a research card whose every cited source is a saved demo excerpt (``excerpt_ref`` starting ``example:``, the
 rule behind the cards' "Seeded example" label). ``users.demo_account`` is readable only by its own user, so it is not
-used. A feed or a summary is seeded when it has rows and every one is.
+used. A feed or a summary is seeded when it has rows and every one is; a problem page when its problem is.
 """
 
 from __future__ import annotations
@@ -21,14 +25,15 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any
+from typing import Any, Final
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.config import DEMO_ENVS, Settings
 from bridge.directory.service import niche_label
-from bridge.public.queries import NEWEST, activity_statement, explore_statement, read
+from bridge.models.enums import ProblemSource
+from bridge.public.queries import NEWEST, activity_statement, explore_statement, problem_statement, read
 from bridge.public.schemas import (
     ActivityFeed,
     ActivityItem,
@@ -37,7 +42,18 @@ from bridge.public.schemas import (
     ExploreNiche,
     ExploreTeaser,
     ExploreTotals,
+    PublicCounty,
+    PublicNiche,
+    PublicNicheParent,
+    PublicOrganisation,
+    PublicProblem,
 )
+
+SOURCES: Final = {
+    ProblemSource.DEVELOPER: "developer",
+    ProblemSource.RESEARCH_AGENT: "research",
+    ProblemSource.ORG_BRIEF: "brief",
+}
 
 
 def demo_deployment(settings: Settings) -> bool:
@@ -111,3 +127,31 @@ async def activity(factory: async_sessionmaker[AsyncSession], *, generated_at: d
 
 async def explore(factory: async_sessionmaker[AsyncSession], *, demo: bool) -> Explore:
     return explore_summary(await read(factory, explore_statement()), demo=demo)
+
+
+def problem_page(row: Any, *, demo: bool) -> PublicProblem:
+    source = ProblemSource(row.source)
+    brief = source is ProblemSource.ORG_BRIEF and row.org_name is not None
+    return PublicProblem(
+        id=row.id,
+        title=row.title,
+        statement=row.statement,
+        affected_group=row.affected_group,
+        source=SOURCES[source],
+        posted_at=row.published_at,
+        county=None if row.county_code is None else PublicCounty(code=row.county_code, name=row.county_name),
+        niche=None
+        if row.niche_id is None
+        else PublicNiche(
+            id=row.niche_id,
+            name=row.niche_name,
+            parent=None if row.parent_id is None else PublicNicheParent(id=row.parent_id, name=row.parent_name),
+        ),
+        organisation=PublicOrganisation(name=row.org_name, verification=str(row.org_verification)) if brief else None,
+        seeded=demo or bool(row.example),
+    )
+
+
+async def problem(factory: async_sessionmaker[AsyncSession], problem_id: UUID, *, demo: bool) -> PublicProblem | None:
+    rows = await read(factory, problem_statement(problem_id))
+    return problem_page(rows[0], demo=demo) if rows else None
