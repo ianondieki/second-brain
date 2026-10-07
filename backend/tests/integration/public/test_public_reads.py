@@ -12,8 +12,10 @@ database, signed out.
   ``Cache-Control: public, max-age=60`` and have the OpenAPI document's shapes.
 
 Each test builds its own rows (committed: the API reads in its own connections) and asserts about them only, by their
-event keys and ids: other modules' rows are in the same database. The reader's 2-second timeout cancels a slow
-statement.
+event keys and ids: other modules' rows are in the same database, some of them dated ahead of the wall clock, so the
+tests that look for their rows in the feed widen it past 20 (``whole_feed``; the limit itself is a unit test). The
+statements also run as the table owner, with RLS out of the way, to prove their own predicates exclude every private
+row; the reader's 2-second timeout cancels a slow statement.
 """
 
 from __future__ import annotations
@@ -210,6 +212,14 @@ async def scene(owner_engine: AsyncEngine) -> Scene:
     return await build(owner_engine)
 
 
+@pytest.fixture
+def whole_feed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The activity feed with every public event, not the newest 20: the scene's rows are in it whatever else the
+    shared database holds."""
+    monkeypatch.setattr(queries, "FEED_SIZE", 1_000_000)
+
+
+@pytest.mark.usefixtures("whole_feed")
 async def test_only_public_rows_reach_a_signed_out_visitor(app_engine: AsyncEngine, scene: Scene) -> None:
     """Given public and private problems, Briefs and proposals, When a signed-out visitor reads the feed and Explore,
     Then only the public ones are there, under opaque keys, with no person, handle, address, organisation, statement
@@ -269,6 +279,7 @@ async def test_explore_counts_by_county_and_top_level_niche_with_the_newest_thre
     assert explore["totals"]["niches"] == len(explore["niches"])
 
 
+@pytest.mark.usefixtures("whole_feed")
 async def test_seeded_follows_the_demo_deployment_and_the_seeds_own_mark(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, scene: Scene
 ) -> None:
@@ -364,6 +375,23 @@ async def test_a_published_proposals_new_problem_puts_its_county_on_explore(
     [group] = [group for group in explore["counties"] if group["code"] == place]
     assert (group["name"], group["count"]) == (f"P24 Seeded County {tag}", 1)
     assert [teaser["id"] for teaser in group["newest"]] == [made[place]]
+
+
+@pytest.mark.usefixtures("whole_feed")
+async def test_the_statements_exclude_every_private_row_without_rls(owner_engine: AsyncEngine, scene: Scene) -> None:
+    """Given the scene's private rows (a pending and a held problem, a draft, an invited, an unverified and a delisted
+    organisation's Brief, a hidden, a held and an unpublished proposal), When both statements run as the table owner
+    (Row-Level Security does not apply to it), Then none of them is read: the statements' own predicates exclude them,
+    whatever RLS would add; the public rows are read."""
+    async with owner_engine.connect() as conn:
+        assert await t.run(conn, "SELECT current_user") == "bridge_owner"
+        activity = {row.row_id for row in (await conn.execute(queries.activity_statement())).all()}
+        explore = {row.id for row in (await conn.execute(queries.explore_statement())).all()}
+    private = set(scene.private_problems.values()) | set(scene.private_versions.values())
+    assert not activity & private
+    assert not explore & set(scene.private_problems.values())
+    assert {*scene.public_problems.values(), scene.public_version} <= activity
+    assert set(scene.public_problems.values()) <= explore
 
 
 async def test_a_slow_public_read_is_cancelled_after_2_seconds(app_engine: AsyncEngine) -> None:
