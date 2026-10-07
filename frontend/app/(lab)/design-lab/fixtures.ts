@@ -3,6 +3,7 @@ import type { MyProposal, MyProposalItem } from "@/app/(app)/dev/ideas/ideas";
 import type { EvaluationNda, TeaserCard } from "@/app/(app)/org/data";
 import type { Detail, Summary } from "@/components/tracker/model";
 import type { Me } from "@/lib/auth/routing";
+import type { PublicActivity } from "@/lib/public/public-data";
 
 // Fixture data for the design lab, shaped like the API's answers (lib/api/schema.d.ts). Lab only: never imported by
 // a product screen (test/ fixtures cannot be imported under app/, so these are the lab's own copies). Every figure is
@@ -218,4 +219,17 @@ export const NDA: EvaluationNda = {
     "2. Confidentiality. The organisation keeps the full proposal confidential, shares it only with the people who evaluate it, and does not build from it without a signed agreement.\n\n" +
     "3. Record. The platform records every opening and shows that record to the developer.\n\n" +
     "4. Term. These obligations last two years from the first opening.",
+};
+
+/** What's happening on Home (P24): the public activity feed as the demo seed gives it ("Seeded example"). */
+export const ACTIVITY: PublicActivity = {
+  generated_at: LAB_NOW,
+  seeded: true,
+  items: [
+    { id: "a1", kind: "problem_posted", at: "2026-10-01T06:24:00Z", county: "Nairobi", niche: "Networks & Telecommunications", title: "Late diesel deliveries darken tower sites", stage: null, seeded: true },
+    { id: "a2", kind: "version_registered", at: "2026-10-01T05:51:00Z", county: "Kisumu", niche: "Agriculture", title: "Cold chain for dairy co-ops", stage: null, seeded: true },
+    { id: "a3", kind: "stage_reached", at: "2026-10-01T04:10:00Z", county: "Nakuru", niche: "Agriculture", title: null, stage: "Agreement", seeded: true },
+    { id: "a4", kind: "brief_opened", at: "2026-09-30T18:00:00Z", county: "Mombasa", niche: "Logistics", title: "Port truck queues cost a day per container", stage: null, seeded: true },
+    { id: "a5", kind: "problem_posted", at: "2026-09-30T09:30:00Z", county: "Nairobi", niche: "Microfinance & SACCOs", title: "SACCOs need affordable cyber security and reporting tools", stage: null, seeded: true },
+  ],
 };
