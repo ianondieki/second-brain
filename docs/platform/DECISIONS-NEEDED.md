@@ -471,6 +471,16 @@ The full entries (why, options, default, what they blocked) are kept below for t
 - Owner's choice (2026-10-01): name **Wazo**; direction C (Editorial trust) as the base with B's kanga-cut lattice as the single East African signature (header band, certificate edge, landing hero, empty states; never behind text); C's dark mode. Step 2 must change layout and hierarchy, not only tokens.
 - Status: step 1 delivered; step 2 (the design system and the four showpiece screens: landing, Home, tracker, certificate) delivered 2026-10-01 for review before the roll-out to the remaining screens (`docs/platform/tasks/P18-design-directions.md`).
 
+### D-65 · The "Prototype" badge and the lattice band leave the top bar (P23-2; REQ-UX-01, D-52, D-55)
+- Why: the owner (2026-10-07) wants the top bar to read as a product: the Wazo wordmark clear, no "Prototype" word, no
+  colour lining. The badge was P18's honesty label (one per screen) and the lattice band the kanga border on every
+  top bar (D-52, recoloured in D-55).
+- Decision (the owner, 2026-10-07): remove both from the top bar. The honesty stays where the data is: the landing
+  footer's sentence ("A prototype: every figure on this site is seeded example data."), the "Seeded example" and
+  "Illustrative example" labels on demo data, and the help page's wording. The lattice keeps framing the hero's foot,
+  the certificate sheet and the footer.
+- Status: P23-2 builds it; the P20 design document's top-bar diagram is updated in the same change.
+
 ### D-64 · The "Similar to your profile" chip floor and f1's calibration per embedding model (P23-1; REQ-PERS-01, REQ-EMB-01)
 - Why: with real vectors, f1 is the cosine between the developer's profile and the card. Cosine has a model-specific baseline: unrelated texts sit near 0 under the word-based fake (dev, CI, the demo) but at roughly 0.3–0.5 under bge-m3 (ADR-005), where "related" starts around 0.6. The P23-1 review found the chip offered for any cosine above zero, which with bge-m3 would label nearly every card "Similar to your profile", and f1's contribution would lift every vector-carrying card above the keyword-path cards in a mixed list.
 - Options: (a) one constant floor in code (`SEMANTIC_CHIP_FLOOR = 0.5` in `matching/ranker.py`) for the chip only; f1 stays `max(0, cosine)`; (b) a per-model `floor` in `ai/models.yaml` applied to both the chip and f1's value, `f1 = clamp((cosine − floor) / (1 − floor), 0, 1)`, so f1 is 0 at the model's unrelated baseline and the keyword and vector paths are comparable; (c) as (b) with the floor measured on the nightly eval set (≤ USD 5, D-04) when bge-m3 is first deployed.
