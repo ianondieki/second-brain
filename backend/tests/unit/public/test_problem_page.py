@@ -129,7 +129,16 @@ def test_the_statement_reads_one_readable_problem_and_a_listed_organisation_only
         " problems.source = 'org_brief'",
     ):
         assert clause in text, clause
-    private = ("created_by", "display_name", "email", "handle", "owner", "slug", "verified_domain", "named_orgs")
-    private += ("legal_name",)
+    private = (
+        "created_by",
+        "display_name",
+        "email",
+        "handle",
+        "owner",
+        "slug",
+        "verified_domain",
+        "named_orgs",
+        "legal_name",
+    )
     for column in private:
         assert column not in text, column
