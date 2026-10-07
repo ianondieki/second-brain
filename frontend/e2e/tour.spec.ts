@@ -12,8 +12,11 @@ test.use({ storageState: { cookies: [], origins: [] } });
 test("the first-login tour shows once, slides on, pauses, goes back, can be skipped, and stays away", async ({ page }) => {
   await signUpDeveloper(page);
   await expect(page).toHaveURL(/\/dev$/, { timeout: 60_000 });
-  // The page's timers on a clock the test moves; the tour is not done yet, so it shows again after the reload.
-  await page.clock.install();
+  // The page's timers on a clock the test moves (paused, so the checks below take no step's time); the tour is not
+  // done yet, so it shows again after the reload.
+  const now = Date.now();
+  await page.clock.install({ time: now });
+  await page.clock.pauseAt(now + 1_000);
   await page.reload();
   const first = page.getByRole("dialog", { name: "This is your home" });
   await expect(first).toBeVisible();
@@ -21,7 +24,6 @@ test("the first-login tour shows once, slides on, pauses, goes back, can be skip
   await expect(page.locator("[data-primary]")).toHaveCount(1); // the page's own, not the tour's buttons
   await expect(page.locator("[data-tour] [data-primary]")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
-  await checkScreen(page, { strict: true });
 
   // Six seconds on: the next step slides in, and the live region says so; focus stays where it was.
   await page.mouse.move(0, 0);
@@ -36,6 +38,9 @@ test("the first-login tour shows once, slides on, pauses, goes back, can be skip
   await page.mouse.move(0, 0);
   await page.clock.runFor(18_000);
   await expect(page.getByRole("dialog", { name: "Every idea gets a certificate" })).toBeVisible();
+  // The page rules with the tour open (axe needs the page's own timers, so the clock runs again; Pause holds the tour).
+  await page.clock.resume();
+  await checkScreen(page, { strict: true });
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("dialog", { name: "This is your home" })).toBeVisible();
