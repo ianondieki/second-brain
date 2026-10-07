@@ -17,7 +17,7 @@ import type { Me } from "@/lib/auth/routing";
 
 import { Actions } from "./Actions";
 import { documentLinkClass } from "./document-link";
-import { ContactReveal } from "./ContactReveal";
+import { LazyContactReveal } from "./lazy";
 import { engagementDocument, engagementHistory, orgMembers } from "./data";
 import { Agreements, ContactPerson, Payments, Signatures } from "./Deal";
 import { Endorsements } from "./Endorsements";
@@ -163,7 +163,7 @@ async function TrackerTab({ detail, me }: { detail: Detail; me: Me }) {
       {detail.contact ? (
         <div className="flex flex-col gap-4">
           <ContactPerson detail={detail} />
-          {namedContact ? <ContactReveal engagementId={detail.id} /> : null}
+          {namedContact ? <LazyContactReveal engagementId={detail.id} /> : null}
         </div>
       ) : null}
       <Agreements detail={detail} />
