@@ -7,6 +7,7 @@ for 20 cards with vectors as for 2."""
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from typing import Any
 from uuid import UUID
 
@@ -19,7 +20,9 @@ from bridge.db import create_session_factory
 from bridge.embeddings.tables import FunctionTable, ProblemEmbeddingTable, ProfileEmbeddingTable
 from bridge.jobs.reembed import StaleRow
 from bridge.llm.embeddings import FAKE_MODEL, FAKE_VERSION, FakeEmbedder, hashed_vector, vector_with_similarity
+from bridge.matching import router as matching_router
 from bridge.matching.ranker import SIMILAR_WORDS
+from bridge.matching.ranking_config import get_ranking
 from tests.integration.embeddings.schema_world import sha
 from tests.integration.matching.trend_world import TrendWorld, build, research_card
 from tests.integration.proposals.helpers import Developers, rows, user_of
@@ -36,6 +39,16 @@ async def made(owner_engine: AsyncEngine) -> AsyncIterator[list[UUID]]:
     yield cards
     async with owner_engine.begin() as conn:
         await conn.execute(text("UPDATE problems SET status = 'archived' WHERE id = ANY(:ids)"), {"ids": cards})
+
+
+@pytest.fixture
+def every_card(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The route returns every recommendable card, not the top ten: the shared database holds other suites' cards
+    (``tests/integration/matching`` leaves fresh ones), which could push a far card out of the top ten and make a test
+    depend on the order the suites run in. Ranking, f1 and the chips are unchanged; only the cut is lifted."""
+    cfg = get_ranking()
+    lifted = replace(cfg, ranker=replace(cfg.ranker, top_n=100_000))
+    monkeypatch.setattr(matching_router, "get_ranking", lambda: lifted)
 
 
 async def personalised(developer: httpx.AsyncClient, world: TrendWorld) -> None:
@@ -79,6 +92,7 @@ async def recommended(developer: httpx.AsyncClient) -> dict[str, dict[str, Any]]
     return {item["problem"]["id"]: item for item in body["items"]}
 
 
+@pytest.mark.usefixtures("every_card")
 async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, developers: Developers, made: list[UUID]
 ) -> None:
@@ -148,6 +162,7 @@ async def test_a_card_close_to_the_profile_ranks_above_a_far_one_and_says_why(
         ("profile_embedding_hash = NULL", "the profile's vector has no hash"),
     ],
 )
+@pytest.mark.usefixtures("every_card")
 async def test_a_profile_vector_the_ranker_may_not_use_leaves_every_card_on_keywords(
     owner_engine: AsyncEngine,
     app_engine: AsyncEngine,
