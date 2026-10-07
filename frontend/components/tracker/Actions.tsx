@@ -10,6 +10,7 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { confirmStepUp, runCommand, type Refusal } from "./calls";
 import type { Member } from "./CommandForm";
+import { LazyStepUp } from "./lazy";
 import {
   commandRequest,
   isEndingCommand,
@@ -27,8 +28,9 @@ import {
 // the server, so React.lazy adds no layout shift.
 const CommandForm = lazy(() => import("./CommandForm").then((m) => ({ default: m.CommandForm })));
 const SideSheet = lazy(() => import("./SideSheet").then((m) => ({ default: m.SideSheet })));
-// The fresh-code form only a signature, endorsement or payment asks for (403 step_up_required): loaded when asked.
-const StepUp = lazy(() => import("./StepUp").then((m) => ({ default: m.StepUp })));
+// The fresh-code form only a signature, endorsement or payment asks for (403 step_up_required): loaded when asked, and
+// said in one sentence if its chunk cannot load (components/tracker/lazy.tsx).
+const StepUp = LazyStepUp;
 
 export interface ActionsProps {
   engagementId: string;
