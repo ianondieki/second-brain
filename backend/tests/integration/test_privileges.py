@@ -22,6 +22,10 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
 - Revision 0011 (REQ-DEV-03): only bridge_app touches the team tables (blocks, invitations, threads, messages, read
   markers, contributor rows), with exactly its matrix; no role but the owner sets a profile's opt-in time, and only
   bridge_app turns the peers switch; only bridge_app executes the peers and team definers.
+- Revision 0012 (REQ-PERS-02, REQ-EMB-01): no role but the owner updates a profile's or a problem's vector, model,
+  version, time or text hash, or inserts a problem's (the worker writes them through the definers); only bridge_app
+  executes the embedding definers, and nobody their internal helpers; no definer function inserts a consent decision
+  (its time is the database's for every writer but the owner).
 """
 
 from __future__ import annotations
@@ -243,6 +247,122 @@ async def test_only_bridge_app_executes_the_team_definers(owner_engine: AsyncEng
         assert set(callers.scalars()) == expected
         public = "SELECT has_function_privilege('public', :sig, 'EXECUTE')"
         assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
+
+
+EMBEDDING_COLUMNS = {
+    "developer_profiles": (
+        "profile_embedding",
+        "embed_model",
+        "embed_version",
+        "profile_embedded_at",
+        "profile_embedding_hash",
+    ),
+    "problems": ("embedding", "embed_model", "embed_version", "embedded_at", "embedding_hash"),
+}
+
+
+@pytest.mark.parametrize(
+    ("table", "column"), [(table, column) for table, columns in EMBEDDING_COLUMNS.items() for column in columns]
+)
+async def test_no_role_writes_an_embedding_but_the_owners_definers(
+    owner_engine: AsyncEngine, table: str, column: str
+) -> None:
+    """Revision 0012: a vector, its model, version and time are written only by app_set_profile_embedding and
+    app_set_problem_embedding (and cleared by the profile's clearer and the consents trigger), all the owner's: no role
+    of the cluster updates one (revisions 0002 and 0005's UPDATE and INSERT of problems' are revoked), and none inserts
+    a problem's. bridge_app keeps revision 0001's table-wide INSERT on developer_profiles (the signup's ORM insert names
+    every column), and its INSERT policy admits a new profile only with each of them NULL (review MINOR 3)."""
+    async with owner_engine.connect() as conn:
+        for privilege in ("UPDATE", "INSERT"):
+            writers = await conn.execute(
+                text(
+                    "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                    " AND r.rolname NOT LIKE 'pg\\_%'"
+                    " AND has_column_privilege(r.oid, CAST(:t AS regclass), :c, :p)"
+                ),
+                {"t": f"public.{table}", "c": column, "p": privilege},
+            )
+            expected = ["bridge_app"] if (table, privilege) == ("developer_profiles", "INSERT") else []
+            assert sorted(writers.scalars()) == expected, privilege
+        reads = "SELECT has_column_privilege('bridge_app', CAST(:t AS regclass), :c, 'SELECT')"
+        assert (await conn.execute(text(reads), {"t": f"public.{table}", "c": column})).scalar_one() is True
+        if table == "developer_profiles":
+            policy = (
+                "SELECT with_check FROM pg_policies WHERE schemaname = 'public' AND tablename = 'developer_profiles'"
+                " AND policyname = 'bridge_app_insert'"
+            )
+            check = (await conn.execute(text(policy))).scalar_one()
+            assert f"({column} IS NULL)" in check
+            assert "(user_id = app_user_id())" in check
+
+
+@pytest.mark.parametrize(
+    ("signature", "callers"),
+    [
+        ("public.app_profiles_to_embed(text, text, integer)", {"bridge_app"}),
+        ("public.app_set_profile_embedding(uuid, vector, text, text, text)", {"bridge_app"}),
+        ("public.app_clear_profile_embedding(uuid)", {"bridge_app"}),
+        ("public.app_problems_to_embed(text, text, integer)", {"bridge_app"}),
+        ("public.app_set_problem_embedding(uuid, vector, text, text, text)", {"bridge_app"}),
+        ("public.app_stale_embedding_counts(text, text)", {"bridge_app"}),
+        ("public.app_clear_empty_embeddings()", {"bridge_app"}),
+        ("public.empty_embedded_profiles()", set()),
+        ("public.profile_embedding_candidates()", set()),
+        ("public.profiles_to_embed(text, text)", set()),
+        ("public.profile_embedding_text(uuid)", set()),
+        ("public.profile_embedding_clear(uuid)", set()),
+        ("public.profile_consent_granted(uuid)", set()),
+        ("public.embedding_text_hash(text)", set()),
+        ("public.problem_embedding_text(text, text)", set()),
+        ("public.problem_is_readable(uuid)", set()),
+    ],
+)
+async def test_only_bridge_app_executes_the_embedding_definers(
+    owner_engine: AsyncEngine, signature: str, callers: set[str]
+) -> None:
+    """Revision 0012: the embedding definers are executable by bridge_app alone of every role of the cluster, PUBLIC
+    included (each refuses a bound session but the clearer's own row); their internal helpers by nobody but the
+    owner."""
+    async with owner_engine.connect() as conn:
+        found = await conn.execute(
+            text(
+                "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                " AND r.rolname NOT LIKE 'pg\\_%' AND has_function_privilege(r.oid, :sig, 'EXECUTE')"
+            ),
+            {"sig": signature},
+        )
+        assert set(found.scalars()) == callers
+        public = "SELECT has_function_privilege('public', :sig, 'EXECUTE')"
+        assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
+
+
+async def test_no_definer_function_inserts_a_consent_decision(owner_engine: AsyncEngine) -> None:
+    """Revision 0012 (security MINOR, round 4): ``consents_created_now`` gives every decision the database's time but
+    the table owner's, so a SECURITY DEFINER function (it runs as the owner) that inserted into ``consents`` would
+    carry a client's time and could make a stale grant the latest decision. No definer function's body inserts into
+    it (the app records decisions as bridge_app, through the consents policy); one that only reads it is fine."""
+    scan = text(
+        "SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.prosecdef AND p.pronamespace = 'public'::regnamespace"
+        " AND p.prosrc ~* 'insert[[:space:]]+into[[:space:]]+(public[.])?\"?consents\"?([^_a-z0-9]|$)'"
+    )
+    async with owner_engine.connect() as conn:
+        transaction = await conn.begin()
+        try:
+            assert list((await conn.execute(scan)).scalars()) == []
+            definers = "SELECT count(*) FROM pg_proc p WHERE p.prosecdef AND p.pronamespace = 'public'::regnamespace"
+            assert (await conn.execute(text(definers))).scalar_one() > 50  # the scan saw the definers
+            await conn.execute(  # the scan finds such a function (rolled back)
+                text(
+                    "CREATE FUNCTION scan_probe() RETURNS void LANGUAGE sql SECURITY DEFINER"
+                    " SET search_path = pg_catalog, public, pg_temp"
+                    " AS $$ INSERT INTO public.consents (id, user_id, purpose, granted, text_version, text_sha256,"
+                    " source, created_at) SELECT uuid7(), id, 'profiling', true, 'v1', '\\x00', 'probe', now()"
+                    " FROM users WHERE false $$"
+                )
+            )
+            assert list((await conn.execute(scan)).scalars()) == ["scan_probe()"]
+        finally:
+            await transaction.rollback()
 
 
 async def test_no_role_reads_or_writes_all_data(owner_engine: AsyncEngine) -> None:
