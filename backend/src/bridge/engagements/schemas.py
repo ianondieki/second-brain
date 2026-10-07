@@ -129,8 +129,8 @@ class DueOut(BaseModel):
 
     due_on: date
     due_at: datetime = Field(
-        description="The instant the window closes, for a countdown: the end of due_on in Africa/Nairobi"
-        " (23:59:59.999999 local), in UTC. overdue stays the authority for whether it has passed"
+        description="The instant the window closes, for a countdown: the stage deadline (the end of due_on in"
+        " Africa/Nairobi, 23:59:59 local), in UTC; overdue is true exactly once it has passed"
     )
     business_days_left: int
     overdue: bool

@@ -3,8 +3,9 @@
 Given the platform clock (``app_clock_now()``), When any /api answer is read, Then ``X-App-Now`` carries it in ISO
 8601 UTC with a ``Z``, and moving the dev/test clock moves it (errors included), so ``make demo-clock`` and the e2e
 clock scenarios move a countdown with every other deadline. Given an engagement waiting on a step, When either party
-reads it (detail or list), Then ``due.due_at`` is the end of ``due_on`` in Africa/Nairobi in UTC, the same for both,
-and later than the platform clock while ``overdue`` is false.
+reads it (detail or list), Then ``due.due_at`` is the stage deadline in UTC (the end of ``due_on`` in Africa/Nairobi,
+the instant ``overdue`` is tested against), the same for both, and later than the platform clock while ``overdue`` is
+false.
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from bridge.engagements.calendar import closes_at
 from bridge.main import APP_NOW_HEADER
 from tests.integration.api import make_client
 from tests.integration.engagements.api_world import Tracker, build, clients, deals_on, moved_clock, open_engagement
@@ -75,12 +75,13 @@ async def test_due_at_is_the_end_of_the_due_day_in_nairobi_for_both_parties(
     async with clients(app_engine, deals_on(), world.developer, world.reviewer) as (dev, reviewer):
         response = await dev.get(t.path())
         assert response.status_code == 200, response.text
-        due = response.json()["due"]
+        detail = response.json()
+        due = detail["due"]
         due_on = date.fromisoformat(due["due_on"])
-        assert due["due_at"] == f"{due_on.isoformat()}T20:59:59.999999Z"
-        assert datetime.fromisoformat(due["due_at"]) == closes_at(due_on)
+        assert due["due_at"] == f"{due_on.isoformat()}T20:59:59Z"  # 23:59:59 in Nairobi
+        assert datetime.fromisoformat(due["due_at"]) == datetime.fromisoformat(detail["stage_deadline_at"])
         assert due["overdue"] is False
-        assert stamped(response) < closes_at(due_on)  # the countdown has time left
+        assert stamped(response) < datetime.fromisoformat(due["due_at"])  # the countdown has time left
         assert (await t.detail(reviewer))["due"] == due  # the organisation's turn: the same instant on both sides
         listed = (await dev.get("/api/me/engagements")).json()["items"]
         assert [item["due"] for item in listed if item["id"] == str(engagement)] == [due]

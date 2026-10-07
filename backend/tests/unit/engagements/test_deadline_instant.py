@@ -1,10 +1,11 @@
 """REQ-TRACK-03 (P23-3): the instant a deadline window closes, for the countdown in days, hours and minutes.
 
-A tracker step's deadline and a Brief's "Proposals by" day both run to the end of their day in Africa/Nairobi (EAT,
-UTC+3, no daylight saving): the window closes at 23:59:59.999999 local, sent in UTC with a ``Z``. ``due_at`` sits
-beside the business days (``due_on``, ``business_days_left``, ``overdue``) and ``deadline_at`` beside the Brief's
-``deadline`` (null when it has none, and derived from it, never set apart from it). Both are always sent and stay
-optional in the generated web types, so clients adopt them at their own pace.
+A tracker step's ``due_at`` is its stage deadline itself (the end of ``due_on`` in Africa/Nairobi, 23:59:59 local),
+in UTC with a ``Z``: the very instant ``overdue`` is tested against, so the two never disagree. A Brief's
+``deadline_at`` is the last instant of its "Proposals by" day in Nairobi (23:59:59.999999 local): the deadline day is
+open and ``past_deadline`` starts at the next local midnight, one microsecond later; it is derived from ``deadline``
+(null when there is none). Both are always sent and stay optional in the generated web types, so clients adopt them
+at their own pace.
 """
 
 from __future__ import annotations
@@ -16,8 +17,9 @@ from uuid import UUID
 
 import pytest
 
-from bridge.engagements.calendar import NAIROBI, closes_at
-from bridge.engagements.schemas import DueOut
+from bridge.engagements import state_machine as sm
+from bridge.engagements.calendar import NAIROBI, closes_at, local_date
+from bridge.engagements.history import due_out
 from bridge.models.enums import BriefStatus, BriefVisibility, ModerationState, ProblemStatus
 from bridge.openapi import render
 from bridge.problems.brief_rules import facts
@@ -40,22 +42,31 @@ def test_a_timestamp_is_not_a_day() -> None:
         closes_at(datetime(2026, 10, 16, 12, tzinfo=UTC))
 
 
-def test_due_sends_the_instant_in_utc_with_a_z() -> None:
-    due = DueOut(due_on=DUE_ON, due_at=closes_at(DUE_ON), business_days_left=7, overdue=False)
-    assert due.model_dump(mode="json") == {
+def test_due_at_is_the_deadline_overdue_is_tested_against() -> None:
+    deadline = sm.end_of_day(DUE_ON)  # how every stage deadline is set
+    on_time = due_out(deadline, deadline, frozenset())
+    assert on_time.model_dump(mode="json") == {
         "due_on": "2026-10-16",
-        "due_at": "2026-10-16T20:59:59.999999Z",
-        "business_days_left": 7,
+        "due_at": "2026-10-16T20:59:59Z",
+        "business_days_left": 0,
         "overdue": False,
     }
+    assert on_time.due_at == deadline
+    assert on_time.due_at.utcoffset() == timedelta(0)  # sent in UTC
+    late = due_out(deadline, deadline + timedelta(microseconds=1), frozenset())
+    assert (late.overdue, late.due_at) == (True, on_time.due_at)  # overdue exactly once due_at has passed
+    early = due_out(deadline, deadline - timedelta(days=2), frozenset())
+    assert (early.overdue, early.due_at) == (False, on_time.due_at)
 
 
 def test_the_briefs_deadline_instant_is_derived_from_its_day() -> None:
     open_one = facts(None, None, DUE_ON, status=BriefStatus.PUBLISHED, today=date(2026, 10, 16))
     assert open_one.model_dump(mode="json")["deadline_at"] == "2026-10-16T20:59:59.999999Z"
     assert (open_one.open, open_one.ended) == (True, None)  # the deadline day itself is open
-    past = facts(None, None, DUE_ON, status=BriefStatus.PUBLISHED, today=date(2026, 10, 17))
-    assert (past.deadline_at, past.ended) == (CLOSES, "past_deadline")
+    assert local_date(CLOSES) == DUE_ON  # deadline_at is still the deadline day in Nairobi: open
+    next_day = local_date(CLOSES + timedelta(microseconds=1))
+    past = facts(None, None, DUE_ON, status=BriefStatus.PUBLISHED, today=next_day)
+    assert (past.deadline_at, past.ended) == (CLOSES, "past_deadline")  # past_deadline from the next instant on
     none = facts(None, None, None, status=BriefStatus.PUBLISHED, today=date(2026, 10, 17))
     assert none.deadline_at is None
     stray = BriefFacts(org=None, budget_band=None, deadline=None, deadline_at=CLOSES)
@@ -93,6 +104,7 @@ def _schema(name: str) -> dict[str, Any]:
 
 def test_the_instants_are_documented_and_optional_in_the_web_types() -> None:
     due = _schema("DueOut")
+    assert "overdue" in due["properties"]["due_at"]["description"]
     assert due["properties"]["due_at"]["type"] == "string"  # never null
     assert due["properties"]["due_at"]["format"] == "date-time"
     assert "due_at" not in due["required"]
