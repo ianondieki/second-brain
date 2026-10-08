@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "./cn";
 import { Sparkline } from "./Sparkline";
@@ -14,17 +14,29 @@ export interface StatTileProps {
   href?: string;
   /** A fuller reading of the figure as the tile's title (Home's deadline tile: the business days left). */
   title?: string;
+  /** The value is this whole number and counts up to it once inside a CountUp box (P25; still under reduced motion,
+   *  read as the number by assistive technology). */
+  count?: number;
   className?: string;
   "data-stat"?: string;
 }
 
 /** A stat tile: the label, the figure in the display face, one meta line, and a sparkline when there is a series. Flat on the canvas. */
-export function StatTile({ label, value, meta, spark, href, className, ...rest }: StatTileProps) {
+export function StatTile({ label, value, meta, spark, href, className, count, ...rest }: StatTileProps) {
+  const figure =
+    count === undefined ? (
+      value
+    ) : (
+      <>
+        <span aria-hidden="true" className="count" style={{ "--to": count } as CSSProperties} />
+        <span className="sr-only">{count}</span>
+      </>
+    );
   const body = (
     <>
       <span className="text-sm font-semibold text-ink-soft">{label}</span>
       <span className="mt-2 flex items-end justify-between gap-3">
-        <span className="font-figure text-2xl leading-none font-[720] tracking-[-0.03em] whitespace-nowrap text-ink tabular-nums">{value}</span>
+        <span className="font-figure text-2xl leading-none font-[720] tracking-[-0.03em] whitespace-nowrap text-ink tabular-nums">{figure}</span>
         {spark ? <Sparkline values={spark} className="mb-1 shrink-0" /> : null}
       </span>
       {meta ? <span className="mt-2 text-sm text-ink-soft">{meta}</span> : null}

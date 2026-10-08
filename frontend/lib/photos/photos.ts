@@ -76,9 +76,10 @@ export const NATIONWIDE: Photo = photo("kenya-tea");
 /** Every vendored photograph, in index order. */
 export const ALL_PHOTOS: readonly Photo[] = [...ALL.values()];
 
-/** Every photograph the site shows, credited on /credits. */
+/** Every photograph the site shows, credited on /credits: every vendored photograph (the landing's strip, Explore,
+ *  the niche bands and Home's greeting draw from the same index), the strip's and Explore's first. */
 export const CREDITED: readonly Photo[] = [
-  ...new Map([...STRIP.map((c) => c.photo), ...EXPLORE.values(), NATIONWIDE].map((p) => [p.slug, p])).values(),
+  ...new Map([...STRIP.map((c) => c.photo), ...EXPLORE.values(), NATIONWIDE, ...ALL_PHOTOS].map((p) => [p.slug, p])).values(),
 ];
 
 /** A county's anchor on /explore: its reference code ("KE-30"), the same on the landing's strip. */
