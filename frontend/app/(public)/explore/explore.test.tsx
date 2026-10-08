@@ -114,7 +114,8 @@ describe("Credits", () => {
       expect(work.getAttribute("href")).toMatch(/^https:\/\/commons\.wikimedia\.org\/wiki\/File:/);
       expect(within(line).getByRole("link", { name: photo.licence }).getAttribute("href")).toBe(photo.licence_url);
       expect(line.textContent).toContain(`by ${photo.author}`);
-      expect(line.textContent).toMatch(photo.slug === "kenya-tea" ? /cropped and resized/ : /; resized, via Wikimedia Commons\.$/);
+      // What was changed, as the index records it ("resized", "cropped and resized"; P25 credits every photograph).
+      expect(line.textContent).toMatch(new RegExp(`; ${photo.changes}, via Wikimedia Commons\\.$`));
     }
   });
 });

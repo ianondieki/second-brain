@@ -3,8 +3,8 @@ import { ALL_PHOTOS, photo, type Photo } from "./photos";
 // A photograph for a niche or a county (D-67, P25): the narrow band on problem, idea and engagement cards, on problem
 // pages and company pages. Decorative: the niche's or the county's name is always shown beside it. A niche at any
 // level maps to its top-level niche (backend/seed/reference.yaml's two-level taxonomy); a top-level niche takes the
-// photograph public/photos/index.json marks with its `niche` (P25-A adds one per niche), else, until then, one of
-// P24's that fits; the public sector takes the county's photograph; anything else gets none (the lattice band).
+// photograph public/photos/index.json marks with its `niche` (P25-A: one per top-level niche), else one of P24's that
+// fits; a public-sector niche without its own takes the county's photograph; anything else gets none (the lattice).
 
 /** Child niche → its top-level niche (backend/seed/reference.yaml). */
 const PARENT: Readonly<Record<string, string>> = {
@@ -28,10 +28,10 @@ export function topNiche(slug: string): string {
   return PARENT[slug] ?? slug;
 }
 
-/** A county's photograph by its reference code ("KE-30"), the first the index lists for it. */
+/** A county's photograph by its reference code ("KE-30"): the index's `county` role first, else any of that county. */
 export function countyPhoto(code: string | null | undefined): Photo | undefined {
   if (!code) return undefined;
-  return ALL_PHOTOS.find((p) => p.county_code === code);
+  return ALL_PHOTOS.find((p) => p.county_code === code && p.role === "county") ?? ALL_PHOTOS.find((p) => p.county_code === code);
 }
 
 /**

@@ -30,6 +30,11 @@ export function useSavesData(): boolean {
   return use(pending).get("save-data")?.trim().toLowerCase() === "on";
 }
 
+/** A band is a short strip: the 480 px files where they are vendored (P25-A), else P24's 800 px. */
+function bandWidths(widths: readonly number[]): readonly number[] {
+  return widths.includes(480) ? [480] : [800];
+}
+
 export interface NicheBandProps {
   /** The niche's slug at any level ("microfinance-saccos" counts as financial services). */
   niche?: string | null;
@@ -56,7 +61,7 @@ export function NicheBand({ niche, county, children, className, sizes = "(min-wi
       className={cn("niche-band h-16", found && children ? "niche-band-scrim" : null, !found && "niche-band-lattice", className)}
       data-niche-band={found ? found.slug : "lattice"}
     >
-      {found ? <Picture photo={found} sizes={sizes} widths={photoWidths(found)} /> : null}
+      {found ? <Picture photo={found} sizes={sizes} widths={bandWidths(photoWidths(found))} /> : null}
       {children ? <div className={cn("absolute inset-x-0 bottom-0 z-[1] p-3", found ? "text-on-night" : "text-ink")}>{children}</div> : null}
     </div>
   );

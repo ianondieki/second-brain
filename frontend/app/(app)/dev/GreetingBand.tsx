@@ -17,7 +17,8 @@ const SIZES = "(min-width: 1152px) 56rem, (min-width: 1024px) calc(100vw - 19rem
  */
 export async function GreetingBand({ part, children }: { part: DayPart; children: ReactNode }) {
   const photo = (await savesData()) ? null : greetingPhoto(part);
-  const widths = photo ? photoWidths(photo) : [];
+  // The 800 px files only (the LCP budget): the band is at most 56 rem wide and sits under a gradient.
+  const widths = photo ? photoWidths(photo).filter((w) => w === 800) : [];
   if (photo) {
     const base = `${photo.dir}/${photo.slug}`;
     preload(`${base}-800.avif`, {

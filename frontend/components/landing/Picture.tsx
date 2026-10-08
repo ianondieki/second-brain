@@ -31,7 +31,7 @@ export function Picture({
 }) {
   const base = `${photo.dir}/${photo.slug}`;
   const set = (ext: string) => widths.map((w) => `${base}-${w}.${ext} ${w}w`).join(", ");
-  const fallback = widths.find((w) => w >= 800) ?? widths[widths.length - 1];
+  const fallback = widths.find((w) => w >= 800) ?? widths[widths.length - 1] ?? 800;
   return (
     <picture>
       <source type="image/avif" srcSet={set("avif")} sizes={sizes} />
