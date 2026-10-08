@@ -11,6 +11,7 @@ import { resolveServerTree } from "@/test/server-tree";
 
 import OrganisationHome from "./(home)/page";
 import { ItemCard, ItemGrid } from "./ItemCard";
+import { BriefForm } from "./problems/new/BriefForm";
 import { BriefPreview } from "./problems/new/BriefPreview";
 
 // D-67 (P25; REQ-UX-01, REQ-UX-02, REQ-UX-06): the organisation side in the portal's page language. Home greets by the
@@ -182,6 +183,29 @@ describe("BriefPreview", () => {
     renderWithIntl(<PreviewHarness />);
     fireEvent.change(screen.getByLabelText("t"), { target: { value: "Tower sites go dark" } });
     expect(document.querySelector("[data-preview='title']")?.textContent).toBe("Tower sites go dark");
+  });
+
+  it("shows the page's own preview first and the live one, fetched on the first edit, after it", async () => {
+    renderWithIntl(
+      <BriefForm
+        orgId={ORG_ID}
+        orgName={ORG_NAME}
+        niches={props.niches}
+        counties={props.counties}
+        bands={props.bands}
+        today="2026-10-08"
+        planLimit={1}
+        planNames={{}}
+        doneHref="/org/problems"
+        hereHref="/org/problems/new"
+        cancelHref="/org/problems"
+        preview={<p data-static-preview="">How it reads on Discover</p>}
+      />,
+    );
+    expect(document.querySelector("[data-static-preview]")).not.toBeNull();
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Tower sites go dark" } });
+    expect(await screen.findByText("Tower sites go dark", { selector: "[data-preview='title']" })).toBeTruthy();
+    expect(document.querySelector("[data-static-preview]")).toBeNull();
   });
 
   function PreviewHarness() {

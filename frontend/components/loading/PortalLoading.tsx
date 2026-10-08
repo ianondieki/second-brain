@@ -1,17 +1,18 @@
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
-import { SignedInShell } from "@/components/SignedInShell";
+import { TopBarBase } from "@/components/TopBarBase";
 import { Skeleton, SkeletonCards, SkeletonHero, SkeletonScreen, SkeletonText } from "@/components/ui/Skeleton";
 
 /** The shapes a loading screen can take, after the page it stands in for (D-67, P25). */
 export type LoadingShape = "home" | "cards" | "list" | "table" | "detail" | "form";
 
 /**
- * A signed-in route's loading screen (`loading.tsx`): the same shell as the page (top bar, Search, the bell, the
- * account menu and the portal's navigation, so nothing jumps when the page arrives) around skeletons shaped like it,
- * with one polite "Loading…" for assistive technology. Server-rendered, no API call of its own (the bell's count waits
- * in its Suspense), so it paints at once.
+ * A signed-in route's loading screen (`loading.tsx`): the page's frame as SignedInShell draws it (the top bar, the
+ * portal's navigation and the main column, so nothing jumps when the page arrives) around skeletons shaped like it,
+ * with one polite "Loading…" for assistive technology. Search and the account menu stand in as their shapes: the
+ * frame holds no client component of the app's own, so a link's prefetch of this screen fetches no route script
+ * (the 150 KB budget, REQ-UX-05). Server-rendered, no API call, so it paints at once.
  */
 export async function PortalLoading({
   homeHref,
@@ -30,7 +31,7 @@ export async function PortalLoading({
 }) {
   const t = await getTranslations("portal");
   return (
-    <SignedInShell homeHref={homeHref} nav={nav} wide>
+    <LoadingFrame homeHref={homeHref} nav={nav}>
       <SkeletonScreen label={t("loading")}>
         <div className="max-w-5xl" data-loading-shape={shape}>
           {shape === "home" ? (
@@ -94,6 +95,31 @@ export async function PortalLoading({
           )}
         </div>
       </SkeletonScreen>
-    </SignedInShell>
+    </LoadingFrame>
+  );
+}
+
+/** SignedInShell's frame with the shapes of Search and the account menu (decorative) and the bell without a count. */
+async function LoadingFrame({ homeHref, nav, children }: { homeHref: string; nav?: ReactNode; children: ReactNode }) {
+  return (
+    <>
+      <TopBarBase homeHref={homeHref} Anchor="a" sticky>
+        <div aria-hidden="true" className="flex min-w-0 items-center gap-1 sm:gap-2" data-top-bar-controls="">
+          <Skeleton className="size-11 rounded-full sm:h-11 sm:w-[clamp(12rem,26vw,19rem)]" />
+          <Skeleton className="size-11 rounded-full" />
+          <Skeleton className="size-11 rounded-full sm:w-28" />
+        </div>
+      </TopBarBase>
+      <div className="mx-auto flex w-full max-w-6xl flex-1 lg:gap-10 lg:px-6">
+        {nav}
+        <main
+          id="main"
+          tabIndex={-1}
+          className={`w-full min-w-0 flex-1 px-4 pt-8 focus:outline-none sm:px-6 lg:px-0 lg:pt-16 ${nav ? "pb-28 lg:pb-16" : "pb-16"}`}
+        >
+          {children}
+        </main>
+      </div>
+    </>
   );
 }

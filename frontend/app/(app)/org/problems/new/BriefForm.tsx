@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -34,7 +34,6 @@ import {
   type Refused,
 } from "../../brief-draft";
 import { briefCalls, type BriefCalls } from "../calls";
-import { BriefPreview } from "./BriefPreview";
 
 export interface NicheGroup {
   id: string;
@@ -62,7 +61,12 @@ export interface BriefFormProps {
   calls?: BriefCalls;
   /** The page's language, for the preview's date. */
   locale?: string;
+  /** How the empty Brief reads on Discover, drawn by the page (BriefPreviewView): shown until the first edit. */
+  preview?: ReactNode;
 }
+
+/** The live preview, fetched on the form's first edit: the first paint shows the page's own (the `preview` prop). */
+const LivePreview = lazy(() => import("./BriefPreview"));
 
 const LIMIT: Partial<Record<DraftField, number>> = {
   title: BRIEF_LIMITS.title,
@@ -88,6 +92,7 @@ export function BriefForm(props: BriefFormProps) {
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<Refused | null>(null);
   const notice = useRef<HTMLDivElement>(null);
+  const [edited, setEdited] = useState(false);
 
   useEffect(() => {
     // A refusal about the whole Brief takes focus; one about its fields leaves focus on the first marked field.
@@ -96,6 +101,7 @@ export function BriefForm(props: BriefFormProps) {
 
   function change<K extends keyof BriefDraft>(field: K, value: BriefDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
+    setEdited(true);
     if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
     if (issues.some((issue) => issue.field === field)) setIssues((current) => current.filter((issue) => issue.field !== field));
   }
@@ -277,14 +283,20 @@ export function BriefForm(props: BriefFormProps) {
       </div>
 
       <div className="brief-aside">
-        <BriefPreview
-          draft={draft}
-          orgName={props.orgName}
-          niches={props.niches}
-          counties={props.counties}
-          bands={props.bands}
-          locale={props.locale ?? "en"}
-        />
+        {edited ? (
+          <Suspense fallback={props.preview}>
+            <LivePreview
+              draft={draft}
+              orgName={props.orgName}
+              niches={props.niches}
+              counties={props.counties}
+              bands={props.bands}
+              locale={props.locale ?? "en"}
+            />
+          </Suspense>
+        ) : (
+          props.preview
+        )}
       </div>
 
       <div className="brief-submit flex flex-col gap-6">

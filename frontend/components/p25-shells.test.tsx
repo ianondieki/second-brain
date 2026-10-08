@@ -19,13 +19,9 @@ vi.mock("next-intl/server", () => ({
     createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
   getLocale: async () => "en",
 }));
-vi.mock("./TopBar", () => ({ TopBar: ({ children }: { children?: ReactNode }) => <header data-top-bar="">{children}</header> }));
-vi.mock("./SignedInShell", () => ({
-  SignedInShell: ({ nav, children, homeHref }: { nav?: ReactNode; children: ReactNode; homeHref: string }) => (
-    <div data-shell={homeHref}>
-      {nav}
-      <main>{children}</main>
-    </div>
+vi.mock("@/components/TopBar", () => ({
+  TopBar: ({ children, homeHref }: { children?: ReactNode; homeHref?: string }) => (
+    <header data-top-bar={homeHref ?? "/"}>{children}</header>
   ),
 }));
 
@@ -76,11 +72,17 @@ describe("AuthShell", () => {
 });
 
 describe("PortalLoading", () => {
-  it("draws the page's shell and says Loading once; the skeletons say nothing", async () => {
+  it("draws the page's frame and says Loading once; the skeletons say nothing", async () => {
     const { container } = renderWithIntl(
       <>{await resolveServerTree(await PortalLoading({ homeHref: "/org", nav: <nav aria-label="Organisation" />, shape: "cards", tabs: true }))}</>,
     );
-    expect(container.querySelector("[data-shell='/org']")).not.toBeNull();
+    const bar = container.querySelector<HTMLElement>("[data-top-bar]")!;
+    expect(bar.querySelector("a")?.getAttribute("href")).toBe("/org");
+    expect(within(screen.getByRole("main")).getByRole("status")).toBeTruthy();
+    // Search, the bell and the account menu stand in as shapes (no client code: prefetching this screen fetches no
+    // route script).
+    expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+    expect(bar.querySelector("[data-top-bar-controls]")?.getAttribute("aria-hidden")).toBe("true");
     expect(screen.getByRole("navigation", { name: "Organisation" })).toBeTruthy();
     expect(screen.getAllByRole("status")).toHaveLength(1);
     expect(screen.getByRole("status").textContent).toBe("Loading…");

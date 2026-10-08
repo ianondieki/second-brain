@@ -16,6 +16,7 @@ import { OrgRefusal } from "../../OrgRefusal";
 import { PlanNotice } from "../PlanNotice";
 import { getCounties, getNicheTree, getVerification, readOrgPlans } from "../../scout-data";
 import { BriefForm } from "./BriefForm";
+import { BriefPreviewView } from "./BriefPreviewView";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("briefs");
@@ -31,6 +32,7 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
   const { memberships, org, missing, query } = await orgContext((await searchParams).org);
   const t = await getTranslations("briefs");
   const ti = await getTranslations("inbox");
+  const tf = await getTranslations("briefForm");
   const back = org ? problemsHref(memberships, org.org_id) : "/org/problems";
 
   const frame = (body: ReactNode) => (
@@ -123,6 +125,21 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
             hereHref={here}
             cancelHref={back}
             locale={await getLocale()}
+            preview={
+              <BriefPreviewView
+                words={{
+                  heading: tf("preview.title"),
+                  title: tf("preview.untitled"),
+                  niche: null,
+                  place: tf("countyAny"),
+                  postedBy: tf("preview.postedBy", { org: org.org_name }),
+                  statement: tf("preview.statement"),
+                  budget: tf("preview.noBudget"),
+                  deadline: tf("preview.noDeadline"),
+                  note: tf("preview.note"),
+                }}
+              />
+            }
           />
         </ClientStrings>
       </div>
