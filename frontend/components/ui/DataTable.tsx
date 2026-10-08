@@ -20,7 +20,7 @@ export function DataTable({ columns, className, children, ...rest }: DataTablePr
     // From 1024 px the console's tables fit their column, so the box stops scrolling sideways and the header row
     // can stay under the sticky top bar while a long queue scrolls (P25).
     <div className="w-full max-sm:contents sm:overflow-x-auto lg:overflow-x-visible">
-      <table role="table" className={cn("w-full border-collapse text-left text-sm max-sm:block", className)} {...rest}>
+      <table role="table" data-sticky-head="" className={cn("w-full border-collapse text-left text-sm max-sm:block", className)} {...rest}>
         <thead role="rowgroup" className="max-sm:hidden">
           <tr role="row" className="border-b border-line">
             {columns.map((column, index) => (

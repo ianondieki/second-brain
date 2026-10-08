@@ -51,6 +51,11 @@ describe("portal.css", () => {
     expect(media("(forced-colors: active)")).toMatch(/\.org-greet-photo,\s*\.auth-photo \{\s*display: none;/);
   });
 
+  it("keeps a focused control clear of the sticky day names and table headers (WCAG 2.4.11)", () => {
+    expect(portal).toMatch(/html:has\(\.notice-day\) \{\s*scroll-padding-block-start: 3rem;/);
+    expect(media("(width >= 64rem)")).toMatch(/html:has\(\[data-sticky-head\]\):has\(\[data-top-bar\]\[data-sticky\]\) \{\s*scroll-padding-block-start: 8rem;/);
+  });
+
   it("skips off-screen notifications and keeps each day's name in view", () => {
     expect(portal).toMatch(/\.notice-row \{\s*content-visibility: auto;/);
     expect(portal).toMatch(/\.notice-day \{\s*position: sticky;/);

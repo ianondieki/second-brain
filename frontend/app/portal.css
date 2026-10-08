@@ -267,8 +267,9 @@ li > .compare-band > .niche-band {
     justify-content: flex-end;
     padding: 1.5rem 1.25rem;
   }
+  /* On a photograph the eyebrow takes the band's main ink: the softer one fell under 4.5:1 over the afternoon sky. */
   .org-greet .page-eyebrow {
-    color: var(--night-soft);
+    color: var(--on-night);
   }
   .org-greet h1 {
     color: var(--on-night);
@@ -278,7 +279,8 @@ li > .compare-band > .niche-band {
   }
   @media (width >= 40rem) {
     .org-greet-photo::after {
-      background: linear-gradient(90deg, rgb(30 22 64 / 0.95) 0%, rgb(30 22 64 / 0.82) 42%, rgb(30 22 64 / 0.28) 78%, rgb(30 22 64 / 0.12) 100%);
+      /* Measured (scratchpad photocontrast.mjs): every text at least 4.5:1 against the brightest pixel under it. */
+      background: linear-gradient(90deg, rgb(30 22 64 / 0.95) 0%, rgb(30 22 64 / 0.9) 50%, rgb(30 22 64 / 0.78) 72%, rgb(30 22 64 / 0.3) 100%);
     }
     .org-greet-body {
       min-height: 16.5rem;
@@ -425,7 +427,7 @@ li > .compare-band > .niche-band {
     gap: 0.25rem 0.75rem;
     font-size: 0.75rem;
     line-height: 1.5;
-    color: var(--night-soft);
+    color: var(--on-night);
   }
   .auth-credit a {
     color: var(--on-night);
@@ -442,5 +444,17 @@ li > .compare-band > .niche-band {
 @media (width >= 40rem) {
   .item-card-band > .niche-band {
     height: 4.5rem;
+  }
+}
+
+/* Focus never under a sticky bar (WCAG 2.4.11): where a page adds its own sticky header under the top bar (the
+   notifications' day names, a console table's header row), anything scrolled to or focused clears both. */
+html:has(.notice-day) {
+  scroll-padding-block-start: 3rem;
+}
+@media (width >= 64rem) {
+  html:has(.notice-day):has([data-top-bar][data-sticky]),
+  html:has([data-sticky-head]):has([data-top-bar][data-sticky]) {
+    scroll-padding-block-start: 8rem;
   }
 }
