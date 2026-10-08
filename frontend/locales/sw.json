@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "reviewP25c2": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: portal.* (vichwa vidogo vya mahali ulipo, maelezo ya picha ya salamu kwa wakati wa siku, mistari mipya ya lango la shirika, dashibodi ya wafanyakazi na kurasa za kuingia)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack) [[SW-REVIEW]] draft Swahili",
     "reviewP15f": "[[COPY-REVIEW]] [[SW-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.* (rasimu ya Kiswahili)",
     "reviewP16c2": "[[COPY-REVIEW]] P16 part C2 (REQ-UX-01..04, REQ-ADM-01): adminModeration.case.textHeadingDecided, scoutForm.fitLong [[SW-REVIEW]] draft Swahili",
@@ -612,6 +613,30 @@
     "title": "Ukurasa huu haukupakia",
     "body": "Kuna tatizo wakati wa kupakia ukurasa huu. Jaribu tena baada ya muda mfupi.",
     "retry": "Jaribu tena"
+  },
+  "portal": {
+    "eyebrow": {
+      "home": "Shirika / Nyumbani",
+      "inbox": "Shirika / Kikasha",
+      "problems": "Shirika / Matatizo",
+      "events": "Shirika / Matukio",
+      "engagements": "Shirika / Ushirikiano",
+      "notifications": "Akaunti / Arifa",
+      "settings": "Akaunti / Mipangilio",
+      "billing": "Akaunti / Mpango na malipo",
+      "help": "Msaada",
+      "legal": "Kisheria",
+      "verify": "Vyeti",
+      "staff": "Dashibodi ya wafanyakazi / {section}"
+    },
+    "greeting": {
+      "morning": "Nairobi, asubuhi hii",
+      "afternoon": "Nairobi, mchana huu",
+      "evening": "Nairobi, jioni hii"
+    },
+    "inbox": {
+      "matchesTitle": "Alichopata Wakala Skauti wako"
+    }
   },
   "orgHome": {
     "inboxTitle": "Kikasha",

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./portal.css";
 
 /*
  * The self-hosted faces (public/fonts/LICENCES.md; D-55), declared here rather than through next/font so the two that

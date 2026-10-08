@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "reviewP25c2": "[[COPY-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67): portal.* (the eyebrows saying where you are, the greeting photograph's captions by the time of day, the organisation portal's, the console's and the signed-out screens' new lines)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
     "reviewP15f": "[[COPY-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.*; adminModeration.reason.* name the pre-screen's reason codes (bridge/proposals/prescreen.py, docs/spec/06 6.12); E0/E1/E2 follow docs/spec/03",
     "reviewP16c2": "[[COPY-REVIEW]] P16 part C2 (REQ-UX-01..04, REQ-ADM-01): adminModeration.case.textHeadingDecided, scoutForm.fitLong",
@@ -612,6 +613,30 @@
     "title": "This page did not load",
     "body": "Something went wrong while loading this page. Try again in a moment.",
     "retry": "Try again"
+  },
+  "portal": {
+    "eyebrow": {
+      "home": "Organisation / Home",
+      "inbox": "Organisation / Inbox",
+      "problems": "Organisation / Problems",
+      "events": "Organisation / Events",
+      "engagements": "Organisation / Engagements",
+      "notifications": "Account / Notifications",
+      "settings": "Account / Settings",
+      "billing": "Account / Plan & billing",
+      "help": "Help",
+      "legal": "Legal",
+      "verify": "Certificates",
+      "staff": "Staff console / {section}"
+    },
+    "greeting": {
+      "morning": "Nairobi, this morning",
+      "afternoon": "Nairobi, this afternoon",
+      "evening": "Nairobi, this evening"
+    },
+    "inbox": {
+      "matchesTitle": "What your scout found"
+    }
   },
   "orgHome": {
     "inboxTitle": "Inbox",

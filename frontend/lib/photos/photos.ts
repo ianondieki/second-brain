@@ -74,9 +74,30 @@ export const NATIONWIDE: Photo = photo("kenya-tea");
 /** Every vendored photograph, in index order. */
 export const ALL_PHOTOS: readonly Photo[] = [...ALL.values()];
 
+/** The time of day in Nairobi, as Home's greeting says it. */
+export type DayPart = "morning" | "afternoon" | "evening";
+
+/**
+ * Home's greeting band by the time of day in Nairobi (D-67, P25): the morning photograph once P25-A vendors it (the
+ * skyline under a blue sky until then), the skyline in the afternoon, the city at golden hour in the evening.
+ */
+export const DAY_PHOTOS: Readonly<Record<DayPart, Photo>> = {
+  morning: ALL.get("nairobi-morning") ?? photo("nairobi-skyline"),
+  afternoon: photo("nairobi-skyline"),
+  evening: photo("nairobi-golden-hour"),
+};
+
+/** The signed-out screens' photograph beside the form from 1024 px (AuthShell): signing in, and creating an account. */
+export const AUTH_PHOTOS = { signIn: photo("nairobi-jacaranda"), signUp: photo("nairobi-golden-hour") } as const;
+
 /** Every photograph the site shows, credited on /credits. */
 export const CREDITED: readonly Photo[] = [
-  ...new Map([...STRIP.map((c) => c.photo), ...EXPLORE.values(), NATIONWIDE].map((p) => [p.slug, p])).values(),
+  ...new Map(
+    [...STRIP.map((c) => c.photo), ...EXPLORE.values(), NATIONWIDE, ...Object.values(DAY_PHOTOS), ...Object.values(AUTH_PHOTOS)].map((p) => [
+      p.slug,
+      p,
+    ]),
+  ).values(),
 ];
 
 /** A county's anchor on /explore: its reference code ("KE-30"), the same on the landing's strip. */
