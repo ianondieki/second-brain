@@ -10,7 +10,8 @@
   trace tool is Phase 3). The overlay deters and traces; it cannot stop a screenshot, and the page says so.
 
 Every value is HTML-escaped; only ``http``/``https`` links become anchors. The page runs no script: the
-Content-Security-Policy allows only the one stylesheet below (by hash). Responses are never cached (``HEADERS``).
+Content-Security-Policy allows only the one stylesheet below (by hash) and fonts from the origin that serves the page
+(the web app's ``/fonts``). Responses are never cached (``HEADERS``).
 The owner's own preview carries no ``view_id`` (the owner's renders are not logged).
 """
 
@@ -36,28 +37,46 @@ SECTIONS: Final = (
     ("notes", "Notes"),
 )
 STYLE: Final = (
-    # The Jacaranda palette (P20, docs/platform/design/p20-design-system.md; frontend/app/globals.css) in a page that
-    # loads nothing: no web fonts (the CSP allows none), so the faces are named first and fall back to the system sans
-    # (Hanken Grotesk for the text, a bold Bricolage Grotesque or system sans for the titles); no images (the lattice
-    # echo is a bloom and saffron gradient band, saffron's only use here). The per-viewer mark keeps its ink, opacity
-    # and size from before the restyle (spec 06 §6.4 item 3: it must survive a screenshot's compression).
-    # Dark mode follows the embedding page: a frame's prefers-color-scheme takes the embedder's used color-scheme
-    # (CSS Color Adjust), so the marked page is dark inside the dark app and light inside the light one.
+    # The Jacaranda palette (P20, docs/platform/design/p20-design-system.md; frontend/app/globals.css) and the app's
+    # faces (D-66, D-67): Hanken Grotesk for the text and Fraunces for the titles, from the web app's own self-hosted
+    # files under /fonts (frontend/public/fonts/LICENCES.md), each with the app's size-adjusted local fallback. The web
+    # app frames this page in a sandbox, so its document has an opaque origin and a font fetch is a CORS request from
+    # origin "null": the font files carry `Access-Control-Allow-Origin: *` (frontend/next.config.ts) and `font-src
+    # 'self'` below names the web origin the page is served from (through the /api rewrite). Relative URLs resolve
+    # against that origin; opened on the API's own origin the fonts 404 and the fallbacks take over. No images (the
+    # lattice echo is a bloom and saffron gradient band, saffron's only use here). Text at 17 px / 1.65 on a 31 em
+    # column, about 66 characters a line in Hanken Grotesk (measured in Chromium); titles at the app's scale (2 rem, and
+    # 2.5 rem in a frame at least 40 rem wide; 1.5 rem), weights and tracking. The per-viewer mark keeps its ink,
+    # opacity, size and tiling from before the restyles (spec 06 §6.4 item 3: it must survive a screenshot's
+    # compression). Dark mode follows the embedding page: a frame's prefers-color-scheme takes the embedder's used
+    # color-scheme (CSS Color Adjust), so the marked page is dark inside the dark app and light inside the light one.
+    '@font-face{font-family:"Hanken Grotesk";src:url("/fonts/hanken-grotesk-v1.woff2") format("woff2");'
+    "font-display:swap;font-weight:400 700}"
+    '@font-face{font-family:"Fraunces";src:url("/fonts/fraunces-v1.woff2") format("woff2");font-display:swap;'
+    "font-weight:500 700;unicode-range:U+0020-007E,U+2013-2014,U+2018-201A,U+201C-201E,U+2022,U+2026,U+2039-203A,"
+    "U+20AC,U+2122}"
+    '@font-face{font-family:"Fraunces";src:url("/fonts/fraunces-ext-v1.woff2") format("woff2");font-display:swap;'
+    "font-weight:500 700;unicode-range:U+00A0-017F}"
+    '@font-face{font-family:"Hanken Grotesk Fallback";src:local(Arial);ascent-override:100.88%;'
+    "descent-override:30.57%;line-gap-override:0%;size-adjust:99.12%}"
+    '@font-face{font-family:"Fraunces Fallback";src:local("Times New Roman");ascent-override:84.88%;'
+    "descent-override:22.13%;line-gap-override:0%;size-adjust:115.22%}"
     ":root{color-scheme:light dark}"
-    'body{margin:0;background:#f7f6fb;color:#1b1730;font:16px/1.6 "Hanken Grotesk",system-ui,-apple-system,"Segoe UI",'
-    "Roboto,Helvetica,Arial,sans-serif}"
+    'body{margin:0;background:#f7f6fb;color:#1b1730;font:17px/1.65 "Hanken Grotesk","Hanken Grotesk Fallback",'
+    'system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}'
     "body::before{content:'';display:block;height:6px;background:repeating-linear-gradient(-45deg,#5a3fc0 0 5px,"
     "#f4b53f 5px 10px)}"
-    "main{position:relative;max-width:46rem;margin:0 auto;padding:2rem 1.25rem 4rem}"
-    ".label{margin:0;color:#8a5800;font-size:.875rem;font-weight:600}"
-    'h1,h2{font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;'
-    "font-weight:700;letter-spacing:-.02em;text-wrap:balance}"
-    "h1{margin:.35rem 0 .5rem;font-size:2rem;line-height:1.12;letter-spacing:-.028em}"
-    "h2{margin:2.5rem 0 .5rem;font-size:1.5rem;line-height:1.2}"
-    ".owner,.note,.mark{color:#5e5873;font-size:.9rem}"
-    ".text{white-space:pre-wrap;overflow-wrap:anywhere;max-width:68ch}"
+    "main{position:relative;max-width:31em;margin:0 auto;padding:2rem 1.25rem 4rem}"
+    ".label{margin:0;color:#8a5800;font-size:.875rem;font-weight:600;letter-spacing:.01em}"
+    'h1,h2{font-family:"Fraunces","Fraunces Fallback",Georgia,"Times New Roman",serif;font-weight:580;'
+    "font-optical-sizing:auto;letter-spacing:-.012em;text-wrap:balance;overflow-wrap:anywhere}"
+    "h1{margin:.4rem 0 .75rem;font-size:2rem;font-weight:600;line-height:1.12;letter-spacing:-.02em}"
+    "h2{margin:2.5rem 0 .6rem;font-size:1.5rem;line-height:1.2}"
+    "@media (min-width:40rem){h1{font-size:2.5rem;line-height:1.06}}"
+    ".owner,.note,.mark{color:#5e5873;font-size:.9375rem;line-height:1.55}"
+    ".text{white-space:pre-wrap;overflow-wrap:anywhere;text-wrap:pretty}"
     "a{color:#5a3fc0;font-weight:600;text-decoration-thickness:1px;text-underline-offset:.2em;overflow-wrap:anywhere}"
-    "ul{padding-left:1.25rem}"
+    "ul{margin:.5rem 0;padding-left:1.25rem}li+li{margin-top:.35rem}"
     ".mark{margin-top:3rem;padding-top:1rem;border-top:1px solid #e4e1ee}"
     ".overlay{position:fixed;inset:-50%;z-index:2;display:grid;"
     "grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:4rem 2.5rem;padding:2rem;"
@@ -76,7 +95,7 @@ HEADERS: Final = {
     "Pragma": "no-cache",
     "Expires": "0",
     "Content-Security-Policy": (
-        f"default-src 'none'; style-src 'sha256-{STYLE_HASH}'; base-uri 'none'; form-action 'none';"
+        f"default-src 'none'; style-src 'sha256-{STYLE_HASH}'; font-src 'self'; base-uri 'none'; form-action 'none';"
         " frame-ancestors 'self'"
     ),
     "X-Frame-Options": "SAMEORIGIN",
