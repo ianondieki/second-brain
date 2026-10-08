@@ -20,8 +20,11 @@ export function CardList({ children, className, ...rest }: HTMLAttributes<HTMLOL
       )}
       {...rest}
     >
+      {/* Off-screen cards skip rendering until they come near (a long list on a phone), each held at a card's size. */}
       {items.map((child) => (
-        <li key={child.key}>{child}</li>
+        <li key={child.key} className="cv-auto [--cv-size:22rem]">
+          {child}
+        </li>
       ))}
     </ol>
   );

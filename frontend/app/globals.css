@@ -91,7 +91,7 @@
   --ink: #1b1730; /* text and icons: a violet ink, 15.8:1 */
   --ink-soft: #5e5873; /* secondary text and input borders, 6.1:1 (6.7:1 on white) */
   --line: #e5dfd2; /* hairlines and dividers, warmed with the paper (decorative; controls take ink-soft borders) */
-  --paper-deep: #efeadf; /* P25: the second neutral layer: nav hover, the Search pill, skeletons, an empty calendar day */
+  --paper-deep: #efeadf; /* P25: the second neutral layer: nav hover, the Search pill, an empty calendar day */
   /* P25: the activity calendar's sequential scale (one hue, bloom; dataviz --ordinal on the card: monotone lightness,
      adjacent steps ≥ 0.06 apart, the light end 2.23:1 on white). heat-0 is a day with nothing. */
   --heat-0: #eeeae2;
@@ -1337,7 +1337,7 @@ dialog[data-sheet][open] {
 
 /*
  * P25 (D-67, "Portal in print"): the signed-in portal's page language, the shell's details, the command palette, the
- * niche photographs, the skeletons, the activity calendar and the HCI floor. CSS first: every page inherits it with
+ * niche photographs, the activity calendar and the HCI floor. CSS first: every page inherits it with
  * no script; each moving part rests in place under reduced motion (the block at the end of this file).
  */
 
@@ -1357,9 +1357,10 @@ time,
   html:has([data-top-bar][data-sticky]) {
     scroll-padding-block-start: 5.5rem;
   }
-  /* The thread's composer stays at the foot from 1024 px (P25): a focused message scrolls clear of it. */
+  /* The thread's composer stays at the foot from 1024 px (P25), never taller than 19 rem plus its 1 rem offset: a
+     focused message or control scrolls clear of it (WCAG 2.4.11). */
   html:has([data-composer]) {
-    scroll-padding-block-end: 17rem;
+    scroll-padding-block-end: 21rem;
   }
 }
 /* Cards adapt to their column, not the window (`.cq` on a card or a grid cell); a row of cards aligns its parts
@@ -1386,7 +1387,7 @@ time,
 }
 .cv-auto {
   content-visibility: auto;
-  contain-intrinsic-size: auto 9rem;
+  contain-intrinsic-size: auto var(--cv-size, 9rem);
 }
 /* More contrast asked for: the secondary ink and the hairlines darken (light) or lighten (dark). */
 @media (prefers-contrast: more) {
@@ -1664,39 +1665,29 @@ time,
   background-repeat: repeat-x;
 }
 
-/* Skeletons (components/ui/Skeleton.tsx): blocks shaped like the page to come, with a slow sweep of light. */
-.skeleton {
-  display: block;
-  border-radius: 0.5rem;
-  background: var(--paper-deep);
-  background-image: linear-gradient(
-    90deg,
-    transparent 0,
-    color-mix(in oklab, var(--field) 70%, transparent) 50%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  background-repeat: no-repeat;
-  animation: skeleton-sweep 1.6s ease-in-out infinite;
-}
-@keyframes skeleton-sweep {
-  from {
-    background-position: 150% 0;
-  }
-  to {
-    background-position: -50% 0;
-  }
-}
-
 /* The activity calendar (components/activity/ActivityCalendar.tsx): 26 weeks of days, Monday first, in the bloom
    scale; each day's count and date on hover. The grid is decorative for assistive technology (a table beside it). */
-/* The calendar and the lines under it share one width: as wide as the card, cells at most 22 px. */
+/* The grid fills its column (cells at most 22 px); from a 44 rem card the summary stands beside it, so a wide card
+   has no empty band. */
 .heat-frame {
   --heat-labels: 1.875rem;
-  max-width: calc(var(--heat-labels) + var(--weeks) * 1.375rem + 2px);
+  display: grid;
+  gap: 0.75rem 2rem;
 }
 .heat {
   --heat-gap: 2px;
+  max-width: calc(var(--heat-labels) + var(--weeks) * 1.375rem + 2px);
+}
+.heat-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+@container (width >= 44rem) {
+  .heat-frame {
+    grid-template-columns: minmax(0, 1fr) 14rem;
+    align-items: center;
+  }
 }
 .heat-months,
 .heat-days {
@@ -1745,6 +1736,11 @@ time,
 .heat-cell[data-future] {
   visibility: hidden;
 }
+/* A day with any action carries an edge in bloom (≥ 3:1 against an empty day in both themes), so even the lightest
+   step is told from nothing without relying on its fill. */
+.heat-cell:not([data-level="0"]) {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 .heat-swatch {
   width: 0.75rem;
 }
@@ -1792,20 +1788,23 @@ time,
 }
 
 @layer components {
-/* Home's greeting (app/(app)/dev/GreetingBand.tsx; P25): Nairobi at this time of day in a wide rounded band, the name
-   over a night gradient that is darkest where the text sits (left from 640 px, the foot on phones). */
+/* Home's greeting (app/(app)/dev/GreetingBand.tsx; P25): Nairobi at this time of day in a wide rounded band. On phones
+   the photograph is a strip above the words, which sit on the night colour itself; from 640 px the words sit over the
+   photograph on a night gradient that stays at 94 % under the whole text block (every line ≥ 4.5:1 against the
+   lightest pixel under it, measured on each greeting photograph), fading only beyond it. */
 .greeting-band {
   position: relative;
   isolation: isolate;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-radius: 1.5rem;
   background: var(--night);
   box-shadow: var(--shadow-card);
 }
 .greeting-photo {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
+  position: relative;
+  height: 9rem;
 }
 .greeting-photo picture,
 .greeting-photo img {
@@ -1819,26 +1818,35 @@ time,
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgb(30 22 64 / 0.25) 0%, rgb(30 22 64 / 0.72) 48%, rgb(30 22 64 / 0.94) 100%);
-}
-@media (width >= 40rem) {
-  .greeting-photo::after {
-    background: linear-gradient(90deg, rgb(30 22 64 / 0.95) 0%, rgb(30 22 64 / 0.82) 42%, rgb(30 22 64 / 0.28) 78%, rgb(30 22 64 / 0.12) 100%);
-  }
+  background: linear-gradient(180deg, transparent 55%, var(--night) 100%);
 }
 .greeting-body {
   display: flex;
-  min-height: 15rem;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 1.5rem 1.25rem 1.5rem;
+  padding: 0.5rem 1.25rem 1.5rem;
 }
 @media (width >= 40rem) {
+  .greeting-photo {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    height: auto;
+  }
+  .greeting-photo::after {
+    background: linear-gradient(
+      90deg,
+      rgb(30 22 64 / 0.94) 0,
+      rgb(30 22 64 / 0.94) 34rem,
+      rgb(30 22 64 / 0.35) calc(34rem + 22%),
+      rgb(30 22 64 / 0.15) 100%
+    );
+  }
   .greeting-body {
     min-height: 16.5rem;
+    max-width: 34rem;
     justify-content: center;
-    padding: 2.5rem 2.5rem;
-    max-width: 40rem;
+    padding: 2.5rem;
   }
 }
 }
@@ -2089,7 +2097,6 @@ time,
   .hero-before,
   .hero-turn,
   .hero-steps li > span,
-  .skeleton,
   .palette[open] {
     animation: none !important;
   }
