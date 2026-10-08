@@ -65,7 +65,7 @@ describe("the HCI floor", () => {
 
   it("has container queries, subgrid rows for card grids, content-visibility and tabular figures", () => {
     expect(css).toMatch(/\.cq \{\s*container-type: inline-size;/);
-    expect(css).toMatch(/\.card-grid > \.card-sub \{[^}]*grid-template-rows: subgrid;/);
+    expect(css).toMatch(/\.card-grid > \.card-sub,\s*\.card-sub > \.card-sub \{[^}]*grid-template-rows: subgrid;/);
     expect(css).toMatch(/\.cv-auto \{\s*content-visibility: auto;\s*contain-intrinsic-size: auto 9rem;/);
     expect(css).toMatch(/td,\s*th,\s*time,\s*\.figure \{\s*font-variant-numeric: tabular-nums lining-nums;/);
     expect(css).toContain("@container page-hero (width >= 40rem)");

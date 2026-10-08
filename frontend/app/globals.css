@@ -1369,11 +1369,16 @@ time,
   grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
   gap: 1rem;
 }
-.card-grid > .card-sub {
+.card-grid > .card-sub,
+.card-sub > .card-sub {
   display: grid;
   grid-row: span 3;
   grid-template-rows: subgrid;
   row-gap: 0.5rem;
+}
+/* A card that is the list item's one child (an <article> inside its <li>) takes the same rows. */
+.card-sub > .card-sub {
+  row-gap: 0.75rem;
 }
 .cv-auto {
   content-visibility: auto;
@@ -1782,6 +1787,96 @@ time,
 }
 }
 
+@layer components {
+/* Home's greeting (app/(app)/dev/GreetingBand.tsx; P25): Nairobi at this time of day in a wide rounded band, the name
+   over a night gradient that is darkest where the text sits (left from 640 px, the foot on phones). */
+.greeting-band {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  background: var(--night);
+  box-shadow: var(--shadow-card);
+}
+.greeting-photo {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.greeting-photo picture,
+.greeting-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 40%;
+}
+.greeting-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(30 22 64 / 0.25) 0%, rgb(30 22 64 / 0.72) 48%, rgb(30 22 64 / 0.94) 100%);
+}
+@media (width >= 40rem) {
+  .greeting-photo::after {
+    background: linear-gradient(90deg, rgb(30 22 64 / 0.95) 0%, rgb(30 22 64 / 0.82) 42%, rgb(30 22 64 / 0.28) 78%, rgb(30 22 64 / 0.12) 100%);
+  }
+}
+.greeting-body {
+  display: flex;
+  min-height: 15rem;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 1.5rem 1.25rem 1.5rem;
+}
+@media (width >= 40rem) {
+  .greeting-body {
+    min-height: 16.5rem;
+    justify-content: center;
+    padding: 2.5rem 2.5rem;
+    max-width: 40rem;
+  }
+}
+}
+
+@layer components {
+/* The certificate seal's sheen (components/certificate/CertificateSheet.tsx; P25): a band of light crosses the seal
+   once when the sheet is hovered, a registered percentage so the gradient itself moves. Still under reduced motion and
+   in print. */
+@property --sheen {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: -40%;
+}
+.seal-sheen {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 9999px;
+}
+.seal-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent calc(var(--sheen) - 22%),
+    rgb(255 255 255 / 0.7) var(--sheen),
+    transparent calc(var(--sheen) + 22%)
+  );
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  transition:
+    --sheen 1100ms var(--ease-out),
+    opacity 400ms var(--ease-out);
+}
+[data-print-sheet]:hover .seal-sheen::after {
+  --sheen: 140%;
+  opacity: 1;
+}
+}
+
 /*
  * View Transitions (components/motion/PageTransition.tsx; React's <ViewTransition>): a route change cross-fades the
  * page, both sides in the same 180 ms (blended, so what does not change stays still), the nav's current pill glides,
@@ -1846,6 +1941,9 @@ time,
   ::view-transition-old(*),
   ::view-transition-new(*) {
     animation: none !important;
+  }
+  .seal-sheen::after {
+    display: none;
   }
 
   /* The strip stands still: one copy, scrolled sideways (its links take focus, so the keyboard reaches every tile).
