@@ -434,8 +434,15 @@ li.card-sub > .item-card {
   }
 }
 @media (width < 48rem) {
-  /* The page behind the full-screen proposal does not scroll. */
+  /* The page behind the full-screen proposal does not scroll, and is hidden: its controls leave the tab order and
+     the accessibility tree while the layer covers them (WCAG 2.4.11); the layer itself stays visible. */
   html:has(.tier2-view) {
     overflow: hidden;
+  }
+  body:has(.tier2-view) {
+    visibility: hidden;
+  }
+  .tier2-view {
+    visibility: visible;
   }
 }

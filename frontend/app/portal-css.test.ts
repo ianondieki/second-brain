@@ -59,6 +59,8 @@ describe("portal.css", () => {
   it("shows the marked proposal full-screen below 768 px and as tall as the screen from it", () => {
     expect(media("(width < 48rem)")).toMatch(/\.tier2-view \{\s*position: fixed;\s*inset: 0;/);
     expect(portal).toMatch(/\.tier2-frame \{[^}]*height: calc\(100dvh - 7rem\);/);
+    // The page under the layer leaves the tab order and the accessibility tree (WCAG 2.4.11).
+    expect(media("(width < 48rem)")).toMatch(/body:has\(\.tier2-view\) \{\s*visibility: hidden;\s*\}\s*\.tier2-view \{\s*visibility: visible;/);
   });
 
   it("keeps each day's name in view", () => {
