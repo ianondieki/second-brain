@@ -25,7 +25,7 @@ export function IdeaTile({ item }: { item: MyProposalItem }) {
   const locale = useLocale();
   const titleId = `idea-${item.id}-title`;
   return (
-    <li className="card-sub cv-auto [--cv-size:20rem]">
+    <li className="card-sub">
       <article
         aria-labelledby={titleId}
         data-idea={item.id}

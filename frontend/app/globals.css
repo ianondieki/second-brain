@@ -1365,7 +1365,7 @@ time,
 }
 /* Cards adapt to their column, not the window (`.cq` on a card or a grid cell); a row of cards aligns its parts
    (`.card-grid` with `.card-sub` children spanning three rows: title, meta, footer). Long lists skip off-screen
-   rendering (`.cv-auto`). */
+   rendering (`.cv-auto`), but never a subgrid item: its layout containment cuts the item off the shared rows. */
 .cq {
   container-type: inline-size;
 }

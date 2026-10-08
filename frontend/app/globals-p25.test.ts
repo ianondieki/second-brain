@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -69,6 +69,19 @@ describe("the HCI floor", () => {
     expect(css).toMatch(/\.cv-auto \{\s*content-visibility: auto;\s*contain-intrinsic-size: auto var\(--cv-size, 9rem\);/);
     expect(css).toMatch(/td,\s*th,\s*time,\s*\.figure \{\s*font-variant-numeric: tabular-nums lining-nums;/);
     expect(css).toContain("@container page-hero (width >= 40rem)");
+  });
+
+  it("never puts cv-auto on a subgrid card (layout containment would cut it off the row's shared tracks)", () => {
+    const files = (readdirSync(process.cwd(), { recursive: true }) as string[]).filter(
+      (file) => /\.tsx$/.test(file) && !/(^|\/)(node_modules|\.next)\//.test(file),
+    );
+    expect(files.length).toBeGreaterThan(50);
+    const both = files.filter((file) =>
+      (readFileSync(join(process.cwd(), file), "utf8").match(/className=\{?["`][^"`]*["`]/g) ?? []).some(
+        (name) => /\bcard-sub\b/.test(name) && /\bcv-auto\b/.test(name),
+      ),
+    );
+    expect(both).toEqual([]);
   });
 
   it("sets the hero's eyebrow in the mono face, sentence case (no capitals transform)", () => {
