@@ -7,7 +7,7 @@ import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { cn } from "@/components/ui/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 import { requireMe } from "@/lib/api/server";
@@ -34,6 +34,7 @@ export default async function BoardPage() {
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
   const [t, locale, board, today] = await Promise.all([getTranslations("quiz"), getLocale(), quizBoard(), quizCard()]);
+  const te = await getTranslations("eyebrow");
   const line = boardLine(board.me);
   // One way to play, said once: under the caller's line when they have no points yet, else on the empty list; a day
   // without a set to play (or a read that failed) points the empty list at Home instead.
@@ -51,11 +52,11 @@ export default async function BoardPage() {
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <div className="flex max-w-3xl flex-col gap-10">
-        <PageHeader back={{ href: QUIZ_PATH, label: t("board.back") }} title={t("board.title")} lead={t("board.lead")}>
+        <PageHero eyebrow={te("board")} back={{ href: QUIZ_PATH, label: t("board.back") }} title={t("board.title")} lead={t("board.lead")}>
           <p className="mt-3 font-figure text-lg font-[620] text-ink tabular-nums" data-board-dates="">
             {dates}
           </p>
-        </PageHeader>
+        </PageHero>
 
         {/* The caller's own line: what this page is for them, raised. */}
         <section aria-label={t("board.you")} className="flex flex-col gap-4 rounded-panel border border-line bg-field p-5 shadow-card sm:p-6" data-board-me="">

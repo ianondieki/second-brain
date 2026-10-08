@@ -144,7 +144,8 @@ describe("the API's words are text", () => {
       sources: [{ ...trendingProblem().sources[0], publisher: MARKUP, quote: MARKUP }],
     });
     const { unmount } = renderWithIntl(<ProblemRow item={item} counties={COUNTIES} query={{ view: "problems" }} />);
-    expect(document.querySelector("img")).toBeNull();
+    // No element from the API's words (the card's own niche photograph band, P25, is the only image).
+    expect([...document.querySelectorAll("img")].filter((img) => !img.closest("[data-niche-band]"))).toHaveLength(0);
     expect(document.querySelector("b")).toBeNull();
     // The card shows the badge's short form (its title keeps the sentence); the markup stays text either way.
     expect(document.querySelector("[data-badge]")?.textContent).toBe("Trending: 4 companies scouting");
@@ -154,7 +155,8 @@ describe("the API's words are text", () => {
     unmount();
     const rec = recommendation({ why: [MARKUP], why_not: MARKUP });
     renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [rec] }))} />);
-    expect(document.querySelector("img")).toBeNull();
+    // No element from the API's words (the card's own niche photograph band, P25, is the only image).
+    expect([...document.querySelectorAll("img")].filter((img) => !img.closest("[data-niche-band]"))).toHaveLength(0);
     expect(document.querySelector("[data-chip=why]")?.textContent).toBe(MARKUP);
     expect(screen.getAllByText(MARKUP).length).toBeGreaterThanOrEqual(2);
   });

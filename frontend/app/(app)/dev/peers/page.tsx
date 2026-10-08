@@ -6,7 +6,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
@@ -39,19 +39,20 @@ export default async function PeersPage() {
     nicheNamesBySlug(),
     peerRelations(),
   ]);
+  const te = await getTranslations("eyebrow");
   const visible = page !== "tooMany" && page.opted_in;
 
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <div className="flex max-w-3xl flex-col gap-8">
-        <PageHeader back={{ href: "/dev", label: t("peers.back") }} title={t("peers.title")} lead={t("peers.lead")}>
+        <PageHero eyebrow={te("peers")} back={{ href: "/dev", label: t("peers.back") }} title={t("peers.title")} lead={t("peers.lead")}>
           {/* Not visible to peers: the page's one sentence and link are about turning it on, nothing else. */}
           {visible ? (
             <div className="mt-2">
               <StandaloneLink href={TEAMS_PATH}>{t("peers.teamsLink")}</StandaloneLink>
             </div>
           ) : null}
-        </PageHeader>
+        </PageHero>
 
         {page === "tooMany" ? (
           <EmptyState data-peers="too-many" sentence={t("peers.tooMany")} action={t("peers.tooManyAction")} href="/dev" />

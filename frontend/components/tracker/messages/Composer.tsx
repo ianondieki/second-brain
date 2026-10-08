@@ -157,7 +157,9 @@ export function Composer({ engagementId, limits, locale, calls, onSent, onClosed
       noValidate
       onSubmit={(event) => void send(event)}
       data-composer=""
-      className="mt-2 flex flex-col gap-4 rounded-panel border border-line bg-field p-4 shadow-card sm:p-5"
+      // From 1024 px the composer stays at the foot of the screen while the thread scrolls (P25); phones keep the
+      // whole height for the thread and the tab bar.
+      className="mt-2 flex flex-col gap-4 rounded-panel border border-line bg-field p-4 shadow-card sm:p-5 lg:sticky lg:bottom-4 lg:z-[5]"
     >
       <TextAreaField
         id={BODY_ID}

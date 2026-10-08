@@ -1357,6 +1357,10 @@ time,
   html:has([data-top-bar][data-sticky]) {
     scroll-padding-block-start: 5.5rem;
   }
+  /* The thread's composer stays at the foot from 1024 px (P25): a focused message scrolls clear of it. */
+  html:has([data-composer]) {
+    scroll-padding-block-end: 17rem;
+  }
 }
 /* Cards adapt to their column, not the window (`.cq` on a card or a grid cell); a row of cards aligns its parts
    (`.card-grid` with `.card-sub` children spanning three rows: title, meta, footer). Long lists skip off-screen
