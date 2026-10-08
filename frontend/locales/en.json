@@ -635,7 +635,12 @@
     "proposal": {
       "means": "What accepting means"
     },
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "settings": {
+      "leadSecurity": "How you sign in, and the second step that keeps your account yours.",
+      "leadNotifications": "What we send you, and where you read it.",
+      "leadProfile": "What other developers see when you choose to be visible."
+    }
   },
   "orgHome": {
     "inboxTitle": "Inbox",

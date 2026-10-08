@@ -635,7 +635,12 @@
     "proposal": {
       "means": "Maana ya kukubali"
     },
-    "loading": "Inapakia…"
+    "loading": "Inapakia…",
+    "settings": {
+      "leadSecurity": "Jinsi unavyoingia, na hatua ya pili inayolinda akaunti yako.",
+      "leadNotifications": "Tunachokutumia, na mahali unapokisoma.",
+      "leadProfile": "Kile wasanidi programu wengine wanaona unapochagua kuonekana."
+    }
   },
   "orgHome": {
     "inboxTitle": "Kikasha",

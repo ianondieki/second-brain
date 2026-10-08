@@ -352,3 +352,18 @@ li > .compare-band > .niche-band {
     forced-color-adjust: none;
   }
 }
+
+/* Plan & billing's hero aside: the current plan, a quiet summary beside the title. */
+@layer components {
+  .current-plan {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    background: var(--field);
+    padding: 0.875rem 1rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+}
