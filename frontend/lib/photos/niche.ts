@@ -4,7 +4,7 @@ import { ALL_PHOTOS, photo, type Photo } from "./photos";
 // pages and company pages. Decorative: the niche's or the county's name is always shown beside it. A niche at any
 // level maps to its top-level niche (backend/seed/reference.yaml's two-level taxonomy); a top-level niche takes the
 // photograph public/photos/index.json marks with its `niche` (P25-A: one per top-level niche), else one of P24's that
-// fits; a public-sector niche without its own takes the county's photograph; anything else gets none (the lattice).
+// fits; anything else gets none (the lattice). The county's own photograph comes first (nichePhoto).
 
 /** Child niche → its top-level niche (backend/seed/reference.yaml). */
 const PARENT: Readonly<Record<string, string>> = {
@@ -35,14 +35,16 @@ export function countyPhoto(code: string | null | undefined): Photo | undefined 
 }
 
 /**
- * The photograph for a problem, an idea or a company: the county's photograph when there is a county with one (the
- * place a problem comes from reads before its sector; the public sector's photograph is its county's), else the niche's
- * (any level: its top-level niche's mark in the index, or P24's that fits), else none (the caller draws the lattice).
+ * The photograph for a problem, an idea or a company: the county's own photograph (the index's `county` role) when the
+ * county has one, as the place a problem comes from reads before its sector; else the niche's (any level: its
+ * top-level niche's mark in the index, or P24's that fits); with no niche, any photograph of the county; else none
+ * (the caller draws the lattice). A niche's photograph taken in some county never stands in for another niche: a
+ * Turkana agriculture problem shows the tea, not Turkana's dispensary.
  */
 export function nichePhoto({ niche, county }: { niche?: string | null; county?: string | null }): Photo | undefined {
-  const local = countyPhoto(county);
-  if (local) return local;
+  const place = county ? ALL_PHOTOS.find((p) => p.county_code === county && p.role === "county") : undefined;
+  if (place) return place;
   const top = niche ? topNiche(niche) : null;
-  if (!top) return undefined;
+  if (!top) return countyPhoto(county);
   return ALL_PHOTOS.find((p) => p.niche === top) ?? (INTERIM[top] ? photo(INTERIM[top]) : undefined);
 }

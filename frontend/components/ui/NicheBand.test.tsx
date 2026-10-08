@@ -51,6 +51,16 @@ describe("nichePhoto", () => {
     expect(nichePhoto({ niche: "agriculture", county: "KE-99" })?.slug).toBe("kenya-tea");
   });
 
+  it("puts only a county-role photograph ahead of the niche: another niche's photograph of that county never stands in", () => {
+    // Turkana's only photograph is the health niche's dispensary; Kajiado's the retail niche's market.
+    expect(nichePhoto({ niche: "agriculture", county: "KE-43" })?.slug).toBe("kenya-tea");
+    expect(nichePhoto({ niche: "energy", county: "KE-10" })?.slug).toBe("ngong-hills-wind");
+    expect(nichePhoto({ niche: "health", county: "KE-43" })?.slug).toBe("turkana-naipekarr-dispensary");
+    expect(nichePhoto({ niche: "a-niche-added-later", county: "KE-43" })).toBeUndefined();
+    // With no niche, any photograph of the county is the place.
+    expect(nichePhoto({ county: "KE-43" })?.slug).toBe("turkana-naipekarr-dispensary");
+  });
+
   it("gives a company with no niche its HQ county's photograph, the county role first", () => {
     expect(nichePhoto({ county: "KE-31" })?.slug).toBe("nakuru-lake");
     expect(countyPhoto("KE-30")?.slug).toBe("nairobi-jacaranda");
