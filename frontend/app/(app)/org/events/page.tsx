@@ -10,7 +10,7 @@ import { NicheBand } from "@/components/ui/NicheBand";
 import { PageHero } from "@/components/ui/PageHero";
 
 import { orgContext } from "../data";
-import { ItemGrid } from "../ItemCard";
+import { CARD_BAND, ItemGrid } from "../ItemCard";
 import { inboxHref } from "../membership";
 import { OrgRefusal } from "../OrgRefusal";
 import { getVerification } from "../scout-data";
@@ -108,7 +108,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/org/event
               <EventItem
                 event={event}
                 href={orgEventHref(memberships, org.org_id, event.id)}
-                band={<NicheBand county={event.online ? null : event.county_code} />}
+                band={<NicheBand county={event.online ? null : event.county_code} sizes={CARD_BAND} />}
               />
             </li>
           ))}

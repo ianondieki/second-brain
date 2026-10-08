@@ -5,6 +5,12 @@ import { cn } from "@/components/ui/cn";
 import { LinkPending } from "@/components/ui/LinkPending";
 import type { RowBadges } from "@/components/ui/RowBase";
 
+/**
+ * The `sizes` of a card's photograph band: a card column is at most about 26 rem wide, and on a phone the 72 px band
+ * needs no more than the smallest file (so a list of cards on Slow 4G fetches the small files, not the 1600 px ones).
+ */
+export const CARD_BAND = "(min-width: 640px) 26rem, 180px";
+
 export interface ItemCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   /** The niche's or county's photograph band (NicheBand, rendered by the server page), or the lattice. */
   band?: ReactNode;

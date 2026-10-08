@@ -14,7 +14,7 @@ import { OrgPicker } from "../OrgPicker";
 import { ACTION_HREF } from "../refusals";
 import { matchesHref } from "../scout";
 import { shortlistHref } from "../shortlist";
-import { ItemGrid } from "../ItemCard";
+import { CARD_BAND, ItemGrid } from "../ItemCard";
 import { InboxRow } from "./InboxRow";
 import { InboxTabs, inboxTab } from "./InboxTabs";
 import { ScoutMatches } from "./matches/ScoutMatches";
@@ -185,7 +185,7 @@ async function InboxList({
               href={proposalHref(memberships, org.org_id, item.proposal.id)}
               trackerHref={item.engagement ? engagementsHref(memberships, org.org_id, item.engagement.id) : undefined}
               org={org}
-              band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} />}
+              band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} />}
             />
           </li>
         ))}

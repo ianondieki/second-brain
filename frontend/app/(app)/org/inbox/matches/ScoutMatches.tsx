@@ -12,7 +12,7 @@ import { OrgPicker } from "../../OrgPicker";
 import { OrgRefusal } from "../../OrgRefusal";
 import { configuresScouts, matchHref, scoutHref, type Match, type Scout, type ScoutList } from "../../scout";
 import { getMatches, getScouts } from "../../scout-data";
-import { ItemGrid } from "../../ItemCard";
+import { CARD_BAND, ItemGrid } from "../../ItemCard";
 import { MatchRow } from "./MatchRow";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
@@ -118,7 +118,7 @@ async function Body({
                     match={match}
                     href={matchHref(memberships, org.org_id, match.id)}
                     org={org}
-                    band={<NicheBand niche={match.available ? match.niche?.slug : null} county={match.available ? match.teaser?.county_code : null} />}
+                    band={<NicheBand niche={match.available ? match.niche?.slug : null} county={match.available ? match.teaser?.county_code : null} sizes={CARD_BAND} />}
                   />
                 </li>
               ))}

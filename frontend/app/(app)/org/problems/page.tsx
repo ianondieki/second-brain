@@ -14,7 +14,7 @@ import { PageHero } from "@/components/ui/PageHero";
 import { getBriefs } from "../brief-data";
 import { briefHref, briefUpgrade, newBriefHref, planFull, postsBriefs, problemsHref } from "../briefs";
 import { orgContext } from "../data";
-import { ItemGrid } from "../ItemCard";
+import { CARD_BAND, ItemGrid } from "../ItemCard";
 import { first, inboxHref } from "../membership";
 import { OrgRefusal } from "../OrgRefusal";
 import { getCounties, readOrgPlans } from "../scout-data";
@@ -122,7 +122,7 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
                 brief={brief}
                 href={briefHref(memberships, org.org_id, brief.id)}
                 county={countyName(brief.county_code)}
-                band={<NicheBand niche={brief.niche?.slug} county={brief.county_code} />}
+                band={<NicheBand niche={brief.niche?.slug} county={brief.county_code} sizes={CARD_BAND} />}
               />
             </li>
           ))}

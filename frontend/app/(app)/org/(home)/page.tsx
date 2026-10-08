@@ -38,7 +38,7 @@ import { getInbox, orgContext, type InboxPage } from "../data";
 import { formatDay } from "../format";
 import { orgHomeStats, weeklySeries } from "../home";
 import { InboxCard } from "../inbox/InboxCard";
-import { ItemGrid } from "../ItemCard";
+import { CARD_BAND, ItemGrid } from "../ItemCard";
 import { engagementsHref, inboxHref, proposalHref, type Membership } from "../membership";
 import { matchesHref, type Match } from "../scout";
 import { getMatches } from "../scout-data";
@@ -274,7 +274,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
                 <InboxCard
                   item={item}
                   href={proposalHref(memberships, org.org_id, item.proposal.id)}
-                  band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} />}
+                  band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} />}
                 />
               </li>
             ))}
