@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { cardLinkClass } from "@/components/ui/Card";
 import { cn } from "@/components/ui/cn";
 import { LinkPending } from "@/components/ui/LinkPending";
+import { NicheBand } from "@/components/ui/NicheBand";
 
 import { StageDots } from "./StageDots";
 
@@ -23,15 +24,18 @@ export interface EngagementCardProps {
   titleBy?: "proposal" | "organisation";
   /** The heading level under the page's own headings. */
   headingLevel?: 2 | 3;
+  /** The idea's niche: its photograph as the card's top band (D-67; the lattice where there is none). */
+  niche?: { slug: string } | null;
 }
 
 /**
  * One engagement as a card (P25, D-67), for both sides' lists: the other party's monogram and the title (the card's
  * one link, which morphs into the tracker's title), where it stands as five dots, then at most two chips (docs/spec/07
  * item 2: the stage in words and, when it waits on the viewer's side, the solid "Your turn"), otherwise who it waits
- * on, the countdown and any unread messages. Raised when it is the viewer's turn. Reusable by the organisation's lists.
+ * on, the countdown and any unread messages. Raised when it is the viewer's turn. With `niche`, the idea's niche
+ * photograph tops the card (never on the tracker itself). Reusable by the organisation's lists.
  */
-export function EngagementCard({ item, mine, href, titleBy = "proposal", headingLevel = 3 }: EngagementCardProps) {
+export function EngagementCard({ item, mine, href, titleBy = "proposal", headingLevel = 3, niche }: EngagementCardProps) {
   const t = useTranslations("tracker");
   const tc = useTranslations("engagementCard");
   const turn = turnOf(item, mine);
@@ -56,6 +60,9 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
         mineTurn && "shadow-card",
       )}
     >
+      {niche !== undefined ? (
+        <NicheBand niche={niche?.slug} className="-mx-4 -mt-4 mb-1 h-14 rounded-t-[15px] rounded-b-none sm:-mx-5 sm:-mt-5" />
+      ) : null}
       <div className="flex min-w-0 items-start gap-3">
         <Avatar name={other} kind={mine === "developer" ? "org" : "person"} active={mineTurn} />
         <div className="min-w-0">

@@ -35,16 +35,14 @@ export function countyPhoto(code: string | null | undefined): Photo | undefined 
 }
 
 /**
- * The photograph for a niche (any level) and, for the public sector or no niche at all, the county; undefined when
- * there is none (the caller draws the lattice band).
+ * The photograph for a problem, an idea or a company: the county's photograph when there is a county with one (the
+ * place a problem comes from reads before its sector; the public sector's photograph is its county's), else the niche's
+ * (any level: its top-level niche's mark in the index, or P24's that fits), else none (the caller draws the lattice).
  */
 export function nichePhoto({ niche, county }: { niche?: string | null; county?: string | null }): Photo | undefined {
+  const local = countyPhoto(county);
+  if (local) return local;
   const top = niche ? topNiche(niche) : null;
-  if (top) {
-    const marked = ALL_PHOTOS.find((p) => p.niche === top);
-    if (marked) return marked;
-    if (INTERIM[top]) return photo(INTERIM[top]);
-    if (top !== "public-sector") return undefined;
-  }
-  return countyPhoto(county);
+  if (!top) return undefined;
+  return ALL_PHOTOS.find((p) => p.niche === top) ?? (INTERIM[top] ? photo(INTERIM[top]) : undefined);
 }

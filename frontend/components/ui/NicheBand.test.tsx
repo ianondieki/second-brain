@@ -41,8 +41,14 @@ describe("nichePhoto", () => {
   it("gives every top-level niche the photograph the index marks with it (P25-A), a child niche its parent's", () => {
     expect(nichePhoto({ niche: "networks-telecommunications" })?.slug).toBe("longonot-earth-station");
     expect(nichePhoto({ niche: "microfinance-saccos" })?.slug).toBe("nairobi-skyline");
-    expect(nichePhoto({ niche: "county-government", county: "KE-17" })?.slug).toBe("nairobi-city-hall");
+    expect(nichePhoto({ niche: "county-government" })?.slug).toBe("nairobi-city-hall");
     expect(nichePhoto({ niche: "health" })?.slug).toBe("turkana-naipekarr-dispensary");
+  });
+
+  it("puts the county's photograph first where the county has one (a Kisumu county-government problem shows Kisumu)", () => {
+    expect(nichePhoto({ niche: "county-government", county: "KE-17" })?.slug).toBe("kisumu-lake-victoria");
+    expect(nichePhoto({ niche: "agriculture", county: "KE-31" })?.slug).toBe("nakuru-lake");
+    expect(nichePhoto({ niche: "agriculture", county: "KE-99" })?.slug).toBe("kenya-tea");
   });
 
   it("gives a company with no niche its HQ county's photograph, the county role first", () => {

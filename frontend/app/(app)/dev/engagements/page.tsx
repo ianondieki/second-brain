@@ -12,6 +12,8 @@ import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
+import { myIdeas } from "../ideas/data";
+
 import { byProposal } from "./byProposal";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -32,7 +34,10 @@ export default async function DeveloperEngagementsPage() {
   const t = await getTranslations("tracker");
   const td = await getTranslations("devEngagements");
   const te = await getTranslations("eyebrow");
-  const groups = byProposal(await myEngagements());
+  const [engagements, ideas] = await Promise.all([myEngagements(), myIdeas().catch(() => [])]);
+  const groups = byProposal(engagements);
+  // Each idea's niche, for its cards' photograph band (D-67).
+  const nicheOf = new Map(ideas.map((idea) => [idea.id, idea.niche ?? null]));
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="engagements" />} wide>
@@ -50,14 +55,16 @@ export default async function DeveloperEngagementsPage() {
                 link={{ href: `/dev/ideas/${encodeURIComponent(group.proposalId)}`, label: td("openIdea") }}
                 data-proposal={group.proposalId}
               >
-                <ul aria-label={td("rowsLabel", { title: group.title })} className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
+                {/* As many 20 rem columns as fit, sharing the width: one card is never left narrow beside empty room. */}
+                <ul aria-label={td("rowsLabel", { title: group.title })} className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
                   {group.items.map((item) => (
-                    <li key={item.id} className="flex min-w-0 [&>article]:flex-1">
+                    <li key={item.id} className="cv-auto flex min-w-0 [--cv-size:18rem] [&>article]:flex-1">
                       <EngagementCard
                         item={item}
                         mine="developer"
                         titleBy="organisation"
                         href={`/dev/engagements/${encodeURIComponent(item.id)}`}
+                        niche={nicheOf.get(item.proposal_id) ?? null}
                       />
                     </li>
                   ))}
