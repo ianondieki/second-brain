@@ -629,11 +629,6 @@
       "verify": "Vyeti",
       "staff": "Dashibodi ya wafanyakazi / {section}"
     },
-    "greeting": {
-      "morning": "Nairobi, asubuhi hii",
-      "afternoon": "Nairobi, mchana huu",
-      "evening": "Nairobi, jioni hii"
-    },
     "inbox": {
       "matchesTitle": "Alichopata Wakala Skauti wako"
     },
@@ -3244,6 +3239,17 @@
       "confirm": "Funga maelezo",
       "closing": "Inafunga…",
       "cancel": "Yaache wazi"
+    },
+    "preview": {
+      "title": "Jinsi inavyosomeka kwenye Gundua",
+      "untitled": "Kichwa chako",
+      "statement": "Maelezo ya tatizo lako yanaonekana hapa unapoandika.",
+      "postedBy": "Imechapishwa na {org}",
+      "budget": "Bajeti: {band}",
+      "noBudget": "Bajeti iko wazi",
+      "deadline": "Mapendekezo kufikia {date}",
+      "noDeadline": "Hakuna tarehe ya mwisho",
+      "note": "Wasanidi programu wataiona wafanyakazi wakishaiidhinisha."
     }
   },
   "shortlist": {

@@ -9,6 +9,7 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { Chip } from "@/components/tracker/Chip";
 import { Callout } from "@/components/ui/Callout";
 import { Card } from "@/components/ui/Card";
+import { NicheBand } from "@/components/ui/NicheBand";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
@@ -103,7 +104,11 @@ export default async function BriefPage({ params, searchParams }: PageProps<"/or
         </Callout>
       </StateNote>
 
-      <Card as="section" variant="flat" aria-labelledby="brief-problem" className="mt-8">
+      <Card as="section" variant="flat" aria-labelledby="brief-problem" className="mt-8 overflow-hidden">
+        {/* The niche's photograph (or the county's, or the lattice): decorative, the niche is named in the facts. */}
+        <div className="detail-band -mx-5 -mt-5 mb-5">
+          <NicheBand niche={brief.niche?.slug} county={brief.county_code} sizes="(min-width: 1024px) 48rem, 100vw" />
+        </div>
         <h2 id="brief-problem" className="sr-only">
           {t("facts.statement")}
         </h2>

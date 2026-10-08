@@ -1,22 +1,25 @@
 import { useLocale, useTranslations } from "next-intl";
 
 import { Chip } from "@/components/tracker/Chip";
-import { Row } from "@/components/ui/RowList";
+import type { ReactNode } from "react";
+
+import { ItemCard } from "../ItemCard";
 import { formatCalendarDate } from "@/lib/format";
 
 import { STATE_CHIP, type Brief } from "../briefs";
 
 /**
- * One of the organisation's Briefs in its list (REQ-DIR-05), a compact card (RowList cards): the title linking to the
+ * One of the organisation's Briefs in its list (REQ-DIR-05), a card under its niche's photograph band (D-67): the title linking to the
  * Brief's page, one meta line (niche, county), one status mark (In review, Published, Not approved, Closed; docs/spec/07
- * item 2: at most two), then the proposals answering it and the deadline on one line.
+ * item 2: at most two) and, at the foot, the proposals answering it and the deadline.
  */
-export function BriefItem({ brief, href, county }: { brief: Brief; href: string; county: string | null }) {
+export function BriefItem({ brief, href, county, band }: { brief: Brief; href: string; county: string | null; band?: ReactNode }) {
   const t = useTranslations("briefs");
   const locale = useLocale();
   const titleId = `brief-${brief.id}-title`;
   return (
-    <Row
+    <ItemCard
+      band={band}
       aria-labelledby={titleId}
       data-brief={brief.id}
       data-state={brief.state}
@@ -29,16 +32,17 @@ export function BriefItem({ brief, href, county }: { brief: Brief; href: string;
           <span>{county ?? t("anywhere")}</span>
         </span>
       }
-      badges={[
+      chips={[
         <Chip key="state" kind={STATE_CHIP[brief.state]}>
           {t(`state.${brief.state}`)}
         </Chip>,
       ]}
-    >
-      <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-soft">
-        <span data-proposals={brief.proposal_count}>{t("proposals", { count: brief.proposal_count })}</span>
-        <span>{brief.deadline ? t("deadline", { date: formatCalendarDate(locale, brief.deadline) }) : t("noDeadline")}</span>
-      </p>
-    </Row>
+      footNote={
+        <span className="flex flex-wrap gap-x-4 gap-y-1">
+          <span data-proposals={brief.proposal_count}>{t("proposals", { count: brief.proposal_count })}</span>
+          <span>{brief.deadline ? t("deadline", { date: formatCalendarDate(locale, brief.deadline) }) : t("noDeadline")}</span>
+        </span>
+      }
+    />
   );
 }

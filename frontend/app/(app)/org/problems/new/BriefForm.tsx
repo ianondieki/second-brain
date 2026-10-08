@@ -34,6 +34,7 @@ import {
   type Refused,
 } from "../../brief-draft";
 import { briefCalls, type BriefCalls } from "../calls";
+import { BriefPreview } from "./BriefPreview";
 
 export interface NicheGroup {
   id: string;
@@ -59,6 +60,8 @@ export interface BriefFormProps {
   hereHref: string;
   cancelHref: string;
   calls?: BriefCalls;
+  /** The page's language, for the preview's date. */
+  locale?: string;
 }
 
 const LIMIT: Partial<Record<DraftField, number>> = {
@@ -72,7 +75,8 @@ const LIMIT: Partial<Record<DraftField, number>> = {
  * with its meter, who is affected), where it fits (niche, county), and the budget band and deadline developers see.
  * Checked before sending; the API checks again (contact details, the lists, the plan) and each refusal is worded here:
  * a 402 names the next plan up with its checkout, a 403 the verification or the role, a 422 the fields. "Post the
- * brief" is the screen's one primary action; a posted Brief opens the list, newest first.
+ * brief" is the screen's one primary action; a posted Brief opens the list, newest first. Beside the form from 1024 px
+ * (under its sections on a phone), a live preview of how the Brief reads on Discover (BriefPreview).
  */
 export function BriefForm(props: BriefFormProps) {
   const t = useStrings("briefForm");
@@ -149,7 +153,8 @@ export function BriefForm(props: BriefFormProps) {
   const upgrade = refused?.refusal === "planLimit" ? refused.upgradePlan : null;
 
   return (
-    <Form onSubmit={submit} className="flex flex-col gap-8" aria-busy={busy || undefined} data-brief-form="">
+    <Form onSubmit={submit} className="brief-layout" aria-busy={busy || undefined} data-brief-form="">
+      <div className="brief-fields flex flex-col gap-8">
       <Card as="section" variant="flat" aria-labelledby="brief-group-problem" className="flex flex-col gap-6">
         <h2 id="brief-group-problem" className={cardHeadingClass}>
           {t("group.problem")}
@@ -269,6 +274,20 @@ export function BriefForm(props: BriefFormProps) {
         <InfoIcon className="mt-0.5 size-4 shrink-0" />
         <span>{t("invitedNote")}</span>
       </p>
+      </div>
+
+      <div className="brief-aside">
+        <BriefPreview
+          draft={draft}
+          orgName={props.orgName}
+          niches={props.niches}
+          counties={props.counties}
+          bands={props.bands}
+          locale={props.locale ?? "en"}
+        />
+      </div>
+
+      <div className="brief-submit flex flex-col gap-6">
 
       {refused ? (
         <Alert ref={notice} className="w-full" tone="error">
@@ -288,6 +307,7 @@ export function BriefForm(props: BriefFormProps) {
         <Link href={props.cancelHref} className={cn(standaloneLinkClass, "self-start sm:self-auto")}>
           {t("cancel")}
         </Link>
+      </div>
       </div>
     </Form>
   );

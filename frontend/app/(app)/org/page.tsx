@@ -17,14 +17,13 @@ import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Callout } from "@/components/ui/Callout";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { NicheBand } from "@/components/ui/NicheBand";
-import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
 import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
 import { ActivityCalendar } from "@/components/activity/ActivityCalendar";
 import { WEEKS } from "@/components/activity/calendar";
 import { getActivity } from "@/components/activity/fetch";
-import { GreetingPhoto } from "@/components/home/GreetingPhoto";
+import { OrgGreeting } from "@/components/home/OrgGreeting";
 import { CountFigure } from "@/components/motion/CountFigure";
 import { CountUp } from "@/components/motion/CountUp";
 import { appNow } from "@/lib/api/server";
@@ -76,29 +75,38 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
         <FirstLoginTour side="org" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("org")} />
       </ClientStrings>
       <div className="max-w-5xl">
-        <PageHero
-          eyebrow={tp("eyebrow.home")}
-          title={t(`greeting.${part}`, { name: me.user.display_name })}
-          lead={org ? t("orgLead", { org: org.org_name }) : t("orgLeadNoName")}
-          action={
-            setupNeeded ? (
+        {/* The greeting on Nairobi at this time of day, as the developer's Home: the eyebrow, the name, the lead and the
+            one primary action. */}
+        <OrgGreeting part={part}>
+          <p className="page-eyebrow" data-eyebrow="">
+            {tp("eyebrow.home")}
+          </p>
+          <h1 className="mt-3 text-[2rem] leading-[1.08] [overflow-wrap:anywhere] text-balance sm:text-[2.75rem] sm:leading-[1.04]">
+            {t(`greeting.${part}`, { name: me.user.display_name })}
+          </h1>
+          <p className="org-greet-lead lead mt-3 max-w-[44ch] text-[1.0625rem] sm:text-lg">
+            {org ? t("orgLead", { org: org.org_name }) : t("orgLeadNoName")}
+          </p>
+          {setupNeeded ? (
+            <div className="mt-6">
               <ButtonLink href="/settings/security" variant="primary">
                 {t("turnOn")}
               </ButtonLink>
-            ) : org ? (
+            </div>
+          ) : org ? (
+            <div className="mt-6">
               <ButtonLink href={inboxHref(memberships, org.org_id)} variant="primary">
                 {(await getTranslations("orgHome"))("open")}
               </ButtonLink>
-            ) : undefined
-          }
-          aside={<GreetingPhoto part={part} />}
-        />
+            </div>
+          ) : null}
+        </OrgGreeting>
       </div>
 
-      <div className="flex max-w-5xl flex-col gap-12">
+      <div className="mt-8 flex max-w-5xl flex-col gap-12 lg:mt-10">
         {/* Two-step sign-in: one quiet line when it is on (the confirmation after turning it on), a notice while off. */}
         {mfa === "on" ? (
-          <p className="-mt-4 flex items-center gap-2 text-sm text-ink-soft" data-home="security">
+          <p className="-mt-6 flex items-center gap-2 text-sm text-ink-soft" data-home="security">
             <CheckIcon className="size-4 shrink-0 text-ok" />
             {t("mfaOn")}
           </p>

@@ -6,10 +6,11 @@ import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { RowList } from "@/components/ui/RowList";
+import { NicheBand } from "@/components/ui/NicheBand";
+import { PageHero } from "@/components/ui/PageHero";
 
 import { orgContext } from "../data";
+import { ItemGrid } from "../ItemCard";
 import { inboxHref } from "../membership";
 import { OrgRefusal } from "../OrgRefusal";
 import { getVerification } from "../scout-data";
@@ -30,13 +31,13 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function EventsPage({ searchParams }: PageProps<"/org/events">) {
   const { memberships, org, missing, query } = await orgContext((await searchParams).org);
-  const t = await getTranslations("orgEvents");
-  const ti = await getTranslations("inbox");
+  const [t, ti, tp] = await Promise.all([getTranslations("orgEvents"), getTranslations("inbox"), getTranslations("portal")]);
 
   const frame = (body: ReactNode, action?: ReactNode, lead?: string) => (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="events" query={query} />} wide>
-      <div className="max-w-3xl">
-        <PageHeader title={t("title")} lead={lead} action={action} />
+      <div className="max-w-5xl">
+        <PageHero
+          eyebrow={tp("eyebrow.events")} title={t("title")} lead={lead} action={action} />
         {body}
       </div>
     </SignedInShell>
@@ -44,7 +45,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/org/event
 
   if (!org) {
     return frame(
-      <div className="mt-8">
+      <div>
         {missing === "notMember" ? (
           <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" />
         ) : (
@@ -58,7 +59,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/org/event
   const lead = t("lead", { org: org.org_name });
   if (list.kind === "refused") {
     return frame(
-      <div className="mt-8">
+      <div>
         <OrgRefusal refusal={list.refusal} orgName={org.org_name} back={{ href: inboxHref(memberships, org.org_id), action: t("home") }} />
       </div>,
       undefined,
@@ -78,7 +79,6 @@ export default async function EventsPage({ searchParams }: PageProps<"/org/event
   if (list.value.length === 0) {
     return frame(
       <EmptyState
-        className="mt-8"
         sentence={posts ? t("empty", { org: org.org_name }) : editor ? (why ?? "") : t("emptyViewer", { org: org.org_name })}
         action={posts ? t("post") : t("home")}
         href={posts ? newHref : `/org${query}`}
@@ -93,20 +93,26 @@ export default async function EventsPage({ searchParams }: PageProps<"/org/event
   return frame(
     <>
       {why ? (
-        <p className="mt-4 max-w-[62ch] text-sm text-ink-soft" data-events-why="">
+        <p className="max-w-[62ch] text-sm text-ink-soft" data-events-why="">
           {why}
         </p>
       ) : null}
       {/* The list's name as a hidden h2, so the events' h3 titles follow the page's h1 in order (axe heading-order). */}
-      <section aria-labelledby="events-list" className="mt-8">
+      <section aria-labelledby="events-list" className="mt-6">
         <h2 id="events-list" className="sr-only">
           {t("listLabel")}
         </h2>
-        <RowList cards data-org-events="">
+        <ItemGrid data-org-events="">
           {list.value.map((event) => (
-            <EventItem key={event.id} event={event} href={orgEventHref(memberships, org.org_id, event.id)} />
+            <li key={event.id}>
+              <EventItem
+                event={event}
+                href={orgEventHref(memberships, org.org_id, event.id)}
+                band={<NicheBand county={event.online ? null : event.county_code} />}
+              />
+            </li>
           ))}
-        </RowList>
+        </ItemGrid>
       </section>
     </>,
     posts ? (

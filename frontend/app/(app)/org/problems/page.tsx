@@ -8,12 +8,13 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { RowList } from "@/components/ui/RowList";
+import { NicheBand } from "@/components/ui/NicheBand";
+import { PageHero } from "@/components/ui/PageHero";
 
 import { getBriefs } from "../brief-data";
 import { briefHref, briefUpgrade, newBriefHref, planFull, postsBriefs, problemsHref } from "../briefs";
 import { orgContext } from "../data";
+import { ItemGrid } from "../ItemCard";
 import { first, inboxHref } from "../membership";
 import { OrgRefusal } from "../OrgRefusal";
 import { getCounties, readOrgPlans } from "../scout-data";
@@ -35,13 +36,13 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function ProblemsPage({ searchParams }: PageProps<"/org/problems">) {
   const params = await searchParams;
   const { memberships, org, missing, query } = await orgContext(params.org);
-  const t = await getTranslations("briefs");
-  const ti = await getTranslations("inbox");
+  const [t, ti, tp] = await Promise.all([getTranslations("briefs"), getTranslations("inbox"), getTranslations("portal")]);
 
   const frame = (body: ReactNode, action?: ReactNode) => (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="problems" query={query} />} wide>
-      <div className="max-w-3xl">
-        <PageHeader
+      <div className="max-w-5xl">
+        <PageHero
+          eyebrow={tp("eyebrow.problems")}
           title={t("title")}
           lead={org ? t("lead", { org: org.org_name }) : undefined}
           action={action}
@@ -53,7 +54,7 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
 
   if (!org) {
     return frame(
-      <div className="mt-8">
+      <div>
         {missing === "notMember" ? (
           <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" />
         ) : (
@@ -71,11 +72,11 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
   ]);
   const self = problemsHref(memberships, org.org_id);
   if (list.kind === "staleCursor" || (list.kind === "ok" && cursor && list.value.items.length === 0)) {
-    return frame(<EmptyState className="mt-8" sentence={t("staleCursor")} action={t("newest")} href={self} />);
+    return frame(<EmptyState sentence={t("staleCursor")} action={t("newest")} href={self} />);
   }
   if (list.kind === "refused") {
     return frame(
-      <div className="mt-8">
+      <div>
         <OrgRefusal refusal={list.refusal} orgName={org.org_name} back={{ href: inboxHref(memberships, org.org_id), action: t("openInbox") }} />
       </div>,
     );
@@ -90,7 +91,6 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
   if (items.length === 0 && !cursor) {
     return frame(
       <EmptyState
-        className="mt-8"
         sentence={posts ? t("empty", { org: org.org_name }) : t("emptyViewer", { org: org.org_name })}
         action={posts ? t("post") : t("openInbox")}
         href={posts ? newHref : inboxHref(memberships, org.org_id)}
@@ -111,20 +111,22 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
         here={self}
       />
       {/* The list's name as a hidden h2, so the Briefs' h3 titles follow the page's h1 in order (axe heading-order). */}
-      <section aria-labelledby="briefs-list" className="mt-6">
+      <section aria-labelledby="briefs-list" className="mt-2">
         <h2 id="briefs-list" className="sr-only">
           {t("listLabel")}
         </h2>
-        <RowList cards data-briefs="">
+        <ItemGrid data-briefs="">
           {items.map((brief) => (
-            <BriefItem
-              key={brief.id}
-              brief={brief}
-              href={briefHref(memberships, org.org_id, brief.id)}
-              county={countyName(brief.county_code)}
-            />
+            <li key={brief.id}>
+              <BriefItem
+                brief={brief}
+                href={briefHref(memberships, org.org_id, brief.id)}
+                county={countyName(brief.county_code)}
+                band={<NicheBand niche={brief.niche?.slug} county={brief.county_code} />}
+              />
+            </li>
           ))}
-        </RowList>
+        </ItemGrid>
       </section>
       {next ? (
         <p className="mt-6">

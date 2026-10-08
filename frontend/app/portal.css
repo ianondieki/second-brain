@@ -4,44 +4,6 @@
  * under reduced motion (the block at the end of this file). Imported by globals.css.
  */
 @layer components {
-  /* Home's greeting band (components/home/GreetingPhoto.tsx): a narrow band on a phone, a window beside the title from
-     a wide hero; the caption on a night scrim names the place and the time. */
-  .greeting-photo {
-    position: relative;
-    height: 3.5rem;
-    overflow: hidden;
-    border-radius: 0.875rem;
-    background: var(--night);
-  }
-  .greeting-photo picture {
-    display: block;
-    height: 100%;
-  }
-  .greeting-photo img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center 40%;
-  }
-  .greeting-photo::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, rgb(30 22 64 / 0.82), rgb(30 22 64 / 0.1) 70%);
-  }
-  .greeting-photo-caption {
-    position: absolute;
-    inset-block-end: 0;
-    inset-inline-start: 0;
-    z-index: 1;
-    padding: 0.5rem 0.875rem;
-    color: var(--on-night);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    letter-spacing: 0.04em;
-    line-height: 1.3;
-  }
   /* A card in a grid of things (app/(app)/org/ItemCard.tsx): band, head, foot; the title's link covers the card. */
   .item-grid {
     display: grid;
@@ -128,31 +90,13 @@
     min-height: 3rem;
   }
 
-  /* A hero with an aside (Home's photograph): the primary action stays under the lead, so the title, the action and the
-     window read as two columns, not three. */
-  @container page-hero (width >= 52rem) {
-    .page-hero-body:has(> .page-hero-aside) .page-hero-main {
-      display: block;
-    }
-    .page-hero-body:has(> .page-hero-aside) .page-hero-main > div + div {
-      margin-top: 1.5rem;
-    }
-    .greeting-photo {
-      height: 8.5rem;
-      border-radius: 1rem;
-      box-shadow: var(--shadow-card);
-    }
-    .greeting-photo::after {
-      background: linear-gradient(180deg, transparent 45%, rgb(30 22 64 / 0.85));
-    }
-  }
 }
 
 @media (forced-colors: active) {
   .item-card:has(.item-card-link:focus-visible) {
     outline-color: Highlight;
   }
-  .greeting-photo {
+  .org-greet {
     border: 1px solid CanvasText;
   }
 }
@@ -228,5 +172,112 @@ li > .compare-band > .niche-band {
   /* The teaser's words read as text: Fraunces section titles with more room above than below. */
   .proposal-read .reading h2 {
     font-size: 1.5rem;
+  }
+}
+
+/* Post a Brief (app/(app)/org/problems/new): the form's sections, then the live preview, then the submit row on a
+   phone; from 1024 px the preview stays beside the form. */
+@layer components {
+  .brief-layout {
+    display: grid;
+    grid-template-areas: "fields" "aside" "submit";
+    gap: 2rem;
+  }
+  .brief-fields {
+    grid-area: fields;
+    min-width: 0;
+  }
+  .brief-aside {
+    grid-area: aside;
+    min-width: 0;
+  }
+  .brief-submit {
+    grid-area: submit;
+    min-width: 0;
+  }
+  .brief-preview-card {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    background: var(--field);
+    box-shadow: var(--shadow-card);
+    margin-top: 0.75rem;
+  }
+  @media (width >= 64rem) {
+    .brief-layout {
+      grid-template-columns: minmax(0, 1fr) 20rem;
+      grid-template-areas: "fields aside" "submit aside";
+      column-gap: 2.5rem;
+    }
+    .brief-aside .brief-preview {
+      position: sticky;
+      top: 6rem;
+    }
+  }
+}
+
+/* A detail page's photograph band (a Brief, an event): wider and a little taller than a card's. */
+.detail-band > .niche-band {
+  height: 5rem;
+  border-radius: 0;
+}
+
+/* The organisation Home's greeting (components/home/OrgGreeting.tsx), as the developer Home's GreetingBand: Nairobi at
+   this time of day behind the greeting, a night gradient darkest where the text sits (left from 640 px, the foot on
+   phones). */
+@layer components {
+  .org-greet {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: 1.5rem;
+    background: var(--night);
+    box-shadow: var(--shadow-card);
+  }
+  .org-greet-photo {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+  }
+  .org-greet-photo picture,
+  .org-greet-photo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 40%;
+  }
+  .org-greet-photo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgb(30 22 64 / 0.25) 0%, rgb(30 22 64 / 0.72) 48%, rgb(30 22 64 / 0.94) 100%);
+  }
+  .org-greet-body {
+    display: flex;
+    min-height: 15rem;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 1.5rem 1.25rem;
+  }
+  .org-greet .page-eyebrow {
+    color: var(--night-soft);
+  }
+  .org-greet h1 {
+    color: var(--on-night);
+  }
+  .org-greet .org-greet-lead {
+    color: var(--night-soft);
+  }
+  @media (width >= 40rem) {
+    .org-greet-photo::after {
+      background: linear-gradient(90deg, rgb(30 22 64 / 0.95) 0%, rgb(30 22 64 / 0.82) 42%, rgb(30 22 64 / 0.28) 78%, rgb(30 22 64 / 0.12) 100%);
+    }
+    .org-greet-body {
+      min-height: 16.5rem;
+      justify-content: center;
+      max-width: 40rem;
+      padding: 2.5rem;
+    }
   }
 }

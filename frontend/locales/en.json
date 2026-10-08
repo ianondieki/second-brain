@@ -629,11 +629,6 @@
       "verify": "Certificates",
       "staff": "Staff console / {section}"
     },
-    "greeting": {
-      "morning": "Nairobi, this morning",
-      "afternoon": "Nairobi, this afternoon",
-      "evening": "Nairobi, this evening"
-    },
     "inbox": {
       "matchesTitle": "What your scout found"
     },
@@ -3244,6 +3239,17 @@
       "confirm": "Close the Brief",
       "closing": "Closing…",
       "cancel": "Keep it open"
+    },
+    "preview": {
+      "title": "How it reads on Discover",
+      "untitled": "Your title",
+      "statement": "Your problem statement shows here as you write it.",
+      "postedBy": "Posted by {org}",
+      "budget": "Budget: {band}",
+      "noBudget": "Budget open",
+      "deadline": "Proposals by {date}",
+      "noDeadline": "No deadline",
+      "note": "Developers see it once staff approve it."
     }
   },
   "shortlist": {

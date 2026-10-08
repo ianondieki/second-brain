@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { ClientStrings } from "@/components/ClientStrings";
@@ -35,7 +35,7 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
 
   const frame = (body: ReactNode) => (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="problems" query={query} />} wide>
-      <div className="max-w-3xl">
+      <div className="max-w-5xl">
         <PageHeader back={{ href: back, label: t("back") }} title={t("newTitle")} />
         {body}
       </div>
@@ -107,7 +107,7 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
   return frame(
     <>
       <p className="mt-2 max-w-[62ch] text-ink-soft">{t("newLead")}</p>
-      {notice}
+      <div className="max-w-3xl">{notice}</div>
       <div className="mt-8">
         <ClientStrings strings={await clientStrings(["briefForm"])}>
           <BriefForm
@@ -122,6 +122,7 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
             doneHref={problemsHref(memberships, org.org_id, { posted: true })}
             hereHref={here}
             cancelHref={back}
+            locale={await getLocale()}
           />
         </ClientStrings>
       </div>
