@@ -58,7 +58,7 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
               decorative, the county is named on it and in the facts; never a logo). */}
           <Card variant="flat" padding="none" className="mt-8 overflow-hidden">
             {org.county ? (
-              <NicheBand county={org.county.code} className="h-24 rounded-none sm:h-28">
+              <NicheBand county={org.county.code} className="h-24 rounded-none sm:h-28" sizes="(min-width: 640px) 36rem, 100vw" wide>
                 <span className="font-display text-lg font-semibold">{org.county.name}</span>
               </NicheBand>
             ) : null}

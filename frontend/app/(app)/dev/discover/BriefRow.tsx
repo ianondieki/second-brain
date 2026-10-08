@@ -3,6 +3,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { problemHref } from "@/components/problem/problem";
 import { Badge } from "@/components/ui/Badge";
 import { CompaniesIcon } from "@/components/ui/icons";
+import { SharedTitle } from "@/components/motion/SharedTitle";
 import { LinkPending } from "@/components/ui/LinkPending";
 import Link from "next/link";
 import { titleLinkClass } from "@/components/ui/Button";
@@ -33,7 +34,9 @@ export function BriefRow({ item, counties }: { item: DiscoverBrief; counties: re
       <CardBand niche={problem.niche} county={problem.county_code} />
       <h3 id={titleId} className={discoverTitleClass}>
         <Link href={problemHref(problem.id)} className={titleLinkClass}>
-          {problem.title}
+          <SharedTitle kind="problem" id={problem.id}>
+            <span>{problem.title}</span>
+          </SharedTitle>
           <LinkPending className="absolute -top-px left-4 sm:left-5" />
         </Link>
       </h3>
