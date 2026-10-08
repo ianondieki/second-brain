@@ -14,7 +14,6 @@ import { AlertIcon, InfoIcon } from "@/components/ui/icons";
 import { Callout } from "@/components/ui/Callout";
 import { ActivityCalendar } from "@/components/activity/ActivityCalendar";
 import type { Activity } from "@/components/activity/calendar";
-import { CountUp } from "@/components/motion/CountUp";
 import { Card } from "@/components/ui/Card";
 import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
@@ -138,34 +137,32 @@ export async function HomeContent({
 
       <div className="mt-8 flex max-w-4xl flex-col gap-12 lg:mt-10 lg:gap-14">
         <section aria-label={t("stats.label")} data-home="stats">
-          {/* The figures count up once as the row comes into view (CountUp); the deadline is a date, not a count. */}
-          <CountUp>
-            <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-              <li>
-                <StatTile data-stat="ideas" label={t("stats.ideas")} value={stats.ideas} count={stats.ideas} meta={t("stats.ideasMeta", { published: stats.published, drafts: stats.drafts })} href="/dev/ideas" />
-              </li>
-              <li>
-                <StatTile data-stat="engagements" label={t("stats.engagements")} value={stats.engagements} count={stats.engagements} meta={t("stats.engagementsMeta", { count: stats.active })} href={ENGAGEMENTS_PATH} />
-              </li>
-              <li>
-                <StatTile data-stat="needs-you" label={t("stats.needsYou")} value={waiting.length} count={waiting.length} meta={waiting.length > 0 ? t("stats.needsYouMeta") : undefined} />
-              </li>
-              <li>
-                <StatTile
-                  data-stat="deadline"
-                  label={t("stats.deadline")}
-                  value={stats.nextDue ? formatShortDate(locale, stats.nextDue.due_on) : t("stats.deadlineNone")}
-                  // The time left in days, hours and minutes (P23-3) when the API gives the instant, the business days
-                  // then in the tile's title; otherwise the business days as the meta line.
-                  meta={
-                    until ? <TimeLeft until={until} now={now} labelWhenPast={t("stats.deadlineOverdue")} mine={stats.nextDueMine} /> : dueWords
-                  }
-                  title={until ? dueWords : undefined}
-                  href={stats.nextDueId ? rowHref(stats.nextDueId) : undefined}
-                />
-              </li>
-            </ul>
-          </CountUp>
+          {/* The figures show their real values from the first paint: they drive what to do next (no count-up). */}
+          <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            <li>
+              <StatTile data-stat="ideas" label={t("stats.ideas")} value={stats.ideas} meta={t("stats.ideasMeta", { published: stats.published, drafts: stats.drafts })} href="/dev/ideas" />
+            </li>
+            <li>
+              <StatTile data-stat="engagements" label={t("stats.engagements")} value={stats.engagements} meta={t("stats.engagementsMeta", { count: stats.active })} href={ENGAGEMENTS_PATH} />
+            </li>
+            <li>
+              <StatTile data-stat="needs-you" label={t("stats.needsYou")} value={waiting.length} meta={waiting.length > 0 ? t("stats.needsYouMeta") : undefined} />
+            </li>
+            <li>
+              <StatTile
+                data-stat="deadline"
+                label={t("stats.deadline")}
+                value={stats.nextDue ? formatShortDate(locale, stats.nextDue.due_on) : t("stats.deadlineNone")}
+                // The time left in days, hours and minutes (P23-3) when the API gives the instant, the business days
+                // then in the tile's title; otherwise the business days as the meta line.
+                meta={
+                  until ? <TimeLeft until={until} now={now} labelWhenPast={t("stats.deadlineOverdue")} mine={stats.nextDueMine} /> : dueWords
+                }
+                title={until ? dueWords : undefined}
+                href={stats.nextDueId ? rowHref(stats.nextDueId) : undefined}
+              />
+            </li>
+          </ul>
         </section>
 
         {/* What's happening (P24): the public activity feed under the tiles, labelled when it is the demo seed's. */}
