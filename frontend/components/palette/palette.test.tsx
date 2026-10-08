@@ -7,16 +7,26 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { DEV_PALETTE, SEARCH_SACCO } from "./fixtures";
 import { shortcutFor } from "./PaletteSlot";
 import { PaletteTrigger } from "./PaletteTrigger";
-import { RECENT_KEY } from "./recent";
+const RECENT_KEY = DEV_PALETTE.recentKey!;
 
 // D-67 (P25; REQ-UX-01, REQ-UX-06): the command palette. WAI-ARIA APG combobox with a grouped listbox in a modal
-// dialog; opened by Ctrl/⌘ K anywhere, "/" outside a text field and the top bar's Search button; its code loads on
+// dialog; opened by Ctrl/⌘ K anywhere and the top bar's Search button (no single-key shortcut, WCAG 2.1.4); its code loads on
 // first use; the API's search groups are left out when the call fails.
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), pathname: "/dev" }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: nav.push, replace: nav.replace, refresh: nav.refresh }),
   usePathname: () => nav.pathname,
+}));
+
+// Calls go through the CSRF helper; here it only builds the Request (no token round trip).
+vi.mock("@/lib/api/csrf", async (original) => ({
+  ...(await original<typeof import("@/lib/api/csrf")>()),
+  // A Request on this page's address (jsdom's Request does not take a relative URL), sent through the given fetch.
+  withCsrf:
+    (base?: typeof fetch) =>
+    (input: RequestInfo | URL, init?: RequestInit) =>
+      (base ?? globalThis.fetch)(input instanceof Request ? input : new Request(new URL(String(input), window.location.href), init)),
 }));
 
 const loads = vi.hoisted(() => ({ count: 0 }));
@@ -46,6 +56,7 @@ beforeEach(() => {
   loads.count = 0;
   nav.pathname = "/dev";
   nav.push.mockReset();
+  nav.replace.mockReset();
   localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
   fetchMock.mockReset();
@@ -100,14 +111,23 @@ describe("PaletteTrigger", () => {
     await openWith(() => fireEvent.keyDown(field, { key: "K", metaKey: true }));
   });
 
-  it('opens on "/" outside a text field, never while typing in one', async () => {
+  it('has no single-key shortcut: "/" anywhere opens nothing (WCAG 2.1.4)', async () => {
     renderTrigger();
-    const field = screen.getByRole("textbox", { name: "A field on the page" });
-    fireEvent.keyDown(field, { key: "/" });
+    fireEvent.keyDown(document.body, { key: "/" });
+    fireEvent.keyDown(document.body, { key: "k" });
     await act(async () => {});
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(loads.count).toBe(0);
-    await openWith(() => fireEvent.keyDown(document.body, { key: "/" }));
+  });
+
+  it("clears another account's recent pages from this browser as soon as this account is signed in", () => {
+    localStorage.setItem("wazo-recent:v2:someone-else", JSON.stringify([{ href: "/org/inbox/x", title: "Their proposal" }]));
+    localStorage.setItem("wazo-recent:v1", "[]");
+    localStorage.setItem(RECENT_KEY, "[]");
+    renderTrigger();
+    expect(localStorage.getItem("wazo-recent:v2:someone-else")).toBeNull();
+    expect(localStorage.getItem("wazo-recent:v1")).toBeNull();
+    expect(localStorage.getItem(RECENT_KEY)).toBe("[]");
   });
 
   it("starts loading the palette when the pointer rests on the button or it takes focus", () => {
@@ -203,13 +223,60 @@ describe("CommandPalette", () => {
     expect(nav.push).not.toHaveBeenCalled();
   });
 
-  it("closes on Escape and gives focus back to what opened it", async () => {
+  it.each([
+    ["Escape", () => fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" })],
+    ["the Close button", () => fireEvent.click(screen.getByRole("button", { name: /^Close/ }))],
+    ["a press on the backdrop", () => fireEvent.click(screen.getByRole("dialog"))],
+  ])("closes on %s: the modal ends first, then the opener has focus again", async (_, close) => {
     const button = renderTrigger();
     button.focus();
     await openWith(() => fireEvent.click(button));
-    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+    const dialog = screen.getByRole("dialog");
+    const ended = vi.spyOn(dialog as HTMLDialogElement, "close");
+    close();
+    expect(ended).toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.activeElement).toBe(button);
+    await waitFor(() => expect(document.activeElement).toBe(button));
+  });
+
+  it("keeps focus in the field: the listbox is not a Tab stop", async () => {
+    renderTrigger();
+    await openWith(() => fireEvent.keyDown(document.body, { key: "k", ctrlKey: true }));
+    expect(screen.getByRole("listbox").getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("ignores a slow answer to an earlier query that arrives after a newer one", async () => {
+    let releaseOld: (r: Response) => void = () => {};
+    fetchMock.mockImplementation((input) => {
+      const url = new URL((input as Request).url);
+      if (url.searchParams.get("q") === "sa") return new Promise<Response>((resolve) => (releaseOld = resolve));
+      return Promise.resolve(new Response(JSON.stringify(SEARCH_SACCO), { status: 200 }));
+    });
+    renderTrigger();
+    await openWith(() => fireEvent.keyDown(document.body, { key: "k", ctrlKey: true }));
+    const combo = screen.getByRole("combobox");
+    fireEvent.change(combo, { target: { value: "sa" } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1)); // "sa" is in flight
+    fireEvent.change(combo, { target: { value: "sacco" } });
+    await screen.findByRole("group", { name: "Your ideas" });
+    // The answer to "sa" lands late, with nothing in it: the newer answer stays, and nothing says "Searching…".
+    releaseOld(new Response(JSON.stringify({ q: "sa", groups: [] }), { status: 200 }));
+    await act(async () => {});
+    expect(screen.getByRole("group", { name: "Your ideas" })).toBeTruthy();
+    expect(screen.queryByText("Searching…")).toBeNull();
+  });
+
+  it("signing out from Actions forgets this browser's recent pages", async () => {
+    localStorage.setItem(RECENT_KEY, JSON.stringify([{ href: "/dev/engagements/e1", title: "Fuel-level alerts" }]));
+    fetchMock.mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      return url.includes("/api/auth/logout") ? new Response(null, { status: 204 }) : new Response("{}", { status: 200 });
+    });
+    renderTrigger();
+    await openWith(() => fireEvent.keyDown(document.body, { key: "k", ctrlKey: true }));
+    fireEvent.click(screen.getByRole("option", { name: "Sign out" }));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/login"));
+    expect(localStorage.getItem(RECENT_KEY)).toBeNull();
   });
 
   it("adds the API's groups after a pause in typing, the typed letters marked", async () => {

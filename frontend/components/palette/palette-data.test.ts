@@ -2,15 +2,27 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DEV_PALETTE, SEARCH_SACCO } from "./fixtures";
 import { fold, matchParts, paletteGroups } from "./model";
-import { isDetailPath, readRecent, RECENT_KEY, RECENT_MAX, rememberPage } from "./recent";
+import { readRecent } from "./recent";
+import { DETAIL, forgetRecent, RECENT_MAX, recentKey, rememberVisit } from "./remember";
 import { parseSearch, search, searchQuery } from "./search";
 
 // D-67 (P25): what the command palette lists, from the API's answer, this browser's recent pages and the query.
 
 function memoryStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
-  return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v), data };
+  return {
+    getItem: (k: string) => data.get(k) ?? null,
+    setItem: (k: string, v: string) => void data.set(k, v),
+    removeItem: (k: string) => void data.delete(k),
+    key: (i: number) => [...data.keys()][i] ?? null,
+    get length() {
+      return data.size;
+    },
+    data,
+  };
 }
+const KEY = recentKey("account-a");
+const isDetailPath = (path: string) => DETAIL.test(path);
 
 describe("parseSearch", () => {
   it("keeps the documented shape, at most five per group, prefixed ids", () => {
@@ -76,23 +88,40 @@ describe("recent pages", () => {
     expect(isDetailPath("/settings/security")).toBe(false);
   });
 
-  it("keeps five, newest first, one entry per address", () => {
+  it("keeps five, newest first, one entry per address, under the account's key", () => {
     const storage = memoryStorage();
-    for (let i = 1; i <= 7; i += 1) rememberPage({ href: `/dev/ideas/${i}`, title: `Idea ${i}` }, storage);
-    rememberPage({ href: "/dev/ideas/5", title: "Idea 5 renamed" }, storage);
-    const recent = readRecent(storage);
+    for (let i = 1; i <= 7; i += 1) rememberVisit(KEY, `/dev/ideas/${i}`, `Idea ${i}`, storage);
+    rememberVisit(KEY, "/dev/ideas/5", "Idea 5 renamed", storage);
+    const recent = readRecent(KEY, storage);
     expect(recent).toHaveLength(RECENT_MAX);
     expect(recent.map((r) => r.title)).toEqual(["Idea 5 renamed", "Idea 7", "Idea 6", "Idea 4", "Idea 3"]);
+    // Only the address and the title on screen are kept.
+    expect(JSON.parse(storage.data.get(KEY)!)[0]).toEqual({ href: "/dev/ideas/5", title: "Idea 5 renamed" });
+    expect(readRecent(recentKey("account-b"), storage)).toEqual([]);
+    expect(readRecent(null, storage)).toEqual([]);
+  });
+
+  it("forgets every other account's list (and the unkeyed first version), and every list on sign-out", () => {
+    const other = recentKey("account-b");
+    const storage = memoryStorage({ [KEY]: "[]", [other]: "[]", "wazo-recent:v1": "[]", "wazo-theme": "dark" });
+    forgetRecent(KEY, storage);
+    expect([...storage.data.keys()].sort()).toEqual([KEY, "wazo-theme"].sort());
+    forgetRecent(undefined, storage);
+    expect([...storage.data.keys()]).toEqual(["wazo-theme"]);
   });
 
   it("ignores unreadable or foreign entries and storage that fails", () => {
-    expect(readRecent(memoryStorage({ [RECENT_KEY]: "{oops" }))).toEqual([]);
-    expect(readRecent(memoryStorage({ [RECENT_KEY]: JSON.stringify([{ href: "https://x.example", title: "x" }, { href: "/dev", title: "Home" }]) }))).toEqual([
+    expect(readRecent(KEY, memoryStorage({ [KEY]: "{oops" }))).toEqual([]);
+    expect(readRecent(KEY, memoryStorage({ [KEY]: JSON.stringify([{ href: "https://x.example", title: "x" }, { href: "/dev", title: "Home" }]) }))).toEqual([
       { id: "recent-/dev", title: "Home", href: "/dev" },
     ]);
-    const throwing = { getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } };
-    expect(readRecent(throwing)).toEqual([]);
-    expect(() => rememberPage({ href: "/dev/ideas/1", title: "x" }, throwing)).not.toThrow();
+    const fail = () => {
+      throw new Error("blocked");
+    };
+    const throwing = { getItem: fail, setItem: fail, removeItem: fail, key: fail, length: 1 };
+    expect(readRecent(KEY, throwing)).toEqual([]);
+    expect(() => rememberVisit(KEY, "/dev/ideas/1", "x", throwing)).not.toThrow();
+    expect(() => forgetRecent(KEY, throwing)).not.toThrow();
   });
 });
 

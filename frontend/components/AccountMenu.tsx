@@ -3,8 +3,11 @@
 import { useSearchParams } from "next/navigation";
 import { lazy, Suspense, use, useEffect, useId, useRef, useState } from "react";
 
+import { forgetEmail } from "@/lib/auth/remembered-email";
+
 import { MenuOptions } from "./AccountMenuScope";
 import { menuBillingHref } from "./billing-link";
+import { forgetRecent } from "./palette/remember";
 import { useStrings } from "./ClientStrings";
 import { cn } from "./ui/cn";
 import { Icon, type IconProps } from "./ui/status-icons";
@@ -31,8 +34,40 @@ const NOTIFICATIONS_HREF = "/settings/notifications";
 
 const HELP_HREF = "/help";
 
-const loadExtras = () => import("./AccountMenuExtras");
-const MenuExtras = lazy(() => loadExtras().then((m) => ({ default: m.AccountMenuExtras })));
+// The lower part loads on use. When its file cannot be fetched (offline, or a newer deploy replaced it), the menu keeps a
+// plain Sign out of its own instead of failing the page.
+export const loadExtras = () => import("./AccountMenuExtras").then((m) => m.AccountMenuExtras, () => MenuFallback);
+const MenuExtras = lazy(() => loadExtras().then((component) => ({ default: component })));
+
+/** The menu's own Sign out when the lower part could not load: the session's CSRF token from its cookie, then home. */
+export function MenuFallback() {
+  const t = useStrings("shell");
+  const [failed, setFailed] = useState(false);
+  async function signOut() {
+    const pick = () => document.cookie.match(/(?:^|; )(?:__Host-)?bridge_csrf=([^;]*)/)?.[1];
+    if (!pick()) await fetch("/api/auth/csrf", { credentials: "same-origin" }).catch(() => null);
+    const token = pick();
+    const response = await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: token ? { "X-CSRF-Token": decodeURIComponent(token) } : {},
+    }).catch(() => null);
+    if (response?.status === 204 || response?.status === 401) {
+      forgetEmail();
+      forgetRecent();
+      // A full load, as the top bar ships no router code (this is the rare path where the menu's own part is missing).
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign("/login");
+    } else setFailed(true);
+  }
+  return (
+    <div className="mt-1 border-t border-line pt-1" data-menu-fallback="">
+      <button type="button" className={itemClass} onClick={() => void signOut()}>
+        {failed ? t("signOutRetry") : t("signOut")}
+      </button>
+    </div>
+  );
+}
 
 const itemClass = "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-accent-wash";
 

@@ -53,4 +53,6 @@ export interface PaletteData {
   strings: PaletteStrings;
   /** The shortcut as this computer writes it: "⌘ K" on Apple platforms, "Ctrl K" elsewhere (from the request). */
   shortcut: string;
+  /** Where this account's Recent list is kept (a hash of the account's id, never the id); null keeps none. */
+  recentKey: string | null;
 }

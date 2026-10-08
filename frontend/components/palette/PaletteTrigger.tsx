@@ -5,14 +5,8 @@ import { useCallback, useEffect, useRef, useState, type ComponentType } from "re
 
 import type { CommandPaletteProps } from "./CommandPalette";
 import { loadPalette } from "./load";
-import { DETAIL, rememberVisit } from "./remember";
+import { DETAIL, forgetRecent, rememberVisit } from "./remember";
 import type { PaletteData } from "./types";
-
-/** A key press inside a text field types; "/" opens the palette only outside one. */
-function inField(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName);
-}
 
 function SearchIcon() {
   return (
@@ -25,8 +19,8 @@ function SearchIcon() {
 
 /**
  * The top bar's Search (D-67, P25): a field-like pill from 640 px ("Search or jump to" and the shortcut), an icon
- * button with the same name on phones. It opens the command palette, whose code loads on first use; Ctrl/⌘ K anywhere
- * and "/" outside a text field open it too. It also remembers the detail pages this browser opens, for the palette's
+ * button with the same name on phones. It opens the command palette, whose code loads on first use; Ctrl/⌘ K
+ * anywhere opens it too. It also remembers the detail pages this browser opens, for the palette's
  * Recent group (their address and the title on their screen, in this browser only).
  */
 export function PaletteTrigger({ data }: { data: PaletteData }) {
@@ -54,10 +48,8 @@ export function PaletteTrigger({ data }: { data: PaletteData }) {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.altKey || event.defaultPrevented) return;
-      const shortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k";
-      const slash = event.key === "/" && !event.ctrlKey && !event.metaKey && !inField(event.target);
-      if (!shortcut && !slash) return;
+      // Ctrl/⌘ K only: a single-key shortcut would fire while someone types elsewhere (WCAG 2.1.4).
+      if (event.altKey || event.defaultPrevented || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") return;
       event.preventDefault();
       show();
     }
@@ -65,16 +57,28 @@ export function PaletteTrigger({ data }: { data: PaletteData }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [show]);
 
+  // Another account's Recent list (someone else used this browser) goes as soon as this one is signed in.
+  const key = data.recentKey;
+  useEffect(() => forgetRecent(key), [key]);
+
   useEffect(() => {
-    if (!pathname || !DETAIL.test(pathname)) return;
+    if (!key || !pathname || !DETAIL.test(pathname)) return;
     // After the page has painted its title (the same h1 RouteFocus moves focus to).
     const frame = requestAnimationFrame(() => {
       const title = document.querySelector("main h1")?.textContent ?? "";
       const org = new URLSearchParams(window.location.search).get("org");
-      rememberVisit(org ? `${pathname}?org=${encodeURIComponent(org)}` : pathname, title);
+      rememberVisit(key, org ? `${pathname}?org=${encodeURIComponent(org)}` : pathname, title);
     });
     return () => cancelAnimationFrame(frame);
-  }, [pathname]);
+  }, [key, pathname]);
+
+  // Focus goes back to the opener once the palette has gone (the modal made the page inert while it was open).
+  const restore = useRef(false);
+  useEffect(() => {
+    if (open || !restore.current) return;
+    restore.current = false;
+    opener.current?.focus();
+  }, [open]);
 
   return (
     <>
@@ -85,7 +89,7 @@ export function PaletteTrigger({ data }: { data: PaletteData }) {
         onPointerEnter={() => void loadPalette().catch(() => {})}
         onFocus={() => void loadPalette().catch(() => {})}
         aria-haspopup="dialog"
-        aria-keyshortcuts="Control+K Meta+K /"
+        aria-keyshortcuts="Control+K Meta+K"
         className="search-pill"
         data-search-trigger=""
       >
@@ -101,8 +105,8 @@ export function PaletteTrigger({ data }: { data: PaletteData }) {
         <Palette
           data={data}
           onClose={() => {
+            restore.current = true;
             setOpen(false);
-            opener.current?.focus();
           }}
         />
       ) : null}

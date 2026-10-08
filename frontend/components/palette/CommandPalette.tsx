@@ -9,6 +9,7 @@ import { applyTheme } from "@/lib/theme";
 
 import { matchParts, paletteGroups, type PaletteOption } from "./model";
 import { readRecent } from "./recent";
+import { forgetRecent } from "./remember";
 import { search, SEARCH_DEBOUNCE_MS, searchQuery, type SearchGroup } from "./search";
 import type { PaletteData } from "./types";
 
@@ -52,7 +53,7 @@ function Arrow() {
  * gets focus back). The active option is the input's aria-activedescendant; arrows, Home and End move it; Enter opens
  * it, Ctrl/⌘ Enter in a new tab; the typed letters are marked in each title.
  */
-export function CommandPalette({ data, onClose }: CommandPaletteProps) {
+export function CommandPalette({ data, onClose: done }: CommandPaletteProps) {
   const s = data.strings;
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -61,7 +62,12 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [answer, setAnswer] = useState<{ q: string; groups: SearchGroup[]; failed: boolean }>({ q: "", groups: [], failed: false });
-  const [recent] = useState(() => readRecent());
+  const [recent] = useState(() => readRecent(data.recentKey));
+  // Closing ends the modal first, so the page is no longer inert when the opener takes focus back.
+  const onClose = () => {
+    if (dialog.current?.open) dialog.current.close();
+    done();
+  };
   const [dark] = useState(pageIsDark);
   const [signOutFailed, setSignOutFailed] = useState(false);
   const [mod] = useState(() => (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl"));
@@ -113,6 +119,7 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
     );
     if (status === 204 || status === 401) {
       forgetEmail(); // the next person on this device should not see this address offered back
+      forgetRecent(); // nor this account's recent pages
       router.replace("/login");
       router.refresh();
       return;
@@ -211,14 +218,14 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
           onClick={onClose}
           className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control px-2 text-sm font-semibold text-accent hover:bg-paper-deep"
         >
-          <span className="sm:sr-only">{s.close}</span>
-          <kbd aria-hidden="true" className="kbd max-sm:hidden">
-            Esc
-          </kbd>
+          {/* The visible words are the name (WCAG 2.5.3): "Close", with the key beside it from 640 px. */}
+          <span>{s.close}</span>
+          <kbd className="kbd ml-2 max-sm:hidden">Esc</kbd>
         </button>
       </div>
 
-      <div id={`${id}-list`} role="listbox" aria-label={s.dialog} className="palette-list">
+      {/* Not a Tab stop: focus stays in the field, which moves the active option (aria-activedescendant). */}
+      <div id={`${id}-list`} role="listbox" aria-label={s.dialog} tabIndex={-1} className="palette-list">
         {groups.map((group, g) => (
           <div key={group.id} role="group" aria-label={group.label} className="pt-2" data-palette-group={group.id}>
             <div aria-hidden="true" className="px-2.5 pt-1 pb-1.5 text-xs font-semibold text-ink-soft">
@@ -239,10 +246,10 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
                   onClick={(event) => onPick(event, option)}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-medium text-ink">
+                    <span className="block font-medium text-ink max-sm:line-clamp-2 sm:truncate">
                       <Title text={option.title} query={query} />
                     </span>
-                    {option.subtitle ? <span className="block truncate text-sm text-ink-soft">{option.subtitle}</span> : null}
+                    {option.subtitle ? <span className="block text-sm text-ink-soft max-sm:line-clamp-2 sm:truncate">{option.subtitle}</span> : null}
                   </span>
                   <span className="palette-go">
                     <Arrow />
