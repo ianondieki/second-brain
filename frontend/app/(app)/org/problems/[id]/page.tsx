@@ -9,6 +9,7 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { Chip } from "@/components/tracker/Chip";
 import { Callout } from "@/components/ui/Callout";
 import { Card } from "@/components/ui/Card";
+import { NicheBand } from "@/components/ui/NicheBand";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
@@ -103,15 +104,20 @@ export default async function BriefPage({ params, searchParams }: PageProps<"/or
         </Callout>
       </StateNote>
 
-      <Card as="section" variant="flat" aria-labelledby="brief-problem" className="mt-8">
+      <Card as="section" variant="flat" aria-labelledby="brief-problem" className="mt-8 overflow-hidden">
+        {/* The niche's photograph (or the county's, or the lattice): decorative, the niche is named in the facts. */}
+        <div className="detail-band -mx-5 -mt-5 mb-5">
+          <NicheBand niche={brief.niche?.slug} county={brief.county_code} sizes="(min-width: 1024px) 48rem, 100vw" />
+        </div>
         <h2 id="brief-problem" className="sr-only">
           {t("facts.statement")}
         </h2>
         <p className="max-w-[65ch] text-lg [overflow-wrap:anywhere] whitespace-pre-line text-ink" data-statement="">
           {brief.statement}
         </p>
-        {/* The facts as a grid (three across from 640 px, two on phones: six facts, no orphan), as the proposal page's. */}
-        <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-6 sm:grid-cols-3">
+        {/* The facts as a grid, three across from 640 px; on a phone one under another, so each value has the full width
+            and no word is split (P25 review). */}
+        <dl className="mt-6 grid grid-cols-1 gap-x-6 gap-y-4 border-t border-line pt-6 sm:grid-cols-3 sm:gap-y-5">
           {(
             [
               ["affected", brief.affected_group ?? notGiven],
@@ -124,7 +130,7 @@ export default async function BriefPage({ params, searchParams }: PageProps<"/or
           ).map(([key, value]) => (
             <div key={key} className="flex min-w-0 flex-col gap-0.5">
               <dt className="text-sm text-ink-soft">{t(`facts.${key}`)}</dt>
-              <dd className="font-semibold [overflow-wrap:anywhere] text-ink">{value}</dd>
+              <dd className="font-semibold [overflow-wrap:break-word] hyphens-auto text-ink">{value}</dd>
             </div>
           ))}
         </dl>

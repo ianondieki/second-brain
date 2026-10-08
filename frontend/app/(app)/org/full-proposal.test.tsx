@@ -99,6 +99,15 @@ describe("FullProposal", () => {
     expect(container.querySelectorAll("[data-primary]")).toHaveLength(0);
   });
 
+  it("puts the way back first: on a phone the frame fills the screen under it (P25 review), never a box in the page", async () => {
+    const { container } = await render(STATES.accepted, true);
+    const view = container.querySelector<HTMLElement>("[data-tier2-view]")!;
+    expect(view.className).toContain("tier2-view"); // portal.css: fixed and full-screen below 768 px
+    const back = view.querySelector("a")!;
+    expect(back.textContent).toBe("Close full proposal");
+    expect(back.compareDocumentPosition(view.querySelector("iframe")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("offers each state's one primary action", async () => {
     const primary = async (nda: NdaResult) =>
       [...(await render(nda, false)).container.querySelectorAll("[data-primary]")].map((el) => el.textContent);

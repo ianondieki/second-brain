@@ -1,9 +1,10 @@
 import { useLocale, useTranslations } from "next-intl";
 
 import { Chip } from "@/components/tracker/Chip";
-import { Row } from "@/components/ui/RowList";
+import type { ReactNode } from "react";
 
 import { formatDay } from "../../format";
+import { ItemCard } from "../../ItemCard";
 import type { Membership } from "../../membership";
 import type { Match } from "../../scout";
 import { editsShortlist } from "../../shortlist";
@@ -11,12 +12,12 @@ import { ShortlistControl } from "../ShortlistControl";
 import { FitMeter, Why } from "./MatchParts";
 
 /**
- * One scout match in the Inbox (REQ-SCOUT-02): its fit, when the scout found it, the title (a link to the match page),
+ * One scout match in the Inbox (REQ-SCOUT-02), a card (D-67, P25) under its niche's photograph band: its fit line, when the scout found it, the title (a link to the match page),
  * the developer's pseudonymous handle (never a name or an id: docs/spec/06 6.1), the niche and why it matches. A
  * match whose proposal was unpublished or held shows only that it is no longer available: no teaser, no why. With
  * `org`, an available match ends in its shortlist star (REQ-REPO-02), or the read-only mark.
  */
-export function MatchRow({ match, href, org }: { match: Match; href: string; org?: Membership }) {
+export function MatchRow({ match, href, org, band }: { match: Match; href: string; org?: Membership; band?: ReactNode }) {
   const t = useTranslations("scoutMatches");
   const locale = useLocale();
   const available = match.available && match.teaser !== null;
@@ -24,7 +25,8 @@ export function MatchRow({ match, href, org }: { match: Match; href: string; org
   const shortlisted = match.shortlisted ?? false;
   const found = <time dateTime={match.created_at}>{t("found", { date: formatDay(locale, match.created_at) })}</time>;
   return (
-    <Row
+    <ItemCard
+      band={band}
       data-match={match.id}
       data-available={available ? "true" : "false"}
       headingLevel={2}
@@ -38,7 +40,7 @@ export function MatchRow({ match, href, org }: { match: Match; href: string; org
           {found}
         </span>
       }
-      badges={[
+      chips={[
         available ? (
           <FitMeter key="fit" score={match.score} />
         ) : (
@@ -47,7 +49,7 @@ export function MatchRow({ match, href, org }: { match: Match; href: string; org
           </Chip>
         ),
       ]}
-      figure={
+      control={
         org && available && (shortlisted || editsShortlist(org)) ? (
           <ShortlistControl org={org} proposalId={match.proposal_id} shortlisted={shortlisted} describedBy={`title-${match.proposal_id}`} />
         ) : undefined
@@ -60,6 +62,6 @@ export function MatchRow({ match, href, org }: { match: Match; href: string; org
       ) : (
         <p className="text-sm text-ink-soft">{t("unavailableNote")}</p>
       )}
-    </Row>
+    </ItemCard>
   );
 }

@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "reviewP25c2": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: portal.* (vichwa vidogo vya mahali ulipo, mistari mipya ya lango la shirika, dashibodi ya wafanyakazi na kurasa za kuingia: portal.eyebrow.*, portal.settings.*, portal.proposal.means, portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry, adminResearch.stepUp.loading, briefForm.preview.* (onyesho la moja kwa moja la jinsi Brief inavyosomeka kwenye Gundua)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack) [[SW-REVIEW]] draft Swahili",
     "reviewP15f": "[[COPY-REVIEW]] [[SW-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.* (rasimu ya Kiswahili)",
     "reviewP16c2": "[[COPY-REVIEW]] P16 part C2 (REQ-UX-01..04, REQ-ADM-01): adminModeration.case.textHeadingDecided, scoutForm.fitLong [[SW-REVIEW]] draft Swahili",
@@ -613,6 +614,36 @@
     "body": "Kuna tatizo wakati wa kupakia ukurasa huu. Jaribu tena baada ya muda mfupi.",
     "retry": "Jaribu tena"
   },
+  "portal": {
+    "eyebrow": {
+      "home": "Shirika / Nyumbani",
+      "inbox": "Shirika / Kikasha",
+      "problems": "Shirika / Matatizo",
+      "events": "Shirika / Matukio",
+      "engagements": "Shirika / Ushirikiano",
+      "notifications": "Akaunti / Arifa",
+      "settings": "Akaunti / Mipangilio",
+      "billing": "Akaunti / Mpango na malipo",
+      "help": "Msaada",
+      "legal": "Kisheria",
+      "verify": "Vyeti",
+      "staff": "Dashibodi ya wafanyakazi / {section}"
+    },
+    "inbox": {
+      "matchesTitle": "Alichopata Wakala Skauti wako"
+    },
+    "proposal": {
+      "means": "Maana ya kukubali"
+    },
+    "settings": {
+      "leadSecurity": "Jinsi unavyoingia, na hatua ya pili inayolinda akaunti yako.",
+      "leadNotifications": "Tunachokutumia, na mahali unapokisoma.",
+      "leadProfile": "Kile wasanidi programu wengine wanaona unapochagua kuonekana."
+    },
+    "auth": {
+      "credits": "Sifa zote za picha"
+    }
+  },
   "orgHome": {
     "inboxTitle": "Kikasha",
     "newest": "Pendekezo jipya zaidi: {title}, lilitumwa {date}.",
@@ -713,7 +744,6 @@
     "view": "Tazama pendekezo kamili",
     "viewNote": "Kulifungua kunahesabiwa kama kutazama: kila utazamaji unarekodiwa na kuwekewa alama ya mtazamaji.",
     "frameTitle": "Pendekezo kamili: {title}, lenye alama yako",
-    "frameNote": "Pendekezo kamili linasogezwa ndani ya fremu hii.",
     "close": "Funga pendekezo kamili",
     "stepUpCode": "Msimbo kutoka kwa programu yako",
     "stepUpSubmit": "Thibitisha",
@@ -1120,7 +1150,9 @@
       "submit": "Thibitisha",
       "checking": "Inakagua…",
       "invalid": "Msimbo huo haukufanya kazi. Weka msimbo mpya zaidi kutoka programu yako ya uthibitishaji.",
-      "cancel": "Ghairi"
+      "cancel": "Ghairi",
+      "retry": "Jaribu tena",
+      "loading": "Inapakia fomu ya msimbo…"
     },
     "queue": {
       "heading": "Zinasubiri ukaguzi",
@@ -3216,6 +3248,17 @@
       "confirm": "Funga maelezo",
       "closing": "Inafunga…",
       "cancel": "Yaache wazi"
+    },
+    "preview": {
+      "title": "Jinsi inavyosomeka kwenye Gundua",
+      "untitled": "Kichwa chako",
+      "statement": "Maelezo ya tatizo lako yanaonekana hapa unapoandika.",
+      "postedBy": "Imechapishwa na {org}",
+      "budget": "Bajeti: {value}",
+      "noBudget": "Bajeti iko wazi",
+      "deadline": "Mapendekezo kufikia {date}",
+      "noDeadline": "Hakuna tarehe ya mwisho",
+      "note": "Wasanidi programu wataiona wafanyakazi wakishaiidhinisha."
     }
   },
   "shortlist": {

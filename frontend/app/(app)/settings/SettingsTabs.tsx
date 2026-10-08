@@ -13,7 +13,7 @@ export type SettingsTab = (typeof SETTINGS_TABS)[number]["key"];
 /**
  * The settings pages as link tabs (P16-A open item 9): Security and Notifications, each its own address, reached from
  * the account menu and from each other; for a developer, Profile too (REQ-DEV-03: the headline, the county and
- * "Visible to peers").
+ * "Visible to peers"). They close the page's hero (PageHero `tabs`, D-67).
  */
 export function SettingsTabs({ current, developer = false }: { current: SettingsTab; developer?: boolean }) {
   const t = useTranslations("settingsNav");
@@ -22,7 +22,6 @@ export function SettingsTabs({ current, developer = false }: { current: Settings
       label={t("label")}
       current={current}
       items={SETTINGS_TABS.filter(({ key }) => developer || key !== "profile").map(({ key, href }) => ({ key, href, label: t(key) }))}
-      className="mt-6 mb-8"
     />
   );
 }

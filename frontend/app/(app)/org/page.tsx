@@ -15,14 +15,20 @@ import { NeedsYouCard } from "@/components/tracker/NeedsYouCard";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Callout } from "@/components/ui/Callout";
-import { CardGrid } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { NicheBand } from "@/components/ui/NicheBand";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
 import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
+import { ActivityCalendar } from "@/components/activity/ActivityCalendar";
+import { WEEKS } from "@/components/activity/calendar";
+import { getActivity } from "@/components/activity/fetch";
+import { appNow } from "@/lib/api/server";
 import { needsMfaSetup } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
+
+import { GreetingBand } from "../dev/GreetingBand";
+import { dayPart } from "../dev/home";
 
 import { getBriefs } from "./brief-data";
 import { briefStats, problemsHref } from "./briefs";
@@ -30,6 +36,7 @@ import { getInbox, orgContext, type InboxPage } from "./data";
 import { formatDay } from "./format";
 import { orgHomeStats, weeklySeries } from "./home";
 import { InboxCard } from "./inbox/InboxCard";
+import { CARD_BAND, ItemGrid } from "./ItemCard";
 import { engagementsHref, inboxHref, proposalHref, type Membership } from "./membership";
 import { matchesHref, type Match } from "./scout";
 import { getMatches } from "./scout-data";
@@ -43,16 +50,18 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Organisation home (docs/spec/07 item 1; D-52): the greeting, four stat tiles from the Inbox, the scout's matches,
- * the engagements and the Problem Briefs (with a sparkline where a series exists), two-step sign-in as a notice only
- * while it is off, what needs the organisation as prominent cards, then the newest Inbox proposals as compact cards.
- * "Open the Inbox" is the screen's one primary action; an owner without two-step sign-in gets "Turn on" instead,
- * since the Inbox is refused until then.
+ * Organisation home (docs/spec/07 item 1; D-52, D-67): the greeting by the time of day beside its Nairobi photograph,
+ * four stat tiles (the Inbox, the scout's matches, the engagements, the Problem Briefs; a sparkline where a series
+ * exists) showing their figures from the first paint, two-step sign-in as a notice only while it is off, "Your last 26 weeks" (this
+ * person's own actions, the activity calendar), what needs the organisation as prominent cards, then the newest Inbox
+ * proposals as cards under their niche's photograph. "Open the Inbox" is the screen's one primary action; an owner
+ * without two-step sign-in gets "Turn on" instead, since the Inbox is refused until then.
  */
 export default async function OrganisationHome({ searchParams }: PageProps<"/org">) {
   const { me, memberships, org, missing, query } = await orgContext((await searchParams).org);
-  const t = await getTranslations("home");
-  const ti = await getTranslations("inbox");
+  const [t, ti, tp] = await Promise.all([getTranslations("home"), getTranslations("inbox"), getTranslations("portal")]);
+  // The greeting by the hour of the app clock in Nairobi (as on the developer's Home), with its photograph.
+  const part = dayPart(appNow());
   const setupNeeded = needsMfaSetup(me.mfa);
   const mfa = me.mfa.enrolled ? "on" : setupNeeded ? "required" : "off";
   const ready = org !== null && !setupNeeded;
@@ -63,25 +72,36 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
       <ClientStrings strings={await clientStrings(["tour"])}>
         <FirstLoginTour side="org" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("org")} />
       </ClientStrings>
-      <div className="max-w-4xl">
-        <PageHeader
-          title={t("title", { name: me.user.display_name })}
-          lead={org ? t("orgLead", { org: org.org_name }) : t("orgLeadNoName")}
-          action={
-            setupNeeded ? (
+      <div className="max-w-5xl">
+        {/* The greeting on Nairobi at this time of day, the developer Home's GreetingBand: the eyebrow, the name, the
+            lead and the one primary action. */}
+        <GreetingBand part={part}>
+          <p className="page-eyebrow text-night-soft" data-eyebrow="">
+            {tp("eyebrow.home")}
+          </p>
+          <h1 className="mt-3 text-[2rem] leading-[1.08] text-ink [overflow-wrap:anywhere] sm:text-[2.75rem] sm:leading-[1.04]">
+            {t(`greeting.${part}`, { name: me.user.display_name })}
+          </h1>
+          <p className="lead mt-3 max-w-[44ch] text-[1.0625rem] text-ink-soft sm:text-lg">
+            {org ? t("orgLead", { org: org.org_name }) : t("orgLeadNoName")}
+          </p>
+          {setupNeeded ? (
+            <div className="mt-6">
               <ButtonLink href="/settings/security" variant="primary">
                 {t("turnOn")}
               </ButtonLink>
-            ) : org ? (
+            </div>
+          ) : org ? (
+            <div className="mt-6">
               <ButtonLink href={inboxHref(memberships, org.org_id)} variant="primary">
                 {(await getTranslations("orgHome"))("open")}
               </ButtonLink>
-            ) : undefined
-          }
-        />
+            </div>
+          ) : null}
+        </GreetingBand>
       </div>
 
-      <div className="mt-8 flex max-w-4xl flex-col gap-12">
+      <div className="mt-8 flex max-w-5xl flex-col gap-12 lg:mt-10">
         {/* Two-step sign-in: one quiet line when it is on (the confirmation after turning it on), a notice while off. */}
         {mfa === "on" ? (
           <p className="-mt-6 flex items-center gap-2 text-sm text-ink-soft" data-home="security">
@@ -124,12 +144,19 @@ async function quietly<T>(read: () => Promise<T>): Promise<T | null> {
 }
 
 async function HomeBody({ memberships, org }: { memberships: Membership[]; org: Membership }) {
-  const [t, ti, tt, locale] = await Promise.all([getTranslations("orgHome"), getTranslations("inbox"), getTranslations("tracker"), getLocale()]);
-  const [inboxRead, matchesRead, engagementsRead, briefsRead] = await Promise.all([
+  const [t, ti, tt, ta, locale] = await Promise.all([
+    getTranslations("orgHome"),
+    getTranslations("inbox"),
+    getTranslations("tracker"),
+    getTranslations("activity"),
+    getLocale(),
+  ]);
+  const [inboxRead, matchesRead, engagementsRead, briefsRead, activity] = await Promise.all([
     quietly(() => getInbox(org.org_id)),
     quietly(() => getMatches(org.org_id)),
     quietly(() => orgEngagements(org.org_id)),
     quietly(() => getBriefs(org.org_id)),
+    getActivity(),
   ]);
   const inbox: InboxPage | null = inboxRead?.kind === "page" ? inboxRead.page : null;
   const matches: Match[] | null = matchesRead?.kind === "ok" ? matchesRead.value : null;
@@ -154,6 +181,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
   return (
     <>
       <section aria-label={t("stats.label")} data-home="stats">
+        {/* The figures show their real values from the first paint: they drive what to do next (no count-up). */}
         <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 [&>li>*]:h-full">
           <li>
             <StatTile
@@ -207,6 +235,15 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
         </ul>
       </section>
 
+      {/* Your last 26 weeks (D-67): this person's own actions for the organisation, read as them; left out without an answer. */}
+      {activity ? (
+        <Section title={ta("title", { weeks: WEEKS })} headingId="home-activity" data-home="activity">
+          <div className="rounded-panel border border-line bg-field p-4 sm:p-6">
+            <ActivityCalendar activity={activity} />
+          </div>
+        </Section>
+      ) : null}
+
       {stats.waiting.length > 0 ? (
         <Section title={tt("needsUs")} headingId="home-needs-us" data-home="needs-us">
           <ul className="flex flex-col gap-4">
@@ -227,13 +264,17 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
         link={newest ? { href: inboxLink, label: t("allProposals") } : undefined}
       >
         {newest ? (
-          <CardGrid>
+          <ItemGrid>
             {inbox!.items.slice(0, INBOX_SHOWN).map((item) => (
               <li key={item.tag_id}>
-                <InboxCard item={item} href={proposalHref(memberships, org.org_id, item.proposal.id)} />
+                <InboxCard
+                  item={item}
+                  href={proposalHref(memberships, org.org_id, item.proposal.id)}
+                  band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} />}
+                />
               </li>
             ))}
-          </CardGrid>
+          </ItemGrid>
         ) : null}
       </Section>
     </>

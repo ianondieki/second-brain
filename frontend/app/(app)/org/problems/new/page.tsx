@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { ClientStrings } from "@/components/ClientStrings";
@@ -16,6 +16,7 @@ import { OrgRefusal } from "../../OrgRefusal";
 import { PlanNotice } from "../PlanNotice";
 import { getCounties, getNicheTree, getVerification, readOrgPlans } from "../../scout-data";
 import { BriefForm } from "./BriefForm";
+import { BriefPreviewView } from "./BriefPreviewView";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("briefs");
@@ -31,11 +32,12 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
   const { memberships, org, missing, query } = await orgContext((await searchParams).org);
   const t = await getTranslations("briefs");
   const ti = await getTranslations("inbox");
+  const tf = await getTranslations("briefForm");
   const back = org ? problemsHref(memberships, org.org_id) : "/org/problems";
 
   const frame = (body: ReactNode) => (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="problems" query={query} />} wide>
-      <div className="max-w-3xl">
+      <div className="max-w-5xl">
         <PageHeader back={{ href: back, label: t("back") }} title={t("newTitle")} />
         {body}
       </div>
@@ -107,7 +109,7 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
   return frame(
     <>
       <p className="mt-2 max-w-[62ch] text-ink-soft">{t("newLead")}</p>
-      {notice}
+      <div className="max-w-3xl">{notice}</div>
       <div className="mt-8">
         <ClientStrings strings={await clientStrings(["briefForm"])}>
           <BriefForm
@@ -122,6 +124,22 @@ export default async function NewBriefPage({ searchParams }: PageProps<"/org/pro
             doneHref={problemsHref(memberships, org.org_id, { posted: true })}
             hereHref={here}
             cancelHref={back}
+            locale={await getLocale()}
+            preview={
+              <BriefPreviewView
+                words={{
+                  heading: tf("preview.title"),
+                  title: tf("preview.untitled"),
+                  niche: null,
+                  place: tf("countyAny"),
+                  postedBy: tf("preview.postedBy", { org: org.org_name }),
+                  statement: tf("preview.statement"),
+                  budget: tf("preview.noBudget"),
+                  deadline: tf("preview.noDeadline"),
+                  note: tf("preview.note"),
+                }}
+              />
+            }
           />
         </ClientStrings>
       </div>

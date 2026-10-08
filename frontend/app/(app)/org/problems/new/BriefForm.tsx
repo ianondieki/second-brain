@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -59,6 +59,10 @@ export interface BriefFormProps {
   hereHref: string;
   cancelHref: string;
   calls?: BriefCalls;
+  /** The page's language, for the preview's date. */
+  locale?: string;
+  /** How the empty Brief reads on Discover, drawn by the page (BriefPreviewView): shown until the first edit. */
+  preview?: ReactNode;
 }
 
 const LIMIT: Partial<Record<DraftField, number>> = {
@@ -72,7 +76,8 @@ const LIMIT: Partial<Record<DraftField, number>> = {
  * with its meter, who is affected), where it fits (niche, county), and the budget band and deadline developers see.
  * Checked before sending; the API checks again (contact details, the lists, the plan) and each refusal is worded here:
  * a 402 names the next plan up with its checkout, a 403 the verification or the role, a 422 the fields. "Post the
- * brief" is the screen's one primary action; a posted Brief opens the list, newest first.
+ * brief" is the screen's one primary action; a posted Brief opens the list, newest first. Beside the form from 1024 px
+ * (under its sections on a phone), a live preview of how the Brief reads on Discover (BriefPreview).
  */
 export function BriefForm(props: BriefFormProps) {
   const t = useStrings("briefForm");
@@ -84,6 +89,8 @@ export function BriefForm(props: BriefFormProps) {
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<Refused | null>(null);
   const notice = useRef<HTMLDivElement>(null);
+  // The live preview, fetched on the first edit; until it arrives the page's own (the `preview` prop) stands.
+  const [Live, setLive] = useState<typeof import("./BriefPreview").BriefPreview>();
 
   useEffect(() => {
     // A refusal about the whole Brief takes focus; one about its fields leaves focus on the first marked field.
@@ -92,6 +99,8 @@ export function BriefForm(props: BriefFormProps) {
 
   function change<K extends keyof BriefDraft>(field: K, value: BriefDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
+    // Offline, the page's own preview stays (the local fallback), and the next edit asks again.
+    if (!Live) import("./BriefPreview").then((m) => setLive(() => m.BriefPreview), () => undefined);
     if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
     if (issues.some((issue) => issue.field === field)) setIssues((current) => current.filter((issue) => issue.field !== field));
   }
@@ -149,7 +158,8 @@ export function BriefForm(props: BriefFormProps) {
   const upgrade = refused?.refusal === "planLimit" ? refused.upgradePlan : null;
 
   return (
-    <Form onSubmit={submit} className="flex flex-col gap-8" aria-busy={busy || undefined} data-brief-form="">
+    <Form onSubmit={submit} className="brief-layout" aria-busy={busy || undefined} data-brief-form="">
+      <div className="brief-fields">
       <Card as="section" variant="flat" aria-labelledby="brief-group-problem" className="flex flex-col gap-6">
         <h2 id="brief-group-problem" className={cardHeadingClass}>
           {t("group.problem")}
@@ -269,6 +279,24 @@ export function BriefForm(props: BriefFormProps) {
         <InfoIcon className="mt-0.5 size-4 shrink-0" />
         <span>{t("invitedNote")}</span>
       </p>
+      </div>
+
+      <div className="brief-aside">
+        {Live ? (
+          <Live
+            draft={draft}
+            orgName={props.orgName}
+            niches={props.niches}
+            counties={props.counties}
+            bands={props.bands}
+            locale={props.locale}
+          />
+        ) : (
+          props.preview
+        )}
+      </div>
+
+      <div className="brief-submit">
 
       {refused ? (
         <Alert ref={notice} className="w-full" tone="error">
@@ -288,6 +316,7 @@ export function BriefForm(props: BriefFormProps) {
         <Link href={props.cancelHref} className={cn(standaloneLinkClass, "self-start sm:self-auto")}>
           {t("cancel")}
         </Link>
+      </div>
       </div>
     </Form>
   );

@@ -76,6 +76,9 @@ export const NATIONWIDE: Photo = photo("kenya-tea");
 /** Every vendored photograph, in index order. */
 export const ALL_PHOTOS: readonly Photo[] = [...ALL.values()];
 
+/** The signed-out screens' photograph beside the form from 1024 px (AuthShell): signing in, and creating an account. */
+export const AUTH_PHOTOS = { signIn: photo("nairobi-jacaranda"), signUp: photo("nairobi-golden-hour") } as const;
+
 /** Every photograph the site shows, credited on /credits: every vendored photograph (the landing's strip, Explore,
  *  the niche bands and Home's greeting draw from the same index), the strip's and Explore's first. */
 export const CREDITED: readonly Photo[] = [

@@ -45,7 +45,8 @@ describe("the help page", () => {
     me.get.mockResolvedValue(null);
     await renderSignedOut();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Help");
-    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+    // The answers' headings, in the page's main (the landing's footer, D-67, has its own column headings).
+    expect(within(screen.getByRole("main")).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
       "How pitching works",
       "What stays confidential",
       "Reminders",
@@ -85,7 +86,9 @@ describe("the help page", () => {
   it("offers Log in to a visitor, and opens even when the API cannot say who is signed in", async () => {
     me.get.mockRejectedValue(new Error("GET /api/auth/me answered 503"));
     await renderSignedOut();
-    expect(screen.getByRole("link", { name: "Log in" }).getAttribute("href")).toBe("/login");
+    // In the top bar (the landing's footer, D-67, lists Log in too).
+    const bar = document.querySelector<HTMLElement>("[data-top-bar]")!;
+    expect(within(bar).getByRole("link", { name: "Log in" }).getAttribute("href")).toBe("/login");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Help");
   });
 
@@ -113,7 +116,8 @@ describe("the help page", () => {
   it("treats a session still owing its second factor as a visitor", async () => {
     me.get.mockResolvedValue({ side: "pending", mfa: { enrolled: true, verified: false, required: true }, user: {} });
     await renderSignedOut();
-    expect(screen.getByRole("link", { name: "Log in" })).toBeTruthy();
+    // In the top bar (the landing's footer, D-67, lists Log in too).
+    expect(within(document.querySelector<HTMLElement>("[data-top-bar]")!).getByRole("link", { name: "Log in" })).toBeTruthy();
   });
 
   it("has every paragraph in both languages", () => {

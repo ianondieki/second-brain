@@ -23,7 +23,7 @@ export default async function SignupPage() {
   if (me) redirect(homeOf(me));
   const [t, consents] = await Promise.all([getTranslations("signup"), getSignupConsents()]);
   return (
-    <AuthShell>
+    <AuthShell photo="signUp">
       <PageHeader title={t("title")} lead={t("lead")} />
       <IntlScope namespaces={["signup", "fields", "validation", "errors", "orgKind"]}>
         {/* The password field's show/hide words are server-formatted (components/ui/PasswordField.tsx). */}

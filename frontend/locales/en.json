@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "reviewP25c2": "[[COPY-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67): portal.* (the eyebrows saying where you are, the organisation portal's, the console's and the signed-out screens' new lines: portal.eyebrow.*, portal.settings.*, portal.proposal.means (the NDA step's second column heading; the step's own lead and the viewer-logging notice stay verbatim), portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry (\"Try again\" when the fresh-code form cannot be fetched), adminResearch.stepUp.loading, briefForm.preview.* (the live preview of how a Brief reads on Discover, mirroring discover.brief* and problem.label.org_brief)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
     "reviewP15f": "[[COPY-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.*; adminModeration.reason.* name the pre-screen's reason codes (bridge/proposals/prescreen.py, docs/spec/06 6.12); E0/E1/E2 follow docs/spec/03",
     "reviewP16c2": "[[COPY-REVIEW]] P16 part C2 (REQ-UX-01..04, REQ-ADM-01): adminModeration.case.textHeadingDecided, scoutForm.fitLong",
@@ -613,6 +614,36 @@
     "body": "Something went wrong while loading this page. Try again in a moment.",
     "retry": "Try again"
   },
+  "portal": {
+    "eyebrow": {
+      "home": "Organisation / Home",
+      "inbox": "Organisation / Inbox",
+      "problems": "Organisation / Problems",
+      "events": "Organisation / Events",
+      "engagements": "Organisation / Engagements",
+      "notifications": "Account / Notifications",
+      "settings": "Account / Settings",
+      "billing": "Account / Plan & billing",
+      "help": "Help",
+      "legal": "Legal",
+      "verify": "Certificates",
+      "staff": "Staff console / {section}"
+    },
+    "inbox": {
+      "matchesTitle": "What your scout found"
+    },
+    "proposal": {
+      "means": "What accepting means"
+    },
+    "settings": {
+      "leadSecurity": "How you sign in, and the second step that keeps your account yours.",
+      "leadNotifications": "What we send you, and where you read it.",
+      "leadProfile": "What other developers see when you choose to be visible."
+    },
+    "auth": {
+      "credits": "All photo credits"
+    }
+  },
   "orgHome": {
     "inboxTitle": "Inbox",
     "newest": "Newest: {title}, sent {date}.",
@@ -713,7 +744,6 @@
     "view": "View full proposal",
     "viewNote": "Opening it counts as a view: every view is logged and watermarked to the viewer.",
     "frameTitle": "Full proposal: {title}, marked for you",
-    "frameNote": "The full proposal scrolls inside this frame.",
     "close": "Close full proposal",
     "stepUpCode": "Code from your app",
     "stepUpSubmit": "Confirm",
@@ -1120,7 +1150,9 @@
       "submit": "Confirm",
       "checking": "Checking…",
       "invalid": "That code did not work. Enter the newest code from your authenticator app.",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "retry": "Try again",
+      "loading": "Getting the code form…"
     },
     "queue": {
       "heading": "Waiting for review",
@@ -3216,6 +3248,17 @@
       "confirm": "Close the Brief",
       "closing": "Closing…",
       "cancel": "Keep it open"
+    },
+    "preview": {
+      "title": "How it reads on Discover",
+      "untitled": "Your title",
+      "statement": "Your problem statement shows here as you write it.",
+      "postedBy": "Posted by {org}",
+      "budget": "Budget: {value}",
+      "noBudget": "Budget open",
+      "deadline": "Proposals by {date}",
+      "noDeadline": "No deadline",
+      "note": "Developers see it once staff approve it."
     }
   },
   "shortlist": {

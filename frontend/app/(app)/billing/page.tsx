@@ -14,7 +14,7 @@ import { homeFor } from "@/lib/auth/routing";
 import { upgradeHref } from "@/lib/billing/upgrade";
 
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 
 import { getCurrentPlan, getPlans } from "./data";
@@ -40,11 +40,13 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
   const t = await getTranslations("billing");
   const subject = billingSubject(me, (await searchParams).org);
 
-  const shell = (lead: ReactNode, children: ReactNode) => (
+  const tp = await getTranslations("portal");
+  // PageHero (D-67): where you are, the title, for whom (an organisation's plan) and, beside it, the current plan.
+  const shell = (lead: ReactNode, children: ReactNode, aside?: ReactNode) => (
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
-      <div className="max-w-4xl">
-        <PageHeader title={t("pageTitle")}>{lead}</PageHeader>
-        <div className="mt-10">{children}</div>
+      <div className="max-w-5xl">
+        <PageHero eyebrow={tp("eyebrow.billing")} title={t("pageTitle")} lead={lead} aside={aside} />
+        <div className="mt-2">{children}</div>
       </div>
     </SignedInShell>
   );
@@ -61,10 +63,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
   }
 
   const orgId = subject.kind === "org" ? subject.membership.org_id : undefined;
-  const forOrg =
-    subject.kind === "org" ? (
-      <p className="mt-2 [overflow-wrap:anywhere] text-ink-soft">{t("forOrg", { org: subject.membership.org_name })}</p>
-    ) : null;
+  const forOrg = subject.kind === "org" ? t("forOrg", { org: subject.membership.org_name }) : null;
   const [catalogue, current] = await Promise.all([getPlans(sideOf(subject)), getCurrentPlan(subject)]);
 
   if (current.kind === "refused") {
@@ -89,12 +88,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
   const sameAs = sameLinesAs(plans);
   const currentName = plans.find((p) => p.code === current.code)?.name ?? current.code;
   return shell(
-    <>
-      {forOrg}
-      <p className="mt-3 text-ink" data-current-plan={current.code}>
-        {t("current", { plan: currentName })}
-      </p>
-    </>,
+    forOrg,
     <Section
       title={t("plansTitle")}
       headingId="plans-title"
@@ -113,6 +107,10 @@ export default async function BillingPage({ searchParams }: PageProps<"/billing"
         ))}
       </ol>
     </Section>,
+    <p className="current-plan" data-current-plan={current.code}>
+      <CheckIcon className="size-5 shrink-0 text-accent" />
+      <span>{t("current", { plan: currentName })}</span>
+    </p>,
   );
 }
 
@@ -147,7 +145,7 @@ async function PlanCard({
       variant={action === "upgrade" ? "raised" : "flat"}
       aria-current={current ? "true" : undefined}
       data-plan={plan.code}
-      className={cn("flex flex-col gap-3", current && "ring-2 ring-accent")}
+      className={cn("flex h-full flex-col gap-3", current && "ring-2 ring-accent")}
     >
       {/* The name, then the price as the card's figure in the display face (P20), then "Your plan". */}
       <div className="flex flex-col gap-1">

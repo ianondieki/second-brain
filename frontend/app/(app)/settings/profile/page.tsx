@@ -8,7 +8,8 @@ import { PortalNavFor } from "@/components/PortalNavFor";
 import { getCountyNames } from "@/components/problem/data";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Card } from "@/components/ui/Card";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
@@ -32,10 +33,9 @@ export default async function ProfileSettingsPage() {
   const me = await requireMe();
   const home = homeOf(me);
   if (me.side !== "developer") redirect("/settings/security");
-  const [t, tNav, tSecurity, profile, blocks, countyNames] = await Promise.all([
+  const [t, tNav, profile, blocks, countyNames] = await Promise.all([
     getTranslations("profileSettings"),
     getTranslations("settingsNav"),
-    getTranslations("security"),
     myProfile(),
     myBlocks(),
     getCountyNames(),
@@ -50,8 +50,13 @@ export default async function ProfileSettingsPage() {
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
       {/* One 48 rem column: the tab strip ends where the cards end. */}
       <div className="max-w-3xl">
-        <PageHeader title={tNav("label")} back={{ href: home, label: tSecurity("back") }} />
-        <SettingsTabs current="profile" developer />
+        <BackLink href={home}>{(await getTranslations("security"))("back")}</BackLink>
+        <PageHero
+          eyebrow={(await getTranslations("portal"))("eyebrow.settings")}
+          title={tNav("label")}
+          lead={(await getTranslations("portal"))("settings.leadProfile")}
+          tabs={<SettingsTabs current="profile" developer />}
+        />
         <ClientStrings strings={await clientStrings(["profileSettings"])}>
           <div className="flex flex-col gap-6">
             <Card variant="flat" className="p-5 sm:p-6">

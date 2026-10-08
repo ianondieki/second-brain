@@ -25,15 +25,18 @@ export interface CompareViewProps {
   memberships: Membership[];
   org: Membership;
   counties: readonly County[];
+  /** Each proposal's niche photograph band by its id (NicheBand, from the server page), over its column or card. */
+  bands?: Readonly<Record<string, ReactNode>>;
 }
 
 /**
- * The compared proposals (Tier 1 only): from 1024 px a calm table, one column per proposal under its title (a link to
+ * The compared proposals (Tier 1 only): from 1024 px a calm table, one column per proposal under its niche's
+ * photograph band and its title (a link to
  * the proposal page) and the facts' names in a first column that stays in place when the table scrolls sideways; below
  * 1024 px one card per proposal with its facts as rows. Only one of the two is displayed at a width (the other is
  * `display: none`, so out of the accessibility tree too).
  */
-export function CompareView({ items, memberships, org, counties }: CompareViewProps) {
+export function CompareView({ items, memberships, org, counties, bands = {} }: CompareViewProps) {
   const t = useTranslations("shortlist");
   const ti = useTranslations("inbox");
   const tf = useTranslations("ideaFields");
@@ -104,9 +107,10 @@ export function CompareView({ items, memberships, org, counties }: CompareViewPr
           </colgroup>
           <thead>
             <tr className="border-b border-line">
-              <td className="sticky left-0 bg-field" />
+              <td className="compare-sticky sticky left-0 bg-field" />
               {items.map((item) => (
-                <th key={item.proposal_id} scope="col" className={cn(cell, "pt-5 align-bottom text-base font-semibold text-ink")}>
+                <th key={item.proposal_id} scope="col" className={cn(cell, "pt-4 align-bottom text-base font-semibold text-ink")}>
+                  {bands[item.proposal_id] ? <div className="compare-band mb-3">{bands[item.proposal_id]}</div> : null}
                   <Link href={href(item)} className={cn(titleLinkClass, TARGET, "[overflow-wrap:anywhere]")}>
                     {title(item)}
                   </Link>
@@ -117,11 +121,11 @@ export function CompareView({ items, memberships, org, counties }: CompareViewPr
           <tbody>
             {FACTS.map((fact) => (
               <tr key={fact} data-fact={fact} className="border-b border-line last:border-b-0">
-                <th scope="row" className={cn(cell, "sticky left-0 bg-field pl-5 font-normal text-ink-soft")}>
+                <th scope="row" className={cn(cell, "compare-sticky sticky left-0 bg-field pl-5 font-normal text-ink-soft")}>
                   {t(`fact.${fact}`)}
                 </th>
                 {items.map((item) => (
-                  <td key={item.proposal_id} className={cn(cell, "text-ink [overflow-wrap:anywhere]")}>
+                  <td key={item.proposal_id} className={cn(cell, "text-ink tabular-nums [overflow-wrap:anywhere]")}>
                     {value(item, fact)}
                   </td>
                 ))}
@@ -137,7 +141,8 @@ export function CompareView({ items, memberships, org, counties }: CompareViewPr
         data-compare="cards"
       >
         {items.map((item) => (
-          <li key={item.proposal_id} className="min-w-0 rounded-panel border border-line bg-field p-5">
+          <li key={item.proposal_id} className="min-w-0 overflow-hidden rounded-panel border border-line bg-field p-5">
+            {bands[item.proposal_id] ? <div className="compare-band -mx-5 -mt-5 mb-4">{bands[item.proposal_id]}</div> : null}
             <h2 className="text-base font-semibold [overflow-wrap:anywhere] text-ink">
               <Link href={href(item)} className={cn(titleLinkClass, TARGET)}>
                 {title(item)}

@@ -141,7 +141,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
         title={t("review.decisionHeading")}
         headingId="decision"
         description={t("review.decisionLead")}
-        className="rounded-panel border border-line bg-field p-5 shadow-card sm:p-6"
+        className="decision-panel rounded-panel border bg-field p-5 sm:p-6"
       >
         <ClientStrings strings={strings}>
           <Decision

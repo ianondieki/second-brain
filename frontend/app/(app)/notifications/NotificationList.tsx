@@ -6,18 +6,42 @@ import { RowBase, RowList } from "@/components/ui/RowBase";
 import type { components } from "@/lib/api/schema";
 import { formatDay, formatTime } from "@/lib/format";
 
+import { CalendarIcon, InboxIcon } from "@/components/org-icons";
+import { DiscoverIcon } from "@/components/discover-icons";
+import { EngagementsIcon, MessageIcon } from "@/components/tracker/icons";
+import { CompaniesIcon } from "@/components/ui/icons";
+import { ClockIcon, InfoIcon } from "@/components/ui/status-icons";
+
 import { groupByDay } from "./days";
+import { noticeKind, type NoticeKind } from "./kinds";
 import { ReadLink } from "./ReadLink";
 
 export type Notification = components["schemas"]["NotificationOut"];
 
+const KIND_ICON: Record<NoticeKind, typeof InfoIcon> = {
+  message: MessageIcon,
+  engagement: EngagementsIcon,
+  discover: DiscoverIcon,
+  reminder: ClockIcon,
+  event: CalendarIcon,
+  team: CompaniesIcon,
+  inbox: InboxIcon,
+  other: InfoIcon,
+};
+
 /**
- * The unread mark: a small accent diamond (the lattice's cut, D-52) before the title. Unread is also said in words
- * inside the title (for screen readers, so a link's name carries it) and by the title's weight: never by colour or
- * shape alone.
+ * What the notice is about, as an icon in a petal disc (D-67, P25; decorative: the title says it), with the unread mark
+ * on its corner: a small accent diamond (the lattice's cut, D-52). Unread is also said in words inside the title (for
+ * screen readers, so a link's name carries it) and by the title's weight: never by colour or shape alone.
  */
-function UnreadMark() {
-  return <span aria-hidden="true" className="mt-[7px] inline-block size-2 shrink-0 rotate-45 rounded-[1px] bg-accent" />;
+function KindMark({ kind, unread }: { kind: string; unread: boolean }) {
+  const key = noticeKind(kind);
+  const Icon = KIND_ICON[key];
+  return (
+    <span aria-hidden="true" className="notice-mark" data-kind={key} data-unread={unread ? "" : undefined}>
+      <Icon className="size-[18px]" />
+    </span>
+  );
 }
 
 async function NotificationRow({ item }: { item: Notification }) {
@@ -32,11 +56,14 @@ async function NotificationRow({ item }: { item: Notification }) {
   );
   return (
     <RowBase
+      // Rows off screen are not drawn until they come near (globals.css .cv-auto), with a size close to theirs: about
+      // 8 rem on a phone (the time and the body under the title), 5.5 rem from 640 px.
+      className="cv-auto [--cv-size:8rem] sm:[--cv-size:5.5rem]"
       data-notification={item.id}
       data-unread={unread ? "true" : "false"}
       title={
-        <span className="flex items-start gap-2.5">
-          {unread ? <UnreadMark /> : <span aria-hidden="true" className="inline-block w-2 shrink-0" />}
+        <span className="flex items-start gap-3">
+          <KindMark kind={item.kind} unread={unread} />
           {item.link ? (
             <ReadLink
               id={item.id}
@@ -61,25 +88,29 @@ async function NotificationRow({ item }: { item: Notification }) {
       }
       figureFrom="sm"
     >
-      <time dateTime={item.created_at} className="pl-[18px] text-sm text-ink-soft sm:hidden">
+      <time dateTime={item.created_at} className="pl-12 text-sm text-ink-soft sm:hidden">
         {time}
       </time>
-      {item.body ? <p className="max-w-[62ch] pl-[18px] text-sm [overflow-wrap:anywhere] text-ink-soft">{item.body}</p> : null}
+      {item.body ? <p className="max-w-[62ch] pl-12 text-sm [overflow-wrap:anywhere] text-ink-soft">{item.body}</p> : null}
     </RowBase>
   );
 }
 
-/** The notifications in Nairobi day groups (Today, Yesterday, then dates), each a heading and its rows on a card, newest first. */
+/**
+ * The notifications in Nairobi day groups (Today, Yesterday, then dates), newest first: each day a separator that
+ * stays at the top while its rows scroll (the day's name in the mono face, a hairline after it), then its rows on a
+ * card. Rows off screen are not drawn until they come near (`content-visibility`, globals.css .cv-auto).
+ */
 export async function NotificationList({ items, now }: { items: readonly Notification[]; now: Date }) {
   const [t, locale] = await Promise.all([getTranslations("notifications"), getLocale()]);
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
       {groupByDay(items, now).map((group) => {
         const headingId = `day-${group.day}`;
         return (
           <section key={group.day} aria-labelledby={headingId} data-day={group.name}>
-            <h2 id={headingId} className="mb-4 text-lg text-ink">
-              {group.name === "date" ? formatDay(locale, group.at) : t(group.name)}
+            <h2 id={headingId} className="notice-day">
+              <span>{group.name === "date" ? formatDay(locale, group.at) : t(group.name)}</span>
             </h2>
             {/* A day's rows on one white card (P20): the day is one object, its rows a list inside it. */}
             <RowList aria-labelledby={headingId} rule={false} className="rounded-panel border border-line bg-field px-4 sm:px-5">

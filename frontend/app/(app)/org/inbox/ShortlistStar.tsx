@@ -38,12 +38,15 @@ export function ShortlistStar({
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ShortlistProblem | null>(null);
+  // Pressed in this visit: the star pops once as it fills (portal.css .star-pop; still under reduced motion).
+  const [pressed, setPressed] = useState(false);
   const name = on ? labels.remove : labels.add;
 
   async function press() {
     if (busy) return;
     const next = !on;
     setOn(next);
+    setPressed(true);
     setBusy(true);
     setProblem(null);
     const outcome = await setImpl(orgId, proposalId, next);
@@ -64,6 +67,7 @@ export function ShortlistStar({
         aria-disabled={busy || undefined}
         onClick={press}
         data-shortlist={on ? "on" : "off"}
+        data-pop={pressed && on ? "" : undefined}
         className={
           icon
             ? "relative inline-flex size-11 items-center justify-center rounded-full text-ink-soft hover:bg-accent-wash data-[shortlist=on]:text-accent"

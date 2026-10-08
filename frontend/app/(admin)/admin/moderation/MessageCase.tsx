@@ -85,7 +85,7 @@ export async function MessageCase({ item, nextId }: { item: Case; nextId: string
         <Section
           title={t("case.decisionHeading")}
           headingId="decision"
-          className="rounded-panel border border-line bg-field p-5 shadow-card lg:sticky lg:top-6 lg:col-start-2 lg:row-start-2"
+          className="decision-panel rounded-panel border bg-field p-5 lg:sticky lg:top-24 lg:col-start-2 lg:row-start-2"
         >
           <ClientStrings key="decision" strings={await caseStrings()}>
             <MessageDecision

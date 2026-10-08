@@ -189,6 +189,22 @@ test.describe("an organisation member", () => {
       "title",
       `Full proposal: ${pitched.title}, marked for you`,
     );
+    // On a phone the marked page fills the screen (P25 review, WCAG 2.4.11): the page under it is out of the tab order,
+    // so Tab from the top reaches "Close full proposal" first and never leaves the layer.
+    if (test.info().project.name === "mobile-360") {
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.keyboard.press("Tab");
+      await expect(page.getByRole("link", { name: "Close full proposal" })).toBeFocused();
+      for (let press = 0; press < 8; press += 1) {
+        const inLayer = await page.evaluate(() => {
+          const active = document.activeElement;
+          return !active || active === document.body || Boolean(active.closest("[data-tier2-view]"));
+        });
+        expect(inLayer, `Tab ${press + 1} stays in the full-screen layer`).toBe(true);
+        await page.keyboard.press("Tab");
+      }
+      await expect(page.locator("[data-top-bar]")).not.toBeVisible();
+    }
     // The marked page reads like the product (D-67): text in Hanken Grotesk, titles in Fraunces, fetched by the
     // sandboxed frame (an opaque origin, so CORS requests from "null") from the web origin's /fonts, which its CSP names
     // as font-src 'self' and next.config.ts lets any origin read.
@@ -231,6 +247,7 @@ test.describe("an organisation member", () => {
     await expect(page.getByText(`You accepted version ${nda.version} of the Evaluation NDA on`)).toBeVisible();
     await expect(page.locator("[data-primary]")).toHaveText("View full proposal");
     await expect(page.locator("[data-tier2-frame]")).toHaveCount(0);
+    await expect(page.locator("[data-top-bar]")).toBeVisible(); // closing it restores the page
     await checkScreen(page, { strict: true });
   });
 

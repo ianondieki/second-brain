@@ -4,7 +4,8 @@ import { getTranslations } from "next-intl/server";
 import { ClientStrings } from "@/components/ClientStrings";
 import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { PageHero } from "@/components/ui/PageHero";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
@@ -37,8 +38,13 @@ export default async function SecurityPage() {
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
       {/* One 48 rem column: the tab strip ends where the cards end. */}
       <div className="max-w-3xl">
-        <PageHeader title={tNav("label")} back={{ href: home, label: t("back") }} />
-        <SettingsTabs current="security" developer={me.side === "developer"} />
+        <BackLink href={home}>{(await getTranslations("security"))("back")}</BackLink>
+        <PageHero
+          eyebrow={(await getTranslations("portal"))("eyebrow.settings")}
+          title={tNav("label")}
+          lead={(await getTranslations("portal"))("settings.leadSecurity")}
+          tabs={<SettingsTabs current="security" developer={me.side === "developer"} />}
+        />
         {/* Server-formatted strings, not next-intl's client runtime (about 3.5 KB of the budget; P16-D). */}
         <ClientStrings
           strings={{

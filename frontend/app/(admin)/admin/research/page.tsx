@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { Panel } from "@/components/ui/Panel";
 import { DataTable } from "@/components/ui/DataTable";
 import { Section } from "@/components/ui/Section";
@@ -10,6 +10,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { AdminShell } from "../AdminShell";
+import { StaffEyebrow } from "../StaffEyebrow";
 import { QueueSurface } from "../QueueSurface";
 import { staffContext } from "../staff";
 import { getResearch, getTrendCandidates } from "./data";
@@ -36,7 +37,7 @@ const RUNS_SHOWN = 5;
 export default async function ResearchPage() {
   const { role } = await staffContext();
   const t = await getTranslations("adminResearch");
-  const header = <PageHeader title={t("title")} lead={t("lead")} focusable />;
+  const header = <PageHero eyebrow={<StaffEyebrow section="research" />} title={t("title")} lead={t("lead")} focusable />;
 
   const refused = (sentence: string, action: string, href: string) => (
     <AdminShell role={role} current="research">

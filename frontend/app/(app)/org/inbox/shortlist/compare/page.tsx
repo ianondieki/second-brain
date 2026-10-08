@@ -5,6 +5,7 @@ import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Callout } from "@/components/ui/Callout";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { NicheBand } from "@/components/ui/NicheBand";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 import { orgContext } from "../../../data";
@@ -84,7 +85,18 @@ export default async function CompareScreen({ searchParams }: PageProps<"/org/in
         {compareShows(read.value.items.length) === "count" ? (
           <EmptyState sentence={t("refusal.count", { min: COMPARE_MIN, max: COMPARE_MAX })} action={t("backToShortlist")} href={back} />
         ) : (
-          <CompareView items={read.value.items} memberships={memberships} org={org} counties={counties} />
+          <CompareView
+            items={read.value.items}
+            memberships={memberships}
+            org={org}
+            counties={counties}
+            bands={Object.fromEntries(
+              read.value.items.map((item) => [
+                item.proposal_id,
+                <NicheBand key={item.proposal_id} niche={item.niche?.slug} county={item.county_code} className="h-12" sizes="(min-width: 1024px) 16rem, 100vw" />,
+              ]),
+            )}
+          />
         )}
       </>
     );
