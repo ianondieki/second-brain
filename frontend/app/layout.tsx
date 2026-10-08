@@ -6,6 +6,7 @@ import { RouteFocus } from "@/components/RouteFocus";
 import { CELEBRATION_INIT_SCRIPT } from "@/components/tracker/celebration-store";
 import { TOUR_INIT_SCRIPT } from "@/components/tour/tour-store";
 import { clientStrings } from "@/lib/i18n/client-strings";
+import { DEFERRED_FONTS_CSS, DEFERRED_FONTS_SCRIPT } from "@/lib/fonts";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 import "./globals.css";
@@ -14,8 +15,8 @@ import "./globals.css";
 // the first screen's text are preloaded at high priority, ahead of the async scripts, so the headline swaps in early
 // (mobile LCP, AC-UX-3): Fraunces upright (the titles; 35 KB, instanced to opsz 24–72 and wght 500–700) and the text
 // face (Hanken Grotesk, 20 KB). The italic (9 KB, the landing hero's accent phrase only) is preloaded by the hero.
-// Bricolage Grotesque (the wordmark and the figures, 21 KB) and the mono face are not preloaded: the wordmark has a
-// sized fallback and the figures sit lower.
+// Bricolage Grotesque (the wordmark and the figures, 21 KB) and the mono face (15 KB) are neither preloaded nor in
+// globals.css: lib/fonts.ts declares them once the first frame has painted (P25), and they swap in over their fallbacks.
 const PRELOADED_FONTS = ["/fonts/fraunces-v1.woff2", "/fonts/hanken-grotesk-v1.woff2"] as const;
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -47,8 +48,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <link key={href} rel="preload" href={href} as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
         ))}
         {/* Before the first paint: the remembered appearance (lib/theme.ts) and a stale first-login tour hidden
-            (components/tour/tour-store.ts); nothing else runs here. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT + TOUR_INIT_SCRIPT + CELEBRATION_INIT_SCRIPT }} />
+            (components/tour/tour-store.ts); after it, the two decorative faces (lib/fonts.ts). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT + TOUR_INIT_SCRIPT + CELEBRATION_INIT_SCRIPT + DEFERRED_FONTS_SCRIPT }} />
+        <noscript dangerouslySetInnerHTML={{ __html: `<style>${DEFERRED_FONTS_CSS}</style>` }} />
       </head>
       <body className="flex min-h-full flex-col bg-paper text-ink">
         {/* Sign out and the error screen read server-formatted strings: no next-intl runtime in the browser. */}

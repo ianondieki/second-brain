@@ -4,8 +4,8 @@ import { getTranslations } from "next-intl/server";
 import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Callout } from "@/components/ui/Callout";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { RowList } from "@/components/ui/RowList";
+import { NicheBand } from "@/components/ui/NicheBand";
+import { PageHero } from "@/components/ui/PageHero";
 
 import { getInbox, orgContext, type InboxPage, type OrgVerification } from "../data";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -14,6 +14,7 @@ import { OrgPicker } from "../OrgPicker";
 import { ACTION_HREF } from "../refusals";
 import { matchesHref } from "../scout";
 import { shortlistHref } from "../shortlist";
+import { CARD_BAND, ItemGrid } from "../ItemCard";
 import { InboxRow } from "./InboxRow";
 import { InboxTabs, inboxTab } from "./InboxTabs";
 import { ScoutMatches } from "./matches/ScoutMatches";
@@ -35,25 +36,33 @@ const CURSOR = /^[A-Za-z0-9_-]{1,500}$/;
 export default async function InboxScreen({ searchParams }: PageProps<"/org/inbox">) {
   const params = await searchParams;
   const { memberships, org, missing, query } = await orgContext(params.org);
-  const t = await getTranslations("inbox");
+  const [t, tm, tp25] = await Promise.all([getTranslations("inbox"), getTranslations("scoutMatches"), getTranslations("portal")]);
   const cursorParam = first(params.cursor);
   const cursor = cursorParam && CURSOR.test(cursorParam) ? cursorParam : undefined;
   const tab = inboxTab(first(params.tab));
 
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="inbox" query={query} />} wide>
-      <div className="max-w-3xl">
-        <PageHeader title={t("title")} />
+      <div className="max-w-5xl">
+        <PageHero
+          eyebrow={tp25("eyebrow.inbox")}
+          title={t("title")}
+          lead={org ? (tab === "matches" ? tm("lead", { org: org.org_name }) : t("lead", { org: org.org_name })) : undefined}
+          tabs={
+            org ? (
+              <InboxTabs
+                current={tab}
+                hrefs={{
+                  tagged: inboxHref(memberships, org.org_id),
+                  matches: matchesHref(memberships, org.org_id),
+                  shortlist: shortlistHref(memberships, org.org_id),
+                }}
+              />
+            ) : undefined
+          }
+        />
         {org ? (
           <>
-            <InboxTabs
-              current={tab}
-              hrefs={{
-                tagged: inboxHref(memberships, org.org_id),
-                matches: matchesHref(memberships, org.org_id),
-                shortlist: shortlistHref(memberships, org.org_id),
-              }}
-            />
             {tab === "matches" ? (
               <ScoutMatches memberships={memberships} org={org} />
             ) : (
@@ -61,7 +70,7 @@ export default async function InboxScreen({ searchParams }: PageProps<"/org/inbo
             )}
           </>
         ) : (
-          <div className="mt-6">
+          <div>
             {missing === "notMember" ? (
               <EmptyState sentence={t("notMember")} action={t("openOwnInbox")} href="/org/inbox" />
             ) : (
@@ -117,13 +126,12 @@ async function InboxBody({
 
   return (
     <>
-      <p className="mt-6 max-w-[62ch] text-ink-soft">{t("lead", { org: orgName })}</p>
       {memberships.length > 1 ? (
-        <div className="mt-6">
+        <div className="mb-6">
           <OrgPicker memberships={memberships} current={org.org_id} action="/org/inbox" />
         </div>
       ) : null}
-      <div className="mt-8">{body}</div>
+      {body}
     </>
   );
 }
@@ -169,17 +177,19 @@ async function InboxList({
   return (
     <>
       {held}
-      <RowList aria-label={t("listLabel", { org: orgName })}>
+      <ItemGrid aria-label={t("listLabel", { org: orgName })}>
         {page.items.map((item) => (
-          <InboxRow
-            key={item.tag_id}
-            item={item}
-            href={proposalHref(memberships, org.org_id, item.proposal.id)}
-            trackerHref={item.engagement ? engagementsHref(memberships, org.org_id, item.engagement.id) : undefined}
-            org={org}
-          />
+          <li key={item.tag_id}>
+            <InboxRow
+              item={item}
+              href={proposalHref(memberships, org.org_id, item.proposal.id)}
+              trackerHref={item.engagement ? engagementsHref(memberships, org.org_id, item.engagement.id) : undefined}
+              org={org}
+              band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} />}
+            />
+          </li>
         ))}
-      </RowList>
+      </ItemGrid>
       {cursor || page.next_cursor ? (
         <nav aria-label={t("pages")} className="mt-8 flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
           {cursor ? (

@@ -10,6 +10,7 @@ import { OrgNav } from "@/components/OrgNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Chip } from "@/components/tracker/Chip";
 import { Callout } from "@/components/ui/Callout";
+import { NicheBand } from "@/components/ui/NicheBand";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -90,7 +91,11 @@ export default async function OrgEventPage({ params, searchParams }: PageProps<"
         </Callout>
       </StateNote>
 
-      <div className="mt-8">
+      {/* The county's photograph (the lattice online or where there is none): decorative, the place is in the details. */}
+      <div className="detail-band mt-8 overflow-hidden rounded-panel">
+        <NicheBand county={event.online ? null : event.county_code} sizes="(min-width: 1024px) 48rem, 100vw" />
+      </div>
+      <div className="mt-6">
         <EventDetails event={event} />
       </div>
 

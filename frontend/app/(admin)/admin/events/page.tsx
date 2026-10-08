@@ -12,10 +12,11 @@ import { Chip } from "@/components/tracker/Chip";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { DataCell, DataRow, DataTable, dataLinkClass } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { formatTime } from "@/lib/format";
 
 import { AdminShell } from "../AdminShell";
+import { StaffEyebrow } from "../StaffEyebrow";
 import { QueueSurface } from "../QueueSurface";
 import { PageStepUp } from "../research/PageStepUp";
 import { staffContext } from "../staff";
@@ -43,8 +44,9 @@ export default async function AdminEventsPage({ searchParams }: PageProps<"/admi
   const t = await getTranslations("adminEvents");
   const shell = (children: ReactNode) => (
     <AdminShell role={role} current={ROLES.has(role) ? "events" : undefined} wide>
-      <div className="flex max-w-5xl flex-col gap-8">
-        <PageHeader
+      <div className="flex max-w-5xl flex-col">
+        <PageHero
+          eyebrow={<StaffEyebrow section="events" />}
           title={t("title")}
           lead={t("lead")}
           focusable

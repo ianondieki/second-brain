@@ -44,6 +44,8 @@ const REPORT = join(__dirname, "..", "test-results", "design-shots", "axe.json")
 const THEMES = (process.env.SHOT_THEMES ?? "light,dark").split(",") as Array<"light" | "dark">;
 const WIDTHS = (process.env.SHOT_WIDTHS ?? "1440,375").split(",").map(Number);
 const FILTER = process.env.SHOT_FILTER ? new RegExp(process.env.SHOT_FILTER) : null;
+/** Only the shots of this set (SHOT_SET=p25), else every shot the filter lets through. */
+const SET = process.env.SHOT_SET ?? null;
 
 type Demo = "dev" | "devBrian" | "org" | "orgOwner" | "orgSacco" | "staff" | "moderator" | "devJuma";
 /** A demo person, a session that owes its second factor, or a new test account of the bell's or the side states' scene. */
@@ -53,7 +55,7 @@ interface Shot {
   path: string;
   who: Who;
   /** The screenshots folder under docs/demo/screenshots/ (default p18). */
-  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c" | "p24";
+  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c" | "p24" | "p25";
   /** Only these widths (default SHOT_WIDTHS). */
   widths?: number[];
   /** Shoot this element only (the top bar), not the page. */
@@ -1091,8 +1093,31 @@ const SHOTS: Shot[] = [
     } },
 ];
 
+// P25 (D-67): the portal in print, into docs/demo/screenshots/p25/: the README set's states for the screens P25 changed,
+// in the new set's folder, and the command palette open on a search.
+const P25_FROM = [
+  "home", "discover", "ideas", "certificate", "tracker", "dev-engagements", "company",
+  "org-home", "org-inbox", "org-proposal-full", "org-engagements", "admin-moderation", "login",
+];
+for (const name of P25_FROM) {
+  const base = SHOTS.find((shot) => shot.name === name && !shot.set);
+  if (base) SHOTS.push({ ...base, set: "p25" });
+}
+SHOTS.push({
+  name: "palette", path: "/dev", who: "dev", set: "p25", viewportOnly: true, prepare: async (page) => {
+    // Ctrl K does nothing before hydration: press until the palette opens.
+    const dialog = page.getByRole("dialog");
+    for (let attempt = 0; attempt < 10 && !(await dialog.isVisible()); attempt++) {
+      await page.keyboard.press("Control+K");
+      await page.waitForTimeout(300);
+    }
+    await dialog.getByRole("combobox").fill("sacco");
+    await dialog.getByRole("option").nth(1).waitFor();
+  },
+});
+
 function wanted(shot: Shot) {
-  return !FILTER || FILTER.test(shot.name);
+  return (!FILTER || FILTER.test(shot.name)) && (!SET || shot.set === SET);
 }
 
 /** Signs a demo person in through the real screens; a code already used in this window waits for the next one. */

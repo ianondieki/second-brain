@@ -8,11 +8,12 @@ import { Badge } from "@/components/ui/Badge";
 import { DataCell, DataRow, DataTable, dataLinkClass } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CheckIcon, ClockIcon, ClosedIcon } from "@/components/ui/icons";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 import { formatCalendarDate } from "@/lib/format";
 
 import { AdminShell } from "../AdminShell";
+import { StaffEyebrow } from "../StaffEyebrow";
 import { QueueSurface } from "../QueueSurface";
 import { PageStepUp } from "../research/PageStepUp";
 import { staffContext } from "../staff";
@@ -33,7 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function QuizQueuePage() {
   const { role } = await staffContext();
   const t = await getTranslations("adminQuiz");
-  const header = <PageHeader title={t("title")} lead={t("lead")} focusable />;
+  const header = <PageHero eyebrow={<StaffEyebrow section="quiz" />} title={t("title")} lead={t("lead")} focusable />;
   const shell = (children: ReactNode) => (
     <AdminShell role={role} current={role === "admin" ? "quiz" : undefined} wide>
       <div className="flex max-w-5xl flex-col gap-12">

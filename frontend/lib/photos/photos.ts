@@ -24,6 +24,10 @@ export interface PhotoEntry {
   changes: string;
   /** The one-line attribution. */
   credit: string;
+  /** The top-level niche it stands for (P25-A adds one per niche), if any. */
+  niche?: string | null;
+  /** What it is for (P25-A): "niche", "greeting-morning", "greeting-afternoon", "greeting-evening", "county". */
+  role?: string | null;
 }
 
 /** A photograph with the folder its files are in. */
@@ -33,7 +37,7 @@ export interface Photo extends PhotoEntry {
 
 const ALL: ReadonlyMap<string, Photo> = new Map((index as PhotoEntry[]).map((entry) => [entry.slug, { ...entry, dir: "/photos" }]));
 
-function photo(slug: string): Photo {
+export function photo(slug: string): Photo {
   const found = ALL.get(slug);
   if (!found) throw new Error(`No photograph ${slug} in public/photos/index.json`);
   return found;
@@ -69,9 +73,16 @@ const EXPLORE: ReadonlyMap<string, Photo> = new Map(
 /** Tea country (no one county): Explore's "Nationwide" group only. */
 export const NATIONWIDE: Photo = photo("kenya-tea");
 
-/** Every photograph the site shows, credited on /credits. */
+/** Every vendored photograph, in index order. */
+export const ALL_PHOTOS: readonly Photo[] = [...ALL.values()];
+
+/** The signed-out screens' photograph beside the form from 1024 px (AuthShell): signing in, and creating an account. */
+export const AUTH_PHOTOS = { signIn: photo("nairobi-jacaranda"), signUp: photo("nairobi-golden-hour") } as const;
+
+/** Every photograph the site shows, credited on /credits: every vendored photograph (the landing's strip, Explore,
+ *  the niche bands and Home's greeting draw from the same index), the strip's and Explore's first. */
 export const CREDITED: readonly Photo[] = [
-  ...new Map([...STRIP.map((c) => c.photo), ...EXPLORE.values(), NATIONWIDE].map((p) => [p.slug, p])).values(),
+  ...new Map([...STRIP.map((c) => c.photo), ...EXPLORE.values(), NATIONWIDE, ...ALL_PHOTOS].map((p) => [p.slug, p])).values(),
 ];
 
 /** A county's anchor on /explore: its reference code ("KE-30"), the same on the landing's strip. */

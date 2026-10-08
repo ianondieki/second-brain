@@ -166,8 +166,8 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
           title={t("case.decisionHeading")}
           headingId="decision"
           className={cn(
-            "rounded-panel border border-line bg-field p-5 shadow-card",
-            !subjectGone && "lg:sticky lg:top-6 lg:col-start-2 lg:row-start-2",
+            "decision-panel rounded-panel border bg-field p-5",
+            !subjectGone && "lg:sticky lg:top-24 lg:col-start-2 lg:row-start-2",
           )}
         >
           {/* Keyed, so it keeps its state (the status line) when a refresh changes what is around it. */}

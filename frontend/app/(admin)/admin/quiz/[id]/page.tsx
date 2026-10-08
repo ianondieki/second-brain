@@ -143,7 +143,7 @@ export default async function QuizSetPage({ params }: PageProps<"/admin/quiz/[id
           title={t("decision.heading")}
           headingId="decision"
           description={t("decision.lead")}
-          className="rounded-panel border border-line bg-field p-5 shadow-card sm:p-6"
+          className="decision-panel rounded-panel border bg-field p-5 sm:p-6"
         >
           <ClientStrings strings={strings}>
             <SetDecision setId={set.id} day={day} dayOver={dayOver} />

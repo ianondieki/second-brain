@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { Suspense } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
@@ -12,7 +13,9 @@ import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AlertIcon, InfoIcon } from "@/components/ui/icons";
 import { Callout } from "@/components/ui/Callout";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ActivityCalendar } from "@/components/activity/ActivityCalendar";
+import type { Activity } from "@/components/activity/calendar";
+import { Card } from "@/components/ui/Card";
 import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
@@ -31,6 +34,7 @@ import { MotionToggle } from "@/components/landing/MotionToggle";
 import { Ticker } from "@/components/landing/Ticker";
 import type { PublicActivity } from "@/lib/public/public-data";
 
+import { GreetingBand } from "./GreetingBand";
 import { dayPart, homeGroups, homeStats } from "./home";
 import { IdeaCard } from "./ideas/IdeaCard";
 import { NEW_PATH, type MyProposalItem } from "./ideas/ideas";
@@ -47,21 +51,26 @@ const OTHERS_SHOWN = 4;
 const IDEAS_SHOWN = 4;
 const ENGAGEMENTS_PATH = "/dev/engagements";
 
+/** A read Home draws below the first screen: the value, or the request still under way (it streams in, P25). */
+export type Later<T> = T | Promise<T>;
+
 export interface HomeContentProps {
   me: Me;
   engagements: readonly Summary[];
   ideas: readonly MyProposalItem[];
-  recommended: RecommendationsState;
+  recommended: Later<RecommendationsState>;
   /** Today's five (REQ-DEV-01): left out when null or not given (the read failed, or a fixture without it). */
-  quiz?: QuizCardState;
+  quiz?: Later<QuizCardState>;
   /** This week (REQ-DEV-02): left out when null or not given (the read failed, or a fixture without it). */
-  week?: Week | null;
+  week?: Later<Week | null>;
   /** Peers (REQ-DEV-03): left out when null or not given (the read failed, or a fixture without it). */
-  peers?: PeersPage | null;
+  peers?: Later<PeersPage | null>;
   /** The app clock's instant for this page (lib/api/server.ts appNow): the countdowns and the greeting read it. */
   now?: string;
   /** What's happening (P24, GET /api/public/activity): left out when null or not given (the read failed, or empty). */
-  activity?: PublicActivity | null;
+  activity?: Later<PublicActivity | null>;
+  /** Your last 26 weeks (P25, GET /api/me/activity): the person's own counts; left out when null or not given. */
+  mine?: Later<Activity | null>;
 }
 
 /**
@@ -81,12 +90,12 @@ export async function HomeContent({
   peers = null,
   now = new Date().toISOString(),
   activity = null,
+  mine = null,
 }: HomeContentProps) {
-  const [t, th, tr, ta, locale] = await Promise.all([
+  const [t, th, te, locale] = await Promise.all([
     getTranslations("devHome"),
     getTranslations("home"),
-    getTranslations("tracker"),
-    getTranslations("landing.activity"),
+    getTranslations("eyebrow"),
     getLocale(),
   ]);
   const { waiting, others } = homeGroups(engagements);
@@ -109,20 +118,27 @@ export async function HomeContent({
       <ClientStrings strings={await clientStrings(["tour"])}>
         <FirstLoginTour side="developer" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("developer")} />
       </ClientStrings>
+      {/* The greeting on Nairobi at this time of day (P25): the eyebrow, the name, the lead and the one primary action. */}
       <div className="max-w-4xl">
-        <PageHeader
-          title={th(`greeting.${dayPart(now)}`, { name: me.user.display_name })}
-          lead={t("lead")}
-          action={
+        <GreetingBand part={dayPart(now)}>
+          <p className="page-eyebrow text-night-soft" data-eyebrow="">
+            {te("devHome", { date: new Intl.DateTimeFormat(`${locale}-KE`, { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Nairobi" }).format(new Date(now)) })}
+          </p>
+          <h1 className="mt-3 text-[2rem] leading-[1.08] text-ink [overflow-wrap:anywhere] sm:text-[2.75rem] sm:leading-[1.04]">
+            {th(`greeting.${dayPart(now)}`, { name: me.user.display_name })}
+          </h1>
+          <p className="lead mt-3 max-w-[44ch] text-[1.0625rem] text-ink-soft sm:text-lg">{t("lead")}</p>
+          <div className="mt-6">
             <ButtonLink href={NEW_PATH} variant="primary">
               {t("newProposal")}
             </ButtonLink>
-          }
-        />
+          </div>
+        </GreetingBand>
       </div>
 
-      <div className="mt-8 flex max-w-4xl flex-col gap-12 lg:gap-14">
+      <div className="mt-8 flex max-w-4xl flex-col gap-12 lg:mt-10 lg:gap-14">
         <section aria-label={t("stats.label")} data-home="stats">
+          {/* The figures show their real values from the first paint: they drive what to do next (no count-up). */}
           <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <li>
               <StatTile data-stat="ideas" label={t("stats.ideas")} value={stats.ideas} meta={t("stats.ideasMeta", { published: stats.published, drafts: stats.drafts })} href="/dev/ideas" />
@@ -150,19 +166,6 @@ export async function HomeContent({
           </ul>
         </section>
 
-        {/* What's happening (P24): the public activity feed under the tiles, labelled when it is the demo seed's. */}
-        {activity ? (
-          <Section title={ta("title")} headingId="home-activity" data-home="activity" data-motion="">
-            <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
-              {activity.seeded ? <p className="demo-label">{ta("seeded")}</p> : <span />}
-              <span className="max-sm:hidden">
-                <MotionToggle label={ta("pause")} />
-              </span>
-            </div>
-            <Ticker activity={activity} variant="strip" />
-          </Section>
-        ) : null}
-
         {/* Two-step sign-in: a notice only while it is off (the status needs no section of its own when it is on). */}
         {mfa !== "on" ? (
           <Callout tone={mfa === "required" ? "error" : "info"} icon={mfa === "required" ? <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" /> : <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />} data-home="security">
@@ -189,53 +192,117 @@ export async function HomeContent({
           </Section>
         ) : null}
 
-        <QuizCard state={quiz} />
-
-        <WeekStrip week={week} />
-
-        <PeersSection peers={peers} />
-
-        <RecommendedForYou state={recommended} />
-
-        {others.length > 0 || ideas.length > 0 ? (
-          // Two lists of rows: side by side from 1024 px when both are there, one column (or the full width) otherwise.
-          <div className="grid gap-12 lg:auto-cols-fr lg:grid-flow-col lg:gap-10">
-            {others.length > 0 ? (
-              <Section
-                title={t("others")}
-                headingId="home-others"
-                data-home="others"
-                link={{ href: ENGAGEMENTS_PATH, label: t("allEngagements") }}
-              >
-                <RowList>
-                  {others.slice(0, OTHERS_SHOWN).map((item) => (
-                    <Row
-                      key={item.id}
-                      data-engagement={item.id}
-                      href={rowHref(item.id)}
-                      title={item.proposal_title}
-                      meta={tr("withOrg", { org: item.org_name })}
-                      badges={[<Chip key="stage" kind={stageChip(item)}>{item.stage_label}</Chip>]}
-                    >
-                      <DueLine item={item} mine="developer" />
-                    </Row>
-                  ))}
-                </RowList>
-              </Section>
-            ) : null}
-
-            {ideas.length > 0 ? (
-              <Section title={t("ideasTitle")} headingId="home-ideas" data-home="ideas" link={{ href: "/dev/ideas", label: t("allIdeas") }}>
-                <RowList>
-                  {ideas.slice(0, IDEAS_SHOWN).map((item) => (
-                    <IdeaCard key={item.id} item={item} headingLevel={3} />
-                  ))}
-                </RowList>
-              </Section>
-            ) : null}
-          </div>
-        ) : null}
+        {/* Below them (P25): streamed in once their reads answer, so the greeting, the tiles and what needs the developer
+            flush first. Nothing follows the boundary, so what arrives moves nothing already painted. */}
+        <Suspense fallback={null}>
+          <HomeBelow
+            ideas={ideas}
+            others={others}
+            reads={{ recommended, quiz, week, peers, activity, mine }}
+          />
+        </Suspense>
       </div>
     </SignedInShell>
+  );
+}
+
+/**
+ * Home below what needs the developer: What's happening, the activity calendar, today's five, the week, peers, the
+ * recommendations, then the other engagements and the ideas. Its reads start with the tiles' two (the page starts them
+ * all at once), and it renders once they have all answered, in one piece and in this order.
+ */
+async function HomeBelow({
+  ideas,
+  others,
+  reads,
+}: {
+  ideas: readonly MyProposalItem[];
+  others: readonly Summary[];
+  reads: Required<Pick<HomeContentProps, "recommended" | "quiz" | "week" | "peers" | "activity" | "mine">>;
+}) {
+  const [t, tr, ta, tc, recommended, quiz, week, peers, activity, mine] = await Promise.all([
+    getTranslations("devHome"),
+    getTranslations("tracker"),
+    getTranslations("landing.activity"),
+    getTranslations("activity"),
+    reads.recommended,
+    reads.quiz,
+    reads.week,
+    reads.peers,
+    reads.activity,
+    reads.mine,
+  ]);
+  const rowHref = (id: string) => `${ENGAGEMENTS_PATH}/${encodeURIComponent(id)}`;
+  return (
+    <>
+      {/* What's happening (P24): the public activity feed under the tiles, labelled when it is the demo seed's. */}
+      {activity ? (
+        <Section title={ta("title")} headingId="home-activity" data-home="activity" data-motion="">
+          <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+            {activity.seeded ? <p className="demo-label">{ta("seeded")}</p> : <span />}
+            <span className="max-sm:hidden">
+              <MotionToggle label={ta("pause")} />
+            </span>
+          </div>
+          <Ticker activity={activity} variant="strip" />
+        </Section>
+      ) : null}
+
+      {/* Your last 26 weeks (P25): the person's own actions by day; left out when the read did not answer. */}
+      {mine ? (
+        <Section title={tc("title", { weeks: 26 })} headingId="home-calendar" data-home="calendar">
+          <Card variant="flat">
+            <ActivityCalendar activity={mine} />
+          </Card>
+        </Section>
+      ) : null}
+
+      <QuizCard state={quiz} />
+
+      <WeekStrip week={week} />
+
+      <PeersSection peers={peers} />
+
+      <RecommendedForYou state={recommended} />
+
+      {others.length > 0 || ideas.length > 0 ? (
+        // Two lists of rows: side by side from 1024 px when both are there, one column (or the full width) otherwise.
+        <div className="grid gap-12 lg:auto-cols-fr lg:grid-flow-col lg:gap-10">
+          {others.length > 0 ? (
+            <Section
+              title={t("others")}
+              headingId="home-others"
+              data-home="others"
+              link={{ href: ENGAGEMENTS_PATH, label: t("allEngagements") }}
+            >
+              <RowList>
+                {others.slice(0, OTHERS_SHOWN).map((item) => (
+                  <Row
+                    key={item.id}
+                    data-engagement={item.id}
+                    href={rowHref(item.id)}
+                    title={item.proposal_title}
+                    meta={tr("withOrg", { org: item.org_name })}
+                    badges={[<Chip key="stage" kind={stageChip(item)}>{item.stage_label}</Chip>]}
+                  >
+                    <DueLine item={item} mine="developer" />
+                  </Row>
+                ))}
+              </RowList>
+            </Section>
+          ) : null}
+
+          {ideas.length > 0 ? (
+            <Section title={t("ideasTitle")} headingId="home-ideas" data-home="ideas" link={{ href: "/dev/ideas", label: t("allIdeas") }}>
+              <RowList>
+                {ideas.slice(0, IDEAS_SHOWN).map((item) => (
+                  <IdeaCard key={item.id} item={item} headingLevel={3} />
+                ))}
+              </RowList>
+            </Section>
+          ) : null}
+        </div>
+      ) : null}
+    </>
   );
 }

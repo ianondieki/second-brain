@@ -42,8 +42,10 @@ export function adminSections(role: StaffRole) {
  */
 export function AdminNav({ current, role }: { current?: AdminSection; role: StaffRole }) {
   const t = useTranslations("admin");
+  const shell = useTranslations("shell");
   return (
     <PortalNav
+      help={{ href: "/help", label: shell("help") }}
       label={t("navLabel")}
       heading={t("navLabel")}
       current={current}

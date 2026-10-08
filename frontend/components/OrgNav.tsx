@@ -28,8 +28,10 @@ export type OrgSection = (typeof ORG_SECTIONS)[number]["key"];
  */
 export function OrgNav({ current, query = "" }: { current?: OrgSection; query?: string }) {
   const t = useTranslations("nav");
+  const shell = useTranslations("shell");
   return (
     <PortalNav
+      help={{ href: "/help", label: shell("help") }}
       label={t("organisation")}
       current={current}
       query={query}

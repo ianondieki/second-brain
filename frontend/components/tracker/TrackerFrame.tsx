@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/components/ui/cn";
 import { Lattice } from "@/components/ui/Lattice";
+import { SharedTitle } from "@/components/motion/SharedTitle";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { TabNav } from "@/components/ui/TabNav";
 import { formatDay } from "@/lib/format";
@@ -55,7 +56,12 @@ export async function TrackerHeader({ detail, basePath, query }: { detail: Detai
     <PageHeader
       className="max-w-3xl"
       back={{ href: withQuery(basePath, query), label: t("back") }}
-      title={detail.proposal_title}
+      // A list card titled by the idea morphs into this title where View Transitions run (P25).
+      title={
+        <SharedTitle kind="engagement" id={detail.id}>
+          <span>{detail.proposal_title}</span>
+        </SharedTitle>
+      }
       lead={<span data-counterpart={line.key}>{t(line.key, line.values)}</span>}
     />
   );

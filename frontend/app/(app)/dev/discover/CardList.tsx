@@ -1,9 +1,10 @@
 import { Children, isValidElement, type HTMLAttributes, type ReactNode } from "react";
 
 import { cn } from "@/components/ui/cn";
+import { NicheBand } from "@/components/ui/NicheBand";
 
 /**
- * Discover's lists (P20): compact cards two across from 768 px, each as tall as its row. With an odd number the first
+ * Discover's lists (P20, P25): compact cards two across from 1280 px, each as tall as its row. With an odd number the first
  * (the list's top item: rising fastest, or newest) takes the whole row, so a card never sits alone under two. An
  * ordered list: the order is the ranking.
  */
@@ -12,14 +13,18 @@ export function CardList({ children, className, ...rest }: HTMLAttributes<HTMLOL
   return (
     <ol
       className={cn(
-        "grid grid-cols-1 gap-4 md:grid-cols-2 [&>li]:min-w-0",
-        items.length > 1 && items.length % 2 === 1 && "md:[&>li:first-child]:col-span-2",
+        // Two across from 1280 px (P25): narrower, each card's photograph band and text keep their measure.
+        "grid grid-cols-1 gap-4 xl:grid-cols-2 xl:gap-5 [&>li]:min-w-0",
+        items.length > 1 && items.length % 2 === 1 && "xl:[&>li:first-child]:col-span-2",
         className,
       )}
       {...rest}
     >
+      {/* Off-screen cards skip rendering until they come near (a long list on a phone), each held at a card's size. */}
       {items.map((child) => (
-        <li key={child.key}>{child}</li>
+        <li key={child.key} className="cv-auto [--cv-size:22rem]">
+          {child}
+        </li>
       ))}
     </ol>
   );
@@ -42,4 +47,12 @@ export function CardFoot({ children }: { children: ReactNode }) {
       <p className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-line pt-3 text-sm text-ink-soft">{children}</p>
     </div>
   );
+}
+
+/**
+ * The card's photograph band (P25, D-67): its niche's photograph (or the county's for the public sector), or the
+ * lattice where there is none, bleeding to the card's edges at its top. Decorative: the niche is named on the card.
+ */
+export function CardBand({ niche, county }: { niche?: { slug: string } | null; county?: string | null }) {
+  return <NicheBand niche={niche?.slug} county={county} className="-mx-4 -mt-4 mb-4 h-14 rounded-t-[15px] rounded-b-none sm:-mx-5 sm:-mt-5 sm:h-16" />;
 }

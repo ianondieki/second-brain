@@ -17,7 +17,7 @@ export default async function CheckEmailPage({ searchParams }: PageProps<"/signu
   const t = await getTranslations("checkEmail");
   const kind = (await searchParams).for === "login" ? "login" : "signup";
   return (
-    <AuthShell>
+    <AuthShell photo="signUp">
       <PageHeader title={t("title")} />
       <IntlScope namespaces={["checkEmail", "errors"]}>
         <CheckEmail kind={kind} />

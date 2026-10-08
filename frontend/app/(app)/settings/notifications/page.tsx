@@ -12,7 +12,8 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { PageHero } from "@/components/ui/PageHero";
 
 import { SettingsTabs } from "../SettingsTabs";
 import { notificationChoices, preferenceChoices, type ConsentItem } from "./choices";
@@ -53,13 +54,18 @@ export default async function NotificationSettingsPage() {
       ? t(`preference.${item.kind}` as "preference.saved_search_digest")
       : item.label,
   );
-  const [tNav, tSecurity] = await Promise.all([getTranslations("settingsNav"), getTranslations("security")]);
+  const tNav = await getTranslations("settingsNav");
   return (
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
       {/* One 48 rem column: the tab strip ends where the card ends. */}
       <div className="max-w-3xl">
-        <PageHeader title={tNav("label")} back={{ href: home, label: tSecurity("back") }} />
-        <SettingsTabs current="notifications" developer={me.side === "developer"} />
+        <BackLink href={home}>{(await getTranslations("security"))("back")}</BackLink>
+        <PageHero
+          eyebrow={(await getTranslations("portal"))("eyebrow.settings")}
+          title={tNav("label")}
+          lead={(await getTranslations("portal"))("settings.leadNotifications")}
+          tabs={<SettingsTabs current="notifications" developer={me.side === "developer"} />}
+        />
         <div>
           {choices.length === 0 && preferences.length === 0 ? (
             <EmptyState sentence={t("empty")} action={t("action.home")} href={home} />

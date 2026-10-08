@@ -6,7 +6,7 @@ import { ProblemLabelText } from "@/components/problem/ProblemLabelText";
 import { titleLinkClass } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
 
-import { discoverCardClass, discoverTitleClass } from "./CardList";
+import { CardBand, discoverCardClass, discoverTitleClass } from "./CardList";
 import { cardBadges, ChipList, MoreSummary, TrendBadge, WhyChip } from "./Chips";
 import { cardChips, moreWhy, projectAnchor, type TrendingProject } from "./discover";
 
@@ -36,6 +36,7 @@ export function ProjectRow({ item }: { item: TrendingProject }) {
       data-trending={trend.trending ? "" : undefined}
       className={discoverCardClass}
     >
+      <CardBand niche={proposal.teaser.niche} />
       <h3 id={`${anchor}-title`} className={discoverTitleClass}>
         {proposal.teaser.title ?? proposal.cert_id}
       </h3>

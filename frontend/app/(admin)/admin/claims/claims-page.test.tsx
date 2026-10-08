@@ -202,7 +202,7 @@ describe("the claims queue", () => {
   it("asks for a fresh code when the second factor is stale", async () => {
     data.stepUp = true;
     await list();
-    expect(screen.getByLabelText("Code from your app")).toBeTruthy();
+    expect(await screen.findByLabelText("Code from your app")).toBeTruthy(); // the form is fetched when asked for (LazyStepUp, P25)
   });
 });
 

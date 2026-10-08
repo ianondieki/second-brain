@@ -3,13 +3,14 @@ import { useLocale, useTranslations } from "next-intl";
 import { problemHref } from "@/components/problem/problem";
 import { Badge } from "@/components/ui/Badge";
 import { CompaniesIcon } from "@/components/ui/icons";
+import { SharedTitle } from "@/components/motion/SharedTitle";
 import { LinkPending } from "@/components/ui/LinkPending";
 import Link from "next/link";
 import { titleLinkClass } from "@/components/ui/Button";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 import { formatCalendarDate } from "@/lib/format";
 
-import { CardFoot, discoverCardClass, discoverTitleClass } from "./CardList";
+import { CardBand, CardFoot, discoverCardClass, discoverTitleClass } from "./CardList";
 import { countryName, countyName, problemAnchor, startProposalHref, type CountyRef, type DiscoverBrief } from "./discover";
 
 /**
@@ -30,9 +31,12 @@ export function BriefRow({ item, counties }: { item: DiscoverBrief; counties: re
 
   return (
     <article id={problemAnchor(problem.id)} aria-labelledby={titleId} data-brief={problem.id} className={discoverCardClass}>
+      <CardBand niche={problem.niche} county={problem.county_code} />
       <h3 id={titleId} className={discoverTitleClass}>
         <Link href={problemHref(problem.id)} className={titleLinkClass}>
-          {problem.title}
+          <SharedTitle kind="problem" id={problem.id}>
+            <span>{problem.title}</span>
+          </SharedTitle>
           <LinkPending className="absolute -top-px left-4 sm:left-5" />
         </Link>
       </h3>

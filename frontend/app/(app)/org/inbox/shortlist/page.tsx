@@ -7,7 +7,7 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { cn } from "@/components/ui/cn";
 import { titleLinkClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 import { orgContext } from "../../data";
@@ -50,28 +50,34 @@ const PROBLEMS: readonly ShortlistProblem[] = ["code", "signedOut", "role", "gon
 export default async function ShortlistScreen({ searchParams }: PageProps<"/org/inbox/shortlist">) {
   const params = await searchParams;
   const { memberships, org, missing, query } = await orgContext(params.org);
-  const t = await getTranslations("inbox");
+  const [t, ts, tp] = await Promise.all([getTranslations("inbox"), getTranslations("shortlist"), getTranslations("portal")]);
   const cursorParam = first(params.cursor);
   const cursor = cursorParam && CURSOR.test(cursorParam) ? cursorParam : undefined;
 
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="inbox" query={query} />} wide>
-      <div className="max-w-3xl">
-        <PageHeader title={t("title")} />
+      <div className="max-w-5xl">
+        <PageHero
+          eyebrow={tp("eyebrow.inbox")}
+          title={t("title")}
+          lead={org ? ts("lead", { org: org.org_name }) : undefined}
+          tabs={
+            org ? (
+              <InboxTabs
+                current="shortlist"
+                hrefs={{
+                  tagged: inboxHref(memberships, org.org_id),
+                  matches: matchesHref(memberships, org.org_id),
+                  shortlist: shortlistHref(memberships, org.org_id),
+                }}
+              />
+            ) : undefined
+          }
+        />
         {org ? (
-          <>
-            <InboxTabs
-              current="shortlist"
-              hrefs={{
-                tagged: inboxHref(memberships, org.org_id),
-                matches: matchesHref(memberships, org.org_id),
-                shortlist: shortlistHref(memberships, org.org_id),
-              }}
-            />
-            <ShortlistBody memberships={memberships} org={org} cursor={cursor} />
-          </>
+          <ShortlistBody memberships={memberships} org={org} cursor={cursor} />
         ) : (
-          <div className="mt-6">
+          <div>
             {missing === "notMember" ? (
               <EmptyState sentence={t("notMember")} action={t("openOwnInbox")} href="/org/inbox" />
             ) : (
@@ -115,13 +121,12 @@ async function ShortlistBody({ memberships, org, cursor }: { memberships: Member
       <h2 id={SHORTLIST_HEADING_ID} tabIndex={-1} className="sr-only">
         {t("pageTitle")}
       </h2>
-      <p className="mt-6 max-w-[62ch] text-ink-soft">{t("lead", { org: org.org_name })}</p>
       {memberships.length > 1 ? (
-        <div className="mt-6">
+        <div className="mb-6">
           <OrgPicker memberships={memberships} current={org.org_id} action="/org/inbox/shortlist" />
         </div>
       ) : null}
-      <div className="mt-8">{body}</div>
+      <div className="max-w-3xl">{body}</div>
     </>
   );
 }

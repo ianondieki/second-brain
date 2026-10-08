@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "reviewP25c2": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: portal.* (vichwa vidogo vya mahali ulipo, mistari mipya ya lango la shirika, dashibodi ya wafanyakazi na kurasa za kuingia: portal.eyebrow.*, portal.settings.*, portal.proposal.means, portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry, adminResearch.stepUp.loading, briefForm.preview.* (onyesho la moja kwa moja la jinsi Brief inavyosomeka kwenye Gundua)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack) [[SW-REVIEW]] draft Swahili",
     "reviewP15f": "[[COPY-REVIEW]] [[SW-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.* (rasimu ya Kiswahili)",
     "reviewP16c2": "[[COPY-REVIEW]] P16 part C2 (REQ-UX-01..04, REQ-ADM-01): adminModeration.case.textHeadingDecided, scoutForm.fitLong [[SW-REVIEW]] draft Swahili",
@@ -30,7 +31,8 @@
     "reviewP23b": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-2 (REQ-UX-01, REQ-UX-03; D-52, D-65), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tour.back, tour.pause, tour.step, tour.stepLabel (vidhibiti vya ziara inayojisogeza); landing.trust.* (mstari chini ya sehemu ya juu: ukweli wanne uliopo tayari kwenye landing.*, bila takwimu wala majina)",
     "reviewP22c": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: teams.*, teamUp.*, profileSettings.*, settingsNav.profile, ideaContributors.*, ideas.contributorsLine, ideas.sheet.contributors; 'Shirikiana' for team up, 'mwaliko' for invitation, 'mchangiaji' for contributor, 'wenzako' for peers; trackerMessages.refusal.attachFailed (faili za kisanduku cha ujumbe hazikupakia)",
     "reviewP23c": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: countdown.* (muda uliobaki hadi tarehe ya mwisho: siku (haibadiliki kwa wingi, hivyo bila ICU plural), saa na dak (dakika) kuanzia kipimo kikubwa (countdown.days, .hours, .minutes), countdown.in (\"baada ya {time}\"), countdown.dueIn (\"Inatakiwa {date} · baada ya {time}\"), countdown.closesIn (\"Mapendekezo yatafungwa baada ya {time}\") na countdown.at (saa kamili ya Nairobi katika kichwa cha kipengele cha muda)); trackerActions.partFailed na .partReload (sehemu ya ukurasa ambayo msimbo wake haukupakia); je, \"dak\" inafaa kama kifupi cha dakika?",
-    "reviewP24": "[[COPY-REVIEW]] [[SW-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: landing.eyebrow, landing.title (kifungu cha italiki, lebo yake ya accent), landing.sample.*, landing.stats.*, landing.counties.*, landing.how.* (vibandiko vitatu), landing.reasons.* (values.* ni maandishi ya Kiingereza ya mpangaji kama bidhaa inavyoyaonyesha; je, yabaki kwa Kiingereza?), landing.activity.*, landing.nav.explore, landing.footer.*, explore.*, credits.*, home.greeting (asubuhi/mchana/jioni kwa saa ya Nairobi), og.*; \"niche\" imeachwa kama ilivyo katika sehemu nyingine za programu; explore.nationwide/nationwideNote/seeded, problemPage.*, og.problemAlt"
+    "reviewP24": "[[COPY-REVIEW]] [[SW-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: landing.eyebrow, landing.title (kifungu cha italiki, lebo yake ya accent), landing.sample.*, landing.stats.*, landing.counties.*, landing.how.* (vibandiko vitatu), landing.reasons.* (values.* ni maandishi ya Kiingereza ya mpangaji kama bidhaa inavyoyaonyesha; je, yabaki kwa Kiingereza?), landing.activity.*, landing.nav.explore, landing.footer.*, explore.*, credits.*, home.greeting (asubuhi/mchana/jioni kwa saa ya Nairobi), og.*; \"niche\" imeachwa kama ilivyo katika sehemu nyingine za programu; explore.nationwide/nationwideNote/seeded, problemPage.*, og.problemAlt",
+    "reviewP25": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: palette.* (kitufe cha Tafuta, makundi, vitendo, vitufe), activity.* (kalenda ya shughuli; activity.mon/wed/fri ni vifupisho vya siku, je, vinafaa?), \"Brief\" imetafsiriwa kama \"maelezo ya tatizo\" kama katika briefs.*; eyebrow.* (P25-C2: lebo ndogo juu ya kila skrini ya msanidi programu, inayosema uko wapi); engagementCard.* (mstari wa vitone vitano wa kadi ya ushirikiano); activity.busiest"
   },
   "app": {
     "name": "Wazo",
@@ -612,6 +614,36 @@
     "body": "Kuna tatizo wakati wa kupakia ukurasa huu. Jaribu tena baada ya muda mfupi.",
     "retry": "Jaribu tena"
   },
+  "portal": {
+    "eyebrow": {
+      "home": "Shirika / Nyumbani",
+      "inbox": "Shirika / Kikasha",
+      "problems": "Shirika / Matatizo",
+      "events": "Shirika / Matukio",
+      "engagements": "Shirika / Ushirikiano",
+      "notifications": "Akaunti / Arifa",
+      "settings": "Akaunti / Mipangilio",
+      "billing": "Akaunti / Mpango na malipo",
+      "help": "Msaada",
+      "legal": "Kisheria",
+      "verify": "Vyeti",
+      "staff": "Dashibodi ya wafanyakazi / {section}"
+    },
+    "inbox": {
+      "matchesTitle": "Alichopata Wakala Skauti wako"
+    },
+    "proposal": {
+      "means": "Maana ya kukubali"
+    },
+    "settings": {
+      "leadSecurity": "Jinsi unavyoingia, na hatua ya pili inayolinda akaunti yako.",
+      "leadNotifications": "Tunachokutumia, na mahali unapokisoma.",
+      "leadProfile": "Kile wasanidi programu wengine wanaona unapochagua kuonekana."
+    },
+    "auth": {
+      "credits": "Sifa zote za picha"
+    }
+  },
   "orgHome": {
     "inboxTitle": "Kikasha",
     "newest": "Pendekezo jipya zaidi: {title}, lilitumwa {date}.",
@@ -712,7 +744,6 @@
     "view": "Tazama pendekezo kamili",
     "viewNote": "Kulifungua kunahesabiwa kama kutazama: kila utazamaji unarekodiwa na kuwekewa alama ya mtazamaji.",
     "frameTitle": "Pendekezo kamili: {title}, lenye alama yako",
-    "frameNote": "Pendekezo kamili linasogezwa ndani ya fremu hii.",
     "close": "Funga pendekezo kamili",
     "stepUpCode": "Msimbo kutoka kwa programu yako",
     "stepUpSubmit": "Thibitisha",
@@ -1119,7 +1150,9 @@
       "submit": "Thibitisha",
       "checking": "Inakagua…",
       "invalid": "Msimbo huo haukufanya kazi. Weka msimbo mpya zaidi kutoka programu yako ya uthibitishaji.",
-      "cancel": "Ghairi"
+      "cancel": "Ghairi",
+      "retry": "Jaribu tena",
+      "loading": "Inapakia fomu ya msimbo…"
     },
     "queue": {
       "heading": "Zinasubiri ukaguzi",
@@ -3215,6 +3248,17 @@
       "confirm": "Funga maelezo",
       "closing": "Inafunga…",
       "cancel": "Yaache wazi"
+    },
+    "preview": {
+      "title": "Jinsi inavyosomeka kwenye Gundua",
+      "untitled": "Kichwa chako",
+      "statement": "Maelezo ya tatizo lako yanaonekana hapa unapoandika.",
+      "postedBy": "Imechapishwa na {org}",
+      "budget": "Bajeti: {value}",
+      "noBudget": "Bajeti iko wazi",
+      "deadline": "Mapendekezo kufikia {date}",
+      "noDeadline": "Hakuna tarehe ya mwisho",
+      "note": "Wasanidi programu wataiona wafanyakazi wakishaiidhinisha."
     }
   },
   "shortlist": {
@@ -4098,5 +4142,81 @@
     "haveAccount": "Una akaunti tayari? <login>Ingia</login>",
     "lead": "Wasanidi programu hujibu matatizo kama haya kwa pendekezo, linalowekwa muhuri wa wakati wanapolichapisha.",
     "unavailable": "Tatizo hili haliwezi kupakiwa kwa sasa."
+  },
+  "palette": {
+    "trigger": "Tafuta au ruka hadi",
+    "dialog": "Tafuta au ruka hadi",
+    "input": "Tafuta kurasa, kazi yako, matatizo na makampuni",
+    "close": "Funga",
+    "empty": "Hakuna kinacholingana na “{q}”.",
+    "searching": "Inatafuta…",
+    "unavailable": "Utafutaji haupatikani kwa sasa. Sehemu na kurasa za hivi karibuni bado zinafanya kazi.",
+    "results": "Matokeo: {count}",
+    "goTo": "Nenda kwa",
+    "recent": "Za hivi karibuni",
+    "actions": "Vitendo",
+    "kind": {
+      "ideas": "Mawazo yako",
+      "engagements": "Ushirikiano",
+      "inbox": "Kikasha",
+      "problems": "Matatizo",
+      "briefs": "Maelezo yako ya matatizo",
+      "companies": "Makampuni"
+    },
+    "settings": "Mipangilio",
+    "notifications": "Arifa",
+    "newProposal": "Pendekezo jipya",
+    "postBrief": "Chapisha maelezo ya tatizo",
+    "themeDark": "Badili hadi mwonekano wa giza",
+    "themeLight": "Badili hadi mwonekano wa mwanga",
+    "keyMove": "kusogea",
+    "keyOpen": "kufungua",
+    "keyNewTab": "kwa kichupo kipya",
+    "keyClose": "kufunga"
+  },
+  "activity": {
+    "title": "Wiki zako {weeks} zilizopita",
+    "total": "Shughuli {total} katika wiki {weeks} zilizopita",
+    "busiest": "Siku yenye shughuli nyingi: {date}, shughuli {count}",
+    "empty": "Bado hakuna kitu: unachofanya kwenye Wazo kitaonekana hapa, siku kwa siku.",
+    "less": "Kidogo",
+    "more": "Zaidi",
+    "legend": "Kutoka shughuli chache kwa siku hadi nyingi",
+    "mon": "Jtt",
+    "wed": "Jtn",
+    "fri": "Iju",
+    "tip": "Shughuli {count} tarehe {date}",
+    "tableCaption": "Shughuli zako kwa siku katika wiki {weeks} zilizopita, bila siku zisizo na shughuli",
+    "tableDate": "Siku",
+    "tableCount": "Shughuli",
+    "kinds": "Zilikuwa nini",
+    "kind": {
+      "version_registered": "Matoleo yaliyosajiliwa: {count}",
+      "proposal_published": "Mapendekezo yaliyochapishwa: {count}",
+      "engagement_step": "Hatua za kifuatiliaji: {count}",
+      "message_sent": "Jumbe: {count}",
+      "quiz_answered": "Majibu ya maswali ya leo: {count}",
+      "team_message": "Jumbe za timu: {count}",
+      "proposal_opened": "Mapendekezo yaliyofunguliwa: {count}",
+      "brief_posted": "Maelezo ya matatizo yaliyochapishwa: {count}"
+    }
+  },
+  "eyebrow": {
+    "devHome": "Nyumbani, {date}",
+    "discover": "Msanidi programu / Gundua",
+    "niches": "Msanidi programu / Gundua / Niche zako",
+    "trend": "Msanidi programu / Gundua / Mwelekeo",
+    "week": "Msanidi programu / Wiki hii",
+    "ideas": "Msanidi programu / Mawazo yangu",
+    "engagements": "Msanidi programu / Ushirikiano",
+    "companies": "Msanidi programu / Makampuni",
+    "peers": "Msanidi programu / Wenzako",
+    "teams": "Msanidi programu / Timu",
+    "quiz": "Msanidi programu / Maswali matano ya leo",
+    "board": "Msanidi programu / Maswali matano ya leo / Ubao wa wiki hii"
+  },
+  "engagementCard": {
+    "stageOf": "Hatua {step} kati ya {total}: {stage}",
+    "waitingOn": "Inamsubiri {name}"
   }
 }

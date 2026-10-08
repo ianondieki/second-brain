@@ -5,12 +5,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { first } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
 import { ButtonLink } from "@/components/ui/ButtonLink";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { DataTable } from "@/components/ui/DataTable";
 
 import { formatDay } from "@/lib/format";
 
 import { AdminShell } from "../AdminShell";
+import { StaffEyebrow } from "../StaffEyebrow";
 import { QueueSummary, QueueSurface } from "../QueueSurface";
 import { PageStepUp } from "../research/PageStepUp";
 import { staffContext } from "../staff";
@@ -41,8 +42,8 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
   // The header's action slot holds "Review the oldest case", the screen's one primary action, when there is one.
   const shell = (children: React.ReactNode, action?: React.ReactNode) => (
     <AdminShell role={role} current="moderation" wide>
-      <div className="flex max-w-5xl flex-col gap-8">
-        <PageHeader title={t("title")} lead={t("lead")} focusable action={action} />
+      <div className="flex max-w-5xl flex-col">
+        <PageHero eyebrow={<StaffEyebrow section="moderation" />} title={t("title")} lead={t("lead")} focusable action={action} />
         {children}
       </div>
     </AdminShell>

@@ -125,3 +125,78 @@ def test_the_headers_forbid_caching_and_allow_only_the_stylesheet() -> None:
     assert f"style-src 'sha256-{digest}'" in csp
     assert "script-src" not in csp  # default-src 'none' forbids every script
     assert f"<style>{STYLE}</style>" in page()
+
+
+# The per-viewer overlay as it was before the P25 typography: its ink, opacity, size and tiling are the mark's
+# legibility after a screenshot's compression (docs/spec/06 6.4 item 3), so the restyle must leave every rule alone.
+OVERLAY_RULES = [
+    ".overlay{position:fixed;inset:-50%;z-index:2;display:grid;"
+    "grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:4rem 2.5rem;padding:2rem;"
+    "transform:rotate(-24deg);pointer-events:none;user-select:none;opacity:.14;color:#1b1730;font-size:.8rem;"
+    "font-weight:500;letter-spacing:.03em;line-height:1.3;overflow-wrap:anywhere}",
+    ".overlay{color:#eeeaf8}",  # dark
+    ".overlay{opacity:.2}",  # print
+]
+# The app's own self-hosted files (frontend/public/fonts, served by the web origin the page is framed from), under a
+# query of their own: the app's pages preload the bare URLs, which browsers that visited before the fonts carried the
+# CORS header hold for a year (immutable) without it, so the frame must not share their cache entries.
+FRAME_QUERY = "?frame=1"
+FACES = {
+    "/fonts/hanken-grotesk-v1.woff2?frame=1": "Hanken Grotesk",
+    "/fonts/fraunces-v1.woff2?frame=1": "Fraunces",
+    "/fonts/fraunces-ext-v1.woff2?frame=1": "Fraunces",
+}
+
+
+def rule(selector: str) -> str:
+    """The declarations of the first top-level rule for exactly ``selector``."""
+    found = re.search(r"(?:^|\})" + re.escape(selector) + r"\{([^{}]*)\}", STYLE)
+    assert found is not None, selector
+    return found.group(1)
+
+
+def test_the_csp_allows_the_stylesheet_by_hash_and_fonts_from_the_web_origin_only() -> None:
+    digest = base64.b64encode(hashlib.sha256(STYLE.encode()).digest()).decode()
+    assert HEADERS["Content-Security-Policy"] == (
+        f"default-src 'none'; style-src 'sha256-{digest}'; font-src 'self'; base-uri 'none'; form-action 'none';"
+        " frame-ancestors 'self'"
+    )
+    assert HEADERS["X-Frame-Options"] == "SAMEORIGIN"
+    assert HEADERS["Referrer-Policy"] == "no-referrer"
+
+
+def test_the_page_names_the_apps_own_faces_and_fetches_nothing_else() -> None:
+    faces = re.findall(r'@font-face\{font-family:"([^"]+)";src:url\("([^"]+)"\) format\("woff2"\)', STYLE)
+    assert {url: family for family, url in faces} == FACES
+    assert len(faces) == len(FACES)
+    assert STYLE.count("url(") == len(FACES)  # no image, no other font, no import
+    assert "data:" not in STYLE
+    assert "@import" not in STYLE
+    assert "font-display:swap" in STYLE  # the text shows at once in the fallback, then swaps in
+
+
+def test_the_frames_font_urls_are_cache_keys_of_their_own() -> None:
+    urls = re.findall(r'url\("([^"]+)"\)', STYLE)
+    assert urls == list(FACES)
+    for url in urls:
+        path, query = url.split("?")
+        assert re.fullmatch(r"/fonts/[a-z-]+-v\d+\.woff2", path)  # the path the web app's CORS rule matches
+        assert f"?{query}" == FRAME_QUERY  # never the bare URL the app's pages preload
+
+
+def test_text_is_hanken_grotesk_at_17_px_and_titles_are_fraunces_as_in_the_app() -> None:
+    body = rule("body")
+    assert 'font:17px/1.65 "Hanken Grotesk","Hanken Grotesk Fallback",' in body
+    titles = rule("h1,h2")
+    assert 'font-family:"Fraunces","Fraunces Fallback",' in titles
+    assert "font-optical-sizing:auto" in titles
+    assert "font-size:2rem" in rule("h1")
+    assert "font-size:1.5rem" in rule("h2")
+    assert "padding:2rem 1.25rem 4rem" in rule("main")  # comfortable at 360 px
+
+
+def test_the_overlay_keeps_its_ink_opacity_size_and_density() -> None:
+    assert re.findall(r"\.overlay[^{}]*\{[^{}]*\}", STYLE) == OVERLAY_RULES
+    html = page()
+    assert html.count('<div class="overlay" aria-hidden="true">') == 1
+    assert html.index('<div class="overlay"') < html.index("<main>")  # tiled over the text (z-index 2, fixed)

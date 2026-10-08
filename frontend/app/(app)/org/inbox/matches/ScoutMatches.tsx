@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { Chip } from "@/components/tracker/Chip";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
-import { RowList } from "@/components/ui/RowList";
+import { NicheBand } from "@/components/ui/NicheBand";
 
 import { EmptyState } from "@/components/ui/EmptyState";
 import { inboxHref, type Membership } from "../../membership";
@@ -12,6 +12,7 @@ import { OrgPicker } from "../../OrgPicker";
 import { OrgRefusal } from "../../OrgRefusal";
 import { configuresScouts, matchHref, scoutHref, type Match, type Scout, type ScoutList } from "../../scout";
 import { getMatches, getScouts } from "../../scout-data";
+import { CARD_BAND, ItemGrid } from "../../ItemCard";
 import { MatchRow } from "./MatchRow";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
@@ -20,20 +21,18 @@ import { StandaloneLink } from "@/components/ui/StandaloneLink";
  * proposals it found, newest first. Without a scout the tab is its empty state: set one up (owners and admins).
  */
 export async function ScoutMatches({ memberships, org }: { memberships: Membership[]; org: Membership }) {
-  const t = await getTranslations("scoutMatches");
   const ti = await getTranslations("inbox");
   const [scouts, matches] = await Promise.all([getScouts(org.org_id), getMatches(org.org_id)]);
   const refusal = scouts.kind === "refused" ? scouts.refusal : matches.kind === "refused" ? matches.refusal : null;
 
   return (
     <>
-      <p className="mt-6 max-w-[62ch] text-ink-soft">{t("lead", { org: org.org_name })}</p>
       {memberships.length > 1 ? (
-        <div className="mt-6">
+        <div className="mb-6">
           <OrgPicker memberships={memberships} current={org.org_id} action="/org/inbox" keep={{ tab: "matches" }} />
         </div>
       ) : null}
-      <div className="mt-8">
+      <div>
         {refusal ? (
           <OrgRefusal refusal={refusal} orgName={org.org_name} back={{ href: "/org", action: ti("emptyAction") }} />
         ) : scouts.kind === "ok" && matches.kind === "ok" ? (
@@ -108,11 +107,23 @@ async function Body({
             <EmptyState sentence={t("emptyNoMatches")} action={t("seeSent")} href={sent} />
           )
         ) : (
-          <RowList aria-label={t("listLabel", { org: org.org_name })}>
-            {matches.map((match) => (
-              <MatchRow key={match.id} match={match} href={matchHref(memberships, org.org_id, match.id)} org={org} />
-            ))}
-          </RowList>
+          <section aria-labelledby="matches-heading">
+            <h2 id="matches-heading" className="text-xl text-ink">
+              {(await getTranslations("portal"))("inbox.matchesTitle")}
+            </h2>
+            <ItemGrid aria-label={t("listLabel", { org: org.org_name })} className="mt-4">
+              {matches.map((match) => (
+                <li key={match.id}>
+                  <MatchRow
+                    match={match}
+                    href={matchHref(memberships, org.org_id, match.id)}
+                    org={org}
+                    band={<NicheBand niche={match.available ? match.niche?.slug : null} county={match.available ? match.teaser?.county_code : null} sizes={CARD_BAND} />}
+                  />
+                </li>
+              ))}
+            </ItemGrid>
+          </section>
         )}
       </div>
     </>

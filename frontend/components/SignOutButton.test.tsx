@@ -34,6 +34,18 @@ describe("SignOutButton", () => {
     expect(mocks.post).toHaveBeenCalledWith("/api/auth/logout", expect.objectContaining({ method: "POST" }));
   });
 
+  // P25: a shared machine never shows the command palette's recent pages to the next person.
+  it("forgets every account's recent pages on sign-out", async () => {
+    window.localStorage.setItem("wazo-recent:v2:abc", JSON.stringify([{ href: "/org/inbox/x", title: "A title under NDA" }]));
+    window.localStorage.setItem("wazo-theme", "dark");
+    mocks.post.mockResolvedValue(answer(204));
+    renderWithIntl(<SignOutButton />);
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/login"));
+    expect(window.localStorage.getItem("wazo-recent:v2:abc")).toBeNull();
+    expect(window.localStorage.getItem("wazo-theme")).toBe("dark");
+  });
+
   it.each([403, 500])("stays and warns when logout answers %i", async (status) => {
     window.sessionStorage.setItem("bridge.pendingEmail", "wanjiru@example.com");
     mocks.post.mockResolvedValue(answer(status));

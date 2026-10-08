@@ -471,6 +471,38 @@ The full entries (why, options, default, what they blocked) are kept below for t
 - Owner's choice (2026-10-01): name **Wazo**; direction C (Editorial trust) as the base with B's kanga-cut lattice as the single East African signature (header band, certificate edge, landing hero, empty states; never behind text); C's dark mode. Step 2 must change layout and hierarchy, not only tokens.
 - Status: step 1 delivered; step 2 (the design system and the four showpiece screens: landing, Home, tracker, certificate) delivered 2026-10-01 for review before the roll-out to the remaining screens (`docs/platform/tasks/P18-design-directions.md`).
 
+### D-67 · "Portal in print": the landing's craft carried into every signed-in screen (P25; REQ-UX-01, REQ-UX-02, REQ-UX-04..07, D-55, D-66)
+- Why: the owner (2026-10-08), after P24: "Landing page has the taste I want … the other pages seem lifeless … bring life
+  … real and seductive … images regarding projects that match the context … Human Computer Interface best design
+  principles … if there are nice features that improve the application end to end, implement them." The portal (Home,
+  Discover, ideas, the editor, the certificate, engagements, the tracker, the organisation's Inbox, Problems and Events,
+  the staff console, settings, billing, notifications, sign-in) still wears the P20 kit: correct and accessible, but
+  flat white panels on paper, little hierarchy beyond size, no imagery, no motion that explains a change.
+- Decision (the owner's brief, taken by the orchestrator): the portal is Operate mode (the impeccable skill): scanning
+  and finishing a task outrank expression, so life comes from precise details, not decoration. (1) **One page language**:
+  a `PageHero` (mono eyebrow saying where you are, the Fraunces title, a one-sentence lead, the one primary action) on
+  every list and home screen; detail screens keep the slim header. (2) **Photographs where content has a place or a
+  niche**: one licensed photograph per top-level niche (ten), shown as a narrow band on problem, idea and engagement
+  cards, on the public and signed-in problem pages and on company pages (the HQ county's photograph); Home's greeting
+  sits on a time-of-day Nairobi photograph (morning, afternoon, evening); never on the tracker (REQ-UX-05: the tracker
+  stays image-free), never a logo, every photograph credited on `/credits`, decorative (`alt=""`) beside a visible niche
+  or county name. (3) **Motion that explains**: route changes cross-fade and a card's title morphs into the detail
+  page's title where the browser supports View Transitions (none under reduced motion, none where unsupported); one
+  orchestrated moment per surface (Home's figures count once, the tracker's progress line draws once, the certificate
+  seal's sheen on hover); press feedback on buttons; skeletons that match the final layout. (4) **Two end-to-end
+  features**: a command palette (Ctrl/⌘ K and a visible "Search" button in the top bar: jump to any section, your
+  ideas, your engagements, public problems and listed companies, plus actions such as New proposal and the theme), and
+  an activity calendar on both Homes ("Your last 26 weeks": versions registered, proposals published, steps taken,
+  messages and quiz answers for a developer; proposals opened, steps taken, Briefs posted for an organisation member),
+  both read as the signed-in person under RLS. (5) **The HCI floor raised**: forced-colors and prefers-contrast
+  support, a consistent focus ring, 44 px targets, `text-wrap: balance` on titles, container queries so cards adapt
+  to their column, subgrid so a row of cards aligns its parts, `content-visibility` on long lists, INP measured on the
+  palette and Discover's filters. The P20 tokens, the nav's five items, one primary action per screen and two chips
+  per card stay; the research note `docs/platform/research/ui-principles.md` cites the published guidance this
+  follows (performance budgets and image delivery, accessible components and focus, CSS layout, React's server-first
+  model, testing what the user sees).
+- Status: built in P25 (gated 2026-10-08; see PROGRESS.md "P25 report") and merged into the integration branch.
+
 ### D-66 · "Jacaranda in print": the serif display face, the paper canvas and photographs (P24; REQ-UX-01..04, D-55)
 - Why: the owner (2026-10-07) wants a landing and a home that read as a world-class product and sell the idea, giving
   three references: hackathon.genai.works (a white page with a mint wash, Inter, stat rows, a featured card with a live
@@ -490,7 +522,7 @@ The full entries (why, options, default, what they blocked) are kept below for t
   BY-SA, credited on a photo-credits page, vendored as AVIF/WebP, never hot-linked) appear in a county strip on the
   landing and on the public Explore page; no third-party logos (principle 4); no fabricated figures (every stat is a
   product constant or a seeded figure labelled as such).
-- Status: built in P24 (feature branch `0eba708`, gated 2026-10-07: reviewer, security-reviewer and ux-reviewer PASS; see PROGRESS.md "P24 report") and merged into the integration branch (commit recorded there); P24 builds it; the P20 design document gains a P24 addendum; the P18/P20 "cream + serif" avoidance note is
+- Status: built in P24 (feature branch `0eba708`, gated 2026-10-07: reviewer, security-reviewer and ux-reviewer PASS; see PROGRESS.md "P24 report") and merged into the integration branch as `18e9fa9`; the P20 design document gains a P24 addendum; the P18/P20 "cream + serif" avoidance note is
   superseded by the owner's references.
 
 ### D-65 · The "Prototype" badge and the lattice band leave the top bar (P23-2; REQ-UX-01, D-52, D-55)
