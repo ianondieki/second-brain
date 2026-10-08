@@ -43,7 +43,8 @@ export function Picture({
         height={photo.height}
         alt={alt}
         loading={eager ? "eager" : "lazy"}
-        fetchPriority={eager ? "high" : undefined}
+        // Below the first screen (lazy) photographs never compete with what paints first (P25: card bands).
+        fetchPriority={eager ? "high" : "low"}
         decoding="async"
         className={cn("bg-night", className)}
       />
