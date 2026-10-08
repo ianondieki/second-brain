@@ -63,11 +63,16 @@ _Current = aliased(ProposalVersion)
 _Draft = aliased(ProposalVersion)
 
 
+# Control (NUL included: the database holds none), surrogate, private-use and unassigned code points. Format
+# characters (Cf: the zero-width joiner of an emoji sequence, a soft hyphen) are text people type or paste: allowed.
+REFUSED_CATEGORIES: Final = frozenset({"Cc", "Cs", "Co", "Cn"})
+
+
 def normalise(q: str) -> str:
-    """The words to search for: ``q`` trimmed, ``MIN_LENGTH`` to ``MAX_LENGTH`` characters with no control character
-    (the database holds no NUL), else 422 ``invalid_query`` (never quoting it)."""
+    """The words to search for: ``q`` trimmed, ``MIN_LENGTH`` to ``MAX_LENGTH`` characters, none of them of a
+    ``REFUSED_CATEGORIES`` category, else 422 ``invalid_query`` (never quoting it)."""
     term = q.strip()
-    if not MIN_LENGTH <= len(term) <= MAX_LENGTH or any(unicodedata.category(ch)[0] == "C" for ch in term):
+    if not MIN_LENGTH <= len(term) <= MAX_LENGTH or any(unicodedata.category(ch) in REFUSED_CATEGORIES for ch in term):
         raise ApiError(422, "invalid_query", QUERY_RULE)
     return term
 

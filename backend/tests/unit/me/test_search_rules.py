@@ -44,6 +44,9 @@ def params(statement: Select[Any]) -> dict[str, object]:
 # --- what was typed --------------------------------------------------------------------------------------------------
 
 
+FAMILY = "\U0001f468\u200d\U0001f469\u200d\U0001f467"  # an emoji ZWJ sequence: three people joined by U+200D
+
+
 @pytest.mark.parametrize(
     ("typed", "term"),
     [
@@ -51,14 +54,32 @@ def params(statement: Select[Any]) -> dict[str, object]:
         ("  sacco  ", "sacco"),
         ("x" * 80, "x" * 80),
         (" " + "y" * 80 + "\t", "y" * 80),
-        ("Ñairobi", "Ñairobi"),
+        ("\u00d1airobi", "\u00d1airobi"),
+        (f" {FAMILY} ", FAMILY),  # format characters (Cf) are text
+        ("co\u00adop", "co\u00adop"),  # a soft hyphen (Cf)
+        ("a\u200b", "a\u200b"),  # a zero-width space (Cf)
+        ("\u2764\ufe0f sacco", "\u2764\ufe0f sacco"),  # a variation selector
     ],
 )
 def test_two_to_eighty_characters_once_trimmed_are_searched(typed: str, term: str) -> None:
     assert search.normalise(typed) == term
 
 
-@pytest.mark.parametrize("typed", ["", " ", "a", "  a  ", "x" * 81, "ab\x00", "ab\ncd", "a\u200b"])
+@pytest.mark.parametrize(
+    "typed",
+    [
+        "",
+        " ",
+        "a",
+        "  a  ",
+        "x" * 81,
+        "ab\x00",  # control (Cc)
+        "ab\ncd",
+        "a\ud800",  # a lone surrogate (Cs)
+        "a\ue000",  # private use (Co)
+        "a\u0378",  # unassigned (Cn)
+    ],
+)
 def test_anything_else_is_a_422_that_does_not_quote_it(typed: str) -> None:
     with pytest.raises(ApiError) as refused:
         search.normalise(typed)

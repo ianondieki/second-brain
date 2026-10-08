@@ -230,6 +230,14 @@ async def test_the_best_match_comes_first_and_a_group_holds_at_most_five(
     assert [item["title"] for item in groups["ideas"][1:]] == [f"Old {scene.word} idea {n}" for n in (5, 4, 3, 2)]
 
 
+async def test_an_emoji_sequence_and_a_soft_hyphen_are_searched_as_typed(scene: Scene, signed_in: SignedIn) -> None:
+    """Format characters (a zero-width joiner, a soft hyphen) are text: searched, never a 422."""
+    family = "\U0001f468\u200d\U0001f469\u200d\U0001f467"
+    async with signed_in(scene.amina) as client:
+        assert await found(client, f" {family} co\u00adop ") == {}
+        assert await found(client, f"{scene.word}\u00ad") == {}
+
+
 @pytest.mark.parametrize("suffix", ["%", "_", "\\", "%%", " _"])
 async def test_like_wildcards_and_the_escape_match_only_themselves(
     scene: Scene, signed_in: SignedIn, suffix: str
