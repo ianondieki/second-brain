@@ -1,4 +1,7 @@
-import { expect, test, type Page } from "@playwright/test";
+import { createServer, request as httpRequest } from "node:http";
+import type { AddressInfo } from "node:net";
+
+import { expect, test, type Frame, type Page } from "@playwright/test";
 
 import { checkScreen, expectEmptyState } from "./support/screen";
 import {
@@ -16,6 +19,58 @@ import { loginReturningTo } from "./support/login";
 // the compose stack, in both projects (360 px and desktop). The API must run with FEATURE_TIER2_ENABLED=true.
 
 const SERVER_STEP = { timeout: 20_000 };
+
+/**
+ * The font families the marked page reports loaded in its sandboxed frame. The page runs no script of its own;
+ * Playwright evaluates in the frame all the same.
+ */
+function loadedFaces(frame: Frame): Promise<string[]> {
+  return frame.evaluate(async () => {
+    await document.fonts.ready;
+    const loaded = [...document.fonts].filter((face) => face.status === "loaded").map((face) => face.family);
+    return [...new Set(loaded)].sort();
+  });
+}
+
+/**
+ * Stands in for a browser that cached the fonts before they carried the CORS header: the app's pages preload the bare
+ * font URLs, served immutable for a year, so such a browser keeps reading them without Access-Control-Allow-Origin.
+ * This proxy in front of the web app (plain HTTP, as the compose stack serves it) strips the header from every bare
+ * /fonts/*.woff2 answer; a URL with a query passes unchanged.
+ */
+async function staleFontsProxy(target: string): Promise<{ origin: string; close: () => Promise<void> }> {
+  const upstream = new URL(target);
+  expect(upstream.protocol, "the stale-fonts proxy speaks plain HTTP").toBe("http:");
+  const server = createServer((incoming, outgoing) => {
+    const forward = httpRequest(
+      {
+        host: upstream.hostname,
+        port: upstream.port || 80,
+        path: incoming.url,
+        method: incoming.method,
+        headers: { ...incoming.headers, host: upstream.host },
+      },
+      (answer) => {
+        const headers = { ...answer.headers };
+        if (/^\/fonts\/[^/?]+\.woff2$/.test(incoming.url ?? "")) delete headers["access-control-allow-origin"];
+        outgoing.writeHead(answer.statusCode ?? 502, headers);
+        answer.pipe(outgoing);
+      },
+    );
+    forward.on("error", () => outgoing.writeHead(502).end());
+    incoming.pipe(forward);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    origin: `http://${upstream.hostname}:${port}`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}
 
 test("signed-out visits to the organisation screens go to the login page", async ({ page }) => {
   for (const path of ["/org/inbox", "/org/inbox/01a0ee62-f783-733e-9321-9f34ec389ac2"]) {
@@ -136,27 +191,37 @@ test.describe("an organisation member", () => {
     );
     // The marked page reads like the product (D-67): text in Hanken Grotesk, titles in Fraunces, fetched by the
     // sandboxed frame (an opaque origin, so CORS requests from "null") from the web origin's /fonts, which its CSP names
-    // as font-src 'self' and next.config.ts lets any origin read. Playwright evaluates in the frame although the page
-    // itself runs no script.
-    const marked = page.frame({ url: new RegExp(`/proposals/${pitched.proposalId}/tier2$`) });
+    // as font-src 'self' and next.config.ts lets any origin read.
+    const tier2Url = new RegExp(`/proposals/${pitched.proposalId}/tier2$`);
+    const marked = page.frame({ url: tier2Url });
     expect(marked, "the marked page's frame").not.toBeNull();
-    await expect
-      .poll(
-        () =>
-          marked!.evaluate(async () => {
-            await document.fonts.ready;
-            const loaded = [...document.fonts].filter((face) => face.status === "loaded").map((face) => face.family);
-            return [...new Set(loaded)].sort();
-          }),
-        SERVER_STEP,
-      )
-      .toEqual(["Fraunces", "Hanken Grotesk"]);
+    await expect.poll(() => loadedFaces(marked!), SERVER_STEP).toEqual(["Fraunces", "Hanken Grotesk"]);
     expect(
       await marked!.evaluate(() => {
         const used = (selector: string) => getComputedStyle(document.querySelector(selector)!);
         return [used(".text").fontFamily.split(",")[0], used(".text").fontSize, used("h1").fontFamily.split(",")[0]];
       }),
     ).toEqual(['"Hanken Grotesk"', "17px", "Fraunces"]);
+    // A browser that preloaded the bare font URLs before they carried the CORS header (the app page first, through the
+    // stale-fonts proxy) still gets both faces in the frame: its URLs (?frame=1) are cache keys of their own.
+    const proxy = await staleFontsProxy(baseURL!);
+    try {
+      const stale = await page.context().newPage();
+      await stale.goto(`${proxy.origin}/org/inbox/${pitched.proposalId}`);
+      await expect(stale.getByRole("heading", { level: 1 })).toHaveText(pitched.title, SERVER_STEP);
+      // The app page itself loads the bare files (same origin, no CORS), so they sit in this context's cache.
+      await expect
+        .poll(() => loadedFaces(stale.mainFrame()), SERVER_STEP)
+        .toEqual(expect.arrayContaining(["Fraunces", "Hanken Grotesk"]));
+      await stale.goto(`${proxy.origin}/org/inbox/${pitched.proposalId}?view=full`);
+      await expect(stale.frameLocator("[data-tier2-frame]").locator(".mark")).toBeVisible(SERVER_STEP);
+      const staleFrame = stale.frame({ url: tier2Url });
+      expect(staleFrame, "the marked page's frame behind the stale-fonts proxy").not.toBeNull();
+      await expect.poll(() => loadedFaces(staleFrame!), SERVER_STEP).toEqual(["Fraunces", "Hanken Grotesk"]);
+      await stale.close();
+    } finally {
+      await proxy.close();
+    }
     // The marked page runs no script, so axe cannot run inside it: the frame is left out (its title is checked above).
     await checkScreen(page, { strict: true, exclude: ["[data-tier2-frame]"] });
 
