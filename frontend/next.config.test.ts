@@ -1,12 +1,29 @@
 // @vitest-environment node
+import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { buildCustomRoute } from "next/dist/lib/build-custom-route";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import loadConfig from "next/dist/server/config";
 import { describe, expect, it } from "vitest";
 
-import nextConfig, { PAGE_EXTENSIONS } from "./next.config";
+import nextConfig, { FONT_CORS, FONT_FILES, PAGE_EXTENSIONS } from "./next.config";
 import { HEADER_RULES } from "./security-headers";
+
+/** The headers the app's real config sends for a path, every matching rule compiled as `next build` does. */
+async function headersFor(path: string): Promise<Record<string, string>> {
+  const sent: Record<string, string> = {};
+  for (const rule of (await nextConfig.headers?.()) ?? []) {
+    const { regex } = buildCustomRoute("header", rule);
+    // Exact case, as experimental.caseSensitiveRoutes makes the server match (security-headers.test.ts).
+    if (new RegExp(regex).test(path)) for (const { key, value } of rule.headers) sent[key] = value;
+  }
+  return sent;
+}
+
+const VENDORED_FONTS = readdirSync(fileURLToPath(new URL("./public/fonts", import.meta.url)))
+  .filter((name) => name.endsWith(".woff2"))
+  .sort();
 
 // security-headers.test.ts proves the header rules are right when sources match in exact case; these tests prove the
 // app's real config (next.config.ts, as next-intl's plugin returns it) turns exact-case matching on and sends those
@@ -30,8 +47,45 @@ describe("next.config.ts", () => {
     expect(nextConfig.pageExtensions).toEqual(PAGE_EXTENSIONS);
   });
 
-  it("sends exactly the header rules of security-headers.ts", async () => {
-    expect(await nextConfig.headers?.()).toEqual(HEADER_RULES);
+  it("sends exactly the header rules of security-headers.ts and the fonts' CORS rule", async () => {
+    expect(await nextConfig.headers?.()).toEqual([...HEADER_RULES, FONT_CORS]);
+  });
+
+  // The marked full proposal (backend proposals/render.py) is framed with a sandbox and no allow-same-origin, so its
+  // document's origin is opaque and its font requests are CORS requests from origin "null". The self-hosted woff2
+  // files are public (OFL), so any origin may read them; nothing else gets the header.
+  // Next applies header rules before it looks for the file, so a name pattern would also put the header on the HTML
+  // 404 page of any matching name: the rule names exactly the vendored files.
+  it("names exactly the vendored woff2 files in the fonts' CORS rule", () => {
+    expect([...FONT_FILES].sort()).toEqual(VENDORED_FONTS);
+  });
+
+  it.each(VENDORED_FONTS)("lets any origin read the font /fonts/%s", async (file) => {
+    expect(await headersFor(`/fonts/${file}`)).toMatchObject({
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Content-Type-Options": "nosniff",
+    });
+  });
+
+  it.each([
+    "/",
+    "/org/inbox",
+    "/api/orgs/x/proposals/y/tier2",
+    "/fonts/LICENCES.md",
+    "/fonts/OFL.txt",
+    "/fonts/og/fraunces-og-v1.ttf",
+    "/fonts/og/x-v1.woff2",
+    "/fonts/missing.woff2",
+    "/fonts/x-v9.woff2", // a 404 page under a versioned font name
+    "/fonts/hanken-grotesk-v9.woff2",
+    "/fonts/hanken-grotesk-v1xwoff2",
+    "/fonts/xhanken-grotesk-v1.woff2",
+    "/FONTS/hanken-grotesk-v1.woff2",
+    "/fonts/hanken-grotesk-v1.woff2/x",
+    "/_next/static/media/font.woff2",
+  ])("lets no other origin read %s", async (path) => {
+    expect(await headersFor(path)).not.toHaveProperty("Access-Control-Allow-Origin");
   });
 
   // `next build` reads the config this way and writes both into routes-manifest.json, which the server then follows.
@@ -43,7 +97,7 @@ describe("next.config.ts", () => {
     async () => {
       const loaded = await loadConfig(PHASE_PRODUCTION_BUILD, fileURLToPath(new URL(".", import.meta.url)));
       expect(loaded.experimental.caseSensitiveRoutes).toBe(true);
-      expect(await loaded.headers?.()).toEqual(HEADER_RULES);
+      expect(await loaded.headers?.()).toEqual([...HEADER_RULES, FONT_CORS]);
     },
   );
 });
