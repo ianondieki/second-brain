@@ -48,8 +48,9 @@ export function PageHero({
   focusable = false,
   className,
 }: PageHeroProps) {
+  // One element, so a page that stacks its parts with a gap keeps the back link right above the eyebrow.
   return (
-    <>
+    <div>
       {back ? <BackLink href={back.href}>{back.label}</BackLink> : null}
       <header className={cn("page-hero mb-6 lg:mb-8", className)} data-page-hero="">
         <div className={cn("page-hero-body", back ? "pt-1" : "pt-2 lg:pt-4")}>
@@ -80,6 +81,6 @@ export function PageHero({
         {/* The tabs' own hairline (TabNav) closes the hero: a line under it only when tabs follow. */}
         {tabs ? <div className="mt-7">{tabs}</div> : null}
       </header>
-    </>
+    </div>
   );
 }
