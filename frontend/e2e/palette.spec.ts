@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { signUpDeveloper } from "./support/accounts";
 import { checkScreen } from "./support/screen";
@@ -6,23 +6,37 @@ import { checkScreen } from "./support/screen";
 // D-67 (P25; REQ-UX-01, REQ-UX-06): the command palette. From /dev, Ctrl K opens it (its code loads then), the keyboard
 // reaches Discover, Enter goes there; Escape gives focus back; the open palette passes strict axe at both widths.
 
+/** Ctrl K, again until the palette is there: a press before the page has hydrated has no listener yet. */
+async function pressOpen(page: Page) {
+  const dialog = page.getByRole("dialog", { name: "Search or jump to" });
+  await expect(async () => {
+    if (!(await dialog.isVisible())) await page.keyboard.press("Control+k");
+    await expect(dialog).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
+}
+
 test("the palette opens with Ctrl K on /dev and jumps to Discover by keyboard", async ({ page }) => {
   await signUpDeveloper(page, "Njeri Kamau");
   const search = page.getByRole("banner").getByRole("button", { name: "Search or jump to" });
   await expect(search).toBeVisible();
   await checkScreen(page, { strict: true });
 
-  await page.locator("body").press("Control+k");
+  // Whatever had focus (the page's heading after a navigation, or nothing: then the Search button) gets it back.
+  await page.evaluate(() => {
+    const at = document.activeElement;
+    (at && at !== document.body ? at : document.querySelector("[data-search-trigger]"))?.setAttribute("data-had-focus", "");
+  });
+  await pressOpen(page);
   const dialog = page.getByRole("dialog", { name: "Search or jump to" });
   await expect(dialog).toBeVisible();
   const combo = dialog.getByRole("combobox");
   await expect(combo).toBeFocused();
   await checkScreen(page, { strict: true });
 
-  // Escape closes it and focus is back where it was (opened from the keyboard on the page: the Search button).
+  // Escape closes it and focus is back where it was.
   await combo.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await expect(search).toBeFocused();
+  await expect(page.locator("[data-had-focus]")).toBeFocused();
 
   // Opened from the Search button with the keyboard: Escape, the Close button and the backdrop each give it focus back.
   await search.focus();
@@ -59,11 +73,15 @@ test("the palette opens with Ctrl K on /dev and jumps to Discover by keyboard", 
 
 test('Ctrl K opens the palette, "/" does not (no single-key shortcut), and the arrows walk its options', async ({ page }) => {
   await signUpDeveloper(page, "Kiprono Bett");
+  const dialog = page.getByRole("dialog", { name: "Search or jump to" });
+  await pressOpen(page); // the page has hydrated, so the "/" below is heard and ignored
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
   await page.locator("main").click({ position: { x: 4, y: 4 } });
   await page.keyboard.press("/");
-  const dialog = page.getByRole("dialog", { name: "Search or jump to" });
+  await page.waitForTimeout(500);
   await expect(dialog).toHaveCount(0);
-  await page.keyboard.press("Control+k");
+  await pressOpen(page);
   await expect(dialog).toBeVisible();
   const combo = dialog.getByRole("combobox");
   const options = dialog.getByRole("option");
@@ -78,7 +96,7 @@ test('Ctrl K opens the palette, "/" does not (no single-key shortcut), and the a
 
 test("the palette searches the API: problems people raised, with the typed letters marked", async ({ page }) => {
   await signUpDeveloper(page, "Wambui Njoroge");
-  await page.locator("body").press("Control+k");
+  await pressOpen(page);
   const dialog = page.getByRole("dialog", { name: "Search or jump to" });
   await dialog.getByRole("combobox").pressSequentially("sacco");
   const problems = dialog.getByRole("group", { name: "Problems" });
