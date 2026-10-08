@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
+import { Suspense } from "react";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
@@ -123,8 +124,14 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
 
         {missing === "notMember" ? <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" /> : null}
 
-        {/* The Inbox asks for two-step sign-in first (the API refuses it before then), so it waits for the setup. */}
-        {ready ? <HomeBody memberships={memberships} org={org} /> : null}
+        {/* The Inbox asks for two-step sign-in first (the API refuses it before then), so it waits for the setup. The
+            tiles and the lists stream in once their reads answer (P25): the greeting, the LCP element, flushes first,
+            and nothing follows the boundary, so what arrives moves nothing already painted. */}
+        {ready ? (
+          <Suspense fallback={null}>
+            <HomeBody memberships={memberships} org={org} />
+          </Suspense>
+        ) : null}
       </div>
     </SignedInShell>
   );
