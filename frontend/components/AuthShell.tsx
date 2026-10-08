@@ -78,7 +78,7 @@ export async function AuthShell({ children, topBarAction, photo = "signIn" }: Au
           </div>
           <p className="auth-credit" data-photo-credit="">
             <span>{picture.credit}</span>
-            <Link href="/credits" className="underline decoration-1 underline-offset-2 hover:decoration-2">
+            <Link href="/credits" className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-2 hover:decoration-2">
               {tp("auth.credits")}
             </Link>
           </p>

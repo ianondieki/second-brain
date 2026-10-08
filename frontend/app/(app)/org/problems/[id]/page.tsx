@@ -129,7 +129,7 @@ export default async function BriefPage({ params, searchParams }: PageProps<"/or
           ).map(([key, value]) => (
             <div key={key} className="flex min-w-0 flex-col gap-0.5">
               <dt className="text-sm text-ink-soft">{t(`facts.${key}`)}</dt>
-              <dd className="font-semibold [overflow-wrap:anywhere] text-ink">{value}</dd>
+              <dd className="font-semibold [overflow-wrap:break-word] hyphens-auto text-ink">{value}</dd>
             </div>
           ))}
         </dl>

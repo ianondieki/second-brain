@@ -68,7 +68,7 @@ export function TeaserDetails({ card }: { card: TeaserCard }) {
       {sections.map(({ key, text }) =>
         text ? (
           <Section key={key} title={t(key)} headingId={`teaser-${key}`} className="reading">
-            <p className="max-w-[68ch] text-[1.0625rem] leading-[1.7] whitespace-pre-line [overflow-wrap:anywhere] text-ink lg:text-lg">{text}</p>
+            <p className="max-w-[60ch] text-[1.0625rem] leading-[1.7] whitespace-pre-line [overflow-wrap:anywhere] text-ink lg:text-lg">{text}</p>
           </Section>
         ) : null,
       )}
