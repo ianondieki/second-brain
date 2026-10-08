@@ -30,7 +30,8 @@
     "reviewP23b": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-2 (REQ-UX-01, REQ-UX-03; D-52, D-65), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tour.back, tour.pause, tour.step, tour.stepLabel (vidhibiti vya ziara inayojisogeza); landing.trust.* (mstari chini ya sehemu ya juu: ukweli wanne uliopo tayari kwenye landing.*, bila takwimu wala majina)",
     "reviewP22c": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: teams.*, teamUp.*, profileSettings.*, settingsNav.profile, ideaContributors.*, ideas.contributorsLine, ideas.sheet.contributors; 'Shirikiana' for team up, 'mwaliko' for invitation, 'mchangiaji' for contributor, 'wenzako' for peers; trackerMessages.refusal.attachFailed (faili za kisanduku cha ujumbe hazikupakia)",
     "reviewP23c": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: countdown.* (muda uliobaki hadi tarehe ya mwisho: siku (haibadiliki kwa wingi, hivyo bila ICU plural), saa na dak (dakika) kuanzia kipimo kikubwa (countdown.days, .hours, .minutes), countdown.in (\"baada ya {time}\"), countdown.dueIn (\"Inatakiwa {date} · baada ya {time}\"), countdown.closesIn (\"Mapendekezo yatafungwa baada ya {time}\") na countdown.at (saa kamili ya Nairobi katika kichwa cha kipengele cha muda)); trackerActions.partFailed na .partReload (sehemu ya ukurasa ambayo msimbo wake haukupakia); je, \"dak\" inafaa kama kifupi cha dakika?",
-    "reviewP24": "[[COPY-REVIEW]] [[SW-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: landing.eyebrow, landing.title (kifungu cha italiki, lebo yake ya accent), landing.sample.*, landing.stats.*, landing.counties.*, landing.how.* (vibandiko vitatu), landing.reasons.* (values.* ni maandishi ya Kiingereza ya mpangaji kama bidhaa inavyoyaonyesha; je, yabaki kwa Kiingereza?), landing.activity.*, landing.nav.explore, landing.footer.*, explore.*, credits.*, home.greeting (asubuhi/mchana/jioni kwa saa ya Nairobi), og.*; \"niche\" imeachwa kama ilivyo katika sehemu nyingine za programu; explore.nationwide/nationwideNote/seeded, problemPage.*, og.problemAlt"
+    "reviewP24": "[[COPY-REVIEW]] [[SW-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: landing.eyebrow, landing.title (kifungu cha italiki, lebo yake ya accent), landing.sample.*, landing.stats.*, landing.counties.*, landing.how.* (vibandiko vitatu), landing.reasons.* (values.* ni maandishi ya Kiingereza ya mpangaji kama bidhaa inavyoyaonyesha; je, yabaki kwa Kiingereza?), landing.activity.*, landing.nav.explore, landing.footer.*, explore.*, credits.*, home.greeting (asubuhi/mchana/jioni kwa saa ya Nairobi), og.*; \"niche\" imeachwa kama ilivyo katika sehemu nyingine za programu; explore.nationwide/nationwideNote/seeded, problemPage.*, og.problemAlt",
+    "reviewP25": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: palette.* (kitufe cha Tafuta, makundi, vitendo, vitufe), activity.* (kalenda ya shughuli; activity.mon/wed/fri ni vifupisho vya siku, je, vinafaa?), \"Brief\" imetafsiriwa kama \"maelezo ya tatizo\" kama katika briefs.*"
   },
   "app": {
     "name": "Wazo",
@@ -4098,5 +4099,61 @@
     "haveAccount": "Una akaunti tayari? <login>Ingia</login>",
     "lead": "Wasanidi programu hujibu matatizo kama haya kwa pendekezo, linalowekwa muhuri wa wakati wanapolichapisha.",
     "unavailable": "Tatizo hili haliwezi kupakiwa kwa sasa."
+  },
+  "palette": {
+    "trigger": "Tafuta au ruka hadi",
+    "dialog": "Tafuta au ruka hadi",
+    "input": "Tafuta kurasa, kazi yako, matatizo na makampuni",
+    "close": "Funga",
+    "empty": "Hakuna kinacholingana na “{q}”.",
+    "searching": "Inatafuta…",
+    "results": "Matokeo: {count}",
+    "goTo": "Nenda kwa",
+    "recent": "Za hivi karibuni",
+    "actions": "Vitendo",
+    "kind": {
+      "ideas": "Mawazo yako",
+      "engagements": "Ushirikiano",
+      "inbox": "Kikasha",
+      "problems": "Matatizo",
+      "briefs": "Maelezo yako ya matatizo",
+      "companies": "Makampuni"
+    },
+    "settings": "Mipangilio",
+    "notifications": "Arifa",
+    "newProposal": "Pendekezo jipya",
+    "postBrief": "Chapisha maelezo ya tatizo",
+    "themeDark": "Badili hadi mwonekano wa giza",
+    "themeLight": "Badili hadi mwonekano wa mwanga",
+    "keyMove": "kusogea",
+    "keyOpen": "kufungua",
+    "keyNewTab": "kwa kichupo kipya",
+    "keyClose": "kufunga"
+  },
+  "activity": {
+    "title": "Wiki zako {weeks} zilizopita",
+    "total": "Shughuli {total} katika wiki {weeks} zilizopita",
+    "empty": "Bado hakuna kitu: unachofanya kwenye Wazo kitaonekana hapa, siku kwa siku.",
+    "less": "Kidogo",
+    "more": "Zaidi",
+    "legend": "Kutoka shughuli chache kwa siku hadi nyingi",
+    "mon": "Jtt",
+    "wed": "Jtn",
+    "fri": "Iju",
+    "tip": "Shughuli {count} tarehe {date}",
+    "tableCaption": "Shughuli zako kwa siku katika wiki {weeks} zilizopita, bila siku zisizo na shughuli",
+    "tableDate": "Siku",
+    "tableCount": "Shughuli",
+    "kinds": "Zilikuwa nini",
+    "kind": {
+      "version_registered": "Matoleo yaliyosajiliwa: {count}",
+      "proposal_published": "Mapendekezo yaliyochapishwa: {count}",
+      "engagement_step": "Hatua za kifuatiliaji: {count}",
+      "message_sent": "Jumbe: {count}",
+      "quiz_answered": "Majibu ya maswali ya leo: {count}",
+      "team_message": "Jumbe za timu: {count}",
+      "proposal_opened": "Mapendekezo yaliyofunguliwa: {count}",
+      "brief_posted": "Maelezo ya matatizo yaliyochapishwa: {count}"
+    }
   }
 }
