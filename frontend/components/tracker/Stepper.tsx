@@ -1,5 +1,5 @@
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/components/ui/cn";
 
@@ -9,7 +9,8 @@ import type { ChipKind, Step } from "./model";
 /**
  * The 5-group stepper (docs/spec/06 6.9 Rendering; docs/spec/07 item 6): an ordered list whose current group carries
  * aria-current="step". Vertical under 1024 px, a horizontal spine from 1024 px. Each group shows its mark, name and
- * status word; the current group also shows the stage's own label and what is due (`detail`).
+ * status word; the current group also shows the stage's own label and what is due (`detail`). The done part of the line
+ * draws once and the current mark breathes three times (P25), both still under reduced motion.
  */
 export function Stepper({ steps, detail, actor }: { steps: Step[]; detail?: ReactNode; /** Who acts now (an Avatar), shown with the current step. */ actor?: ReactNode }) {
   const t = useTranslations("tracker");
@@ -30,8 +31,11 @@ export function Stepper({ steps, detail, actor }: { steps: Step[]; detail?: Reac
             {last ? null : (
               <span
                 aria-hidden="true"
+                // The done part of the line draws once, step after step (globals.css .step-line; still under reduced motion).
+                data-step-line={step.chip === "completed" ? "done" : undefined}
+                style={{ "--i": i } as CSSProperties}
                 className={cn(
-                  "absolute top-8 bottom-1.5 left-[11px] w-0.5 rounded-full",
+                  "step-line absolute top-8 bottom-1.5 left-[11px] w-0.5 rounded-full",
                   "lg:top-[11px] lg:right-1.5 lg:bottom-auto lg:left-9 lg:h-0.5 lg:w-auto",
                   step.chip === "completed" ? "bg-accent" : "bg-line",
                 )}
@@ -40,7 +44,7 @@ export function Stepper({ steps, detail, actor }: { steps: Step[]; detail?: Reac
             {/* Done and current in bloom; the current step wears a petal halo, so it reads as "here" at a glance. */}
             <ChipMark
               kind={step.chip}
-              className={cn("relative size-6 rounded-full bg-paper", STEP_TONE[step.chip], current && "ring-[5px] ring-accent-wash")}
+              className={cn("relative size-6 rounded-full bg-paper", STEP_TONE[step.chip], current && "step-breathe ring-[5px] ring-accent-wash")}
             />
             <div className="min-w-0 flex-1">
               {/* Group names wrap only at spaces, never inside a word ("Implementation" stays whole at every width). */}

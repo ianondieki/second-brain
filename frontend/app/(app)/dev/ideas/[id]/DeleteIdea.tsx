@@ -9,8 +9,8 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog, openConfirm } from "@/components/ui/ConfirmDialog";
 
-import { removeIdea } from "../calls";
-import { BASE_PATH } from "../ideas";
+import type { removeIdea } from "../calls";
+import { BASE_PATH } from "../paths";
 
 export interface DeleteIdeaProps {
   id: string;
@@ -24,7 +24,11 @@ export interface DeleteIdeaProps {
  * a published idea is hidden and its registered versions, certificates and /verify records are kept; a draft that was
  * never published is removed. A ConfirmDialog: it traps focus, closes on Escape and returns focus to the button.
  */
-export function DeleteIdea({ id, registered, removeImpl = removeIdea }: DeleteIdeaProps) {
+// The delete call (and the editor's save helpers it shares a module with) loads on confirmation, not with the page
+// (P25: the idea page under the 150 KB budget).
+const removeLazily: typeof removeIdea = (id, client) => import("../calls").then((calls) => calls.removeIdea(id, client));
+
+export function DeleteIdea({ id, registered, removeImpl = removeLazily }: DeleteIdeaProps) {
   const t = useStrings("ideaDelete");
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);

@@ -103,12 +103,12 @@ export default async function EventsPage({ searchParams }: PageProps<"/org/event
           {t("listLabel")}
         </h2>
         <ItemGrid data-org-events="">
-          {list.value.map((event, index) => (
+          {list.value.map((event) => (
             <li key={event.id}>
               <EventItem
                 event={event}
                 href={orgEventHref(memberships, org.org_id, event.id)}
-                band={<NicheBand county={event.online ? null : event.county_code} sizes={CARD_BAND} eager={index === 0} />}
+                band={<NicheBand county={event.online ? null : event.county_code} sizes={CARD_BAND} />}
               />
             </li>
           ))}

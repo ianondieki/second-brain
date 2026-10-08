@@ -11,6 +11,7 @@ import { cn } from "@/components/ui/cn";
 import { LinkPending } from "@/components/ui/LinkPending";
 import { Section } from "@/components/ui/Section";
 
+import { CardBand } from "./CardList";
 import { cardBadges, ChipList, MoreSummary, WhyChip } from "./Chips";
 import { DISCOVER_PATH, NICHES_PATH, PROFILING_HREF, startProposalHref } from "./discover";
 import {
@@ -115,6 +116,7 @@ export function RecommendationRow({ item }: { item: Recommendation }) {
       data-decision={decision}
       className="relative flex h-full min-w-0 flex-col rounded-panel border border-line bg-field p-4 transition-[border-color] duration-(--motion-fast) hover:border-accent-line sm:p-5"
     >
+      <CardBand niche={item.problem.niche} />
       <h3 id={titleId} className="text-base leading-snug font-semibold text-pretty [overflow-wrap:anywhere] text-ink">
         <Link href={problemHref(item.problem.id)} className={cn(titleLinkClass, "-my-[11px] inline-block py-[11px]")}>
           {item.problem.title}

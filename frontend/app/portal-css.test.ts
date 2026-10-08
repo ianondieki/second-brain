@@ -40,15 +40,15 @@ describe("portal.css", () => {
     expect(media("(prefers-reduced-motion: reduce)")).toMatch(/\[data-pop\] > svg \{\s*animation: none/);
   });
 
-  it("keeps the shapes a fill drew in forced colours: the greeting band, the decision panel, the notice's disc", () => {
+  it("keeps the shapes a fill drew in forced colours: the decision panel, the notice's disc, the focused card", () => {
     const forced = media("(forced-colors: active)");
-    for (const selector of [".org-greet", ".decision-panel", ".notice-mark", ".item-card:has(.item-card-link:focus-visible)"]) {
+    for (const selector of [".decision-panel", ".notice-mark", ".item-card:has(.item-card-link:focus-visible)"]) {
       expect(forced, selector).toContain(selector);
     }
   });
 
-  it("drops the photographs in forced colours, so text never sits on one without its gradient", () => {
-    expect(media("(forced-colors: active)")).toMatch(/\.org-greet-photo,\s*\.auth-photo \{\s*display: none;/);
+  it("drops the sign-in photograph in forced colours, so text never sits on one without its gradient", () => {
+    expect(media("(forced-colors: active)")).toMatch(/\.auth-photo \{\s*display: none;/);
   });
 
   it("keeps a focused control clear of the sticky day names and table headers (WCAG 2.4.11)", () => {
@@ -56,13 +56,13 @@ describe("portal.css", () => {
     expect(media("(width >= 64rem)")).toMatch(/html:has\(\[data-sticky-head\]\):has\(\[data-top-bar\]\[data-sticky\]\) \{\s*scroll-padding-block-start: 8rem;/);
   });
 
-  it("skips off-screen notifications and keeps each day's name in view", () => {
-    expect(portal).toMatch(/\.notice-row \{\s*content-visibility: auto;/);
+  it("keeps each day's name in view", () => {
     expect(portal).toMatch(/\.notice-day \{\s*position: sticky;/);
   });
 
-  it("aligns a row of cards part by part (subgrid) and focuses the card around its one link", () => {
-    expect(portal).toMatch(/\.item-grid > li \{[^}]*grid-template-rows: subgrid;/);
+  it("repeats nothing globals.css has (the card grid, its subgrid, content-visibility) and focuses a card around its link", () => {
+    for (const selector of [".card-grid {", ".card-sub {", ".cv-auto {", ".item-grid", ".org-greet"]) expect(portal, selector).not.toContain(selector);
+    expect(portal).toMatch(/li\.card-sub > \.item-card \{\s*row-gap: 0;/);
     expect(portal).toMatch(/\.item-card:has\(\.item-card-link:focus-visible\) \{\s*outline: 2px solid var\(--accent\);/);
   });
 

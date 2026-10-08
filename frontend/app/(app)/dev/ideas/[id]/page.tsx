@@ -14,6 +14,7 @@ import { Callout, type CalloutTone } from "@/components/ui/Callout";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LockIcon } from "@/components/ui/icons";
+import { SharedTitle } from "@/components/motion/SharedTitle";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { Section } from "@/components/ui/Section";
@@ -108,7 +109,15 @@ export default async function IdeaPage({ params, searchParams }: PageProps<"/dev
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="ideas" />} wide>
       <div className="max-w-4xl">
-        <PageHeader back={{ href: BASE_PATH, label: t("back") }} title={version?.teaser.title?.trim() || t("untitled")}>
+        <PageHeader
+          back={{ href: BASE_PATH, label: t("back") }}
+          // The card's title on My ideas morphs into this one where View Transitions run (P25).
+          title={
+            <SharedTitle kind="idea" id={idea.id}>
+              <span>{version?.teaser.title?.trim() || t("untitled")}</span>
+            </SharedTitle>
+          }
+        >
           <p className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1">
             <IdeaStatusBadge status={status} />
             {idea.current ? (

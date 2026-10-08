@@ -10,7 +10,10 @@ import { NicheBand } from "./NicheBand";
 // lattice where there is none, and when the request carries Save-Data: on.
 
 const request = vi.hoisted(() => ({ headers: new Headers() }));
-vi.mock("next/headers", () => ({ headers: async () => request.headers }));
+// A request's headers as React's `use` reads a settled promise (NicheBand reads them synchronously).
+vi.mock("next/headers", () => ({
+  headers: () => Object.assign(Promise.resolve(request.headers), { status: "fulfilled", value: request.headers }),
+}));
 
 beforeEach(() => {
   request.headers = new Headers();
@@ -35,17 +38,39 @@ describe("nichePhoto", () => {
     expect(nichePhoto({ niche: "retail" })?.slug).toBe("rongai-market");
   });
 
-  it("gives the public sector, and a company with no niche, its county's photograph", () => {
+  it("gives every top-level niche the photograph the index marks with it (P25-A), a child niche its parent's", () => {
+    expect(nichePhoto({ niche: "networks-telecommunications" })?.slug).toBe("longonot-earth-station");
+    expect(nichePhoto({ niche: "microfinance-saccos" })?.slug).toBe("nairobi-skyline");
+    expect(nichePhoto({ niche: "county-government" })?.slug).toBe("nairobi-city-hall");
+    expect(nichePhoto({ niche: "health" })?.slug).toBe("turkana-naipekarr-dispensary");
+  });
+
+  it("puts the county's photograph first where the county has one (a Kisumu county-government problem shows Kisumu)", () => {
     expect(nichePhoto({ niche: "county-government", county: "KE-17" })?.slug).toBe("kisumu-lake-victoria");
-    expect(nichePhoto({ niche: "public-sector", county: "KE-30" })?.county_code).toBe("KE-30");
+    expect(nichePhoto({ niche: "agriculture", county: "KE-31" })?.slug).toBe("nakuru-lake");
+    expect(nichePhoto({ niche: "agriculture", county: "KE-99" })?.slug).toBe("kenya-tea");
+  });
+
+  it("puts only a county-role photograph ahead of the niche: another niche's photograph of that county never stands in", () => {
+    // Turkana's only photograph is the health niche's dispensary; Kajiado's the retail niche's market.
+    expect(nichePhoto({ niche: "agriculture", county: "KE-43" })?.slug).toBe("kenya-tea");
+    expect(nichePhoto({ niche: "energy", county: "KE-10" })?.slug).toBe("ngong-hills-wind");
+    expect(nichePhoto({ niche: "health", county: "KE-43" })?.slug).toBe("turkana-naipekarr-dispensary");
+    expect(nichePhoto({ niche: "a-niche-added-later", county: "KE-43" })).toBeUndefined();
+    // With no niche, any photograph of the county is the place.
+    expect(nichePhoto({ county: "KE-43" })?.slug).toBe("turkana-naipekarr-dispensary");
+  });
+
+  it("gives a company with no niche its HQ county's photograph, the county role first", () => {
     expect(nichePhoto({ county: "KE-31" })?.slug).toBe("nakuru-lake");
+    expect(countyPhoto("KE-30")?.slug).toBe("nairobi-jacaranda");
+    expect(countyPhoto("KE-43")?.slug).toBe("turkana-naipekarr-dispensary");
     expect(countyPhoto("KE-99")).toBeUndefined();
   });
 
   it("gives nothing where there is no fitting photograph (the lattice band)", () => {
-    expect(nichePhoto({ niche: "health" })).toBeUndefined();
-    expect(nichePhoto({ niche: "networks-telecommunications", county: "KE-30" })).toBeUndefined();
-    expect(nichePhoto({ niche: "public-sector" })).toBeUndefined();
+    expect(nichePhoto({ niche: "a-niche-added-later" })).toBeUndefined();
+    expect(nichePhoto({ county: "KE-99" })).toBeUndefined();
     expect(nichePhoto({})).toBeUndefined();
   });
 });
@@ -61,11 +86,13 @@ describe("NicheBand", () => {
     expect(img.getAttribute("width")).toBeTruthy();
     expect(img.getAttribute("height")).toBeTruthy();
     expect(el.querySelector("source")?.getAttribute("type")).toBe("image/avif");
-    expect(img.getAttribute("src")).toMatch(/\.webp$/);
+    // A band is a short strip: the 480 px card-band files (P25-A).
+    expect(img.getAttribute("src")).toMatch(/kenya-tea-480\.webp$/);
+    expect(img.getAttribute("srcset")).toBe("/photos/kenya-tea-480.webp 480w");
   });
 
   it("draws the lattice band where there is no photograph", async () => {
-    const el = await band({ niche: "energy" });
+    const el = await band({ niche: "a-niche-added-later" });
     expect(el.dataset.nicheBand).toBe("lattice");
     expect(el.className).toContain("niche-band-lattice");
     expect(el.querySelector("img")).toBeNull();

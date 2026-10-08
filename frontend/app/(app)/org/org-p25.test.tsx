@@ -142,7 +142,8 @@ describe("ItemCard", () => {
     expect(card.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2);
     // Band, head, foot: three parts, so a row of cards aligns them (subgrid).
     expect(card.children).toHaveLength(3);
-    expect(card.parentElement!.parentElement!.className).toContain("item-grid");
+    expect(card.parentElement!.className).toContain("card-sub");
+    expect(card.parentElement!.parentElement!.className).toContain("card-grid");
   });
 });
 

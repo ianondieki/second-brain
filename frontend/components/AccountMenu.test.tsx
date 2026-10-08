@@ -43,7 +43,9 @@ describe("AccountMenu", () => {
     expect(screen.getByRole("link", { name: "Sign-in security" }).getAttribute("href")).toBe("/settings/security");
     expect(screen.getByRole("link", { name: "Notification settings" }).getAttribute("href")).toBe("/settings/notifications");
     expect(screen.getByRole("link", { name: "Help" }).getAttribute("href")).toBe("/help");
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    // The appearance and Sign out arrive with the first opening (their own chunk, P25).
+    expect(await screen.findByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Appearance" })).toBeTruthy();
     expect([...panel!.querySelectorAll("a, button")].map((item) => item.textContent)).toEqual([
       "Plan & billing",
       "Sign-in security",
@@ -96,6 +98,7 @@ describe("AccountMenu", () => {
     fireEvent.click(toggle);
     const panel = document.getElementById(toggle.getAttribute("aria-controls")!);
     expect(screen.queryByRole("link", { name: "Plan & billing" })).toBeNull();
+    await screen.findByRole("button", { name: "Sign out" });
     expect([...panel!.querySelectorAll("a, button")].map((item) => item.textContent)).toEqual([
       "Sign-in security",
       "Notification settings",

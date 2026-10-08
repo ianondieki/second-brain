@@ -13,12 +13,16 @@ import { TeamThread } from "./TeamThread";
 const POST = vi.fn();
 const GET = vi.fn();
 vi.mock("@/lib/api/client", () => ({ api: { POST: (...args: unknown[]) => POST(...args), GET: (...args: unknown[]) => GET(...args) } }));
+// Marking read runs as the thread opens, with the CSRF helper alone (not the typed client: the route's 150 KB).
+const send = vi.fn();
+vi.mock("@/lib/api/csrf", () => ({ withCsrf: () => (...args: unknown[]) => send(...args) }));
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }) }));
 
 afterEach(() => {
   cleanup();
   POST.mockReset();
+  send.mockReset();
   refresh.mockReset();
 });
 
@@ -53,9 +57,13 @@ function open(unread = 0) {
 
 describe("the team thread's calls", () => {
   it("marks an unread thread read up to its newest message", async () => {
-    POST.mockResolvedValue({ response: new Response(null, { status: 200 }) });
+    send.mockResolvedValue(new Response(null, { status: 200 }));
     open(1);
-    await waitFor(() => expect(POST).toHaveBeenCalledWith("/api/me/teams/{thread_id}/read", { params: { path: { thread_id: ID } }, body: { up_to: "m2" } }));
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    const [url, init] = send.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`/api/me/teams/${ID}/read`);
+    expect(init).toMatchObject({ method: "POST", body: JSON.stringify({ up_to: "m2" }) });
+    expect(POST).not.toHaveBeenCalled();
   });
 
   it("Send posts to the team thread and draws the message as the caller's", async () => {

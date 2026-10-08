@@ -20,7 +20,9 @@ export type County = Schemas["CountyRef"];
 export type PublishResult = Schemas["PublishOut"];
 export type Removed = Schemas["RemovedOut"];
 
-export const BASE_PATH = "/dev/ideas";
+import { BASE_PATH } from "./paths";
+
+export { BASE_PATH };
 export const NEW_PATH = "/dev/ideas/new";
 
 /** The API's limits (bridge/proposals/schemas.py and sanitise.py). Inputs stop at them, so the API never refuses a

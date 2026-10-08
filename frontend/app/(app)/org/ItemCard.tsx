@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Fragment, type HTMLAttributes, type ReactNode } from "react";
+import { Children, cloneElement, Fragment, isValidElement, type HTMLAttributes, type ReactNode } from "react";
 
 import { cn } from "@/components/ui/cn";
 import { LinkPending } from "@/components/ui/LinkPending";
@@ -34,7 +34,7 @@ export interface ItemCardProps extends Omit<HTMLAttributes<HTMLElement>, "title"
 /**
  * One thing in a grid of cards on the organisation's screens (D-67, P25): a photograph band on top (decorative, the
  * niche or county is named in the meta line), the title as the card's one link, the meta line, then the chips at the
- * foot. Three parts, so in an `.item-grid` the rows of cards align their titles and their feet (subgrid). Controls
+ * foot. Three parts, so in an ItemGrid (.card-grid) the rows of cards align their titles and their feet (subgrid). Controls
  * (the star, a chip that links to the tracker) sit above the stretched link.
  */
 export function ItemCard({
@@ -53,7 +53,7 @@ export function ItemCard({
 }: ItemCardProps) {
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
-    <article className={cn("item-card", className)} {...rest}>
+    <article className={cn("item-card card-sub", className)} {...rest}>
       <div className="item-card-band">{band}</div>
       <div className="item-card-head">
         <div className="flex items-start justify-between gap-3">
@@ -86,11 +86,14 @@ export function ItemCard({
   );
 }
 
-/** The grid of ItemCards: as many 18 rem columns as fit, each row of cards aligned part by part (subgrid). */
+/**
+ * The grid of ItemCards (globals.css .card-grid): as many 18 rem columns as fit, each row of cards aligned part by part
+ * (each item a .card-sub on the subgrid). Items are the cards' <li>s.
+ */
 export function ItemGrid({ className, children, ...rest }: HTMLAttributes<HTMLUListElement> & { children: ReactNode }) {
   return (
-    <ul className={cn("item-grid", className)} {...rest}>
-      {children}
+    <ul className={cn("card-grid", className)} {...rest}>
+      {Children.map(children, (child) => (isValidElement<{ className?: string }>(child) && child.type === "li" ? cloneElement(child, { className: cn("card-sub", child.props.className) }) : child))}
     </ul>
   );
 }

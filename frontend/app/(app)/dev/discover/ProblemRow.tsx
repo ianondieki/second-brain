@@ -4,9 +4,10 @@ import { useLocale, useTranslations } from "next-intl";
 import { formatDate, problemHref, safeHttpsUrl } from "@/components/problem/problem";
 import { ProblemLabelText } from "@/components/problem/ProblemLabelText";
 import { standaloneLinkClass, titleLinkClass } from "@/components/ui/Button";
+import { SharedTitle } from "@/components/motion/SharedTitle";
 import { LinkPending } from "@/components/ui/LinkPending";
 
-import { CardFoot, discoverCardClass, discoverTitleClass } from "./CardList";
+import { CardBand, CardFoot, discoverCardClass, discoverTitleClass } from "./CardList";
 import { cardBadges, ChipList, MoreSummary, TrendBadge, WhyChip } from "./Chips";
 import {
   cardChips,
@@ -62,9 +63,12 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
       data-trending={trend.trending ? "" : undefined}
       className={discoverCardClass}
     >
+      <CardBand niche={problem.niche} county={problem.county_code} />
       <h3 id={titleId} className={discoverTitleClass}>
         <Link href={problemHref(problem.id)} className={titleLinkClass}>
-          {problem.title}
+          <SharedTitle kind="problem" id={problem.id}>
+            <span>{problem.title}</span>
+          </SharedTitle>
           <LinkPending className="absolute -top-px left-4 sm:left-5" />
         </Link>
       </h3>

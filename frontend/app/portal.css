@@ -4,19 +4,8 @@
  * under reduced motion (the block at the end of this file). Imported by globals.css.
  */
 @layer components {
-  /* A card in a grid of things (app/(app)/org/ItemCard.tsx): band, head, foot; the title's link covers the card. */
-  .item-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
-    gap: 1rem;
-  }
-  .item-grid > li {
-    display: grid;
-    min-width: 0;
-    grid-row: span 3;
-    grid-template-rows: subgrid;
-    row-gap: 0;
-  }
+  /* A card in a grid of things (app/(app)/org/ItemCard.tsx): band, head, foot; the title's link covers the card. In
+     globals.css's .card-grid with .card-sub items (subgrid), its parts sit flush (each part pads itself). */
   .item-card {
     position: relative;
     display: grid;
@@ -29,11 +18,6 @@
     transition:
       border-color var(--motion-fast) var(--ease-out),
       box-shadow var(--motion-fast) var(--ease-out);
-  }
-  .item-grid > li > .item-card {
-    grid-row: span 3;
-    grid-template-rows: subgrid;
-    row-gap: 0;
   }
   .item-card:hover {
     border-color: var(--accent-line);
@@ -92,11 +76,7 @@
   .item-card:has(.item-card-link:focus-visible) {
     outline-color: Highlight;
   }
-  .org-greet {
-    border: 1px solid CanvasText;
-  }
-  /* The photographs' gradients are dropped in forced colours: the text then sits on Canvas, not on a photograph. */
-  .org-greet-photo,
+  /* The photograph's gradient is dropped in forced colours: the text then sits on Canvas, not on a photograph. */
   .auth-photo {
     display: none;
   }
@@ -229,68 +209,6 @@ li > .compare-band > .niche-band {
   border-radius: 0;
 }
 
-/* The organisation Home's greeting (components/home/OrgGreeting.tsx), as the developer Home's GreetingBand: Nairobi at
-   this time of day behind the greeting, a night gradient darkest where the text sits (left from 640 px, the foot on
-   phones). */
-@layer components {
-  .org-greet {
-    position: relative;
-    isolation: isolate;
-    overflow: hidden;
-    border-radius: 1.5rem;
-    background: var(--night);
-    box-shadow: var(--shadow-card);
-  }
-  .org-greet-photo {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-  }
-  .org-greet-photo picture,
-  .org-greet-photo img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: 50% 40%;
-  }
-  .org-greet-photo::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgb(30 22 64 / 0.8) 0%, rgb(30 22 64 / 0.86) 48%, rgb(30 22 64 / 0.95) 100%);
-  }
-  .org-greet-body {
-    display: flex;
-    min-height: 15rem;
-    flex-direction: column;
-    justify-content: flex-end;
-    padding: 1.5rem 1.25rem;
-  }
-  /* On a photograph the eyebrow takes the band's main ink: the softer one fell under 4.5:1 over the afternoon sky. */
-  .org-greet .page-eyebrow {
-    color: var(--on-night);
-  }
-  .org-greet h1 {
-    color: var(--on-night);
-  }
-  .org-greet .org-greet-lead {
-    color: var(--night-soft);
-  }
-  @media (width >= 40rem) {
-    .org-greet-photo::after {
-      /* Measured (scratchpad photocontrast.mjs): every text at least 4.5:1 against the brightest pixel under it. */
-      background: linear-gradient(90deg, rgb(30 22 64 / 0.95) 0%, rgb(30 22 64 / 0.9) 50%, rgb(30 22 64 / 0.78) 72%, rgb(30 22 64 / 0.3) 100%);
-    }
-    .org-greet-body {
-      min-height: 16.5rem;
-      justify-content: center;
-      max-width: 40rem;
-      padding: 2.5rem;
-    }
-  }
-}
-
 /* Notifications (app/(app)/notifications/NotificationList.tsx): day separators that stay at the top while their rows
    scroll, an icon per kind in a petal disc with the unread diamond on its corner, rows drawn as they come near. */
 @layer components {
@@ -346,10 +264,6 @@ li > .compare-band > .niche-band {
     border-radius: 1px;
     background: var(--accent);
     box-shadow: 0 0 0 2px var(--field);
-  }
-  .notice-row {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 5.5rem;
   }
 }
 @media (forced-colors: active) {
@@ -457,4 +371,11 @@ html:has(.notice-day) {
   html:has([data-sticky-head]):has([data-top-bar][data-sticky]) {
     scroll-padding-block-start: 8rem;
   }
+}
+
+/* An ItemCard's three parts sit flush in globals.css's subgrid (.card-sub's row gap is for cards whose parts do not pad
+   themselves). */
+li.card-sub:has(> .item-card),
+li.card-sub > .item-card {
+  row-gap: 0;
 }

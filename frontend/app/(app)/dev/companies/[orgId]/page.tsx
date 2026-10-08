@@ -6,6 +6,8 @@ import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Avatar } from "@/components/ui/Avatar";
+import { NicheBand } from "@/components/ui/NicheBand";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
@@ -39,13 +41,28 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
     <SignedInShell homeHref={home} nav={<DevNav current="companies" />}>
       {org ? (
         <>
-          <PageHeader back={{ href: back, label: t("detailBack") }} title={org.name}>
+          <PageHeader
+            back={{ href: back, label: t("detailBack") }}
+            title={
+              <span className="flex items-center gap-4">
+                <Avatar name={org.name} kind="org" size="lg" />
+                <span className="min-w-0">{org.name}</span>
+              </span>
+            }
+          >
             <p className="mt-3">
               <VerificationBadge badge={org.badge} />
             </p>
           </PageHeader>
-          {/* The facts as one white card on the canvas: a record to read, set apart from the page's chrome. */}
-          <Card variant="flat" className="mt-8 sm:p-6">
+          {/* The facts as one white card on the canvas, opening with the HQ county's photograph and its name (P25;
+              decorative, the county is named on it and in the facts; never a logo). */}
+          <Card variant="flat" padding="none" className="mt-8 overflow-hidden">
+            {org.county ? (
+              <NicheBand county={org.county.code} className="h-24 rounded-none sm:h-28" sizes="(min-width: 640px) 36rem, 100vw" wide>
+                <span className="font-display text-lg font-semibold">{org.county.name}</span>
+              </NicheBand>
+            ) : null}
+            <div className="p-5 sm:p-6">
           <DescriptionList>
             <Description label={t("detailType")}>{kinds(org.kind)}</Description>
             <Description label={t("detailCounty")}>{org.county?.name ?? t("detailNone")}</Description>
@@ -64,6 +81,7 @@ export default async function OrganisationPage({ params, searchParams }: PagePro
               <Description label={t("detailResponse")}>{org.responsiveness.text}</Description>
             ) : null}
           </DescriptionList>
+            </div>
           </Card>
         </>
       ) : (

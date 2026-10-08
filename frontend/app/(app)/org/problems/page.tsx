@@ -116,13 +116,13 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
           {t("listLabel")}
         </h2>
         <ItemGrid data-briefs="">
-          {items.map((brief, index) => (
+          {items.map((brief) => (
             <li key={brief.id}>
               <BriefItem
                 brief={brief}
                 href={briefHref(memberships, org.org_id, brief.id)}
                 county={countyName(brief.county_code)}
-                band={<NicheBand niche={brief.niche?.slug} county={brief.county_code} sizes={CARD_BAND} eager={index === 0} />}
+                band={<NicheBand niche={brief.niche?.slug} county={brief.county_code} sizes={CARD_BAND} />}
               />
             </li>
           ))}

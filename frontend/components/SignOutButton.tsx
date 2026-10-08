@@ -8,6 +8,8 @@ import { useStrings } from "./ClientStrings";
 import { withCsrf } from "@/lib/api/csrf";
 import { forgetEmail } from "@/lib/auth/remembered-email";
 
+import { forgetRecent } from "./palette/remember";
+
 import { Button } from "./ui/Button";
 import { AlertIcon } from "./ui/status-icons";
 
@@ -31,6 +33,7 @@ export function SignOutButton() {
     );
     if (status === 204 || status === 401) {
       forgetEmail(); // the next person on this device should not see this address offered back
+      forgetRecent(); // nor the command palette's recent pages (P25)
       router.replace("/login");
       router.refresh();
       return;

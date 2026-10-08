@@ -56,7 +56,9 @@ async function NotificationRow({ item }: { item: Notification }) {
   );
   return (
     <RowBase
-      className="notice-row"
+      // Rows off screen are not drawn until they come near (globals.css .cv-auto), with a size close to theirs: about
+      // 8 rem on a phone (the time and the body under the title), 5.5 rem from 640 px.
+      className="cv-auto [--cv-size:8rem] sm:[--cv-size:5.5rem]"
       data-notification={item.id}
       data-unread={unread ? "true" : "false"}
       title={
@@ -97,7 +99,7 @@ async function NotificationRow({ item }: { item: Notification }) {
 /**
  * The notifications in Nairobi day groups (Today, Yesterday, then dates), newest first: each day a separator that
  * stays at the top while its rows scroll (the day's name in the mono face, a hairline after it), then its rows on a
- * card. Rows off screen are not drawn until they come near (`content-visibility`, portal.css .notice-row).
+ * card. Rows off screen are not drawn until they come near (`content-visibility`, globals.css .cv-auto).
  */
 export async function NotificationList({ items, now }: { items: readonly Notification[]; now: Date }) {
   const [t, locale] = await Promise.all([getTranslations("notifications"), getLocale()]);

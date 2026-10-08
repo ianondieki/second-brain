@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -24,8 +24,8 @@ function media(query: string): string {
 }
 
 describe("reduced motion", () => {
-  it("stops the skeletons' sweep, the palette's entrance and every view transition", () => {
-    expect(reduced).toMatch(/\.skeleton,\s*\.palette\[open\] \{\s*animation: none !important;/);
+  it("stops the palette's entrance and every view transition", () => {
+    expect(reduced).toMatch(/\.palette\[open\] \{\s*animation: none !important;/);
     expect(reduced).toMatch(/::view-transition-group\(\*\),\s*::view-transition-old\(\*\),\s*::view-transition-new\(\*\) \{\s*animation: none !important;/);
     expect(reduced).toContain(".count,"); // CountUp's figures stand at their value
   });
@@ -65,10 +65,23 @@ describe("the HCI floor", () => {
 
   it("has container queries, subgrid rows for card grids, content-visibility and tabular figures", () => {
     expect(css).toMatch(/\.cq \{\s*container-type: inline-size;/);
-    expect(css).toMatch(/\.card-grid > \.card-sub \{[^}]*grid-template-rows: subgrid;/);
-    expect(css).toMatch(/\.cv-auto \{\s*content-visibility: auto;\s*contain-intrinsic-size: auto 9rem;/);
+    expect(css).toMatch(/\.card-grid > \.card-sub,\s*\.card-sub > \.card-sub \{[^}]*grid-template-rows: subgrid;/);
+    expect(css).toMatch(/\.cv-auto \{\s*content-visibility: auto;\s*contain-intrinsic-size: auto var\(--cv-size, 9rem\);/);
     expect(css).toMatch(/td,\s*th,\s*time,\s*\.figure \{\s*font-variant-numeric: tabular-nums lining-nums;/);
     expect(css).toContain("@container page-hero (width >= 40rem)");
+  });
+
+  it("never puts cv-auto on a subgrid card (layout containment would cut it off the row's shared tracks)", () => {
+    const files = (readdirSync(process.cwd(), { recursive: true }) as string[]).filter(
+      (file) => /\.tsx$/.test(file) && !/(^|\/)(node_modules|\.next)\//.test(file),
+    );
+    expect(files.length).toBeGreaterThan(50);
+    const both = files.filter((file) =>
+      (readFileSync(join(process.cwd(), file), "utf8").match(/className=\{?["`][^"`]*["`]/g) ?? []).some(
+        (name) => /\bcard-sub\b/.test(name) && /\bcv-auto\b/.test(name),
+      ),
+    );
+    expect(both).toEqual([]);
   });
 
   it("sets the hero's eyebrow in the mono face, sentence case (no capitals transform)", () => {

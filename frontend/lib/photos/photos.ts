@@ -25,7 +25,9 @@ export interface PhotoEntry {
   /** The one-line attribution. */
   credit: string;
   /** The top-level niche it stands for (P25-A adds one per niche), if any. */
-  niche?: string;
+  niche?: string | null;
+  /** What it is for (P25-A): "niche", "greeting-morning", "greeting-afternoon", "greeting-evening", "county". */
+  role?: string | null;
 }
 
 /** A photograph with the folder its files are in. */
@@ -74,32 +76,13 @@ export const NATIONWIDE: Photo = photo("kenya-tea");
 /** Every vendored photograph, in index order. */
 export const ALL_PHOTOS: readonly Photo[] = [...ALL.values()];
 
-/** The time of day in Nairobi, as Home's greeting says it. */
-export type DayPart = "morning" | "afternoon" | "evening";
-
-/**
- * Home's greeting by the time of day in Nairobi (D-67, P25): the photograph public/photos/index.json gives the role
- * `greeting-<part>` (the morning, the skyline in the afternoon, golden hour in the evening).
- */
-const byRole = (role: string, fallback: string): Photo =>
-  [...ALL.values()].find((p) => (p as Photo & { role?: string }).role === role) ?? photo(fallback);
-export const DAY_PHOTOS: Readonly<Record<DayPart, Photo>> = {
-  morning: byRole("greeting-morning", "nairobi-skyline"),
-  afternoon: byRole("greeting-afternoon", "nairobi-skyline"),
-  evening: byRole("greeting-evening", "nairobi-golden-hour"),
-};
-
 /** The signed-out screens' photograph beside the form from 1024 px (AuthShell): signing in, and creating an account. */
 export const AUTH_PHOTOS = { signIn: photo("nairobi-jacaranda"), signUp: photo("nairobi-golden-hour") } as const;
 
-/** Every photograph the site shows, credited on /credits. */
+/** Every photograph the site shows, credited on /credits: every vendored photograph (the landing's strip, Explore,
+ *  the niche bands and Home's greeting draw from the same index), the strip's and Explore's first. */
 export const CREDITED: readonly Photo[] = [
-  ...new Map(
-    [...STRIP.map((c) => c.photo), ...EXPLORE.values(), NATIONWIDE, ...Object.values(DAY_PHOTOS), ...Object.values(AUTH_PHOTOS)].map((p) => [
-      p.slug,
-      p,
-    ]),
-  ).values(),
+  ...new Map([...STRIP.map((c) => c.photo), ...EXPLORE.values(), NATIONWIDE, ...ALL_PHOTOS].map((p) => [p.slug, p])).values(),
 ];
 
 /** A county's anchor on /explore: its reference code ("KE-30"), the same on the landing's strip. */

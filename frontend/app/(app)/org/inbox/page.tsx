@@ -178,14 +178,14 @@ async function InboxList({
     <>
       {held}
       <ItemGrid aria-label={t("listLabel", { org: orgName })}>
-        {page.items.map((item, index) => (
+        {page.items.map((item) => (
           <li key={item.tag_id}>
             <InboxRow
               item={item}
               href={proposalHref(memberships, org.org_id, item.proposal.id)}
               trackerHref={item.engagement ? engagementsHref(memberships, org.org_id, item.engagement.id) : undefined}
               org={org}
-              band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} eager={index === 0} />}
+              band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} />}
             />
           </li>
         ))}

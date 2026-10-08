@@ -1,13 +1,14 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { use, useEffect, useId, useRef, useState } from "react";
+import { lazy, Suspense, use, useEffect, useId, useRef, useState } from "react";
+
+import { forgetEmail } from "@/lib/auth/remembered-email";
 
 import { MenuOptions } from "./AccountMenuScope";
 import { menuBillingHref } from "./billing-link";
+import { forgetRecent } from "./palette/remember";
 import { useStrings } from "./ClientStrings";
-import { SignOutButton } from "./SignOutButton";
-import { ThemeToggle } from "./ThemeToggle";
 import { cn } from "./ui/cn";
 import { Icon, type IconProps } from "./ui/status-icons";
 
@@ -33,8 +34,51 @@ const NOTIFICATIONS_HREF = "/settings/notifications";
 
 const HELP_HREF = "/help";
 
-const itemClass =
-  "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-accent-wash";
+// The lower part loads on use. When its file cannot be fetched (offline, or a newer deploy replaced it), the menu keeps a
+// plain Sign out of its own instead of failing the page.
+export const loadExtras = () => import("./AccountMenuExtras").then((m) => m.AccountMenuExtras, () => MenuFallback);
+const MenuExtras = lazy(() => loadExtras().then((component) => ({ default: component })));
+
+/** The menu's own Sign out when the lower part could not load. Not lib/api/csrf (that would put about 430 B on the
+ *  idea editor, 150 B under its budget), but the same rules: the __Host- cookie first, and once more with a fresh
+ *  token when the API answers 403 (a token from before the session changed). */
+export function MenuFallback() {
+  const t = useStrings("shell");
+  const [failed, setFailed] = useState(false);
+  async function signOut() {
+    const cookie = (name: string) => document.cookie.match(`(?:^|; )${name}=([^;]*)`)?.[1];
+    let token = cookie("__Host-bridge_csrf") ?? cookie("bridge_csrf");
+    let response: Response | null = null;
+    for (let tries = 0; tries < 2; tries += 1) {
+      if (!token || tries) {
+        const fresh = await fetch("/api/auth/csrf", { credentials: "same-origin" }).then((r) => r.json()).catch(() => null);
+        token = fresh?.csrf_token ?? token;
+      }
+      response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: token ? { "X-CSRF-Token": decodeURIComponent(token) } : {},
+      }).catch(() => null);
+      if (response?.status !== 403) break;
+    }
+    if (response?.status === 204 || response?.status === 401) {
+      forgetEmail();
+      forgetRecent();
+      // A full load, as the top bar ships no router code (this is the rare path where the menu's own part is missing).
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign("/login");
+    } else setFailed(true);
+  }
+  return (
+    <div className="mt-1 border-t border-line pt-1" data-menu-fallback="">
+      <button type="button" className={itemClass} onClick={() => void signOut()}>
+        {failed ? t("signOutRetry") : t("signOut")}
+      </button>
+    </div>
+  );
+}
+
+const itemClass = "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-accent-wash";
 
 // The popover floats over the page: the one elevation (shadow-overlay, docs/platform/design/p16-design-system.md).
 
@@ -47,6 +91,7 @@ export function AccountMenu() {
   const t = useStrings("shell");
   const { billing: showBilling } = use(MenuOptions);
   const [open, setOpen] = useState(false);
+  const [primed, setPrimed] = useState(false);
   const panelId = useId();
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -83,7 +128,12 @@ export function AccountMenu() {
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={() => setOpen((was) => !was)}
+        onClick={() => {
+          setPrimed(true);
+          setOpen((was) => !was);
+        }}
+        onPointerEnter={() => setPrimed(true)}
+        onFocus={() => setPrimed(true)}
         className="-mr-2 inline-flex min-h-11 items-center gap-2 rounded-control px-2 font-medium text-ink hover:bg-accent-wash"
       >
         <span className="flex size-8 items-center justify-center rounded-full bg-accent-wash text-accent">
@@ -122,20 +172,13 @@ export function AccountMenu() {
             </a>
           </li>
         </ul>
-        <div className="mt-1 border-t border-line px-1 pt-2 pb-1">
-          <p className="px-2 text-xs font-medium text-ink-soft">{t("theme.label")}</p>
-          <ThemeToggle className="mt-1" />
-        </div>
-        {/* Sign out reads as a menu item like the links above it; its failure notice stays under it. */}
-        <div
-          className={
-            "mt-1 flex border-t border-line pt-1 [&>div]:w-full [&>div]:items-stretch [&>div>p]:px-3 [&>div>p]:text-left " +
-            "[&_button]:w-full [&_button]:justify-start [&_button]:rounded-control [&_button]:px-3 [&_button]:text-ink " +
-            "[&_button]:font-medium [&_button]:no-underline [&_button:hover]:bg-accent-wash [&_button:hover]:text-ink"
-          }
-        >
-          <SignOutButton />
-        </div>
+        {/* The appearance and Sign out load with the menu's first opening (or as the pointer or focus reaches its
+            button): about 2 KB of script no page needs before then (docs/spec/07 item 5; P25). */}
+        {primed ? (
+          <Suspense fallback={<div className="h-32" aria-hidden="true" />}>
+            <MenuExtras />
+          </Suspense>
+        ) : null}
       </div>
     </div>
   );

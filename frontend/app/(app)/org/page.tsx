@@ -23,13 +23,13 @@ import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
 import { ActivityCalendar } from "@/components/activity/ActivityCalendar";
 import { WEEKS } from "@/components/activity/calendar";
 import { getActivity } from "@/components/activity/fetch";
-import { OrgGreeting } from "@/components/home/OrgGreeting";
 import { CountFigure } from "@/components/motion/CountFigure";
 import { CountUp } from "@/components/motion/CountUp";
 import { appNow } from "@/lib/api/server";
 import { needsMfaSetup } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
+import { GreetingBand } from "../dev/GreetingBand";
 import { dayPart } from "../dev/home";
 
 import { getBriefs } from "./brief-data";
@@ -75,16 +75,16 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
         <FirstLoginTour side="org" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("org")} />
       </ClientStrings>
       <div className="max-w-5xl">
-        {/* The greeting on Nairobi at this time of day, as the developer's Home: the eyebrow, the name, the lead and the
-            one primary action. */}
-        <OrgGreeting part={part}>
-          <p className="page-eyebrow" data-eyebrow="">
+        {/* The greeting on Nairobi at this time of day, the developer Home's GreetingBand: the eyebrow, the name, the
+            lead and the one primary action. */}
+        <GreetingBand part={part}>
+          <p className="page-eyebrow text-night-soft" data-eyebrow="">
             {tp("eyebrow.home")}
           </p>
-          <h1 className="mt-3 text-[2rem] leading-[1.08] [overflow-wrap:anywhere] text-balance sm:text-[2.75rem] sm:leading-[1.04]">
+          <h1 className="mt-3 text-[2rem] leading-[1.08] text-ink [overflow-wrap:anywhere] sm:text-[2.75rem] sm:leading-[1.04]">
             {t(`greeting.${part}`, { name: me.user.display_name })}
           </h1>
-          <p className="org-greet-lead lead mt-3 max-w-[44ch] text-[1.0625rem] sm:text-lg">
+          <p className="lead mt-3 max-w-[44ch] text-[1.0625rem] text-ink-soft sm:text-lg">
             {org ? t("orgLead", { org: org.org_name }) : t("orgLeadNoName")}
           </p>
           {setupNeeded ? (
@@ -100,7 +100,7 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
               </ButtonLink>
             </div>
           ) : null}
-        </OrgGreeting>
+        </GreetingBand>
       </div>
 
       <div className="mt-8 flex max-w-5xl flex-col gap-12 lg:mt-10">

@@ -64,7 +64,10 @@ export async function CertificateSheet({
               </p>
             ) : null}
           </div>
-          <Seal size={104} animate={animate} className="hidden sm:block" />
+          {/* The seal catches the light when the sheet is hovered (P25: a registered --sheen, globals.css). */}
+          <span className="seal-sheen hidden sm:block">
+            <Seal size={104} animate={animate} />
+          </span>
         </div>
         <dl className="mt-6 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-[9rem_minmax(0,1fr)]">
           <dt className="text-ink-soft">{t("certificate")}</dt>

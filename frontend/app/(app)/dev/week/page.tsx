@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
@@ -30,13 +30,13 @@ export default async function WeekPage() {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const [t, locale, events, trend] = await Promise.all([getTranslations("week"), getLocale(), weekEvents(), trendOfTheDay()]);
+  const [t, te, locale, events, trend] = await Promise.all([getTranslations("week"), getTranslations("eyebrow"), getLocale(), weekEvents(), trendOfTheDay()]);
   const days = byDay(events.items);
 
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <div className="flex max-w-3xl flex-col gap-12 lg:gap-14">
-        <PageHeader back={{ href: "/dev", label: t("page.back") }} title={t("page.title")} lead={t("page.lead")} />
+        <PageHero back={{ href: "/dev", label: t("page.back") }} eyebrow={te("week")} title={t("page.title")} lead={t("page.lead")} className="mb-0" />
 
         {/* No event: one sentence (the trend of the day, when there is one, still follows). */}
         {days.length === 0 ? (
