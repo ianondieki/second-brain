@@ -13,7 +13,7 @@
     "source_url": "https://commons.wikimedia.org/wiki/File:Nairobi%27s_Central_Business_District_Landmark_Skyscrapers..jpg",
     "changes": "resized",
     "credit": "Photo: Tall Black, CC BY-SA 4.0 (resized), via Wikimedia Commons",
-    "niche": null,
+    "niche": "financial-services",
     "role": "greeting-afternoon"
   },
   {
@@ -167,23 +167,6 @@
     "changes": "cropped and resized",
     "credit": "Photo: SeanTwice (CC0, public domain dedication; cropped and resized), via Wikimedia Commons",
     "niche": "agriculture",
-    "role": "niche"
-  },
-  {
-    "slug": "mombasa-treasury-square",
-    "county": "Mombasa",
-    "county_code": "KE-28",
-    "caption": "A cream-and-tile colonial bank building on a sunlit street corner at Treasury Square, Mombasa",
-    "width": 1600,
-    "height": 1047,
-    "title": "KCB Treasury Square, 2025 (01)",
-    "author": "Bahnfrend",
-    "licence": "CC BY-SA 4.0",
-    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
-    "source_url": "https://commons.wikimedia.org/wiki/File:KCB_Treasury_Square,_2025_(01).jpg",
-    "changes": "resized",
-    "credit": "Photo: Bahnfrend, CC BY-SA 4.0 (resized), via Wikimedia Commons",
-    "niche": "financial-services",
     "role": "niche"
   },
   {

@@ -230,3 +230,5 @@ Each row is one fact read from the Commons API response for the file named (`ext
 5. People who appear small in `mombasa-treasury-square`, `nairobi-city-hall` and `nairobi-strathmore-campus` have no model-release status on the Commons pages read; none is an identifiable subject.
 6. `nairobi-morning` is hazy and grey-toned rather than golden; EXIF time 05:09 is the only evidence of "early light", and the Commons page does not state sunrise. The EXIF `DateTimeOriginal` is the camera's clock and its time zone is not documented.
 7. The files are made from Commons' 1920 px thumbnails (as in P24), so the 1600 px files are not true 2x of a 1600 px slot.
+
+**Orchestrator ruling (2026-10-08).** `mombasa-treasury-square` is withdrawn and its files removed: the KCB Bank sign is the most legible element at card size, which reads as an endorsement (spec 04 principle 4). The financial-services niche uses `nairobi-skyline` (Nairobi's central business district); `index.json` gives it `niche: financial-services` beside its `greeting-afternoon` role. The rows above are kept as the research record.
