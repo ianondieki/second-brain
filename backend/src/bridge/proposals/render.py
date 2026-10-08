@@ -42,21 +42,24 @@ STYLE: Final = (
     # files under /fonts (frontend/public/fonts/LICENCES.md), each with the app's size-adjusted local fallback. The web
     # app frames this page in a sandbox, so its document has an opaque origin and a font fetch is a CORS request from
     # origin "null": the font files carry `Access-Control-Allow-Origin: *` (frontend/next.config.ts) and `font-src
-    # 'self'` below names the web origin the page is served from (through the /api rewrite). Relative URLs resolve
-    # against that origin; opened on the API's own origin the fonts 404 and the fallbacks take over. No images (the
-    # lattice echo is a bloom and saffron gradient band, saffron's only use here). Text at 17 px / 1.65 on a 31 em
+    # 'self'` below names the web origin the page is served from (through the /api rewrite). The URLs carry
+    # `?frame=1`, a cache key of their own: the app's pages preload the bare URLs, and a browser that visited before
+    # the fonts carried the CORS header holds those for a year (immutable) without it and would refuse them here; the
+    # web app's header rules match the path, so the query changes nothing else. Relative URLs resolve against the web
+    # origin; opened on the API's own origin the fonts 404 and the fallbacks take over. No images (the lattice echo is
+    # a bloom and saffron gradient band, saffron's only use here). Text at 17 px / 1.65 on a 31 em
     # column, about 66 characters a line in Hanken Grotesk (measured in Chromium); titles at the app's scale (2 rem, and
     # 2.5 rem in a frame at least 40 rem wide; 1.5 rem), weights and tracking. The per-viewer mark keeps its ink,
     # opacity, size and tiling from before the restyles (spec 06 §6.4 item 3: it must survive a screenshot's
     # compression). Dark mode follows the embedding page: a frame's prefers-color-scheme takes the embedder's used
     # color-scheme (CSS Color Adjust), so the marked page is dark inside the dark app and light inside the light one.
-    '@font-face{font-family:"Hanken Grotesk";src:url("/fonts/hanken-grotesk-v1.woff2") format("woff2");'
+    '@font-face{font-family:"Hanken Grotesk";src:url("/fonts/hanken-grotesk-v1.woff2?frame=1") format("woff2");'
     "font-display:swap;font-weight:400 700}"
-    '@font-face{font-family:"Fraunces";src:url("/fonts/fraunces-v1.woff2") format("woff2");font-display:swap;'
+    '@font-face{font-family:"Fraunces";src:url("/fonts/fraunces-v1.woff2?frame=1") format("woff2");font-display:swap;'
     "font-weight:500 700;unicode-range:U+0020-007E,U+2013-2014,U+2018-201A,U+201C-201E,U+2022,U+2026,U+2039-203A,"
     "U+20AC,U+2122}"
-    '@font-face{font-family:"Fraunces";src:url("/fonts/fraunces-ext-v1.woff2") format("woff2");font-display:swap;'
-    "font-weight:500 700;unicode-range:U+00A0-017F}"
+    '@font-face{font-family:"Fraunces";src:url("/fonts/fraunces-ext-v1.woff2?frame=1") format("woff2");'
+    "font-display:swap;font-weight:500 700;unicode-range:U+00A0-017F}"
     '@font-face{font-family:"Hanken Grotesk Fallback";src:local(Arial);ascent-override:100.88%;'
     "descent-override:30.57%;line-gap-override:0%;size-adjust:99.12%}"
     '@font-face{font-family:"Fraunces Fallback";src:local("Times New Roman");ascent-override:84.88%;'

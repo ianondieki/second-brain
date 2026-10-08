@@ -137,11 +137,14 @@ OVERLAY_RULES = [
     ".overlay{color:#eeeaf8}",  # dark
     ".overlay{opacity:.2}",  # print
 ]
-# The app's own self-hosted files (frontend/public/fonts, served by the web origin the page is framed from).
+# The app's own self-hosted files (frontend/public/fonts, served by the web origin the page is framed from), under a
+# query of their own: the app's pages preload the bare URLs, which browsers that visited before the fonts carried the
+# CORS header hold for a year (immutable) without it, so the frame must not share their cache entries.
+FRAME_QUERY = "?frame=1"
 FACES = {
-    "/fonts/hanken-grotesk-v1.woff2": "Hanken Grotesk",
-    "/fonts/fraunces-v1.woff2": "Fraunces",
-    "/fonts/fraunces-ext-v1.woff2": "Fraunces",
+    "/fonts/hanken-grotesk-v1.woff2?frame=1": "Hanken Grotesk",
+    "/fonts/fraunces-v1.woff2?frame=1": "Fraunces",
+    "/fonts/fraunces-ext-v1.woff2?frame=1": "Fraunces",
 }
 
 
@@ -170,6 +173,15 @@ def test_the_page_names_the_apps_own_faces_and_fetches_nothing_else() -> None:
     assert "data:" not in STYLE
     assert "@import" not in STYLE
     assert "font-display:swap" in STYLE  # the text shows at once in the fallback, then swaps in
+
+
+def test_the_frames_font_urls_are_cache_keys_of_their_own() -> None:
+    urls = re.findall(r'url\("([^"]+)"\)', STYLE)
+    assert urls == list(FACES)
+    for url in urls:
+        path, query = url.split("?")
+        assert re.fullmatch(r"/fonts/[a-z-]+-v\d+\.woff2", path)  # the path the web app's CORS rule matches
+        assert f"?{query}" == FRAME_QUERY  # never the bare URL the app's pages preload
 
 
 def test_text_is_hanken_grotesk_at_17_px_and_titles_are_fraunces_as_in_the_app() -> None:
