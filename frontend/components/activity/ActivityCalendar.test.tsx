@@ -20,7 +20,6 @@ vi.mock("next-intl/server", () => ({
   getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
   getLocale: async () => "en",
 }));
-vi.mock("./fetch", () => ({ getActivity: async () => null }));
 afterEach(cleanup);
 
 const BUSY = { "2026-10-08": 6, "2026-10-01": 3, "2026-09-15": 1, "2026-05-04": 2 };
@@ -81,6 +80,8 @@ describe("ActivityCalendar", () => {
   it("gives the total, a line per kind and the Less to More legend", async () => {
     const container = await renderCalendar();
     expect(screen.getByText("12 actions in the last 26 weeks")).toBeTruthy();
+    // A day's count is readable without the hover tip: the busiest day in words.
+    expect(screen.getByText("Busiest day: 8 Oct 2026, 6 actions")).toBeTruthy();
     const kinds = screen.getByRole("list", { name: "What they were" });
     expect(within(kinds).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["6 versions registered", "6 messages"]);
     const legend = container.querySelector("[data-activity-legend]")!;
@@ -136,6 +137,16 @@ describe("the scale", () => {
     for (let i = 1; i < ls.length; i += 1) expect(direction * (ls[i] - ls[i - 1])).toBeGreaterThanOrEqual(0.06);
     expect(contrast(steps[0], card)).toBeGreaterThanOrEqual(2);
     expect(contrast(steps[3], card)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each([
+    ["light", block("\n:root {"), "#5a3fc0"],
+    ["dark", block('\nhtml[data-theme="dark"] {'), "#a996ff"],
+  ] as const)("%s: a day with any action has a bloom edge at 3:1 or more against an empty day", (_, text, accent) => {
+    const empty = text.match(/--heat-0: (#[0-9a-f]{6})/)![1];
+    expect(contrast(accent, empty)).toBeGreaterThanOrEqual(3);
+    expect(css).toMatch(/\.heat-cell:not\(\[data-level="0"\]\) \{\s*box-shadow: inset 0 0 0 1px var\(--accent\);/);
+    expect(text).toContain(`--accent: ${accent};`);
   });
 
   it("is the same in the system's dark mode as in the chosen one", () => {
