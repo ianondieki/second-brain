@@ -6,7 +6,7 @@ import { ProblemLabelText } from "@/components/problem/ProblemLabelText";
 import { standaloneLinkClass, titleLinkClass } from "@/components/ui/Button";
 import { LinkPending } from "@/components/ui/LinkPending";
 
-import { CardFoot, discoverCardClass, discoverTitleClass } from "./CardList";
+import { CardBand, CardFoot, discoverCardClass, discoverTitleClass } from "./CardList";
 import { cardBadges, ChipList, MoreSummary, TrendBadge, WhyChip } from "./Chips";
 import {
   cardChips,
@@ -62,6 +62,7 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
       data-trending={trend.trending ? "" : undefined}
       className={discoverCardClass}
     >
+      <CardBand niche={problem.niche} county={problem.county_code} />
       <h3 id={titleId} className={discoverTitleClass}>
         <Link href={problemHref(problem.id)} className={titleLinkClass}>
           {problem.title}

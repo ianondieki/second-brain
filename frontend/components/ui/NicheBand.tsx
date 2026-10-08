@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import type { ReactNode } from "react";
+import { use, type ReactNode } from "react";
 
 import { Picture } from "@/components/landing/Picture";
 import { photoWidths } from "@/lib/photos/files";
@@ -14,6 +14,20 @@ export async function savesData(): Promise<boolean> {
   } catch {
     return false; // outside a request (a test, a static render): nothing asked
   }
+}
+
+/**
+ * The same, read synchronously (React's `use`), so a band can sit inside the synchronous server components of cards.
+ * Outside a request (a unit test, a static render) `headers()` throws at once: nothing was asked.
+ */
+export function useSavesData(): boolean {
+  let pending: Promise<{ get(name: string): string | null }>;
+  try {
+    pending = headers();
+  } catch {
+    return false;
+  }
+  return use(pending).get("save-data")?.trim().toLowerCase() === "on";
 }
 
 export interface NicheBandProps {
@@ -33,10 +47,10 @@ export interface NicheBandProps {
  * A niche's or a county's photograph as a narrow band (D-67, P25): <picture> with AVIF and WebP, the file's own size
  * (no layout shift), lazy and decoded off the main thread, `alt=""` because the niche or county name is always shown
  * beside it. Where there is no photograph, or the request carries `Save-Data: on`, the kanga lattice band instead.
- * Never on the tracker (REQ-UX-05). A server component: no script.
+ * Never on the tracker (REQ-UX-05). A server component (synchronous, so cards can hold it): no script.
  */
-export async function NicheBand({ niche, county, children, className, sizes = "(min-width: 1280px) 26rem, (min-width: 640px) 45vw, 92vw" }: NicheBandProps) {
-  const found = (await savesData()) ? undefined : nichePhoto({ niche, county });
+export function NicheBand({ niche, county, children, className, sizes = "(min-width: 1280px) 26rem, (min-width: 640px) 45vw, 92vw" }: NicheBandProps) {
+  const found = useSavesData() ? undefined : nichePhoto({ niche, county });
   return (
     <div
       className={cn("niche-band h-16", found && children ? "niche-band-scrim" : null, !found && "niche-band-lattice", className)}

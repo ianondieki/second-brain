@@ -10,7 +10,10 @@ import { NicheBand } from "./NicheBand";
 // lattice where there is none, and when the request carries Save-Data: on.
 
 const request = vi.hoisted(() => ({ headers: new Headers() }));
-vi.mock("next/headers", () => ({ headers: async () => request.headers }));
+// A request's headers as React's `use` reads a settled promise (NicheBand reads them synchronously).
+vi.mock("next/headers", () => ({
+  headers: () => Object.assign(Promise.resolve(request.headers), { status: "fulfilled", value: request.headers }),
+}));
 
 beforeEach(() => {
   request.headers = new Headers();

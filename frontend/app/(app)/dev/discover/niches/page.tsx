@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { directoryOptions } from "@/app/(app)/dev/companies/directory";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { ClientStrings } from "@/components/ClientStrings";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
@@ -31,7 +31,7 @@ export default async function LikedNichesPage() {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const t = await getTranslations("likedNiches");
+  const [t, te] = await Promise.all([getTranslations("likedNiches"), getTranslations("eyebrow")]);
   const [liked, { niches }, consent, strings] = await Promise.all([
     likedNiches(),
     directoryOptions(),
@@ -48,17 +48,18 @@ export default async function LikedNichesPage() {
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="discover" />} wide>
       <div className="max-w-3xl">
-        <PageHeader
+        <PageHero
           back={{ href: DISCOVER_PATH, label: t("back") }}
+          eyebrow={te("niches")}
           title={t("title")}
           lead={liked ? t("lead", { count: liked.min, max: liked.max }) : undefined}
         >
           {liked ? <p className="mt-1 text-sm text-ink-soft">{t("keep", { count: liked.min })}</p> : null}
-        </PageHeader>
+        </PageHero>
         {liked ? (
           <ClientStrings strings={strings}>
             {/* The picker and the consent, each one white card (P20): two settings, two objects. */}
-            <div className="mt-8 rounded-panel border border-line bg-field p-5 sm:p-6 lg:mt-10">
+            <div className="rounded-panel border border-line bg-field p-5 sm:p-6">
               <NichePicker niches={options} initial={liked.liked.map((niche) => niche.id)} min={liked.min} max={liked.max} />
             </div>
             {consent ? (
