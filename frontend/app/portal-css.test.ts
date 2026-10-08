@@ -47,6 +47,10 @@ describe("portal.css", () => {
     }
   });
 
+  it("drops the photographs in forced colours, so text never sits on one without its gradient", () => {
+    expect(media("(forced-colors: active)")).toMatch(/\.org-greet-photo,\s*\.auth-photo \{\s*display: none;/);
+  });
+
   it("skips off-screen notifications and keeps each day's name in view", () => {
     expect(portal).toMatch(/\.notice-row \{\s*content-visibility: auto;/);
     expect(portal).toMatch(/\.notice-day \{\s*position: sticky;/);

@@ -99,6 +99,11 @@
   .org-greet {
     border: 1px solid CanvasText;
   }
+  /* The photographs' gradients are dropped in forced colours: the text then sits on Canvas, not on a photograph. */
+  .org-greet-photo,
+  .auth-photo {
+    display: none;
+  }
 }
 
 /* The shortlist star (app/(app)/org/inbox/ShortlistStar.tsx) pops once as a press fills it: the change is seen at once,
