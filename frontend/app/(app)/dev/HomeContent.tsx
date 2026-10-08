@@ -166,16 +166,38 @@ export async function HomeContent({
           </ul>
         </section>
 
-        {/* Below the first screen (P25): streamed in once its reads answer, so the greeting and the tiles flush first.
-            Nothing follows the boundary, so what arrives moves nothing already painted. */}
+        {/* Two-step sign-in: a notice only while it is off (the status needs no section of its own when it is on). */}
+        {mfa !== "on" ? (
+          <Callout tone={mfa === "required" ? "error" : "info"} icon={mfa === "required" ? <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" /> : <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />} data-home="security">
+            <p>{mfa === "required" ? th("mfaRequired") : th("mfaOff")}</p>
+            <Link href="/settings/security" className={standaloneLinkClass}>
+              {th("setUp")}
+            </Link>
+          </Callout>
+        ) : null}
+
+        {engagements.length === 0 ? (
+          <EmptyState sentence={t("empty")} action={t("emptyAction")} href="/dev/ideas" />
+        ) : null}
+
+        {waiting.length > 0 ? (
+          <Section title={t("needsYou")} headingId="home-needs-you" data-home="needs-you">
+            <ul className="flex flex-col gap-4">
+              {waiting.map((item) => (
+                <li key={item.id}>
+                  <NeedsYouHero item={item} href={rowHref(item.id)} action={t("openTracker")} now={now} />
+                </li>
+              ))}
+            </ul>
+          </Section>
+        ) : null}
+
+        {/* Below them (P25): streamed in once their reads answer, so the greeting, the tiles and what needs the developer
+            flush first. Nothing follows the boundary, so what arrives moves nothing already painted. */}
         <Suspense fallback={null}>
           <HomeBelow
-            mfa={mfa}
-            engagements={engagements}
             ideas={ideas}
-            waiting={waiting}
             others={others}
-            now={now}
             reads={{ recommended, quiz, week, peers, activity, mine }}
           />
         </Suspense>
@@ -185,31 +207,21 @@ export async function HomeContent({
 }
 
 /**
- * Home below the stat tiles: What's happening, the two-step sign-in notice, what needs the developer, the activity
- * calendar, today's five, the week, peers, the recommendations, then the other engagements and the ideas. Its reads
- * run while the first screen is already on its way (the page starts them after the tiles' two), and it renders once
- * they have all answered, in one piece and in this order.
+ * Home below what needs the developer: What's happening, the activity calendar, today's five, the week, peers, the
+ * recommendations, then the other engagements and the ideas. Its reads start with the tiles' two (the page starts them
+ * all at once), and it renders once they have all answered, in one piece and in this order.
  */
 async function HomeBelow({
-  mfa,
-  engagements,
   ideas,
-  waiting,
   others,
-  now,
   reads,
 }: {
-  mfa: "on" | "required" | "off";
-  engagements: readonly Summary[];
   ideas: readonly MyProposalItem[];
-  waiting: readonly Summary[];
   others: readonly Summary[];
-  now: string;
   reads: Required<Pick<HomeContentProps, "recommended" | "quiz" | "week" | "peers" | "activity" | "mine">>;
 }) {
-  const [t, th, tr, ta, tc, recommended, quiz, week, peers, activity, mine] = await Promise.all([
+  const [t, tr, ta, tc, recommended, quiz, week, peers, activity, mine] = await Promise.all([
     getTranslations("devHome"),
-    getTranslations("home"),
     getTranslations("tracker"),
     getTranslations("landing.activity"),
     getTranslations("activity"),
@@ -233,32 +245,6 @@ async function HomeBelow({
             </span>
           </div>
           <Ticker activity={activity} variant="strip" />
-        </Section>
-      ) : null}
-
-      {/* Two-step sign-in: a notice only while it is off (the status needs no section of its own when it is on). */}
-      {mfa !== "on" ? (
-        <Callout tone={mfa === "required" ? "error" : "info"} icon={mfa === "required" ? <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" /> : <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />} data-home="security">
-          <p>{mfa === "required" ? th("mfaRequired") : th("mfaOff")}</p>
-          <Link href="/settings/security" className={standaloneLinkClass}>
-            {th("setUp")}
-          </Link>
-        </Callout>
-      ) : null}
-
-      {engagements.length === 0 ? (
-        <EmptyState sentence={t("empty")} action={t("emptyAction")} href="/dev/ideas" />
-      ) : null}
-
-      {waiting.length > 0 ? (
-        <Section title={t("needsYou")} headingId="home-needs-you" data-home="needs-you">
-          <ul className="flex flex-col gap-4">
-            {waiting.map((item) => (
-              <li key={item.id}>
-                <NeedsYouHero item={item} href={rowHref(item.id)} action={t("openTracker")} now={now} />
-              </li>
-            ))}
-          </ul>
         </Section>
       ) : null}
 

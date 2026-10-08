@@ -32,27 +32,22 @@ function started<T>(read: Promise<T>): Promise<T> {
 }
 
 /**
- * Developer Home. The first screen's reads (the stat tiles: the engagements and the ideas) come first, together; the
- * rest start once those have answered, so they do not queue ahead of them at the API, and HomeContent streams them in
- * below the tiles (P25: the greeting, the LCP element, no longer waits for data shown further down).
+ * Developer Home. Every read starts at once; the page waits only for the first screen's two (the stat tiles: the
+ * engagements and the ideas), and HomeContent streams the other six in below what needs the developer (P25: the
+ * greeting, the LCP element, no longer waits for data shown further down).
  */
 export default async function DeveloperHome() {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
+  const below = {
+    recommended: started(recommendations().then(recommendationsState)),
+    quiz: started(quizCard()),
+    week: started(weekStrip()),
+    peers: started(homePeers()),
+    activity: started(publicActivity()),
+    mine: started(getActivity()),
+  };
   const [engagements, ideas] = await Promise.all([myEngagements(), myIdeas()]);
-  return (
-    <HomeContent
-      me={me}
-      engagements={engagements}
-      ideas={ideas}
-      recommended={started(recommendations().then(recommendationsState))}
-      quiz={started(quizCard())}
-      week={started(weekStrip())}
-      peers={started(homePeers())}
-      now={appNow()}
-      activity={started(publicActivity())}
-      mine={started(getActivity())}
-    />
-  );
+  return <HomeContent me={me} engagements={engagements} ideas={ideas} now={appNow()} {...below} />;
 }
