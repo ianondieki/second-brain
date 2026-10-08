@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 
 import { lazyCalls } from "@/components/tracker/messages/lazy-calls";
+import { postReadMarker } from "@/components/tracker/messages/mark-read";
 import { Thread } from "@/components/tracker/messages/Thread";
 import type { Thread as ThreadPage } from "@/components/tracker/messages/thread";
-import { api } from "@/lib/api/client";
 
 import type { TeamCalls } from "../calls";
 import { STEP_FAILED_ID, STEPS_ID } from "./ids";
@@ -13,14 +13,8 @@ import type { IdeaChoice, Sheet, ThreadSheets as Sheets } from "./ThreadSheets";
 
 const load = () => import("./later");
 
-async function markRead(threadId: string, upTo: string) {
-  try {
-    const { response } = await api.POST("/api/me/teams/{thread_id}/read", { params: { path: { thread_id: threadId } }, body: { up_to: upTo } });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
+// Runs as the thread opens: the CSRF helper alone, not the typed client (./later and Send bring that).
+const markRead = (threadId: string, upTo: string) => postReadMarker("/api/me/teams/{thread_id}/read", threadId, upTo);
 
 /**
  * A team thread (REQ-DEV-03) drawn by the engagement thread's own parts (components/tracker/messages/Thread.tsx): the

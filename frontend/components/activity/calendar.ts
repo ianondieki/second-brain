@@ -1,20 +1,16 @@
-// The activity calendar's data (D-67, P25): GET /api/me/activity?weeks=26 checked field by field (the route was built
-// beside this calendar, P25-B, after backend/openapi.json was frozen for this worktree; once the regenerated schema
-// is merged, the reader takes its type from it), and the grid it draws: weeks as columns, Monday first, each day's
-// count on a five-step scale. Pure, so it is tested without a server.
+import type { components } from "@/lib/api/schema";
+
+// The activity calendar's data (D-67, P25): GET /api/me/activity?weeks=26 (the generated schema's ActivityCalendar),
+// checked field by field before it is drawn, and the grid it draws: weeks as columns, Monday first, each day's count
+// on a five-step scale. Pure, so it is tested without a server.
 
 export const WEEKS = 26;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 86_400_000;
 
-export interface Activity {
-  from: string;
-  to: string;
-  timezone: string;
-  days: { date: string; count: number }[];
-  kinds: { kind: string; count: number }[];
-  total: number;
-}
+export type Activity = components["schemas"]["ActivityCalendar"];
+type Kind = components["schemas"]["ActivityKindCount"]["kind"];
+const KINDS: readonly Kind[] = ["version_registered", "proposal_published", "engagement_step", "message_sent", "quiz_answered", "team_message", "proposal_opened", "brief_posted"];
 
 const count = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0;
 const date = (value: unknown): value is string => typeof value === "string" && DATE.test(value);
@@ -23,18 +19,20 @@ const date = (value: unknown): value is string => typeof value === "string" && D
 export function parseActivity(body: unknown): Activity | null {
   if (!body || typeof body !== "object") return null;
   const { from, to, timezone, days, kinds, total } = body as Record<string, unknown>;
-  if (!date(from) || !date(to) || from > to || typeof timezone !== "string" || !count(total)) return null;
+  if (!date(from) || !date(to) || from > to || timezone !== "Africa/Nairobi" || !count(total)) return null;
   if (!Array.isArray(days) || !Array.isArray(kinds)) return null;
   const okDays = days.every((d) => d && typeof d === "object" && date((d as { date?: unknown }).date) && count((d as { count?: unknown }).count));
   const okKinds = kinds.every((k) => k && typeof k === "object" && typeof (k as { kind?: unknown }).kind === "string" && count((k as { count?: unknown }).count));
   if (!okDays || !okKinds) return null;
+  // A kind this build does not know (a later API) counts in the total but is not named.
+  const known = (kinds as { kind: string; count: number }[]).filter((k): k is { kind: Kind; count: number } => (KINDS as readonly string[]).includes(k.kind));
   return {
     from,
     to,
-    timezone,
+    timezone: "Africa/Nairobi",
     total,
     days: (days as Activity["days"]).map(({ date: d, count: c }) => ({ date: d, count: c })),
-    kinds: (kinds as Activity["kinds"]).map(({ kind, count: c }) => ({ kind, count: c })),
+    kinds: known.map(({ kind, count: c }) => ({ kind, count: c })),
   };
 }
 

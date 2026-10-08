@@ -6,7 +6,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -31,6 +31,7 @@ export default async function QuizPage() {
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
   const t = await getTranslations("quiz");
+  const te = await getTranslations("eyebrow");
   const state = await quizToday();
 
   let content;
@@ -52,7 +53,7 @@ export default async function QuizPage() {
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <div className="flex max-w-3xl flex-col gap-8">
-        <PageHeader back={{ href: "/dev", label: t("back") }} title={t("title")} lead={t("lead")} />
+        <PageHero eyebrow={te("quiz")} back={{ href: "/dev", label: t("back") }} title={t("title")} lead={t("lead")} />
         {content}
       </div>
     </SignedInShell>

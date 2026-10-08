@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { Row } from "@/components/ui/RowList";
 
 import { orgHref, type DirectoryFilters, type OrgCard } from "./filters";
@@ -17,7 +18,13 @@ export function OrgRow({ org, filters = {} }: { org: OrgCard; filters?: Director
   return (
     <Row
       data-org={org.slug}
-      title={org.name}
+      // The organisation's monogram (initials, never a logo: docs/spec/04 principle 4) beside its name (P25).
+      title={
+        <span className="flex items-center gap-3">
+          <Avatar name={org.name} kind="org" size="sm" />
+          <span className="min-w-0">{org.name}</span>
+        </span>
+      }
       href={orgHref(org.id, filters)}
       meta={org.county ? t("meta", { kind, county: org.county.name }) : kind}
       badges={[<VerificationBadge key="badge" badge={org.badge} />]}

@@ -198,7 +198,14 @@ test("AC-TRACK-9: the thread opens at Approve to proceed, then both sides write,
     const reply = devPage.locator("[data-message][data-mine='false']");
     await expect(reply).toContainText("Rita Wanjiru");
     await expect(reply).toContainText(org.orgName);
-    await reply.getByRole("button", { name: "Report" }).click();
+    // P25: from 1024 px the composer is sticky at the foot; a focused control above it is never under it (WCAG 2.4.11).
+    const report = reply.getByRole("button", { name: "Report" });
+    await devPage.evaluate(() => window.scrollTo(0, 0));
+    await report.focus();
+    await expect(report).toBeFocused();
+    const [button, composer] = await Promise.all([report.boundingBox(), devPage.locator("[data-composer]").boundingBox()]);
+    if (info.project.name === "desktop") expect(button!.y + button!.height).toBeLessThanOrEqual(composer!.y);
+    await report.click();
     const sheet = devPage.locator("dialog[open]");
     await expect(sheet.getByRole("heading", { name: "Report this message" })).toBeVisible();
     await sheet.getByRole("button", { name: "Send the report" }).click();

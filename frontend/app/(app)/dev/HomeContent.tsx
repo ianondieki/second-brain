@@ -12,7 +12,9 @@ import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AlertIcon, InfoIcon } from "@/components/ui/icons";
 import { Callout } from "@/components/ui/Callout";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { ActivityCalendar } from "@/components/activity/ActivityCalendar";
+import type { Activity } from "@/components/activity/calendar";
+import { Card } from "@/components/ui/Card";
 import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
@@ -31,6 +33,7 @@ import { MotionToggle } from "@/components/landing/MotionToggle";
 import { Ticker } from "@/components/landing/Ticker";
 import type { PublicActivity } from "@/lib/public/public-data";
 
+import { GreetingBand } from "./GreetingBand";
 import { dayPart, homeGroups, homeStats } from "./home";
 import { IdeaCard } from "./ideas/IdeaCard";
 import { NEW_PATH, type MyProposalItem } from "./ideas/ideas";
@@ -62,6 +65,8 @@ export interface HomeContentProps {
   now?: string;
   /** What's happening (P24, GET /api/public/activity): left out when null or not given (the read failed, or empty). */
   activity?: PublicActivity | null;
+  /** Your last 26 weeks (P25, GET /api/me/activity): the person's own counts; left out when null or not given. */
+  mine?: Activity | null;
 }
 
 /**
@@ -81,12 +86,15 @@ export async function HomeContent({
   peers = null,
   now = new Date().toISOString(),
   activity = null,
+  mine = null,
 }: HomeContentProps) {
-  const [t, th, tr, ta, locale] = await Promise.all([
+  const [t, th, tr, ta, tc, te, locale] = await Promise.all([
     getTranslations("devHome"),
     getTranslations("home"),
     getTranslations("tracker"),
     getTranslations("landing.activity"),
+    getTranslations("activity"),
+    getTranslations("eyebrow"),
     getLocale(),
   ]);
   const { waiting, others } = homeGroups(engagements);
@@ -109,20 +117,27 @@ export async function HomeContent({
       <ClientStrings strings={await clientStrings(["tour"])}>
         <FirstLoginTour side="developer" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("developer")} />
       </ClientStrings>
+      {/* The greeting on Nairobi at this time of day (P25): the eyebrow, the name, the lead and the one primary action. */}
       <div className="max-w-4xl">
-        <PageHeader
-          title={th(`greeting.${dayPart(now)}`, { name: me.user.display_name })}
-          lead={t("lead")}
-          action={
+        <GreetingBand part={dayPart(now)}>
+          <p className="page-eyebrow text-night-soft" data-eyebrow="">
+            {te("devHome", { date: new Intl.DateTimeFormat(`${locale}-KE`, { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Nairobi" }).format(new Date(now)) })}
+          </p>
+          <h1 className="mt-3 text-[2rem] leading-[1.08] text-ink [overflow-wrap:anywhere] sm:text-[2.75rem] sm:leading-[1.04]">
+            {th(`greeting.${dayPart(now)}`, { name: me.user.display_name })}
+          </h1>
+          <p className="lead mt-3 max-w-[44ch] text-[1.0625rem] text-ink-soft sm:text-lg">{t("lead")}</p>
+          <div className="mt-6">
             <ButtonLink href={NEW_PATH} variant="primary">
               {t("newProposal")}
             </ButtonLink>
-          }
-        />
+          </div>
+        </GreetingBand>
       </div>
 
-      <div className="mt-8 flex max-w-4xl flex-col gap-12 lg:gap-14">
+      <div className="mt-8 flex max-w-4xl flex-col gap-12 lg:mt-10 lg:gap-14">
         <section aria-label={t("stats.label")} data-home="stats">
+          {/* The figures show their real values from the first paint: they drive what to do next (no count-up). */}
           <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <li>
               <StatTile data-stat="ideas" label={t("stats.ideas")} value={stats.ideas} meta={t("stats.ideasMeta", { published: stats.published, drafts: stats.drafts })} href="/dev/ideas" />
@@ -186,6 +201,15 @@ export async function HomeContent({
                 </li>
               ))}
             </ul>
+          </Section>
+        ) : null}
+
+        {/* Your last 26 weeks (P25): the person's own actions by day; left out when the read did not answer. */}
+        {mine ? (
+          <Section title={tc("title", { weeks: 26 })} headingId="home-calendar" data-home="calendar">
+            <Card variant="flat">
+              <ActivityCalendar activity={mine} />
+            </Card>
           </Section>
         ) : null}
 

@@ -6,7 +6,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
@@ -42,6 +42,7 @@ export default async function TeamsPage() {
     myThreads(),
     myContributions(),
   ]);
+  const te = await getTranslations("eyebrow");
   const anyInvitation = invitations.received.length + invitations.sent.length > 0;
   const nothing = !anyInvitation && threads.length === 0 && credits.length === 0;
   const strings = await clientStrings(["teamUp"]);
@@ -49,7 +50,7 @@ export default async function TeamsPage() {
   return (
     <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
       <div className="flex max-w-4xl flex-col gap-12 lg:gap-14">
-        <PageHeader back={{ href: PEERS_PATH, label: t("list.back") }} title={t("list.title")} lead={t("list.lead")} />
+        <PageHero eyebrow={te("teams")} back={{ href: PEERS_PATH, label: t("list.back") }} title={t("list.title")} lead={t("list.lead")} />
 
         {/* The status line of an answer to an invitation sits above the sections, so reading the page again keeps it. */}
         <ClientStrings strings={strings}>

@@ -91,7 +91,7 @@
   --ink: #1b1730; /* text and icons: a violet ink, 15.8:1 */
   --ink-soft: #5e5873; /* secondary text and input borders, 6.1:1 (6.7:1 on white) */
   --line: #e5dfd2; /* hairlines and dividers, warmed with the paper (decorative; controls take ink-soft borders) */
-  --paper-deep: #efeadf; /* P25: the second neutral layer: nav hover, the Search pill, skeletons, an empty calendar day */
+  --paper-deep: #efeadf; /* P25: the second neutral layer: nav hover, the Search pill, an empty calendar day */
   /* P25: the activity calendar's sequential scale (one hue, bloom; dataviz --ordinal on the card: monotone lightness,
      adjacent steps ≥ 0.06 apart, the light end 2.23:1 on white). heat-0 is a day with nothing. */
   --heat-0: #eeeae2;
@@ -1337,7 +1337,7 @@ dialog[data-sheet][open] {
 
 /*
  * P25 (D-67, "Portal in print"): the signed-in portal's page language, the shell's details, the command palette, the
- * niche photographs, the skeletons, the activity calendar and the HCI floor. CSS first: every page inherits it with
+ * niche photographs, the activity calendar and the HCI floor. CSS first: every page inherits it with
  * no script; each moving part rests in place under reduced motion (the block at the end of this file).
  */
 
@@ -1357,10 +1357,15 @@ time,
   html:has([data-top-bar][data-sticky]) {
     scroll-padding-block-start: 5.5rem;
   }
+  /* The thread's composer stays at the foot from 1024 px (P25), never taller than 19 rem plus its 1 rem offset: a
+     focused message or control scrolls clear of it (WCAG 2.4.11). */
+  html:has([data-composer]) {
+    scroll-padding-block-end: 21rem;
+  }
 }
 /* Cards adapt to their column, not the window (`.cq` on a card or a grid cell); a row of cards aligns its parts
    (`.card-grid` with `.card-sub` children spanning three rows: title, meta, footer). Long lists skip off-screen
-   rendering (`.cv-auto`). */
+   rendering (`.cv-auto`), but never a subgrid item: its layout containment cuts the item off the shared rows. */
 .cq {
   container-type: inline-size;
 }
@@ -1369,15 +1374,20 @@ time,
   grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
   gap: 1rem;
 }
-.card-grid > .card-sub {
+.card-grid > .card-sub,
+.card-sub > .card-sub {
   display: grid;
   grid-row: span 3;
   grid-template-rows: subgrid;
   row-gap: 0.5rem;
 }
+/* A card that is the list item's one child (an <article> inside its <li>) takes the same rows. */
+.card-sub > .card-sub {
+  row-gap: 0.75rem;
+}
 .cv-auto {
   content-visibility: auto;
-  contain-intrinsic-size: auto 9rem;
+  contain-intrinsic-size: auto var(--cv-size, 9rem);
 }
 /* More contrast asked for: the secondary ink and the hairlines darken (light) or lighten (dark). */
 @media (prefers-contrast: more) {
@@ -1655,39 +1665,29 @@ time,
   background-repeat: repeat-x;
 }
 
-/* Skeletons (components/ui/Skeleton.tsx): blocks shaped like the page to come, with a slow sweep of light. */
-.skeleton {
-  display: block;
-  border-radius: 0.5rem;
-  background: var(--paper-deep);
-  background-image: linear-gradient(
-    90deg,
-    transparent 0,
-    color-mix(in oklab, var(--field) 70%, transparent) 50%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  background-repeat: no-repeat;
-  animation: skeleton-sweep 1.6s ease-in-out infinite;
-}
-@keyframes skeleton-sweep {
-  from {
-    background-position: 150% 0;
-  }
-  to {
-    background-position: -50% 0;
-  }
-}
-
 /* The activity calendar (components/activity/ActivityCalendar.tsx): 26 weeks of days, Monday first, in the bloom
    scale; each day's count and date on hover. The grid is decorative for assistive technology (a table beside it). */
-/* The calendar and the lines under it share one width: as wide as the card, cells at most 22 px. */
+/* The grid fills its column (cells at most 22 px); from a 44 rem card the summary stands beside it, so a wide card
+   has no empty band. */
 .heat-frame {
   --heat-labels: 1.875rem;
-  max-width: calc(var(--heat-labels) + var(--weeks) * 1.375rem + 2px);
+  display: grid;
+  gap: 0.75rem 2rem;
 }
 .heat {
   --heat-gap: 2px;
+  max-width: calc(var(--heat-labels) + var(--weeks) * 1.375rem + 2px);
+}
+.heat-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+@container (width >= 44rem) {
+  .heat-frame {
+    grid-template-columns: minmax(0, 1fr) 14rem;
+    align-items: center;
+  }
 }
 .heat-months,
 .heat-days {
@@ -1736,6 +1736,11 @@ time,
 .heat-cell[data-future] {
   visibility: hidden;
 }
+/* A day with any action carries an edge in bloom (≥ 3:1 against an empty day in both themes), so even the lightest
+   step is told from nothing without relying on its fill. */
+.heat-cell:not([data-level="0"]) {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 .heat-swatch {
   width: 0.75rem;
 }
@@ -1779,6 +1784,260 @@ time,
 }
 .heat-day {
   grid-column: 1;
+}
+}
+
+@layer components {
+/* Home's greeting (app/(app)/dev/GreetingBand.tsx; P25): Nairobi at this time of day in a wide rounded band. On phones
+   the photograph is a strip above the words, which sit on the night colour itself; from 640 px the words sit over the
+   photograph on a night gradient that stays at 94 % under the whole text block (every line ≥ 4.5:1 against the
+   lightest pixel under it, measured on each greeting photograph), fading only beyond it. */
+.greeting-band {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  background: var(--night);
+  box-shadow: var(--shadow-card);
+}
+.greeting-photo {
+  position: relative;
+  height: 9rem;
+}
+.greeting-photo picture,
+.greeting-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 40%;
+}
+.greeting-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 55%, var(--night) 100%);
+}
+.greeting-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0.5rem 1.25rem 1.5rem;
+}
+@media (width >= 40rem) {
+  .greeting-photo {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    height: auto;
+  }
+  .greeting-photo::after {
+    background: linear-gradient(
+      90deg,
+      rgb(30 22 64 / 0.94) 0,
+      rgb(30 22 64 / 0.94) 34rem,
+      rgb(30 22 64 / 0.35) calc(34rem + 22%),
+      rgb(30 22 64 / 0.15) 100%
+    );
+  }
+  .greeting-body {
+    min-height: 16.5rem;
+    max-width: 34rem;
+    justify-content: center;
+    padding: 2.5rem;
+  }
+}
+}
+
+@layer components {
+/* The certificate seal's sheen (components/certificate/CertificateSheet.tsx; P25): a band of light crosses the seal
+   once when the sheet is hovered, a registered percentage so the gradient itself moves. Still under reduced motion and
+   in print. */
+@property --sheen {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: -40%;
+}
+.seal-sheen {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 9999px;
+}
+.seal-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent calc(var(--sheen) - 22%),
+    rgb(255 255 255 / 0.7) var(--sheen),
+    transparent calc(var(--sheen) + 22%)
+  );
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  transition:
+    --sheen 1100ms var(--ease-out),
+    opacity 400ms var(--ease-out);
+}
+[data-print-sheet]:hover .seal-sheen::after {
+  --sheen: 140%;
+  opacity: 1;
+}
+}
+
+@layer components {
+/* An engagement's five stages as dots on a line (components/engagements/StageDots.tsx; P25): done filled, the current
+   ringed (error past its deadline, hollow while paused or ended), the rest open. Shapes, not colour alone. */
+.stage-dots {
+  display: flex;
+  align-items: center;
+  max-width: 14rem;
+}
+.stage-dots > span {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.stage-dots > span:last-child {
+  flex: 0;
+}
+.stage-dots > span::before {
+  content: "";
+  width: 0.625rem;
+  height: 0.625rem;
+  flex-shrink: 0;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 9999px;
+  background: var(--field);
+}
+.stage-dots > span:not(:last-child)::after {
+  content: "";
+  height: 1.5px;
+  flex: 1;
+  margin-inline: 3px;
+  background: var(--line);
+}
+.stage-dots > [data-dot="completed"]::before {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+.stage-dots > [data-dot="completed"]::after {
+  background: var(--ok);
+}
+.stage-dots > [data-dot="current"]::before,
+.stage-dots > [data-dot="overdue"]::before {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 3px solid var(--accent);
+  background: var(--field);
+}
+.stage-dots > [data-dot="overdue"]::before {
+  border-color: var(--error);
+}
+.stage-dots > [data-dot="onHold"]::before,
+.stage-dots > [data-dot="ended"]::before {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px dashed var(--ink-soft);
+}
+@media (forced-colors: active) {
+  .stage-dots > span::before,
+  .stage-dots > span::after {
+    forced-color-adjust: none;
+  }
+}
+}
+
+@layer components {
+/* The tracker's stepper (components/tracker/Stepper.tsx; P25): the done line draws once, a step after the one before,
+   down on phones and across from 1024 px; the current mark breathes three times, then rests. Image-free (REQ-UX-05). */
+[data-step-line="done"] {
+  transform-origin: top;
+  animation: step-draw-y 520ms var(--ease-out) calc(120ms + var(--i, 0) * 160ms) backwards;
+}
+@media (width >= 64rem) {
+  [data-step-line="done"] {
+    transform-origin: left;
+    animation-name: step-draw-x;
+  }
+}
+@keyframes step-draw-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes step-draw-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+.step-breathe {
+  animation: step-breathe 2.4s ease-in-out 900ms 3;
+}
+@keyframes step-breathe {
+  50% {
+    box-shadow: 0 0 0 9px color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+}
+/* History marks (components/tracker/HistoryList.tsx): a circle with the event's icon. */
+.event-mark {
+  position: relative;
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--line);
+  border-radius: 9999px;
+  background: var(--field);
+  color: var(--ink-soft);
+}
+.event-mark > svg {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+.event-mark[data-latest] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 0 0 4px var(--accent-wash);
+}
+.event-mark[data-tone="message"] {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+.event-mark[data-tone="end"] {
+  color: var(--error);
+}
+}
+
+@layer components {
+/* The editor's autosave status (app/(app)/dev/ideas/editor/Editor.tsx; P25): a pill once there is something to say;
+   while saving, a bloom dot breathes (still under reduced motion). */
+.save-status:not(:empty) {
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  background: var(--field);
+  padding: 0.125rem 0.75rem 0.125rem 0.625rem;
+}
+.save-status[data-save="saving"]::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  animation: save-breathe 1.2s ease-in-out infinite;
+}
+@keyframes save-breathe {
+  50% {
+    opacity: 0.3;
+  }
 }
 }
 
@@ -1838,13 +2097,20 @@ time,
   .hero-before,
   .hero-turn,
   .hero-steps li > span,
-  .skeleton,
   .palette[open] {
     animation: none !important;
   }
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) {
+    animation: none !important;
+  }
+  .seal-sheen::after {
+    display: none;
+  }
+  [data-step-line="done"],
+  .step-breathe,
+  .save-status[data-save="saving"]::before {
     animation: none !important;
   }
 

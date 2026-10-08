@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -26,7 +26,7 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/dev/co
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const t = await getTranslations("companies");
+  const [t, te] = await Promise.all([getTranslations("companies"), getTranslations("eyebrow")]);
   const filters = parseFilters(await searchParams);
   const [browse, { niches, filterOptions }] = await Promise.all([browseDirectory(filters), directoryOptions()]);
   const hasResults = browse.kind === "page" && countOrgs(browse.page) > 0;
@@ -34,10 +34,10 @@ export default async function CompaniesPage({ searchParams }: PageProps<"/dev/co
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="companies" />} wide>
       <div className="max-w-4xl">
-        <PageHeader title={t("title")} lead={t("lead")} />
+        <PageHero eyebrow={te("companies")} title={t("title")} lead={t("lead")} />
       </div>
       {/* The search and its filters as one control surface, as on Discover. */}
-      <div className="mt-8 max-w-4xl rounded-panel border border-line bg-field p-4 sm:p-5">
+      <div className="max-w-4xl rounded-panel border border-line bg-field p-4 sm:p-5">
         <DirectoryFilters filters={filters} niches={niches} options={filterOptions} showClear={hasResults} />
       </div>
       <div className="mt-10 max-w-4xl lg:mt-12">

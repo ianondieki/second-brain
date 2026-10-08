@@ -731,7 +731,12 @@ function SaveStatus({ save, onRetry }: { save: Save; onRetry: () => void }) {
           : null;
   return (
     <div className="flex min-h-8 flex-wrap items-center gap-x-4">
-      <p role="status" className={cn("inline-flex items-center gap-1.5 text-sm", failed ? "text-error" : "text-ink-soft")}>
+      {/* A quiet pill (P25): a dot that breathes while saving, a check once saved, the alert when it is not. */}
+      <p
+        role="status"
+        data-save={save.kind}
+        className={cn("save-status inline-flex items-center gap-1.5 text-sm", failed ? "text-error" : "text-ink-soft")}
+      >
         {save.kind === "saved" && !save.partial ? <CheckIcon className="size-4 shrink-0 text-ok" /> : null}
         {failed ? <AlertIcon className="size-4 shrink-0" /> : null}
         {text}

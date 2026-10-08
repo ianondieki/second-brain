@@ -1,4 +1,4 @@
-import { apiOrigin, forwardHeaders, recordAppNow } from "@/lib/api/server";
+import { forwardHeaders, serverApi } from "@/lib/api/server";
 
 import { parseActivity, WEEKS, type Activity } from "./calendar";
 
@@ -10,14 +10,13 @@ export async function getActivity(weeks: number = WEEKS): Promise<Activity | nul
   try {
     const headers = await forwardHeaders();
     if (!headers.cookie) return null;
-    const response = await fetch(`${apiOrigin}/api/me/activity?weeks=${weeks}`, {
-      headers: { ...headers, accept: "application/json" },
+    const { data } = await serverApi().GET("/api/me/activity", {
+      params: { query: { weeks } },
+      headers,
       signal: AbortSignal.timeout(3000),
       cache: "no-store",
     });
-    recordAppNow(response);
-    if (!response.ok) return null;
-    return parseActivity(await response.json());
+    return data ? parseActivity(data) : null;
   } catch {
     return null;
   }

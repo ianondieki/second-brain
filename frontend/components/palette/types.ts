@@ -1,3 +1,5 @@
+import type { components } from "@/lib/api/schema";
+
 // The command palette's data (D-67, P25): what the server gives the top bar's Search button, and what the lazily loaded
 // palette shows. Plain, serialisable values: the button carries them in the page's payload, not in its script.
 
@@ -20,6 +22,7 @@ export interface PaletteStrings {
   close: string;
   empty: string;
   searching: string;
+  unavailable: string;
   results: string;
   goTo: string;
   recent: string;
@@ -37,9 +40,9 @@ export interface PaletteStrings {
   keyClose: string;
 }
 
-/** The groups the API's search answers with (GET /api/me/search). */
-export const SEARCH_KINDS = ["ideas", "engagements", "inbox", "problems", "briefs", "companies"] as const;
-export type SearchKind = (typeof SEARCH_KINDS)[number];
+/** The groups the API's search answers with (GET /api/me/search; the generated schema's SearchGroup kinds). */
+export type SearchKind = components["schemas"]["SearchGroup"]["kind"];
+export const SEARCH_KINDS = ["ideas", "engagements", "inbox", "problems", "briefs", "companies"] as const satisfies readonly SearchKind[];
 
 export interface PaletteData {
   portal: PalettePortal;
@@ -48,4 +51,8 @@ export interface PaletteData {
   /** New proposal (developer) or Post a Brief (organisation), with its address; none for the staff console. */
   create: PaletteLink | null;
   strings: PaletteStrings;
+  /** The shortcut as this computer writes it: "⌘ K" on Apple platforms, "Ctrl K" elsewhere (from the request). */
+  shortcut: string;
+  /** Where this account's Recent list is kept (a hash of the account's id, never the id); null keeps none. */
+  recentKey: string | null;
 }

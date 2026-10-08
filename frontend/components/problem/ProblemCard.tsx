@@ -1,8 +1,9 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { SharedTitle } from "@/components/motion/SharedTitle";
 import { Card } from "@/components/ui/Card";
-import { Lattice } from "@/components/ui/Lattice";
+import { NicheBand } from "@/components/ui/NicheBand";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
@@ -45,10 +46,15 @@ export async function ProblemCard({
     <article aria-labelledby="problem-title" data-problem={problem.id} className="flex flex-col gap-10">
       {/* The card itself: a lattice-edged sheet (the look of the certificate and /verify), the facts under a rule. */}
       <Card padding="none" className="overflow-hidden">
-        <Lattice />
+        {/* The niche's photograph as the card's top edge (P25; the lattice where there is none, or under Save-Data),
+            decorative: the niche is named in the facts below. */}
+        <NicheBand niche={problem.niche?.slug} county={problem.county_code} className="h-20 rounded-none sm:h-28" sizes="(min-width: 1024px) 48rem, 100vw" wide />
         <header className="flex flex-col gap-3 p-5 sm:p-8">
         <h1 id="problem-title" className="text-2xl [overflow-wrap:anywhere] text-ink lg:text-3xl">
-          {problem.title}
+          {/* A Discover card's title morphs into this one where View Transitions run (P25). */}
+          <SharedTitle kind="problem" id={problem.id}>
+            <span>{problem.title}</span>
+          </SharedTitle>
         </h1>
         {/* The card's label (docs/spec/09 AI labels) under the title as a Badge: no eyebrow above a heading. Neutral:
             the accent is kept for "act here or you are here" (p16-design-system.md, principle 3). */}

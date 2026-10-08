@@ -9,6 +9,7 @@ import { applyTheme } from "@/lib/theme";
 
 import { matchParts, paletteGroups, type PaletteOption } from "./model";
 import { readRecent } from "./recent";
+import { forgetRecent } from "./remember";
 import { search, SEARCH_DEBOUNCE_MS, searchQuery, type SearchGroup } from "./search";
 import type { PaletteData } from "./types";
 
@@ -39,7 +40,7 @@ function Title({ text, query }: { text: string; query: string }) {
 
 function Arrow() {
   return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="size-4 shrink-0">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" className="size-4 shrink-0">
       <path d="M4 10h11M11 5.5 15.5 10 11 14.5" />
     </svg>
   );
@@ -52,7 +53,7 @@ function Arrow() {
  * gets focus back). The active option is the input's aria-activedescendant; arrows, Home and End move it; Enter opens
  * it, Ctrl/⌘ Enter in a new tab; the typed letters are marked in each title.
  */
-export function CommandPalette({ data, onClose }: CommandPaletteProps) {
+export function CommandPalette({ data, onClose: done }: CommandPaletteProps) {
   const s = data.strings;
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -60,14 +61,20 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
   const id = useId();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [answer, setAnswer] = useState<{ q: string; groups: SearchGroup[] }>({ q: "", groups: [] });
-  const [recent] = useState(() => readRecent());
+  const [answer, setAnswer] = useState<{ q: string; groups: SearchGroup[]; failed: boolean }>({ q: "", groups: [], failed: false });
+  const [recent] = useState(() => readRecent(data.recentKey));
+  // Closing ends the modal first, so the page is no longer inert when the opener takes focus back.
+  const onClose = () => {
+    if (dialog.current?.open) dialog.current.close();
+    done();
+  };
   const [dark] = useState(pageIsDark);
   const [signOutFailed, setSignOutFailed] = useState(false);
   const [mod] = useState(() => (/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl"));
 
   const q = searchQuery(query);
   const searching = q !== null && answer.q !== q;
+  const unavailable = q !== null && answer.q === q && answer.failed;
   const groups = useMemo(
     () => paletteGroups({ data, query, recent, results: q !== null && answer.q === q ? answer.groups : [], dark }),
     [data, query, recent, answer, q, dark],
@@ -91,7 +98,7 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       void search(q, controller.signal).then((found) => {
-        if (!controller.signal.aborted) setAnswer({ q, groups: found });
+        if (!controller.signal.aborted) setAnswer({ q, groups: found ?? [], failed: found === null });
       });
     }, SEARCH_DEBOUNCE_MS);
     return () => {
@@ -112,6 +119,7 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
     );
     if (status === 204 || status === 401) {
       forgetEmail(); // the next person on this device should not see this address offered back
+      forgetRecent(); // nor this account's recent pages
       router.replace("/login");
       router.refresh();
       return;
@@ -175,7 +183,7 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
       }}
     >
       <div className="flex items-center gap-2 border-b border-line px-3 sm:px-4">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true" className="size-5 shrink-0 text-ink-soft">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true" focusable="false" className="size-5 shrink-0 text-ink-soft">
           <circle cx="11" cy="11" r="6.5" />
           <path d="m16 16 4 4" />
         </svg>
@@ -210,14 +218,14 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
           onClick={onClose}
           className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control px-2 text-sm font-semibold text-accent hover:bg-paper-deep"
         >
-          <span className="sm:sr-only">{s.close}</span>
-          <kbd aria-hidden="true" className="kbd max-sm:hidden">
-            Esc
-          </kbd>
+          {/* The visible words are the name (WCAG 2.5.3): "Close", with the key beside it from 640 px. */}
+          <span>{s.close}</span>
+          <kbd className="kbd ml-2 max-sm:hidden">Esc</kbd>
         </button>
       </div>
 
-      <div id={`${id}-list`} role="listbox" aria-label={s.dialog} className="palette-list">
+      {/* Not a Tab stop: focus stays in the field, which moves the active option (aria-activedescendant). */}
+      <div id={`${id}-list`} role="listbox" aria-label={s.dialog} tabIndex={-1} className="palette-list">
         {groups.map((group, g) => (
           <div key={group.id} role="group" aria-label={group.label} className="pt-2" data-palette-group={group.id}>
             <div aria-hidden="true" className="px-2.5 pt-1 pb-1.5 text-xs font-semibold text-ink-soft">
@@ -238,10 +246,10 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
                   onClick={(event) => onPick(event, option)}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-medium text-ink">
+                    <span className="block font-medium text-ink max-sm:line-clamp-2 sm:truncate">
                       <Title text={option.title} query={query} />
                     </span>
-                    {option.subtitle ? <span className="block truncate text-sm text-ink-soft">{option.subtitle}</span> : null}
+                    {option.subtitle ? <span className="block text-sm text-ink-soft max-sm:line-clamp-2 sm:truncate">{option.subtitle}</span> : null}
                   </span>
                   <span className="palette-go">
                     <Arrow />
@@ -259,6 +267,11 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
           <span className="font-medium text-error">{s.signOutFailed}</span>
         ) : searching ? (
           s.searching
+        ) : unavailable ? (
+          // The API could not answer: say so, never "nothing matches" (sections and recent pages are local).
+          <span className="block py-2 text-ink" data-palette-unavailable="">
+            {s.unavailable}
+          </span>
         ) : options.length === 0 ? (
           <span className="block py-4 text-center text-base text-ink">{s.empty.replace("{q}", query.trim())}</span>
         ) : query.trim() ? (

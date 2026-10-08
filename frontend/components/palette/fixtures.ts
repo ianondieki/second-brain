@@ -17,6 +17,8 @@ export const DEV_PALETTE: PaletteData = {
     { id: "go-help", title: en.shell.help, href: "/help" },
   ],
   create: { id: "act-create", title: p.newProposal, href: "/dev/ideas/new" },
+  shortcut: "Ctrl K",
+  recentKey: "wazo-recent:v2:account-a",
   strings: {
     trigger: p.trigger,
     dialog: p.dialog,
@@ -24,6 +26,7 @@ export const DEV_PALETTE: PaletteData = {
     close: p.close,
     empty: p.empty,
     searching: p.searching,
+    unavailable: p.unavailable,
     results: p.results,
     goTo: p.goTo,
     recent: p.recent,

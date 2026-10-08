@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { getActivity } from "@/components/activity/fetch";
 import { myEngagements } from "@/components/tracker/data";
 import { appNow, requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
@@ -25,7 +26,7 @@ export default async function DeveloperHome() {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const [engagements, ideas, recommended, quiz, week, peers, activity] = await Promise.all([
+  const [engagements, ideas, recommended, quiz, week, peers, activity, mine] = await Promise.all([
     myEngagements(),
     myIdeas(),
     recommendations(),
@@ -33,6 +34,7 @@ export default async function DeveloperHome() {
     weekStrip(),
     homePeers(),
     publicActivity(),
+    getActivity(),
   ]);
   return (
     <HomeContent
@@ -45,6 +47,7 @@ export default async function DeveloperHome() {
       peers={peers}
       now={appNow()}
       activity={activity}
+      mine={mine}
     />
   );
 }

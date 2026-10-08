@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { directoryOptions } from "@/app/(app)/dev/companies/directory";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
@@ -33,7 +33,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const t = await getTranslations("discover");
+  const [t, te] = await Promise.all([getTranslations("discover"), getTranslations("eyebrow")]);
   const query = parseDiscover(await searchParams);
   const [lists, { niches, filterOptions }, saved] = await Promise.all([
     query.view === "gap"
@@ -55,7 +55,8 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
     <SignedInShell homeHref={home} nav={<DevNav current="discover" />} wide>
       <div className="max-w-4xl">
         {/* No primary action: Discover's work is on the rows. "Your niches" is a secondary link in the action slot. */}
-        <PageHeader
+        <PageHero
+          eyebrow={te("discover")}
           title={t("title")}
           lead={t("lead")}
           action={
@@ -66,7 +67,7 @@ export default async function DiscoverPage({ searchParams }: PageProps<"/dev/dis
         />
       </div>
       {/* The lists and their filters as one control surface: the tab strip on top, the filters under it. */}
-      <div className="mt-8 max-w-4xl rounded-panel border border-line bg-field">
+      <div className="max-w-4xl rounded-panel border border-line bg-field">
         <ViewSwitch query={query} className="px-2 sm:px-3" />
         <div className="px-4 py-1 sm:px-5">
           <DiscoverFilters query={query} niches={niches} counties={filterOptions.counties} showClear={!empty} />

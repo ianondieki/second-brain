@@ -5,15 +5,14 @@ import { getTranslations } from "next-intl/server";
 import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { myEngagements } from "@/components/tracker/data";
-import { EngagementRow } from "@/components/tracker/EngagementRow";
-import { awaitsMe } from "@/components/tracker/model";
+import { EngagementCard } from "@/components/engagements/EngagementCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { RowList } from "@/components/ui/RowList";
-import { cn } from "@/components/ui/cn";
+import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
+
+import { myIdeas } from "../ideas/data";
 
 import { byProposal } from "./byProposal";
 
@@ -34,46 +33,47 @@ export default async function DeveloperEngagementsPage() {
   if (home !== "/dev") redirect(home);
   const t = await getTranslations("tracker");
   const td = await getTranslations("devEngagements");
-  const groups = byProposal(await myEngagements());
+  const te = await getTranslations("eyebrow");
+  const [engagements, ideas] = await Promise.all([myEngagements(), myIdeas().catch(() => [])]);
+  const groups = byProposal(engagements);
+  // Each idea's niche, for its cards' photograph band (D-67).
+  const nicheOf = new Map(ideas.map((idea) => [idea.id, idea.niche ?? null]));
 
   return (
     <SignedInShell homeHref={home} nav={<DevNav current="engagements" />} wide>
-      <div className="max-w-3xl">
-        <PageHeader title={t("title")} lead={t("devLead")} />
+      <div className="max-w-5xl">
+        <PageHero eyebrow={te("engagements")} title={t("title")} lead={t("devLead")} />
         {groups.length > 0 ? (
-          <div className="mt-8 flex flex-col gap-6 lg:mt-10">
+          <div className="flex flex-col gap-12 lg:gap-14">
             {groups.map((group) => (
-              // Each idea is one white card of its organisations' rows; an idea with a row waiting on the developer
-              // is raised (P20: the thing that needs you carries the weight).
+              // Each idea is a section of its organisations' cards; the card that waits on the developer is raised.
               <Section
                 key={group.proposalId}
-                className={cn(
-                  "rounded-panel border border-line bg-field p-4 sm:p-6",
-                  group.items.some((item) => awaitsMe(item, "developer")) && "shadow-card",
-                )}
-                headingStyle="card"
                 title={group.title}
                 headingId={`proposal-${group.proposalId}`}
                 description={td("organisations", { count: group.items.length })}
                 link={{ href: `/dev/ideas/${encodeURIComponent(group.proposalId)}`, label: td("openIdea") }}
                 data-proposal={group.proposalId}
               >
-                <RowList aria-label={td("rowsLabel", { title: group.title })} className="[&>li:last-child>article]:pb-0">
+                {/* As many 20 rem columns as fit, sharing the width: one card is never left narrow beside empty room. */}
+                <ul aria-label={td("rowsLabel", { title: group.title })} className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
                   {group.items.map((item) => (
-                    <EngagementRow
-                      key={item.id}
-                      item={item}
-                      mine="developer"
-                      titleBy="organisation"
-                      href={`/dev/engagements/${encodeURIComponent(item.id)}`}
-                    />
+                    <li key={item.id} className="cv-auto flex min-w-0 [--cv-size:18rem] [&>article]:flex-1">
+                      <EngagementCard
+                        item={item}
+                        mine="developer"
+                        titleBy="organisation"
+                        href={`/dev/engagements/${encodeURIComponent(item.id)}`}
+                        niche={nicheOf.get(item.proposal_id) ?? null}
+                      />
+                    </li>
                   ))}
-                </RowList>
+                </ul>
               </Section>
             ))}
           </div>
         ) : (
-          <EmptyState sentence={t("emptyDev")} action={t("emptyDevAction")} href="/dev/ideas" className="mt-8" />
+          <EmptyState sentence={t("emptyDev")} action={t("emptyDevAction")} href="/dev/ideas" />
         )}
       </div>
     </SignedInShell>
