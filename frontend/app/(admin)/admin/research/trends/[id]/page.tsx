@@ -155,7 +155,7 @@ export default async function TrendReviewPage({ params }: PageProps<"/admin/rese
           title={t("trends.review.decisionHeading")}
           headingId="decision"
           description={t("trends.review.decisionLead")}
-          className="rounded-panel border border-line bg-field p-5 shadow-card sm:p-6"
+          className="decision-panel rounded-panel border bg-field p-5 sm:p-6"
         >
           <ClientStrings strings={strings}>
             <TrendDecision cardId={card.id} />

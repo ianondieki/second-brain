@@ -3,7 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { DataTable } from "@/components/ui/DataTable";
 import { first } from "@/app/(app)/org/membership";
 import { ClientStrings } from "@/components/ClientStrings";
@@ -11,6 +11,7 @@ import { ClientStrings } from "@/components/ClientStrings";
 import { formatCalendarDate } from "@/lib/format";
 
 import { AdminShell } from "../AdminShell";
+import { StaffEyebrow } from "../StaffEyebrow";
 import { QueueSummary, QueueSurface } from "../QueueSurface";
 import { PageStepUp } from "../research/PageStepUp";
 import { staffContext } from "../staff";
@@ -41,7 +42,7 @@ export default async function ClaimsPage({ searchParams }: PageProps<"/admin/cla
   const shell = (lead: ReactNode, children: ReactNode) => (
     <AdminShell role={role} current="claims" wide>
       <div className="flex max-w-5xl flex-col gap-8">
-        <PageHeader title={t("title")} lead={lead} focusable />
+        <PageHero eyebrow={<StaffEyebrow section="claims" />} title={t("title")} lead={lead} focusable />
         {children}
       </div>
     </AdminShell>

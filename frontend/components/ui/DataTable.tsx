@@ -12,12 +12,14 @@ export interface DataTableProps extends HTMLAttributes<HTMLTableElement> {
  * A calm, dense table for the staff console (D-52): small type, hairline rows, tabular figures, no zebra and no
  * borders between cells. Under 640 px each row stacks its cells, every cell prefixed by its column's name, and the
  * header row is left out (the prefixes say the columns); a wider table scrolls sideways inside its own box, never the
- * page. The table roles are written out: WebKit drops a table's semantics (and its name) once its parts change
+ * page; from 1024 px the header row sticks under the top bar. The table roles are written out: WebKit drops a table's semantics (and its name) once its parts change
  * display, which the stacked layout does.
  */
 export function DataTable({ columns, className, children, ...rest }: DataTableProps) {
   return (
-    <div className="w-full max-sm:contents sm:overflow-x-auto">
+    // From 1024 px the console's tables fit their column, so the box stops scrolling sideways and the header row
+    // can stay under the sticky top bar while a long queue scrolls (P25).
+    <div className="w-full max-sm:contents sm:overflow-x-auto lg:overflow-x-visible">
       <table role="table" className={cn("w-full border-collapse text-left text-sm max-sm:block", className)} {...rest}>
         <thead role="rowgroup" className="max-sm:hidden">
           <tr role="row" className="border-b border-line">
@@ -26,7 +28,7 @@ export function DataTable({ columns, className, children, ...rest }: DataTablePr
                 key={index}
                 role="columnheader"
                 scope="col"
-                className="py-2.5 pr-4 text-[0.8125rem] font-semibold whitespace-nowrap text-ink-soft last:pr-0"
+                className="py-2.5 pr-4 text-[0.8125rem] font-semibold whitespace-nowrap text-ink-soft last:pr-0 lg:sticky lg:top-16 lg:z-[1] lg:bg-field lg:shadow-[inset_0_-1px_0_var(--line)]"
               >
                 {column}
               </th>

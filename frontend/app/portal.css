@@ -367,3 +367,20 @@ li > .compare-band > .niche-band {
     color: var(--ink);
   }
 }
+
+/* The staff console (app/(admin)/admin): the decision panel is the clearest thing on a case page, a bloom hairline and
+   the overlay's depth, so the eye finds it first; it stays clear of the sticky top bar. */
+@layer components {
+  .decision-panel {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-overlay);
+  }
+  .decision-panel > div:first-child > h2 {
+    font-size: 1.375rem;
+  }
+}
+@media (forced-colors: active) {
+  .decision-panel {
+    border: 2px solid CanvasText;
+  }
+}
