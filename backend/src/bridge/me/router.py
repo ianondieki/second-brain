@@ -67,8 +67,8 @@ async def search_mine(
         Query(max_length=RAW_QUERY_MAX, description="The words to find: 2 to 80 characters once trimmed"),
     ],
 ) -> SearchResults:
-    """The command palette: the caller's ideas, engagements, Inbox and Briefs, readable problems and listed companies
-    whose title (or name) holds the words, at most five of each."""
+    """The command palette: the caller's ideas, engagements, Inbox and Briefs, readable problems and (for a developer)
+    listed companies whose title (or name) holds the words, at most five of each."""
     term = search.normalise(q)
     await limits.spend(
         db,

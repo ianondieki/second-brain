@@ -2,9 +2,10 @@
 
 **What is searched, by side** (``bridge.me.caller``): a developer's ideas (their own proposals, drafts included: My
 ideas), engagements (theirs as the developer), problems (published ones anyone signed in may read) and companies
-(listed organisations); an organisation member's Inbox (proposals pitched to their organisations), engagements
-(their organisations'), Briefs (their organisations' own, every state, as the Problems screen lists them), problems
-(not their own organisations' Briefs, which are under Briefs) and companies; staff's problems and companies.
+(listed organisations: only developers have the Companies screen, ``/dev/companies``, which sends everyone else to
+their home); an organisation member's Inbox (proposals pitched to their organisations), engagements (their
+organisations'), Briefs (their organisations' own, every state, as the Problems screen lists them) and problems (not
+their own organisations' Briefs, which are under Briefs); staff's problems.
 
 **How.** Case-insensitive substring of the title (an organisation's name for companies; for a developer's engagements
 the counterpart organisation's name too), the LIKE wildcards ``%`` and ``_`` and the escape ``\\`` taken literally.
@@ -52,8 +53,8 @@ MAX_LENGTH: Final = 80
 QUERY_RULE: Final = f"Type {MIN_LENGTH} to {MAX_LENGTH} characters to search."
 GROUPS: Final[dict[Side, tuple[SearchKind, ...]]] = {
     "developer": ("ideas", "engagements", "problems", "companies"),
-    "org": ("inbox", "engagements", "briefs", "problems", "companies"),
-    "staff": ("problems", "companies"),
+    "org": ("inbox", "engagements", "briefs", "problems"),
+    "staff": ("problems",),
 }
 PROPOSAL_FALLBACK: Final = "Proposal"  # an engagement whose proposal title the caller cannot read (the lists' word)
 ORG_FALLBACK: Final = "Organisation"
@@ -332,7 +333,7 @@ def kinds_for(caller: Caller) -> tuple[SearchKind, ...]:
     """The caller's side's groups; an organisation's own groups only when some organisation is open to them."""
     kinds = GROUPS[caller.side]
     if caller.side == "org" and not caller.orgs:
-        return tuple(kind for kind in kinds if kind in ("problems", "companies"))
+        return tuple(kind for kind in kinds if kind == "problems")
     return kinds
 
 

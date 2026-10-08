@@ -5,10 +5,11 @@
   never another developer's draft, a held or pending problem, an organisation's draft or invited-only Brief, another
   party's engagement, or a company that is not listed (not verified, delisted).
 - An organisation member finds their organisation's Inbox (a held proposal's pitch left out), engagement and Briefs
-  (every state), the problems everyone reads (not their own Briefs again) and the listed companies; a member of
-  several organisations gets ``?org=`` on their organisation's links, and an organisation whose role needs a second
-  factor this session has not given is left out, as its routes would refuse it.
-- Staff find what every developer finds among problems and companies, though RLS shows them more.
+  (every state) and the problems everyone reads (not their own Briefs again), and no companies (the Companies
+  screen is the developer portal's); a member of several organisations gets ``?org=`` on their organisation's links,
+  and an organisation whose role needs a second factor this session has not given is left out, as its routes would
+  refuse it. A developer who is a member of an unlisted organisation never finds it among the companies.
+- Staff find what every developer finds among problems (no companies), though RLS shows them more.
 - ``%``, ``_`` and ``\\`` match themselves; past 30 searches in 10 seconds it is 429 with ``Retry-After``; each read
   is read-only with a 2 s statement timeout; the answer says ``Cache-Control: private, no-store`` and has the OpenAPI
   document's shape.
@@ -27,6 +28,7 @@ from bridge.me import search
 from bridge.me.caller import Caller
 from bridge.me.schemas import SearchResults
 from tests.integration.api import make_client
+from tests.integration.engagements import tracker as t
 from tests.integration.me.conftest import SignedIn
 from tests.integration.me.scene import Scene, idea, niche, person
 from tests.unit.public.openapi_shape import conforms
@@ -126,7 +128,7 @@ async def test_a_member_finds_their_organisation_s_inbox_engagement_and_briefs(
 ) -> None:
     async with signed_in(scene.member_a) as client:
         groups = await found(client, scene.word)
-    assert list(groups) == ["inbox", "engagements", "briefs", "problems", "companies"]
+    assert list(groups) == ["inbox", "engagements", "briefs", "problems"]  # no companies outside the developer portal
     assert groups["inbox"] == [
         {
             "id": str(scene.tags["amina_alpha"]),
@@ -147,7 +149,6 @@ async def test_a_member_finds_their_organisation_s_inbox_engagement_and_briefs(
     assert ids(groups["briefs"]) == briefs
     assert {item["href"] for item in groups["briefs"]} == {f"/org/problems/{problem}" for problem in briefs}
     assert ids(groups["problems"]) == {str(scene.problems[label]) for label in ("public", "brief_b")}
-    assert ids(groups["companies"]) == {str(scene.alpha), str(scene.beta)}
     assert str(scene.engagements["brian_beta"]) not in everything(groups)
     assert {str(scene.ideas["brian_held"]), str(scene.tags["brian_held_alpha"])} & everything(groups) == set()
 
@@ -171,8 +172,7 @@ async def test_a_member_of_several_keeps_the_organisation_and_never_sees_another
     ]
     assert [item["href"] for item in groups["briefs"]] == [f"/org/problems/{scene.problems['brief_b']}{org}"]
     assert ids(groups["problems"]) == {str(scene.problems[label]) for label in ("public", "brief_a")}
-    # Gamma is the member's own organisation, but not listed: never among the companies.
-    assert ids(groups["companies"]) == {str(scene.alpha), str(scene.beta)}
+    assert list(groups) == ["inbox", "engagements", "briefs", "problems"]
     assert everything(groups) & private_ids(scene) == set()
     assert str(scene.engagements["amina_alpha"]) not in everything(groups)
 
@@ -182,15 +182,28 @@ async def test_an_organisation_whose_role_needs_a_second_factor_not_given_is_lef
 ) -> None:
     async with signed_in(scene.member_b, mfa_verified=False) as client:
         groups = await found(client, scene.word)
-    assert list(groups) == ["problems", "companies"]  # Beta's Inbox, engagement and Brief need the second factor
+    assert list(groups) == ["problems"]  # Beta's Inbox, engagement and Brief need the second factor
     assert ids(groups["problems"]) == {str(scene.problems[label]) for label in ("public", "brief_a", "brief_b")}
 
 
 async def test_staff_find_only_what_every_developer_finds(scene: Scene, signed_in: SignedIn) -> None:
     async with signed_in(scene.staff) as client:
         groups = await found(client, scene.word)
-    assert list(groups) == ["problems", "companies"]
+    assert list(groups) == ["problems"]
     assert ids(groups["problems"]) == {str(scene.problems[label]) for label in ("public", "brief_a", "brief_b")}
+
+
+async def test_a_developer_never_finds_their_own_unlisted_organisation_among_the_companies(
+    scene: Scene, signed_in: SignedIn, owner_engine: AsyncEngine
+) -> None:
+    """Gamma (not verified) is this developer's own organisation, which RLS lets them read: still not listed."""
+    async with owner_engine.begin() as conn:
+        insider = await person(conn, "insider", developer=True)
+        await t.member(conn, scene.gamma, insider, "{viewer}")
+        await t.member(conn, scene.delta, insider, "{viewer}")
+    async with signed_in(insider) as client:
+        groups = await found(client, scene.word)
+    assert list(groups) == ["problems", "companies"]
     assert ids(groups["companies"]) == {str(scene.alpha), str(scene.beta)}
 
 

@@ -2,7 +2,7 @@
 
 Given what was typed, when it is checked, then 2 to 80 characters once trimmed pass and anything else is 422
 ``invalid_query`` without quoting it; LIKE's ``%``, ``_`` and ``\\`` match themselves; each side searches its own
-groups in a fixed order (an organisation member with no open organisation only problems and companies); every item
+groups in a fixed order (companies for developers only; a member with no open organisation only problems); every item
 links to the web app's path for it, an organisation's with ``?org=`` only for a member of several; each group is cut
 to five and empty groups are left out; and each statement repeats its list's own rule (the owner, the party, the
 delivered tag of a published proposal, the organisation's Briefs, ``problem_is_readable``, the directory's listing).
@@ -98,12 +98,12 @@ def test_the_match_and_the_order_name_the_escape_character() -> None:
 
 def test_each_side_searches_its_own_groups_in_order() -> None:
     assert search.kinds_for(DEVELOPER) == ("ideas", "engagements", "problems", "companies")
-    assert search.kinds_for(MEMBER) == ("inbox", "engagements", "briefs", "problems", "companies")
-    assert search.kinds_for(STAFF) == ("problems", "companies")
+    assert search.kinds_for(MEMBER) == ("inbox", "engagements", "briefs", "problems")
+    assert search.kinds_for(STAFF) == ("problems",)  # no Companies screen outside the developer portal
 
 
 def test_a_member_whose_organisations_all_need_a_second_factor_searches_only_what_everyone_reads() -> None:
-    assert search.kinds_for(Caller(USER, "org", ())) == ("problems", "companies")
+    assert search.kinds_for(Caller(USER, "org", ())) == ("problems",)
 
 
 def item(n: int) -> SearchItem:

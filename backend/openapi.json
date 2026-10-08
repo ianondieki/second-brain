@@ -34841,7 +34841,7 @@
     },
     "/api/me/search": {
       "get": {
-        "description": "The command palette: the caller's ideas, engagements, Inbox and Briefs, readable problems and listed companies\nwhose title (or name) holds the words, at most five of each.",
+        "description": "The command palette: the caller's ideas, engagements, Inbox and Briefs, readable problems and (for a developer)\nlisted companies whose title (or name) holds the words, at most five of each.",
         "operationId": "search_mine_api_me_search_get",
         "parameters": [
           {
