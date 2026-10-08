@@ -43,10 +43,6 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
-  .item-card-band > .niche-band {
-    height: 4.5rem;
-    border-radius: 0;
-  }
   .item-card-head {
     display: flex;
     min-width: 0;
@@ -433,5 +429,18 @@ li > .compare-band > .niche-band {
   }
   .auth-credit a {
     color: var(--on-night);
+  }
+}
+
+/* A card's photograph band (app/(app)/org/ItemCard.tsx), outside the layers so it wins over NicheBand's own height
+   utility: a narrow strip on a phone, so it is never larger than the page's title and lead (never the LCP element:
+   photographs are decoration beside a visible name, D-67); a band from 640 px. */
+.item-card-band > .niche-band {
+  height: 2.5rem;
+  border-radius: 0;
+}
+@media (width >= 40rem) {
+  .item-card-band > .niche-band {
+    height: 4.5rem;
   }
 }
