@@ -6,11 +6,11 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { orgEngagements } from "@/components/tracker/data";
 import { EngagementList } from "@/components/tracker/EngagementList";
 
-import { orgContext } from "../../data";
+import { orgContext } from "../data";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
-import { ENGAGEMENTS_PATH, inboxHref, type Membership } from "../../membership";
-import { OrgPicker } from "../../OrgPicker";
+import { ENGAGEMENTS_PATH, inboxHref, type Membership } from "../membership";
+import { OrgPicker } from "../OrgPicker";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("tracker");

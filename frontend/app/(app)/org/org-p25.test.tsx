@@ -9,7 +9,7 @@ import { briefList, ORG_ID, ORG_NAME } from "@/test/briefs";
 import { renderWithIntl } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
-import OrganisationHome from "./(home)/page";
+import OrganisationHome from "./page";
 import { ItemCard, ItemGrid } from "./ItemCard";
 import { BriefForm } from "./problems/new/BriefForm";
 import { BriefPreview } from "./problems/new/BriefPreview";

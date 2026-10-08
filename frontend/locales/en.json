@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "reviewP25c2": "[[COPY-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67): portal.* (the eyebrows saying where you are, the organisation portal's, the console's and the signed-out screens' new lines: portal.eyebrow.*, portal.settings.*, portal.proposal.means (the NDA step's second column heading; the step's own lead and the viewer-logging notice stay verbatim), portal.inbox.matchesTitle, portal.auth.credits, portal.loading), briefForm.preview.* (the live preview of how a Brief reads on Discover, mirroring discover.brief* and problem.label.org_brief)",
+    "reviewP25c2": "[[COPY-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67): portal.* (the eyebrows saying where you are, the organisation portal's, the console's and the signed-out screens' new lines: portal.eyebrow.*, portal.settings.*, portal.proposal.means (the NDA step's second column heading; the step's own lead and the viewer-logging notice stay verbatim), portal.inbox.matchesTitle, portal.auth.credits), briefForm.preview.* (the live preview of how a Brief reads on Discover, mirroring discover.brief* and problem.label.org_brief)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
     "reviewP15f": "[[COPY-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.*; adminModeration.reason.* name the pre-screen's reason codes (bridge/proposals/prescreen.py, docs/spec/06 6.12); E0/E1/E2 follow docs/spec/03",
     "reviewP16c2": "[[COPY-REVIEW]] P16 part C2 (REQ-UX-01..04, REQ-ADM-01): adminModeration.case.textHeadingDecided, scoutForm.fitLong",
@@ -635,7 +635,6 @@
     "proposal": {
       "means": "What accepting means"
     },
-    "loading": "Loading…",
     "settings": {
       "leadSecurity": "How you sign in, and the second step that keeps your account yours.",
       "leadNotifications": "What we send you, and where you read it.",
@@ -1152,7 +1151,8 @@
       "submit": "Confirm",
       "checking": "Checking…",
       "invalid": "That code did not work. Enter the newest code from your authenticator app.",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "retry": "Try again"
     },
     "queue": {
       "heading": "Waiting for review",

@@ -30,18 +30,18 @@ import { appNow } from "@/lib/api/server";
 import { needsMfaSetup } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
-import { dayPart } from "../../dev/home";
+import { dayPart } from "../dev/home";
 
-import { getBriefs } from "../brief-data";
-import { briefStats, problemsHref } from "../briefs";
-import { getInbox, orgContext, type InboxPage } from "../data";
-import { formatDay } from "../format";
-import { orgHomeStats, weeklySeries } from "../home";
-import { InboxCard } from "../inbox/InboxCard";
-import { CARD_BAND, ItemGrid } from "../ItemCard";
-import { engagementsHref, inboxHref, proposalHref, type Membership } from "../membership";
-import { matchesHref, type Match } from "../scout";
-import { getMatches } from "../scout-data";
+import { getBriefs } from "./brief-data";
+import { briefStats, problemsHref } from "./briefs";
+import { getInbox, orgContext, type InboxPage } from "./data";
+import { formatDay } from "./format";
+import { orgHomeStats, weeklySeries } from "./home";
+import { InboxCard } from "./inbox/InboxCard";
+import { CARD_BAND, ItemGrid } from "./ItemCard";
+import { engagementsHref, inboxHref, proposalHref, type Membership } from "./membership";
+import { matchesHref, type Match } from "./scout";
+import { getMatches } from "./scout-data";
 
 /** How many Inbox proposals Home shows before "All proposals". */
 const INBOX_SHOWN = 4;
