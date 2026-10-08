@@ -6,19 +6,6 @@ import { formatCalendarDate } from "@/lib/format";
 import { buildGrid, WEEKS, type Activity } from "./calendar";
 import { getActivity } from "./fetch";
 
-/** The action kinds the calendar names (the API's; any other kind counts in the total but is not named). */
-const KINDS = [
-  "version_registered",
-  "proposal_published",
-  "engagement_step",
-  "message_sent",
-  "quiz_answered",
-  "team_message",
-  "proposal_opened",
-  "brief_posted",
-] as const;
-type Kind = (typeof KINDS)[number];
-const isKind = (kind: string): kind is Kind => (KINDS as readonly string[]).includes(kind);
 
 /** A month's short name in the page's language ("Oct"; three letters in English, as lib/format.ts writes months). */
 function monthName(locale: string, day: string): string {
@@ -45,9 +32,7 @@ export async function ActivityCalendar({ activity, weeks = WEEKS }: { activity: 
   }
   const grid = buildGrid(activity);
   const busy = activity.days.filter((d) => d.count > 0);
-  const kinds = activity.kinds
-    .filter((k): k is { kind: Kind; count: number } => k.count > 0 && isKind(k.kind))
-    .sort((a, b) => b.count - a.count);
+  const kinds = activity.kinds.filter((k) => k.count > 0).sort((a, b) => b.count - a.count);
   const dayLabels = [t("mon"), "", t("wed"), "", t("fri"), "", ""];
 
   return (

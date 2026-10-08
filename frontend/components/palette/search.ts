@@ -1,10 +1,10 @@
+import { createApiClient } from "@/lib/api/client";
+
 import { SEARCH_KINDS, type PaletteLink, type SearchKind } from "./types";
 
-// The palette's search (GET /api/me/search?q=; D-67, P25). The route was built beside this palette (P25-B), after
-// backend/openapi.json was frozen for this worktree, so its answer is read as unknown and checked here, field by
-// field, instead of trusting a hand-written type: anything that does not have the documented shape
-// `{q, groups: [{kind, items: [{id, title, subtitle, href}]}]}` is dropped, and a failed call shows no search groups.
-// Once the regenerated schema is merged (P25 part 2), this reads the route through the typed client instead.
+// The palette's search (GET /api/me/search?q=; D-67, P25) through the typed client. The answer is still checked item
+// by item before it is shown (parseSearch): a result only ever opens a path on this site, and a malformed item is
+// dropped rather than drawn. A call that could not be answered gives null (the palette says search is unavailable).
 
 export const SEARCH_MIN = 2;
 export const SEARCH_MAX = 80;
@@ -54,15 +54,17 @@ export function searchQuery(text: string): string | null {
  * One search: the groups (none for a successful empty answer), or null when it could not be answered (offline, a
  * server error, the rate limit, an answer that is not JSON): the palette then says search is unavailable.
  */
-export async function search(q: string, signal: AbortSignal, fetcher: typeof fetch = fetch): Promise<SearchGroup[] | null> {
+export async function search(
+  q: string,
+  signal: AbortSignal,
+  fetcher: typeof fetch = (input, init) => globalThis.fetch(input, init),
+): Promise<SearchGroup[] | null> {
   try {
-    const response = await fetcher(`/api/me/search?q=${encodeURIComponent(q)}`, {
-      credentials: "same-origin",
-      headers: { accept: "application/json" },
-      signal,
-    });
-    if (!response.ok) return null;
-    return parseSearch(await response.json());
+    // Same origin, written out: the client builds a Request, which needs an absolute address outside a browser.
+    const baseUrl = typeof window === "undefined" ? "" : window.location.origin;
+    const { data, response } = await createApiClient({ baseUrl, fetch: fetcher }).GET("/api/me/search", { params: { query: { q } }, signal });
+    if (!response.ok || !data) return null;
+    return parseSearch(data);
   } catch {
     return null;
   }

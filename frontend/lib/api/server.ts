@@ -11,7 +11,7 @@ import { cookieSecure, sessionCookieHeader } from "./cookies";
 import type { paths } from "./schema";
 
 // Server-side calls go straight to FastAPI (same default as the /api rewrite in next.config.ts).
-export const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
+const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 
 /**
  * The app clock for this request (P23-3): the first `X-App-Now` instant an API response carried, so the page's

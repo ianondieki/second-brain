@@ -1,3 +1,5 @@
+import type { components } from "@/lib/api/schema";
+
 // The command palette's data (D-67, P25): what the server gives the top bar's Search button, and what the lazily loaded
 // palette shows. Plain, serialisable values: the button carries them in the page's payload, not in its script.
 
@@ -38,9 +40,9 @@ export interface PaletteStrings {
   keyClose: string;
 }
 
-/** The groups the API's search answers with (GET /api/me/search). */
-export const SEARCH_KINDS = ["ideas", "engagements", "inbox", "problems", "briefs", "companies"] as const;
-export type SearchKind = (typeof SEARCH_KINDS)[number];
+/** The groups the API's search answers with (GET /api/me/search; the generated schema's SearchGroup kinds). */
+export type SearchKind = components["schemas"]["SearchGroup"]["kind"];
+export const SEARCH_KINDS = ["ideas", "engagements", "inbox", "problems", "briefs", "companies"] as const satisfies readonly SearchKind[];
 
 export interface PaletteData {
   portal: PalettePortal;

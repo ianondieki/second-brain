@@ -210,7 +210,9 @@ describe("CommandPalette", () => {
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "sacco" } });
     const ideas = await screen.findByRole("group", { name: "Your ideas" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0][0])).toBe("/api/me/search?q=sacco");
+    const sent = fetchMock.mock.calls[0][0] as Request;
+    expect(new URL(sent.url).pathname + new URL(sent.url).search).toBe("/api/me/search?q=sacco");
+    expect(sent.method).toBe("GET");
     const option = within(ideas).getByRole("option");
     expect(option.textContent).toContain("Repayment nudges for SACCO members");
     expect(option.querySelector("mark")?.textContent).toBe("SACCO");

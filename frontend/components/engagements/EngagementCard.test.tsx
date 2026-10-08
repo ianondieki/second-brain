@@ -14,7 +14,7 @@ describe("EngagementCard", () => {
   it("links its title, reads its stage as one image and keeps to two chips when it is your turn", () => {
     renderWithIntl(
       <EngagementCard
-        item={summary({ state: "TERMS_DRAFTING", stage_group: "agreement", stage_label: "Terms drafting", whose_turn: ["developer"] })}
+        item={summary({ state: "NEGOTIATION", stage_group: "agreement", stage_label: "Terms drafting", whose_turn: ["developer"] })}
         mine="developer"
         href="/dev/engagements/e1"
       />,
@@ -32,7 +32,7 @@ describe("EngagementCard", () => {
   it("says who it waits on otherwise, titled by the organisation under an idea", () => {
     renderWithIntl(
       <EngagementCard
-        item={summary({ state: "TERMS_DRAFTING", stage_group: "agreement", whose_turn: ["org"], org_name: "SACCO B" })}
+        item={summary({ state: "NEGOTIATION", stage_group: "agreement", whose_turn: ["org"], org_name: "SACCO B" })}
         mine="developer"
         titleBy="organisation"
         href="/dev/engagements/e1"
