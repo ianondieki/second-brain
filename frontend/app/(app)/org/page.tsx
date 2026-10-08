@@ -15,14 +15,23 @@ import { NeedsYouCard } from "@/components/tracker/NeedsYouCard";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Callout } from "@/components/ui/Callout";
-import { CardGrid } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { NicheBand } from "@/components/ui/NicheBand";
+import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
 import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
+import { ActivityCalendar } from "@/components/activity/ActivityCalendar";
+import { WEEKS } from "@/components/activity/calendar";
+import { getActivity } from "@/components/activity/fetch";
+import { GreetingPhoto } from "@/components/home/GreetingPhoto";
+import { CountFigure } from "@/components/motion/CountFigure";
+import { CountUp } from "@/components/motion/CountUp";
+import { appNow } from "@/lib/api/server";
 import { needsMfaSetup } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
+
+import { dayPart } from "../dev/home";
 
 import { getBriefs } from "./brief-data";
 import { briefStats, problemsHref } from "./briefs";
@@ -30,6 +39,7 @@ import { getInbox, orgContext, type InboxPage } from "./data";
 import { formatDay } from "./format";
 import { orgHomeStats, weeklySeries } from "./home";
 import { InboxCard } from "./inbox/InboxCard";
+import { ItemGrid } from "./ItemCard";
 import { engagementsHref, inboxHref, proposalHref, type Membership } from "./membership";
 import { matchesHref, type Match } from "./scout";
 import { getMatches } from "./scout-data";
@@ -43,16 +53,18 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * Organisation home (docs/spec/07 item 1; D-52): the greeting, four stat tiles from the Inbox, the scout's matches,
- * the engagements and the Problem Briefs (with a sparkline where a series exists), two-step sign-in as a notice only
- * while it is off, what needs the organisation as prominent cards, then the newest Inbox proposals as compact cards.
- * "Open the Inbox" is the screen's one primary action; an owner without two-step sign-in gets "Turn on" instead,
- * since the Inbox is refused until then.
+ * Organisation home (docs/spec/07 item 1; D-52, D-67): the greeting by the time of day beside its Nairobi photograph,
+ * four stat tiles (the Inbox, the scout's matches, the engagements, the Problem Briefs; a sparkline where a series
+ * exists) whose figures count once, two-step sign-in as a notice only while it is off, "Your last 26 weeks" (this
+ * person's own actions, the activity calendar), what needs the organisation as prominent cards, then the newest Inbox
+ * proposals as cards under their niche's photograph. "Open the Inbox" is the screen's one primary action; an owner
+ * without two-step sign-in gets "Turn on" instead, since the Inbox is refused until then.
  */
 export default async function OrganisationHome({ searchParams }: PageProps<"/org">) {
   const { me, memberships, org, missing, query } = await orgContext((await searchParams).org);
-  const t = await getTranslations("home");
-  const ti = await getTranslations("inbox");
+  const [t, ti, tp] = await Promise.all([getTranslations("home"), getTranslations("inbox"), getTranslations("portal")]);
+  // The greeting by the hour of the app clock in Nairobi (as on the developer's Home), with its photograph.
+  const part = dayPart(appNow());
   const setupNeeded = needsMfaSetup(me.mfa);
   const mfa = me.mfa.enrolled ? "on" : setupNeeded ? "required" : "off";
   const ready = org !== null && !setupNeeded;
@@ -63,9 +75,10 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
       <ClientStrings strings={await clientStrings(["tour"])}>
         <FirstLoginTour side="org" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("org")} />
       </ClientStrings>
-      <div className="max-w-4xl">
-        <PageHeader
-          title={t("title", { name: me.user.display_name })}
+      <div className="max-w-5xl">
+        <PageHero
+          eyebrow={tp("eyebrow.home")}
+          title={t(`greeting.${part}`, { name: me.user.display_name })}
           lead={org ? t("orgLead", { org: org.org_name }) : t("orgLeadNoName")}
           action={
             setupNeeded ? (
@@ -78,13 +91,14 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
               </ButtonLink>
             ) : undefined
           }
+          aside={<GreetingPhoto part={part} />}
         />
       </div>
 
-      <div className="mt-8 flex max-w-4xl flex-col gap-12">
+      <div className="flex max-w-5xl flex-col gap-12">
         {/* Two-step sign-in: one quiet line when it is on (the confirmation after turning it on), a notice while off. */}
         {mfa === "on" ? (
-          <p className="-mt-6 flex items-center gap-2 text-sm text-ink-soft" data-home="security">
+          <p className="-mt-4 flex items-center gap-2 text-sm text-ink-soft" data-home="security">
             <CheckIcon className="size-4 shrink-0 text-ok" />
             {t("mfaOn")}
           </p>
@@ -124,12 +138,19 @@ async function quietly<T>(read: () => Promise<T>): Promise<T | null> {
 }
 
 async function HomeBody({ memberships, org }: { memberships: Membership[]; org: Membership }) {
-  const [t, ti, tt, locale] = await Promise.all([getTranslations("orgHome"), getTranslations("inbox"), getTranslations("tracker"), getLocale()]);
-  const [inboxRead, matchesRead, engagementsRead, briefsRead] = await Promise.all([
+  const [t, ti, tt, ta, locale] = await Promise.all([
+    getTranslations("orgHome"),
+    getTranslations("inbox"),
+    getTranslations("tracker"),
+    getTranslations("activity"),
+    getLocale(),
+  ]);
+  const [inboxRead, matchesRead, engagementsRead, briefsRead, activity] = await Promise.all([
     quietly(() => getInbox(org.org_id)),
     quietly(() => getMatches(org.org_id)),
     quietly(() => orgEngagements(org.org_id)),
     quietly(() => getBriefs(org.org_id)),
+    getActivity(),
   ]);
   const inbox: InboxPage | null = inboxRead?.kind === "page" ? inboxRead.page : null;
   const matches: Match[] | null = matchesRead?.kind === "ok" ? matchesRead.value : null;
@@ -154,12 +175,14 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
   return (
     <>
       <section aria-label={t("stats.label")} data-home="stats">
+        {/* The figures count up once as the tiles come into view (CountUp; the real figure is read either way). */}
+        <CountUp>
         <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 [&>li>*]:h-full">
           <li>
             <StatTile
               data-stat="inbox"
               label={t("stats.inbox")}
-              value={stats.inbox === null ? unknown.value : stats.more ? t("stats.more", { count: stats.inbox }) : stats.inbox}
+              value={stats.inbox === null ? unknown.value : stats.more ? t("stats.more", { count: stats.inbox }) : <CountFigure value={stats.inbox} />}
               meta={stats.inbox === null ? unknown.meta : stats.inbox === 0 ? undefined : stats.fresh > 0 ? t("stats.inboxMeta", { count: stats.fresh }) : t("stats.inboxMetaNone")}
               // A series only once it can show a shape: under five points it is a hockey stick with no scale.
               spark={inbox && stats.inbox !== null && stats.inbox >= SPARK_FROM ? weeklySeries(inbox.items.map((item) => item.pitched_at), now) : undefined}
@@ -170,7 +193,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="matches"
               label={t("stats.matches")}
-              value={stats.matches === null ? unknown.value : stats.matches}
+              value={stats.matches === null ? unknown.value : <CountFigure value={stats.matches} />}
               meta={stats.matches === null ? unknown.meta : stats.newestMatch ? t("stats.matchesMeta", { date: formatDay(locale, stats.newestMatch) }) : undefined}
               spark={matches && stats.matches !== null && stats.matches >= SPARK_FROM ? weeklySeries(matches.map((match) => match.created_at), now) : undefined}
               href={matchesHref(memberships, org.org_id)}
@@ -180,7 +203,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="engagements"
               label={t("stats.engagements")}
-              value={stats.engagements === null ? unknown.value : stats.engagements}
+              value={stats.engagements === null ? unknown.value : <CountFigure value={stats.engagements} />}
               meta={stats.engagements === null ? unknown.meta : t("stats.engagementsMeta", { count: stats.active })}
               href={engagementsLink}
             />
@@ -191,7 +214,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="briefs"
               label={t("stats.briefs")}
-              value={briefs === null ? unknown.value : briefs.open}
+              value={briefs === null ? unknown.value : <CountFigure value={briefs.open} />}
               meta={
                 briefs === null
                   ? unknown.meta
@@ -205,7 +228,17 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             />
           </li>
         </ul>
+        </CountUp>
       </section>
+
+      {/* Your last 26 weeks (D-67): this person's own actions for the organisation, read as them; left out without an answer. */}
+      {activity ? (
+        <Section title={ta("title", { weeks: WEEKS })} headingId="home-activity" data-home="activity">
+          <div className="rounded-panel border border-line bg-field p-4 sm:p-6">
+            <ActivityCalendar activity={activity} />
+          </div>
+        </Section>
+      ) : null}
 
       {stats.waiting.length > 0 ? (
         <Section title={tt("needsUs")} headingId="home-needs-us" data-home="needs-us">
@@ -227,13 +260,17 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
         link={newest ? { href: inboxLink, label: t("allProposals") } : undefined}
       >
         {newest ? (
-          <CardGrid>
+          <ItemGrid>
             {inbox!.items.slice(0, INBOX_SHOWN).map((item) => (
               <li key={item.tag_id}>
-                <InboxCard item={item} href={proposalHref(memberships, org.org_id, item.proposal.id)} />
+                <InboxCard
+                  item={item}
+                  href={proposalHref(memberships, org.org_id, item.proposal.id)}
+                  band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} />}
+                />
               </li>
             ))}
-          </CardGrid>
+          </ItemGrid>
         ) : null}
       </Section>
     </>
