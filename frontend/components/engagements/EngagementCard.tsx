@@ -39,6 +39,12 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
   const other = mine === "developer" ? item.org_name : item.developer_name;
   const title = titleBy === "organisation" ? other : item.proposal_title;
   const Heading = headingLevel === 2 ? "h2" : "h3";
+  const link = (
+    <Link href={href} className={cardLinkClass}>
+      {title}
+      <LinkPending className="absolute top-2 left-1/2 -translate-x-1/2" />
+    </Link>
+  );
   return (
     <article
       data-engagement={item.id}
@@ -54,12 +60,8 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
         <Avatar name={other} kind={mine === "developer" ? "org" : "person"} active={mineTurn} />
         <div className="min-w-0">
           <Heading className="font-sans text-base leading-snug font-semibold [overflow-wrap:anywhere] text-ink">
-            <SharedTitle kind="engagement" id={item.id}>
-              <Link href={href} className={cardLinkClass}>
-                {title}
-                <LinkPending className="absolute top-2 left-1/2 -translate-x-1/2" />
-              </Link>
-            </SharedTitle>
+            {/* Titled by the idea, the title morphs into the tracker's (the same words); by the organisation it does not. */}
+            {titleBy === "proposal" ? <SharedTitle kind="engagement" id={item.id}>{link}</SharedTitle> : link}
           </Heading>
           {titleBy === "proposal" ? (
             <p className="text-sm text-ink-soft">{mine === "developer" ? t("withOrg", { org: item.org_name }) : t("fromDeveloper", { name: item.developer_name })}</p>

@@ -1,11 +1,16 @@
 import { useLocale, useTranslations } from "next-intl";
+import type { ComponentType } from "react";
 
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/Badge";
 import { titleLinkClass } from "@/components/ui/Button";
 import { Section } from "@/components/ui/Section";
-import { AlertIcon, CheckIcon } from "@/components/ui/status-icons";
+import { PauseIcon, PlayIcon } from "@/components/icons/lucide";
+import { PencilIcon, SparkIcon } from "@/components/ui/icons";
+import { AlertIcon, CheckIcon, ClockIcon, LockIcon } from "@/components/ui/status-icons";
+
+import { MessageIcon } from "./icons";
 
 import { formatDate, notesByEvent, type Command, type History, type HistoryEvent, type Note } from "./model";
 import { Eat } from "./When";
@@ -85,19 +90,15 @@ export function HistoryList({
         {entries.map((entry, i) => {
           const rail =
             i < entries.length - 1 ? (
-              <span aria-hidden="true" className="absolute top-5 bottom-0 left-[7px] w-0.5 rounded-full bg-ink-soft/30" />
+              <span aria-hidden="true" className="absolute top-8 bottom-0 left-[13px] w-0.5 rounded-full bg-ink-soft/25" />
             ) : null;
+          // A mark per event with its icon (P25): the latest filled in bloom; messages in bloom; an end in the error tone.
+          const kind = entry.kind === "message" ? "message" : eventKind(entry.event.command);
+          const { Icon, tone } = MARKS[kind];
           const mark = (
-            <span
-              aria-hidden="true"
-              className={
-                i === 0
-                  ? "relative mt-1 size-4 shrink-0 rounded-full bg-accent ring-4 ring-accent-wash"
-                  : entry.kind === "message"
-                    ? "relative mt-1 size-4 shrink-0 rounded-full border-2 border-accent bg-accent-wash"
-                    : "relative mt-1 size-4 shrink-0 rounded-full border-2 border-ink-soft bg-paper"
-              }
-            />
+            <span aria-hidden="true" className="event-mark" data-latest={i === 0 ? "" : undefined} data-tone={tone} data-mark-kind={kind}>
+              <Icon />
+            </span>
           );
           if (entry.kind === "message") {
             const message = entry.message;
@@ -184,4 +185,29 @@ export function timeline(history: Pick<History, "events" | "messages">): Entry[]
     message,
   }));
   return [...events, ...messages].sort((a, b) => b.at - a.at);
+}
+
+type MarkKind = "start" | "message" | "sign" | "pause" | "resume" | "end" | "nda" | "time" | "step";
+const MARKS: Record<MarkKind, { Icon: ComponentType<{ className?: string }>; tone?: "message" | "end" }> = {
+  start: { Icon: SparkIcon },
+  message: { Icon: MessageIcon, tone: "message" },
+  sign: { Icon: PencilIcon },
+  pause: { Icon: PauseIcon },
+  resume: { Icon: PlayIcon },
+  end: { Icon: AlertIcon, tone: "end" },
+  nda: { Icon: LockIcon },
+  time: { Icon: ClockIcon, tone: "end" },
+  step: { Icon: CheckIcon },
+};
+
+/** The icon family of an event: how it started, a signature or terms, a pause, a resumption, an end, the NDA, a step. */
+export function eventKind(command: string): MarkKind {
+  if (command === "create") return "start";
+  if (command === "expire") return "time";
+  if (["decline", "decline_interest", "withdraw", "cancel_request"].includes(command)) return "end";
+  if (["pause", "request_info"].includes(command)) return "pause";
+  if (["resume", "answer_info", "reopen_negotiation"].includes(command)) return "resume";
+  if (["send_nda", "sign_nda"].includes(command)) return "nda";
+  if (command.startsWith("sign_") || ["propose_terms", "mark_final"].includes(command)) return "sign";
+  return "step";
 }

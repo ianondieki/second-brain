@@ -1941,6 +1941,70 @@ time,
 }
 }
 
+@layer components {
+/* The tracker's stepper (components/tracker/Stepper.tsx; P25): the done line draws once, a step after the one before,
+   down on phones and across from 1024 px; the current mark breathes three times, then rests. Image-free (REQ-UX-05). */
+[data-step-line="done"] {
+  transform-origin: top;
+  animation: step-draw-y 520ms var(--ease-out) calc(120ms + var(--i, 0) * 160ms) backwards;
+}
+@media (width >= 64rem) {
+  [data-step-line="done"] {
+    transform-origin: left;
+    animation-name: step-draw-x;
+  }
+}
+@keyframes step-draw-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes step-draw-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+.step-breathe {
+  animation: step-breathe 2.4s ease-in-out 900ms 3;
+}
+@keyframes step-breathe {
+  50% {
+    box-shadow: 0 0 0 9px color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+}
+/* History marks (components/tracker/HistoryList.tsx): a circle with the event's icon. */
+.event-mark {
+  position: relative;
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--line);
+  border-radius: 9999px;
+  background: var(--field);
+  color: var(--ink-soft);
+}
+.event-mark > svg {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+.event-mark[data-latest] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 0 0 4px var(--accent-wash);
+}
+.event-mark[data-tone="message"] {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+.event-mark[data-tone="end"] {
+  color: var(--error);
+}
+}
+
 /*
  * View Transitions (components/motion/PageTransition.tsx; React's <ViewTransition>): a route change cross-fades the
  * page, both sides in the same 180 ms (blended, so what does not change stays still), the nav's current pill glides,
@@ -2008,6 +2072,10 @@ time,
   }
   .seal-sheen::after {
     display: none;
+  }
+  [data-step-line="done"],
+  .step-breathe {
+    animation: none !important;
   }
 
   /* The strip stands still: one copy, scrolled sideways (its links take focus, so the keyboard reaches every tile).
