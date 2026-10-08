@@ -18,6 +18,18 @@ const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 export const DESIGN_LAB = process.env.NODE_ENV === "development" || process.env.DESIGN_LAB === "1";
 export const PAGE_EXTENSIONS = [DESIGN_LAB ? "lab.tsx" : "stub.tsx", "tsx", "ts", "jsx", "js"];
 
+/**
+ * The self-hosted fonts (public/fonts, OFL, the versioned woff2 files security-headers.ts caches) are readable from any
+ * origin. The marked full proposal (backend proposals/render.py, REQ-PROV-03) is framed in a sandbox without
+ * allow-same-origin, so its document has an opaque origin and its font requests are CORS requests from origin "null":
+ * without this header the browser drops the response and the page falls back to a system face. The files are public,
+ * so the header reveals nothing; no other path gets it (a credentialed request is never allowed by "*").
+ */
+export const FONT_CORS = {
+  source: "/fonts/:file([^/]+-v\\d+\\.woff2)",
+  headers: [{ key: "Access-Control-Allow-Origin", value: "*" }],
+};
+
 const nextConfig: NextConfig = {
   output: "standalone",
   pageExtensions: PAGE_EXTENSIONS,
@@ -31,9 +43,9 @@ const nextConfig: NextConfig = {
       { source: "/.well-known/provenance-keys.json", destination: `${apiOrigin}/.well-known/provenance-keys.json` },
     ];
   },
-  // nosniff everywhere; the document-only headers on everything but the /_next/static build assets.
+  // nosniff everywhere; the document-only headers on everything but the /_next/static build assets; the fonts' CORS.
   async headers() {
-    return HEADER_RULES.map(({ source, headers }) => ({ source, headers: [...headers] }));
+    return [...HEADER_RULES.map(({ source, headers }) => ({ source, headers: [...headers] })), FONT_CORS];
   },
 };
 
