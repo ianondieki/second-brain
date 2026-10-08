@@ -1877,6 +1877,70 @@ time,
 }
 }
 
+@layer components {
+/* An engagement's five stages as dots on a line (components/engagements/StageDots.tsx; P25): done filled, the current
+   ringed (error past its deadline, hollow while paused or ended), the rest open. Shapes, not colour alone. */
+.stage-dots {
+  display: flex;
+  align-items: center;
+  max-width: 14rem;
+}
+.stage-dots > span {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.stage-dots > span:last-child {
+  flex: 0;
+}
+.stage-dots > span::before {
+  content: "";
+  width: 0.625rem;
+  height: 0.625rem;
+  flex-shrink: 0;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 9999px;
+  background: var(--field);
+}
+.stage-dots > span:not(:last-child)::after {
+  content: "";
+  height: 1.5px;
+  flex: 1;
+  margin-inline: 3px;
+  background: var(--line);
+}
+.stage-dots > [data-dot="completed"]::before {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+.stage-dots > [data-dot="completed"]::after {
+  background: var(--ok);
+}
+.stage-dots > [data-dot="current"]::before,
+.stage-dots > [data-dot="overdue"]::before {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 3px solid var(--accent);
+  background: var(--field);
+}
+.stage-dots > [data-dot="overdue"]::before {
+  border-color: var(--error);
+}
+.stage-dots > [data-dot="onHold"]::before,
+.stage-dots > [data-dot="ended"]::before {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px dashed var(--ink-soft);
+}
+@media (forced-colors: active) {
+  .stage-dots > span::before,
+  .stage-dots > span::after {
+    forced-color-adjust: none;
+  }
+}
+}
+
 /*
  * View Transitions (components/motion/PageTransition.tsx; React's <ViewTransition>): a route change cross-fades the
  * page, both sides in the same 180 ms (blended, so what does not change stays still), the nav's current pill glides,
