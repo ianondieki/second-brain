@@ -21,33 +21,38 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("devPageTitle") };
 }
 
-/** Developer Home: the reads (together, not one after the other), then HomeContent draws them. */
+/**
+ * A read for below the first screen, started now and awaited by HomeContent's boundary. Each one answers null on a
+ * failure; the one thing it throws (a redirect, the session ended) is handled there, so it is marked handled here and
+ * never reaches the process as an unhandled rejection while the shell renders.
+ */
+function started<T>(read: Promise<T>): Promise<T> {
+  read.catch(() => undefined);
+  return read;
+}
+
+/**
+ * Developer Home. The first screen's reads (the stat tiles: the engagements and the ideas) come first, together; the
+ * rest start once those have answered, so they do not queue ahead of them at the API, and HomeContent streams them in
+ * below the tiles (P25: the greeting, the LCP element, no longer waits for data shown further down).
+ */
 export default async function DeveloperHome() {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
-  const [engagements, ideas, recommended, quiz, week, peers, activity, mine] = await Promise.all([
-    myEngagements(),
-    myIdeas(),
-    recommendations(),
-    quizCard(),
-    weekStrip(),
-    homePeers(),
-    publicActivity(),
-    getActivity(),
-  ]);
+  const [engagements, ideas] = await Promise.all([myEngagements(), myIdeas()]);
   return (
     <HomeContent
       me={me}
       engagements={engagements}
       ideas={ideas}
-      recommended={recommendationsState(recommended)}
-      quiz={quiz}
-      week={week}
-      peers={peers}
+      recommended={started(recommendations().then(recommendationsState))}
+      quiz={started(quizCard())}
+      week={started(weekStrip())}
+      peers={started(homePeers())}
       now={appNow()}
-      activity={activity}
-      mine={mine}
+      activity={started(publicActivity())}
+      mine={started(getActivity())}
     />
   );
 }
