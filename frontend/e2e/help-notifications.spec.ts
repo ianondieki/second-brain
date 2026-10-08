@@ -45,7 +45,8 @@ async function expectNotificationSettings(page: Page) {
 async function expectHelp(page: Page, { signedIn = false } = {}) {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Help");
   // Signed in to a portal, a fifth section offers the first-login tour again (D-52); a visitor gets the four.
-  await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+  // The answers' headings in the page's main (a visitor's page has the landing's footer with its own, D-67).
+  await expect(page.getByRole("main").getByRole("heading", { level: 2 })).toHaveText([
     "How pitching works",
     "What stays confidential",
     "Reminders",
@@ -59,7 +60,8 @@ async function expectHelp(page: Page, { signedIn = false } = {}) {
 test("a visitor can read help, and the notification settings ask them to log in", async ({ page }) => {
   await page.goto("/help");
   await expectHelp(page);
-  await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+  // In the top bar (the landing's footer lists Log in too, D-67).
+  await expect(page.locator("[data-top-bar]").getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
   await expect(page.getByRole("button", { name: "Account" })).toHaveCount(0);
   await checkScreen(page, { strict: true });
 

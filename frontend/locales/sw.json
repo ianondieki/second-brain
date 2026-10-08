@@ -640,6 +640,9 @@
       "leadSecurity": "Jinsi unavyoingia, na hatua ya pili inayolinda akaunti yako.",
       "leadNotifications": "Tunachokutumia, na mahali unapokisoma.",
       "leadProfile": "Kile wasanidi programu wengine wanaona unapochagua kuonekana."
+    },
+    "auth": {
+      "credits": "Sifa zote za picha"
     }
   },
   "orgHome": {

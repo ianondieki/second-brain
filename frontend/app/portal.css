@@ -384,3 +384,43 @@ li > .compare-band > .niche-band {
     border: 2px solid CanvasText;
   }
 }
+
+/* The signed-out screens' night side (components/AuthShell.tsx): the photograph fills it under a night gradient that
+   keeps the steps AA (darkest where the text sits), the credit in its lower corner above the lattice. */
+@layer components {
+  .auth-photo {
+    position: absolute;
+    inset: 0;
+  }
+  .auth-photo picture {
+    display: block;
+    height: 100%;
+  }
+  .auth-photo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 45%;
+  }
+  .auth-photo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, rgb(30 22 64 / 0.94) 0%, rgb(30 22 64 / 0.86) 45%, rgb(30 22 64 / 0.55) 100%);
+  }
+  .auth-credit {
+    position: absolute;
+    inset-inline: max(3.5rem, calc((100vw - 72rem) / 2 + 1.5rem)) 3.5rem;
+    bottom: 1.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--night-soft);
+  }
+  .auth-credit a {
+    color: var(--on-night);
+  }
+}

@@ -6,10 +6,10 @@ import type { ReactNode } from "react";
 import { ClientStrings } from "@/components/ClientStrings";
 import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
-import { TopBar } from "@/components/TopBar";
+import { PublicFrame } from "@/components/landing/PublicFrame";
 import { ShowTourAgain } from "@/components/tour/ShowTourAgain";
-import { standaloneLinkClass, textLinkClass } from "@/components/ui/Button";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { textLinkClass } from "@/components/ui/Button";
+import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 import { getMe, getUnreadCount } from "@/lib/api/server";
 import { homeOf, isPending, type Home, type Me } from "@/lib/auth/routing";
@@ -40,7 +40,7 @@ async function signedIn(): Promise<{ me: Me; home: Home } | null> {
  * signed in; signed in, it has the account menu. Server-rendered text only: no script of its own.
  */
 export default async function HelpPage() {
-  const t = await getTranslations("help");
+  const [t, tp] = await Promise.all([getTranslations("help"), getTranslations("portal")]);
   const person = await signedIn();
   // The first-login tour, on request, for the two sides that have one (the staff console has none).
   const hasTour = person !== null && (person.home === "/dev" || person.home === "/org");
@@ -51,7 +51,7 @@ export default async function HelpPage() {
   ];
   const content = (
     <>
-      <PageHeader title={t("pageTitle")} lead={t("lead")} />
+      <PageHero eyebrow={tp("eyebrow.help")} title={t("pageTitle")} lead={t("lead")} />
       {/* A reading page: the answers at a comfortable measure, and a contents list that stays beside them from
           1024 px (under the header on a phone). The list is a navigation, not a heading, so the page's h2s are
           only its sections. */}
@@ -113,16 +113,12 @@ export default async function HelpPage() {
       </SignedInShell>
     );
   }
+  // A visitor reads it in the landing's public frame (its top bar with "Log in", its footer; D-67).
   return (
-    <>
-      <TopBar>
-        <Link href="/login" className={standaloneLinkClass}>
-          {t("logIn")}
-        </Link>
-      </TopBar>
-      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 pt-8 pb-16 focus:outline-none sm:px-6 lg:pt-16">
+    <PublicFrame>
+      <div className="mx-auto w-full max-w-6xl px-4 pt-8 pb-16 sm:px-6 lg:pt-16">
         <div className="max-w-4xl">{content}</div>
-      </main>
-    </>
+      </div>
+    </PublicFrame>
   );
 }
