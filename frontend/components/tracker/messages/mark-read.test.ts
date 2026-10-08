@@ -18,7 +18,14 @@ describe("markRead", () => {
   });
 
   it("answers false on a refusal and on a network failure, never throwing", async () => {
-    await expect(postReadMarker("/x", "m1", async () => new Response(null, { status: 403 }))).resolves.toBe(false);
-    await expect(postReadMarker("/x", "m1", () => Promise.reject(new TypeError("offline")))).resolves.toBe(false);
+    const path = "/api/me/teams/{thread_id}/read";
+    await expect(postReadMarker(path, "t1", "m1", async () => new Response(null, { status: 403 }))).resolves.toBe(false);
+    await expect(postReadMarker(path, "t1", "m1", () => Promise.reject(new TypeError("offline")))).resolves.toBe(false);
+  });
+
+  it("fills a team thread's id into the schema's path", async () => {
+    const send = vi.fn(async () => new Response(null, { status: 200 }));
+    await postReadMarker("/api/me/teams/{thread_id}/read", "t 1", "m1", send);
+    expect(send).toHaveBeenCalledWith("/api/me/teams/t%201/read", expect.objectContaining({ method: "POST" }));
   });
 });

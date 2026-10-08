@@ -1,10 +1,10 @@
 import { withCsrf } from "@/lib/api/csrf";
-import type { operations } from "@/lib/api/schema";
+import type { paths } from "@/lib/api/schema";
 
-type Engagement = operations["mark_read_api_engagements__engagement_id__messages_read_post"];
-type Team = operations["mark_read_api_me_teams__thread_id__read_post"];
-/** The read marker's body as both endpoints take it (from the generated schema). */
-export type ReadBody = Engagement["requestBody"]["content"]["application/json"] & Team["requestBody"]["content"]["application/json"];
+/** The two read markers, as the generated schema names them: a renamed route fails typecheck here. */
+export type ReadPath = Extract<keyof paths, "/api/engagements/{engagement_id}/messages/read" | "/api/me/teams/{thread_id}/read">;
+/** A read marker's body, from the same schema entry as its path. */
+export type ReadBody<P extends ReadPath = ReadPath> = NonNullable<paths[P]["post"]>["requestBody"]["content"]["application/json"];
 
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -13,10 +13,10 @@ type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
  * helper, not the typed client (that loads with Send: the messages routes stay within 150 KB, docs/spec/07 item 5);
  * the body's type still comes from the generated schema. Quiet: a refusal changes nothing on the page.
  */
-export async function postReadMarker(url: string, upTo: string, send: Fetch = withCsrf()): Promise<boolean> {
-  const body: ReadBody = { up_to: upTo };
+export async function postReadMarker<P extends ReadPath>(path: P, id: string, upTo: string, send: Fetch = withCsrf()): Promise<boolean> {
+  const body: ReadBody<P> = { up_to: upTo };
   try {
-    const response = await send(url, {
+    const response = await send(path.replace(/\{[a-z_]+\}/, encodeURIComponent(id)), {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
@@ -30,5 +30,5 @@ export async function postReadMarker(url: string, upTo: string, send: Fetch = wi
 
 /** POST /api/engagements/{engagement_id}/messages/read */
 export function markRead(engagementId: string, upTo: string, send?: Fetch): Promise<boolean> {
-  return postReadMarker(`/api/engagements/${encodeURIComponent(engagementId)}/messages/read`, upTo, send);
+  return postReadMarker("/api/engagements/{engagement_id}/messages/read", engagementId, upTo, send);
 }

@@ -14,7 +14,7 @@ import type { IdeaChoice, Sheet, ThreadSheets as Sheets } from "./ThreadSheets";
 const load = () => import("./later");
 
 // Runs as the thread opens: the CSRF helper alone, not the typed client (./later and Send bring that).
-const markRead = (threadId: string, upTo: string) => postReadMarker(`/api/me/teams/${encodeURIComponent(threadId)}/read`, upTo);
+const markRead = (threadId: string, upTo: string) => postReadMarker("/api/me/teams/{thread_id}/read", threadId, upTo);
 
 /**
  * A team thread (REQ-DEV-03) drawn by the engagement thread's own parts (components/tracker/messages/Thread.tsx): the
