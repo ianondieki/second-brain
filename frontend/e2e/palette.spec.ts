@@ -54,3 +54,26 @@ test('"/" opens the palette outside a text field, and the arrows walk its option
   await combo.press("Escape");
   await expect(dialog).toHaveCount(0);
 });
+
+test("the palette searches the API: problems people raised, with the typed letters marked", async ({ page }) => {
+  await signUpDeveloper(page, "Wambui Njoroge");
+  await page.locator("body").press("Control+k");
+  const dialog = page.getByRole("dialog", { name: "Search or jump to" });
+  await dialog.getByRole("combobox").pressSequentially("sacco");
+  const problems = dialog.getByRole("group", { name: "Problems" });
+  await expect(problems).toBeVisible({ timeout: 10_000 });
+  await expect(problems.getByRole("option").first().locator("mark")).toHaveText(/sacco/i);
+  await checkScreen(page, { strict: true });
+  await dialog.getByRole("combobox").press("Escape");
+});
+
+test("Home greets on Nairobi's photograph and keeps the person's own last 26 weeks", async ({ page }) => {
+  await signUpDeveloper(page, "Kamau Gitau");
+  await expect(page.locator("[data-greeting]")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Kamau Gitau");
+  const calendar = page.locator("[data-home='calendar']");
+  await expect(calendar.getByRole("heading", { name: "Your last 26 weeks" })).toBeVisible();
+  // A new account has done nothing yet: one sentence, no grid.
+  await expect(calendar.locator("[data-activity='empty']")).toHaveText("Nothing yet: what you do on Wazo shows here, day by day.");
+  await checkScreen(page, { strict: true });
+});
