@@ -6,12 +6,8 @@
  * paint above the fold can be preloaded at high priority from app/layout.tsx. Each has a size-adjusted local fallback
  * (metrics computed from the files against Arial), so the swap moves nothing.
  */
-@font-face {
-  font-family: "Bricolage Grotesque";
-  src: url("/fonts/bricolage-grotesque-v2.woff2") format("woff2");
-  font-display: swap;
-  font-weight: 600 800;
-}
+/* Bricolage Grotesque (the wordmark and the figures) and IBM Plex Mono (the eyebrows) are declared after the first
+   paint by lib/fonts.ts (app/layout.tsx; P25): here they would be fetched at the first layout, ahead of the LCP. */
 @font-face {
   font-family: "Bricolage Grotesque Fallback";
   src: local(Arial);
@@ -72,12 +68,6 @@
   descent-override: 22.13%;
   line-gap-override: 0%;
   size-adjust: 115.22%;
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  src: url("/fonts/ibm-plex-mono-latin-v1.woff2") format("woff2");
-  font-display: swap;
-  font-weight: 400;
 }
 
 /*
