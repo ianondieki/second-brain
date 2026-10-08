@@ -8,7 +8,7 @@ import { EngagementCard } from "@/components/engagements/EngagementCard";
 import { awaitsMe, type Summary } from "@/components/tracker/model";
 import { Section } from "@/components/ui/Section";
 
-import { orgContext } from "../data";
+import { getTeaser, orgContext } from "../data";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
 import { ENGAGEMENTS_PATH, inboxHref, type Membership } from "../membership";
@@ -84,6 +84,11 @@ async function Body({ memberships, org, query }: { memberships: Membership[]; or
  */
 async function EngagementGrid({ items, query }: { items: Summary[]; query: string }) {
   const t = await getTranslations("tracker");
+  // Each proposal's niche, for its cards' photograph band (D-67), from its public teaser (Tier 1, read once per
+  // proposal and cached per request); a teaser that cannot be read leaves its cards without a band.
+  const ids = [...new Set(items.map((item) => item.proposal_id))];
+  const teasers = await Promise.all(ids.map((id) => getTeaser(id).catch(() => null)));
+  const nicheOf = new Map(ids.map((id, index) => [id, teasers[index]?.teaser.niche ?? null]));
   const waiting = items.filter((item) => awaitsMe(item, "org"));
   const rest = items.filter((item) => !awaitsMe(item, "org"));
   const groups = [
@@ -95,7 +100,13 @@ async function EngagementGrid({ items, query }: { items: Summary[]; query: strin
     <ul aria-label={label} data-group={label ? group : undefined} className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
       {list.map((item) => (
         <li key={item.id} className="cv-auto flex min-w-0 [--cv-size:16rem] [&>article]:flex-1">
-          <EngagementCard item={item} mine="org" headingLevel={level} href={`${ENGAGEMENTS_PATH}/${encodeURIComponent(item.id)}${query}`} />
+          <EngagementCard
+            item={item}
+            mine="org"
+            headingLevel={level}
+            href={`${ENGAGEMENTS_PATH}/${encodeURIComponent(item.id)}${query}`}
+            niche={nicheOf.get(item.proposal_id) ?? null}
+          />
         </li>
       ))}
     </ul>

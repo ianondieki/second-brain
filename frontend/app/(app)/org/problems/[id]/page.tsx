@@ -115,8 +115,9 @@ export default async function BriefPage({ params, searchParams }: PageProps<"/or
         <p className="max-w-[65ch] text-lg [overflow-wrap:anywhere] whitespace-pre-line text-ink" data-statement="">
           {brief.statement}
         </p>
-        {/* The facts as a grid (three across from 640 px, two on phones: six facts, no orphan), as the proposal page's. */}
-        <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-line pt-6 sm:grid-cols-3">
+        {/* The facts as a grid, three across from 640 px; on a phone one under another, so each value has the full width
+            and no word is split (P25 review). */}
+        <dl className="mt-6 grid grid-cols-1 gap-x-6 gap-y-4 border-t border-line pt-6 sm:grid-cols-3 sm:gap-y-5">
           {(
             [
               ["affected", brief.affected_group ?? notGiven],
