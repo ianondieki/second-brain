@@ -1907,6 +1907,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Activity
+         * @description The caller's own actions per day (Africa/Nairobi) for the activity calendar: counts only.
+         */
+        get: operations["my_activity_api_me_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/blocks": {
         parameters: {
             query?: never;
@@ -2769,6 +2789,27 @@ export interface paths {
          * @description Rename a saved search or turn its alerts on or off.
          */
         patch: operations["update_saved_search_api_me_saved_searches__search_id__patch"];
+        trace?: never;
+    };
+    "/api/me/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Mine
+         * @description The command palette: the caller's ideas, engagements, Inbox and Briefs, readable problems and (for a developer)
+         *     listed companies whose title (or name) holds the words, at most five of each.
+         */
+        get: operations["search_mine_api_me_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/me/teams": {
@@ -3966,6 +4007,55 @@ export interface components {
              */
             status: "check_email";
         };
+        /** ActivityCalendar */
+        ActivityCalendar: {
+            /**
+             * Days
+             * @description Every day of the range, oldest first, days without actions as 0
+             */
+            days: components["schemas"]["ActivityDay"][];
+            /**
+             * From
+             * Format: date
+             * @description The first day of the range (Africa/Nairobi)
+             */
+            from: string;
+            /**
+             * Kinds
+             * @description Each kind counted for the caller's side, in a fixed order
+             */
+            kinds: components["schemas"]["ActivityKindCount"][];
+            /**
+             * Timezone
+             * @constant
+             */
+            timezone: "Africa/Nairobi";
+            /**
+             * To
+             * Format: date
+             * @description The last day: today on the platform clock (Africa/Nairobi)
+             */
+            to: string;
+            /**
+             * Total
+             * @description Every counted action over the range
+             */
+            total: number;
+        };
+        /** ActivityDay */
+        ActivityDay: {
+            /**
+             * Count
+             * @description The caller's own actions that day, every kind together
+             */
+            count: number;
+            /**
+             * Date
+             * Format: date
+             * @description A day in Africa/Nairobi
+             */
+            date: string;
+        };
         /** ActivityFeed */
         ActivityFeed: {
             /**
@@ -4027,6 +4117,19 @@ export interface components {
              * @description Only a title that is already public: a published problem, Brief or teaser
              */
             title: string | null;
+        };
+        /** ActivityKindCount */
+        ActivityKindCount: {
+            /**
+             * Count
+             * @description The caller's own actions of this kind over the whole range
+             */
+            count: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "version_registered" | "proposal_published" | "engagement_step" | "message_sent" | "quiz_answered" | "team_message" | "proposal_opened" | "brief_posted";
         };
         /** AdminNicheOut */
         AdminNicheOut: {
@@ -8989,6 +9092,52 @@ export interface components {
              * @description How many scouts the plan allows; null: no limit.
              */
             scout_agents: number | null;
+        };
+        /** SearchGroup */
+        SearchGroup: {
+            /**
+             * Items
+             * @description At most five: a title (or name) starting with the words first, then the newest
+             */
+            items: components["schemas"]["SearchItem"][];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ideas" | "engagements" | "inbox" | "problems" | "briefs" | "companies";
+        };
+        /** SearchItem */
+        SearchItem: {
+            /**
+             * Href
+             * @description The web app path the item opens; an organisation's items keep ?org= for a member of several
+             */
+            href: string;
+            /**
+             * Id
+             * @description The record's id (an Inbox item's is its pitch, as the Inbox's tag_id)
+             */
+            id: string;
+            /**
+             * Subtitle
+             * @description One line under the title, as the list screens show it; may be null
+             */
+            subtitle: string | null;
+            /** Title */
+            title: string;
+        };
+        /** SearchResults */
+        SearchResults: {
+            /**
+             * Groups
+             * @description The caller's side's groups that found something, in a fixed order
+             */
+            groups: components["schemas"]["SearchGroup"][];
+            /**
+             * Q
+             * @description The words searched for, trimmed
+             */
+            q: string;
         };
         /** SessionResponse */
         SessionResponse: {
@@ -20189,6 +20338,101 @@ export interface operations {
             };
         };
     };
+    my_activity_api_me_activity_get: {
+        parameters: {
+            query?: {
+                /** @description How many weeks, ending today (Africa/Nairobi) */
+                weeks?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityCalendar"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     my_blocks_api_me_blocks_get: {
         parameters: {
             query?: never;
@@ -25595,6 +25839,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SavedSearchOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    search_mine_api_me_search_get: {
+        parameters: {
+            query: {
+                /** @description The words to find: 2 to 80 characters once trimmed */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
                 };
             };
             /** @description Bad Request */
