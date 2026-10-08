@@ -27,7 +27,8 @@ describe("Home's greeting photograph", () => {
       ["image/webp", PHONE_MEDIA, "/photos/nairobi-golden-hour-480.webp"],
       ["image/webp", WIDE_MEDIA, "/photos/nairobi-golden-hour-800.webp"],
     ]);
-    expect(PHONE_MEDIA).toBe("(width < 40rem)"); // the CSS breakpoint of .greeting-photo (globals.css)
+    // The CSS breakpoint of .greeting-photo (globals.css, 40 rem), in the syntax every supported browser reads.
+    expect([PHONE_MEDIA, WIDE_MEDIA]).toEqual(["(max-width: 639px)", "(min-width: 640px)"]);
   });
 
   it("is the one eager, high-priority image, not decoded asynchronously, and decorative", async () => {

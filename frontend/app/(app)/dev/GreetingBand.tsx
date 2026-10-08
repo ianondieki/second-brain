@@ -5,10 +5,14 @@ import { photoWidths } from "@/lib/photos/files";
 import { greetingPhoto, type DayPart } from "@/lib/photos/greeting";
 import type { Photo } from "@/lib/photos/photos";
 
-/** Below 40 rem (globals.css `.greeting-photo`) the photograph is a 9 rem strip above the words: the 480 px file. */
-export const PHONE_MEDIA = "(width < 40rem)";
+/**
+ * Below 40 rem (640 px; globals.css `.greeting-photo`) the photograph is a 9 rem strip above the words: the 480 px file.
+ * Written as min/max-width, not range syntax: an HTML `media` attribute is not transpiled as globals.css is, and Safari
+ * before 16.4 would match neither source and fall back to the 800 px WebP.
+ */
+export const PHONE_MEDIA = "(max-width: 639px)";
 /** From 40 rem it fills the band behind the words, at most 56 rem wide, under a gradient: the 800 px file. */
-export const WIDE_MEDIA = "(width >= 40rem)";
+export const WIDE_MEDIA = "(min-width: 640px)";
 
 /**
  * Home's greeting (D-67, P25): a wide rounded band with Nairobi at this time of day behind the name, set in Fraunces
