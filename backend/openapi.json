@@ -36,6 +36,79 @@
         "title": "AcceptedResponse",
         "type": "object"
       },
+      "ActivityCalendar": {
+        "properties": {
+          "days": {
+            "description": "Every day of the range, oldest first, days without actions as 0",
+            "items": {
+              "$ref": "#/components/schemas/ActivityDay"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "from": {
+            "description": "The first day of the range (Africa/Nairobi)",
+            "format": "date",
+            "title": "From",
+            "type": "string"
+          },
+          "kinds": {
+            "description": "Each kind counted for the caller's side, in a fixed order",
+            "items": {
+              "$ref": "#/components/schemas/ActivityKindCount"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "timezone": {
+            "const": "Africa/Nairobi",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "to": {
+            "description": "The last day: today on the platform clock (Africa/Nairobi)",
+            "format": "date",
+            "title": "To",
+            "type": "string"
+          },
+          "total": {
+            "description": "Every counted action over the range",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "timezone",
+          "days",
+          "kinds",
+          "total"
+        ],
+        "title": "ActivityCalendar",
+        "type": "object"
+      },
+      "ActivityDay": {
+        "properties": {
+          "count": {
+            "description": "The caller's own actions that day, every kind together",
+            "title": "Count",
+            "type": "integer"
+          },
+          "date": {
+            "description": "A day in Africa/Nairobi",
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "count"
+        ],
+        "title": "ActivityDay",
+        "type": "object"
+      },
       "ActivityFeed": {
         "properties": {
           "generated_at": {
@@ -152,6 +225,35 @@
           "seeded"
         ],
         "title": "ActivityItem",
+        "type": "object"
+      },
+      "ActivityKindCount": {
+        "properties": {
+          "count": {
+            "description": "The caller's own actions of this kind over the whole range",
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "version_registered",
+              "proposal_published",
+              "engagement_step",
+              "message_sent",
+              "quiz_answered",
+              "team_message",
+              "proposal_opened",
+              "brief_posted"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "ActivityKindCount",
         "type": "object"
       },
       "AdminNicheOut": {
@@ -12273,6 +12375,97 @@
           "digest_size"
         ],
         "title": "ScoutPlanOut",
+        "type": "object"
+      },
+      "SearchGroup": {
+        "properties": {
+          "items": {
+            "description": "At most five: a title (or name) starting with the words first, then the newest",
+            "items": {
+              "$ref": "#/components/schemas/SearchItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "ideas",
+              "engagements",
+              "inbox",
+              "problems",
+              "briefs",
+              "companies"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "items"
+        ],
+        "title": "SearchGroup",
+        "type": "object"
+      },
+      "SearchItem": {
+        "properties": {
+          "href": {
+            "description": "The web app path the item opens; an organisation's items keep ?org= for a member of several",
+            "title": "Href",
+            "type": "string"
+          },
+          "id": {
+            "description": "The record's id (an Inbox item's is its pitch, as the Inbox's tag_id)",
+            "title": "Id",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One line under the title, as the list screens show it; may be null",
+            "title": "Subtitle"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "subtitle",
+          "href"
+        ],
+        "title": "SearchItem",
+        "type": "object"
+      },
+      "SearchResults": {
+        "properties": {
+          "groups": {
+            "description": "The caller's side's groups that found something, in a fixed order",
+            "items": {
+              "$ref": "#/components/schemas/SearchGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "q": {
+            "description": "The words searched for, trimmed",
+            "title": "Q",
+            "type": "string"
+          }
+        },
+        "required": [
+          "q",
+          "groups"
+        ],
+        "title": "SearchResults",
         "type": "object"
       },
       "SessionResponse": {
@@ -27878,6 +28071,124 @@
         ]
       }
     },
+    "/api/me/activity": {
+      "get": {
+        "description": "The caller's own actions per day (Africa/Nairobi) for the activity calendar: counts only.",
+        "operationId": "my_activity_api_me_activity_get",
+        "parameters": [
+          {
+            "description": "How many weeks, ending today (Africa/Nairobi)",
+            "in": "query",
+            "name": "weeks",
+            "required": false,
+            "schema": {
+              "default": 26,
+              "description": "How many weeks, ending today (Africa/Nairobi)",
+              "maximum": 52,
+              "minimum": 1,
+              "title": "Weeks",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityCalendar"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "My Activity",
+        "tags": [
+          "me"
+        ]
+      }
+    },
     "/api/me/blocks": {
       "get": {
         "description": "The developers you blocked, newest first.",
@@ -34525,6 +34836,122 @@
         "summary": "Update Saved Search",
         "tags": [
           "discover"
+        ]
+      }
+    },
+    "/api/me/search": {
+      "get": {
+        "description": "The command palette: the caller's ideas, engagements, Inbox and Briefs, readable problems and (for a developer)\nlisted companies whose title (or name) holds the words, at most five of each.",
+        "operationId": "search_mine_api_me_search_get",
+        "parameters": [
+          {
+            "description": "The words to find: 2 to 80 characters once trimmed",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "The words to find: 2 to 80 characters once trimmed",
+              "maxLength": 200,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Search Mine",
+        "tags": [
+          "me"
         ]
       }
     },
