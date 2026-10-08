@@ -39,19 +39,28 @@ const HELP_HREF = "/help";
 export const loadExtras = () => import("./AccountMenuExtras").then((m) => m.AccountMenuExtras, () => MenuFallback);
 const MenuExtras = lazy(() => loadExtras().then((component) => ({ default: component })));
 
-/** The menu's own Sign out when the lower part could not load: the session's CSRF token from its cookie, then home. */
+/** The menu's own Sign out when the lower part could not load. Not lib/api/csrf (that would put about 430 B on the
+ *  idea editor, 150 B under its budget), but the same rules: the __Host- cookie first, and once more with a fresh
+ *  token when the API answers 403 (a token from before the session changed). */
 export function MenuFallback() {
   const t = useStrings("shell");
   const [failed, setFailed] = useState(false);
   async function signOut() {
-    const pick = () => document.cookie.match(/(?:^|; )(?:__Host-)?bridge_csrf=([^;]*)/)?.[1];
-    if (!pick()) await fetch("/api/auth/csrf", { credentials: "same-origin" }).catch(() => null);
-    const token = pick();
-    const response = await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: token ? { "X-CSRF-Token": decodeURIComponent(token) } : {},
-    }).catch(() => null);
+    const cookie = (name: string) => document.cookie.match(`(?:^|; )${name}=([^;]*)`)?.[1];
+    let token = cookie("__Host-bridge_csrf") ?? cookie("bridge_csrf");
+    let response: Response | null = null;
+    for (let tries = 0; tries < 2; tries += 1) {
+      if (!token || tries) {
+        const fresh = await fetch("/api/auth/csrf", { credentials: "same-origin" }).then((r) => r.json()).catch(() => null);
+        token = fresh?.csrf_token ?? token;
+      }
+      response = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: token ? { "X-CSRF-Token": decodeURIComponent(token) } : {},
+      }).catch(() => null);
+      if (response?.status !== 403) break;
+    }
     if (response?.status === 204 || response?.status === 401) {
       forgetEmail();
       forgetRecent();

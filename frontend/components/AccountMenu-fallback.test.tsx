@@ -35,6 +35,27 @@ describe("AccountMenu without its lower part", () => {
     expect(window.localStorage.getItem("wazo-recent:v2:abc")).toBeNull();
   });
 
+  it("sends the __Host- cookie's token first, and once more with a fresh token after a 403", async () => {
+    const jar = vi.spyOn(document, "cookie", "get").mockReturnValue("bridge_csrf=planted; __Host-bridge_csrf=token-2");
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("{}", { status: 403 }))
+      .mockResolvedValueOnce(Response.json({ csrf_token: "token-3" }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithIntl(<AccountMenu />);
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith("/login"));
+    const tokens = fetchMock.mock.calls
+      .filter(([url]) => url === "/api/auth/logout")
+      .map(([, init]) => (init?.headers as Record<string, string>)["X-CSRF-Token"]);
+    expect(tokens).toEqual(["token-2", "token-3"]);
+    jar.mockRestore();
+  });
+
   it("says to try again when the sign-out does not go through", async () => {
     document.cookie = "bridge_csrf=token-1";
     vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response("{}", { status: 500 })));
