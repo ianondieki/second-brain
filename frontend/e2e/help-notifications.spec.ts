@@ -26,7 +26,8 @@ const MESSAGES = "Email me when someone writes to me on an engagement (at most o
 
 async function openMenuItem(page: Page, name: string) {
   await page.getByRole("button", { name: "Account" }).click();
-  await page.getByRole("link", { name, exact: true }).click();
+  // In the menu itself: from 1024 px the rail also links Help under its sections (P25, D-67).
+  await page.locator("[data-account-menu]").getByRole("link", { name, exact: true }).click();
 }
 
 /** The page's client part has hydrated (its checkboxes answer clicks). */

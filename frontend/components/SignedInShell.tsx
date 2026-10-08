@@ -1,8 +1,10 @@
 import { Suspense, type ReactNode } from "react";
 
+import type { StaffRole } from "./AdminNav";
 import { cn } from "./ui/cn";
 import { AccountMenu } from "./AccountMenu";
 import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
+import { PaletteSlot } from "./palette/PaletteSlot";
 import { TopBar } from "./TopBar";
 
 export interface SignedInShellProps {
@@ -14,18 +16,22 @@ export interface SignedInShellProps {
   wide?: boolean;
   /** The page is the bell's own (/notifications): the bell carries aria-current="page". */
   bellCurrent?: boolean;
+  /** The staff console's role, so the command palette lists the sections that role may open. */
+  staffRole?: StaffRole;
 }
 
 /**
- * Signed-in screens: top bar with the notification bell and the account menu (Plan & billing, Notification settings,
- * Help, Sign out), the portal navigation when given, and one column of content.
+ * Signed-in screens: top bar with Search (the command palette), the notification bell and the account menu (Plan &
+ * billing, Notification settings, Help, Sign out), the portal navigation when given, and one column of content.
  */
-export function SignedInShell({ homeHref, children, nav, wide = false, bellCurrent = false }: SignedInShellProps) {
+export function SignedInShell({ homeHref, children, nav, wide = false, bellCurrent = false, staffRole }: SignedInShellProps) {
   return (
     <>
-      <TopBar homeHref={homeHref}>
-        {/* docs/spec/07 item 1: the bell, then the avatar menu, on the right of the bar. */}
-        <div className="flex items-center gap-1" data-top-bar-controls="">
+      <TopBar homeHref={homeHref} sticky>
+        {/* docs/spec/07 item 1: the bell, then the avatar menu, on the right of the bar; P25 puts Search before them
+            (the command palette, D-67). */}
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2" data-top-bar-controls="">
+          <PaletteSlot homeHref={homeHref} staffRole={staffRole} />
           {/* A slow count never holds the page: until it answers, the bell is there without one. */}
           <Suspense fallback={<NotificationBell count={null} current={bellCurrent} />}>
             <UnreadNotificationBell current={bellCurrent} />

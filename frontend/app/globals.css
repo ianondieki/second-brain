@@ -91,6 +91,14 @@
   --ink: #1b1730; /* text and icons: a violet ink, 15.8:1 */
   --ink-soft: #5e5873; /* secondary text and input borders, 6.1:1 (6.7:1 on white) */
   --line: #e5dfd2; /* hairlines and dividers, warmed with the paper (decorative; controls take ink-soft borders) */
+  --paper-deep: #efeadf; /* P25: the second neutral layer: nav hover, the Search pill, skeletons, an empty calendar day */
+  /* P25: the activity calendar's sequential scale (one hue, bloom; dataviz --ordinal on the card: monotone lightness,
+     adjacent steps ≥ 0.06 apart, the light end 2.23:1 on white). heat-0 is a day with nothing. */
+  --heat-0: #eeeae2;
+  --heat-1: #b3a3f0;
+  --heat-2: #8b73e4;
+  --heat-3: #6447cc;
+  --heat-4: #3d2890;
   --bezel: var(--ink); /* the drawn phone's frame (checkout) */
   --accent: #5a3fc0; /* bloom: primary buttons, links, focus ring, current step, 6.6:1 (white on it 7.2:1) */
   --accent-wash: #efebfc; /* petal: selected rows, the active nav item, info notices; bloom on it 6.2:1 */
@@ -146,6 +154,12 @@ html[data-theme="dark"] {
   --ink: #eeeaf8;
   --ink-soft: #b5aecc;
   --line: #2d2643;
+  --paper-deep: #231c3a;
+  --heat-0: #252040; /* dark: more is lighter; the light end 2.12:1 on the card (#19142a) */
+  --heat-1: #4e3d9e;
+  --heat-2: #6a55c8;
+  --heat-3: #9580f0;
+  --heat-4: #cbbfff;
   --bezel: var(--line); /* the drawn phone's frame (checkout) */
   --accent: #a996ff;
   --accent-wash: #241c44;
@@ -173,6 +187,12 @@ html[data-theme="dark"] {
     --ink: #eeeaf8;
     --ink-soft: #b5aecc;
     --line: #2d2643;
+    --paper-deep: #231c3a;
+    --heat-0: #252040; /* dark: more is lighter; the light end 2.12:1 on the card (#19142a) */
+    --heat-1: #4e3d9e;
+    --heat-2: #6a55c8;
+    --heat-3: #9580f0;
+    --heat-4: #cbbfff;
     --bezel: var(--line); /* the drawn phone's frame (checkout) */
     --accent: #a996ff;
     --accent-wash: #241c44;
@@ -207,6 +227,7 @@ html[data-theme="dark"] {
   --color-warm-line: var(--warm-line);
   --color-on-warm: var(--on-warm);
   --color-line: var(--line);
+  --color-paper-deep: var(--paper-deep);
   --color-bezel: var(--bezel);
   --color-ok: var(--ok);
   --color-error: var(--error);
@@ -1314,6 +1335,485 @@ dialog[data-sheet][open] {
   letter-spacing: 0.06em;
 }
 
+/*
+ * P25 (D-67, "Portal in print"): the signed-in portal's page language, the shell's details, the command palette, the
+ * niche photographs, the skeletons, the activity calendar and the HCI floor. CSS first: every page inherits it with
+ * no script; each moving part rests in place under reduced motion (the block at the end of this file).
+ */
+
+/* The HCI floor. Titles balance (h3 stays pretty: the owner's nit on Home, P24), leads are pretty, figures line up. */
+td,
+th,
+time,
+.figure {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.lead {
+  text-wrap: pretty;
+}
+/* From 1024 px the signed-in top bar is sticky (SignedInShell): anything scrolled to (an anchor) or focused clears it
+   (the scroller's padding, which both scroll-into-view and focus scrolling honour, rather than a margin per target). */
+@media (width >= 64rem) {
+  html:has([data-top-bar][data-sticky]) {
+    scroll-padding-block-start: 5.5rem;
+  }
+}
+/* Cards adapt to their column, not the window (`.cq` on a card or a grid cell); a row of cards aligns its parts
+   (`.card-grid` with `.card-sub` children spanning three rows: title, meta, footer). Long lists skip off-screen
+   rendering (`.cv-auto`). */
+.cq {
+  container-type: inline-size;
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
+  gap: 1rem;
+}
+.card-grid > .card-sub {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: 0.5rem;
+}
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 9rem;
+}
+/* More contrast asked for: the secondary ink and the hairlines darken (light) or lighten (dark). */
+@media (prefers-contrast: more) {
+  :root {
+    --ink-soft: #3f3a52;
+    --line: #9d9584;
+    --paper-deep: #e4ddcf;
+  }
+  html[data-theme="dark"] {
+    --ink-soft: #d9d3ec;
+    --line: #6b6190;
+  }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) {
+    --ink-soft: #d9d3ec;
+    --line: #6b6190;
+  }
+}
+/* Forced colours (Windows contrast themes): one focus ring in the system's highlight; shapes that were drawn by a fill
+   alone get a border so they survive (buttons, chips, the current nav item, the palette's chosen row). */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  .btn,
+  [data-chip],
+  [data-badge],
+  .search-pill,
+  .nav-item[aria-current="page"],
+  .demo-label {
+    border: 1px solid CanvasText;
+  }
+  .nav-item[aria-current="page"]::before {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+  .palette-option[aria-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .palette-option mark {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}
+
+/* Press feedback: a button settles 1 px when pressed, quicker than the hover (120 ms). */
+.btn:active {
+  transform: translateY(1px);
+  transition-duration: 120ms;
+}
+
+@layer components {
+/* The page's hero (components/ui/PageHero.tsx): the eyebrow says where you are, in the mono face, sentence case. */
+.page-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+.page-hero {
+  container: page-hero / inline-size;
+}
+.page-hero-body {
+  display: grid;
+  gap: 1.25rem;
+}
+.page-hero-title {
+  font-size: 2rem;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+.page-hero-lead {
+  max-width: 60ch;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+@container page-hero (width >= 40rem) {
+  .page-hero-title {
+    font-size: 2.75rem;
+    line-height: 1.04;
+  }
+  .page-hero-lead {
+    font-size: 1.125rem;
+  }
+  .page-hero-main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+}
+@container page-hero (width >= 52rem) {
+  .page-hero-body:has(> .page-hero-aside) {
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
+    align-items: end;
+    column-gap: 2.5rem;
+  }
+}
+
+/* The portal's nav (components/PortalNav.tsx): the current item is a bloom-wash pill; on the rail a short bloom bar at
+   its leading edge, so the shape says "current" as well as the colour. The pill carries a view-transition name, so it
+   glides from item to item where View Transitions run. */
+.nav-item[aria-current="page"] .nav-icon {
+  view-transition-name: nav-current;
+}
+@media (width >= 64rem) {
+  .nav-item[aria-current="page"] .nav-icon {
+    view-transition-name: none;
+  }
+  .nav-item[aria-current="page"] {
+    view-transition-name: nav-current;
+  }
+  .nav-item[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0.4375rem;
+    top: 50%;
+    width: 3px;
+    height: 1.125rem;
+    border-radius: 3px;
+    background: var(--accent);
+    translate: 0 -50%;
+  }
+}
+
+/* The top bar's Search: a field-like pill that opens the command palette; an icon button on phones. */
+.search-pill {
+  display: inline-flex;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  border-radius: 9999px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+.search-pill:hover {
+  color: var(--ink);
+  background: var(--paper-deep);
+}
+@media (width >= 40rem) {
+  .search-pill {
+    width: clamp(12rem, 26vw, 19rem);
+    justify-content: flex-start;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    padding-inline: 0.875rem 0.5rem;
+  }
+  .search-pill:hover {
+    border-color: var(--accent-line);
+  }
+}
+.kbd {
+  display: inline-flex;
+  min-width: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  background: var(--field);
+  padding: 0.0625rem 0.375rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* The command palette (components/palette/CommandPalette.tsx): a modal dialog near the top of the screen. */
+.palette {
+  width: min(40rem, calc(100vw - 1.5rem));
+  max-height: min(34rem, calc(100dvh - 2rem));
+  margin: max(0.75rem, 10vh) auto auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1.125rem;
+  background: var(--field);
+  color: var(--ink);
+  padding: 0;
+  box-shadow: var(--shadow-overlay);
+}
+.palette[open] {
+  display: flex;
+  flex-direction: column;
+  animation: palette-in 180ms var(--ease-out);
+}
+.palette::backdrop {
+  background: var(--scrim);
+}
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+}
+.palette-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem 0.5rem 0.5rem;
+}
+.palette-option {
+  display: flex;
+  min-height: 2.75rem;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.625rem;
+  padding: 0.375rem 0.625rem;
+}
+.palette-option[aria-selected="true"] {
+  background: var(--accent-wash);
+}
+.palette-option[aria-selected="true"] .palette-go {
+  opacity: 1;
+}
+.palette-option mark {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+.palette-go {
+  margin-inline-start: auto;
+  opacity: 0;
+  color: var(--accent);
+}
+
+/* A niche's or a county's photograph as a narrow band (components/ui/NicheBand.tsx); the lattice where there is none
+   (or the request asked to save data). */
+.niche-band {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--night);
+}
+.niche-band picture {
+  display: block;
+  height: 100%;
+}
+.niche-band img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.niche-band-scrim::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 30%, rgb(30 22 64 / 0.55) 65%, rgb(30 22 64 / 0.9));
+}
+.niche-band-lattice {
+  background-color: var(--accent-wash);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%235A3FC0'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23F4B53F'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 0 6 6l6-6 6 6 6-6Z' fill='%235A3FC0'/%3E%3C/svg%3E");
+  background-position:
+    0 100%,
+    0 0;
+  background-size: 24px 6px;
+  background-repeat: repeat-x;
+}
+
+/* Skeletons (components/ui/Skeleton.tsx): blocks shaped like the page to come, with a slow sweep of light. */
+.skeleton {
+  display: block;
+  border-radius: 0.5rem;
+  background: var(--paper-deep);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0,
+    color-mix(in oklab, var(--field) 70%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+/* The activity calendar (components/activity/ActivityCalendar.tsx): 26 weeks of days, Monday first, in the bloom
+   scale; each day's count and date on hover. The grid is decorative for assistive technology (a table beside it). */
+/* The calendar and the lines under it share one width: as wide as the card, cells at most 22 px. */
+.heat-frame {
+  --heat-labels: 1.875rem;
+  max-width: calc(var(--heat-labels) + var(--weeks) * 1.375rem + 2px);
+}
+.heat {
+  --heat-gap: 2px;
+}
+.heat-months,
+.heat-days {
+  display: grid;
+  grid-template-columns: var(--heat-labels) repeat(var(--weeks), minmax(0, 1fr));
+  column-gap: var(--heat-gap);
+}
+.heat-months {
+  height: 1.25rem;
+}
+.heat-days {
+  grid-template-rows: repeat(7, auto);
+  grid-auto-flow: column;
+  row-gap: var(--heat-gap);
+}
+@container (width >= 24rem) {
+  .heat {
+    --heat-gap: 3px;
+  }
+}
+@container (width >= 36rem) {
+  .heat {
+    --heat-gap: 4px;
+  }
+}
+.heat-cell {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--heat-0);
+  forced-color-adjust: none;
+}
+.heat-cell[data-level="1"] {
+  background: var(--heat-1);
+}
+.heat-cell[data-level="2"] {
+  background: var(--heat-2);
+}
+.heat-cell[data-level="3"] {
+  background: var(--heat-3);
+}
+.heat-cell[data-level="4"] {
+  background: var(--heat-4);
+}
+.heat-cell[data-future] {
+  visibility: hidden;
+}
+.heat-swatch {
+  width: 0.75rem;
+}
+/* A day's count and date over it on hover (the table beside the grid is the accessible way to the same figures);
+   anchored left in the first weeks and right in the last ones, so it never leaves the card. */
+.heat-cell[data-tip]:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.heat-cell[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 5;
+  translate: -50% 0;
+  border-radius: 0.5rem;
+  background: var(--ink);
+  padding: 0.25rem 0.5rem;
+  color: var(--paper);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.heat-days > .heat-cell:nth-child(-n + 35)[data-tip]:hover::after {
+  left: 0;
+  translate: 0 0;
+}
+.heat-days > .heat-cell:nth-last-child(-n + 35)[data-tip]:hover::after {
+  left: auto;
+  right: 0;
+  translate: 0 0;
+}
+.heat-label {
+  align-self: center;
+  font-size: 0.6875rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.heat-day {
+  grid-column: 1;
+}
+}
+
+/*
+ * View Transitions (components/motion/PageTransition.tsx; React's <ViewTransition>): a route change cross-fades the
+ * page, both sides in the same 180 ms (blended, so what does not change stays still), the nav's current pill glides,
+ * a card's title morphs into the detail page's title (components/motion/SharedTitle.tsx). Short, ease-out; none under
+ * reduced motion; browsers without the API simply swap.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-old(.page-exit) {
+  animation: vt-fade-out 180ms var(--ease-out) both;
+}
+::view-transition-new(.page-enter) {
+  animation: vt-fade-in 180ms var(--ease-out) both;
+}
+::view-transition-group(nav-current),
+::view-transition-group(.title-morph) {
+  animation-duration: 220ms;
+  animation-timing-function: var(--ease-out);
+}
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1337,7 +1837,14 @@ dialog[data-sheet][open] {
   .hero-arrive,
   .hero-before,
   .hero-turn,
-  .hero-steps li > span {
+  .hero-steps li > span,
+  .skeleton,
+  .palette[open] {
+    animation: none !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
     animation: none !important;
   }
 

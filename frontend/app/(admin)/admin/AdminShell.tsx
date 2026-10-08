@@ -24,7 +24,7 @@ export async function AdminShell({
   const { me } = await staffContext(); // cached per request: the layout and the page made this call already
   return (
     <AccountMenuScope billing={me.memberships.length > 0}>
-      <SignedInShell homeHref="/admin" nav={<AdminNav role={role} current={current} />} wide={wide}>
+      <SignedInShell homeHref="/admin" nav={<AdminNav role={role} current={current} />} wide={wide} staffRole={role}>
         {children}
       </SignedInShell>
     </AccountMenuScope>

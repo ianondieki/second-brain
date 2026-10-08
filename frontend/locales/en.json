@@ -30,7 +30,8 @@
     "reviewP23b": "[[COPY-REVIEW]] P23-2 (REQ-UX-01, REQ-UX-03; D-52, D-65): tour.back, tour.pause (the slide show's controls; Pause is a toggle whose icon shows the state), tour.step (a step's dot), tour.stepLabel (what a screen reader hears when the step changes); landing.trust.* (the strip under the hero: four of the product's existing truths, restated from landing.lead, landing.who.organisations.point2, landing.faq.verified.a (\"Proposals go only to verified organisations\") and landing.how.stagesTitle; no figures, no names)",
     "reviewP22c": "[[COPY-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62): teams.* (Home's Peers section, /dev/peers, /dev/teams, the team-up thread page), teamUp.* (the peers list, the Team up sheet, invitations, the thread's menu, the contributor sheet and credits), profileSettings.* (Settings > Profile with the Visible to peers sentence the task card fixes), settingsNav.profile, ideaContributors.*, ideas.contributorsLine and ideas.sheet.contributors (D-62 (a): handles only, nothing about shares); the copy says team up, invitation and contributor, never friend, match or connect; the engagement thread's own sentences (trackerMessages.*) serve the team thread's messages and composer; trackerMessages.refusal.attachFailed (the composer's files could not load)",
     "reviewP23c": "[[COPY-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01): countdown.* (the deadline countdown on Home's Next deadline tile and Needs you card, the tracker's deadline and a Brief's Proposals wanted by line: the figure from its largest unit down in words, days with an ICU plural, h and min kept short (countdown.days, .hours, .minutes, each the whole figure so no words are joined in code); countdown.in (\"in {time}\", Home), countdown.dueIn (\"Due {date} · in {time}\", the tracker's one deadline line), countdown.closesIn (\"Proposals close in {time}\") and countdown.at (the full instant in Nairobi time, the time element's title)); past the instant the existing words stay (devHome.stats.deadlineOverdue, tracker.deadline.was, briefs.state.closed); trackerActions.partFailed and .partReload (a part of the tracker whose code did not load: the share, the contact reveal, the code form)",
-    "reviewP24": "[[COPY-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66): landing.eyebrow, landing.title (the italic accent phrase, its accent tag), landing.sample.demo/due/dueWords/units.*, landing.stats.* (product constants: 5 tracker stages, 47 counties, 16 niches in seed/reference.yaml, 0 contact details before an NDA), landing.counties.*, landing.how.eyebrow/title and the three mono chips (landing.how.*.chip), landing.reasons.* (the values.* are the ranker's own English chip texts, bridge/matching/ranker.py, shown as a seeded example), landing.activity.*, landing.nav.explore, landing.footer.explore/credits, explore.*, credits.*, home.greeting (by the hour of the app clock in Nairobi), og.* (share cards); removed with the strip and the sides panels: landing.trust.*, landing.who.*, landing.nav.organisations, landing.sample.label; explore.nationwide/nationwideNote/seeded, problemPage.* (the public problem page: the organisation line names the verification level only, never a name), og.problemAlt; removed: landing.activity.kind.stage_reached (deferred by the backend), og.alt (the idea card)"
+    "reviewP24": "[[COPY-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66): landing.eyebrow, landing.title (the italic accent phrase, its accent tag), landing.sample.demo/due/dueWords/units.*, landing.stats.* (product constants: 5 tracker stages, 47 counties, 16 niches in seed/reference.yaml, 0 contact details before an NDA), landing.counties.*, landing.how.eyebrow/title and the three mono chips (landing.how.*.chip), landing.reasons.* (the values.* are the ranker's own English chip texts, bridge/matching/ranker.py, shown as a seeded example), landing.activity.*, landing.nav.explore, landing.footer.explore/credits, explore.*, credits.*, home.greeting (by the hour of the app clock in Nairobi), og.* (share cards); removed with the strip and the sides panels: landing.trust.*, landing.who.*, landing.nav.organisations, landing.sample.label; explore.nationwide/nationwideNote/seeded, problemPage.* (the public problem page: the organisation line names the verification level only, never a name), og.problemAlt; removed: landing.activity.kind.stage_reached (deferred by the backend), og.alt (the idea card)",
+    "reviewP25": "[[COPY-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67): palette.* (the command palette: the Search button, its groups, the actions, the keys; palette.kind.* name the API's search groups), activity.* (the activity calendar: title, total, legend, the per-day tip and the hidden table, activity.kind.* the API's action kinds)"
   },
   "app": {
     "name": "Wazo",
@@ -4098,5 +4099,61 @@
     "haveAccount": "Already have an account? <login>Log in</login>",
     "lead": "Developers answer problems like this with a proposal, timestamped when they publish it.",
     "unavailable": "This problem cannot be loaded right now."
+  },
+  "palette": {
+    "trigger": "Search or jump to",
+    "dialog": "Search or jump to",
+    "input": "Search pages, your work, problems and companies",
+    "close": "Close",
+    "empty": "Nothing matches “{q}”.",
+    "searching": "Searching…",
+    "results": "Results: {count}",
+    "goTo": "Go to",
+    "recent": "Recent",
+    "actions": "Actions",
+    "kind": {
+      "ideas": "Your ideas",
+      "engagements": "Engagements",
+      "inbox": "Inbox",
+      "problems": "Problems",
+      "briefs": "Your Briefs",
+      "companies": "Companies"
+    },
+    "settings": "Settings",
+    "notifications": "Notifications",
+    "newProposal": "New proposal",
+    "postBrief": "Post a Brief",
+    "themeDark": "Switch to dark appearance",
+    "themeLight": "Switch to light appearance",
+    "keyMove": "to move",
+    "keyOpen": "to open",
+    "keyNewTab": "for a new tab",
+    "keyClose": "to close"
+  },
+  "activity": {
+    "title": "Your last {weeks} weeks",
+    "total": "{total, plural, one {# action} other {# actions}} in the last {weeks} weeks",
+    "empty": "Nothing yet: what you do on Wazo shows here, day by day.",
+    "less": "Less",
+    "more": "More",
+    "legend": "From fewer actions a day to more",
+    "mon": "Mon",
+    "wed": "Wed",
+    "fri": "Fri",
+    "tip": "{count, plural, one {# action} other {# actions}} on {date}",
+    "tableCaption": "Your actions per day in the last {weeks} weeks, days with none left out",
+    "tableDate": "Day",
+    "tableCount": "Actions",
+    "kinds": "What they were",
+    "kind": {
+      "version_registered": "{count, plural, one {# version registered} other {# versions registered}}",
+      "proposal_published": "{count, plural, one {# proposal published} other {# proposals published}}",
+      "engagement_step": "{count, plural, one {# tracker step} other {# tracker steps}}",
+      "message_sent": "{count, plural, one {# message} other {# messages}}",
+      "quiz_answered": "{count, plural, one {# quiz answer} other {# quiz answers}}",
+      "team_message": "{count, plural, one {# team message} other {# team messages}}",
+      "proposal_opened": "{count, plural, one {# proposal opened} other {# proposals opened}}",
+      "brief_posted": "{count, plural, one {# Brief posted} other {# Briefs posted}}"
+    }
   }
 }

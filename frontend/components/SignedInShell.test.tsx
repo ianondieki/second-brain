@@ -48,6 +48,18 @@ describe("SignedInShell", () => {
     expect(header.querySelector("[data-lattice]")).toBeNull();
   });
 
+  // P25 (D-67): Search comes first among the controls; from 1024 px the bar stays at the top.
+  it("puts the Search button before the bell, in a top bar that is sticky from 1024 px", async () => {
+    await renderShell({ homeHref: "/dev" });
+    const header = screen.getByRole("banner");
+    const search = within(header).getByRole("button", { name: "Search or jump to" });
+    expect(search.getAttribute("aria-haspopup")).toBe("dialog");
+    const bell = within(header).getByRole("link", { name: "Notifications, 2 unread" });
+    expect(search.compareDocumentPosition(bell) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(header.className.split(" ")).toEqual(expect.arrayContaining(["lg:sticky", "lg:top-0"]));
+    expect(header.hasAttribute("data-sticky")).toBe(true);
+  });
+
   it("puts the bell, with the unread count read on the server, before the account menu (P19-C)", async () => {
     await renderShell({ homeHref: "/dev" });
     const header = screen.getByRole("banner");
@@ -87,7 +99,8 @@ describe("SignedInShell", () => {
     const main = await renderShell({ homeHref: "/dev", nav: <DevNav current="ideas" /> });
     const nav = screen.getByRole("navigation", { name: "Developer" });
     expect(nav.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(nav.parentElement).toBe(main.parentElement); // side by side from 1024 px
+    // Side by side from 1024 px: the rail (the nav and, under it, Help; P25) beside main.
+    expect(nav.closest("[data-portal-rail]")!.parentElement).toBe(main.parentElement);
     expect(main.className.split(" ")).toEqual(expect.arrayContaining(["pb-28", "lg:pb-16"]));
   });
 
