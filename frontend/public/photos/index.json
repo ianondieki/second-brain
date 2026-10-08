@@ -12,7 +12,9 @@
     "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
     "source_url": "https://commons.wikimedia.org/wiki/File:Nairobi%27s_Central_Business_District_Landmark_Skyscrapers..jpg",
     "changes": "resized",
-    "credit": "Photo: Tall Black, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+    "credit": "Photo: Tall Black, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": null,
+    "role": "greeting-afternoon"
   },
   {
     "slug": "nairobi-golden-hour",
@@ -27,7 +29,9 @@
     "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
     "source_url": "https://commons.wikimedia.org/wiki/File:Aerial_view_of_the_Nairobi_skyline_from_the_KICC_rooftop_at_golden_hour.jpg",
     "changes": "resized",
-    "credit": "Photo: Lebu Ayiga, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+    "credit": "Photo: Lebu Ayiga, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": null,
+    "role": "greeting-evening"
   },
   {
     "slug": "nairobi-jacaranda",
@@ -42,7 +46,9 @@
     "licence_url": "https://creativecommons.org/licenses/by/2.0",
     "source_url": "https://commons.wikimedia.org/wiki/File:Carpet_of_purple_jacaranda_blossoms_(5112231780).jpg",
     "changes": "resized",
-    "credit": "Photo: McKay Savage from London, UK, CC BY 2.0 (resized), via Wikimedia Commons"
+    "credit": "Photo: McKay Savage from London, UK, CC BY 2.0 (resized), via Wikimedia Commons",
+    "niche": null,
+    "role": "county"
   },
   {
     "slug": "mombasa-old-town",
@@ -57,7 +63,9 @@
     "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
     "source_url": "https://commons.wikimedia.org/wiki/File:Old_Town_Mombasa_Import_Dock.jpg",
     "changes": "resized",
-    "credit": "Photo: Martin Chomba, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+    "credit": "Photo: Martin Chomba, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": null,
+    "role": "county"
   },
   {
     "slug": "mombasa-likoni-ferry",
@@ -72,7 +80,9 @@
     "licence_url": "https://creativecommons.org/licenses/by-sa/2.0",
     "source_url": "https://commons.wikimedia.org/wiki/File:Likoni_Ferry_(cropped).jpg",
     "changes": "resized",
-    "credit": "Photo: Victor Ochieng, CC BY-SA 2.0 (resized), via Wikimedia Commons"
+    "credit": "Photo: Victor Ochieng, CC BY-SA 2.0 (resized), via Wikimedia Commons",
+    "niche": "logistics",
+    "role": "niche"
   },
   {
     "slug": "kisumu-lake-victoria",
@@ -87,7 +97,9 @@
     "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
     "source_url": "https://commons.wikimedia.org/wiki/File:Lake_Victoria_as_visible_from_Kisumu_City.jpg",
     "changes": "resized",
-    "credit": "Photo: Yashvi1919, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+    "credit": "Photo: Yashvi1919, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": null,
+    "role": "county"
   },
   {
     "slug": "nakuru-lake",
@@ -102,7 +114,9 @@
     "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
     "source_url": "https://commons.wikimedia.org/wiki/File:Lago_Nakuru,_Kenia,_2024-05-19,_DD_01-03_PAN.jpg",
     "changes": "resized",
-    "credit": "Photo: Diego Delso, CC BY-SA 4.0 (resized), via Wikimedia Commons"
+    "credit": "Photo: Diego Delso, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": null,
+    "role": "county"
   },
   {
     "slug": "eldoret-town",
@@ -117,7 +131,9 @@
     "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
     "source_url": "https://commons.wikimedia.org/wiki/File:Eldoret_1.JPG",
     "changes": "resized",
-    "credit": "Photo: Daryona, CC BY-SA 3.0 (resized), via Wikimedia Commons"
+    "credit": "Photo: Daryona, CC BY-SA 3.0 (resized), via Wikimedia Commons",
+    "niche": null,
+    "role": "county"
   },
   {
     "slug": "rongai-market",
@@ -132,7 +148,9 @@
     "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
     "source_url": "https://commons.wikimedia.org/wiki/File:Market_In_Africa.jpg",
     "changes": "resized",
-    "credit": "Photo: safaritravelplus (CC0, public domain dedication; resized), via Wikimedia Commons"
+    "credit": "Photo: safaritravelplus (CC0, public domain dedication; resized), via Wikimedia Commons",
+    "niche": "retail",
+    "role": "niche"
   },
   {
     "slug": "kenya-tea",
@@ -147,6 +165,144 @@
     "licence_url": "https://creativecommons.org/publicdomain/zero/1.0/deed.en",
     "source_url": "https://commons.wikimedia.org/wiki/File:Tea_Farm_in_Kenya.jpg",
     "changes": "cropped and resized",
-    "credit": "Photo: SeanTwice (CC0, public domain dedication; cropped and resized), via Wikimedia Commons"
+    "credit": "Photo: SeanTwice (CC0, public domain dedication; cropped and resized), via Wikimedia Commons",
+    "niche": "agriculture",
+    "role": "niche"
+  },
+  {
+    "slug": "mombasa-treasury-square",
+    "county": "Mombasa",
+    "county_code": "KE-28",
+    "caption": "A cream-and-tile colonial bank building on a sunlit street corner at Treasury Square, Mombasa",
+    "width": 1600,
+    "height": 1047,
+    "title": "KCB Treasury Square, 2025 (01)",
+    "author": "Bahnfrend",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:KCB_Treasury_Square,_2025_(01).jpg",
+    "changes": "resized",
+    "credit": "Photo: Bahnfrend, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": "financial-services",
+    "role": "niche"
+  },
+  {
+    "slug": "longonot-earth-station",
+    "county": "Kenya",
+    "county_code": null,
+    "caption": "Two large satellite dishes and a mast at an earth station on the plain below Mount Longonot",
+    "width": 1600,
+    "height": 804,
+    "title": "Longonot Earth Station 2010",
+    "author": "Arthur Buliva / Arthurbuliva at en.wikipedia",
+    "licence": "CC BY-SA 3.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Longonot_Earth_Station_2010.jpg",
+    "changes": "cropped and resized",
+    "credit": "Photo: Arthur Buliva / Arthurbuliva at en.wikipedia, CC BY-SA 3.0 (cropped and resized), via Wikimedia Commons",
+    "niche": "ict",
+    "role": "niche"
+  },
+  {
+    "slug": "nairobi-strathmore-campus",
+    "county": "Nairobi",
+    "county_code": "KE-30",
+    "caption": "A stone and glass university building seen at an angle on a campus in Madaraka, Nairobi",
+    "width": 1600,
+    "height": 899,
+    "title": "Strathmore Business School 1",
+    "author": "Mathewabiero",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Strathmore_Business_School_1.JPG",
+    "changes": "resized",
+    "credit": "Photo: Mathewabiero, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": "education",
+    "role": "niche"
+  },
+  {
+    "slug": "nairobi-city-hall",
+    "county": "Nairobi",
+    "county_code": "KE-30",
+    "caption": "Nairobi City Hall and its clock tower under a blue sky",
+    "width": 1600,
+    "height": 1062,
+    "title": "Nairobi city hall",
+    "author": "Jorge Láscar",
+    "licence": "CC BY-SA 2.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/2.0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Nairobi_city_hall.jpg",
+    "changes": "resized",
+    "credit": "Photo: Jorge Láscar, CC BY-SA 2.0 (resized), via Wikimedia Commons",
+    "niche": "public-sector",
+    "role": "niche"
+  },
+  {
+    "slug": "turkana-naipekarr-dispensary",
+    "county": "Turkana",
+    "county_code": "KE-43",
+    "caption": "A small dispensary building with blue doors and windows in dry Turkana County landscape",
+    "width": 1600,
+    "height": 1200,
+    "title": "Turkana County, Naipekarr Dispensary",
+    "author": "SellyDessy",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Turkana_County,_Naipekarr_Dispensary.jpg",
+    "changes": "resized",
+    "credit": "Photo: SellyDessy, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": "health",
+    "role": "niche"
+  },
+  {
+    "slug": "ngong-hills-wind",
+    "county": "Kenya",
+    "county_code": null,
+    "caption": "Wind turbines on green hillside under cloud near the top of the Ngong Hills",
+    "width": 1600,
+    "height": 800,
+    "title": "Ngong Hills Wind Farm",
+    "author": "Singularity Preparation",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Ngong_Hills_Wind_Farm.jpg",
+    "changes": "cropped and resized",
+    "credit": "Photo: Singularity Preparation, CC BY-SA 4.0 (cropped and resized), via Wikimedia Commons",
+    "niche": "energy",
+    "role": "niche"
+  },
+  {
+    "slug": "otho-abwao-water-point",
+    "county": "Kenya",
+    "county_code": null,
+    "caption": "Clean water flowing from a pipe into a concrete storage tank of a community water system",
+    "width": 1600,
+    "height": 1200,
+    "title": "Pumped water flowing into the storage tanks in Otho Abwao Kenya",
+    "author": "Oertherdb",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Pumped_water_flowing_into_the_storage_tanks_in_Otho_Abwao_Kenya.jpg",
+    "changes": "resized",
+    "credit": "Photo: Oertherdb, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": "social-ngo",
+    "role": "niche"
+  },
+  {
+    "slug": "nairobi-morning",
+    "county": "Nairobi",
+    "county_code": "KE-30",
+    "caption": "A giraffe on the savannah of Nairobi National Park with the city's towers rising in early haze behind it",
+    "width": 1600,
+    "height": 860,
+    "title": "A giraffe with a beautiful background of Nairobi City Skyline",
+    "author": "Alexmbogo",
+    "licence": "CC BY-SA 4.0",
+    "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+    "source_url": "https://commons.wikimedia.org/wiki/File:A_giraffe_with_a_beautiful_background_of_Nairobi_City_Skyline.jpg",
+    "changes": "resized",
+    "credit": "Photo: Alexmbogo, CC BY-SA 4.0 (resized), via Wikimedia Commons",
+    "niche": null,
+    "role": "greeting-morning"
   }
 ]
