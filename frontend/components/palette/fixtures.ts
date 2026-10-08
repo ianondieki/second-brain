@@ -24,6 +24,7 @@ export const DEV_PALETTE: PaletteData = {
     close: p.close,
     empty: p.empty,
     searching: p.searching,
+    unavailable: p.unavailable,
     results: p.results,
     goTo: p.goTo,
     recent: p.recent,

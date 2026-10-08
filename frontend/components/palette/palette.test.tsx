@@ -228,19 +228,32 @@ describe("CommandPalette", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("leaves the search groups out when the call fails, and keeps the rest", async () => {
-    fetchMock.mockResolvedValue(new Response("{}", { status: 500 }));
+  it.each([
+    ["a server error", () => fetchMock.mockResolvedValue(new Response("{}", { status: 500 }))],
+    ["the rate limit", () => fetchMock.mockResolvedValue(new Response("{}", { status: 429 }))],
+    ["no network", () => fetchMock.mockRejectedValue(new TypeError("offline"))],
+  ])("on %s, says search is unavailable, leaves its groups out and keeps the rest", async (_, fail) => {
+    fail();
     renderTrigger();
     await openWith(() => fireEvent.keyDown(document.body, { key: "k", ctrlKey: true }));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "ho" } });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    await waitFor(() => expect(screen.queryByText("Searching…")).toBeNull());
+    expect(await screen.findByText("Search is unavailable right now. Sections and recent pages still work.")).toBeTruthy();
     expect(screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual(["Go to"]);
     expect(screen.getByRole("option", { name: "Home" })).toBeTruthy();
+    expect(screen.queryByText(/Nothing matches/)).toBeNull();
   });
 
-  it("says in one sentence when nothing matches", async () => {
+  it("says search is unavailable, not that nothing matches, when nothing local matches either", async () => {
     fetchMock.mockRejectedValue(new TypeError("offline"));
+    renderTrigger();
+    await openWith(() => fireEvent.keyDown(document.body, { key: "k", ctrlKey: true }));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "zzqx" } });
+    expect(await screen.findByText("Search is unavailable right now. Sections and recent pages still work.")).toBeTruthy();
+    expect(screen.queryByText(/Nothing matches/)).toBeNull();
+  });
+
+  it("says in one sentence when a successful search finds nothing", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ q: "zzqx", groups: [] }), { status: 200 }));
     renderTrigger();
     await openWith(() => fireEvent.keyDown(document.body, { key: "k", ctrlKey: true }));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "zzqx" } });

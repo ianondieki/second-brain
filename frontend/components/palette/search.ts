@@ -50,17 +50,20 @@ export function searchQuery(text: string): string | null {
   return q.length >= SEARCH_MIN ? q : null;
 }
 
-/** One search: the groups, or none when the call fails, answers anything but 200, or is aborted. */
-export async function search(q: string, signal: AbortSignal, fetcher: typeof fetch = fetch): Promise<SearchGroup[]> {
+/**
+ * One search: the groups (none for a successful empty answer), or null when it could not be answered (offline, a
+ * server error, the rate limit, an answer that is not JSON): the palette then says search is unavailable.
+ */
+export async function search(q: string, signal: AbortSignal, fetcher: typeof fetch = fetch): Promise<SearchGroup[] | null> {
   try {
     const response = await fetcher(`/api/me/search?q=${encodeURIComponent(q)}`, {
       credentials: "same-origin",
       headers: { accept: "application/json" },
       signal,
     });
-    if (!response.ok) return [];
+    if (!response.ok) return null;
     return parseSearch(await response.json());
   } catch {
-    return [];
+    return null;
   }
 }

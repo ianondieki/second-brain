@@ -56,6 +56,7 @@ export async function PaletteSlot({ homeHref, staffRole }: { homeHref: string; s
     close: t("close"),
     empty: t("empty", { q: "{q}" }),
     searching: t("searching"),
+    unavailable: t("unavailable"),
     results: t("results", { count: "{count}" }),
     goTo: t("goTo"),
     recent: t("recent"),

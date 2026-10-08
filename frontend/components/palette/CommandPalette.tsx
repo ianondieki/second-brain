@@ -39,7 +39,7 @@ function Title({ text, query }: { text: string; query: string }) {
 
 function Arrow() {
   return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="size-4 shrink-0">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" className="size-4 shrink-0">
       <path d="M4 10h11M11 5.5 15.5 10 11 14.5" />
     </svg>
   );
@@ -60,7 +60,7 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
   const id = useId();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [answer, setAnswer] = useState<{ q: string; groups: SearchGroup[] }>({ q: "", groups: [] });
+  const [answer, setAnswer] = useState<{ q: string; groups: SearchGroup[]; failed: boolean }>({ q: "", groups: [], failed: false });
   const [recent] = useState(() => readRecent());
   const [dark] = useState(pageIsDark);
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -68,6 +68,7 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
 
   const q = searchQuery(query);
   const searching = q !== null && answer.q !== q;
+  const unavailable = q !== null && answer.q === q && answer.failed;
   const groups = useMemo(
     () => paletteGroups({ data, query, recent, results: q !== null && answer.q === q ? answer.groups : [], dark }),
     [data, query, recent, answer, q, dark],
@@ -91,7 +92,7 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       void search(q, controller.signal).then((found) => {
-        if (!controller.signal.aborted) setAnswer({ q, groups: found });
+        if (!controller.signal.aborted) setAnswer({ q, groups: found ?? [], failed: found === null });
       });
     }, SEARCH_DEBOUNCE_MS);
     return () => {
@@ -175,7 +176,7 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
       }}
     >
       <div className="flex items-center gap-2 border-b border-line px-3 sm:px-4">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true" className="size-5 shrink-0 text-ink-soft">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true" focusable="false" className="size-5 shrink-0 text-ink-soft">
           <circle cx="11" cy="11" r="6.5" />
           <path d="m16 16 4 4" />
         </svg>
@@ -259,6 +260,11 @@ export function CommandPalette({ data, onClose }: CommandPaletteProps) {
           <span className="font-medium text-error">{s.signOutFailed}</span>
         ) : searching ? (
           s.searching
+        ) : unavailable ? (
+          // The API could not answer: say so, never "nothing matches" (sections and recent pages are local).
+          <span className="block py-2 text-ink" data-palette-unavailable="">
+            {s.unavailable}
+          </span>
         ) : options.length === 0 ? (
           <span className="block py-4 text-center text-base text-ink">{s.empty.replace("{q}", query.trim())}</span>
         ) : query.trim() ? (

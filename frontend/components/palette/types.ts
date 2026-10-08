@@ -20,6 +20,7 @@ export interface PaletteStrings {
   close: string;
   empty: string;
   searching: string;
+  unavailable: string;
   results: string;
   goTo: string;
   recent: string;

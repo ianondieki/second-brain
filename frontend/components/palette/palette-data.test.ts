@@ -55,11 +55,13 @@ describe("parseSearch", () => {
     expect(searchQuery("x".repeat(100))).toHaveLength(80);
   });
 
-  it("answers no groups when the call fails or is refused", async () => {
+  it("answers null (unavailable) when the call fails or is refused, and no groups for an empty answer", async () => {
     const signal = new AbortController().signal;
-    expect(await search("sacco", signal, vi.fn<typeof fetch>().mockRejectedValue(new TypeError("offline")))).toEqual([]);
-    expect(await search("sacco", signal, vi.fn<typeof fetch>().mockResolvedValue(new Response("", { status: 429 })))).toEqual([]);
-    expect(await search("sacco", signal, vi.fn<typeof fetch>().mockResolvedValue(new Response("not json")))).toEqual([]);
+    expect(await search("sacco", signal, vi.fn<typeof fetch>().mockRejectedValue(new TypeError("offline")))).toBeNull();
+    expect(await search("sacco", signal, vi.fn<typeof fetch>().mockResolvedValue(new Response("", { status: 429 })))).toBeNull();
+    expect(await search("sacco", signal, vi.fn<typeof fetch>().mockResolvedValue(new Response("", { status: 503 })))).toBeNull();
+    expect(await search("sacco", signal, vi.fn<typeof fetch>().mockResolvedValue(new Response("not json")))).toBeNull();
+    expect(await search("sacco", signal, vi.fn<typeof fetch>().mockResolvedValue(new Response('{"q":"sacco","groups":[]}')))).toEqual([]);
   });
 });
 

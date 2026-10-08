@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
 import { Picture } from "@/components/landing/Picture";
+import { photoWidths } from "@/lib/photos/files";
 import { nichePhoto } from "@/lib/photos/niche";
 
 import { cn } from "./cn";
@@ -34,14 +35,14 @@ export interface NicheBandProps {
  * beside it. Where there is no photograph, or the request carries `Save-Data: on`, the kanga lattice band instead.
  * Never on the tracker (REQ-UX-05). A server component: no script.
  */
-export async function NicheBand({ niche, county, children, className, sizes = "(min-width: 1024px) 24rem, 100vw" }: NicheBandProps) {
+export async function NicheBand({ niche, county, children, className, sizes = "(min-width: 1280px) 26rem, (min-width: 640px) 45vw, 92vw" }: NicheBandProps) {
   const found = (await savesData()) ? undefined : nichePhoto({ niche, county });
   return (
     <div
       className={cn("niche-band h-16", found && children ? "niche-band-scrim" : null, !found && "niche-band-lattice", className)}
       data-niche-band={found ? found.slug : "lattice"}
     >
-      {found ? <Picture photo={found} sizes={sizes} /> : null}
+      {found ? <Picture photo={found} sizes={sizes} widths={photoWidths(found)} /> : null}
       {children ? <div className={cn("absolute inset-x-0 bottom-0 z-[1] p-3", found ? "text-on-night" : "text-ink")}>{children}</div> : null}
     </div>
   );

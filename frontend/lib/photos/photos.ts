@@ -25,7 +25,9 @@ export interface PhotoEntry {
   /** The one-line attribution. */
   credit: string;
   /** The top-level niche it stands for (P25-A adds one per niche), if any. */
-  niche?: string;
+  niche?: string | null;
+  /** What it is for (P25-A): "niche", "greeting-morning", "greeting-afternoon", "greeting-evening", "county". */
+  role?: string | null;
 }
 
 /** A photograph with the folder its files are in. */

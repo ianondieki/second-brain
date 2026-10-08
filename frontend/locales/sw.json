@@ -4107,6 +4107,7 @@
     "close": "Funga",
     "empty": "Hakuna kinacholingana na “{q}”.",
     "searching": "Inatafuta…",
+    "unavailable": "Utafutaji haupatikani kwa sasa. Sehemu na kurasa za hivi karibuni bado zinafanya kazi.",
     "results": "Matokeo: {count}",
     "goTo": "Nenda kwa",
     "recent": "Za hivi karibuni",
