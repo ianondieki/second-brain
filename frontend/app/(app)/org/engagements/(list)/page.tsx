@@ -6,11 +6,11 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { orgEngagements } from "@/components/tracker/data";
 import { EngagementList } from "@/components/tracker/EngagementList";
 
-import { orgContext } from "../data";
+import { orgContext } from "../../data";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { ENGAGEMENTS_PATH, inboxHref, type Membership } from "../membership";
-import { OrgPicker } from "../OrgPicker";
+import { PageHero } from "@/components/ui/PageHero";
+import { ENGAGEMENTS_PATH, inboxHref, type Membership } from "../../membership";
+import { OrgPicker } from "../../OrgPicker";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("tracker");
@@ -24,17 +24,16 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function OrganisationEngagementsPage({ searchParams }: PageProps<"/org/engagements">) {
   const { memberships, org, missing, query } = await orgContext((await searchParams).org);
-  const t = await getTranslations("tracker");
-  const ti = await getTranslations("inbox");
+  const [t, ti, tp] = await Promise.all([getTranslations("tracker"), getTranslations("inbox"), getTranslations("portal")]);
 
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="engagements" query={query} />} wide>
-      <div className="max-w-3xl">
-        <PageHeader title={t("title")} lead={org ? t("orgLead") : undefined} />
+      <div className="max-w-5xl">
+        <PageHero eyebrow={tp("eyebrow.engagements")} title={t("title")} lead={org ? t("orgLead") : undefined} />
         {org ? (
           <Body memberships={memberships} org={org} query={query} />
         ) : (
-          <div className="mt-6">
+          <div>
             {missing === "notMember" ? (
               <EmptyState sentence={t("notMember")} action={t("openOwn")} href={ENGAGEMENTS_PATH} />
             ) : (
@@ -66,11 +65,11 @@ async function Body({ memberships, org, query }: { memberships: Membership[]; or
   return (
     <>
       {memberships.length > 1 ? (
-        <div className="mt-6">
+        <div className="mb-6">
           <OrgPicker memberships={memberships} current={org.org_id} action={ENGAGEMENTS_PATH} />
         </div>
       ) : null}
-      <div className="mt-8">{body}</div>
+      <div className="max-w-3xl">{body}</div>
     </>
   );
 }

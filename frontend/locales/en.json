@@ -634,7 +634,8 @@
     },
     "proposal": {
       "means": "What accepting means"
-    }
+    },
+    "loading": "Loading…"
   },
   "orgHome": {
     "inboxTitle": "Inbox",

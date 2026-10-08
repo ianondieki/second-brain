@@ -9,7 +9,7 @@ import { renderWithIntl } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
 import type { BriefsRead } from "./brief-data";
-import OrganisationHome from "./page";
+import OrganisationHome from "./(home)/page";
 
 // REQ-DIR-05 with D-52 (P19-F §F-B): the organisation Home keeps four stat tiles; the fourth counts the open Problem
 // Briefs (in place of "Need us", whose engagements are the cards right below) and leads to Problems.

@@ -78,13 +78,15 @@ export const ALL_PHOTOS: readonly Photo[] = [...ALL.values()];
 export type DayPart = "morning" | "afternoon" | "evening";
 
 /**
- * Home's greeting band by the time of day in Nairobi (D-67, P25): the morning photograph once P25-A vendors it (the
- * skyline under a blue sky until then), the skyline in the afternoon, the city at golden hour in the evening.
+ * Home's greeting by the time of day in Nairobi (D-67, P25): the photograph public/photos/index.json gives the role
+ * `greeting-<part>` (the morning, the skyline in the afternoon, golden hour in the evening).
  */
+const byRole = (role: string, fallback: string): Photo =>
+  [...ALL.values()].find((p) => (p as Photo & { role?: string }).role === role) ?? photo(fallback);
 export const DAY_PHOTOS: Readonly<Record<DayPart, Photo>> = {
-  morning: ALL.get("nairobi-morning") ?? photo("nairobi-skyline"),
-  afternoon: photo("nairobi-skyline"),
-  evening: photo("nairobi-golden-hour"),
+  morning: byRole("greeting-morning", "nairobi-skyline"),
+  afternoon: byRole("greeting-afternoon", "nairobi-skyline"),
+  evening: byRole("greeting-evening", "nairobi-golden-hour"),
 };
 
 /** The signed-out screens' photograph beside the form from 1024 px (AuthShell): signing in, and creating an account. */
