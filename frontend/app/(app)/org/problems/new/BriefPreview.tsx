@@ -23,7 +23,7 @@ export interface BriefPreviewProps {
   niches: readonly NicheGroup[];
   counties: readonly { id: string; label: string }[];
   bands: readonly BudgetBand[];
-  locale: string;
+  locale?: string;
 }
 
 /**
@@ -31,7 +31,7 @@ export interface BriefPreviewProps {
  * the form's first edit (BriefForm), so the page's first load carries none of it (REQ-UX-05's 150 KB). Words from the
  * server-formatted `briefForm` strings.
  */
-export function BriefPreview({ draft, orgName, niches, counties, bands, locale }: BriefPreviewProps) {
+export function BriefPreview({ draft, orgName, niches, counties, bands, locale = "en" }: BriefPreviewProps) {
   const t = useStrings("briefForm");
   const band = bands.find((b) => b.code === draft.band)?.label;
   const day = /^\d{4}-\d{2}-\d{2}$/.test(draft.deadline) ? formatCalendarDate(locale, draft.deadline) : null;
@@ -51,5 +51,3 @@ export function BriefPreview({ draft, orgName, niches, counties, bands, locale }
     />
   );
 }
-
-export default BriefPreview;

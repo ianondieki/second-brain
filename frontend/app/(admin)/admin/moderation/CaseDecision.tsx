@@ -13,7 +13,7 @@ import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import type { confirmStepUp } from "../research/calls";
-import { StepUp } from "../research/StepUp";
+import { LazyStepUp as StepUp } from "../research/LazyStepUp";
 import { decideCase } from "./calls";
 import { MODERATION_PATH, refusalNext, type Blocked, type Choice, type RefusalCode } from "./moderation";
 

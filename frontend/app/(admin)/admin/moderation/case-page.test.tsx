@@ -245,7 +245,7 @@ describe("the case page", () => {
   it("asks for a fresh code in place of the case when the second factor is stale", async () => {
     data.view = { kind: "stepUp" };
     await page();
-    expect(screen.getByLabelText("Code from your app")).toBeTruthy();
+    expect(await screen.findByLabelText("Code from your app")).toBeTruthy(); // the form is fetched when asked for (LazyStepUp, P25)
     expect(screen.getByText(/more than 12 hours ago/)).toBeTruthy();
   });
 

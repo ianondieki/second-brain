@@ -185,7 +185,10 @@ li > .compare-band > .niche-band {
   }
   .brief-fields {
     grid-area: fields;
+    display: flex;
     min-width: 0;
+    flex-direction: column;
+    gap: 2rem;
   }
   .brief-aside {
     grid-area: aside;
@@ -193,7 +196,10 @@ li > .compare-band > .niche-band {
   }
   .brief-submit {
     grid-area: submit;
+    display: flex;
     min-width: 0;
+    flex-direction: column;
+    gap: 1.5rem;
   }
   .brief-preview-card {
     overflow: hidden;

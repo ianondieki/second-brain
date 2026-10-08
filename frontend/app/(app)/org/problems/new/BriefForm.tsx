@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -65,9 +65,6 @@ export interface BriefFormProps {
   preview?: ReactNode;
 }
 
-/** The live preview, fetched on the form's first edit: the first paint shows the page's own (the `preview` prop). */
-const LivePreview = lazy(() => import("./BriefPreview"));
-
 const LIMIT: Partial<Record<DraftField, number>> = {
   title: BRIEF_LIMITS.title,
   statement: BRIEF_LIMITS.statement,
@@ -92,7 +89,8 @@ export function BriefForm(props: BriefFormProps) {
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<Refused | null>(null);
   const notice = useRef<HTMLDivElement>(null);
-  const [edited, setEdited] = useState(false);
+  // The live preview, fetched on the first edit; until it arrives the page's own (the `preview` prop) stands.
+  const [Live, setLive] = useState<typeof import("./BriefPreview").BriefPreview>();
 
   useEffect(() => {
     // A refusal about the whole Brief takes focus; one about its fields leaves focus on the first marked field.
@@ -101,7 +99,7 @@ export function BriefForm(props: BriefFormProps) {
 
   function change<K extends keyof BriefDraft>(field: K, value: BriefDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
-    setEdited(true);
+    if (!Live) void import("./BriefPreview").then((m) => setLive(() => m.BriefPreview));
     if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
     if (issues.some((issue) => issue.field === field)) setIssues((current) => current.filter((issue) => issue.field !== field));
   }
@@ -160,7 +158,7 @@ export function BriefForm(props: BriefFormProps) {
 
   return (
     <Form onSubmit={submit} className="brief-layout" aria-busy={busy || undefined} data-brief-form="">
-      <div className="brief-fields flex flex-col gap-8">
+      <div className="brief-fields">
       <Card as="section" variant="flat" aria-labelledby="brief-group-problem" className="flex flex-col gap-6">
         <h2 id="brief-group-problem" className={cardHeadingClass}>
           {t("group.problem")}
@@ -283,23 +281,21 @@ export function BriefForm(props: BriefFormProps) {
       </div>
 
       <div className="brief-aside">
-        {edited ? (
-          <Suspense fallback={props.preview}>
-            <LivePreview
-              draft={draft}
-              orgName={props.orgName}
-              niches={props.niches}
-              counties={props.counties}
-              bands={props.bands}
-              locale={props.locale ?? "en"}
-            />
-          </Suspense>
+        {Live ? (
+          <Live
+            draft={draft}
+            orgName={props.orgName}
+            niches={props.niches}
+            counties={props.counties}
+            bands={props.bands}
+            locale={props.locale}
+          />
         ) : (
           props.preview
         )}
       </div>
 
-      <div className="brief-submit flex flex-col gap-6">
+      <div className="brief-submit">
 
       {refused ? (
         <Alert ref={notice} className="w-full" tone="error">

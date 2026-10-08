@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
-import { StepUp } from "./StepUp";
+import { LazyStepUp as StepUp } from "./LazyStepUp";
 
 /**
  * The step-up in place of a whole research screen: once the code is accepted the page is fetched again, and when this

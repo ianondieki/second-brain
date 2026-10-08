@@ -14,7 +14,7 @@ import { TextAreaField } from "@/components/ui/TextAreaField";
 import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import type { confirmStepUp } from "../research/calls";
-import { StepUp } from "../research/StepUp";
+import { LazyStepUp as StepUp } from "../research/LazyStepUp";
 import { decideMessageCase } from "./calls";
 import { MODERATION_PATH, refusalNext, type Blocked, type Choice, type OutcomeKey, type RefusalCode } from "./moderation";
 
