@@ -12,6 +12,7 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { BackLink } from "@/components/ui/BackLink";
 import { PageHero } from "@/components/ui/PageHero";
 
 import { SettingsTabs } from "../SettingsTabs";
@@ -58,6 +59,7 @@ export default async function NotificationSettingsPage() {
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
       {/* One 48 rem column: the tab strip ends where the card ends. */}
       <div className="max-w-3xl">
+        <BackLink href={home}>{(await getTranslations("security"))("back")}</BackLink>
         <PageHero
           eyebrow={(await getTranslations("portal"))("eyebrow.settings")}
           title={tNav("label")}

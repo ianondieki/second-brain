@@ -53,7 +53,7 @@ describe("portal.css", () => {
 
   it("keeps a focused control clear of the sticky day names and table headers (WCAG 2.4.11)", () => {
     expect(portal).toMatch(/html:has\(\.notice-day\) \{\s*scroll-padding-block-start: 3rem;/);
-    expect(media("(width >= 64rem)")).toMatch(/html:has\(\[data-sticky-head\]\):has\(\[data-top-bar\]\[data-sticky\]\) \{\s*scroll-padding-block-start: 8rem;/);
+    expect(media("(width >= 80rem)")).toMatch(/html:has\(\[data-sticky-head\]\):has\(\[data-top-bar\]\[data-sticky\]\) \{\s*scroll-padding-block-start: 8rem;/);
   });
 
   it("shows the marked proposal full-screen below 768 px and as tall as the screen from it", () => {

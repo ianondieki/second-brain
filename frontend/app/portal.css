@@ -367,7 +367,11 @@ html:has(.notice-day) {
   scroll-padding-block-start: 3rem;
 }
 @media (width >= 64rem) {
-  html:has(.notice-day):has([data-top-bar][data-sticky]),
+  html:has(.notice-day):has([data-top-bar][data-sticky]) {
+    scroll-padding-block-start: 8rem;
+  }
+}
+@media (width >= 80rem) {
   html:has([data-sticky-head]):has([data-top-bar][data-sticky]) {
     scroll-padding-block-start: 8rem;
   }

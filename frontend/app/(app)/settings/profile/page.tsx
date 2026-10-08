@@ -8,6 +8,7 @@ import { PortalNavFor } from "@/components/PortalNavFor";
 import { getCountyNames } from "@/components/problem/data";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Card } from "@/components/ui/Card";
+import { BackLink } from "@/components/ui/BackLink";
 import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
@@ -49,6 +50,7 @@ export default async function ProfileSettingsPage() {
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
       {/* One 48 rem column: the tab strip ends where the cards end. */}
       <div className="max-w-3xl">
+        <BackLink href={home}>{(await getTranslations("security"))("back")}</BackLink>
         <PageHero
           eyebrow={(await getTranslations("portal"))("eyebrow.settings")}
           title={tNav("label")}

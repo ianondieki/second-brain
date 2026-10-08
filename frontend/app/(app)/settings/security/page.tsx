@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { ClientStrings } from "@/components/ClientStrings";
 import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
+import { BackLink } from "@/components/ui/BackLink";
 import { PageHero } from "@/components/ui/PageHero";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
@@ -37,6 +38,7 @@ export default async function SecurityPage() {
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide>
       {/* One 48 rem column: the tab strip ends where the cards end. */}
       <div className="max-w-3xl">
+        <BackLink href={home}>{(await getTranslations("security"))("back")}</BackLink>
         <PageHero
           eyebrow={(await getTranslations("portal"))("eyebrow.settings")}
           title={tNav("label")}
