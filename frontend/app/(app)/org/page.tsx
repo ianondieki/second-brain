@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { unstable_rethrow } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
+import { Suspense, type ReactNode } from "react";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
@@ -54,7 +55,8 @@ export async function generateMetadata(): Promise<Metadata> {
  * four stat tiles (the Inbox, the scout's matches, the engagements, the Problem Briefs; a sparkline where a series
  * exists) showing their figures from the first paint, two-step sign-in as a notice only while it is off, "Your last 26 weeks" (this
  * person's own actions, the activity calendar), what needs the organisation as prominent cards, then the newest Inbox
- * proposals as cards under their niche's photograph. "Open the Inbox" is the screen's one primary action; an owner
+ * proposals as cards under their niche's photograph. The greeting and the tiles are in the first flush; the calendar's
+ * read starts with the tiles' four, and the calendar and the two lists under it stream in once it answers (P25). "Open the Inbox" is the screen's one primary action; an owner
  * without two-step sign-in gets "Turn on" instead, since the Inbox is refused until then.
  */
 export default async function OrganisationHome({ searchParams }: PageProps<"/org">) {
@@ -151,12 +153,13 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
     getTranslations("activity"),
     getLocale(),
   ]);
-  const [inboxRead, matchesRead, engagementsRead, briefsRead, activity] = await Promise.all([
+  // The calendar's read (it never throws) starts with the tiles' four; only the tiles' are waited for here.
+  const calendar = getActivity();
+  const [inboxRead, matchesRead, engagementsRead, briefsRead] = await Promise.all([
     quietly(() => getInbox(org.org_id)),
     quietly(() => getMatches(org.org_id)),
     quietly(() => orgEngagements(org.org_id)),
     quietly(() => getBriefs(org.org_id)),
-    getActivity(),
   ]);
   const inbox: InboxPage | null = inboxRead?.kind === "page" ? inboxRead.page : null;
   const matches: Match[] | null = matchesRead?.kind === "ok" ? matchesRead.value : null;
@@ -235,48 +238,63 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
         </ul>
       </section>
 
-      {/* Your last 26 weeks (D-67): this person's own actions for the organisation, read as them; left out without an answer. */}
-      {activity ? (
-        <Section title={ta("title", { weeks: WEEKS })} headingId="home-activity" data-home="activity">
-          <div className="rounded-panel border border-line bg-field p-4 sm:p-6">
-            <ActivityCalendar activity={activity} />
-          </div>
-        </Section>
-      ) : null}
+      {/* Below the tiles (P25): the calendar, then what needs the organisation and the Inbox, streamed in one piece once
+          the calendar's read answers, in this order. Nothing follows the boundary, so what arrives moves nothing. */}
+      <Suspense fallback={null}>
+        <Await read={calendar}>
+          {(activity) => (
+            <>
+              {/* Your last 26 weeks (D-67): this person's own actions for the organisation, read as them; left out without an answer. */}
+              {activity ? (
+                <Section title={ta("title", { weeks: WEEKS })} headingId="home-activity" data-home="activity">
+                  <div className="rounded-panel border border-line bg-field p-4 sm:p-6">
+                    <ActivityCalendar activity={activity} />
+                  </div>
+                </Section>
+              ) : null}
 
-      {stats.waiting.length > 0 ? (
-        <Section title={tt("needsUs")} headingId="home-needs-us" data-home="needs-us">
-          <ul className="flex flex-col gap-4">
-            {stats.waiting.map((item) => (
-              <li key={item.id}>
-                <NeedsYouCard item={item} mine="org" href={engagementsHref(memberships, org.org_id, item.id)} action={t("openTracker")} />
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
+              {stats.waiting.length > 0 ? (
+                <Section title={tt("needsUs")} headingId="home-needs-us" data-home="needs-us">
+                  <ul className="flex flex-col gap-4">
+                    {stats.waiting.map((item) => (
+                      <li key={item.id}>
+                        <NeedsYouCard item={item} mine="org" href={engagementsHref(memberships, org.org_id, item.id)} action={t("openTracker")} />
+                      </li>
+                    ))}
+                  </ul>
+                </Section>
+              ) : null}
 
-      <Section
-        title={t("inboxTitle")}
-        headingId="home-inbox"
-        data-home="inbox"
-        description={inboxSentence}
-        link={newest ? { href: inboxLink, label: t("allProposals") } : undefined}
-      >
-        {newest ? (
-          <ItemGrid>
-            {inbox!.items.slice(0, INBOX_SHOWN).map((item) => (
-              <li key={item.tag_id}>
-                <InboxCard
-                  item={item}
-                  href={proposalHref(memberships, org.org_id, item.proposal.id)}
-                  band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} />}
-                />
-              </li>
-            ))}
-          </ItemGrid>
-        ) : null}
-      </Section>
+              <Section
+                title={t("inboxTitle")}
+                headingId="home-inbox"
+                data-home="inbox"
+                description={inboxSentence}
+                link={newest ? { href: inboxLink, label: t("allProposals") } : undefined}
+              >
+                {newest ? (
+                  <ItemGrid>
+                    {inbox!.items.slice(0, INBOX_SHOWN).map((item) => (
+                      <li key={item.tag_id}>
+                        <InboxCard
+                          item={item}
+                          href={proposalHref(memberships, org.org_id, item.proposal.id)}
+                          band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} />}
+                        />
+                      </li>
+                    ))}
+                  </ItemGrid>
+                ) : null}
+              </Section>
+            </>
+          )}
+        </Await>
+      </Suspense>
     </>
   );
+}
+
+/** Renders `children` with a read's answer once it arrives: the content of a Suspense boundary. */
+async function Await<T>({ read, children }: { read: Promise<T>; children: (value: T) => ReactNode }) {
+  return children(await read);
 }

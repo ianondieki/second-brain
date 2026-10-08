@@ -6,12 +6,8 @@
  * paint above the fold can be preloaded at high priority from app/layout.tsx. Each has a size-adjusted local fallback
  * (metrics computed from the files against Arial), so the swap moves nothing.
  */
-@font-face {
-  font-family: "Bricolage Grotesque";
-  src: url("/fonts/bricolage-grotesque-v2.woff2") format("woff2");
-  font-display: swap;
-  font-weight: 600 800;
-}
+/* Bricolage Grotesque (the wordmark and the figures) and IBM Plex Mono (the eyebrows) are declared after the first
+   paint by lib/fonts.ts (app/layout.tsx; P25): here they would be fetched at the first layout, ahead of the LCP. */
 @font-face {
   font-family: "Bricolage Grotesque Fallback";
   src: local(Arial);
@@ -19,6 +15,17 @@
   descent-override: 26.67%;
   line-gap-override: 0%;
   size-adjust: 101.22%;
+}
+/* IBM Plex Mono's fallback (P25): Courier New or a metric-compatible clone (Liberation Mono, Cousine), sized to Plex
+   Mono (advance 600/1000 both; Plex ascent 1025, descent 275, measured in Chromium), so the eyebrows do not move when
+   the face swaps in after the first paint. */
+@font-face {
+  font-family: "IBM Plex Mono Fallback";
+  src: local("Courier New"), local("Liberation Mono"), local(Cousine);
+  ascent-override: 102.52%;
+  descent-override: 27.51%;
+  line-gap-override: 0%;
+  size-adjust: 99.98%;
 }
 @font-face {
   font-family: "Hanken Grotesk";
@@ -72,12 +79,6 @@
   descent-override: 22.13%;
   line-gap-override: 0%;
   size-adjust: 115.22%;
-}
-@font-face {
-  font-family: "IBM Plex Mono";
-  src: url("/fonts/ibm-plex-mono-latin-v1.woff2") format("woff2");
-  font-display: swap;
-  font-weight: 400;
 }
 
 /*
@@ -257,7 +258,7 @@ html[data-theme="dark"] {
   /* D-66 (P24): titles in Fraunces; Bricolage keeps the wordmark and the figures (font-figure). */
   --font-display: "Fraunces", "Fraunces Fallback", Georgia, "Times New Roman", serif;
   --font-figure: "Bricolage Grotesque", "Bricolage Grotesque Fallback", "Hanken Grotesk", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: "IBM Plex Mono", "IBM Plex Mono Fallback", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Radii: inputs; cards, sheets and panels. Buttons and chips are pills (rounded-full). */
   --radius-control: 10px;
