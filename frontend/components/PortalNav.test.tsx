@@ -25,6 +25,27 @@ describe("PortalNav", () => {
     for (const link of links) expect(link.className).toContain("min-h-14");
   });
 
+  // P25 (D-67): the rail stays under the sticky top bar; the current item is a bloom-wash pill whose shape (and, on the
+  // rail, a bloom bar at its leading edge: globals.css .nav-item) marks it; Help is a quiet link under the sections,
+  // outside the <nav>, so the portal keeps at most five sections.
+  it("puts Help under the rail's sections, outside the navigation, and marks the current item's pill", () => {
+    render(<PortalNav label="Developer" items={ITEMS} current="ideas" help={{ href: "/help", label: "Help" }} />);
+    const nav = screen.getByRole("navigation", { name: "Developer" });
+    expect(within(nav).getAllByRole("link")).toHaveLength(2);
+    const aside = screen.getByRole("complementary", { name: "Help" });
+    const help = within(aside).getByRole("link", { name: "Help" });
+    expect(nav.contains(help)).toBe(false);
+    expect(help.getAttribute("href")).toBe("/help");
+    expect(aside.className.split(" ")).toEqual(expect.arrayContaining(["hidden", "lg:block"]));
+    const rail = nav.parentElement!;
+    expect(rail.className.split(" ")).toEqual(expect.arrayContaining(["lg:sticky", "lg:top-16", "lg:self-start"]));
+    const current = within(nav).getByRole("link", { name: "My ideas" });
+    expect(current.className).toContain("nav-item");
+    expect(current.className).toContain("lg:bg-accent-wash");
+    expect(current.querySelector(".nav-icon")!.className).toContain("bg-accent-wash");
+    for (const link of within(nav).getAllByRole("link")) expect(link.className).toContain("lg:min-h-11");
+  });
+
   it("keeps a query on every link", () => {
     render(<PortalNav label="Organisation" items={ITEMS} current="home" query="?org=1" />);
     expect(screen.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["/dev?org=1", "/dev/ideas?org=1"]);
