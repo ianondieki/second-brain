@@ -6,7 +6,8 @@
   past that it is 429 ``rate_limited`` with ``Retry-After`` and nothing is read. ``Cache-Control: private,
   no-store``.
 - ``GET /api/me/activity?weeks=26``: the caller's own actions per Nairobi day over ``weeks`` (1 to 52) weeks ending
-  today (``bridge.me.activity``). ``Cache-Control: private, max-age=60``.
+  today (``bridge.me.activity``). ``Cache-Control: private, no-store``: a shared browser must never answer the next
+  person's request with the last person's counts (the URL is the same for everyone).
 
 Both read as the signed-in person under Row-Level Security (the session dependency binds the caller), in a read-only
 transaction of their own whose statements the database cancels after ``READ_TIMEOUT`` (a 500 then, nothing kept).
@@ -37,7 +38,7 @@ SEARCH_PURPOSE: Final = "me_search"  # the ledger's purpose label
 # [[COPY-REVIEW]]
 TOO_FAST: Final = "You are searching very quickly. Wait a few seconds and try again."
 SEARCH_CACHE: Final = "private, no-store"
-ACTIVITY_CACHE: Final = "private, max-age=60"
+ACTIVITY_CACHE: Final = "private, no-store"
 READ_TIMEOUT: Final = "2s"
 _READ_ONLY = text("SET TRANSACTION READ ONLY")
 _TIMEOUT = text(f"SET LOCAL statement_timeout = '{READ_TIMEOUT}'")

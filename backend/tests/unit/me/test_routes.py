@@ -4,7 +4,7 @@ Given a signed-in person, when the palette searches or the Home asks for the cal
 outside 2 to 80 characters once trimmed (or a ``weeks`` outside 1 to 52) is 422 and nothing is read; a search is
 counted against the person's rate limit before anything is read, and past it is 429 ``rate_limited`` with
 ``Retry-After`` and no read; each read runs in a read-only transaction of its own with a 2 s statement timeout, as
-the caller; the search says ``Cache-Control: private, no-store`` and the calendar ``private, max-age=60``; both
+the caller; both say ``Cache-Control: private, no-store`` (one URL for everyone: never kept by a shared browser); both
 bodies have exactly the shapes the OpenAPI document gives.
 """
 
@@ -182,7 +182,7 @@ async def test_a_query_outside_two_to_eighty_characters_is_422_and_nothing_is_re
     assert "x" * 81 not in response.text
 
 
-async def test_the_calendar_reads_as_the_caller_read_only_and_may_be_kept_a_minute(
+async def test_the_calendar_reads_as_the_caller_read_only_and_is_never_stored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scene = Scene(monkeypatch)
@@ -190,7 +190,7 @@ async def test_the_calendar_reads_as_the_caller_read_only_and_may_be_kept_a_minu
         response = await http.get("/api/me/activity")
         custom = await http.get("/api/me/activity", params={"weeks": 52})
     assert response.status_code == 200, response.text
-    assert response.headers["cache-control"] == "private, max-age=60"
+    assert response.headers["cache-control"] == "private, no-store"
     body = response.json()
     assert (body["from"], body["to"], body["timezone"], body["total"]) == (
         "2026-10-02",

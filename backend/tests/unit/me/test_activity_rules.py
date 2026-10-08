@@ -17,6 +17,7 @@ from sqlalchemy import create_engine
 from bridge.me import activity
 from bridge.me.caller import Caller
 from bridge.me.schemas import ActivityKind
+from bridge.models.enums import ProblemSource
 
 USER = UUID(int=1)
 DIALECT = create_engine("postgresql+psycopg://").dialect  # nothing connects
@@ -136,6 +137,20 @@ def test_each_kind_reads_only_the_callers_own_rows(kind: ActivityKind) -> None:
     compiled = statement.compile(dialect=DIALECT)
     assert ACTORS[kind] in str(compiled)
     assert USER in compiled.params.values()
+
+
+def test_a_first_publication_counts_once_and_only_later_versions_as_registered() -> None:
+    compiled = activity.kind_statement("version_registered", Caller(USER, "developer")).compile(dialect=DIALECT)
+    assert "proposal_versions.version_no > %(version_no_1)s" in str(compiled)
+    assert compiled.params["version_no_1"] == 1
+    published = str(activity.kind_statement("proposal_published", Caller(USER, "developer")).compile(dialect=DIALECT))
+    assert "proposals.published_at IS NOT NULL" in published
+
+
+def test_only_a_brief_counts_as_brief_posted() -> None:
+    compiled = activity.kind_statement("brief_posted", Caller(USER, "org")).compile(dialect=DIALECT)
+    assert "problems.source = %(source_1)s" in str(compiled)
+    assert compiled.params["source_1"] == ProblemSource.ORG_BRIEF
 
 
 def test_an_unknown_kind_is_refused() -> None:

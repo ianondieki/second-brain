@@ -6,8 +6,9 @@ time: 20:59 UTC is still that day, 21:00 UTC is the next.
 
 **What counts, by side** (``bridge.me.caller``; staff use the developer portal, so they get the developer's kinds):
 
-- developer: ``version_registered`` (a version of their proposal registered: ``registered_at``),
-  ``proposal_published`` (their proposal's first publication: ``published_at``), ``engagement_step`` (a tracker
+- developer: ``proposal_published`` (their proposal's first publication: ``published_at``; that registers version 1,
+  counted here only), ``version_registered`` (a later version of it registered: ``version_no`` above 1,
+  ``registered_at``), ``engagement_step`` (a tracker
   event they acted: ``actor_user_id``), ``message_sent`` (an engagement message they sent), ``quiz_answered`` (their
   attempt at a day's quiz: ``finished_at``) and ``team_message`` (a message they sent in a team-up thread);
 - organisation member: ``proposal_opened`` (a full proposal they opened: their own ``document_views`` rows),
@@ -68,6 +69,7 @@ KINDS: Final[dict[Side, tuple[ActivityKind, ...]]] = {
     "org": ORG_KINDS,
     "staff": DEVELOPER_KINDS,
 }
+FIRST_VERSION: Final = 1
 _NOW: Final = text("SELECT app_clock_now()")
 _ZONE: Final = literal_column(f"'{NAIROBI_ZONE}'", Text)  # a constant, not a parameter: GROUP BY repeats the expression
 
@@ -99,6 +101,7 @@ def kind_statement(kind: ActivityKind, caller: Caller) -> Select[Any]:
             ProposalVersion.registered_at,
             ProposalVersion.proposal_id.in_(select(Proposal.id).where(Proposal.owner_id == user)),
             ProposalVersion.registered_at.is_not(None),
+            ProposalVersion.version_no > FIRST_VERSION,  # the first is the publication: one action, one count
         )
     if kind == "proposal_published":
         return _when(kind, Proposal.published_at, Proposal.owner_id == user, Proposal.published_at.is_not(None))
