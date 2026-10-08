@@ -42,7 +42,7 @@ export default async function ModerationPage({ searchParams }: PageProps<"/admin
   // The header's action slot holds "Review the oldest case", the screen's one primary action, when there is one.
   const shell = (children: React.ReactNode, action?: React.ReactNode) => (
     <AdminShell role={role} current="moderation" wide>
-      <div className="flex max-w-5xl flex-col gap-8">
+      <div className="flex max-w-5xl flex-col">
         <PageHero eyebrow={<StaffEyebrow section="moderation" />} title={t("title")} lead={t("lead")} focusable action={action} />
         {children}
       </div>

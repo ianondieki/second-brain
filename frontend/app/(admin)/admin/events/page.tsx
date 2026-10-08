@@ -44,7 +44,7 @@ export default async function AdminEventsPage({ searchParams }: PageProps<"/admi
   const t = await getTranslations("adminEvents");
   const shell = (children: ReactNode) => (
     <AdminShell role={role} current={ROLES.has(role) ? "events" : undefined} wide>
-      <div className="flex max-w-5xl flex-col gap-8">
+      <div className="flex max-w-5xl flex-col">
         <PageHero
           eyebrow={<StaffEyebrow section="events" />}
           title={t("title")}

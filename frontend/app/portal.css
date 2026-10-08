@@ -251,7 +251,7 @@ li > .compare-band > .niche-band {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgb(30 22 64 / 0.25) 0%, rgb(30 22 64 / 0.72) 48%, rgb(30 22 64 / 0.94) 100%);
+    background: linear-gradient(180deg, rgb(30 22 64 / 0.8) 0%, rgb(30 22 64 / 0.86) 48%, rgb(30 22 64 / 0.95) 100%);
   }
   .org-greet-body {
     display: flex;

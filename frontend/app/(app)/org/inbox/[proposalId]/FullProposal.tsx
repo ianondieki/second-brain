@@ -230,7 +230,7 @@ async function Accepted({ nda, hrefs }: { nda: EvaluationNda; hrefs: FullProposa
   const t = await getTranslations("orgProposal");
   const locale = await getLocale();
   return (
-    <Card padding="none" className="flex flex-col items-start gap-4 p-5 sm:p-7" data-nda-step="accepted">
+    <Card padding="none" className="flex max-w-3xl flex-col items-start gap-4 p-5 sm:p-7" data-nda-step="accepted">
       <p className="max-w-[60ch] text-ink">
         {t("accepted", { version: nda.version, date: formatMoment(locale, nda.accepted_at!) })}
       </p>

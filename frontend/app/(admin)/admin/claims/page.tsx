@@ -41,7 +41,7 @@ export default async function ClaimsPage({ searchParams }: PageProps<"/admin/cla
   const t = await getTranslations("adminClaims");
   const shell = (lead: ReactNode, children: ReactNode) => (
     <AdminShell role={role} current="claims" wide>
-      <div className="flex max-w-5xl flex-col gap-8">
+      <div className="flex max-w-5xl flex-col">
         <PageHero eyebrow={<StaffEyebrow section="claims" />} title={t("title")} lead={lead} focusable />
         {children}
       </div>

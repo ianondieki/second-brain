@@ -45,7 +45,7 @@ export function BriefPreview({
   const day = /^\d{4}-\d{2}-\d{2}$/.test(draft.deadline) ? formatCalendarDate(locale, draft.deadline) : null;
   return (
     <section aria-labelledby="brief-preview-heading" className="brief-preview" data-brief-preview="">
-      <h2 id="brief-preview-heading" className="text-sm font-semibold text-ink-soft">
+      <h2 id="brief-preview-heading" className="page-eyebrow">
         {t("preview.title")}
       </h2>
       <div aria-hidden="true" className="brief-preview-card">
