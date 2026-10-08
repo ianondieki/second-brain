@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEV_PALETTE, SEARCH_SACCO } from "./fixtures";
+import { shortcutFor } from "./PaletteSlot";
 import { PaletteTrigger } from "./PaletteTrigger";
 import { RECENT_KEY } from "./recent";
 
@@ -72,6 +73,13 @@ async function openWith(key: () => void) {
 }
 
 describe("PaletteTrigger", () => {
+  it("names the shortcut as the platform writes it", () => {
+    expect(shortcutFor("Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5)")).toBe("⌘ K");
+    expect(shortcutFor("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)")).toBe("⌘ K");
+    expect(shortcutFor("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("Ctrl K");
+    expect(shortcutFor("")).toBe("Ctrl K");
+  });
+
   it("is a named button with the shortcut as this computer writes it, and loads nothing until used", () => {
     const button = renderTrigger();
     expect(button.getAttribute("aria-haspopup")).toBe("dialog");

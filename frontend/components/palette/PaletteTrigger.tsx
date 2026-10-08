@@ -3,8 +3,6 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 
-import { useHydrated } from "@/lib/hooks/useHydrated";
-
 import type { CommandPaletteProps } from "./CommandPalette";
 import { loadPalette } from "./load";
 import { DETAIL, rememberVisit } from "./remember";
@@ -35,7 +33,6 @@ export function PaletteTrigger({ data }: { data: PaletteData }) {
   const [Palette, setPalette] = useState<ComponentType<CommandPaletteProps> | null>(null);
   const [open, setOpen] = useState(false);
   const opener = useRef<HTMLElement | null>(null);
-  const hydrated = useHydrated();
   const pathname = usePathname();
 
   const button = useRef<HTMLButtonElement>(null);
@@ -79,7 +76,6 @@ export function PaletteTrigger({ data }: { data: PaletteData }) {
     return () => cancelAnimationFrame(frame);
   }, [pathname]);
 
-  const mac = hydrated && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   return (
     <>
       <button
@@ -95,12 +91,10 @@ export function PaletteTrigger({ data }: { data: PaletteData }) {
       >
         <SearchIcon />
         <span className="sr-only sm:not-sr-only sm:truncate">{data.strings.trigger}</span>
-        {/* The shortcut as this computer writes it, once the browser is known (never in the server's HTML). */}
-        {hydrated ? (
-          <kbd aria-hidden="true" className="kbd ml-auto max-sm:hidden">
-            {mac ? "⌘ K" : "Ctrl K"}
-          </kbd>
-        ) : null}
+        {/* The shortcut as this computer writes it (the server reads the browser's platform: no script for it). */}
+        <kbd aria-hidden="true" className="kbd ml-auto max-sm:hidden">
+          {data.shortcut}
+        </kbd>
       </button>
       {/* Mounted while open, so each opening starts from an empty field and the latest recent pages. */}
       {Palette && open ? (

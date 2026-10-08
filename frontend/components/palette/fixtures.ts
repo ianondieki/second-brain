@@ -17,6 +17,7 @@ export const DEV_PALETTE: PaletteData = {
     { id: "go-help", title: en.shell.help, href: "/help" },
   ],
   create: { id: "act-create", title: p.newProposal, href: "/dev/ideas/new" },
+  shortcut: "Ctrl K",
   strings: {
     trigger: p.trigger,
     dialog: p.dialog,

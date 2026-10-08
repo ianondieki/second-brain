@@ -51,4 +51,6 @@ export interface PaletteData {
   /** New proposal (developer) or Post a Brief (organisation), with its address; none for the staff console. */
   create: PaletteLink | null;
   strings: PaletteStrings;
+  /** The shortcut as this computer writes it: "⌘ K" on Apple platforms, "Ctrl K" elsewhere (from the request). */
+  shortcut: string;
 }
