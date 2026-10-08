@@ -83,6 +83,16 @@ def test_like_wildcards_and_the_escape_match_themselves(term: str, escaped: str)
     assert (words.anywhere, words.start) == (f"%{escaped}%", f"{escaped}%")
 
 
+def test_the_match_and_the_order_name_the_escape_character() -> None:
+    statement = search.companies_statement(DEVELOPER, search.Words("50%_off"))
+    text = sql(statement)
+    assert text.count("ILIKE") == 2
+    assert text.count("ESCAPE '") == 2  # the backslash (doubled by an unconnected dialect, single on a server)
+    values = list(params(statement).values())
+    assert "%50\\%\\_off%" in values
+    assert "50\\%\\_off%" in values
+
+
 # --- groups by side ---------------------------------------------------------------------------------------------------
 
 
@@ -173,3 +183,62 @@ def test_inbox_briefs_and_companies_items() -> None:
     company = SimpleNamespace(id=ORG_B, legal_name="SACCO B", kind=OrgKind.SACCO_MFI, county="Nakuru")
     assert search.company_item(DEVELOPER, company).subtitle == "SACCO/MFI · Nakuru"
     assert search.company_item(DEVELOPER, SimpleNamespace(**{**vars(company), "county": None})).subtitle == "SACCO/MFI"
+
+
+# --- each statement repeats its list's rule -------------------------------------------------------------------------
+
+
+def test_ideas_are_the_callers_own_proposals_drafts_included() -> None:
+    statement = search.ideas_statement(DEVELOPER, search.Words("sa"))
+    text = sql(statement)
+    assert "proposals.owner_id = %(owner_id_1)s::UUID" in text
+    assert "coalesce(proposal_versions_1.title, proposal_versions_2.title)" in text
+    assert "status" not in text.split("WHERE", 1)[1]  # drafts, published and hidden alike, as My ideas
+    assert params(statement)["owner_id_1"] == USER
+    assert "LIMIT %(param_1)s" in text
+    assert params(statement)["param_1"] == search.GROUP_SIZE
+
+
+def test_engagements_are_the_developers_own_or_the_members_organisations() -> None:
+    mine = sql(search.engagements_statement(DEVELOPER, search.Words("sa")))
+    assert "engagements.developer_id = %(developer_id_1)s::UUID" in mine
+    assert "organizations.legal_name ILIKE" in mine  # the counterpart's name, for the developer
+    theirs = search.engagements_statement(MEMBER_OF_SEVERAL, search.Words("sa"))
+    text = sql(theirs)
+    assert "engagements.org_id IN (__[POSTCOMPILE_org_id_1])" in text
+    assert "developer_id =" not in text
+    assert "organizations.legal_name ILIKE" not in text
+    assert params(theirs)["org_id_1"] == [ORG_A, ORG_B]
+
+
+def test_the_inbox_is_delivered_tags_of_published_clear_proposals_of_the_members_organisations() -> None:
+    statement = search.inbox_statement(MEMBER, search.Words("sa"))
+    text = sql(statement)
+    assert "tags.org_id IN (__[POSTCOMPILE_org_id_1])" in text
+    values = set(map(str, params(statement).values()))
+    assert {"delivered", "published", "clear"} <= values
+    assert "proposals.current_version_id" in text
+
+
+def test_briefs_are_the_members_organisations_own() -> None:
+    statement = search.briefs_statement(MEMBER, search.Words("sa"))
+    assert "problem_briefs.org_id IN (__[POSTCOMPILE_org_id_1])" in sql(statement)
+    assert params(statement)["org_id_1"] == [ORG_A]
+
+
+def test_problems_are_the_readable_ones_and_not_the_members_own_briefs() -> None:
+    for caller in (DEVELOPER, STAFF, MEMBER):
+        text = sql(search.problems_statement(caller, search.Words("sa")))
+        assert "problems.status = %(status_1)s" in text
+        assert "problems.moderation_state = %(moderation_state_1)s" in text
+        assert "problem_briefs_1.visibility" in text  # a Brief's only while it is published and public
+    assert "NOT IN" in sql(search.problems_statement(MEMBER, search.Words("sa")))
+    assert "NOT IN" not in sql(search.problems_statement(DEVELOPER, search.Words("sa")))
+    assert "NOT IN" not in sql(search.problems_statement(Caller(USER, "org", ()), search.Words("sa")))
+
+
+def test_companies_are_listed_organisations() -> None:
+    statement = search.companies_statement(STAFF, search.Words("sa"))
+    text = sql(statement)
+    assert "organizations.verification IN (__[POSTCOMPILE_verification_1])" in text
+    assert "organizations.delisted_at IS NULL" in text

@@ -24,21 +24,26 @@ the stage, or the stage; for a company its type and county) and the web app path
 from __future__ import annotations
 
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, Final
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, SQLColumnExpression
+from sqlalchemy import ColumnElement, Select, SQLColumnExpression, and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from bridge.directory.models import Niche
-from bridge.directory.service import ORG_TYPE_LABELS, niche_label
+from bridge.directory.models import Niche, Region
+from bridge.directory.service import ORG_TYPE_LABELS, listed, niche_label
 from bridge.engagements import state_machine as sm
+from bridge.engagements.models import Engagement
 from bridge.errors import ApiError
 from bridge.me.caller import Caller, Side
 from bridge.me.schemas import SearchGroup, SearchItem, SearchKind, SearchResults
-from bridge.models.enums import EngagementState, OrgKind
-from bridge.proposals.models import ProposalVersion
+from bridge.models.enums import EngagementState, ModerationState, OrgKind, ProposalStatus, TagStatus
+from bridge.problems.models import Problem, ProblemBrief
+from bridge.proposals.models import Proposal, ProposalVersion, Tag
+from bridge.public.queries import readable_problem
+from bridge.tenancy.models import Organization
 
 GROUP_SIZE: Final = 5
 MIN_LENGTH: Final = 2
@@ -144,6 +149,124 @@ def company_line(kind: OrgKind | str, county: str | None) -> str:
     return label if county is None else f"{label} · {county}"
 
 
+# --- the statements, one per group ----------------------------------------------------------------------------------
+
+
+def ideas_statement(caller: Caller, words: Words) -> Select[Any]:
+    """My ideas' rows (``bridge.proposals.service._MY_LIST``): the caller's proposals, the draft's title first."""
+    title = func.coalesce(_Draft.title, _Current.title)
+    changed = func.greatest(Proposal.updated_at, _Draft.updated_at)
+    return (
+        select(Proposal.id, title.label("title"), Niche.name_en.label("niche"), _Parent.name_en.label("parent"))
+        .outerjoin(_Current, _Current.id == Proposal.current_version_id)
+        .outerjoin(_Draft, _Draft.id == Proposal.draft_version_id)
+        .outerjoin(Niche, Niche.id == func.coalesce(_Draft.niche_id, _Current.niche_id))
+        .outerjoin(_Parent, _Parent.id == Niche.parent_id)
+        .where(Proposal.owner_id == caller.user_id, words.match(title))
+        .order_by(words.first(title).desc(), changed.desc(), Proposal.id.desc())
+        .limit(GROUP_SIZE)
+    )
+
+
+def engagements_statement(caller: Caller, words: Words) -> Select[Any]:
+    """The engagement lists' rows: the developer's own (``GET /api/me/engagements``), or the member's organisations'
+    (``GET /api/orgs/{org_id}/engagements``), each with its version's title and the organisation's name as RLS shows
+    them."""
+    party = Engagement.org_id.in_(caller.orgs) if caller.side == "org" else Engagement.developer_id == caller.user_id
+    found = words.match(ProposalVersion.title)
+    if caller.side != "org":
+        found = or_(found, words.match(Organization.legal_name))
+    return (
+        select(
+            Engagement.id,
+            Engagement.org_id,
+            Engagement.state,
+            ProposalVersion.title.label("title"),
+            Organization.legal_name.label("org_name"),
+        )
+        .outerjoin(ProposalVersion, ProposalVersion.id == Engagement.version_id)
+        .outerjoin(Organization, Organization.id == Engagement.org_id)
+        .where(party, found)
+        .order_by(words.first(ProposalVersion.title).desc(), Engagement.updated_at.desc(), Engagement.id.desc())
+        .limit(GROUP_SIZE)
+    )
+
+
+def inbox_statement(caller: Caller, words: Words) -> Select[Any]:
+    """The Inbox's rows (``bridge.proposals.inbox``): delivered tags of the member's organisations whose proposal is
+    published and clear, with the current teaser's title and niche; newest pitch first."""
+    return (
+        select(
+            Tag.id,
+            Tag.proposal_id,
+            Tag.org_id,
+            ProposalVersion.title.label("title"),
+            Niche.name_en.label("niche"),
+            _Parent.name_en.label("parent"),
+        )
+        .join(Proposal, Proposal.id == Tag.proposal_id)
+        .join(ProposalVersion, ProposalVersion.id == Proposal.current_version_id)
+        .outerjoin(Niche, Niche.id == ProposalVersion.niche_id)
+        .outerjoin(_Parent, _Parent.id == Niche.parent_id)
+        .where(
+            Tag.org_id.in_(caller.orgs),
+            Tag.status == TagStatus.DELIVERED,
+            Proposal.status == ProposalStatus.PUBLISHED,
+            Proposal.moderation_state == ModerationState.CLEAR,
+            words.match(ProposalVersion.title),
+        )
+        .order_by(words.first(ProposalVersion.title).desc(), Tag.created_at.desc(), Tag.id.desc())
+        .limit(GROUP_SIZE)
+    )
+
+
+def briefs_statement(caller: Caller, words: Words) -> Select[Any]:
+    """The Problems screen's rows (``bridge.problems.briefs.list_briefs``): the member's organisations' Briefs in every
+    state, newest first."""
+    return (
+        select(
+            Problem.id,
+            ProblemBrief.org_id,
+            Problem.title,
+            Niche.name_en.label("niche"),
+            _Parent.name_en.label("parent"),
+        )
+        .join(ProblemBrief, ProblemBrief.problem_id == Problem.id)
+        .outerjoin(Niche, Niche.id == Problem.niche_id)
+        .outerjoin(_Parent, _Parent.id == Niche.parent_id)
+        .where(ProblemBrief.org_id.in_(caller.orgs), words.match(Problem.title))
+        .order_by(words.first(Problem.title).desc(), Problem.created_at.desc(), Problem.id.desc())
+        .limit(GROUP_SIZE)
+    )
+
+
+def problems_statement(caller: Caller, words: Words) -> Select[Any]:
+    """Problems every signed-in developer may read (``readable_problem``), newest published first; for a member, not
+    their own organisations' Briefs (those are under Briefs)."""
+    readable = readable_problem()
+    if caller.side == "org" and caller.orgs:
+        readable = and_(readable, or_(Problem.org_id.is_(None), Problem.org_id.not_in(caller.orgs)))
+    return (
+        select(Problem.id, Problem.title, Niche.name_en.label("niche"), _Parent.name_en.label("parent"))
+        .outerjoin(Niche, Niche.id == Problem.niche_id)
+        .outerjoin(_Parent, _Parent.id == Niche.parent_id)
+        .where(readable, words.match(Problem.title))
+        .order_by(words.first(Problem.title).desc(), Problem.published_at.desc().nulls_last(), Problem.id.desc())
+        .limit(GROUP_SIZE)
+    )
+
+
+def companies_statement(caller: Caller, words: Words) -> Select[Any]:
+    """The directory's organisations (``listed``: E0, E1 or E2 and not delisted), by name."""
+    return (
+        select(Organization.id, Organization.legal_name, Organization.kind, Region.name.label("county"))
+        .outerjoin(Region, Region.code == Organization.county_code)
+        .where(listed(), words.match(Organization.legal_name))
+        .order_by(words.first(Organization.legal_name).desc(), Organization.legal_name, Organization.id)
+        .limit(GROUP_SIZE)
+    )
+
+
 # --- rows into items ------------------------------------------------------------------------------------------------
 
 
@@ -193,6 +316,18 @@ def company_item(caller: Caller, row: Any) -> SearchItem:
     )
 
 
+Statement = Callable[[Caller, Words], Select[Any]]
+Item = Callable[[Caller, Any], SearchItem]
+READS: Final[dict[SearchKind, tuple[Statement, Item]]] = {
+    "ideas": (ideas_statement, idea_item),
+    "engagements": (engagements_statement, engagement_item),
+    "inbox": (inbox_statement, inbox_item),
+    "briefs": (briefs_statement, brief_item),
+    "problems": (problems_statement, problem_item),
+    "companies": (companies_statement, company_item),
+}
+
+
 def kinds_for(caller: Caller) -> tuple[SearchKind, ...]:
     """The caller's side's groups; an organisation's own groups only when some organisation is open to them."""
     kinds = GROUPS[caller.side]
@@ -206,3 +341,13 @@ def results(q: str, found: Sequence[tuple[SearchKind, list[SearchItem]]]) -> Sea
     return SearchResults(
         q=q, groups=[SearchGroup(kind=kind, items=items[:GROUP_SIZE]) for kind, items in found if items]
     )
+
+
+async def run(db: AsyncSession, caller: Caller, term: str) -> SearchResults:
+    """Search every group of the caller's side, one statement each, in the caller's transaction."""
+    words, found = Words(term), []
+    for kind in kinds_for(caller):
+        statement, item = READS[kind]
+        rows = (await db.execute(statement(caller, words))).all()
+        found.append((kind, [item(caller, row) for row in rows]))
+    return results(term, found)
