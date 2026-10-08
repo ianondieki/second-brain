@@ -134,6 +134,29 @@ test.describe("an organisation member", () => {
       "title",
       `Full proposal: ${pitched.title}, marked for you`,
     );
+    // The marked page reads like the product (D-67): text in Hanken Grotesk, titles in Fraunces, fetched by the
+    // sandboxed frame (an opaque origin, so CORS requests from "null") from the web origin's /fonts, which its CSP names
+    // as font-src 'self' and next.config.ts lets any origin read. Playwright evaluates in the frame although the page
+    // itself runs no script.
+    const marked = page.frame({ url: new RegExp(`/proposals/${pitched.proposalId}/tier2$`) });
+    expect(marked, "the marked page's frame").not.toBeNull();
+    await expect
+      .poll(
+        () =>
+          marked!.evaluate(async () => {
+            await document.fonts.ready;
+            const loaded = [...document.fonts].filter((face) => face.status === "loaded").map((face) => face.family);
+            return [...new Set(loaded)].sort();
+          }),
+        SERVER_STEP,
+      )
+      .toEqual(["Fraunces", "Hanken Grotesk"]);
+    expect(
+      await marked!.evaluate(() => {
+        const used = (selector: string) => getComputedStyle(document.querySelector(selector)!);
+        return [used(".text").fontFamily.split(",")[0], used(".text").fontSize, used("h1").fontFamily.split(",")[0]];
+      }),
+    ).toEqual(['"Hanken Grotesk"', "17px", "Fraunces"]);
     // The marked page runs no script, so axe cannot run inside it: the frame is left out (its title is checked above).
     await checkScreen(page, { strict: true, exclude: ["[data-tier2-frame]"] });
 
