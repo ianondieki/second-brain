@@ -101,3 +101,23 @@ test("the developer tabs keep every label inside its own tab at 360 px, in Engli
     }
   }
 });
+
+// P25-C2 review (WCAG 2.4.7, 2.4.11): the first Tab stop, "Skip to content", shows above the sticky top bar on every
+// width, scrolled or not: nothing covers it, and it leads to the page's main.
+test("the focused skip link is visible above the sticky top bar", async ({ page }) => {
+  await signUpDeveloper(page, "Wanjiku Kamau");
+  await page.goto("/dev/ideas");
+  await page.mouse.wheel(0, 400);
+  await page.keyboard.press("Tab");
+  const skip = page.getByRole("link", { name: "Skip to content" });
+  await expect(skip).toBeFocused();
+  await expect(skip).toBeInViewport();
+  const onTop = await skip.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return hit === el || el.contains(hit);
+  });
+  expect(onTop, "nothing covers the focused skip link").toBe(true);
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/#main$/);
+});
