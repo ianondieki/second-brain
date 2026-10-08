@@ -3254,7 +3254,7 @@
       "untitled": "Kichwa chako",
       "statement": "Maelezo ya tatizo lako yanaonekana hapa unapoandika.",
       "postedBy": "Imechapishwa na {org}",
-      "budget": "Bajeti: {band}",
+      "budget": "Bajeti: {value}",
       "noBudget": "Bajeti iko wazi",
       "deadline": "Mapendekezo kufikia {date}",
       "noDeadline": "Hakuna tarehe ya mwisho",

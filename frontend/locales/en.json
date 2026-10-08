@@ -3254,7 +3254,7 @@
       "untitled": "Your title",
       "statement": "Your problem statement shows here as you write it.",
       "postedBy": "Posted by {org}",
-      "budget": "Budget: {band}",
+      "budget": "Budget: {value}",
       "noBudget": "Budget open",
       "deadline": "Proposals by {date}",
       "noDeadline": "No deadline",

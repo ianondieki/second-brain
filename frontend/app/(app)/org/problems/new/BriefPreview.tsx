@@ -63,7 +63,7 @@ export function BriefPreview({
             {draft.statement.trim() || t("preview.statement")}
           </p>
           <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold text-ink tabular-nums">
-            <span>{band ? t("preview.budget", { band }) : t("preview.noBudget")}</span>
+            <span>{band ? t("preview.budget", { value: band }) : t("preview.noBudget")}</span>
             <span>{day ? t("preview.deadline", { date: day }) : t("preview.noDeadline")}</span>
           </p>
         </div>
