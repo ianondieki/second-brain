@@ -2009,6 +2009,30 @@ time,
 }
 }
 
+@layer components {
+/* The editor's autosave status (app/(app)/dev/ideas/editor/Editor.tsx; P25): a pill once there is something to say;
+   while saving, a bloom dot breathes (still under reduced motion). */
+.save-status:not(:empty) {
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  background: var(--field);
+  padding: 0.125rem 0.75rem 0.125rem 0.625rem;
+}
+.save-status[data-save="saving"]::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  animation: save-breathe 1.2s ease-in-out infinite;
+}
+@keyframes save-breathe {
+  50% {
+    opacity: 0.3;
+  }
+}
+}
+
 /*
  * View Transitions (components/motion/PageTransition.tsx; React's <ViewTransition>): a route change cross-fades the
  * page, both sides in the same 180 ms (blended, so what does not change stays still), the nav's current pill glides,
@@ -2078,7 +2102,8 @@ time,
     display: none;
   }
   [data-step-line="done"],
-  .step-breathe {
+  .step-breathe,
+  .save-status[data-save="saving"]::before {
     animation: none !important;
   }
 
