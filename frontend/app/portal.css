@@ -281,3 +281,74 @@ li > .compare-band > .niche-band {
     }
   }
 }
+
+/* Notifications (app/(app)/notifications/NotificationList.tsx): day separators that stay at the top while their rows
+   scroll, an icon per kind in a petal disc with the unread diamond on its corner, rows drawn as they come near. */
+@layer components {
+  .notice-day {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding-block: 0.5rem;
+    background: var(--paper);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    line-height: 1.4;
+    color: var(--ink-soft);
+  }
+  .notice-day::after {
+    content: "";
+    height: 1px;
+    flex: 1;
+    background: var(--line);
+  }
+  @media (width >= 64rem) {
+    .notice-day {
+      top: 4.5rem;
+    }
+  }
+  .notice-mark {
+    position: relative;
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: var(--accent-wash);
+    color: var(--accent);
+    margin-top: -0.375rem;
+  }
+  .notice-mark[data-unread]::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    rotate: 45deg;
+    border-radius: 1px;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--field);
+  }
+  .notice-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 5.5rem;
+  }
+}
+@media (forced-colors: active) {
+  .notice-mark {
+    border: 1px solid CanvasText;
+  }
+  .notice-mark[data-unread]::after {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+}

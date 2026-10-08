@@ -5,7 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHero } from "@/components/ui/PageHero";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 import { forwardHeaders, getUnreadCount, requireMe, serverApi } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
@@ -56,7 +56,12 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/no
   const params = await searchParams;
   const raw = Array.isArray(params.cursor) ? params.cursor[0] : params.cursor;
   const cursor = raw && CURSOR.test(raw) ? raw : undefined;
-  const [t, page, unread] = await Promise.all([getTranslations("notifications"), myNotifications(cursor), getUnreadCount()]);
+  const [t, tp, page, unread] = await Promise.all([
+    getTranslations("notifications"),
+    getTranslations("portal"),
+    myNotifications(cursor),
+    getUnreadCount(),
+  ]);
 
   let body;
   if (page.kind === "staleCursor" || (cursor && page.items.length === 0)) {
@@ -85,7 +90,8 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/no
   return (
     <SignedInShell homeHref={home} nav={<PortalNavFor me={me} />} wide bellCurrent>
       <div className="max-w-3xl">
-        <PageHeader
+        <PageHero
+          eyebrow={tp("eyebrow.notifications")}
           title={t("title")}
           lead={t("lead")}
           action={
@@ -97,7 +103,7 @@ export default async function NotificationsPage({ searchParams }: PageProps<"/no
             ) : null
           }
         />
-        <div className="mt-8">{body}</div>
+        {body}
       </div>
     </SignedInShell>
   );
