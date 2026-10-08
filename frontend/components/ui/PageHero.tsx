@@ -51,8 +51,8 @@ export function PageHero({
   return (
     <>
       {back ? <BackLink href={back.href}>{back.label}</BackLink> : null}
-      <header className={cn("page-hero", tabs ? "mb-6" : "mb-8", className)} data-page-hero="">
-        <div className="page-hero-body pt-2 lg:pt-4">
+      <header className={cn("page-hero mb-6 lg:mb-8", className)} data-page-hero="">
+        <div className={cn("page-hero-body", back ? "pt-1" : "pt-2 lg:pt-4")}>
           <div className="page-hero-main min-w-0">
             <div className="min-w-0">
               <p className="page-eyebrow" data-eyebrow="">
