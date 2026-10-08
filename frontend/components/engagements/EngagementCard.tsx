@@ -61,7 +61,13 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
       )}
     >
       {niche !== undefined ? (
-        <NicheBand niche={niche?.slug} className="-mx-4 -mt-4 mb-1 h-14 rounded-t-[15px] rounded-b-none sm:-mx-5 sm:-mt-5" />
+        <NicheBand
+          niche={niche?.slug}
+          // A card can run the column's width (one engagement for an idea): every vendored size, chosen by width.
+          wide
+          sizes="(min-width: 1024px) 54rem, 92vw"
+          className="-mx-4 -mt-4 mb-1 h-14 rounded-t-[15px] rounded-b-none sm:-mx-5 sm:-mt-5"
+        />
       ) : null}
       <div className="flex min-w-0 items-start gap-3">
         <Avatar name={other} kind={mine === "developer" ? "org" : "person"} active={mineTurn} />
