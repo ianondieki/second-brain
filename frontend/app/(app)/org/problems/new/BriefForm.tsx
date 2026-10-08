@@ -99,7 +99,8 @@ export function BriefForm(props: BriefFormProps) {
 
   function change<K extends keyof BriefDraft>(field: K, value: BriefDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value }));
-    if (!Live) void import("./BriefPreview").then((m) => setLive(() => m.BriefPreview));
+    // Offline, the page's own preview stays (the local fallback), and the next edit asks again.
+    if (!Live) import("./BriefPreview").then((m) => setLive(() => m.BriefPreview), () => undefined);
     if (errors[field]) setErrors((current) => ({ ...current, [field]: undefined }));
     if (issues.some((issue) => issue.field === field)) setIssues((current) => current.filter((issue) => issue.field !== field));
   }
