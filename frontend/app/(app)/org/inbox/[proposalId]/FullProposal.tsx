@@ -6,7 +6,7 @@ import { ConfidentialIcon } from "@/components/org-icons";
 import { buttonClass, standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Card } from "@/components/ui/Card";
-import { LockIcon } from "@/components/ui/status-icons";
+import { CheckIcon, LockIcon } from "@/components/ui/status-icons";
 
 import { Fingerprint } from "@/app/(public)/verify/Fingerprint";
 
@@ -155,63 +155,73 @@ async function NdaStep({
   hrefs: FullProposalProps["hrefs"];
 }) {
   const t = await getTranslations("orgProposal");
-  // The step that needs the reader now: one raised card holding the NDA's text (an inset well, not a card in a card),
-  // its version and fingerprint, who sees the opening, and "Accept and view".
+  // The step that needs the reader now, as a calm decision (D-67): one raised card in two columns from 1024 px. On
+  // the left what is accepted, exactly: the NDA's text in an inset well, its version and fingerprint. On the right
+  // what accepting means, in the step's own words (the lead, then the viewer-logging notice verbatim), and
+  // "Accept and view". One column on a phone, in that order.
   return (
-    <Card padding="none" className="flex flex-col gap-6 p-5 sm:p-7" data-nda-step="">
-      <div>
+    <Card padding="none" className="nda-step" data-nda-step="">
+      <div className="nda-step-text">
         <h3 className="text-lg text-ink">{t("ndaHeading")}</h3>
-        <p className="mt-1 max-w-[60ch] text-ink">{t("ndaLead", { org: orgName })}</p>
-      </div>
-      <div className="overflow-hidden rounded-control border border-line bg-paper">
-        <div
-          role="region"
-          tabIndex={0}
-          aria-label={t("ndaTextLabel", { version: nda.version })}
-          className="max-h-72 overflow-y-auto px-4 py-4 whitespace-pre-wrap [overflow-wrap:anywhere] text-ink sm:px-5"
-          data-nda-body=""
-        >
-          {nda.body}
-        </div>
-        <dl className="flex flex-col gap-2 border-t border-line px-4 py-3 text-sm sm:px-5">
-          <div className="flex flex-wrap gap-x-2">
-            <dt className="text-ink-soft">{t("ndaVersionLabel")}</dt>
-            <dd className="font-semibold text-ink" data-nda-version={nda.version}>
-              {nda.version}
-            </dd>
+        <div className="mt-4 overflow-hidden rounded-control border border-line bg-paper">
+          <div
+            role="region"
+            tabIndex={0}
+            aria-label={t("ndaTextLabel", { version: nda.version })}
+            className="max-h-80 overflow-y-auto px-4 py-4 whitespace-pre-wrap [overflow-wrap:anywhere] text-ink sm:px-5"
+            data-nda-body=""
+          >
+            {nda.body}
           </div>
-          <div className="flex flex-col gap-1">
-            <dt className="text-ink-soft">{t("ndaFingerprint")}</dt>
-            <dd>
-              <Fingerprint hex={nda.sha256} className="text-sm leading-6" />
-            </dd>
-          </div>
-        </dl>
-      </div>
-      {nda.is_placeholder ? <p className="-mt-3 max-w-[60ch] text-sm text-ink-soft">{t("ndaDraft")}</p> : null}
-      <section aria-labelledby="logging-notice-heading" className="flex items-start gap-3 border-t border-line pt-5">
-        <LockIcon className="mt-0.5 size-5 shrink-0 text-accent" />
-        <div className="min-w-0">
-          <h4 id="logging-notice-heading" className="font-semibold text-ink">
-            {t("noticeHeading")}
-          </h4>
-          {/* The viewer-logging notice exactly as the API sends it (its version is echoed on acceptance). */}
-          <p className="mt-1 max-w-[62ch] text-ink" data-logging-notice={nda.logging_notice.version}>
-            {nda.logging_notice.text}
-          </p>
+          <dl className="flex flex-col gap-2 border-t border-line px-4 py-3 text-sm sm:px-5">
+            <div className="flex flex-wrap gap-x-2">
+              <dt className="text-ink-soft">{t("ndaVersionLabel")}</dt>
+              <dd className="font-semibold text-ink" data-nda-version={nda.version}>
+                {nda.version}
+              </dd>
+            </div>
+            <div className="flex flex-col gap-1">
+              <dt className="text-ink-soft">{t("ndaFingerprint")}</dt>
+              <dd>
+                <Fingerprint hex={nda.sha256} className="text-sm leading-6" />
+              </dd>
+            </div>
+          </dl>
         </div>
-      </section>
-      <NdaAccept
-        key={`${nda.template_id}:${nda.sha256}:${nda.logging_notice.version}`}
-        orgId={orgId}
-        proposalId={proposalId}
-        templateId={nda.template_id}
-        sha256={nda.sha256}
-        noticeVersion={nda.logging_notice.version}
-        viewHref={hrefs.view}
-        inboxHref={hrefs.inbox}
-        orgName={orgName}
-      />
+        {nda.is_placeholder ? <p className="mt-3 max-w-[60ch] text-sm text-ink-soft">{t("ndaDraft")}</p> : null}
+      </div>
+      <div className="nda-step-decision">
+        <h3 className="text-lg text-ink">{(await getTranslations("portal"))("proposal.means")}</h3>
+        <ul className="nda-consequences">
+          <li>
+            <CheckIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+            <p className="max-w-[60ch] text-ink">{t("ndaLead", { org: orgName })}</p>
+          </li>
+          <li>
+            <LockIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+            <section aria-labelledby="logging-notice-heading" className="min-w-0">
+              <h4 id="logging-notice-heading" className="font-semibold text-ink">
+                {t("noticeHeading")}
+              </h4>
+              {/* The viewer-logging notice exactly as the API sends it (its version is echoed on acceptance). */}
+              <p className="mt-1 max-w-[62ch] text-ink" data-logging-notice={nda.logging_notice.version}>
+                {nda.logging_notice.text}
+              </p>
+            </section>
+          </li>
+        </ul>
+        <NdaAccept
+          key={`${nda.template_id}:${nda.sha256}:${nda.logging_notice.version}`}
+          orgId={orgId}
+          proposalId={proposalId}
+          templateId={nda.template_id}
+          sha256={nda.sha256}
+          noticeVersion={nda.logging_notice.version}
+          viewHref={hrefs.view}
+          inboxHref={hrefs.inbox}
+          orgName={orgName}
+        />
+      </div>
     </Card>
   );
 }

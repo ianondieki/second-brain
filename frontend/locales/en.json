@@ -636,6 +636,9 @@
     },
     "inbox": {
       "matchesTitle": "What your scout found"
+    },
+    "proposal": {
+      "means": "What accepting means"
     }
   },
   "orgHome": {

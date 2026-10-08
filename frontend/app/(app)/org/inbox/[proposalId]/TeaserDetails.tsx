@@ -34,7 +34,7 @@ export function TeaserDetails({ card }: { card: TeaserCard }) {
         <h2 id="teaser-details" className="sr-only">
           {t("details")}
         </h2>
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-5 rounded-panel border border-line bg-field p-5 sm:grid-cols-3 sm:p-6">
+        <dl className="grid max-w-3xl grid-cols-2 gap-x-6 gap-y-5 rounded-panel border border-line bg-field p-5 sm:grid-cols-3 sm:p-6">
           <div className={fact}>
             <dt className={label}>{t("maturityLabel")}</dt>
             <dd className={value}>{teaser.maturity ? tf(MATURITY_KEY[teaser.maturity]) : ti("notStated")}</dd>
@@ -67,8 +67,8 @@ export function TeaserDetails({ card }: { card: TeaserCard }) {
       </section>
       {sections.map(({ key, text }) =>
         text ? (
-          <Section key={key} title={t(key)} headingId={`teaser-${key}`}>
-            <p className="max-w-[64ch] whitespace-pre-line lg:text-[1.0625rem] [overflow-wrap:anywhere] text-ink">{text}</p>
+          <Section key={key} title={t(key)} headingId={`teaser-${key}`} className="reading">
+            <p className="max-w-[68ch] text-[1.0625rem] leading-[1.7] whitespace-pre-line [overflow-wrap:anywhere] text-ink lg:text-lg">{text}</p>
           </Section>
         ) : null,
       )}

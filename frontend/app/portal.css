@@ -186,3 +186,47 @@ li > .compare-band > .niche-band {
     animation: none;
   }
 }
+
+/* The full proposal's Evaluation NDA step (app/(app)/org/inbox/[proposalId]/FullProposal.tsx): what is accepted on the
+   left, what accepting means and the one action on the right, from 1024 px; one column before. */
+@layer components {
+  .nda-step {
+    display: grid;
+    gap: 1.75rem;
+    padding: 1.25rem;
+  }
+  .nda-step-decision {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .nda-consequences {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .nda-consequences > li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  @media (width >= 40rem) {
+    .nda-step {
+      padding: 1.75rem;
+    }
+  }
+  @media (width >= 64rem) {
+    .nda-step {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 2.5rem;
+    }
+    .nda-step-decision {
+      border-inline-start: 1px solid var(--line);
+      padding-inline-start: 2.5rem;
+    }
+  }
+  /* The teaser's words read as text: Fraunces section titles with more room above than below. */
+  .proposal-read .reading h2 {
+    font-size: 1.5rem;
+  }
+}

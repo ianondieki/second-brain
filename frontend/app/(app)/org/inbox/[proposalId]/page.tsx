@@ -63,9 +63,9 @@ export default async function OrgProposalScreen({ params, searchParams }: PagePr
   const title = card.teaser.title ?? ti("untitled");
   return (
     <SignedInShell homeHref={`/org${orgParam}`} nav={nav} wide>
-      <article className="flex max-w-3xl flex-col gap-12">
+      <article className="proposal-read flex max-w-5xl flex-col gap-12">
         {/* One flex item: the back link sits on the title, not a column gap away. */}
-        <div>
+        <div className="max-w-3xl">
           <PageHeader
             back={back}
             title={title}
