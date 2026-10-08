@@ -5,12 +5,12 @@ import { act, cleanup, fireEvent, screen, within } from "@testing-library/react"
 import { createTranslator } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { CountUp } from "@/components/motion/CountUp";
 import en from "@/locales/en.json";
 import { renderWithIntl } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
 import { Counties } from "./Counties";
-import { CountUp } from "./CountUp";
 import { HeroComposition } from "./HeroComposition";
 import { HowItWorks } from "./HowItWorks";
 import { Reasons } from "./Reasons";

@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import type { CSSProperties } from "react";
 
-import { CountUp } from "./CountUp";
+import { CountUp } from "@/components/motion/CountUp";
 
 /**
  * The product in four figures (D-66): constants of the product, never a usage figure. The tracker's five stages
