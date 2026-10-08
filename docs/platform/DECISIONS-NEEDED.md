@@ -501,7 +501,7 @@ The full entries (why, options, default, what they blocked) are kept below for t
   per card stay; the research note `docs/platform/research/ui-principles.md` cites the published guidance this
   follows (performance budgets and image delivery, accessible components and focus, CSS layout, React's server-first
   model, testing what the user sees).
-- Status: P25 builds it (`docs/platform/tasks/P25.md`).
+- Status: built in P25 (gated 2026-10-08; see PROGRESS.md "P25 report") and merged into the integration branch.
 
 ### D-66 · "Jacaranda in print": the serif display face, the paper canvas and photographs (P24; REQ-UX-01..04, D-55)
 - Why: the owner (2026-10-07) wants a landing and a home that read as a world-class product and sell the idea, giving

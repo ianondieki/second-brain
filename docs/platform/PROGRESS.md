@@ -1215,6 +1215,72 @@ old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
 question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
 check before release.
 
+### P25 report (2026-10-08): "Portal in print": life in every signed-in screen, the command palette, the activity calendar (D-67)
+
+**Why.** The owner, after P24: carry the landing's taste into the other pages, which "seem lifeless"; real photographs
+that match the context; HCI principles; features that improve the product end to end. Card: `tasks/P25.md`; direction
+D-67; guidance `docs/platform/research/ui-principles.md` (58 sources, a 29-item checklist).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`; worktree merges P25-B `7b7347e`, P25-A `d434764`,
+P25-C1 `24f00f9` and `40ccc30`, P25-E `edf52ed`, P25-C2 `264a6fb`, Next.js patch `1016cba`, P25-F `cb47d17`):
+- **Backend**: `GET /api/me/search` (the palette: the caller's ideas, engagements, Inbox, Briefs, readable problems,
+  listed companies for developers; five per group; per-user rate limit; read-only, 2 s timeout) and
+  `GET /api/me/activity` (the caller's own actions per Nairobi day, `private, no-store`).
+- **Photographs**: seven new licensed Commons photographs (ICT, education, public sector, health, energy, community
+  water, a Nairobi morning) and 480 px card files for all; a bank photograph was withdrawn because its logo was its
+  clearest element.
+- **Foundation**: `PageHero`, a refined rail with a gliding active pill, the top bar's Search, the command palette
+  (Ctrl/⌘ K, lazy, APG combobox, Recent cleared on sign-out), niche and county photograph bands (none under Save-Data),
+  View Transitions for route changes and card titles, the 26-week activity calendar, the HCI floor (forced colors,
+  prefers-contrast, one focus ring, container queries, subgrid).
+- **Developer portal**: Home's greeting on a time-of-day Nairobi photograph, Discover, ideas, engagements cards with a
+  five-dot stage line, the image-free tracker's line drawing once, companies, peers, teams, quiz, problem pages.
+- **Organisation, staff, public**: org Home and Inbox in the same language, the full proposal at 68 ch with a
+  full-screen reading on phones, the staff console dense and calm, sign-in split with a credited photograph from
+  1024 px.
+- **The marked full proposal** now renders in Fraunces and Hanken inside its sandboxed frame (`font-src 'self'`, CORS on
+  the six vendored fonts only, a cache key of its own).
+- **Speed**: streaming below the first screen on Home, org Home and Discover; decorative faces after the first frame;
+  the 480 px greeting on phones.
+
+**Reviews.** Backend: security-reviewer PASS, reviewer PASS (fix round). Proposal typography: security-reviewer PASS,
+reviewer CHANGES_REQUIRED (stale font cache) then fixed. Developer portal: reviewer and ux-reviewer CHANGES_REQUIRED
+(Recent across accounts, greeting contrast at 360, palette focus, composer covering focus, subgrid broken by
+content-visibility) then PASS. Organisation side: both CHANGES_REQUIRED (count-up showing 0, skip link under the bar,
+the phone proposal layer leaving the page reachable) then fixed and verified. Speed fix: reviewer CHANGES_REQUIRED
+(serial reads) then fixed.
+
+**Gate** (stack rebuilt from `cb47d17`, fresh resets): Playwright 230 passed, 6 skipped; clock scenarios 6/6; the
+walkthrough and README set re-recorded; the P25 set in `docs/demo/screenshots/p25/`. Every changed route under
+150,000 B gzipped (tightest `/dev/ideas/new` 149,994 B, `/billing/upgrade` 149,969 B). Lighthouse mobile Slow 4G,
+medians of three, accessibility 100 everywhere:
+
+| Route | LCP light | LCP dark | Performance |
+|---|---|---|---|
+| `/dev` (warm server) | 2.35 s | 2.34 s | 96–98 |
+| `/dev/discover` | 1.54 s | 1.67 s | 98–100 |
+| `/dev/ideas` | 2.31 s | 2.33 s | 96–98 |
+| tracker | 2.42 s | 2.21 s | 96–98 |
+| `/org` | 2.43 s | 2.59 s | 96–98 |
+| `/org/inbox` | 2.51 s | 2.17 s | 97–99 |
+| `/admin/moderation` | 2.26 s | 2.43 s | 97–99 |
+| `/login` | 2.17 s | 2.33 s | 98–99 |
+
+CI `pr.yml` run 358 on `cb47d17`: frontend, Playwright with the clock scenarios, the demo story, hygiene, both legacy
+jobs, osv-scanner and Trivy green; npm audit red (D-56); the backend job cancelled at its 35-minute limit (the owner's
+call). CodeQL run 293 failed its gate as every run does; run 292 on `878c373` showed exactly the eight D-42 findings.
+
+**Deviations and residuals.**
+- `/dev` measured 3.3 s on a cold server right after a reset; the table is a warm server. The runs fell at Nairobi
+  night, when Home shows no greeting photograph; the daytime case rests on the implementer's 2.25 s.
+- No route-level loading screens: Next prefetched every link's code with them and broke the budget.
+- Next.js moved to 16.3.8 for CVE-2026-94483 (SSRF in image optimization).
+- Next-revision items for db-migrations: indexes for the palette's ILIKE and the activity's actor columns, pruning
+  `login_attempts`, `app_public_stage_events()`, `CHECK (users.id <> nil)`.
+- Copy and Swahili review of `_meta.reviewP25` and `_meta.reviewP25c2` is the owner's.
+
+**Status.** Gate reached; reviews PASS; merged into the integration branch under the standing rule.
+
 ### P24 report (2026-10-07): "Jacaranda in print": the seductive landing, Explore, a living Home, share cards (D-66)
 
 **Why.** The owner, with three references (hackathon.genai.works, basix-venture-route.vercel.app, a Kenyan real-estate
