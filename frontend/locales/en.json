@@ -744,7 +744,6 @@
     "view": "View full proposal",
     "viewNote": "Opening it counts as a view: every view is logged and watermarked to the viewer.",
     "frameTitle": "Full proposal: {title}, marked for you",
-    "frameNote": "The full proposal scrolls inside this frame.",
     "close": "Close full proposal",
     "stepUpCode": "Code from your app",
     "stepUpSubmit": "Confirm",

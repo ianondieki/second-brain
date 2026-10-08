@@ -48,22 +48,24 @@ export async function FullProposal({ orgId, orgName, proposalId, title, nda, vie
     body = await Accepted({ nda: nda.nda, hrefs });
   } else {
     open = true;
+    // From 768 px the marked page reads in a frame as tall as the screen under the top bar; below it the frame
+    // fills the screen (fixed, in the same tab) with "Close full proposal" above it, so a phone never scrolls a box
+    // inside the page (portal.css .tier2-view). Either way it is one logged, watermarked view.
     body = (
-      <div className="flex flex-col items-start gap-3">
-        <p className="max-w-[60ch] text-sm text-ink-soft">{t("viewNote")}</p>
+      <div className="tier2-view" data-tier2-view="">
+        <div className="tier2-bar">
+          <StandaloneLink href={hrefs.here}>{t("close")}</StandaloneLink>
+          <p className="max-w-[60ch] text-sm text-ink-soft">{t("viewNote")}</p>
+        </div>
         <iframe
           src={tier2Src(orgId, proposalId)}
           title={t("frameTitle", { title })}
           // No scripts, forms or same-origin access for the page; its links open in a new tab outside the sandbox.
           sandbox="allow-popups allow-popups-to-escape-sandbox"
           referrerPolicy="no-referrer"
-          className="h-[70dvh] min-h-96 w-full rounded-panel border border-line bg-field shadow-card lg:h-[80vh]"
+          className="tier2-frame"
           data-tier2-frame=""
         />
-        <p className="text-sm text-ink-soft">{t("frameNote")}</p>
-        <StandaloneLink href={hrefs.here}>
-          {t("close")}
-        </StandaloneLink>
       </div>
     );
   }

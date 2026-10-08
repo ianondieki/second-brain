@@ -379,3 +379,58 @@ li.card-sub:has(> .item-card),
 li.card-sub > .item-card {
   row-gap: 0;
 }
+
+/* The marked full proposal (app/(app)/org/inbox/[proposalId]/FullProposal.tsx): below 768 px it fills the screen in the
+   same tab, "Close full proposal" above it, so the only scroll is the page's own (no box scrolling inside the page);
+   from 768 px it reads in a frame as tall as the screen under the top bar. */
+@layer components {
+  .tier2-view {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .tier2-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  .tier2-frame {
+    display: block;
+    width: 100%;
+    min-height: 24rem;
+    height: calc(100dvh - 7rem);
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    background: var(--field);
+    box-shadow: var(--shadow-card);
+  }
+  @media (width < 48rem) {
+    .tier2-view {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      gap: 0;
+      background: var(--paper);
+    }
+    .tier2-bar {
+      border-bottom: 1px solid var(--line);
+      background: var(--field);
+      padding: 0.25rem 1rem 0.75rem;
+    }
+    .tier2-frame {
+      min-height: 0;
+      height: auto;
+      flex: 1;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+  }
+}
+@media (width < 48rem) {
+  /* The page behind the full-screen proposal does not scroll. */
+  html:has(.tier2-view) {
+    overflow: hidden;
+  }
+}

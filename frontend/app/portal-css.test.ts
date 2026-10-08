@@ -56,6 +56,11 @@ describe("portal.css", () => {
     expect(media("(width >= 64rem)")).toMatch(/html:has\(\[data-sticky-head\]\):has\(\[data-top-bar\]\[data-sticky\]\) \{\s*scroll-padding-block-start: 8rem;/);
   });
 
+  it("shows the marked proposal full-screen below 768 px and as tall as the screen from it", () => {
+    expect(media("(width < 48rem)")).toMatch(/\.tier2-view \{\s*position: fixed;\s*inset: 0;/);
+    expect(portal).toMatch(/\.tier2-frame \{[^}]*height: calc\(100dvh - 7rem\);/);
+  });
+
   it("keeps each day's name in view", () => {
     expect(portal).toMatch(/\.notice-day \{\s*position: sticky;/);
   });
