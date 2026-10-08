@@ -7,7 +7,7 @@ import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import loadConfig from "next/dist/server/config";
 import { describe, expect, it } from "vitest";
 
-import nextConfig, { FONT_CORS, PAGE_EXTENSIONS } from "./next.config";
+import nextConfig, { FONT_CORS, FONT_FILES, PAGE_EXTENSIONS } from "./next.config";
 import { HEADER_RULES } from "./security-headers";
 
 /** The headers the app's real config sends for a path, every matching rule compiled as `next build` does. */
@@ -21,9 +21,9 @@ async function headersFor(path: string): Promise<Record<string, string>> {
   return sent;
 }
 
-const FONT_FILES = readdirSync(fileURLToPath(new URL("./public/fonts", import.meta.url))).filter((name) =>
-  name.endsWith(".woff2"),
-);
+const VENDORED_FONTS = readdirSync(fileURLToPath(new URL("./public/fonts", import.meta.url)))
+  .filter((name) => name.endsWith(".woff2"))
+  .sort();
 
 // security-headers.test.ts proves the header rules are right when sources match in exact case; these tests prove the
 // app's real config (next.config.ts, as next-intl's plugin returns it) turns exact-case matching on and sends those
@@ -54,7 +54,13 @@ describe("next.config.ts", () => {
   // The marked full proposal (backend proposals/render.py) is framed with a sandbox and no allow-same-origin, so its
   // document's origin is opaque and its font requests are CORS requests from origin "null". The self-hosted woff2
   // files are public (OFL), so any origin may read them; nothing else gets the header.
-  it.each(FONT_FILES)("lets any origin read the font /fonts/%s", async (file) => {
+  // Next applies header rules before it looks for the file, so a name pattern would also put the header on the HTML
+  // 404 page of any matching name: the rule names exactly the vendored files.
+  it("names exactly the vendored woff2 files in the fonts' CORS rule", () => {
+    expect([...FONT_FILES].sort()).toEqual(VENDORED_FONTS);
+  });
+
+  it.each(VENDORED_FONTS)("lets any origin read the font /fonts/%s", async (file) => {
     expect(await headersFor(`/fonts/${file}`)).toMatchObject({
       "Access-Control-Allow-Origin": "*",
       "Cache-Control": "public, max-age=31536000, immutable",
@@ -71,6 +77,10 @@ describe("next.config.ts", () => {
     "/fonts/og/fraunces-og-v1.ttf",
     "/fonts/og/x-v1.woff2",
     "/fonts/missing.woff2",
+    "/fonts/x-v9.woff2", // a 404 page under a versioned font name
+    "/fonts/hanken-grotesk-v9.woff2",
+    "/fonts/hanken-grotesk-v1xwoff2",
+    "/fonts/xhanken-grotesk-v1.woff2",
     "/FONTS/hanken-grotesk-v1.woff2",
     "/fonts/hanken-grotesk-v1.woff2/x",
     "/_next/static/media/font.woff2",
