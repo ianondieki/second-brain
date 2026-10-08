@@ -23,8 +23,6 @@ import { AlertIcon, CheckIcon, InfoIcon } from "@/components/ui/status-icons";
 import { ActivityCalendar } from "@/components/activity/ActivityCalendar";
 import { WEEKS } from "@/components/activity/calendar";
 import { getActivity } from "@/components/activity/fetch";
-import { CountFigure } from "@/components/motion/CountFigure";
-import { CountUp } from "@/components/motion/CountUp";
 import { appNow } from "@/lib/api/server";
 import { needsMfaSetup } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
@@ -54,7 +52,7 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * Organisation home (docs/spec/07 item 1; D-52, D-67): the greeting by the time of day beside its Nairobi photograph,
  * four stat tiles (the Inbox, the scout's matches, the engagements, the Problem Briefs; a sparkline where a series
- * exists) whose figures count once, two-step sign-in as a notice only while it is off, "Your last 26 weeks" (this
+ * exists) showing their figures from the first paint, two-step sign-in as a notice only while it is off, "Your last 26 weeks" (this
  * person's own actions, the activity calendar), what needs the organisation as prominent cards, then the newest Inbox
  * proposals as cards under their niche's photograph. "Open the Inbox" is the screen's one primary action; an owner
  * without two-step sign-in gets "Turn on" instead, since the Inbox is refused until then.
@@ -183,14 +181,13 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
   return (
     <>
       <section aria-label={t("stats.label")} data-home="stats">
-        {/* The figures count up once as the tiles come into view (CountUp; the real figure is read either way). */}
-        <CountUp>
+        {/* The figures show their real values from the first paint: they drive what to do next (no count-up). */}
         <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 [&>li>*]:h-full">
           <li>
             <StatTile
               data-stat="inbox"
               label={t("stats.inbox")}
-              value={stats.inbox === null ? unknown.value : stats.more ? t("stats.more", { count: stats.inbox }) : <CountFigure value={stats.inbox} />}
+              value={stats.inbox === null ? unknown.value : stats.more ? t("stats.more", { count: stats.inbox }) : stats.inbox}
               meta={stats.inbox === null ? unknown.meta : stats.inbox === 0 ? undefined : stats.fresh > 0 ? t("stats.inboxMeta", { count: stats.fresh }) : t("stats.inboxMetaNone")}
               // A series only once it can show a shape: under five points it is a hockey stick with no scale.
               spark={inbox && stats.inbox !== null && stats.inbox >= SPARK_FROM ? weeklySeries(inbox.items.map((item) => item.pitched_at), now) : undefined}
@@ -201,7 +198,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="matches"
               label={t("stats.matches")}
-              value={stats.matches === null ? unknown.value : <CountFigure value={stats.matches} />}
+              value={stats.matches === null ? unknown.value : stats.matches}
               meta={stats.matches === null ? unknown.meta : stats.newestMatch ? t("stats.matchesMeta", { date: formatDay(locale, stats.newestMatch) }) : undefined}
               spark={matches && stats.matches !== null && stats.matches >= SPARK_FROM ? weeklySeries(matches.map((match) => match.created_at), now) : undefined}
               href={matchesHref(memberships, org.org_id)}
@@ -211,7 +208,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="engagements"
               label={t("stats.engagements")}
-              value={stats.engagements === null ? unknown.value : <CountFigure value={stats.engagements} />}
+              value={stats.engagements === null ? unknown.value : stats.engagements}
               meta={stats.engagements === null ? unknown.meta : t("stats.engagementsMeta", { count: stats.active })}
               href={engagementsLink}
             />
@@ -222,7 +219,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="briefs"
               label={t("stats.briefs")}
-              value={briefs === null ? unknown.value : <CountFigure value={briefs.open} />}
+              value={briefs === null ? unknown.value : briefs.open}
               meta={
                 briefs === null
                   ? unknown.meta
@@ -236,7 +233,6 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             />
           </li>
         </ul>
-        </CountUp>
       </section>
 
       {/* Your last 26 weeks (D-67): this person's own actions for the organisation, read as them; left out without an answer. */}

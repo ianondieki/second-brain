@@ -15,8 +15,8 @@ import { BriefForm } from "./problems/new/BriefForm";
 import { BriefPreview } from "./problems/new/BriefPreview";
 
 // D-67 (P25; REQ-UX-01, REQ-UX-02, REQ-UX-06): the organisation side in the portal's page language. Home greets by the
-// hour of the app clock on Nairobi's photograph with the eyebrow saying where you are and one primary action, counts
-// its tiles once and shows "Your last 26 weeks"; a card is a band, one link and at most two chips; the Brief form's
+// hour of the app clock on Nairobi's photograph with the eyebrow saying where you are and one primary action, shows
+// its figures from the first paint and shows "Your last 26 weeks"; a card is a band, one link and at most two chips; the Brief form's
 // preview follows what is typed.
 
 vi.mock("next-intl/server", () => ({
@@ -94,14 +94,14 @@ describe("the organisation Home (P25)", () => {
     expect(container.querySelector<HTMLElement>("[data-greeting]")!.dataset.greeting).toBe("nairobi-golden-hour");
   });
 
-  it("counts its figures once, reading the real figure to assistive technology", async () => {
+  it("shows its figures as text from the first paint (they drive what to do next: no count-up)", async () => {
     const { container } = await home();
     const tiles = container.querySelector("[data-home='stats']")!;
-    expect(tiles.querySelector("[data-count-up]")).not.toBeNull();
-    const briefs = container.querySelector<HTMLElement>("[data-stat='briefs']")!;
-    const drawn = briefs.querySelector<HTMLElement>(".count")!;
-    expect(drawn.getAttribute("aria-hidden")).toBe("true");
-    expect(briefs.querySelector(".sr-only")?.textContent).toBe(drawn.dataset.count);
+    expect(tiles.querySelector("[data-count-up]")).toBeNull();
+    expect(tiles.querySelector(".count")).toBeNull();
+    // briefList() holds one open Brief; the tile says 1 in plain text.
+    expect(container.querySelector<HTMLElement>("[data-stat='briefs']")!.textContent).toMatch(/^Problem Briefs1/);
+    expect(container.querySelector<HTMLElement>("[data-stat='inbox']")!.textContent).toMatch(/^Inbox0/);
   });
 
   it("shows 'Your last 26 weeks' when the API answers, and leaves it out when it does not", async () => {
