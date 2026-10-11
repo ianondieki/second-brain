@@ -18,11 +18,11 @@ import {
   type NicheNode,
   type OrgCard,
 } from "./filters";
-import { OrgRow } from "./OrgRow";
+import { OrgTile } from "./OrgTile";
 
 // REQ-DIR-01 (F1): Developer › Companies. docs/spec/06 6.2 (grouped by niche, org type and county filters; cards show
 // name, niche, org type, county and the badge, never a logo) and docs/spec/07 items 2 and 4 (≤2 chips per card, empty
-// states are one sentence and one action).
+// states are one sentence and one action). P26: the list's cards and the company page in the portal's language.
 
 afterEach(cleanup);
 
@@ -151,33 +151,75 @@ describe("filters from the URL", () => {
   });
 });
 
-describe("OrgRow", () => {
-  it("shows name, type and county, and the badge copy verbatim as its only chip", () => {
-    const { container } = renderWithIntl(<OrgRow org={org()} />);
-    expect(screen.getByRole("link", { name: "Telkom Kenya Limited" }).getAttribute("href")).toBe(
-      "/dev/companies/0199a000-0000-7000-8000-0000000000aa",
-    );
-    expect(screen.getByText("Company, Nairobi City")).toBeTruthy();
+/** A photograph on the page that is not decoration (a logo would be one): an <img> with a non-empty alt. */
+function meaningfulImages(container: HTMLElement) {
+  return [...container.querySelectorAll("img")].filter((img) => (img.getAttribute("alt") ?? "") !== "");
+}
+
+function renderTile(card: OrgCard, groupNiche?: string) {
+  return renderWithIntl(
+    <ul>
+      <OrgTile org={card} groupNiche={groupNiche} />
+    </ul>,
+  );
+}
+
+describe("OrgTile", () => {
+  it("shows the place's band, the monogram, the name in the display face as its one link, type and county, and the badge verbatim as its only chip", () => {
+    const { container } = renderTile(org());
+    const card = container.querySelector("article[data-org='telkom-kenya']") as HTMLElement;
+    const links = within(card).getAllByRole("link");
+    expect(links).toHaveLength(1);
+    expect(links[0].getAttribute("href")).toBe("/dev/companies/0199a000-0000-7000-8000-0000000000aa");
+    expect(links[0].textContent).toBe("Telkom Kenya Limited");
+    const name = within(card).getByRole("heading", { level: 3, name: "Telkom Kenya Limited" });
+    expect(name.className).toContain("font-display");
+    expect(card.getAttribute("aria-labelledby")).toBe(name.id);
+    // Nairobi has a county photograph: the band shows it, decorative (alt=""), never a logo.
+    expect(card.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("nairobi-jacaranda");
+    expect(card.querySelectorAll("img").length).toBeGreaterThan(0);
+    expect(meaningfulImages(card)).toHaveLength(0);
+    const seal = card.querySelector("[data-avatar='org']") as HTMLElement;
+    expect(seal.textContent).toBe("TK");
+    expect(seal.getAttribute("aria-hidden")).toBe("true");
+    expect(card.querySelector("p")?.textContent).toBe("Company, Nairobi City"); // the meta line is the card's first line
     expect(screen.getByText(E0_TEXT)).toBeTruthy();
-    expect(container.querySelectorAll("[data-badge]")).toHaveLength(1);
-    expect(container.querySelector("img")).toBeNull();
+    expect(card.querySelectorAll("[data-badge]")).toHaveLength(1);
+    expect(card.querySelectorAll("[data-chip]")).toHaveLength(0);
+    expect(card.querySelector("[data-response]")).toBeNull();
+  });
+
+  it("takes the niche's photograph where the county has none, the section's niche where the organisation lists none, and the lattice last", () => {
+    const { container } = renderTile(
+      org({
+        county: { code: "KE-01", name: "Baringo" },
+        niches: [{ ...TELECOMS, slug: "networks-telecommunications" }],
+      }),
+    );
+    expect(container.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe(
+      "longonot-earth-station",
+    );
+    cleanup();
+    const unsorted = renderTile(org({ county: null, niches: [] }), "agriculture");
+    expect(unsorted.container.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("kenya-tea");
+    cleanup();
+    const bare = renderTile(org({ county: null, niches: [] }));
+    expect(bare.container.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("lattice");
+    expect(bare.container.querySelector("img")).toBeNull();
   });
 
   it("shows the type alone without a county, and the response record only when the API sends one", () => {
-    renderWithIntl(<OrgRow org={org({ county: null })} />);
-    expect(screen.getByText("Company")).toBeTruthy();
+    const { container } = renderTile(org({ county: null }));
+    expect(container.querySelector("article p")?.textContent).toBe("Company");
     expect(screen.queryByText(/Usually answers/)).toBeNull();
     const text = "Usually answers in 4 days · 80% answered";
     cleanup();
-    renderWithIntl(
-      <OrgRow
-        org={org({
-          badge: { level: "e2", text: E2_TEXT },
-          responsiveness: { median_days: 4, answered_pct: 80, text },
-        })}
-      />,
+    const answered = renderTile(
+      org({ badge: { level: "e2", text: E2_TEXT }, responsiveness: { median_days: 4, answered_pct: 80, text } }),
     );
-    expect(screen.getByText(text)).toBeTruthy();
+    expect(answered.container.querySelector("[data-response]")?.textContent).toBe(text);
+    expect(answered.container.querySelector("[data-response] svg")?.getAttribute("aria-hidden")).toBe("true");
+    expect(answered.container.querySelectorAll("[data-badge]")).toHaveLength(1);
   });
 });
 
@@ -186,6 +228,12 @@ describe("DirectoryResults", () => {
     const { container } = renderWithIntl(<DirectoryResults kind="page" page={PAGE} filters={{}} />);
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
     expect(headings).toEqual(["ICT › Networks & Telecoms", "Not yet sorted by niche"]); // one line, no label above
+    expect(screen.getByText("3 organisations")).toBeTruthy();
+    expect(screen.getByText("1 organisation")).toBeTruthy();
+    // Each niche's organisations as a grid of cards, each card a list item; never a logo.
+    const telecoms = screen.getByRole("region", { name: "ICT › Networks & Telecoms" });
+    expect(within(telecoms).getAllByRole("listitem")).toHaveLength(3);
+    expect(meaningfulImages(container)).toHaveLength(0);
     const rows = container.querySelectorAll("article");
     expect(rows).toHaveLength(4);
     for (const row of rows) expect(row.querySelectorAll("[data-badge]").length).toBeLessThanOrEqual(2);

@@ -1,20 +1,20 @@
 import { useTranslations } from "next-intl";
 
 import { EmptyState } from "@/components/ui/EmptyState";
-import { RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
+import { StandaloneLink } from "@/components/ui/StandaloneLink";
 
 import {
   BASE_PATH,
   countOrgs,
   filtersHref,
   isNarrowed,
+  splitNicheLabel,
   type DirectoryFilters,
   type DirectoryGroup,
   type DirectoryPage,
 } from "./filters";
-import { OrgRow } from "./OrgRow";
-import { StandaloneLink } from "@/components/ui/StandaloneLink";
+import { OrgTile } from "./OrgTile";
 
 export type ResultsProps =
   | { kind: "page"; page: DirectoryPage; filters: DirectoryFilters }
@@ -49,13 +49,7 @@ export function DirectoryResults(props: ResultsProps) {
       ))}
       {filters.cursor || page.next_cursor ? (
         <nav aria-label={t("pages")} className="flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
-          {filters.cursor ? (
-            <StandaloneLink href={firstPage}>
-              {t("firstPage")}
-            </StandaloneLink>
-          ) : (
-            <span />
-          )}
+          {filters.cursor ? <StandaloneLink href={firstPage}>{t("firstPage")}</StandaloneLink> : <span />}
           {page.next_cursor ? (
             <StandaloneLink href={filtersHref({ ...filters, cursor: page.next_cursor })}>
               {t("nextPage")}
@@ -67,16 +61,35 @@ export function DirectoryResults(props: ResultsProps) {
   );
 }
 
-/** One niche's organisations: a Section titled with the niche's two-level name (no label above it), rows of two. */
+/**
+ * One niche's organisations (AC-DIR-6): a Section titled with the niche's two-level name (the parent niche quieter,
+ * in the same line: no label above it) and how many organisations it holds on this page, then the organisations as
+ * cards, two across from 640 px, each card four rows the grid shares (subgrid).
+ */
 function Group({ group, filters }: { group: DirectoryGroup; filters: DirectoryFilters }) {
   const t = useTranslations("companies");
   return (
-    <Section title={group.niche ? group.niche.label : t("noNiche")}>
-      <RowList className="md:grid md:grid-cols-2 md:gap-x-10">
+    <Section
+      title={group.niche ? <NicheTitle label={group.niche.label} /> : t("noNiche")}
+      description={t("groupCount", { count: group.orgs.length })}
+      data-niche={group.niche?.slug ?? "none"}
+    >
+      <ul className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
         {group.orgs.map((org) => (
-          <OrgRow key={org.id} org={org} filters={filters} />
+          <OrgTile key={org.id} org={org} filters={filters} groupNiche={group.niche?.slug} />
         ))}
-      </RowList>
+      </ul>
     </Section>
+  );
+}
+
+/** "ICT › Networks & Telecoms": the parent niche in the quieter ink, the niche itself in ink; one heading's words. */
+function NicheTitle({ label }: { label: string }) {
+  const { parent, name } = splitNicheLabel(label);
+  if (!parent) return <>{name}</>;
+  return (
+    <>
+      <span className="text-ink-soft">{parent} ›</span> {name}
+    </>
   );
 }
