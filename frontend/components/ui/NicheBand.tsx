@@ -35,6 +35,14 @@ function bandWidths(widths: readonly number[]): readonly number[] {
   return widths.includes(480) ? [480] : [800];
 }
 
+/** Where the photograph's crop sits (object-position): a list can vary it card by card, so one file never tiles. */
+export type BandPosition = "top" | "center" | "bottom";
+const POSITIONS: Readonly<Record<BandPosition, string>> = {
+  top: "object-[50%_20%]",
+  center: "object-[50%_50%]",
+  bottom: "object-[50%_80%]",
+};
+
 export interface NicheBandProps {
   /** The niche's slug at any level ("microfinance-saccos" counts as financial services). */
   niche?: string | null;
@@ -48,6 +56,8 @@ export interface NicheBandProps {
   sizes?: string;
   /** A page-wide band (a problem page, a company page): every vendored size, not only the card band's 480 px. */
   wide?: boolean;
+  /** The crop: the photograph's own centre unless given (P26: the Companies list cycles three crops). */
+  position?: BandPosition;
 }
 
 /**
@@ -56,15 +66,40 @@ export interface NicheBandProps {
  * beside it. Where there is no photograph, or the request carries `Save-Data: on`, the kanga lattice band instead.
  * Never on the tracker (REQ-UX-05). A server component (synchronous, so cards can hold it): no script.
  */
-export function NicheBand({ niche, county, children, className, sizes = "(min-width: 1280px) 26rem, (min-width: 640px) 45vw, 92vw", wide = false }: NicheBandProps) {
+export function NicheBand({
+  niche,
+  county,
+  children,
+  className,
+  sizes = "(min-width: 1280px) 26rem, (min-width: 640px) 45vw, 92vw",
+  wide = false,
+  position,
+}: NicheBandProps) {
   const found = useSavesData() ? undefined : nichePhoto({ niche, county });
   return (
     <div
-      className={cn("niche-band h-16", found && children ? "niche-band-scrim" : null, !found && "niche-band-lattice", className)}
+      className={cn(
+        "niche-band h-16",
+        found && children ? "niche-band-scrim" : null,
+        !found && "niche-band-lattice",
+        className,
+      )}
       data-niche-band={found ? found.slug : "lattice"}
+      data-band-position={found && position ? position : undefined}
     >
-      {found ? <Picture photo={found} sizes={sizes} widths={wide ? photoWidths(found) : bandWidths(photoWidths(found))} /> : null}
-      {children ? <div className={cn("absolute inset-x-0 bottom-0 z-[1] p-3", found ? "text-on-night" : "text-ink")}>{children}</div> : null}
+      {found ? (
+        <Picture
+          photo={found}
+          sizes={sizes}
+          widths={wide ? photoWidths(found) : bandWidths(photoWidths(found))}
+          className={position ? POSITIONS[position] : undefined}
+        />
+      ) : null}
+      {children ? (
+        <div className={cn("absolute inset-x-0 bottom-0 z-[1] p-3", found ? "text-on-night" : "text-ink")}>
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

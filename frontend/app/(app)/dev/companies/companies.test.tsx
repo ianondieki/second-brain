@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { renderWithIntl } from "@/test/intl";
 
 import { DirectoryFilters } from "./DirectoryFilters";
+import { sectionBands } from "./bands";
 import { DirectoryResults } from "./DirectoryResults";
 import {
   activeFilterCount,
@@ -345,6 +346,66 @@ describe("DirectoryResults", () => {
     ]);
     expect(screen.getByText(E2_TEXT)).toBeTruthy();
     expect(screen.getByText(E1_TEXT)).toBeTruthy();
+  });
+
+  it("varies a section's photographs: four Nairobi universities alternate the county's and the niche's, in three crops", () => {
+    const HIGHER_ED = {
+      id: "0199a000-0000-7000-8000-0000000000e1",
+      slug: "higher-education",
+      label: "Education › Higher education",
+    };
+    const universities = [
+      "Catholic University",
+      "Kenyatta University",
+      "Strathmore University",
+      "University of Nairobi",
+    ].map((name, i) =>
+      org({
+        id: `0199a000-0000-7000-8000-00000000000${i}`,
+        slug: `uni-${i}`,
+        name,
+        kind: "university_tvet",
+        niches: [HIGHER_ED],
+      }),
+    );
+    const { container } = renderWithIntl(
+      <DirectoryResults
+        kind="page"
+        page={{ groups: [{ niche: HIGHER_ED, orgs: universities }], next_cursor: null }}
+        filters={{}}
+      />,
+    );
+    const bands = [...container.querySelectorAll("[data-niche-band]")];
+    const files = bands.map((band) => band.getAttribute("data-niche-band"));
+    // County first for the first card, then never the same file twice in a row.
+    expect(files).toEqual([
+      "nairobi-jacaranda",
+      "nairobi-strathmore-campus",
+      "nairobi-jacaranda",
+      "nairobi-strathmore-campus",
+    ]);
+    expect(new Set(files).size).toBeGreaterThanOrEqual(2);
+    const positions = bands.map((band) => band.getAttribute("data-band-position"));
+    expect(new Set(positions).size).toBeGreaterThanOrEqual(3);
+    expect([...container.querySelectorAll("[data-niche-band] img")].map((img) => img.className)).toEqual([
+      expect.stringContaining("object-[50%_20%]"),
+      expect.stringContaining("object-[50%_50%]"),
+      expect.stringContaining("object-[50%_80%]"),
+      expect.stringContaining("object-[50%_20%]"),
+    ]);
+  });
+
+  it("keeps a card's place where it does not repeat, and cycles the crop where only one photograph exists", () => {
+    const mombasa = org({ county: { code: "KE-28", name: "Mombasa" } });
+    expect(sectionBands([org(), mombasa, org()], "networks-telecommunications")).toEqual([
+      { niche: "networks", county: "KE-30", position: "top" },
+      { niche: "networks", county: "KE-28", position: "center" },
+      { niche: "networks", county: "KE-30", position: "bottom" },
+    ]);
+    // No niche photograph to alternate with (the lattice niche of an unknown slug): the same file, three crops.
+    const same = sectionBands([org(), org(), org(), org()], "unknown-niche");
+    expect(same.map((band) => band.county)).toEqual(["KE-30", "KE-30", "KE-30", "KE-30"]);
+    expect(same.map((band) => band.position)).toEqual(["top", "center", "bottom", "top"]);
   });
 
   it("links each organisation with the list's filters and page", () => {

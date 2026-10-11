@@ -7,6 +7,7 @@ import { ClockIcon } from "@/components/ui/icons";
 import { LinkPending } from "@/components/ui/LinkPending";
 import { NicheBand } from "@/components/ui/NicheBand";
 
+import type { CardBand } from "./bands";
 import { orgHref, type DirectoryFilters, type OrgCard } from "./filters";
 import { VerificationBadge } from "./VerificationBadge";
 
@@ -15,6 +16,8 @@ export interface OrgTileProps {
   filters?: DirectoryFilters;
   /** The niche of the section the card sits in: the band's photograph when the organisation lists none of its own. */
   groupNiche?: string | null;
+  /** The band its section chose (bands.ts sectionBands: no photograph twice in a row, the crop cycling); else its place. */
+  band?: CardBand;
 }
 
 /**
@@ -25,7 +28,7 @@ export interface OrgTileProps {
  * the API sends one (E2 with enough history). A list item of four rows the grid shares (subgrid), so a row of cards
  * lines up its names, meta lines, badges and records.
  */
-export function OrgTile({ org, filters = {}, groupNiche }: OrgTileProps) {
+export function OrgTile({ org, filters = {}, groupNiche, band }: OrgTileProps) {
   const t = useTranslations("companies");
   const kinds = useTranslations("orgKind");
   const kind = kinds(org.kind);
@@ -43,8 +46,9 @@ export function OrgTile({ org, filters = {}, groupNiche }: OrgTileProps) {
       >
         <div className="min-w-0">
           <NicheBand
-            county={org.county?.code}
-            niche={org.niches[0]?.slug ?? groupNiche}
+            county={band ? band.county : org.county?.code}
+            niche={band ? band.niche : (org.niches[0]?.slug ?? groupNiche)}
+            position={band?.position}
             className="h-20 rounded-t-[15px] rounded-b-none sm:h-24"
           />
           {/* Before the link in the document, so the link's cover stays above it: a click on the seal opens the page. */}

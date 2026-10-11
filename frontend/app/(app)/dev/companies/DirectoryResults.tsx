@@ -14,6 +14,7 @@ import {
   type DirectoryGroup,
   type DirectoryPage,
 } from "./filters";
+import { sectionBands } from "./bands";
 import { OrgTile } from "./OrgTile";
 
 export type ResultsProps =
@@ -64,10 +65,12 @@ export function DirectoryResults(props: ResultsProps) {
 /**
  * One niche's organisations (AC-DIR-6): a Section titled with the niche's two-level name (the parent niche quieter,
  * in the same line: no label above it) and how many organisations it holds on this page, then the organisations as
- * cards, two across from 640 px, each card four rows the grid shares (subgrid).
+ * cards, two across from 640 px, each card four rows the grid shares (subgrid). The section picks the cards' bands
+ * (bands.ts): no photograph twice in a row, the crop cycling.
  */
 function Group({ group, filters }: { group: DirectoryGroup; filters: DirectoryFilters }) {
   const t = useTranslations("companies");
+  const bands = sectionBands(group.orgs, group.niche?.slug);
   return (
     <Section
       title={group.niche ? <NicheTitle label={group.niche.label} /> : t("noNiche")}
@@ -75,8 +78,8 @@ function Group({ group, filters }: { group: DirectoryGroup; filters: DirectoryFi
       data-niche={group.niche?.slug ?? "none"}
     >
       <ul className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
-        {group.orgs.map((org) => (
-          <OrgTile key={org.id} org={org} filters={filters} groupNiche={group.niche?.slug} />
+        {group.orgs.map((org, index) => (
+          <OrgTile key={org.id} org={org} filters={filters} groupNiche={group.niche?.slug} band={bands[index]} />
         ))}
       </ul>
     </Section>
