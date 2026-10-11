@@ -18,6 +18,7 @@ import {
   type NicheNode,
   type OrgCard,
 } from "./filters";
+import { OrgProfile } from "./OrgProfile";
 import { OrgTile } from "./OrgTile";
 
 // REQ-DIR-01 (F1): Developer › Companies. docs/spec/06 6.2 (grouped by niche, org type and county filters; cards show
@@ -220,6 +221,105 @@ describe("OrgTile", () => {
     expect(answered.container.querySelector("[data-response]")?.textContent).toBe(text);
     expect(answered.container.querySelector("[data-response] svg")?.getAttribute("aria-hidden")).toBe("true");
     expect(answered.container.querySelectorAll("[data-badge]")).toHaveLength(1);
+  });
+});
+
+function renderProfile(card: OrgCard, back = "/dev/companies?county=KE-30") {
+  return renderWithIntl(<OrgProfile org={card} back={back} />);
+}
+
+describe("OrgProfile (the company page)", () => {
+  it("opens on the county's photograph with the county named on it, then the monogram and the name as the page's title", () => {
+    const { container } = renderProfile(org());
+    const band = container.querySelector("[data-niche-band]") as HTMLElement;
+    expect(band.getAttribute("data-niche-band")).toBe("nairobi-jacaranda");
+    expect(band.textContent).toBe("Nairobi City");
+    expect(band.className).toContain("niche-band-scrim"); // the night gradient under the words
+    expect(meaningfulImages(container)).toHaveLength(0);
+    expect(container.querySelector("[data-avatar='org']")?.className).toContain("size-20");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Telkom Kenya Limited");
+    expect(screen.getByText("Company, Nairobi City")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "All companies" }).getAttribute("href")).toBe(
+      "/dev/companies?county=KE-30",
+    );
+  });
+
+  it("says what pitching an E0 organisation means in the held-tag sentence, and shows the badge verbatim", () => {
+    const { container } = renderProfile(org());
+    expect(screen.getByText(E0_TEXT)).toBeTruthy();
+    expect(container.querySelectorAll("[data-badge]")).toHaveLength(1);
+    expect(container.querySelector("[data-held]")?.textContent).toBe(
+      "Telkom Kenya Limited isn't on the platform yet. Your proposal is saved and they'll see it if they join and verify. We don't email them on your behalf.",
+    );
+    cleanup();
+    const verified = renderProfile(org({ badge: { level: "e2", text: E2_TEXT } }));
+    expect(verified.container.querySelector("[data-held]")).toBeNull();
+    expect(screen.getByText(E2_TEXT)).toBeTruthy();
+  });
+
+  it("has one primary action, problems in its first niche on Discover, and a way to pitch one of your ideas", () => {
+    const { container } = renderProfile(
+      org({
+        niches: [
+          TELECOMS,
+          { id: "n9", slug: "microfinance-saccos", label: "Financial services › Microfinance & SACCOs" },
+        ],
+      }),
+    );
+    const primary = container.querySelectorAll("[data-primary]");
+    expect(primary).toHaveLength(1);
+    expect(primary[0].textContent).toBe("Find problems in Networks & Telecoms");
+    expect(primary[0].getAttribute("href")).toBe("/dev/discover?niche=networks");
+    expect(screen.getByRole("link", { name: "Pitch one of your ideas" }).getAttribute("href")).toBe("/dev/ideas");
+    // The niches as links to Discover under their own heading.
+    const niches = screen.getByRole("region", { name: "Problems in their niches" });
+    expect(
+      within(niches)
+        .getAllByRole("link")
+        .map((a) => [a.textContent, a.getAttribute("href")]),
+    ).toEqual([
+      ["ICT › Networks & Telecoms", "/dev/discover?niche=networks"],
+      ["Financial services › Microfinance & SACCOs", "/dev/discover?niche=microfinance-saccos"],
+    ]);
+  });
+
+  it("hides the primary action and the niches without a niche; the photograph falls back to the lattice", () => {
+    const { container } = renderProfile(org({ niches: [], county: null }));
+    expect(container.querySelectorAll("[data-primary]")).toHaveLength(0);
+    expect(screen.queryByRole("region", { name: "Problems in their niches" })).toBeNull();
+    const band = container.querySelector("[data-niche-band]") as HTMLElement;
+    expect(band.getAttribute("data-niche-band")).toBe("lattice");
+    expect(band.textContent).toBe("");
+    expect(screen.getByRole("link", { name: "Pitch one of your ideas" })).toBeTruthy();
+  });
+
+  it("sets the facts as tiles: type, county and, only when sent, the response record's figures over the API's sentence", () => {
+    const { container } = renderProfile(org());
+    const facts = container.querySelector("dl[data-facts]") as HTMLElement;
+    expect([...facts.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual(["Organisation type", "County"]);
+    expect([...facts.querySelectorAll("dd")].map((dd) => dd.textContent)).toEqual(["Company", "Nairobi City"]);
+    cleanup();
+    const text = "Usually answers in 4 days · 80% answered";
+    const answered = renderProfile(
+      org({
+        county: null,
+        badge: { level: "e2", text: E2_TEXT },
+        responsiveness: { median_days: 4, answered_pct: 80, text },
+      }),
+    );
+    const tiles = answered.container.querySelector("dl[data-facts]") as HTMLElement;
+    expect([...tiles.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual([
+      "Organisation type",
+      "County",
+      "Response record",
+    ]);
+    const [, county, response] = [...tiles.querySelectorAll("dd")];
+    expect(county.textContent).toBe("Not given");
+    expect(response.querySelector(".font-figure")?.textContent).toBe("4 days · 80%");
+    expect(response.textContent).toContain(text);
+    cleanup();
+    renderProfile(org({ responsiveness: { median_days: 1, answered_pct: 100, text } }));
+    expect(screen.getByText("1 day · 100%")).toBeTruthy();
   });
 });
 

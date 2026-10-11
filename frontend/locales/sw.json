@@ -1028,9 +1028,12 @@
     "detailBack": "Makampuni yote",
     "detailType": "Aina ya shirika",
     "detailCounty": "Kaunti",
-    "detailNiches": "Fani",
     "detailResponse": "Rekodi ya majibu",
     "detailNone": "Haijatolewa",
+    "findProblems": "Tafuta matatizo katika {niche}",
+    "pitchIdea": "Wasilisha mojawapo ya mawazo yako",
+    "nichesTitle": "Matatizo katika fani zao",
+    "responseFigure": "siku {days} · {pct}%",
     "notFound": "Shirika hili halipo kwenye saraka."
   },
   "verify": {

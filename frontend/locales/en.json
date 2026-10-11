@@ -1028,9 +1028,12 @@
     "detailBack": "All companies",
     "detailType": "Organisation type",
     "detailCounty": "County",
-    "detailNiches": "Niches",
     "detailResponse": "Response record",
     "detailNone": "Not given",
+    "findProblems": "Find problems in {niche}",
+    "pitchIdea": "Pitch one of your ideas",
+    "nichesTitle": "Problems in their niches",
+    "responseFigure": "{days, plural, one {# day} other {# days}} · {pct}%",
     "notFound": "This organisation is not in the directory."
   },
   "verify": {
