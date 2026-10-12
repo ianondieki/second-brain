@@ -41,7 +41,11 @@ export async function PaletteSlot({ homeHref, staffRole }: { homeHref: string; s
       ? DEV_SECTIONS.map(({ key, href }) => ({ id: `go-${key}`, title: nav(key), href }))
       : portal === "org"
         ? ORG_SECTIONS.map(({ key, href }) => ({ id: `go-${key}`, title: nav(key), href: `${href}${query}` }))
-        : adminSections(staffRole ?? "admin").map(({ key, href }) => ({ id: `go-${key}`, title: admin(`nav.${key}`), href }));
+        : adminSections(staffRole ?? "admin").map(({ key, href }) => ({
+            id: `go-${key}`,
+            title: admin(`nav.${key}`),
+            href,
+          }));
   const goTo: PaletteLink[] = [
     ...sections,
     { id: "go-settings", title: t("settings"), href: "/settings/security" },
@@ -79,7 +83,14 @@ export async function PaletteSlot({ homeHref, staffRole }: { homeHref: string; s
     keyNewTab: t("keyNewTab"),
     keyClose: t("keyClose"),
   };
-  const data: PaletteData = { portal, goTo, create, strings, shortcut: shortcutFor(await userAgent()), recentKey: await accountKey() };
+  const data: PaletteData = {
+    portal,
+    goTo,
+    create,
+    strings,
+    shortcut: shortcutFor(await userAgent()),
+    recentKey: await accountKey(),
+  };
   return <PaletteTrigger data={data} />;
 }
 
@@ -98,14 +109,20 @@ export function shortcutFor(agent: string): string {
 }
 
 /**
- * The Recent list's key for the signed-in account: a hash of its id (the browser never stores the id), or null when
- * the account cannot be read (then no Recent list is kept).
+ * A hash of the signed-in account's id (never the id), or null when the account cannot be read: the key of the Recent
+ * list (then no Recent list is kept) and the name of the offline cache (components/offline; then none is kept).
  */
-async function accountKey(): Promise<string | null> {
+export async function accountHash(): Promise<string | null> {
   try {
     const me = await getMe();
-    return me ? recentKey(createHash("sha256").update(`wazo-recent|${me.user.id}`).digest("hex").slice(0, 20)) : null;
+    return me ? createHash("sha256").update(`wazo-recent|${me.user.id}`).digest("hex").slice(0, 20) : null;
   } catch {
     return null;
   }
+}
+
+/** The Recent list's key for the signed-in account (recent.ts). */
+async function accountKey(): Promise<string | null> {
+  const hash = await accountHash();
+  return hash ? recentKey(hash) : null;
 }

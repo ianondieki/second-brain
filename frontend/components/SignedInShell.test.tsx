@@ -15,7 +15,8 @@ import { SignedInShell, type SignedInShellProps } from "./SignedInShell";
 // navigation when it has one (bottom tabs on phones, a left rail from 1024 px) and one column of content in <main>.
 
 vi.mock("next-intl/server", () => ({
-  getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+  getTranslations: async (namespace: string) =>
+    createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
@@ -70,7 +71,9 @@ describe("SignedInShell", () => {
   });
 
   it("holds the bell in a Suspense boundary whose fallback is the bell without a count", () => {
-    function find(node: ReactNode): ReactElement<{ fallback: ReactElement<{ count: unknown }>; children: ReactElement }> | null {
+    function find(
+      node: ReactNode,
+    ): ReactElement<{ fallback: ReactElement<{ count: unknown }>; children: ReactElement }> | null {
       for (const child of Children.toArray(node)) {
         if (!isValidElement(child)) continue;
         if (child.type === Suspense) return child as never;
@@ -118,5 +121,19 @@ describe("SignedInShell", () => {
     const wide = await renderShell({ homeHref: "/dev", wide: true });
     expect(wide.firstElementChild!.hasAttribute("class")).toBe(false);
     expect(within(wide).getByRole("heading", { name: "My ideas" })).toBeTruthy();
+  });
+
+  // P27 (REQ-UX-08; D-69): the offline part, given by the pages the worker keeps, sits at the top of <main>, above the
+  // page; never in the staff console.
+  it("draws the offline part it is given at the top of main, and none in the staff console", async () => {
+    const main = await renderShell({ homeHref: "/dev", offline: <p data-offline-part="">offline</p> });
+    expect(main.firstElementChild!.hasAttribute("data-offline-part")).toBe(true);
+    cleanup();
+    const console = await renderShell({
+      homeHref: "/admin",
+      staffRole: "admin",
+      offline: <p data-offline-part="">offline</p>,
+    });
+    expect(console.querySelector("[data-offline-part]")).toBeNull();
   });
 });

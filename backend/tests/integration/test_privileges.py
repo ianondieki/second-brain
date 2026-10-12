@@ -29,8 +29,8 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
 - Revision 0013 (REQ-ENG-15, REQ-PROV-06, REQ-ENG-13, REQ-DEV-04): only bridge_app touches the assignments,
   recommendations, declarations and calendar feeds, with exactly its matrix; only bridge_app updates the profile's D3
   references and nudge dismissal; only bridge_app executes the window and feed definers, nobody the business-day
-  helper; no definer function inserts a prior-knowledge declaration (its window is the database's for every writer but
-  the owner).
+  helper; no function body inserts, updates or deletes a prior-knowledge declaration (its window and its one redaction
+  are the owner's own session's only).
 """
 
 from __future__ import annotations
@@ -431,30 +431,41 @@ async def test_only_bridge_app_executes_the_v13_definers(
         assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
 
 
-# Revision 0013, the security review's MINOR 2. A function the owner runs (a SECURITY DEFINER one, or any function a
-# definer calls) acts as the owner; the declaration window's bypass is the owner's with no user bound only. So no
-# function body of the schema may insert a declaration, and every body that runs dynamic SQL (EXECUTE) or builds text
-# with format() is reviewed by hand (a dynamic statement can name the table in pieces): this list, with why each is
-# safe. A new one fails until it is reviewed here.
-DECLARATION_INSERT = 'insert[[:space:]]+into[[:space:]]+(public[.])?"?prior_knowledge_declarations"?([^_a-z0-9]|$)'
+# Revision 0013, the security review's MINOR 2 and its re-check's (B). A function the owner runs (a SECURITY DEFINER
+# one, or any function a definer calls) acts as the owner; the declaration window's bypass and the one redaction are the
+# owner's own session's with no user bound only. So no function body of the schema may insert, update or delete a
+# declaration, and every body that runs dynamic SQL (EXECUTE) or builds text with format() is reviewed by hand (a
+# dynamic statement can name the table in pieces): this list, with why each is safe. A new one fails until it is
+# reviewed here.
+DECLARATION_WRITE = (
+    "(insert[[:space:]]+into|update|delete[[:space:]]+from)[[:space:]]+(only[[:space:]]+)?(public[.])?"
+    '"?prior_knowledge_declarations"?([^_a-z0-9]|$)'
+)
 DYNAMIC_SQL = "\\mexecute\\M|\\mformat[[:space:]]*[(]"
 REVIEWED_DYNAMIC: dict[str, str] = {
     "app_decide_claim(uuid,boolean,text)": "format() builds a decision reason string; no EXECUTE, no declaration",
 }
 FUNCTION_SCAN = text(
-    "SELECT p.oid::regprocedure::text AS signature, p.prosrc ~* :insert AS inserts, p.prosrc ~* :dynamic AS dynamic"
+    "SELECT p.oid::regprocedure::text AS signature, p.prosrc ~* :write AS writes, p.prosrc ~* :dynamic AS dynamic"
     " FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND NOT EXISTS (SELECT 1 FROM pg_depend d"
     " WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')"
-    " AND (p.prosrc ~* :insert OR p.prosrc ~* :dynamic)"
+    " AND (p.prosrc ~* :write OR p.prosrc ~* :dynamic)"
 )
-# Probes the scan must catch (created and rolled back): the literal insert, the reviewer's insert built in pieces, a
-# format()-built statement, and dynamic SQL in an INVOKER function a definer could call.
+# Probes the scan must catch (created and rolled back): the literal insert, an update and a delete (the re-check's (B):
+# a definer that redacts or removes a declaration), the reviewer's insert built in pieces, a format()-built statement,
+# and dynamic SQL in an INVOKER function a definer could call.
 SCAN_PROBES = {
     "probe_literal()": "CREATE FUNCTION probe_literal() RETURNS void LANGUAGE sql SECURITY DEFINER"
     " SET search_path = pg_catalog, public, pg_temp AS $$ INSERT INTO public.prior_knowledge_declarations"
     " (id, engagement_id, org_id, proposal_id, version_id, declared_by, evidence_sha256, evidence_title,"
     " evidence_dated_on, first_tier2_view_at, window_closes_on) SELECT uuid7(), e.id, e.org_id, e.proposal_id,"
     " e.version_id, e.developer_id, '\\x00', 'probe', current_date, now(), current_date + 1 FROM engagements e"
+    " WHERE false $$",
+    "probe_update()": "CREATE FUNCTION probe_update() RETURNS void LANGUAGE sql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ UPDATE prior_knowledge_declarations"
+    " SET evidence_title = '[redacted]' WHERE false $$",
+    "probe_delete()": "CREATE FUNCTION probe_delete() RETURNS void LANGUAGE sql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ DELETE FROM ONLY public.prior_knowledge_declarations"
     " WHERE false $$",
     "probe_pieces()": "CREATE FUNCTION probe_pieces() RETURNS void LANGUAGE plpgsql SECURITY DEFINER"
     " SET search_path = pg_catalog, public, pg_temp AS $$ BEGIN EXECUTE 'INSERT INTO public.' || 'prior_knowledge_'"
@@ -466,23 +477,30 @@ SCAN_PROBES = {
 }
 
 
-async def test_no_function_inserts_a_declaration_or_runs_unreviewed_dynamic_sql(owner_engine: AsyncEngine) -> None:
-    """Revision 0013 (the security review's MINOR 2): ``prior_knowledge_declarations_window`` keeps a writer's own
-    window only for the table's owner with no user bound (a seed, a backfill), and a function the owner runs acts as
-    the owner. No function body of the schema, definer or not, inserts a declaration; the only bodies with dynamic SQL
-    or format() are the reviewed ones; and the scan catches each probe: a literal insert, the review's insert built in
-    pieces (``'prior_knowledge_' || 'declarations'``), a format()-built statement and an INVOKER function's EXECUTE."""
-    patterns = {"insert": DECLARATION_INSERT, "dynamic": DYNAMIC_SQL}
+async def test_no_function_writes_a_declaration_or_runs_unreviewed_dynamic_sql(owner_engine: AsyncEngine) -> None:
+    """Revision 0013 (the security review's MINOR 2 and its re-check's (B)): ``prior_knowledge_declarations_window``
+    keeps a writer's own window, and ``prior_knowledge_declarations_redaction_guard`` admits the one redaction, only for
+    the table's owner in its own session with no user bound (a seed, a backfill, a DSR script), and a function the owner
+    runs acts as the owner. No function body of the schema, definer or not, inserts, updates or deletes a declaration;
+    the only bodies with dynamic SQL or format() are the reviewed ones; and the scan catches each probe: a literal
+    insert, an update, a delete, the review's insert built in pieces (``'prior_knowledge_' || 'declarations'``), a
+    format()-built statement and an INVOKER function's EXECUTE."""
+    patterns = {"write": DECLARATION_WRITE, "dynamic": DYNAMIC_SQL}
     async with owner_engine.connect() as conn:
         transaction = await conn.begin()
         try:
             found = (await conn.execute(FUNCTION_SCAN, patterns)).all()
-            assert [row.signature for row in found if row.inserts] == []
+            assert [row.signature for row in found if row.writes] == []
             assert {row.signature for row in found if row.dynamic} == set(REVIEWED_DYNAMIC)
             for statement in SCAN_PROBES.values():
                 await conn.execute(text(statement))
-            flagged = {row.signature for row in (await conn.execute(FUNCTION_SCAN, patterns)).all()}
-            assert flagged - set(REVIEWED_DYNAMIC) == set(SCAN_PROBES)
+            flagged = (await conn.execute(FUNCTION_SCAN, patterns)).all()
+            assert {row.signature for row in flagged} - set(REVIEWED_DYNAMIC) == set(SCAN_PROBES)
+            assert {row.signature for row in flagged if row.writes} == {
+                "probe_literal()",
+                "probe_update()",
+                "probe_delete()",
+            }
         finally:
             await transaction.rollback()
 

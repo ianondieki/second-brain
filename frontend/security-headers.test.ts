@@ -68,10 +68,20 @@ describe("web security headers", () => {
     });
   });
 
-  it.each(["/fonts/LICENCES.md", "/fonts/missing", "/fonts/bricolage-grotesque.woff2"])("treat %s under /fonts as a page (not cached, with the page headers)", (path) => {
-    const sent = headersFor(path);
-    expect(sent["Cache-Control"]).toBeUndefined();
-    expect(sent["X-Frame-Options"]).toBe("DENY");
+  it.each(["/fonts/LICENCES.md", "/fonts/missing", "/fonts/bricolage-grotesque.woff2"])(
+    "treat %s under /fonts as a page (not cached, with the page headers)",
+    (path) => {
+      const sent = headersFor(path);
+      expect(sent["Cache-Control"]).toBeUndefined();
+      expect(sent["X-Frame-Options"]).toBe("DENY");
+    },
+  );
+
+  it("revalidate the service worker on every update check, and nothing else under that rule", () => {
+    expect(headersFor("/sw.js")).toMatchObject({ "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" });
+    expect(headersFor("/sw.jsx")["Cache-Control"]).toBeUndefined();
+    expect(headersFor("/x/sw.js")["Cache-Control"]).toBeUndefined();
+    expect(headersFor("/SW.js")["Cache-Control"]).toBeUndefined();
   });
 
   it("match sources in exact case, since Next's default would exempt /_NEXT/static/... pages", () => {
