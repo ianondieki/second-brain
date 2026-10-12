@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bridge.db import bind_tenant, create_session_factory
 from bridge.engagements import chain, prior_knowledge
 from bridge.engagements.calendar import add_business_days, local_date
+from bridge.engagements.models import EVIDENCE_TITLE_REDACTED
 from bridge.engagements.notify import DECLARED_TITLE, N31_KIND
 from bridge.engagements.prior_knowledge import COMMAND, WINDOW_CLOSED, Window
 from bridge.ids import uuid7
@@ -317,6 +318,33 @@ async def test_who_may_declare_and_what(owner_engine: AsyncEngine, app_engine: A
         assert code(after_view) == (422, "evidence_after_first_view")
         assert (await s.owner.post(url, json=body(viewed_on, title=f"  {TITLE}  "))).status_code == 201
         assert await declarations(owner_engine, engagement) == [TITLE]  # trimmed
+
+
+async def test_the_redaction_marker_is_never_a_declarations_title(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``'[redacted]'`` marks a data-subject request's redaction of the title (revision 0013): the API refuses it as a
+    title before it reads anything (422, not 404), and should that check ever be bypassed the database's refusal is the
+    same 422, never a 500 or a 409. The marker is exact: another case is a title like any other."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    viewed_on = await tier2_view(owner_engine, world)
+    nowhere = f"/api/orgs/{world.org}/engagements/{uuid7()}/prior-knowledge"
+    async with clients(app_engine, SETTINGS, world.signatory) as (signatory,):
+        for title in (EVIDENCE_TITLE_REDACTED, f"  {EVIDENCE_TITLE_REDACTED} "):
+            for url in (path(world, engagement), nowhere):
+                refused = await signatory.post(url, json=body(viewed_on, title=title))
+                assert code(refused) == (422, "invalid_evidence_title")
+        with monkeypatch.context() as patched:
+            patched.setattr(prior_knowledge, "EVIDENCE_TITLE_REDACTED", "not the marker")  # the API's check bypassed
+            backstop = await signatory.post(
+                path(world, engagement), json=body(viewed_on, title=EVIDENCE_TITLE_REDACTED)
+            )
+            assert code(backstop) == (422, "invalid_evidence_title")
+        assert await declarations(owner_engine, engagement) == []
+        taken = await signatory.post(path(world, engagement), json=body(viewed_on, title="[REDACTED] v2"))
+        assert taken.status_code == 201, taken.text
+    assert await declarations(owner_engine, engagement) == ["[REDACTED] v2"]
 
 
 async def test_an_ended_engagement_takes_no_declaration(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:

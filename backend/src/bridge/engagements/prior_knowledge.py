@@ -12,7 +12,8 @@ Kenyan business day after that view's day in Africa/Nairobi (``window_closes_on`
 evidence's SHA-256 (hashed in the browser: no file is ever uploaded), the organisation's own one-line title for it and
 the evidence's date (no later than today, and on or before the Nairobi day of the first Tier-2 view: prior knowledge
 predates the access; the security review of revision 0013). Refused, in this order: 403 ``role_not_allowed``; 422 for
-the body (``invalid_evidence_title``, ``evidence_date_in_future``); 404 for an engagement that is not the
+the body (``invalid_evidence_title``, a title of exactly ``EVIDENCE_TITLE_REDACTED`` included: it marks a data-subject
+request's redaction; ``evidence_date_in_future``); 404 for an engagement that is not the
 organisation's (403 ``both_parties`` for its own developer); 409 ``already_declared`` (one per engagement); 409
 ``engagement_ended`` (revision 0003's chain takes no event once an engagement has ended; checked before the window);
 403 ``no_tier2_access_yet`` before any view; 403 ``declaration_window_closed`` with the spec's sentence after the
@@ -46,6 +47,7 @@ from bridge.engagements.calendar import local_date
 from bridge.engagements.models import (
     DECLARATION_ROLES,
     EVIDENCE_TITLE_MAX_CHARS,
+    EVIDENCE_TITLE_REDACTED,
     Engagement,
     EngagementEvent,
     PriorKnowledgeDeclaration,
@@ -169,6 +171,8 @@ def _refusal(exc: DBAPIError) -> ApiError:
     sqlstate = getattr(exc.orig, "sqlstate", None)
     message = str(getattr(getattr(exc.orig, "diag", None), "message_primary", "") or "")
     constraint = str(getattr(getattr(exc.orig, "diag", None), "constraint_name", "") or "")
+    if sqlstate == "23514" and ("an evidence title of" in message or "evidence_title_valid" in constraint):
+        return ApiError(422, "invalid_evidence_title", INVALID_TITLE)  # the redaction marker; the one-line CHECK
     if sqlstate == "55000":
         if "has ended" in message:
             return ApiError(409, "engagement_ended", ENGAGEMENT_ENDED)
@@ -198,7 +202,7 @@ async def declare(db: AsyncSession, org: OrgContext, engagement_id: UUID, body: 
         title = one_line(body.evidence_title, EVIDENCE_TITLE_MAX_CHARS)
     except ValueError as exc:
         raise ApiError(422, "invalid_evidence_title", INVALID_TITLE) from exc
-    if title is None:
+    if title is None or title == EVIDENCE_TITLE_REDACTED:  # the marker of a data-subject request's redaction
         raise ApiError(422, "invalid_evidence_title", INVALID_TITLE)
     today = local_date(await app_now(db))
     if body.evidence_dated_on > today:

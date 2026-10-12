@@ -66,6 +66,18 @@ def answer(error: ApiError) -> tuple[int, str]:
         ),
         (refused("55000", "prior_knowledge_declarations: the engagement has ended"), (409, "engagement_ended")),
         (
+            refused(
+                "23514",
+                "prior_knowledge_declarations: an evidence title of '[redacted]' is a data-subject request's redaction,"
+                " never a declaration's",
+            ),
+            (422, "invalid_evidence_title"),
+        ),
+        (
+            refused("23514", "violates", "ck_prior_knowledge_declarations_evidence_title_valid"),
+            (422, "invalid_evidence_title"),
+        ),
+        (
             refused("23514", "engagement_events: the engagement ended in DECLINED and takes no further event"),
             (409, "engagement_ended"),
         ),
