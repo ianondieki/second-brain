@@ -6,14 +6,17 @@ or a description carries neither line."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
+from uuid import UUID
+
+import pytest
 
 from bridge.events import calendar
-from bridge.events.calendar import Entry
+from bridge.events.calendar import CalendarEvent, Entry
 from tests.unit.events.ics_parser import instant, parse
-from tests.unit.events.test_calendar import event
 
 STAMP = datetime(2026, 10, 12, 6, 0, tzinfo=UTC)
+EAT = timezone(timedelta(hours=3))
 DUE = datetime(2026, 10, 16, 20, 59, 59, tzinfo=UTC)  # the end of 16 Oct 2026 in Nairobi
 
 
@@ -90,28 +93,87 @@ def test_text_is_escaped_and_folded_in_every_entry() -> None:
     assert b"X-WR-CALNAME:A\\, B\\; C\r\n" in body
 
 
-def test_an_events_file_is_the_same_bytes_as_before() -> None:
-    """``ics`` is now one entry through ``calendar_file``: the event's file keeps every line in its old order."""
-    body = calendar.ics(event(), host="wazo.example", product="Wazo")
-    names = [name for name, _ in parse(body)]
-    assert names == [
-        "BEGIN",
-        "VERSION",
-        "PRODID",
-        "CALSCALE",
-        "METHOD",
-        "BEGIN",
-        "UID",
-        "DTSTAMP",
-        "DTSTART",
-        "DTEND",
-        "SUMMARY",
-        "LOCATION",
-        "DESCRIPTION",
-        "URL",
-        "STATUS",
-        "TRANSP",
-        "END",
-        "END",
-    ]
-    assert b"TRANSP:OPAQUE\r\n" in body
+# Two pinned events and the bytes the writer gave them before it took a list of entries (the event writer of
+# claude/fervent-mccarthy-0zyqn2, run on these events): a venue with a link, and an online event whose title folds
+# just before a two-octet character, whose join address is its location and which has no link.
+IN_PERSON = CalendarEvent(
+    id=UUID("01927f00-0000-7000-8000-0000000000a1"),
+    title="Rust, Go; and \\ friends",
+    description="Talks and a workshop.\nBring a laptop, a charger; and questions.",
+    starts_at=datetime(2026, 10, 14, 18, 0, tzinfo=EAT),
+    ends_at=datetime(2026, 10, 14, 20, 30, tzinfo=EAT),
+    updated_at=datetime(2026, 10, 6, 9, 15, 2, tzinfo=UTC),
+    online=False,
+    venue="iHub, Senteu Plaza",
+    county_name="Nairobi City",
+    join_url=None,
+    link="https://events.example.test/rust-go?ref=wazo",
+)
+ONLINE = CalendarEvent(
+    id=UUID("01927f00-0000-7000-8000-0000000000a2"),
+    title="Wasanidi wa programu " * 3 + "abc" + "\u00e9" * 40,  # 74 octets with "SUMMARY:", then a 2-octet character
+    description="Line one.\r\nLine two; with a comma, and a backslash \\ " + "x" * 90,
+    starts_at=datetime(2026, 11, 2, 9, 30, tzinfo=EAT),
+    ends_at=datetime(2026, 11, 2, 11, 0, tzinfo=EAT),
+    updated_at=datetime(2026, 10, 7, 23, 59, 59, tzinfo=UTC),
+    online=True,
+    venue=None,
+    county_name=None,
+    join_url="https://meet.example.test/abc-defg-hij?pwd=" + "z" * 60,
+    link=None,
+)
+IN_PERSON_ICS = (
+    b"BEGIN:VCALENDAR\r\n"
+    b"VERSION:2.0\r\n"
+    b"PRODID:-//Wazo//This week//EN\r\n"
+    b"CALSCALE:GREGORIAN\r\n"
+    b"METHOD:PUBLISH\r\n"
+    b"BEGIN:VEVENT\r\n"
+    b"UID:event-01927f00-0000-7000-8000-0000000000a1@wazo.example\r\n"
+    b"DTSTAMP:20261006T091502Z\r\n"
+    b"DTSTART:20261014T150000Z\r\n"
+    b"DTEND:20261014T173000Z\r\n"
+    b"SUMMARY:Rust\\, Go\\; and \\\\ friends\r\n"
+    b"LOCATION:iHub\\, Senteu Plaza\\, Nairobi City\r\n"
+    b"DESCRIPTION:Talks and a workshop.\\nBring a laptop\\, a charger\\; and questio\r\n"
+    b" ns.\r\n"
+    b"URL:https://events.example.test/rust-go?ref=wazo\r\n"
+    b"STATUS:CONFIRMED\r\n"
+    b"TRANSP:OPAQUE\r\n"
+    b"END:VEVENT\r\n"
+    b"END:VCALENDAR\r\n"
+)
+ONLINE_ICS = (
+    b"BEGIN:VCALENDAR\r\n"
+    b"VERSION:2.0\r\n"
+    b"PRODID:-//Wazo//This week//EN\r\n"
+    b"CALSCALE:GREGORIAN\r\n"
+    b"METHOD:PUBLISH\r\n"
+    b"BEGIN:VEVENT\r\n"
+    b"UID:event-01927f00-0000-7000-8000-0000000000a2@wazo.example\r\n"
+    b"DTSTAMP:20261007T235959Z\r\n"
+    b"DTSTART:20261102T063000Z\r\n"
+    b"DTEND:20261102T080000Z\r\n"
+    b"SUMMARY:Wasanidi wa programu Wasanidi wa programu Wasanidi wa programu abc\r\n"
+    b" \xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9"
+    b"\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9"
+    b"\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9"
+    b"\xc3\xa9\r\n"
+    b" \xc3\xa9\xc3\xa9\xc3\xa9\r\n"
+    b"LOCATION:https://meet.example.test/abc-defg-hij?pwd=zzzzzzzzzzzzzzzzzzzzzzz\r\n"
+    b" zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\r\n"
+    b"DESCRIPTION:Line one.\\nLine two\\; with a comma\\, and a backslash \\\\ xxxxxxx\r\n"
+    b" xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n"
+    b" xxxxxxxxx\r\n"
+    b"STATUS:CONFIRMED\r\n"
+    b"TRANSP:OPAQUE\r\n"
+    b"END:VEVENT\r\n"
+    b"END:VCALENDAR\r\n"
+)
+
+
+@pytest.mark.parametrize(("pinned", "golden"), [(IN_PERSON, IN_PERSON_ICS), (ONLINE, ONLINE_ICS)])
+def test_an_events_file_is_the_same_bytes_as_before(pinned: CalendarEvent, golden: bytes) -> None:
+    """``ics`` is now one entry through ``calendar_file``: an event's file is byte for byte what the old writer gave
+    (every line, its order, escaping, folding and CRLF)."""
+    assert calendar.ics(pinned, host="wazo.example", product="Wazo") == golden
