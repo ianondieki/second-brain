@@ -4252,10 +4252,8 @@
     "assignedToMe": "Assigned to me"
   },
   "deadlines": {
-    "monthLabel": "{month}",
     "previous": "Previous month, {month}",
     "next": "Next month, {month}",
-    "today": "Today",
     "more": "{count, plural, other {+# more}}",
     "dayDeadlines": "{date}: {count, plural, one {# deadline} other {# deadlines}}",
     "dayList": "Deadlines on {date}",
