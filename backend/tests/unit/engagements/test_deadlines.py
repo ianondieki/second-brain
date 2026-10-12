@@ -79,6 +79,7 @@ def test_a_reversed_or_overlong_window_is_refused(start: date | None, end: date)
     with pytest.raises(ApiError) as refused:
         deadlines.window(MONDAY, start, end)
     assert refused.value.status_code == 422
+    assert isinstance(refused.value.detail, dict)
     assert refused.value.detail["code"] == "invalid_range"
 
 

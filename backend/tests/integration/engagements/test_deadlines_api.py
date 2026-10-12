@@ -36,6 +36,7 @@ from tests.integration.engagements.api_world import (
     deals_on,
     holidays_of,
     open_engagement,
+    run,
     seats,
     walk_to,
 )
@@ -255,7 +256,7 @@ async def test_a_feed_carries_the_list_to_a_calendar_app_and_nothing_else(
         # a member who leaves the organisation takes their feed of it with them
         org_path = org_feed.removeprefix(settings.public_base_url.rstrip("/"))
         async with owner_engine.begin() as conn:
-            await dw.run(
+            await run(
                 conn,
                 "UPDATE memberships SET status = 'removed' WHERE org_id = :o AND user_id = :u",
                 o=world.org,
@@ -265,7 +266,7 @@ async def test_a_feed_carries_the_list_to_a_calendar_app_and_nothing_else(
         live = "SELECT count(*) FROM calendar_feeds WHERE user_id = :u AND revoked_at IS NULL"
         assert await dw.one(owner_engine, live, u=world.owner) == 0  # revoked by the database, not only unread
         async with owner_engine.begin() as conn:
-            await dw.run(
+            await run(
                 conn,
                 "UPDATE memberships SET status = 'active' WHERE org_id = :o AND user_id = :u",
                 o=world.org,
@@ -278,7 +279,7 @@ async def test_a_feed_carries_the_list_to_a_calendar_app_and_nothing_else(
         personal_path = personal.removeprefix(settings.public_base_url.rstrip("/"))
         assert (await anon.get(personal_path)).status_code == 200
         async with owner_engine.begin() as conn:
-            await dw.run(conn, "UPDATE users SET status = 'suspended' WHERE id = :u", u=world.developer)
+            await run(conn, "UPDATE users SET status = 'suspended' WHERE id = :u", u=world.developer)
         assert (await anon.get(personal_path)).status_code == 404
         assert await dw.one(owner_engine, live, u=world.developer) == 0
 

@@ -44,8 +44,9 @@ def ids(column: dict[str, Any]) -> set[str]:
 
 
 def item(board: dict[str, Any], engagement: UUID) -> dict[str, Any]:
-    [found] = [i for c in board["columns"] for i in c["items"] if i["id"] == str(engagement)]
-    return found
+    found: list[dict[str, Any]] = [i for c in board["columns"] for i in c["items"] if i["id"] == str(engagement)]
+    assert len(found) == 1, engagement
+    return found[0]
 
 
 async def test_the_board_columns_ageing_stalls_and_funnel(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
