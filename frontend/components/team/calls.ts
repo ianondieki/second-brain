@@ -38,14 +38,15 @@ const BY_CODE: Record<string, TeamRefusal> = {
   invalid_note: "invalidNote",
 };
 
-export function teamRefusal(status: number, error: unknown): TeamRefusal {
+/** `note`: the call sent a note (the recommendation), so a request-validation error is about it. */
+export function teamRefusal(status: number, error: unknown, note = false): TeamRefusal {
   const code = apiErrorCode(error);
   if (code && code in BY_CODE) return BY_CODE[code];
   if (status === 404) return "notFound";
   if (status === 403) return "notAllowed";
   if (status === 409) return "conflict";
   if (status === 429) return "tooMany";
-  if (status === 422) return code === "validation" ? "invalidNote" : "generic";
+  if (status === 422) return note && code === "validation" ? "invalidNote" : "generic";
   return "generic";
 }
 
@@ -61,10 +62,13 @@ export interface TeamCalls {
 /** The calls for one engagement of one organisation. */
 export function teamCalls(orgId: string, engagementId: string, client: ApiClient = api): TeamCalls {
   const params = { path: { org_id: orgId, engagement_id: engagementId } };
-  async function settle(call: Promise<{ data?: Team; error?: unknown; response: Response }>): Promise<TeamOutcome> {
+  async function settle(
+    call: Promise<{ data?: Team; error?: unknown; response: Response }>,
+    note = false,
+  ): Promise<TeamOutcome> {
     try {
       const { data, error, response } = await call;
-      return data ? { ok: true, team: data } : { ok: false, refusal: teamRefusal(response.status, error) };
+      return data ? { ok: true, team: data } : { ok: false, refusal: teamRefusal(response.status, error, note) };
     } catch {
       return { ok: false, refusal: "network" };
     }
@@ -81,6 +85,7 @@ export function teamCalls(orgId: string, engagementId: string, client: ApiClient
           params,
           body: { stance, note: note.trim() || null },
         }),
+        true,
       ),
     withdraw: () => settle(client.DELETE("/api/orgs/{org_id}/engagements/{engagement_id}/recommendation", { params })),
   };
