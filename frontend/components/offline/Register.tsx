@@ -21,29 +21,40 @@ export function Register({ hash, version }: { hash: string | null; version: stri
 
   useEffect(() => {
     const html = document.documentElement;
-    // Read-only offline: every control in <main> the page had not disabled itself is disabled, and given back online.
-    const offline = (down: boolean) => {
-      html.toggleAttribute("data-offline", down);
+    // Did the worker answer this page from its cache? Then, back online, the page is loaded again, not unlocked stale.
+    let cached = false;
+    let watch: MutationObserver | undefined;
+    // Read-only offline: every control in <main> the page had not disabled itself is disabled (those added later too,
+    // by the observer), and given back online.
+    const lock = (down: boolean) => {
       for (const control of document.querySelectorAll<HTMLButtonElement>(CONTROLS)) {
         if (down ? control.disabled : !control.hasAttribute(LOCKED)) continue;
         control.disabled = down;
         control.toggleAttribute(LOCKED, down);
       }
     };
+    const offline = (down: boolean) => {
+      html.toggleAttribute("data-offline", down);
+      lock(down);
+      watch?.disconnect();
+      if (down) (watch = new MutationObserver(() => lock(true))).observe(html, { childList: true, subtree: true });
+    };
     const goneOffline = () => offline(true);
-    const backOnline = () => offline(false);
+    const backOnline = () => (cached ? location.reload() : offline(false));
     offline(!navigator.onLine);
     const sw = navigator.serviceWorker;
     // The worker handles its messages one at a time, in order: "user" lands before any "status" or "visit".
     worker.current = sw
       ? sw
-          .register(`/sw.js?v=${encodeURIComponent(version)}`, { scope: "/", updateViaCache: "none" })
+          // The build id is letters, digits, "-" and "_"; the scope is the script's own ("/"); the script itself is
+          // never taken from the HTTP cache (updateViaCache "imports", the default, and /sw.js is no-cache).
+          .register(`/sw.js?v=${version}`)
           .then(() => sw.ready)
           .then(({ active }) => {
             active?.postMessage(hash ? { type: "user", hash } : { type: "clear" });
             // Did the worker answer this page from its cache (the network failed though the browser says online)?
             const channel = new MessageChannel();
-            channel.port1.onmessage = ({ data }) => offline(Boolean(data?.cached) || !navigator.onLine);
+            channel.port1.onmessage = ({ data }) => offline((cached = Boolean(data?.cached)) || !navigator.onLine);
             active?.postMessage({ type: "status" }, [channel.port2]);
             return active;
           })

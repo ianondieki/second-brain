@@ -117,7 +117,7 @@ describe("the offline island", () => {
     fakeCaches(null);
     renderWithIntl(page());
     await waitFor(() => expect(told).toContainEqual({ type: "visit", url: location.href }));
-    expect(container.register).toHaveBeenCalledWith("/sw.js?v=build-7", { scope: "/", updateViaCache: "none" });
+    expect(container.register).toHaveBeenCalledWith("/sw.js?v=build-7");
     const types = told.map((m) => (m as { type: string }).type);
     expect(types.indexOf("user")).toBeGreaterThanOrEqual(0);
     expect(types.indexOf("user")).toBeLessThan(types.indexOf("visit"));
@@ -163,6 +163,35 @@ describe("the offline island", () => {
     expect(document.querySelectorAll("[data-offline-locked]")).toHaveLength(0);
     // What the page itself had disabled stays so.
     expect(off(screen.getByRole("button", { name: "Already off" }))).toBe(true);
+  });
+
+  it("locks controls that appear while offline", async () => {
+    fakeWorker();
+    online(false);
+    renderWithIntl(page());
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
+    const late = document.createElement("button");
+    late.textContent = "Late";
+    document.querySelector("form")!.append(late);
+    await waitFor(() => expect(off(late)).toBe(true));
+  });
+
+  it("back online, loads a page the worker answered from its cache again instead of unlocking it stale", async () => {
+    fakeWorker({ status: { cached: true } });
+    const reload = vi.fn();
+    vi.stubGlobal("location", {
+      ...window.location,
+      reload,
+      href: window.location.href,
+      pathname: window.location.pathname,
+    });
+    renderWithIntl(page());
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(off(screen.getByRole("button", { name: "Send" }))).toBe(true);
   });
 
   it("marks the page offline when the worker answered it from its cache, though the browser says it is online", async () => {

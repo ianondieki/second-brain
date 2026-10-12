@@ -73,9 +73,12 @@ export function OfflineSlot({ page }: { page: string }) {
   return (
     <>
       <OfflineBanner page={page} />
-      <Suspense fallback={null}>
-        <Island />
-      </Suspense>
+      {/* The worker in production builds only: `next dev` serves files that change under the same names. */}
+      {process.env.NODE_ENV === "production" ? (
+        <Suspense fallback={null}>
+          <Island />
+        </Suspense>
+      ) : null}
     </>
   );
 }
