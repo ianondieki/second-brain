@@ -42,4 +42,15 @@ describe("EngagementCard", () => {
     expect(screen.getByText("Waiting on SACCO B")).toBeTruthy();
     expect(screen.queryByText("Your turn")).toBeNull();
   });
+
+  it("never sets a named organisation's premises over an organisation's name; titled by the idea, the niche's photograph", () => {
+    const item = summary({ state: "NEGOTIATION", stage_group: "agreement", whose_turn: ["org"], org_name: "Kenyatta University" });
+    const band = () => document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band");
+    // Education's photograph is Strathmore's campus: over another university's name it would read as theirs.
+    renderWithIntl(<EngagementCard item={item} mine="developer" titleBy="organisation" niche={{ slug: "higher-education" }} href="/dev/engagements/e1" />);
+    expect(band()).toBe("lattice");
+    cleanup();
+    renderWithIntl(<EngagementCard item={item} mine="developer" niche={{ slug: "higher-education" }} href="/dev/engagements/e1" />);
+    expect(band()).toBe("nairobi-strathmore-campus");
+  });
 });

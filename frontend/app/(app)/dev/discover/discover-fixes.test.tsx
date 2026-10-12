@@ -155,6 +155,17 @@ describe("a Brief's photograph band (P26)", () => {
     renderWithIntl(<ProblemRow item={place("research_agent")} counties={COUNTIES} query={{ view: "problems" }} />);
     expect(band()).toBe("nairobi-strathmore-campus");
   });
+
+  it("does the same on a recommendation: a recommended Brief never carries another organisation's premises", () => {
+    // Health's photograph is the Naipekarr dispensary (named premises); the fixture has no county.
+    const as = (source: "org_brief" | "research_agent") => recommendation({ problem: { ...recommendation().problem, source } });
+    const band = () => document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band");
+    const { unmount } = renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [as("org_brief")] }))} />);
+    expect(band()).toBe("lattice");
+    unmount();
+    renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [as("research_agent")] }))} />);
+    expect(band()).toBe("turkana-naipekarr-dispensary");
+  });
 });
 
 describe("the API's words are text", () => {

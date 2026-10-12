@@ -82,6 +82,12 @@ describe("a Brief on Discover", () => {
     expect(card.querySelectorAll("[data-primary]")).toHaveLength(0); // the card's way in is a link, not the screen's primary
   });
 
+  it("never shows a named organisation's premises on its band: ICT's earth station is one company's, so the lattice", () => {
+    const item = discoverBrief();
+    renderWithIntl(<BriefRow item={{ ...item, problem: { ...item.problem, county_code: null } }} counties={COUNTIES} />);
+    expect(document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("lattice");
+  });
+
   it("says when the organisation gave no band or deadline", () => {
     renderWithIntl(
       <BriefRow
