@@ -18,6 +18,7 @@ import { history } from "@/test/engagement";
 
 import { declarationRefusal, type Declaration, type DeclarationOutcome } from "./calls";
 import { DeclarationSheet } from "./DeclarationSheet";
+import { focusLineWhenRefreshed, LINE_ID } from "./focus-line";
 import { asSha256, HASH_MAX_BYTES, nairobiDay, sha256Hex } from "./hash";
 import { ReceivedDeclaration } from "./ReceivedDeclaration";
 
@@ -282,6 +283,118 @@ const orgDetail = (prior_knowledge: unknown, overrides = {}) =>
 async function line(d: ReturnType<typeof detail>) {
   return renderWithIntl(<>{await resolveServerTree(<DeclarationLine detail={d} />)}</>);
 }
+
+describe("the declaration sheet's edges (P27 review)", () => {
+  /** A digest whose answer the test gives when it chooses. */
+  function controllable() {
+    const pending: Array<(hex: string) => void> = [];
+    const hashImpl = vi.fn(() => new Promise<string>((resolve) => pending.push(resolve)));
+    return { hashImpl, answer: (index: number, hex: string) => act(async () => pending[index](hex)) };
+  }
+
+  it("keeps the latest file's fingerprint when an earlier, larger one finishes after it", async () => {
+    const digest = controllable();
+    const { declareImpl } = open({ hashImpl: digest.hashImpl });
+    await chooseFile(fileOf(45 * 1024 * 1024, "archive.zip"));
+    await chooseFile(fileOf(10, "minutes.pdf"));
+    expect(digest.hashImpl).toHaveBeenCalledTimes(2);
+    await digest.answer(1, HASH);
+    expect(document.querySelector("[data-file-hash]")!.textContent).toBe(HASH);
+    // The 45 MB file's digest arrives last: it is dropped.
+    await digest.answer(0, "f".repeat(64));
+    expect(document.querySelector("[data-file-hash]")!.textContent).toBe(HASH);
+    expect(screen.getByText("Fingerprint of minutes.pdf:")).toBeTruthy();
+    await fillRest();
+    expect((declareImpl as ReturnType<typeof vi.fn>).mock.calls[0][2].evidence_sha256_hex).toBe(HASH);
+  });
+
+  it("waits for a fingerprint only on the file way: a pasted hash sends while a file is still hashing", async () => {
+    const digest = controllable();
+    const { declareImpl } = open({ hashImpl: digest.hashImpl });
+    await chooseFile(fileOf(45 * 1024 * 1024));
+    const submit = screen.getByRole("button", { name: "Record declaration" });
+    expect(submit.getAttribute("aria-disabled")).toBe("true");
+    await fillRest();
+    expect(declareImpl).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("radio", { name: "Paste a SHA-256" }));
+    expect(submit.getAttribute("aria-disabled")).toBeNull();
+    fireEvent.change(screen.getByLabelText("SHA-256"), { target: { value: HASH } });
+    await act(async () => fireEvent.click(submit));
+    expect(declareImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a title with a control or invisible character before sending, with the field's sentence", async () => {
+    for (const bad of [0x200b, 0x202e, 0x00a0, 0x0009]) {
+      cleanup();
+      const { declareImpl } = open();
+      await chooseFile(fileOf(10));
+      await fillRest(`Board${String.fromCharCode(bad)}minutes`);
+      expect(declareImpl).not.toHaveBeenCalled();
+      const title = screen.getByLabelText("Title");
+      expect(title.getAttribute("aria-invalid")).toBe("true");
+      expect(document.getElementById(`${title.id}-error`)!.textContent).toBe(
+        "Give the title on one line, up to 200 characters, with no invisible characters.",
+      );
+      expect(document.activeElement).toBe(title);
+    }
+  });
+
+  it.each([
+    ["declaration_window_closed", 403, true],
+    ["already_declared", 409, true],
+    ["engagement_ended", 409, true],
+    ["role_not_allowed", 403, false],
+    ["no_tier2_access_yet", 403, false],
+  ] as const)("closing after %s says the tracker changed: %s", async (code, status, changed) => {
+    const declareImpl = vi.fn(
+      async (): Promise<DeclarationOutcome> => ({
+        ok: false,
+        refusal: declarationRefusal(status, { detail: { code, message: "x" } }),
+      }),
+    );
+    const { onClose } = open({ declareImpl });
+    await chooseFile(fileOf(10));
+    await fillRest();
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onClose).toHaveBeenCalledWith(changed);
+  });
+});
+
+describe("focus after the tracker refreshes", () => {
+  function page(sentence: string) {
+    document.body.innerHTML = `<div data-turn-card=""><h2 id="actions-heading" tabindex="-1">Your actions</h2>
+      <span data-clock="">3 h 12 min</span>
+      <section data-declaration="open"><p id="${LINE_ID}" tabindex="-1">${sentence}</p><button>Declare prior knowledge</button></section></div>`;
+  }
+
+  it("moves to the declaration line once its words change, and ignores the clock's", async () => {
+    page("Your organisation can declare existing similar work until 16 Oct 2026.");
+    const button = document.querySelector("button")!;
+    button.focus();
+    expect(focusLineWhenRefreshed()).not.toBeNull();
+    // The clock ticks: not the line.
+    document.querySelector("[data-clock]")!.textContent = "3 h 11 min";
+    await Promise.resolve();
+    expect(document.activeElement).toBe(button);
+    // The refresh: the line says it was declared, and the button is gone.
+    document.getElementById(LINE_ID)!.textContent = "Your organisation declared prior knowledge on 5 Oct 2026.";
+    button.remove();
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById(LINE_ID)));
+  });
+
+  it("moves to the actions' heading when the line goes (an ended engagement)", async () => {
+    page("Your organisation can declare existing similar work until 16 Oct 2026.");
+    focusLineWhenRefreshed();
+    document.querySelector("[data-declaration]")!.remove();
+    await waitFor(() => expect(document.activeElement).toBe(document.getElementById("actions-heading")));
+  });
+
+  it("arms nothing without a line", () => {
+    document.body.innerHTML = "";
+    expect(focusLineWhenRefreshed()).toBeNull();
+  });
+});
 
 describe("the declaration line on the organisation's tracker", () => {
   const OPEN = {

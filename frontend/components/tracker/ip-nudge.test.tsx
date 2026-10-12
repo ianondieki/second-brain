@@ -53,7 +53,7 @@ async function nudge(d = sendNda()) {
 }
 
 describe("the IP note", () => {
-  it("says the spec's nudge once, with KIPI's and KECOBO's sites (rel=noopener) and Dismiss", async () => {
+  it("says the spec's nudge once, with KIPI's and KECOBO's sites (rel=noopener noreferrer) and Dismiss", async () => {
     const { container } = await nudge();
     const note = container.querySelector("[data-ip-nudge] aside")!;
     expect(note.getAttribute("aria-label")).toBe("Before you share");
@@ -62,8 +62,8 @@ describe("the IP note", () => {
     );
     const links = [...note.querySelectorAll("a")];
     expect(links.map((a) => [a.getAttribute("href"), a.getAttribute("rel")])).toEqual([
-      ["https://kipi.go.ke", "noopener"],
-      ["https://copyright.go.ke", "noopener"],
+      ["https://kipi.go.ke", "noopener noreferrer"],
+      ["https://copyright.go.ke", "noopener noreferrer"],
     ]);
     expect(links[0].textContent).toBe("KIPI (kipi.go.ke) (opens in a new tab)");
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeTruthy();
