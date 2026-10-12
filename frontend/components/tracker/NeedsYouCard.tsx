@@ -10,14 +10,15 @@ import { LinkPending } from "@/components/ui/LinkPending";
 import { Chip, ChipMark } from "./Chip";
 import { isFinished, stageChip, type Party, type Summary } from "./model";
 import { UnreadLine } from "./UnreadLine";
-import { DueLine } from "./When";
+import { DueClock } from "./When";
 
 /**
  * One engagement that waits on the viewer, as a prominent card (D-52): the other party's avatar, the idea, the stage,
- * the deadline, and the way in. The card is one link, named by the idea's title and covering the whole card; the
+ * the deadline (the live clock while the stage's window is open, P26; otherwise its words), and the way in. The card
+ * is one link, named by the idea's title and covering the whole card; the
  * "Open the tracker" affordance is the link's visual cue, not a second link. The chips stay the stage and "Your turn".
  */
-export function NeedsYouCard({ item, mine, href, action }: { item: Summary; mine: Party; href: string; action: string }) {
+export function NeedsYouCard({ item, mine, href, action, now }: { item: Summary; mine: Party; href: string; action: string; now?: string }) {
   const t = useTranslations("tracker");
   const other = mine === "developer" ? item.org_name : item.developer_name;
   return (
@@ -39,9 +40,9 @@ export function NeedsYouCard({ item, mine, href, action }: { item: Summary; mine
             </Badge>
           </p>
           {item.due && !isFinished(item.state) ? (
-            <p className="mt-2">
-              <DueLine item={item} mine={mine} />
-            </p>
+            <div className="mt-3 text-sm">
+              <DueClock item={item} mine={mine} now={now} />
+            </div>
           ) : null}
           {item.unread_messages ? (
             <p className="mt-2">
