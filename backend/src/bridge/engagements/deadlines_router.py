@@ -14,7 +14,8 @@ Signed in:
   idempotent). Creating and revoking are audited (``calendar_feed.created``, ``calendar_feed.revoked``; ids only).
 
 Unauthenticated (D-70: the token is the capability): ``GET /api/calendar/{token}.ics``, the same deadlines as the
-list's default as one named calendar (``X-WR-CALNAME: <product> deadlines``); 404 for an unknown, revoked or malformed
+list's default as one named calendar (``X-WR-CALNAME``: ``<product> deadlines``, and for a member's feed of an
+organisation ``<product> deadlines · <its legal name>``); 404 for an unknown, revoked or malformed
 token (one body for all three); 429 ``too_many_fetches`` with ``Retry-After`` past 60 reads an hour of one feed; never
 a cookie; ``Cache-Control: private, no-store``; each read stamps the feed's ``last_fetched_at``.
 
@@ -29,6 +30,7 @@ from typing import Annotated, Any, Final
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Response
+from sqlalchemy import select
 
 from bridge.audit.service import record as audit
 from bridge.auth.deps import CurrentSession, Db, SettingsDep
@@ -42,6 +44,7 @@ from bridge.engagements.service import app_now
 from bridge.errors import ERROR_RESPONSES, json_errors, not_found
 from bridge.events import calendar
 from bridge.tenancy.deps import OrgMember
+from bridge.tenancy.models import Organization
 
 router = APIRouter(tags=["deadlines"], responses=ERROR_RESPONSES)
 
@@ -49,7 +52,8 @@ ME: Final = "/api/me"
 ORG: Final = "/api/orgs/{org_id}"
 ICS_CACHE: Final = "private, no-store"
 SECTION: Final = "Deadlines"
-FEED_NAME: Final = "{product} deadlines"  # [[COPY-REVIEW]] the subscribed calendar's name
+FEED_NAME: Final = "{product} deadlines"  # [[COPY-REVIEW]] the subscribed calendar's name (a personal feed)
+ORG_FEED_NAME: Final = "{product} deadlines · {org}"  # a member's feed of an organisation: its legal name
 NO_FEED: Final = "No live calendar feed has this address."
 ICS_RESPONSES: Final[dict[int | str, dict[str, Any]]] = {
     200: {"content": {"text/calendar": {}}, "description": "The deadline as an iCalendar file"},
@@ -208,6 +212,16 @@ async def revoke_org_feed(org: OrgMember, db: Db) -> None:
     await _revoke(db, org.live.user.id, org.org_id)
 
 
+async def _feed_name(db: Db, settings: Settings, feed: feeds.FeedRef) -> str:
+    """The subscribed calendar's name: the product's, and an organisation feed's organisation (its legal name)."""
+    org = None
+    if feed.org_id is not None:
+        org = await db.scalar(select(Organization.legal_name).where(Organization.id == feed.org_id))
+    if org is None:
+        return FEED_NAME.format(product=settings.product_name)
+    return ORG_FEED_NAME.format(product=settings.product_name, org=org)
+
+
 @router.get(
     feeds.FEED_PATH,
     response_class=Response,
@@ -233,10 +247,10 @@ async def read_feed(token: str, db: Db, settings: SettingsDep) -> Response:
         deals_enabled=settings.feature_deals_enabled,
         platform_name=settings.product_name,
     )
+    name = await _feed_name(db, settings, feed)
     await feeds.touch(db, feed)
     await db.commit()
     entries = [deadlines.calendar_entry(d, base_url=settings.public_base_url, stamp=now) for d in found]
-    name = FEED_NAME.format(product=settings.product_name)
     body = calendar.calendar_file(entries, product=settings.product_name, section=SECTION, name=name)
     return Response(
         content=body,

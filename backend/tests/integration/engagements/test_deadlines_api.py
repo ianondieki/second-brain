@@ -288,6 +288,10 @@ async def test_a_feed_carries_the_list_to_a_calendar_app_and_nothing_else(
         org_feed = (await s.owner.post(f"/api/orgs/{world.org}/calendar-feed")).json()["url"]
         org_read = await anon.get(org_feed.removeprefix(settings.public_base_url.rstrip("/")))
         assert org_read.status_code == 200
+        # a member's feed of the organisation is named for it; the personal feed is the product's alone
+        org_names = [value for name, value in parse(org_read.content) if name == "X-WR-CALNAME"]
+        assert org_names == [f"{settings.product_name} deadlines · {world.org_name}"]
+        assert [value for name, value in lines if name == "X-WR-CALNAME"] == [f"{settings.product_name} deadlines"]
         assert {e["UID"].split("@")[0] for e in vevents(org_read.content)} == {
             f"stage-{engagement}",
             f"brief-{brief}",
