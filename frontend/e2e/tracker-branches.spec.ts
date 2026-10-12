@@ -125,10 +125,13 @@ async function expectCountdown(page: Page, timer: Locator, id: string) {
 }
 
 const homeTimer = (page: Page) => page.locator("[data-stat='deadline'] [data-timer]");
-const bannerTimer = (page: Page) => banner(page).locator("[data-timer]");
+/** The tracker's figure panel: the live clock (P26). */
+const bannerClock = (page: Page) => banner(page).locator("[data-clock-panel] [data-clock]");
+/** An engagement's live clock on a card (the Engagements lists, Home's Needs-you cards; P26). */
+const cardClock = (page: Page, id: string) => page.locator(`[data-engagement="${id}"] [data-clock]`);
 
-test("the deadline counts down in days, hours and minutes on Home and the tracker, from the API's clock", async ({ page, browser }, info) => {
-  test.setTimeout(120_000);
+test("the deadline counts down in days, hours and minutes on Home, the cards and the tracker, from the API's clock", async ({ page, browser }, info) => {
+  test.setTimeout(150_000);
   const { dev, devPage, orgPage, close } = await scene(page, browser, info);
   try {
     // The review is the organisation's step: the countdown is said to both parties, warm for neither on the developer's side.
@@ -137,13 +140,28 @@ test("the deadline counts down in days, hours and minutes on Home and the tracke
     await expect(homeTimer(devPage)).toHaveText(/^in (\d+ days? )?(\d+ h )?\d+ min$/);
     await expect(devPage.locator("[data-stat='deadline']")).toHaveAttribute("title", /business day/);
     await checkScreen(devPage, { strict: true });
+    // The developer's Engagements list: the card's live clock, its figures and its words under it.
+    await devPage.goto("/dev/engagements");
+    await expect(cardClock(devPage, dev.engagementId).locator('time[datetime^="P"]')).toBeVisible();
+    await expectCountdown(devPage, cardClock(devPage, dev.engagementId), dev.engagementId);
+    await expect(cardClock(devPage, dev.engagementId).locator("[data-figure]")).not.toHaveCount(0);
+    await expect(cardClock(devPage, dev.engagementId)).not.toHaveAttribute("data-clock", "warm");
+    await checkScreen(devPage, { strict: true });
     await devPage.goto(`/dev/engagements/${dev.engagementId}`);
-    await expectCountdown(devPage, bannerTimer(devPage), dev.engagementId);
-    // One deadline, said once: the figure's secondary line carries the date and the time left.
-    await expect(bannerTimer(devPage)).toHaveText(/^Due \d{1,2} \w{3} \d{4} · in\u00a0/);
-    await expect(bannerTimer(devPage)).not.toHaveAttribute("data-timer", "warm");
+    await expectCountdown(devPage, bannerClock(devPage), dev.engagementId);
+    // One deadline, said once: the clock's line carries the business days and the date.
+    await expect(banner(devPage).locator("[data-clock-panel] [data-due]")).toHaveText(/(business days? left, due|^Due today,) \d{1,2} \w{3} \d{4}$/);
+    await expect(banner(devPage).locator("[data-due]")).toHaveCount(1);
+    await expect(bannerClock(devPage)).not.toHaveAttribute("data-clock", "warm");
+    // The organisation's Engagements list and its Home's "Needs us" card show the same clock.
+    await orgPage.goto("/org/engagements");
+    await expect(cardClock(orgPage, dev.engagementId).locator('time[datetime^="P"]')).toBeVisible();
+    await expectCountdown(orgPage, cardClock(orgPage, dev.engagementId), dev.engagementId);
+    await checkScreen(orgPage, { strict: true });
+    await orgPage.goto("/org");
+    await expect(orgPage.locator(`[data-home="needs-us"] [data-engagement="${dev.engagementId}"] time[datetime^="P"]`)).toBeVisible();
     await orgPage.goto(`/org/engagements/${dev.engagementId}`);
-    await expectCountdown(orgPage, bannerTimer(orgPage), dev.engagementId);
+    await expectCountdown(orgPage, bannerClock(orgPage), dev.engagementId);
     // No live region: a ticking figure is never announced.
     await expect(banner(orgPage).locator("[aria-live]")).toHaveCount(0);
     await checkScreen(orgPage, { strict: true });
