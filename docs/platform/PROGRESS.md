@@ -1253,7 +1253,16 @@ history rebuilt into six one-concern commits → PASS (one MINOR, a guard test f
 `locales/clock-messages.test.ts`). P26-B: reviewer CHANGES_REQUIRED three times (the alternating bands put another
 institution's premises on a card — the orchestrator's own follow-up; the E0 sentence "Your proposal is saved" before
 any pitch; the paged count; the lazy hero; a missed Brief render in Recommended for you; untested call sites) →
-fixed each time → PASS. ux-reviewer: pending at this commit (the verdict is recorded in the follow-up commit).
+fixed each time → PASS. ux-reviewer: CHANGES_REQUIRED (the Companies grid had made the first card's photograph the page's LCP but loaded it
+lazily: 3.4 s; plus minors) → **P26-C** (`533e7c4`…`767f9c7`): the first two cards of the first section and the first
+card of each engagements list are eager and high priority (Lighthouse's `lcp-lazy-loaded` and `prioritize-lcp-image`
+now not applicable; the LCP image's load delay 189 → 32 ms); the clock's `<time>` carries the duration in words for
+screen readers (Intl's long units, "siku 6 saa 14 dakika 23") with the figures aria-hidden; the E0 badge breaks only
+between its phrases in every browser (the first `<wbr>` version was found by the reviewer to be ignored by Firefox
+under nowrap, which would have scrolled a 360 px card sideways); a company card's name and meta line share one subgrid
+row; the company page says type and county once (the fact tiles), lists only its other niches ("Also works in") and
+words the E0 hint "pitch to them"; the tracker's panel wider and "due" kept with its date. reviewer PASS on P26-C
+(after one CHANGES_REQUIRED: the Firefox badge, one eager band per org list, tests); ux-reviewer PASS.
 
 **Gate** (web image rebuilt from the merged tree; three fresh resets): Playwright 230 passed, 6 skipped (41 min);
 clock scenarios 6/6; the walkthrough and the README set re-recorded; the P26 set in `docs/demo/screenshots/p26/`
@@ -1279,9 +1288,13 @@ jobs, gitleaks, pip-audit, osv-scanner and Trivy green; npm audit red (D-56); th
 35-minute limit (the owner's call). CodeQL run 295 failed its gate as every run does (D-42).
 
 **Deviations and residuals.**
-- The two lists and the companies list measure 3.1–3.5 s LCP here against AC-UX-3's 2.5 s (performance still ≥ 90):
-  the first card's photograph band and the clock's hydration on a cold server; `/dev`'s own figure is 2.20 s. Next
-  revision: a `fetchpriority="high"` on the first visible card band and a static first paint of the lists' heads.
+- The two lists and the companies list measured 3.1–3.5 s LCP at the gate against AC-UX-3's 2.5 s (performance
+  medians 90–94); after P26-C the LCP image is discovered at once (2.24 s on one run), but the ux-reviewer's re-check
+  ran while three P27 agents loaded the machine (scores 78–90, noisy) and found the remaining time lost before the
+  first paint, not in the photographs: ~1.1 s of element render delay on the lists against 0.27 s FCP on `/dev/ideas`,
+  with style and layout work at 676 ms against 381 ms. The likely cause is the dozen React clock islands hydrating
+  under a 4× CPU throttle. P27-FE-1 re-measures on a quiet machine and, if the lists stay under 90, replaces the
+  per-card clock islands with one page-level vanilla ticker over the server-rendered figures.
 - The first gate run failed on a full disk (Docker's build cache at 11 GB starved SeaweedFS and `e2e-env` was
   SIGKILLed); pruned, the second run was clean. `docker builder prune` belongs in the gate script.
 - The repository has no Prettier configuration and the code is hand-wrapped at 120–160; three reviewers flagged it.
