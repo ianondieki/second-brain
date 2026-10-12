@@ -43,7 +43,10 @@ export function Register({ hash, version }: { hash: string | null; version: stri
       }
     };
     const offline = (down: boolean) => {
-      html.toggleAttribute("data-offline", down);
+      // "cached": the worker answered this page from its copy (its clocks' instant is that copy's, P27); "offline":
+      // the browser has no connection, the page itself fresh. Either way [data-offline] shows the banner and locks.
+      if (down) html.setAttribute("data-offline", cached ? "cached" : "offline");
+      else html.removeAttribute("data-offline");
       lock(down);
       watch?.disconnect();
       // A control a client component enables again is disabled again: "disabled" changes are watched too.

@@ -202,6 +202,8 @@ describe("the offline island", () => {
     online(false);
     renderWithIntl(page());
     await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
+    // A fresh page without a connection: "offline", not "cached" (its clocks' instant is right; they stay).
+    expect(document.documentElement.getAttribute("data-offline")).toBe("offline");
     for (const name of ["Note", "Choice", "Message"]) expect(off(screen.getByLabelText(name))).toBe(true);
     expect(off(screen.getByRole("button", { name: "Send" }))).toBe(true);
     // Nothing can be sent: the submit button does nothing.
@@ -298,6 +300,8 @@ describe("the offline island", () => {
     fakeWorker({ status: { cached: true, date: "" } });
     renderWithIntl(page());
     await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
+    // P27: a page from the worker's copy says so (its deadline clocks are hidden: their instant is the copy's).
+    expect(document.documentElement.getAttribute("data-offline")).toBe("cached");
   });
 
   it("follows the browser going offline after the page loaded, and leaves nothing behind when it goes", async () => {
