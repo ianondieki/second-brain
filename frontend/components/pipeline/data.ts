@@ -34,7 +34,9 @@ export function assignedTo(pipeline: Pipeline, userId: string): Pipeline {
     ...pipeline,
     columns: pipeline.columns.map((column) => {
       const items = column.items.filter((item) => item.team?.assignee?.user_id === userId);
-      return { ...column, items, count: items.length, median_days_in_stage: median(items.map((i) => i.days_in_stage)) };
+      // As the API's: a closed engagement has no time in a stage to count (the Close column's median is none).
+      const open = items.filter((item) => item.state !== "CLOSED");
+      return { ...column, items, count: items.length, median_days_in_stage: median(open.map((i) => i.days_in_stage)) };
     }),
   };
 }
