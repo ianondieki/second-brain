@@ -169,10 +169,10 @@ describe("DeadlineClock", () => {
       </>,
     );
     expect(figures()).toEqual(["6", "14", "23"]);
-    expect(document.querySelector("[data-line]")?.textContent).toBe("in 6 days 14 hours 23 minutes");
+    expect(document.querySelector("[data-line]")?.textContent).toBe("in 6\u00a0days 14\u00a0hours 23\u00a0minutes");
     tick();
     expect(figures()).toEqual(["6", "13", "53"]);
-    expect(document.querySelector("[data-line]")?.textContent).toBe("in 6 days 13 hours 53 minutes");
+    expect(document.querySelector("[data-line]")?.textContent).toBe("in 6\u00a0days 13\u00a0hours 53\u00a0minutes");
     expect(document.querySelector("[data-line] time")?.getAttribute("dateTime")).toBe("P6DT13H53M");
   });
 });

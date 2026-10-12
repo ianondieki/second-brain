@@ -139,7 +139,7 @@ describe("a Brief's problem card", () => {
     renderWithIntl(await ProblemCard({ problem: detail({ brief } as Partial<ProblemDetail>), now: "2026-11-24T06:36:00Z" }));
     const value = within(document.querySelector("dl")!).getByText("Proposals wanted by").nextElementSibling!;
     // P27: the sentence clock on the page's ticker, its units the language's own words.
-    expect(value.textContent).toBe("30 Nov 2026Proposals close in 6 days 14 hours 23 minutes");
+    expect(value.textContent).toBe("30 Nov 2026Proposals close in 6\u00a0days 14\u00a0hours 23\u00a0minutes");
     expect(value.querySelector("time")?.getAttribute("dateTime")).toBe("P6DT14H23M");
     expect(value.querySelector("time")?.getAttribute("title")).toBe("30 Nov 2026, 23:59 EAT");
     expect(value.querySelector("[data-clock='open']")).not.toBeNull();

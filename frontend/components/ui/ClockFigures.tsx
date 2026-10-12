@@ -37,7 +37,7 @@ function html(text: string): string {
 }
 
 /** The duration in words for a screen reader (Intl's long units in the page's language: "siku 6 saa 14 dakika 23"). */
-function spoken(locale: string, d: number, h: number, m: number): string {
+function spoken(locale: string, d: number, h: number, m: number): string[] {
   // Day, hour and minute are sanctioned units (ECMA-402) in every browser the browserslist names: no fallback.
   const unit = (value: number, kind: "day" | "hour" | "minute") =>
     new Intl.NumberFormat(locale, { style: "unit", unit: kind, unitDisplay: "long" }).format(value);
@@ -45,7 +45,7 @@ function spoken(locale: string, d: number, h: number, m: number): string {
   if (d) parts.push(unit(d, "day"));
   if (d || h) parts.push(unit(h, "hour"));
   parts.push(unit(m, "minute"));
-  return parts.join(" ");
+  return parts;
 }
 
 /** A clock message filled: each figure and unit word in its own span, in the message's order. */
@@ -92,16 +92,19 @@ export function ClockFigures({
   let inside = html(labelWhenPast);
   if (left > 0) {
     const time = `<time datetime="P${d}DT${h}H${m}M" title="${html(title)}">`;
-    const words = html(spoken(locale, d, h, m));
+    const units = spoken(locale, d, h, m);
     if (formats) {
       // Leading units that are zero are not drawn ("14 h 23 min", "23 min"): the message for the largest unit left.
       const figures = figuresHtml(formats[d ? 0 : h ? 1 : 2], d, h, m);
       // The duration in words for screen readers; the figures beside it are its picture (a letter "d" read out would
       // not be).
-      inside = `${time}<span class="sr-only">${words}</span><span data-clock-figures="" aria-hidden="true">${figures}</span></time>`;
+      inside = `${time}<span class="sr-only">${html(units.join(" "))}</span><span data-clock-figures="" aria-hidden="true">${figures}</span></time>`;
     } else {
       const [before, after = ""] = frame.split("{time}");
-      inside = `${html(before)}${time}${words}</time>${html(after)}`;
+      // The words wrap between units, never inside one ("15 days", "siku 15" each held by no-break spaces), as the
+      // ticker writes them.
+      const words = units.map((unit) => unit.replace(/ /g, "\u00a0")).join(" ");
+      inside = `${html(before)}${time}${html(words)}</time>${html(after)}`;
     }
   }
   return (

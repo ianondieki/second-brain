@@ -42,8 +42,10 @@ export const CLOCK_TICKER_SCRIPT =
   'f=s[D?"formatDays":h?"formatHours":"formatMinutes"],v={days:D,hours:h,minutes:n};if(!t)return;' +
   't.setAttribute("datetime","P"+D+"DT"+h+"H"+n+"M");' +
   'function u(x,k){return new Intl.NumberFormat(s.locale,{style:"unit",unit:k,unitDisplay:"long"}).format(x)}' +
-  'if(D)p.push(u(D,"day"));if(D||h)p.push(u(h,"hour"));p.push(u(n,"minute"));p=p.join(" ");' +
-  "if(!f){t.textContent=p;return}t.firstChild.textContent=p;" +
+  'if(D)p.push(u(D,"day"));if(D||h)p.push(u(h,"hour"));p.push(u(n,"minute"));' +
+  // A sentence clock's words wrap between units, never inside one ("15 days" stays together).
+  'if(!f){t.textContent=p.map(function(x){return x.replace(/ /g,"\\xa0")}).join(" ");return}' +
+  't.firstChild.textContent=p.join(" ");' +
   "t.lastChild.innerHTML=f.replace(/<f>\\{(\\w+)\\}<\\/f>|<u>([^<]*)<\\/u>|([^<]+)/g,function(_,a,b,c){" +
   'return a?\'<span data-figure="">\'+v[a]+"</span>":b!=null?\'<span data-unit="">\'+esc(b)+"</span>"' +
   ':\'<span data-gap="">\'+esc(c)+"</span>"})});' +

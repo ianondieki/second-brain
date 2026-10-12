@@ -268,10 +268,10 @@ describe("the clock ticker", () => {
         <DeadlineLine until={UNTIL} now={NOW} labelWhenPast="Overdue" />
       </p>,
     );
-    expect(clockOf("line").textContent).toBe("in 6 days 14 hours 23 minutes");
+    expect(clockOf("line").textContent).toBe("in 6\u00a0days 14\u00a0hours 23\u00a0minutes");
     tick();
     vi.advanceTimersByTime(MIN);
-    expect(clockOf("line").textContent).toBe("in 6 days 14 hours 22 minutes");
+    expect(clockOf("line").textContent).toBe("in 6\u00a0days 14\u00a0hours 22\u00a0minutes");
     expect(duration("line")).toBe("P6DT14H22M");
     expect(clockOf("line").querySelector("time")?.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");
     cleanup();
@@ -281,7 +281,7 @@ describe("the clock ticker", () => {
       </p>,
       "sw",
     );
-    expect(clockOf("line").textContent).toBe("baada ya dakika 1");
+    expect(clockOf("line").textContent).toBe("baada ya dakika\u00a01");
     vi.advanceTimersByTime(MIN);
     expect(clockOf("line").textContent).toBe("Imechelewa");
     expect(clockOf("line").getAttribute("data-clock")).toBe("past");
@@ -330,9 +330,9 @@ describe("sentence clocks (DeadlineLine) on the ticker", () => {
 
   it("says the time left in the language's own words, one day in the singular, the Nairobi instant as its title", () => {
     lines("en");
-    expect(clockOf("in").textContent).toBe("in 6 days 14 hours 23 minutes");
-    expect(clockOf("closes").textContent).toBe("Proposals close in 6 days 14 hours 23 minutes");
-    expect(clockOf("one").textContent).toBe("in 1 day 0 hours 2 minutes");
+    expect(clockOf("in").textContent).toBe("in 6\u00a0days 14\u00a0hours 23\u00a0minutes");
+    expect(clockOf("closes").textContent).toBe("Proposals close in 6\u00a0days 14\u00a0hours 23\u00a0minutes");
+    expect(clockOf("one").textContent).toBe("in 1\u00a0day 0\u00a0hours 2\u00a0minutes");
     expect(clockOf("in").querySelector("time")?.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");
     expect(duration("in")).toBe("P6DT14H23M");
     // Tabular figures; the warm look (the saffron mark, a pseudo-element, and the warm time) keyed on data-clock.
@@ -343,8 +343,35 @@ describe("sentence clocks (DeadlineLine) on the ticker", () => {
     expect(document.querySelector("[aria-hidden], [aria-live], [role='timer']")).toBeNull();
     cleanup();
     lines("sw");
-    expect(clockOf("in").textContent).toBe("baada ya siku 6 saa 14 dakika 23");
-    expect(clockOf("closes").textContent).toBe("Mapendekezo yatafungwa baada ya siku 6 saa 14 dakika 23");
+    expect(clockOf("in").textContent).toBe("baada ya siku\u00a06 saa\u00a014 dakika\u00a023");
+    expect(clockOf("closes").textContent).toBe(
+      "Mapendekezo yatafungwa baada ya siku\u00a06 saa\u00a014 dakika\u00a023",
+    );
+  });
+
+  it("writes what the server would have drawn at that minute, each unit held together by no-break spaces", () => {
+    for (const locale of ["en", "sw"] as const) {
+      const line = (now: string) =>
+        withMessages(
+          <p data-testid="in">
+            <DeadlineLine until={UNTIL} now={now} labelWhenPast="Overdue" />
+          </p>,
+          locale,
+        );
+      line(NOW);
+      tick();
+      vi.advanceTimersByTime(23 * MIN + 30_000);
+      const ticked = clockOf("in").outerHTML;
+      // The sentence wraps between units only ("6 days" | "14 hours", "siku 6" | "saa 14").
+      expect(clockOf("in").querySelector("time")?.textContent?.split(" ")).toHaveLength(3);
+      cleanup();
+      line(new Date(Date.now()).toISOString());
+      const sansNow = (html: string) => html.replace(/ data-now="[^"]*"/, "");
+      expect(sansNow(ticked)).toBe(sansNow(clockOf("in").outerHTML));
+      cleanup();
+      delete page.__clocks;
+      vi.setSystemTime(new Date(NOW));
+    }
   });
 
   it("drops the leading units that are zero", () => {
@@ -358,8 +385,8 @@ describe("sentence clocks (DeadlineLine) on the ticker", () => {
         </p>
       </>,
     );
-    expect(clockOf("hours").textContent).toBe("in 14 hours 5 minutes");
-    expect(clockOf("nine").textContent).toBe("in 9 minutes");
+    expect(clockOf("hours").textContent).toBe("in 14\u00a0hours 5\u00a0minutes");
+    expect(clockOf("nine").textContent).toBe("in 9\u00a0minutes");
     expect(duration("nine")).toBe("P0DT0H9M");
   });
 
@@ -371,11 +398,11 @@ describe("sentence clocks (DeadlineLine) on the ticker", () => {
     );
     tick();
     vi.advanceTimersByTime(20_000); // exactly 6 d 14 h 23 m left: still that figure
-    expect(clockOf("in").textContent).toBe("in 6 days 14 hours 23 minutes");
+    expect(clockOf("in").textContent).toBe("in 6\u00a0days 14\u00a0hours 23\u00a0minutes");
     vi.advanceTimersByTime(1);
-    expect(clockOf("in").textContent).toBe("in 6 days 14 hours 22 minutes");
+    expect(clockOf("in").textContent).toBe("in 6\u00a0days 14\u00a0hours 22\u00a0minutes");
     vi.advanceTimersByTime(61 * MIN);
-    expect(clockOf("in").textContent).toBe("in 6 days 13 hours 21 minutes");
+    expect(clockOf("in").textContent).toBe("in 6\u00a0days 13\u00a0hours 21\u00a0minutes");
     expect(vi.getTimerCount()).toBe(1);
   });
 
@@ -393,17 +420,17 @@ describe("sentence clocks (DeadlineLine) on the ticker", () => {
     // Prefetched at NOW + 20 min, first shown at NOW + 30 min: the app clock's time, not the page's.
     line(at(20 * MIN));
     tick();
-    expect(clockOf("in").textContent).toBe("in 6 days 13 hours 53 minutes");
+    expect(clockOf("in").textContent).toBe("in 6\u00a0days 13\u00a0hours 53\u00a0minutes");
     cleanup();
     // A page drawn at NOW + 40 min (ahead of the app clock) moves it on.
     line(at(40 * MIN));
     tick();
-    expect(clockOf("in").textContent).toBe("in 6 days 13 hours 43 minutes");
+    expect(clockOf("in").textContent).toBe("in 6\u00a0days 13\u00a0hours 43\u00a0minutes");
     cleanup();
     // One drawn at NOW never moves it back.
     line(NOW);
     tick();
-    expect(clockOf("in").textContent).toBe("in 6 days 13 hours 43 minutes");
+    expect(clockOf("in").textContent).toBe("in 6\u00a0days 13\u00a0hours 43\u00a0minutes");
   });
 
   it("counts the time asleep: the browser's clock moved on while no timer ran, and showing the tab puts it right", () => {
@@ -411,7 +438,7 @@ describe("sentence clocks (DeadlineLine) on the ticker", () => {
     tick();
     vi.setSystemTime(new Date(Date.parse(NOW) + 3 * 60 * MIN));
     setHidden(false);
-    expect(clockOf("in").textContent).toBe("in 6 days 11 hours 23 minutes");
+    expect(clockOf("in").textContent).toBe("in 6\u00a0days 11\u00a0hours 23\u00a0minutes");
   });
 });
 

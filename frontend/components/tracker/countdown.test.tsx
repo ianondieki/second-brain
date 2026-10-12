@@ -103,7 +103,7 @@ describe("the tracker's countdown", () => {
     // The organisation waits on the answer: no clock of its own, the time left in the question's sentence.
     renderWithIntl(<WhoseTurn detail={detail({ ...question, my_party: "org" })} now={NOW} />);
     expect(panel()).toBeNull();
-    expect(timer()?.textContent).toBe("in 6 days 14 hours 23 minutes");
+    expect(timer()?.textContent).toBe("in 6\u00a0days 14\u00a0hours 23\u00a0minutes");
     expect(timer()?.querySelector("time")?.getAttribute("datetime")).toBe("P6DT14H23M");
     expect(timer()?.querySelector("time")?.getAttribute("title")).toBe("7 Oct 2026, 23:59 EAT");
     expect(timer()?.getAttribute("data-clock")).toBe("open");
