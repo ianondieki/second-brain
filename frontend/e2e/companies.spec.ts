@@ -113,8 +113,8 @@ test.describe("a signed-in developer", () => {
     await expect(page.locator("main [data-niche-band]")).toContainText("Nairobi City");
     await expect(page.locator("main img:not([alt=''])")).toHaveCount(0);
     await expect(page.getByRole("term")).toContainText(["Organisation type", "County"]);
-    const niches = page.getByRole("region", { name: "Problems in their niches" });
-    await expect(niches.getByRole("link").first()).toHaveAttribute("href", /^\/dev\/discover\?niche=[a-z0-9-]+$/);
+    // The seeded organisations list one niche each: the primary action says it and no second list repeats it.
+    await expect(page.getByRole("region", { name: "Also works in" })).toHaveCount(0);
     // The screen's one primary action: problems in the organisation's first niche, on Discover.
     const primary = page.locator("[data-primary]");
     await expect(primary).toHaveCount(1);

@@ -26,6 +26,8 @@ export interface EngagementCardProps {
   headingLevel?: 2 | 3;
   /** The idea's niche: its photograph as the card's top band (D-67; the lattice where there is none). */
   niche?: { slug: string } | null;
+  /** The list's first card: its band is the page's largest picture, fetched at once (P26-C). */
+  eager?: boolean;
   /** The app clock's instant for the page (appNow, the API's X-App-Now): with it, an open deadline is a live clock. */
   now?: string;
 }
@@ -39,7 +41,16 @@ export interface EngagementCardProps {
  * organisation's answer-by case keep their words. Raised when it is the viewer's turn. With `niche`, the idea's niche
  * photograph tops the card (never on the tracker itself). Reusable by the organisation's lists.
  */
-export function EngagementCard({ item, mine, href, titleBy = "proposal", headingLevel = 3, niche, now }: EngagementCardProps) {
+export function EngagementCard({
+  item,
+  mine,
+  href,
+  titleBy = "proposal",
+  headingLevel = 3,
+  niche,
+  now,
+  eager = false,
+}: EngagementCardProps) {
   const t = useTranslations("tracker");
   const tc = useTranslations("engagementCard");
   const turn = turnOf(item, mine);
@@ -69,6 +80,7 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
           niche={niche?.slug}
           // Titled by the organisation, the band sits over its name: never another organisation's premises (P26).
           forOrganisation={titleBy === "organisation"}
+          eager={eager}
           // A card can run the column's width (one engagement for an idea): every vendored size, chosen by width.
           wide
           sizes="(min-width: 1024px) 54rem, 92vw"
@@ -80,10 +92,20 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
         <div className="min-w-0">
           <Heading className="font-sans text-base leading-snug font-semibold [overflow-wrap:anywhere] text-ink">
             {/* Titled by the idea, the title morphs into the tracker's (the same words); by the organisation it does not. */}
-            {titleBy === "proposal" ? <SharedTitle kind="engagement" id={item.id}>{link}</SharedTitle> : link}
+            {titleBy === "proposal" ? (
+              <SharedTitle kind="engagement" id={item.id}>
+                {link}
+              </SharedTitle>
+            ) : (
+              link
+            )}
           </Heading>
           {titleBy === "proposal" ? (
-            <p className="text-sm text-ink-soft">{mine === "developer" ? t("withOrg", { org: item.org_name }) : t("fromDeveloper", { name: item.developer_name })}</p>
+            <p className="text-sm text-ink-soft">
+              {mine === "developer"
+                ? t("withOrg", { org: item.org_name })
+                : t("fromDeveloper", { name: item.developer_name })}
+            </p>
           ) : null}
         </div>
       </div>

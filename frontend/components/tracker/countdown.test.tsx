@@ -36,7 +36,8 @@ describe("the tracker's countdown", () => {
     expect(document.querySelectorAll("[data-whose-turn] [data-due]")).toHaveLength(1);
     expect(document.querySelector("[data-whose-turn] .sr-only [data-due]")).toBeNull();
     expect(panel()?.closest("[aria-hidden='true']")).toBeNull();
-    expect(panel()?.querySelector("[aria-hidden]")).toBeNull();
+    // Nothing hidden from screen readers but the clock's figures, whose words sit beside them.
+    expect(panel()?.querySelector("[aria-hidden]:not([data-clock-figures])")).toBeNull();
     // The old business-days figure and the sentence countdown give way to it.
     expect(document.querySelector("[data-countdown]")).toBeNull();
     expect(timer()).toBeNull();
@@ -105,10 +106,10 @@ describe("the tracker's countdown", () => {
     expect(timer()?.getAttribute("data-timer")).toBe("open");
   });
 
-  it("gives the clock panel the clock's own width from 640 px, never narrower than 15 rem (two-digit days, Swahili)", () => {
+  it("gives the clock panel the clock's own width from 640 px, never narrower than 16 rem (two-digit days, Swahili)", () => {
     renderWithIntl(<WhoseTurn detail={detail({ due: DUE })} now={NOW} />);
     expect(panel()?.className).toContain("sm:w-min");
-    expect(panel()?.className).toContain("sm:min-w-60");
+    expect(panel()?.className).toContain("sm:min-w-64");
     expect(panel()?.className).not.toMatch(/\bsm:w-60\b/);
   });
 });

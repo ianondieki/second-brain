@@ -247,7 +247,8 @@ describe("OrgProfile (the company page)", () => {
     expect(hero.getAttribute("fetchpriority")).toBe("high");
     expect(container.querySelector("[data-avatar='org']")?.className).toContain("size-20");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Telkom Kenya Limited");
-    expect(screen.getByText("Company, Nairobi City")).toBeTruthy();
+    // The type and the county are the fact tiles' (never said again under the title).
+    expect(screen.queryByText("Company, Nairobi City")).toBeNull();
     expect(screen.getByRole("link", { name: "All companies" }).getAttribute("href")).toBe(
       "/dev/companies?county=KE-30",
     );
@@ -258,7 +259,7 @@ describe("OrgProfile (the company page)", () => {
     expect(screen.getByText(E0_TEXT)).toBeTruthy();
     expect(container.querySelectorAll("[data-badge]")).toHaveLength(1);
     expect(container.querySelector("[data-held]")?.textContent).toBe(
-      "Telkom Kenya Limited isn't on the platform yet. A proposal you pitch here is saved, and they'll see it if they join and verify. We don't email them on your behalf.",
+      "Telkom Kenya Limited isn't on the platform yet. A proposal you pitch to them is saved, and they'll see it if they join and verify. We don't email them on your behalf.",
     );
     cleanup();
     const verified = renderProfile(org({ badge: { level: "e2", text: E2_TEXT } }));
@@ -280,16 +281,18 @@ describe("OrgProfile (the company page)", () => {
     expect(primary[0].textContent).toBe("Find problems in Networks & Telecoms");
     expect(primary[0].getAttribute("href")).toBe("/dev/discover?niche=networks");
     expect(screen.getByRole("link", { name: "Pitch one of your ideas" }).getAttribute("href")).toBe("/dev/ideas");
-    // The niches as links to Discover under their own heading.
-    const niches = screen.getByRole("region", { name: "Problems in their niches" });
+    // The other niches as links to Discover under their own heading; the first is the primary's, not repeated.
+    const niches = screen.getByRole("region", { name: "Also works in" });
     expect(
       within(niches)
         .getAllByRole("link")
         .map((a) => [a.textContent, a.getAttribute("href")]),
-    ).toEqual([
-      ["ICT › Networks & Telecoms", "/dev/discover?niche=networks"],
-      ["Financial services › Microfinance & SACCOs", "/dev/discover?niche=microfinance-saccos"],
-    ]);
+    ).toEqual([["Financial services › Microfinance & SACCOs", "/dev/discover?niche=microfinance-saccos"]]);
+    cleanup();
+    // One niche: the primary action says it; no second list of the same link.
+    renderProfile(org());
+    expect(screen.queryByRole("region", { name: "Also works in" })).toBeNull();
+    expect(screen.getAllByRole("link", { name: /Networks & Telecoms/ })).toHaveLength(1);
   });
 
   it("names the county on the hero only when the photograph is the county's; never another institution's premises", () => {
@@ -307,13 +310,13 @@ describe("OrgProfile (the company page)", () => {
     band = farm.container.querySelector("[data-niche-band]") as HTMLElement;
     expect(band.getAttribute("data-niche-band")).toBe("kenya-tea");
     expect(band.textContent).toBe("");
-    expect(screen.getByText("Company, Baringo")).toBeTruthy(); // the county is still said, in the meta line
+    expect(screen.getByText("Baringo")).toBeTruthy(); // the county is still said, in its fact tile
   });
 
   it("hides the primary action and the niches without a niche; the photograph falls back to the lattice", () => {
     const { container } = renderProfile(org({ niches: [], county: null }));
     expect(container.querySelectorAll("[data-primary]")).toHaveLength(0);
-    expect(screen.queryByRole("region", { name: "Problems in their niches" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Also works in" })).toBeNull();
     const band = container.querySelector("[data-niche-band]") as HTMLElement;
     expect(band.getAttribute("data-niche-band")).toBe("lattice");
     expect(band.textContent).toBe("");
@@ -426,7 +429,9 @@ describe("DirectoryResults", () => {
       expect.stringContaining("object-[50%_80%]"),
       expect.stringContaining("object-[50%_20%]"),
     ]);
-    for (const img of images) expect(img.getAttribute("loading")).toBe("lazy"); // card bands stay lazy
+    // The first two cards of the first section hold the page's largest picture: fetched at once; the rest lazy.
+    expect(images.map((img) => img.getAttribute("loading"))).toEqual(["eager", "eager", "lazy", "lazy"]);
+    expect(images.map((img) => img.getAttribute("fetchpriority"))).toEqual(["high", "high", "low", "low"]);
   });
 
   it("keeps a one-photograph county's file and cycles its crop; without one, the niche's mark; else the lattice", () => {

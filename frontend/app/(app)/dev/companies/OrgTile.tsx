@@ -19,6 +19,8 @@ export interface OrgTileProps {
   groupNiche?: string | null;
   /** The band its section chose (bands.ts sectionBands: its county's own photographs in turn, the crop cycling). */
   band?: CardBand;
+  /** One of the first cards on the page: its band is the page's largest picture, fetched at once (P26-C). */
+  eager?: boolean;
 }
 
 /**
@@ -29,7 +31,7 @@ export interface OrgTileProps {
  * chip (docs/spec/07 item 2), and the response record when the API sends one (E2 with enough history). A list item of
  * four rows the grid shares (subgrid), so a row of cards lines up its names, meta lines, badges and records.
  */
-export function OrgTile({ org, filters = {}, groupNiche, band }: OrgTileProps) {
+export function OrgTile({ org, filters = {}, groupNiche, band, eager = false }: OrgTileProps) {
   const t = useTranslations("companies");
   const kinds = useTranslations("orgKind");
   const kind = kinds(org.kind);
@@ -39,18 +41,18 @@ export function OrgTile({ org, filters = {}, groupNiche, band }: OrgTileProps) {
     ? band.photo
     : (placePhotos({ county: org.county?.code, niche: org.niches[0]?.slug ?? groupNiche })[0]?.slug ?? null);
   return (
-    <li className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
+    <li className="row-span-3 grid min-w-0 grid-rows-subgrid gap-y-0">
       <article
         data-org={org.slug}
         aria-labelledby={titleId}
         className={
-          "relative row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0 rounded-panel border border-line bg-field pb-5 " +
+          "relative row-span-3 grid min-w-0 grid-rows-subgrid gap-y-0 rounded-panel border border-line bg-field pb-5 " +
           "transition-[border-color,box-shadow] duration-(--motion-fast) hover:border-accent-line hover:shadow-card " +
           "has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-accent"
         }
       >
         <div className="min-w-0">
-          <NicheBand photo={photo} position={band?.position} className="h-20 rounded-t-[15px] rounded-b-none sm:h-24" />
+          <NicheBand photo={photo} position={band?.position} eager={eager} className="h-20 rounded-t-[15px] rounded-b-none sm:h-24" />
           {/* Before the link in the document, so the link's cover stays above it: a click on the seal opens the page. */}
           <div className="relative -mt-6 px-5">
             <Avatar name={org.name} kind="org" size="lg" className="font-display ring-4 ring-field" />
@@ -64,10 +66,11 @@ export function OrgTile({ org, filters = {}, groupNiche, band }: OrgTileProps) {
               <LinkPending className="absolute top-2 left-1/2 -translate-x-1/2" />
             </Link>
           </h3>
+          {/* With its name, in the same shared row: a two-line name next door never pushes it away from its own. */}
+          <p className="mt-1 px-5 text-sm text-ink-soft">
+            {org.county ? t("meta", { kind, county: org.county.name }) : kind}
+          </p>
         </div>
-        <p className="mt-1 px-5 text-sm text-ink-soft">
-          {org.county ? t("meta", { kind, county: org.county.name }) : kind}
-        </p>
         <p className="mt-3.5 px-5">
           <VerificationBadge badge={org.badge} />
         </p>

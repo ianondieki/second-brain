@@ -47,7 +47,15 @@ export interface DeadlineClockProps {
  * deadline in words as its line. The <time> reads as the duration and carries the full instant in Nairobi time as its
  * title; the words line says the date and the business days. No live region. A server component wherever it is drawn.
  */
-export function DeadlineClock({ until, now, labelWhenPast, mine = false, size = "sm", words, className }: DeadlineClockProps) {
+export function DeadlineClock({
+  until,
+  now,
+  labelWhenPast,
+  mine = false,
+  size = "sm",
+  words,
+  className,
+}: DeadlineClockProps) {
   const t = useTranslations("countdown");
   const locale = useLocale();
   const slots = {
@@ -58,7 +66,10 @@ export function DeadlineClock({ until, now, labelWhenPast, mine = false, size = 
     u: (chunks: string) => `<u>${chunks}</u>`,
   };
   return (
-    <div data-deadline-clock={size} className={cn("flex min-w-0 flex-col", size === "lg" ? "gap-2" : "gap-1.5", className)}>
+    <div
+      data-deadline-clock={size}
+      className={cn("flex min-w-0 flex-col", size === "lg" ? "gap-2" : "gap-1.5", className)}
+    >
       <ClockFigures
         until={until}
         now={now}
@@ -68,9 +79,10 @@ export function DeadlineClock({ until, now, labelWhenPast, mine = false, size = 
         // message's own); formatted here, so they work however the catalogues are compiled.
         formats={[t.markup("clockDays", slots), t.markup("clockHours", slots), t.markup("clockMinutes", slots)]}
         title={t("at", nairobiParts(locale, until))}
+        locale={locale}
         className={cn(look, sizes[size])}
       />
-      {words ? <p className="text-sm leading-snug text-ink-soft">{words}</p> : null}
+      {words ? <p className="text-sm leading-snug text-pretty text-ink-soft">{words}</p> : null}
     </div>
   );
 }

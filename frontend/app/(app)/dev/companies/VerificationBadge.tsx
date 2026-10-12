@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+
 import { Badge, badgeBase, type BadgeTone } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 import { CheckIcon, InfoIcon, ListedIcon } from "@/components/ui/icons";
@@ -24,7 +26,16 @@ export function VerificationBadge({ badge, className }: { badge: OrgCard["badge"
     return (
       <span data-badge="e0" className={cn(badgeBase, "font-medium text-ink-soft", className)}>
         <Icon />
-        <span className="min-w-0">{badge.text}</span>
+        {/* The words verbatim (text nodes only), breaking only after a " · " (<wbr>): never mid-phrase, never a
+            separator left dangling. */}
+        <span className="min-w-0 whitespace-nowrap">
+          {badge.text.split(" · ").map((part, i, all) => (
+            <Fragment key={i}>
+              {i > 0 ? <wbr /> : null}
+              {i < all.length - 1 ? `${part} · ` : part}
+            </Fragment>
+          ))}
+        </span>
       </span>
     );
   }

@@ -47,7 +47,7 @@ export default async function DeveloperEngagementsPage() {
         <PageHero eyebrow={te("engagements")} title={t("title")} lead={t("devLead")} />
         {groups.length > 0 ? (
           <div className="flex flex-col gap-12 lg:gap-14">
-            {groups.map((group) => (
+            {groups.map((group, gi) => (
               // Each idea is a section of its organisations' cards; the card that waits on the developer is raised.
               <Section
                 key={group.proposalId}
@@ -59,9 +59,10 @@ export default async function DeveloperEngagementsPage() {
               >
                 {/* As many 20 rem columns as fit, sharing the width: one card is never left narrow beside empty room. */}
                 <ul aria-label={td("rowsLabel", { title: group.title })} className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
-                  {group.items.map((item) => (
+                  {group.items.map((item, i) => (
                     <li key={item.id} className="cv-auto flex min-w-0 [--cv-size:18rem] [&>article]:flex-1">
                       <EngagementCard
+                        eager={gi === 0 && i === 0}
                         item={item}
                         mine="developer"
                         titleBy="organisation"

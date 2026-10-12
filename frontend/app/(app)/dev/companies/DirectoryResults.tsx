@@ -52,6 +52,7 @@ export function DirectoryResults(props: ResultsProps) {
           filters={filters}
           // The count is the section's whole only when the list is: one page, no page before it or after it.
           counted={!filters.cursor && !page.next_cursor}
+          first={index === 0}
         />
       ))}
       {filters.cursor || page.next_cursor ? (
@@ -75,7 +76,17 @@ export function DirectoryResults(props: ResultsProps) {
  * from 640 px, each card four rows the grid shares (subgrid). The section picks the cards' bands (bands.ts): each
  * card its own county's photographs in turn, the crop cycling.
  */
-function Group({ group, filters, counted }: { group: DirectoryGroup; filters: DirectoryFilters; counted: boolean }) {
+function Group({
+  group,
+  filters,
+  counted,
+  first,
+}: {
+  group: DirectoryGroup;
+  filters: DirectoryFilters;
+  counted: boolean;
+  first: boolean;
+}) {
   const t = useTranslations("companies");
   const bands = sectionBands(group.orgs, group.niche?.slug);
   return (
@@ -86,7 +97,15 @@ function Group({ group, filters, counted }: { group: DirectoryGroup; filters: Di
     >
       <ul className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
         {group.orgs.map((org, index) => (
-          <OrgTile key={org.id} org={org} filters={filters} groupNiche={group.niche?.slug} band={bands[index]} />
+          <OrgTile
+            key={org.id}
+            org={org}
+            filters={filters}
+            groupNiche={group.niche?.slug}
+            band={bands[index]}
+            // The first two cards of the first section hold the page's largest picture: fetched at once.
+            eager={first && index < 2}
+          />
         ))}
       </ul>
     </Section>

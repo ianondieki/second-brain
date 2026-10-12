@@ -70,9 +70,6 @@ export function OrgProfile({ org, back }: { org: OrgCard; back: string }) {
             >
               {org.name}
             </h1>
-            <p className="mt-2 text-ink-soft sm:text-[1.0625rem]">
-              {org.county ? t("meta", { kind, county: org.county.name }) : kind}
-            </p>
             <p className="mt-4">
               <VerificationBadge badge={org.badge} />
             </p>
@@ -113,10 +110,11 @@ export function OrgProfile({ org, back }: { org: OrgCard; back: string }) {
         ) : null}
       </dl>
 
-      {org.niches.length > 0 ? (
-        <Section title={t("nichesTitle")} className="mt-10 px-4 sm:mt-12 sm:px-5">
+      {/* The first niche is the primary action's; the others, when there are any, link to Discover too. */}
+      {org.niches.length > 1 ? (
+        <Section title={t("otherNiches")} className="mt-10 px-4 sm:mt-12 sm:px-5">
           <ul className="flex flex-wrap gap-2.5">
-            {org.niches.map((niche) => (
+            {org.niches.slice(1).map((niche) => (
               <li key={niche.id} className="min-w-0">
                 <Link
                   href={discoverHref({ niche: niche.slug })}

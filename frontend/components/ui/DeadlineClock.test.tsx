@@ -51,7 +51,10 @@ describe("DeadlineClock", () => {
     const time = clock().querySelector("time")!;
     expect(time.getAttribute("dateTime")).toBe("P6DT14H23M");
     expect(time.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");
-    expect(time.textContent).toBe("6 d 14 h 23 min");
+    expect(time.querySelector("[data-clock-figures]")?.textContent).toBe("6 d 14 h 23 min");
+    // Screen readers get the duration in words, the figures being its picture (aria-hidden).
+    expect(time.querySelector(".sr-only")?.textContent).toBe("6 days 14 hours 23 minutes");
+    expect(time.querySelector("[data-clock-figures]")?.getAttribute("aria-hidden")).toBe("true");
     expect(figures()).toEqual(["6", "14", "23"]);
     expect([...document.querySelectorAll("[data-unit]")].map((unit) => unit.textContent?.trim())).toEqual(["d", "h", "min"]);
     // The figure face, tabular and bold; the unit words ink-soft.
@@ -60,12 +63,14 @@ describe("DeadlineClock", () => {
     expect(clock().className).toContain("[&_[data-unit]]:text-ink-soft");
     expect(document.querySelector("[data-deadline-clock] p")?.textContent).toBe("4 business days left, due 16 Oct 2026");
     // No live region: a ticking figure is never announced; nothing hidden from screen readers.
-    expect(document.querySelector("[aria-live], [role='status'], [role='timer'], [aria-hidden]")).toBeNull();
+    expect(document.querySelector("[aria-live], [role='status'], [role='timer']")).toBeNull();
+    expect(document.querySelectorAll("[aria-hidden]")).toHaveLength(1); // only the figures, whose words sit beside them
   });
 
   it("puts each unit word where Swahili puts it, before its figure", () => {
     withMessages(<DeadlineClock until={UNTIL} now={NOW} labelWhenPast="Imechelewa" />, "sw");
-    expect(clock().querySelector("time")?.textContent).toBe("siku 6 saa 14 dak 23");
+    expect(clock().querySelector("[data-clock-figures]")?.textContent).toBe("siku 6 saa 14 dak 23");
+    expect(clock().querySelector("time .sr-only")?.textContent).toBe("siku 6 saa 14 dakika 23");
     expect(figures()).toEqual(["6", "14", "23"]);
   });
 
@@ -79,7 +84,7 @@ describe("DeadlineClock", () => {
         <DeadlineClock until={UNTIL} now={NOW} labelWhenPast="Overdue" />
       </NextIntlClientProvider>,
     );
-    expect(clock().querySelector("time")?.textContent).toBe("23m / 14h / 6d");
+    expect(clock().querySelector("[data-clock-figures]")?.textContent).toBe("23m / 14h / 6d");
     expect(figures()).toEqual(["23", "14", "6"]);
     expect(clock().querySelector("time")?.getAttribute("datetime")).toBe("P6DT14H23M");
   });
@@ -87,7 +92,8 @@ describe("DeadlineClock", () => {
   it("leaves out the leading units that are zero (the duration stays whole), and comes in two sizes", () => {
     withMessages(<DeadlineClock until={at(9)} now={NOW} labelWhenPast="Overdue" size="lg" />);
     expect(figures()).toEqual(["9"]);
-    expect(clock().querySelector("time")?.textContent).toBe("9 min");
+    expect(clock().querySelector("[data-clock-figures]")?.textContent).toBe("9 min");
+    expect(clock().querySelector("time .sr-only")?.textContent).toBe("9 minutes");
     expect(clock().querySelector("time")?.getAttribute("dateTime")).toBe("P0DT0H9M");
     expect(document.querySelector("[data-deadline-clock]")?.getAttribute("data-deadline-clock")).toBe("lg");
     expect(clock().className).toContain("sm:[&_[data-figure]]:text-[2.5rem]");
@@ -114,7 +120,7 @@ describe("DeadlineClock", () => {
     expect(clock().getAttribute("data-clock")).toBe("warm");
     // Under a day: two figures, no "0 d"; the duration stays whole.
     expect(figures()).toEqual(["14", "23"]);
-    expect(clock().querySelector("time")?.textContent).toBe("14 h 23 min");
+    expect(clock().querySelector("[data-clock-figures]")?.textContent).toBe("14 h 23 min");
     expect(clock().querySelector("time")?.getAttribute("dateTime")).toBe("P0DT14H23M");
     expect(clock().className).toContain("[&[data-clock=warm]_[data-figure]]:text-warm");
     cleanup();

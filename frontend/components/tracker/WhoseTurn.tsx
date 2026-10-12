@@ -154,7 +154,7 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
         </div>
       </div>
       {clock && detail.due ? (
-        <div data-clock-panel="" className="shrink-0 border-t border-line pt-4 sm:w-min sm:min-w-60 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
+        <div data-clock-panel="" className="shrink-0 border-t border-line pt-4 sm:w-min sm:min-w-64 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
           <DeadlineClock size="lg" until={until!} now={now!} labelWhenPast={t("chip.overdue")} mine={awaited.has(detail.my_party)} words={answerClock ? undefined : <DueText due={detail.due} />} />
         </div>
       ) : figure && detail.due ? (

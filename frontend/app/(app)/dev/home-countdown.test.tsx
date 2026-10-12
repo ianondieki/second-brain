@@ -90,7 +90,7 @@ describe("Home's Needs you card", () => {
 
   it("takes the warm look under 24 hours, the step being the developer's", () => {
     renderWithIntl(<NeedsYouHero item={mine()} href="/dev/engagements/x" action="Open the tracker" now="2026-10-16T08:00:00.000Z" />);
-    expect(document.querySelector("[data-clock='warm'] time")?.textContent).toBe("12 h 59 min");
+    expect(document.querySelector("[data-clock='warm'] [data-clock-figures]")?.textContent).toBe("12 h 59 min");
     expect(document.querySelectorAll("[data-chip]")).toHaveLength(2);
   });
 

@@ -101,9 +101,10 @@ async function EngagementGrid({ items, query }: { items: Summary[]; query: strin
   const grid = (list: Summary[], level: 2 | 3, group: string, label?: string) => (
     // As many 20 rem columns as fit, sharing the width, as the developer's list.
     <ul aria-label={label} data-group={label ? group : undefined} className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
-      {list.map((item) => (
+      {list.map((item, i) => (
         <li key={item.id} className="cv-auto flex min-w-0 [--cv-size:16rem] [&>article]:flex-1">
           <EngagementCard
+            eager={i === 0}
             item={item}
             mine="org"
             headingLevel={level}
