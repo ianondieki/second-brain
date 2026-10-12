@@ -35,6 +35,7 @@ vi.mock("next-intl/server", () => ({
   getTranslations: async (namespace: string) =>
     createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
   getMessages: async () => en,
+  getLocale: async () => "en",
 }));
 vi.mock("@/components/SignedInShell", () => ({
   SignedInShell: ({ children }: { children: ReactNode }) => <main>{children}</main>,
@@ -44,7 +45,8 @@ vi.mock("@/components/PortalNavFor", () => ({ PortalNavFor: () => null }));
 afterEach(cleanup);
 
 async function open() {
-  return renderWithIntl(<>{await resolveServerTree(await NotificationSettingsPage())}</>).container;
+  const page = await NotificationSettingsPage({ searchParams: Promise.resolve({}) } as PageProps<"/settings/notifications">);
+  return renderWithIntl(<>{await resolveServerTree(page)}</>).container;
 }
 
 describe("Settings › Notifications › Data", () => {
