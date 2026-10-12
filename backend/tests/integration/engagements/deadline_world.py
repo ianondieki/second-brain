@@ -22,6 +22,7 @@ from tests.integration.engagements.api_world import World, run
 
 BRIEF_STATEMENT = "Depots lose a fifth of their milk before it reaches Nairobi (a Brief statement)."
 EVENT_DESCRIPTION = "A long description of the meetup that no calendar feed should carry."
+JOIN_URL = "https://meet.example.test/p27"  # an online event's join address: never in a deadline's entry
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,8 +124,9 @@ async def add_event(
             conn,
             "INSERT INTO events (id, org_id, created_by, title, description, starts_at, ends_at, online, join_url,"
             " status, decided_by, decided_at) VALUES (:id, :org, :user, :title, :description, :starts, :ends, true,"
-            " 'https://meet.example.test/p27', 'published', :staff, now())",
+            " :join_url, 'published', :staff, now())",
             id=event_id,
+            join_url=JOIN_URL,
             org=org_id,
             user=poster,
             title=title,

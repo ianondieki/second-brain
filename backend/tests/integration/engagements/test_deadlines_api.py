@@ -249,6 +249,9 @@ async def test_a_feed_carries_the_list_to_a_calendar_app_and_nothing_else(
     engagement = await open_engagement(app_engine, world)
     today = await db_today(owner_engine)
     brief = await dw.add_brief(owner_engine, world.org, world.owner, today + timedelta(days=9), title="Fleet")
+    starts = datetime.combine(today + timedelta(days=4), time(10, 0), tzinfo=NAIROBI)
+    meetup = await dw.add_event(owner_engine, world.org, world.owner, starts, title="Meetup", staff=world.staff)
+    await dw.remind(owner_engine, world.developer, meetup)  # an event entry: its title and times, nothing else
     settings = get_settings()
     async with seats(app_engine, settings, world) as s, make_client(app_engine, settings, ip="127.0.9.1") as anon:
         t = Tracker(engagement)
@@ -295,13 +298,19 @@ async def test_a_feed_carries_the_list_to_a_calendar_app_and_nothing_else(
         assert {e["UID"].split("@")[0] for e in vevents(org_read.content)} == {
             f"stage-{engagement}",
             f"brief-{brief}",
+            f"event-{meetup}",
         }
 
-        # titles, dates and names only
+        # titles, dates and names only: an event's entry carries neither its description nor its join address
+        texts = (QUESTION, ANSWER, MESSAGE, dw.BRIEF_STATEMENT, dw.EVENT_DESCRIPTION, "What it does", "A problem")
         for body in (read.content, org_read.content):
-            for secret in (QUESTION, ANSWER, MESSAGE, dw.BRIEF_STATEMENT, "What it does", "A problem"):
+            [event] = [e for e in vevents(body) if e["UID"].startswith(f"event-{meetup}@")]
+            assert (event["SUMMARY"], event["DESCRIPTION"]) == ("Meetup", world.org_name)
+            assert "LOCATION" not in event
+            for secret in (*texts, dw.JOIN_URL):
                 assert secret.encode() not in body, secret
                 assert secret[:20].encode() not in body, secret
+            assert b"meet.example.test" not in body
             assert b"RLS proposal" in body  # the proposal's title is a title
 
         # rotate: the old URL is gone at once; revoke: the new one too
