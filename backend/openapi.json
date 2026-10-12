@@ -39626,7 +39626,7 @@
     },
     "/api/orgs/{org_id}/engagements/{engagement_id}/assignee": {
       "put": {
-        "description": "Assign the engagement to a member (an owner, admin, reviewer or signatory), or to nobody (``user_id`` null).",
+        "description": "Assign the engagement to a member (an owner, admin, reviewer or signatory), or to nobody (``user_id`` null).\nAt most 30 changes an hour per member and organisation (429 ``too_many_assignments``, ``Retry-After``).",
         "operationId": "put_assignee_api_orgs__org_id__engagements__engagement_id__assignee_put",
         "parameters": [
           {
@@ -39739,7 +39739,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "invalid_assignee (or a request-validation error)"
           },
           "429": {
             "content": {
@@ -39749,7 +39749,15 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "too_many_assignments: more than 30 changes in an hour by this member in this organisation",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           }
         },
         "summary": "Put Assignee",

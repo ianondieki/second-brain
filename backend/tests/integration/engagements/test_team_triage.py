@@ -17,7 +17,7 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from bridge.engagements.team import N30, assigned_title
+from bridge.engagements.team import ASSIGNMENTS_PER_HOUR, N30, assigned_title
 from bridge.ids import uuid7
 from tests.integration.engagements.api_world import (
     PROPOSAL_TITLE,
@@ -364,6 +364,46 @@ async def test_the_developer_is_never_assigned_their_own_engagement_even_as_a_re
         owner_engine, "SELECT 1 FROM in_app_notifications WHERE user_id = :u AND kind = :k", u=world.developer, k=N30
     )
     assert told == []
+
+
+async def test_assignee_changes_are_limited_per_member_and_organisation(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Flipping the assignee between a colleague and nobody appends rows, audit rows and N30s: at most
+    ``ASSIGNMENTS_PER_HOUR`` changes an hour per member and organisation; the next is 429 ``too_many_assignments``
+    with ``Retry-After``, nothing written and nobody told. A refused change is not counted; another member is not
+    limited by it."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+
+    async def written() -> tuple[int, int, int]:
+        [counts] = await rows(
+            owner_engine,
+            "SELECT (SELECT count(*) FROM engagement_assignments WHERE engagement_id = :e) AS assignments,"
+            " (SELECT count(*) FROM audit_events WHERE action = 'engagement.assigned' AND subject_id = :e) AS audits,"
+            " (SELECT count(*) FROM in_app_notifications WHERE kind = :k AND user_id = :u) AS notices",
+            e=engagement,
+            k=N30,
+            u=world.signatory,
+        )
+        return int(counts.assignments), int(counts.audits), int(counts.notices)
+
+    async with seats(app_engine, SETTINGS, world) as s:
+        assert code(await assign(s.reviewer, world, engagement, None)) == (409, "unchanged")  # refused: not counted
+        for turn in range(ASSIGNMENTS_PER_HOUR):
+            changed = await assign(s.reviewer, world, engagement, None if turn % 2 else world.signatory)
+            assert changed.status_code == 200, changed.text
+        half = ASSIGNMENTS_PER_HOUR // 2
+        assert await written() == (half, ASSIGNMENTS_PER_HOUR, half)
+
+        refused = await assign(s.reviewer, world, engagement, world.signatory)
+        assert code(refused) == (429, "too_many_assignments")
+        assert 1 <= int(refused.headers["Retry-After"]) <= 3600
+        assert refused.json()["detail"]["retry_after_seconds"] == int(refused.headers["Retry-After"])
+        assert await written() == (half, ASSIGNMENTS_PER_HOUR, half)  # nothing written, nobody told
+
+        assert (await assign(s.owner, world, engagement, world.owner)).status_code == 200  # another member
+    assert await written() == (half + 1, ASSIGNMENTS_PER_HOUR + 1, half)
 
 
 async def test_each_member_reads_their_own_recommendation_as_mine(

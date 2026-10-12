@@ -5,7 +5,10 @@ Team triage (REQ-ENG-15, D-68; ``bridge.engagements.team``):
 
 - ``GET …/team``: the team sheet (any member): the members it may be assigned to, the assignee, every recommendation.
 - ``PUT …/assignee`` ``{user_id|null}``: assign (owner, admin, reviewer or signatory; 403 ``role_not_allowed``
-  otherwise, 409 ``unchanged``, 422 ``invalid_assignee``); N30 to the assignee unless they assigned themselves.
+  otherwise, 409 ``unchanged``, 422 ``invalid_assignee``: not a triage member, or the engagement's own developer);
+  N30 to the assignee unless they assigned themselves. At most ``team.ASSIGNMENTS_PER_HOUR`` (30) changes an hour per
+  member and organisation: past that, 429 ``too_many_assignments`` with ``Retry-After`` (whole seconds), checked after
+  the role check and before any write, so nothing is written and nobody is told; a refused change is not counted.
 - ``PUT …/recommendation`` ``{stance, note}`` (the same roles) and ``DELETE …/recommendation`` (the caller's own).
 
 The prior-knowledge declaration (REQ-PROV-06; ``bridge.engagements.prior_knowledge``):
@@ -21,14 +24,23 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from bridge.auth.deps import Db
+from bridge.auth.deps import Db, SettingsDep
 from bridge.engagements import prior_knowledge, team
 from bridge.engagements.schemas import AssigneeBody, DeclarationBody, DeclarationOut, RecommendationBody, TeamOut
-from bridge.errors import ERROR_RESPONSES
+from bridge.errors import ERROR_RESPONSES, ApiErrorBody
 from bridge.tenancy.deps import OrgMember
 
 router = APIRouter(tags=["engagements"], responses=ERROR_RESPONSES)
 ORG_ENGAGEMENT = "/api/orgs/{org_id}/engagements/{engagement_id}"
+ASSIGNEE_RESPONSES: dict[int | str, dict[str, object]] = {
+    422: {"model": ApiErrorBody, "description": "invalid_assignee (or a request-validation error)"},
+    429: {
+        "model": ApiErrorBody,
+        "description": f"too_many_assignments: more than {team.ASSIGNMENTS_PER_HOUR} changes in an hour by this member"
+        " in this organisation",
+        "headers": {"Retry-After": {"description": "Whole seconds to wait", "schema": {"type": "integer"}}},
+    },
+}
 
 
 @router.get(f"{ORG_ENGAGEMENT}/team")
@@ -39,10 +51,13 @@ async def get_team(engagement_id: UUID, org: OrgMember, db: Db) -> TeamOut:
     return await team.team_view(db, org.org_id, engagement)
 
 
-@router.put(f"{ORG_ENGAGEMENT}/assignee")
-async def put_assignee(engagement_id: UUID, body: AssigneeBody, request: Request, org: OrgMember, db: Db) -> TeamOut:
-    """Assign the engagement to a member (an owner, admin, reviewer or signatory), or to nobody (``user_id`` null)."""
-    assigned = await team.assign(db, org, engagement_id, body.user_id)
+@router.put(f"{ORG_ENGAGEMENT}/assignee", responses=ASSIGNEE_RESPONSES)
+async def put_assignee(
+    engagement_id: UUID, body: AssigneeBody, request: Request, org: OrgMember, db: Db, settings: SettingsDep
+) -> TeamOut:
+    """Assign the engagement to a member (an owner, admin, reviewer or signatory), or to nobody (``user_id`` null).
+    At most 30 changes an hour per member and organisation (429 ``too_many_assignments``, ``Retry-After``)."""
+    assigned = await team.assign(db, settings, org, engagement_id, body.user_id)
     await db.commit()
     factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
     await team.tell_assignee(

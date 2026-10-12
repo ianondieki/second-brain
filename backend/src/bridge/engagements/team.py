@@ -14,7 +14,10 @@ and never on a developer's. Neither changes the engagement's state; only the tra
   assignee-is-not-the-developer clause in ``engagement_assignments_guard``) is for the next revision; until then the
   API's check is the only one. The live row is closed (the database stamps ``unassigned_at``) and the next inserted in
   one transaction; a concurrent assignment loses on the partial unique index (409). The assignee is told (N30, in-app)
-  unless they assigned themselves.
+  unless they assigned themselves. Each member changes an organisation's assignments at most ``ASSIGNMENTS_PER_HOUR``
+  times in any hour (429 ``too_many_assignments`` with ``Retry-After``, after the role check and before any write; the
+  ``login_attempts`` ledger, keyed by an HMAC of the organisation and the member): flipping the assignee between a
+  colleague and nobody would otherwise append rows, audit rows and N30s without bound. A refused change is not counted.
 - **Recommend** (``PUT …/recommendation``): the same roles; one row per member, upserted; an empty note is none
   (NULL); a note of exactly ``NOTE_REDACTED`` (D-54's marker of a redaction) is refused (422 ``invalid_note``).
   **Withdraw** (``DELETE …/recommendation``): any member removes their own.
@@ -27,6 +30,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Final
 from uuid import UUID
 
@@ -37,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.audit.service import record as audit
 from bridge.auth.models import User
+from bridge.config import Settings
 from bridge.db import bind_tenant
 from bridge.engagements.models import (
     NOTE_REDACTED,
@@ -66,6 +71,7 @@ from bridge.models.enums import EngagementParty, MembershipStatus, OrgRole, Reco
 from bridge.notifications import em2
 from bridge.notifications.in_app import MAX_TITLE_CHARS, post_in_app
 from bridge.proposals.models import ProposalVersion
+from bridge.teams import limits
 from bridge.tenancy.deps import OrgContext
 from bridge.tenancy.models import Membership
 from bridge.web_paths import engagement_path
@@ -74,6 +80,9 @@ TRIAGE: Final = frozenset(TRIAGE_ROLES)
 # The one role the team sheet names a member by.
 ROLE_ORDER: Final = (OrgRole.OWNER, OrgRole.ADMIN, OrgRole.SIGNATORY, OrgRole.REVIEWER)
 N30: Final = "engagement.n30"
+ASSIGNMENTS_PER_HOUR: Final = 30  # assignee changes per member and organisation in any hour
+ASSIGNMENT_WINDOW: Final = timedelta(hours=1)
+ASSIGNMENT_PURPOSE: Final = "engagement_assignment"  # the ledger's purpose label (with the organisation's id)
 FORMER_MEMBER: Final = "Former member"  # [[COPY-REVIEW]] a member whose name the caller can no longer read (history's)
 # [[COPY-REVIEW]] the API's refusals (the web app shows its own words) and N30's lines.
 ROLE_NOT_ALLOWED: Final = "Only an owner, admin, reviewer or signatory assigns engagements and recommends."
@@ -86,6 +95,7 @@ INVALID_NOTE: Final = f"Write the note on one line, at most {RECOMMENDATION_NOTE
 ASSIGNED_TITLE: Final = '{who} assigned you "{title}"'
 ASSIGNED_BODY: Final = "It is in your Assigned to me list. Open the tracker to pick it up."
 SOME_PROPOSAL: Final = "a proposal"
+TOO_MANY_ASSIGNMENTS: Final = "You have changed assignments many times this hour. Try again later."
 
 log = get_logger(__name__)
 
@@ -261,9 +271,28 @@ def _refusal(exc: DBAPIError, *, check: ApiError, unique: ApiError) -> ApiError:
     raise exc
 
 
-async def assign(db: AsyncSession, org: OrgContext, engagement_id: UUID, user_id: UUID | None) -> Assigned:
+async def spend_assignment(db: AsyncSession, settings: Settings, org: OrgContext) -> None:
+    """Count one assignee change by the caller in the organisation, or 429 ``too_many_assignments`` (with
+    ``Retry-After``) when ``ASSIGNMENTS_PER_HOUR`` of them fall within the last hour. The record joins the caller's
+    transaction: committed with the change, rolled back with a refused one."""
+    await limits.spend(
+        db,
+        settings.secret_key.get_secret_value(),
+        purpose=f"{ASSIGNMENT_PURPOSE}:{org.org_id}",
+        user_id=org.live.user.id,
+        limit=ASSIGNMENTS_PER_HOUR,
+        window=ASSIGNMENT_WINDOW,
+        code="too_many_assignments",
+        message=TOO_MANY_ASSIGNMENTS,
+    )
+
+
+async def assign(
+    db: AsyncSession, settings: Settings, org: OrgContext, engagement_id: UUID, user_id: UUID | None
+) -> Assigned:
     """Assign the engagement to ``user_id`` (None: nobody), in the caller's transaction (the router commits)."""
     require_triage(org)
+    await spend_assignment(db, settings, org)
     engagement = await org_engagement(db, org.org_id, engagement_id, org.live.user.id)
     if user_id is not None and user_id == engagement.developer_id:  # D-68: never their own proposal's triage
         raise ApiError(422, "invalid_assignee", INVALID_ASSIGNEE)
