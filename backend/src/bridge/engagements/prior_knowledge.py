@@ -59,7 +59,7 @@ from bridge.engagements.schemas import (
 )
 from bridge.engagements.service import app_now, db_refusal, lock_engagement
 from bridge.engagements.team import org_engagement
-from bridge.errors import ApiError, forbidden, not_found
+from bridge.errors import ApiError, forbidden
 from bridge.ids import uuid7
 from bridge.models.enums import EngagementActorRole, OrgRole
 from bridge.tenancy.deps import OrgContext
@@ -248,11 +248,9 @@ async def declare(db: AsyncSession, org: OrgContext, engagement_id: UUID, body: 
         await db.flush()
     except DBAPIError as exc:
         raise _refusal(exc) from exc
-    stored = (
+    stored = (  # inserted a moment ago in this transaction: the declarer reads it (the engagement's reader)
         await db.execute(select(d.first_tier2_view_at, d.window_closes_on, d.declared_at).where(d.id == declaration_id))
-    ).one_or_none()
-    if stored is None:  # inserted a moment ago in this transaction: readable by the declarer
-        raise not_found()
+    ).one()
     await audit(
         db,
         "engagement.prior_knowledge_declared",
