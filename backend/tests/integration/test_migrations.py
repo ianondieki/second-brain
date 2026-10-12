@@ -1683,7 +1683,7 @@ V13_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
         + _v13_of_engagement(
             "prior_knowledge_declarations",
             " AND (e.proposal_id = prior_knowledge_declarations.proposal_id)"
-            " AND (e.version_id = prior_knowledge_declarations.version_id)",
+            " AND (e.version_id = prior_knowledge_declarations.version_id)" + _V13_NOT_MINE,
         )
         + ")",
     ),
@@ -1700,8 +1700,9 @@ async def test_schema_v11_policies_are_exactly_the_planned_ones(owner_engine: As
     engagement of the row's organisation (a recommendation the member's own; withdrawn by its member whatever their
     role), and never read, written, closed or withdrawn by the engagement's own developer, even as a member (the
     security review's MINOR 1); a declaration is read by whoever reads its engagement and inserted by an owner, admin
-    or signatory as themselves naming the engagement's organisation, proposal and version (no UPDATE or DELETE policy:
-    append-only); a calendar feed is its user's own, an organisation's only for a member of it."""
+    or signatory as themselves naming the engagement's organisation, proposal and version, never on their own
+    engagement (the re-check's (D)), and has no UPDATE or DELETE policy (append-only); a calendar feed is its user's
+    own, an organisation's only for a member of it."""
     found = await rows(
         owner_engine,
         "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, qual, with_check FROM pg_policies"

@@ -24,7 +24,7 @@ from bridge.engagements.interest import (
 )
 from bridge.engagements.models import Engagement
 from bridge.engagements.router import PartyDep
-from bridge.engagements.schemas import EngagementDetail, InterestBody, Tier2ShareOut
+from bridge.engagements.schemas import InterestBody, Tier2ShareOut, TrackerDetail
 from bridge.engagements.service import resolve_party
 from bridge.errors import ERROR_RESPONSES, not_found
 from bridge.tenancy.deps import OrgMember
@@ -35,7 +35,7 @@ router = APIRouter(tags=["engagements"], responses=ERROR_RESPONSES)
 @router.post("/api/orgs/{org_id}/interest", status_code=201)
 async def post_interest(
     request: Request, body: InterestBody, org: OrgMember, db: Db, settings: SettingsDep
-) -> EngagementDetail:
+) -> TrackerDetail:
     """Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer."""
     await throttle_interest(db, settings, org, client_ip(request))
     engagement_id = await express_interest(db, settings, org, body)

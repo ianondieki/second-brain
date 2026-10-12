@@ -428,6 +428,9 @@ def test_every_web_paths_builder_makes_a_platform_path() -> None:
         "dev_event_path": [web_paths.dev_event_path(uuid4())],  # P22 track B: N27, the morning-of notice
         "DEV_TEAMS": [web_paths.DEV_TEAMS],  # P22 track C: N28, an invitation
         "team_thread_path": [web_paths.team_thread_path(uuid4())],  # P22 track C: N29, a team thread
+        "problem_path": [web_paths.problem_path(uuid4())],  # P27 track A: a Brief's calendar entry (developer)
+        "org_problem_path": [web_paths.org_problem_path(uuid4(), uuid4())],  # P27 track A: the organisation's Brief
+        "org_event_path": [web_paths.org_event_path(uuid4(), uuid4())],  # P27 track A: the organisation's event
         "discover_path": [  # P21 track C: a saved search's alert; values are query-encoded, too-long words left out
             web_paths.discover_path(view, niche=niche, county=county, words=words)
             for view in ("problems", "briefs")
