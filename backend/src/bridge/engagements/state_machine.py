@@ -171,6 +171,9 @@ SIDE_COMMANDS: Final = frozenset(
     {Command.REQUEST_INFO, Command.ANSWER_INFO, Command.CANCEL_REQUEST, Command.PAUSE, Command.RESUME}
 )
 EXPIRE: Final = "expire"  # the command code of the system's expiry event (no party runs it: not a row)
+# The command code of an organisation's prior-knowledge declaration (REQ-PROV-06): an event that changes no state and
+# is not a row of the table (bridge.engagements.prior_knowledge appends it).
+PRIOR_KNOWLEDGE_DECLARED: Final = "prior_knowledge_declared"
 RESUME_NOTICE: Final = "N20"  # the system's resume of a hold at its date tells both parties
 # The longest text a note carries (engagement_notes' body CHECK, revision 0006), and a reason's.
 QUESTION_MAX_CHARS: Final = 2000

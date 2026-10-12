@@ -38,6 +38,7 @@ from bridge.engagements.interest_router import router as interest_router
 from bridge.engagements.messages_router import router as messages_router
 from bridge.engagements.pipeline_router import router as pipeline_router
 from bridge.engagements.router import router as engagements_router
+from bridge.engagements.team_router import router as engagement_team_router
 from bridge.events.router import router as events_router
 from bridge.integrations.sms import sms_provider_from_settings
 from bridge.llm.deps import build_runtime as llm_runtime
@@ -239,6 +240,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(problems_router)
     app.include_router(briefs_router)
     app.include_router(engagements_router)
+    app.include_router(engagement_team_router)
     app.include_router(messages_router)
     app.include_router(deadlines_router)
     app.include_router(pipeline_router)

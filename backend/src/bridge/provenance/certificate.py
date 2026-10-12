@@ -11,6 +11,11 @@ D-62 (a) (REQ-DEV-03): when the owner credited contributors, a "Contributors" ro
 handles joined by ", " (``app_contributor_handles``, read at render time like the owner's name). The registrant stays
 the one owner; nothing about shares. The credit is never part of the manifest or its hash, so adding or removing a
 contributor changes neither (``manifest_version`` stays "1") and the verify page shows no names as before.
+
+D3 (REQ-DEV-04; docs/spec/06 6.4 pt 8): when the owner set any of their GitHub login, KECOBO or KIPI references on
+their profile, one "Self-reported references" row lists the set ones ("GitHub @login · KECOBO <ref> · KIPI <ref>"),
+read at render time like the owner's name: the developer's own statement, never verified, never in the manifest or its
+hash and never on the public ``/verify`` page or API.
 """
 
 from __future__ import annotations
@@ -43,6 +48,7 @@ FOOTER = (
 )
 PENDING = "Timestamp pending"
 CONTRIBUTORS = "Contributors"  # [[COPY-REVIEW]] D-62 (a)'s label, after the Owner row
+SELF_REPORTED = "Self-reported references"  # [[COPY-REVIEW]] D3's label (REQ-DEV-04), after the Owner rows
 QR_SIZE = 38 * mm
 
 
@@ -65,6 +71,23 @@ class CertificateData:
     split_bps: int = 10_000
     attachment_hashes: tuple[bytes, ...] = field(default=())
     contributors: tuple[str, ...] = field(default=())  # D-62 (a): handles, by the time each was added
+    github_login: str | None = None  # D3, self-reported (REQ-DEV-04)
+    kecobo_number: str | None = None
+    kipi_number: str | None = None
+
+
+def self_reported(data: CertificateData) -> str | None:
+    """D3's line, the set references only ("GitHub @login · KECOBO <ref> · KIPI <ref>"), or None when none is set."""
+    parts = [
+        f"{label} {value}"
+        for label, value in (
+            ("GitHub", f"@{data.github_login}" if data.github_login else None),
+            ("KECOBO", data.kecobo_number),
+            ("KIPI", data.kipi_number),
+        )
+        if value
+    ]
+    return " · ".join(parts) or None
 
 
 def utc_text(ts: datetime) -> str:
@@ -105,6 +128,9 @@ def render_pdf(data: CertificateData) -> bytes:
     ]
     if data.contributors:  # [[COPY-REVIEW]] the label (D-62 (a): "Contributors: <handles>")
         rows.append((CONTRIBUTORS, Paragraph(escape(", ".join(data.contributors)), body)))
+    references = self_reported(data)
+    if references is not None:  # [[COPY-REVIEW]] the label (D3: the developer's own statement, never verified)
+        rows.append((SELF_REPORTED, Paragraph(escape(references), body)))
     rows += [
         (when, Paragraph(f"{utc_text(moment)}<br/>{eat_text(moment)}", body)),
         ("Status", Paragraph(status_label(data.status), body)),
@@ -168,7 +194,10 @@ _CERTIFICATE = text(
 _ATTACHMENTS = text(
     "SELECT sha256 FROM proposal_attachments WHERE version_id = :version AND sha256 IS NOT NULL ORDER BY sha256"
 )
-_PROFILE = text("SELECT handle, verification_level FROM developer_profiles WHERE user_id = :user")
+_PROFILE = text(
+    "SELECT handle, verification_level, github_login, kecobo_number, kipi_number FROM developer_profiles"
+    " WHERE user_id = :user"
+)
 _LEGAL_NAME = text(
     "SELECT verified_legal_name FROM kyc_reviews WHERE user_id = :user AND status = 'approved'"
     " AND verified_legal_name IS NOT NULL ORDER BY decided_at DESC NULLS LAST LIMIT 1"
@@ -206,4 +235,7 @@ async def load_certificate(
         verify_url=verify_url(public_base_url, row.cert_id),
         attachment_hashes=tuple(bytes(h) for h in hashes),
         contributors=tuple(str(handle) for handle in row.contributors),
+        github_login=profile.github_login if profile is not None else None,
+        kecobo_number=profile.kecobo_number if profile is not None else None,
+        kipi_number=profile.kipi_number if profile is not None else None,
     )

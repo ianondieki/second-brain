@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { OrgNav } from "@/components/OrgNav";
+import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { orgEngagements } from "@/components/tracker/data";
 import { EngagementCard } from "@/components/engagements/EngagementCard";
@@ -35,7 +36,12 @@ export default async function OrganisationEngagementsPage({ searchParams }: Page
   ]);
 
   return (
-    <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="engagements" query={query} />} wide>
+    <SignedInShell
+      homeHref={`/org${query}`}
+      nav={<OrgNav current="engagements" query={query} />}
+      wide
+      offline={<OfflineSlot page={(await getTranslations("nav"))("engagements")} />}
+    >
       <div className="max-w-5xl">
         <PageHero eyebrow={tp("eyebrow.engagements")} title={t("title")} lead={org ? t("orgLead") : undefined} />
         {org ? (

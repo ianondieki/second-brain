@@ -7,6 +7,8 @@ import { Suspense, type ReactNode } from "react";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { OrgNav } from "@/components/OrgNav";
+import { InstallOffer } from "@/components/offline/InstallOffer";
+import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
 import { tourDoneFromCookies } from "@/components/tour/tour-store";
@@ -70,7 +72,17 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
 
   const tourDone = tourDoneFromCookies(await cookies(), "org");
   return (
-    <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="home" query={query} />} wide>
+    <SignedInShell
+      homeHref={`/org${query}`}
+      nav={<OrgNav current="home" query={query} />}
+      wide
+      offline={
+        <>
+          <OfflineSlot page={(await getTranslations("nav"))("home")} />
+          <InstallOffer />
+        </>
+      }
+    >
       <ClientStrings strings={await clientStrings(["tour"])}>
         <FirstLoginTour side="org" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("org")} />
       </ClientStrings>
@@ -113,7 +125,13 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
         ) : (
           <Callout
             tone={mfa === "required" ? "error" : "info"}
-            icon={mfa === "required" ? <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" /> : <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />}
+            icon={
+              mfa === "required" ? (
+                <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" />
+              ) : (
+                <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+              )
+            }
             data-home="security"
           >
             <p>{mfa === "required" ? t("mfaRequired") : t("mfaOff")}</p>
@@ -123,7 +141,9 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
           </Callout>
         )}
 
-        {missing === "notMember" ? <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" /> : null}
+        {missing === "notMember" ? (
+          <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" />
+        ) : null}
 
         {/* The Inbox asks for two-step sign-in first (the API refuses it before then), so it waits for the setup. */}
         {ready ? <HomeBody memberships={memberships} org={org} /> : null}
@@ -177,10 +197,15 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
   const unknown = { value: t("stats.unknown"), meta: t("stats.unavailable") };
   const inboxSentence = inbox
     ? newest
-      ? t("newest", { title: newest.proposal.teaser.title ?? ti("untitled"), date: formatDay(locale, newest.pitched_at) })
+      ? t("newest", {
+          title: newest.proposal.teaser.title ?? ti("untitled"),
+          date: formatDay(locale, newest.pitched_at),
+        })
       : inbox.held_count > 0
         ? ti("held", { count: inbox.held_count, org: org.org_name })
-        : ti(inbox.verification === "e2" ? "emptyE2" : inbox.verification === "e1" ? "emptyE1" : "emptyUnverified", { org: org.org_name })
+        : ti(inbox.verification === "e2" ? "emptyE2" : inbox.verification === "e1" ? "emptyE1" : "emptyUnverified", {
+            org: org.org_name,
+          })
     : null;
 
   return (
@@ -192,10 +217,31 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
             <StatTile
               data-stat="inbox"
               label={t("stats.inbox")}
-              value={stats.inbox === null ? unknown.value : stats.more ? t("stats.more", { count: stats.inbox }) : stats.inbox}
-              meta={stats.inbox === null ? unknown.meta : stats.inbox === 0 ? undefined : stats.fresh > 0 ? t("stats.inboxMeta", { count: stats.fresh }) : t("stats.inboxMetaNone")}
+              value={
+                stats.inbox === null
+                  ? unknown.value
+                  : stats.more
+                    ? t("stats.more", { count: stats.inbox })
+                    : stats.inbox
+              }
+              meta={
+                stats.inbox === null
+                  ? unknown.meta
+                  : stats.inbox === 0
+                    ? undefined
+                    : stats.fresh > 0
+                      ? t("stats.inboxMeta", { count: stats.fresh })
+                      : t("stats.inboxMetaNone")
+              }
               // A series only once it can show a shape: under five points it is a hockey stick with no scale.
-              spark={inbox && stats.inbox !== null && stats.inbox >= SPARK_FROM ? weeklySeries(inbox.items.map((item) => item.pitched_at), now) : undefined}
+              spark={
+                inbox && stats.inbox !== null && stats.inbox >= SPARK_FROM
+                  ? weeklySeries(
+                      inbox.items.map((item) => item.pitched_at),
+                      now,
+                    )
+                  : undefined
+              }
               href={inboxLink}
             />
           </li>
@@ -204,8 +250,21 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
               data-stat="matches"
               label={t("stats.matches")}
               value={stats.matches === null ? unknown.value : stats.matches}
-              meta={stats.matches === null ? unknown.meta : stats.newestMatch ? t("stats.matchesMeta", { date: formatDay(locale, stats.newestMatch) }) : undefined}
-              spark={matches && stats.matches !== null && stats.matches >= SPARK_FROM ? weeklySeries(matches.map((match) => match.created_at), now) : undefined}
+              meta={
+                stats.matches === null
+                  ? unknown.meta
+                  : stats.newestMatch
+                    ? t("stats.matchesMeta", { date: formatDay(locale, stats.newestMatch) })
+                    : undefined
+              }
+              spark={
+                matches && stats.matches !== null && stats.matches >= SPARK_FROM
+                  ? weeklySeries(
+                      matches.map((match) => match.created_at),
+                      now,
+                    )
+                  : undefined
+              }
               href={matchesHref(memberships, org.org_id)}
             />
           </li>
@@ -260,7 +319,13 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
                   <ul className="flex flex-col gap-4">
                     {stats.waiting.map((item) => (
                       <li key={item.id}>
-                        <NeedsYouCard item={item} mine="org" href={engagementsHref(memberships, org.org_id, item.id)} action={t("openTracker")} now={clock} />
+                        <NeedsYouCard
+                          item={item}
+                          mine="org"
+                          href={engagementsHref(memberships, org.org_id, item.id)}
+                          action={t("openTracker")}
+                          now={clock}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -281,7 +346,13 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
                         <InboxCard
                           item={item}
                           href={proposalHref(memberships, org.org_id, item.proposal.id)}
-                          band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} />}
+                          band={
+                            <NicheBand
+                              niche={item.proposal.teaser.niche?.slug}
+                              county={item.proposal.teaser.county_code}
+                              sizes={CARD_BAND}
+                            />
+                          }
                         />
                       </li>
                     ))}

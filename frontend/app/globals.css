@@ -2147,3 +2147,30 @@ time,
     display: none !important;
   }
 }
+
+/* Offline, read-only (P27; components/offline/Register.tsx): the controls of the disabled page read as unavailable, not
+   as ready to press. A disabled control is exempt from the contrast minimum (WCAG 1.4.3), and the banner above says
+   why. Forced colours draw them as GrayText. */
+@layer components {
+  [data-offline-locked] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  @media (forced-colors: active) {
+    [data-offline-locked] {
+      color: GrayText;
+      border-color: GrayText;
+    }
+  }
+}
+
+/* The server-drawn offline banner (components/offline/OfflineSlot.tsx) shows only while the page is read offline
+   (<html data-offline>, set by components/offline/Register.tsx). Outside any layer, so it wins over the banner's own
+   `flex` utility. */
+[data-offline-banner] {
+  display: none;
+}
+html[data-offline] [data-offline-banner] {
+  display: flex;
+}

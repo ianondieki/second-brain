@@ -31,6 +31,13 @@ export const NOSNIFF: Header = { key: "X-Content-Type-Options", value: "nosniff"
 export const FONT_CACHE: Header = { key: "Cache-Control", value: "public, max-age=31536000, immutable" };
 
 /**
+ * The service worker (public/sw.js, P27; D-69) is checked for a new version on every update check, never answered from
+ * the HTTP cache (Next serves public files `max-age=0` already; this says it outright). Its scope is "/", where it
+ * lives, so no Service-Worker-Allowed header is needed.
+ */
+export const WORKER_CACHE: Header = { key: "Cache-Control", value: "no-cache" };
+
+/**
  * Headers that only mean something on a document: framing, referrers, device features and the CSP. They are not sent
  * with the hashed build assets under /_next/static (scripts, CSS) or the fonts under /fonts, where they change nothing but add about
  * 0.4 KB to every file a route downloads over HTTP/1.1 (docs/spec/07 item 5: the JS budget). A worker script takes
@@ -57,6 +64,8 @@ export const HEADER_RULES: ReadonlyArray<{ source: string; headers: Header[] }> 
   // The self-hosted fonts (public/fonts, versioned file names): cached like the hashed build assets, so a returning
   // visitor's headline never waits for a revalidation round trip.
   { source: "/fonts/:file([^/]+-v\\d+\\.woff2)", headers: [FONT_CACHE] },
+  // The service worker, exactly (a query such as its ?v= build stamp is not part of the match).
+  { source: "/sw.js", headers: [WORKER_CACHE] },
   // Every path except /_next/static/… and the versioned font files (a /fonts/… 404 is a document too): a negative
   // lookahead, as in the Next.js middleware matcher examples.
   { source: "/((?!_next/static/|fonts/[^/]+-v\\d+\\.woff2$).*)", headers: [...PAGE_HEADERS] },

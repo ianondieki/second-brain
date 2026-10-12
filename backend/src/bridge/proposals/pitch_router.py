@@ -179,4 +179,4 @@ async def org_inbox(
         after = inbox.decode_cursor(cursor) if cursor else None
     except ValueError as exc:
         raise ApiError(400, "invalid_cursor", "Start again from the first page.") from exc
-    return await inbox.inbox(db, org_id=ctx.org_id, cursor=after, limit=limit)
+    return await inbox.inbox(db, org_id=ctx.org_id, cursor=after, limit=limit, viewer_id=ctx.live.user.id)

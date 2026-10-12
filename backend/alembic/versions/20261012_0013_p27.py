@@ -10,8 +10,8 @@ granted to bridge_app, one internal, seven trigger functions). Nothing of revisi
 dropped; the triggers reuse ``tracker_engagement_visible()`` (revision 0003) and ``block_mutation()`` (revision 0002),
 the clocks ``app_clock_now()`` (revision 0003) and ``app_nairobi_today()`` (revision 0009), the policies
 ``app_is_member()`` (revision 0001) and ``app_is_staff()`` (revision 0002). The upgrade is additive; the downgrade is
-destructive (see ``downgrade()``). Amended in place after the P27-M security review (eight MINORs; the revision had
-run on test databases only).
+destructive (see ``downgrade()``). Amended in place after the P27-M security review (eight MINORs) and again after its
+re-check (four MINORs, defence in depth); the revision had run on test databases only.
 
 One-line text (a recommendation's note, a declaration's evidence title, a KECOBO or KIPI reference) is
 ``bridge.models.text``'s rule, restated here as ``FORBIDDEN_TEXT_CHARS``: at least one character other than the ASCII
@@ -62,27 +62,33 @@ offset applies where the owner enabled it).
   ``evidence_title``, ``evidence_dated_on``): one per engagement (``uq_prior_knowledge_declarations_engagement_id``).
   Read by whoever reads the engagement (revisions 0002 and 0003's policies: its developer, the proposal's owner; the
   organisation's members; staff admin, for the evidence pack of docs/spec/06 6.12), never by another organisation.
-  Inserted by a declarer as themselves (``declared_by``), naming the engagement's organisation, proposal and version.
-  Append-only for every role, the owner included: ``_no_delete`` and ``_no_truncate`` (``block_mutation()``), and
-  ``_redaction_guard`` refuses every UPDATE but one by the owner role (a data-subject request's pseudonymisation,
-  never the app's) of ``evidence_title`` alone to ``'[redacted]'``, once. The evidence is its SHA-256 only (32 bytes,
-  CHECK) with the organisation's own title (one-line text, 1 to 200 characters, CHECK) and its date; no file and no
-  text of it is ever stored. On INSERT, ``_0_visible`` (``tracker_engagement_visible()``) refuses an engagement the
-  caller does not read, then ``_1_window`` (``prior_knowledge_declarations_window()``, SECURITY INVOKER:
-  ``current_user`` is the writer) refuses an organisation, proposal or version that is not the engagement's
-  (check_violation, every role) and makes the rules the database's for every writer but the table's owner with no
-  user bound (a seed, a backfill, the test world; a definer function runs as the owner, but a request binds its user,
-  and a test scans every function body for a definer insert, dynamic SQL and format()): an ended engagement is
-  refused (object_not_in_prerequisite_state, "has ended"); the organisation's first Tier-2 view and the closing day
-  come from ``app_prior_knowledge_window`` (object_not_in_prerequisite_state, "has not viewed", before any view;
-  "window closed on <day>" once the Nairobi day on the shared clock is past it); the evidence is dated on or before
-  the Nairobi day of that first view (check_violation: existing similar work predates the access); and
-  ``first_tier2_view_at``, ``window_closes_on`` and ``declared_at`` are set whatever was sent. CHECKs keep them
-  consistent for every writer (``window_after_first_view``, ``declared_within_window``,
-  ``evidence_predates_first_view``). Known and kept (the review's eighth note): the window opens on the database clock
-  (revision 0002's ``evidence_time_guard`` sets ``document_views.started_at`` to ``now()``) and closes on the shared
-  clock, so a test-clock scenario views and declares in one clock epoch; a later revision may move ``started_at`` to
-  ``app_clock_now()``.
+  Inserted by a declarer as themselves (``declared_by``), naming the engagement's organisation, proposal and version, on
+  an engagement not their own (its developer, a declarer of the organisation too, never declares against their own
+  proposal: as the triage policies, D-68). Append-only for every role, the owner included: ``_no_delete`` and
+  ``_no_truncate`` (``block_mutation()``), and ``_redaction_guard`` refuses every UPDATE but one by the owner role in
+  its own session with no user bound (as below; a data-subject request's pseudonymisation, never the app's) of
+  ``evidence_title`` alone to ``'[redacted]'``, once. The evidence is its SHA-256 only (32 bytes, CHECK) with the
+  organisation's own title (one-line text, 1 to 200 characters, CHECK) and its date; no file and no text of it is ever
+  stored. On INSERT, ``_0_visible`` (``tracker_engagement_visible()``) refuses an engagement the caller does not read,
+  then ``_1_window`` (``prior_knowledge_declarations_window()``, SECURITY INVOKER: ``current_user`` is the writer)
+  refuses an organisation, proposal or version that is not the engagement's (check_violation, every role) and makes the
+  rules the database's for every writer but the table's owner in its own session with no user bound. Its own session:
+  the session's login (``session_user``) is the owner itself or a superuser (a migration, the seed, a backfill, a
+  restore; the test world, whose harness logs in as a superuser and sets the owner role). A definer function runs as the
+  owner, but its session's login is its caller's (the API and the workers log in as bridge_app), so it never qualifies,
+  a user bound or not; and a test scans every function body for an insert, update or delete of a declaration, dynamic
+  SQL and format(). The rules: an evidence title of exactly ``'[redacted]'`` is refused (check_violation: it marks a
+  data-subject request's redaction, which an organisation never pre-empts or mimics; not a CHECK, which would refuse the
+  redaction itself; the owner's own session may restore a redacted row); an ended engagement is refused
+  (object_not_in_prerequisite_state, "has ended"); the organisation's first Tier-2 view and the closing day come from
+  ``app_prior_knowledge_window`` (object_not_in_prerequisite_state, "has not viewed", before any view; "window closed on
+  <day>" once the Nairobi day on the shared clock is past it); the evidence is dated on or before the Nairobi day of
+  that first view (check_violation: existing similar work predates the access); and ``first_tier2_view_at``,
+  ``window_closes_on`` and ``declared_at`` are set whatever was sent. CHECKs keep them consistent for every writer
+  (``window_after_first_view``, ``declared_within_window``, ``evidence_predates_first_view``). Known and kept (the
+  review's eighth note): the window opens on the database clock (revision 0002's ``evidence_time_guard`` sets
+  ``document_views.started_at`` to ``now()``) and closes on the shared clock, so a test-clock scenario views and
+  declares in one clock epoch; a later revision may move ``started_at`` to ``app_clock_now()``.
 - ``calendar_feeds`` (USER; bridge_app: SELECT, INSERT of ``id``, ``user_id``, ``org_id``, ``token_hash``, UPDATE of
   ``revoked_at``): D-70's capability URLs, the token stored only as its SHA-256 (32 bytes, CHECK; unique). The user's
   own rows only; a feed for an organisation only by a member of it. One live feed per user (``org_id`` NULL,
@@ -134,13 +140,15 @@ Operating rules for the code that uses this schema:
   check_violation, before the policy would), then ``INSERT ... ON CONFLICT (engagement_id, member_user_id) DO UPDATE SET
   stance = EXCLUDED.stance, note = EXCLUDED.note`` as the member, sending NULL for no note; withdraw with ``DELETE ...
   WHERE engagement_id = :e AND member_user_id = :me``.
-- Declare: refuse an ended engagement (409 ``engagement_ended``), read ``app_prior_knowledge_window(:e)`` for the 403s
-  (``no_tier2_access_yet`` while the first view is NULL, ``declaration_window_closed`` once ``app_nairobi_today()`` is
-  past the closing day) and the 422 (evidence dated after the first view's Nairobi day), and the 409 (a row exists),
-  then INSERT as the declarer with the engagement's ``org_id``, ``proposal_id`` and ``version_id``, leaving the three
-  database columns out (read them back), and append the engagement event ``prior_knowledge_declared`` (payload: ids
-  and the hex hash only) and the audit row in the same transaction. SQLSTATE 55000 from ``_1_window`` is the race of
-  the window closing (403); the unique violation on ``engagement_id`` the race of two declarations (409).
+- Declare: refuse the engagement's own developer (403, a member of the organisation or not; the policy refuses them), an
+  evidence title of exactly ``'[redacted]'`` (422; the database refuses it with check_violation) and an ended engagement
+  (409 ``engagement_ended``), read ``app_prior_knowledge_window(:e)`` for the 403s (``no_tier2_access_yet`` while the
+  first view is NULL, ``declaration_window_closed`` once ``app_nairobi_today()`` is past the closing day) and the 422
+  (evidence dated after the first view's Nairobi day), and the 409 (a row exists), then INSERT as the declarer with the
+  engagement's ``org_id``, ``proposal_id`` and ``version_id``, leaving the three database columns out (read them back),
+  and append the engagement event ``prior_knowledge_declared`` (payload: ids and the hex hash only) and the audit row in
+  the same transaction. SQLSTATE 55000 from ``_1_window`` is the race of the window closing (403); the unique violation
+  on ``engagement_id`` the race of two declarations (409).
 - Feeds: create or rotate in one transaction (``UPDATE calendar_feeds SET revoked_at = now() WHERE user_id = :me AND
   org_id IS NOT DISTINCT FROM :org AND revoked_at IS NULL``, then INSERT the new hash); revoke with the same UPDATE.
   The unauthenticated read: ``SELECT * FROM app_calendar_feed_lookup(:token_hash)`` with the SHA-256 computed from the
@@ -289,10 +297,13 @@ _RECOMMENDATIONS_READER = f"{_MEMBER} AND " + _not_its_developer("engagement_rec
 _OWN_RECOMMENDATION = f"member_user_id = app_user_id() AND {_TRIAGE} AND " + _not_its_developer(
     "engagement_recommendations"
 )
+# A declarer as themselves, naming the engagement's proposal and version, on an engagement not their own (D-68's rule,
+# as the triage policies: the developer may also be a declarer of the organisation).
 DECLARATION_INSERT = f"declared_by = app_user_id() AND {_DECLARER} AND " + _of_engagement(
     "prior_knowledge_declarations",
     " AND e.proposal_id = prior_knowledge_declarations.proposal_id"
-    " AND e.version_id = prior_knowledge_declarations.version_id",
+    " AND e.version_id = prior_knowledge_declarations.version_id"
+    " AND e.developer_id <> app_user_id()",
 )
 
 POLICIES: tuple[Policy, ...] = (
@@ -309,7 +320,8 @@ POLICIES: tuple[Policy, ...] = (
     ),
     Policy("engagement_recommendations", "UPDATE", _OWN_RECOMMENDATION, _OWN_RECOMMENDATION),
     Policy("engagement_recommendations", "DELETE", f"member_user_id = app_user_id() AND {_RECOMMENDATIONS_READER}"),
-    # --- prior_knowledge_declarations: the engagement's readers read; a declarer declares (append-only) ---
+    # --- prior_knowledge_declarations: the engagement's readers read; a declarer declares (append-only), never on their
+    # own engagement ---
     Policy(
         "prior_knowledge_declarations",
         "SELECT",
@@ -492,16 +504,19 @@ $$;
 
 -- prior_knowledge_declarations, BEFORE INSERT after prior_knowledge_declarations_0_visible (the engagement is the
 -- caller's): the organisation, proposal and version are the engagement's, for every writer (check_violation). Then the
--- rules are the database's (REQ-PROV-06) for every writer but the table's owner with no user bound (a seed, a backfill,
--- the test world: they keep what they send; a definer function runs as the owner but a request binds its user, so it
--- never takes this path): an ended engagement is refused (object_not_in_prerequisite_state; the API answers 409
--- engagement_ended first); the first Tier-2 view and the closing day come from app_prior_knowledge_window, refused
--- before any view and once the Nairobi day on the shared clock is past the closing day
--- (object_not_in_prerequisite_state); the evidence is dated on or before the Nairobi day of that first view
--- (check_violation: existing similar work predates the access); and first_tier2_view_at, window_closes_on and
--- declared_at are set whatever was sent. SECURITY INVOKER: current_user is the writer (as consents_created_now() of
--- revision 0012) and the engagement is read under the writer's RLS; app_prior_knowledge_window is bridge_app's to
--- execute.
+-- rules are the database's (REQ-PROV-06) for every writer but the table's owner in its own session with no user bound:
+-- the session's login is the owner itself or a superuser (a migration, the seed, a backfill, a restore, the test world:
+-- they keep what they send). A definer function runs as the owner, but its session's login is its caller's (the API
+-- and the workers log in as bridge_app), so it never takes this path, a user bound or not. The rules: an evidence
+-- title of exactly '[redacted]' is refused (check_violation: it marks a data-subject request's redaction, which an
+-- organisation never pre-empts or mimics; not a CHECK, which would refuse the redaction itself); an ended
+-- engagement is refused (object_not_in_prerequisite_state; the API answers 409 engagement_ended first); the first
+-- Tier-2 view and the closing day come from app_prior_knowledge_window, refused before any view and once the Nairobi
+-- day on the shared clock is past the closing day (object_not_in_prerequisite_state); the evidence is dated on or
+-- before the Nairobi day of that first view (check_violation: existing similar work predates the access); and
+-- first_tier2_view_at, window_closes_on and declared_at are set whatever was sent. SECURITY INVOKER: current_user is
+-- the writer (as consents_created_now() of revision 0012) and the engagement is read under the writer's RLS;
+-- app_prior_knowledge_window is bridge_app's to execute.
 CREATE FUNCTION prior_knowledge_declarations_window() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog, public, pg_temp
@@ -521,8 +536,14 @@ BEGIN
             USING ERRCODE = 'check_violation';
     END IF;
     IF current_user = (SELECT pg_catalog.pg_get_userbyid(c.relowner) FROM pg_catalog.pg_class c WHERE c.oid = TG_RELID)
+       AND (session_user = current_user
+            OR EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname = session_user AND r.rolsuper))
        AND public.app_user_id() IS NULL THEN
         RETURN NEW;
+    END IF;
+    IF NEW.evidence_title = '[redacted]' THEN
+        RAISE EXCEPTION 'prior_knowledge_declarations: an evidence title of ''[redacted]'' is a data-subject request''s'
+            ' redaction, never a declaration''s' USING ERRCODE = 'check_violation';
     END IF;
     IF v_ended IS NOT NULL THEN
         RAISE EXCEPTION 'prior_knowledge_declarations: the engagement has ended'
@@ -550,15 +571,20 @@ END;
 $$;
 
 -- prior_knowledge_declarations, BEFORE UPDATE, every role: append-only evidence, but for one redaction by the table's
--- owner role (a data-subject request's pseudonymisation, run by the owner, never by the app): evidence_title alone,
--- to '[redacted]', once; any other UPDATE is refused (insufficient_privilege, block_mutation()'s wording).
--- SECURITY INVOKER: current_user is the writer.
+-- owner role in its own session with no user bound (a data-subject request's pseudonymisation, run by the owner, never
+-- by the app; the session's login is the owner itself or a superuser, as prior_knowledge_declarations_window(), so a
+-- definer function reached from another login never redacts): evidence_title alone, to '[redacted]', once; any other
+-- UPDATE is refused (insufficient_privilege, block_mutation()'s wording). SECURITY INVOKER: current_user is the
+-- writer.
 CREATE FUNCTION prior_knowledge_declarations_redaction_guard() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
     IF current_user <> (SELECT pg_catalog.pg_get_userbyid(c.relowner) FROM pg_catalog.pg_class c WHERE c.oid = TG_RELID)
+       OR (session_user <> current_user
+           AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles r WHERE r.rolname = session_user AND r.rolsuper))
+       OR public.app_user_id() IS NOT NULL
        OR (NEW.id, NEW.engagement_id, NEW.org_id, NEW.proposal_id, NEW.version_id, NEW.declared_by, NEW.evidence_sha256,
            NEW.evidence_dated_on, NEW.first_tier2_view_at, NEW.window_closes_on, NEW.declared_at)
           IS DISTINCT FROM
