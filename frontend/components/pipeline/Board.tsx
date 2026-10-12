@@ -79,7 +79,8 @@ export async function Board({ pipeline, cardHref, filter, emptyHref }: BoardProp
   return (
     <div className="flex flex-col gap-10" data-board="">
       <Funnel funnel={pipeline.funnel} />
-      <section aria-labelledby="columns-title" className="flex flex-col gap-4">
+      {/* Not a landmark itself: the row below is the region the heading names. */}
+      <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="columns-title" className="sr-only">
             {t("columnsLabel")}
@@ -136,7 +137,7 @@ export async function Board({ pipeline, cardHref, filter, emptyHref }: BoardProp
             ))}
           </ol>
         </div>
-      </section>
+      </div>
       <ClockTicker />
     </div>
   );
