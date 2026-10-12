@@ -13,7 +13,9 @@ the prior-knowledge declaration, calendar feeds and the D3 references.
   signatory naming the engagement's organisation, proposal and version, with the window, its first view and its time
   the database's (``app_prior_knowledge_window``: the 10th Kenyan business day after the first view's Nairobi day,
   holidays included, as ``bridge.engagements.calendar.add_business_days``); refused once the Nairobi day on the shared
-  clock is past the closing day and for evidence dated after today; append-only for every role, the owner included;
+  clock is past the closing day and for evidence dated after today; refused with the title ``'[redacted]'`` (the mark
+  of a DSR's redaction); append-only for every role, the owner included, but for the owner's one redaction in its own
+  session with no user bound (a definer reached from a bridge_app login never redacts, nor keeps its own window);
   read by the engagement's readers (the developer, the members, staff admin), never by another organisation.
 - Calendar feeds: one live feed per user and per user and organisation; rotation revokes (the database's time) and a
   revoked feed never changes; an organisation's feed only for a member of it; ``app_calendar_feed_lookup`` answers the
@@ -29,12 +31,15 @@ Every test runs in one rolled-back transaction (``tracker.as_app``); the downgra
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
+import pytest
 import sqlalchemy as sa
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from bridge.engagements.calendar import add_business_days, local_date
@@ -719,6 +724,43 @@ async def test_only_the_owner_with_no_user_bound_keeps_its_own_window(owner_engi
             sent["closes"],
             sent["declared"],
         )
+
+
+MIMIC = re.escape("an evidence title of '[redacted]' is a data-subject request's redaction")
+
+
+async def test_no_declaration_is_inserted_already_redacted(owner_engine: AsyncEngine) -> None:
+    """The security re-check's (C): an evidence title of exactly ``'[redacted]'`` marks a DSR's redaction, so the
+    signatory's declaration with it is refused (check_violation, SQLSTATE 23514, from the window trigger: a CHECK would
+    refuse the redaction itself) and so is the owner role's with a user bound; the owner's own session with no user
+    bound (a restore of a redacted row) keeps it; the signatory's declaration with its own title is accepted."""
+    window = {
+        "first": datetime(2026, 9, 1, 6, 0, tzinfo=UTC),
+        "closes": date(2026, 9, 15),
+        "declared": datetime(2026, 9, 10, 9, 0, tzinfo=UTC),
+    }
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await scene(conn)
+        await view(conn, p, p.reviewer)
+        await t.act(conn, p.signatory, p.org)
+        savepoint = await conn.begin_nested()
+        with pytest.raises(DBAPIError, match=MIMIC) as refused:
+            await conn.execute(sa.text(DECLARE), declaration(p, engagement, p.signatory, title=REDACTED))
+        await savepoint.rollback()
+        assert getattr(refused.value.orig, "sqlstate", None) == "23514"
+        await t.as_owner(conn)  # the signatory still bound
+        await t.expect(conn, DECLARE, MIMIC, **declaration(p, engagement, p.signatory, title=REDACTED))
+        await t.act(conn, None)
+        await t.as_owner(conn)
+        savepoint = await conn.begin_nested()
+        restored = declaration(p, engagement, p.signatory, title=REDACTED, dated=date(2026, 9, 1))
+        await t.run(conn, OWNER_DECLARE, **restored, **window)
+        title = "SELECT evidence_title FROM prior_knowledge_declarations WHERE id = :id"
+        assert await t.run(conn, title, id=restored["id"]) == REDACTED
+        await savepoint.rollback()
+        await t.act(conn, p.signatory, p.org)
+        await t.run(conn, DECLARE, **declaration(p, engagement, p.signatory))
+        assert await count(conn, "prior_knowledge_declarations", engagement) == 1
 
 
 async def test_an_ended_engagement_takes_no_declaration(owner_engine: AsyncEngine) -> None:
