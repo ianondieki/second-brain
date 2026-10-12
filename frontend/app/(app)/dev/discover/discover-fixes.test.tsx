@@ -166,6 +166,12 @@ describe("a Brief's photograph band (P26)", () => {
     renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [as("research_agent")] }))} />);
     expect(band()).toBe("turkana-naipekarr-dispensary");
   });
+
+  it("puts a recommended problem's county first, as Discover's cards do", () => {
+    const inKisumu = recommendation({ problem: { ...recommendation().problem, county_code: "KE-17" } });
+    renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [inKisumu] }))} />);
+    expect(document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("kisumu-lake-victoria");
+  });
 });
 
 describe("the API's words are text", () => {

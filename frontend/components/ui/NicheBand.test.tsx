@@ -129,6 +129,9 @@ describe("NicheBand", () => {
     // No one's premises: the tea fields stay; a county with its own photographs shows them first.
     expect(await slug({ niche: "agriculture", county: "KE-22", forOrganisation: true })).toBe("kenya-tea");
     expect(await slug({ niche: "higher-education", county: "KE-30", forOrganisation: true })).toBe("nairobi-jacaranda");
+    // An organisation's event in Turkana: the county's only photograph is a named dispensary, so the lattice.
+    expect(await slug({ county: "KE-43", forOrganisation: true })).toBe("lattice");
+    expect(await slug({ county: "KE-43" })).toBe("turkana-naipekarr-dispensary");
   });
 
   it("fetches a hero band at once and at high priority (eager); a band is lazy and low otherwise", async () => {
