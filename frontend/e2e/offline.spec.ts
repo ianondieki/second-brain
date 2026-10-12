@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type APIRequestContext, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 
+import { pathOf, waitForSignInLink } from "./support/mailpit";
 import { checkScreen } from "./support/screen";
 import {
   OWNER_DATABASE_URL,
@@ -351,4 +352,38 @@ test("a sign-in reached inside the app deletes the previous person's cache befor
   await goOffline(context);
   await expectOfflinePage(page, tracker);
   await goOnline(context);
+});
+
+test("a magic link that signs the next person in without a password deletes the previous person's cache", async ({
+  page,
+  browser,
+  context,
+}, info) => {
+  // The first person keeps a tracker; then their session lapses (no sign-out, the cache stays).
+  const org = await signUpOrg(page.request);
+  const dev = await pitchFromDeveloper(page.request, org.orgId);
+  const tracker = `/dev/engagements/${dev.engagementId}`;
+  await page.goto(tracker);
+  await workerReady(page);
+  await page.goto(tracker);
+  await expect.poll(() => kept(page, tracker), SERVER_STEP).toBe(true);
+  await context.clearCookies();
+
+  // The next person signs up in another browser; their emailed link is opened in this one, where the password chosen
+  // there is not kept: the link signs them in with none (LinkSignIn's no-password way on, on /auth/link, a page with
+  // no offline part and not one the worker clears on).
+  const other = await browser.newContext({ ...info.project.use });
+  const email = `link-${tag()}@example.com`;
+  const csrf = ((await (await other.request.get("/api/auth/csrf")).json()) as { csrf_token: string }).csrf_token;
+  const signup = await other.request.post("/api/auth/signup", {
+    headers: { "X-CSRF-Token": csrf },
+    data: { email, password: PASSWORD, display_name: "Otieno Ouma", side: "developer", accept_terms: true },
+  });
+  expect(signup.status(), await signup.text()).toBeLessThan(300);
+  const link = await waitForSignInLink(other.request, email);
+  await other.close();
+  expect(await peopleCaches(page)).toHaveLength(1);
+  await page.goto(pathOf(link));
+  await expect(page.getByRole("heading", { name: "You are signed in" })).toBeVisible(SERVER_STEP);
+  expect(await peopleCaches(page)).toEqual([]);
 });
