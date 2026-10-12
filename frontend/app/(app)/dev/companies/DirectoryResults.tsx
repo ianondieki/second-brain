@@ -46,7 +46,13 @@ export function DirectoryResults(props: ResultsProps) {
   return (
     <div className="flex flex-col gap-12">
       {page.groups.map((group, index) => (
-        <Group key={`${group.niche?.id ?? "none"}-${index}`} group={group} filters={filters} />
+        <Group
+          key={`${group.niche?.id ?? "none"}-${index}`}
+          group={group}
+          filters={filters}
+          // The count is the section's whole only when the list is: one page, no page before it or after it.
+          counted={!filters.cursor && !page.next_cursor}
+        />
       ))}
       {filters.cursor || page.next_cursor ? (
         <nav aria-label={t("pages")} className="flex flex-wrap items-center justify-between gap-x-8 gap-y-2">
@@ -64,17 +70,18 @@ export function DirectoryResults(props: ResultsProps) {
 
 /**
  * One niche's organisations (AC-DIR-6): a Section titled with the niche's two-level name (the parent niche quieter,
- * in the same line: no label above it) and how many organisations it holds on this page, then the organisations as
- * cards, two across from 640 px, each card four rows the grid shares (subgrid). The section picks the cards' bands
- * (bands.ts): no photograph twice in a row, the crop cycling.
+ * in the same line: no label above it) and, when the whole list is on this one page (`counted`), how many
+ * organisations it holds (a paged list would count only this page's), then the organisations as cards, two across
+ * from 640 px, each card four rows the grid shares (subgrid). The section picks the cards' bands (bands.ts): each
+ * card its own county's photographs in turn, the crop cycling.
  */
-function Group({ group, filters }: { group: DirectoryGroup; filters: DirectoryFilters }) {
+function Group({ group, filters, counted }: { group: DirectoryGroup; filters: DirectoryFilters; counted: boolean }) {
   const t = useTranslations("companies");
   const bands = sectionBands(group.orgs, group.niche?.slug);
   return (
     <Section
       title={group.niche ? <NicheTitle label={group.niche.label} /> : t("noNiche")}
-      description={t("groupCount", { count: group.orgs.length })}
+      description={counted ? t("groupCount", { count: group.orgs.length }) : undefined}
       data-niche={group.niche?.slug ?? "none"}
     >
       <ul className="grid grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
