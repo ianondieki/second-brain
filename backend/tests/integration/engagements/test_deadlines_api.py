@@ -30,6 +30,7 @@ from tests.integration.engagements.api_world import (
     build,
     clients,
     db_today,
+    deals_on,
     holidays_of,
     open_engagement,
     seats,
@@ -307,3 +308,64 @@ async def test_feeds_are_audited_by_id_and_need_a_session(owner_engine: AsyncEng
         u=world.developer,
     )
     assert hashes == 0
+
+
+async def test_milestones_platform_events_and_the_organisation_feed(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """A signed agreement's milestone is the developer's deadline until submitted, then the organisation's review
+    date; accepted, it is gone. A platform event names the product. A member's feed of the organisation has a status
+    and can be turned off."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    today = await db_today(owner_engine)
+    holidays = await holidays_of(owner_engine)
+    settings = deals_on()
+    starts = datetime.combine(today + timedelta(days=5), time(18, 0), tzinfo=NAIROBI)
+    platform = await dw.add_event(owner_engine, None, world.staff, starts, title="Open day", staff=world.staff)
+    await dw.remind(owner_engine, world.developer, platform)
+    async with seats(app_engine, settings, world) as s:
+        t = Tracker(engagement)
+        detail = await walk_to(t, s, world, today, "IN_IMPLEMENTATION")
+        milestone = detail["agreements"][0]["milestones"][0]["id"]
+        key = f"milestone:{milestone}"
+
+        def find(items: list[dict[str, Any]]) -> dict[str, Any]:
+            [found] = [i for i in items if i["key"] == key]
+            return found
+
+        mine = (await ok(await s.dev.get("/api/me/deadlines")))["items"]
+        assert not [i for i in mine if i["kind"] == "stage"]  # implementation: the milestones carry the dates
+        working = find(mine)
+        assert (working["title"], working["mine"], working["due_on"]) == (
+            "Milestone 1: RLS proposal",
+            True,
+            str(today + timedelta(days=30)),
+        )
+        assert working["engagement_id"] == str(engagement)
+        assert find((await ok(await s.owner.get(f"/api/orgs/{world.org}/deadlines")))["items"])["mine"] is False
+        assert (await s.dev.get(f"/api/me/deadlines/milestone/{milestone}/calendar.ics")).status_code == 200
+        [event] = [i for i in mine if i["kind"] == "event"]
+        assert event["context"] == settings.product_name
+
+        for step in ("start", "submit"):
+            await t.ok(s.dev, f"milestones/{milestone}/{step}")
+        review_on = add_business_days(today, get_policy().review_window_bd_default, holidays)
+        review = find((await ok(await s.dev.get("/api/me/deadlines")))["items"])
+        assert (review["title"], review["mine"], review["due_on"]) == (
+            "Milestone 1 review: RLS proposal",
+            False,
+            str(review_on),
+        )
+        org_review = find((await ok(await s.reviewer.get(f"/api/orgs/{world.org}/deadlines")))["items"])
+        assert org_review["mine"] is True
+        await t.ok(s.reviewer, f"milestones/{milestone}/accept")
+        assert not [i for i in (await ok(await s.dev.get("/api/me/deadlines")))["items"] if i["kind"] == "milestone"]
+        assert (await s.dev.get(f"/api/me/deadlines/milestone/{milestone}/calendar.ics")).status_code == 404
+
+        assert (await ok(await s.owner.get(f"/api/orgs/{world.org}/calendar-feed")))["active"] is False
+        assert (await s.owner.post(f"/api/orgs/{world.org}/calendar-feed")).status_code == 201
+        assert (await ok(await s.owner.get(f"/api/orgs/{world.org}/calendar-feed")))["active"] is True
+        assert (await ok(await s.owner.get("/api/me/calendar-feed")))["active"] is False  # one per (user, org)
+        assert (await s.owner.delete(f"/api/orgs/{world.org}/calendar-feed")).status_code == 204
+        assert (await ok(await s.owner.get(f"/api/orgs/{world.org}/calendar-feed")))["active"] is False

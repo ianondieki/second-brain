@@ -154,3 +154,15 @@ async def test_the_board_and_the_calendar_send_as_many_statements_for_many_engag
         assert len(large[0][1]["columns"][0]["items"]) == LARGE
         assert len(large[1][1]["items"]) == LARGE
         assert [n for n, _ in large] == [n for n, _ in small]
+
+
+async def test_an_organisation_with_no_engagement_has_an_empty_board(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    org = await dw.add_org(owner_engine)
+    async with clients(app_engine, deals_on(), org.owner) as (owner,):
+        board = (await owner.get(f"/api/orgs/{org.id}/pipeline")).json()
+    assert [(c["group"], c["count"], c["median_days_in_stage"], c["items"]) for c in board["columns"]] == [
+        (group, 0, None, []) for group in GROUPS
+    ]
+    assert board["funnel"]["entered"] == dict.fromkeys(GROUPS, 0)

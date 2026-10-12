@@ -118,3 +118,10 @@ def test_the_funnel_counts_first_entries_inside_the_window() -> None:
     }
     assert (found.closed, found.ended) == (1, 1)
     assert pipeline.funnel(changes, now + timedelta(days=200), 90).entered.review == 0
+
+
+def test_only_the_five_stepper_groups_are_columns() -> None:
+    assert pipeline.GROUPS == ("review", "contact_nda", "agreement", "implementation", "close")
+    assert pipeline.as_group("agreement") == "agreement"
+    with pytest.raises(ValueError, match="stage group"):
+        pipeline.as_group("elsewhere")

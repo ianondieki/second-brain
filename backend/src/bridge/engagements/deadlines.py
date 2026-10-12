@@ -313,7 +313,7 @@ async def _milestone_items(db: AsyncSession, viewer: Viewer, working: dict[UUID,
             due_on, party, words = m.due_date, EngagementParty.DEVELOPER, MILESTONE_TITLE
         elif m.id in reviews:
             due_on, party, words = reviews[m.id], EngagementParty.ORG, MILESTONE_REVIEW_TITLE
-        else:  # submitted, but the chain holds no submission (never for the app's writes)
+        else:  # pragma: no cover - submitted, but the chain holds no submission (never for the app's writes)
             continue
         items.append(
             Item(

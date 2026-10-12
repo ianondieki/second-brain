@@ -57,7 +57,7 @@ WINDOW_DAYS: Final = 90
 GROUPS: Final[tuple[StageGroup, ...]] = get_args(StageGroup)
 
 
-def _group(name: str) -> StageGroup:
+def as_group(name: str) -> StageGroup:
     """``name`` as one of the five groups (the stepper's names; anything else is a bug: ValueError at import)."""
     for group in GROUPS:
         if group == name:
@@ -66,7 +66,7 @@ def _group(name: str) -> StageGroup:
 
 
 _GROUP_OF: Final[Mapping[EngagementState, StageGroup]] = {
-    **{state: _group(name) for state, name in sm.STAGE_GROUPS.items()},
+    **{state: as_group(name) for state, name in sm.STAGE_GROUPS.items()},
     S.PROCUREMENT_ROUTE: "contact_nda",  # stage 3b, between approval and first contact (docs/spec/06 6.9)
 }
 ENDED: Final = frozenset({S.DECLINED, S.WITHDRAWN, S.EXPIRED, S.TERMINATED})
