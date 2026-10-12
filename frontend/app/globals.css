@@ -2174,3 +2174,10 @@ time,
 html[data-offline] [data-offline-banner] {
   display: flex;
 }
+
+/* P27 (REQ-TRACK-03): a page shown offline is this device's copy, drawn at its data-now, days ago perhaps; its live
+   clocks would show that time left as if it were now. Offline they are hidden, figures and words: the business days
+   under a card's clock and the banner's "as of" time are the page's time reference. Outside any layer, as above. */
+html[data-offline] [data-clock] {
+  display: none;
+}

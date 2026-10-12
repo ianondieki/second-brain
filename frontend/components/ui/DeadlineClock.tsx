@@ -89,24 +89,38 @@ export function DeadlineClock({
 }
 
 // The sentence clock's look: tabular figures; on the viewer's own step under 24 hours, the saffron mark before the
-// words and the time in the warm text colour (as TimeLeft's).
+// words and the time in the warm text colour (as the P23-3 countdown's).
 const line =
   "tabular-nums data-[clock=warm]:before:me-1.5 data-[clock=warm]:before:inline-block data-[clock=warm]:before:size-2 data-[clock=warm]:before:rounded-full data-[clock=warm]:before:bg-flourish data-[clock=warm]:before:align-middle [&[data-clock=warm]>time]:font-semibold [&[data-clock=warm]>time]:text-warm [&>time]:whitespace-nowrap";
 
 export interface DeadlineLineProps {
+  /** The instant the window closes (the API's `due_at`, a Brief's `deadline_at`). */
   until: string;
+  /** The app clock's instant for this page (lib/api/server.ts appNow, from the API's X-App-Now). */
   now: string;
+  /** Said once `until` is reached: the screen's existing wording ("Overdue", "Closed"). */
   labelWhenPast: string;
+  /** "in 6 days 14 hours 23 minutes" (`in`) or "Proposals close in …" (`closesIn`). */
+  sentence?: "in" | "closesIn";
+  /** The step is the viewer's: under 24 hours the time takes the saffron "your turn" mark. */
   mine?: boolean;
   className?: string;
 }
 
 /**
  * The time left to `until` as a sentence ("in 6 days 14 hours 23 minutes", the units the language's own from Intl),
- * kept on the minute by the page's ticker as DeadlineClock is (P27): for a deadline that is not the viewer's figure to
- * watch (the organisation's line under an open question). The screen's word once the instant has passed.
+ * kept on the minute by the page's ticker as DeadlineClock is (P27): where a deadline is read, not watched (Home's
+ * deadline tile, a Brief's closing, the organisation's line under an open question). The screen's word once the
+ * instant has passed. The page renders the ticker (ClockTicker) once.
  */
-export function DeadlineLine({ until, now, labelWhenPast, mine = false, className }: DeadlineLineProps) {
+export function DeadlineLine({
+  until,
+  now,
+  labelWhenPast,
+  sentence = "in",
+  mine = false,
+  className,
+}: DeadlineLineProps) {
   const t = useTranslations("countdown");
   const locale = useLocale();
   return (
@@ -115,7 +129,7 @@ export function DeadlineLine({ until, now, labelWhenPast, mine = false, classNam
       now={now}
       labelWhenPast={labelWhenPast}
       tone={mine ? "warm" : "neutral"}
-      frame={t("in", { time: "{time}" })}
+      frame={t(sentence, { time: "{time}" })}
       title={t("at", nairobiParts(locale, until))}
       locale={locale}
       className={cn(line, className)}

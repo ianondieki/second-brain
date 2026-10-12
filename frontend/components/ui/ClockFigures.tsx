@@ -27,7 +27,8 @@ export interface ClockFiguresProps {
   className?: string;
 }
 
-// A figure, a unit word, or the text between them, in a clock message. ClockTicker.tsx's script reads them the same way.
+// A figure, a unit word, or the text between them, in a clock message. ClockTicker.tsx's script reads them the same way;
+// exported for the catalogues' shape test (locales/clock-messages.test.ts).
 export const PARTS = /<f>\{(days|hours|minutes)\}<\/f>|<u>([^<]*)<\/u>|([^<]+)/g;
 
 /** Text for HTML (an element's text or an attribute's value in double quotes). */
@@ -36,7 +37,7 @@ function html(text: string): string {
 }
 
 /** The duration in words for a screen reader (Intl's long units in the page's language: "siku 6 saa 14 dakika 23"). */
-export function spoken(locale: string, d: number, h: number, m: number): string {
+function spoken(locale: string, d: number, h: number, m: number): string {
   // Day, hour and minute are sanctioned units (ECMA-402) in every browser the browserslist names: no fallback.
   const unit = (value: number, kind: "day" | "hour" | "minute") =>
     new Intl.NumberFormat(locale, { style: "unit", unit: kind, unitDisplay: "long" }).format(value);
@@ -48,7 +49,7 @@ export function spoken(locale: string, d: number, h: number, m: number): string 
 }
 
 /** A clock message filled: each figure and unit word in its own span, in the message's order. */
-export function figuresHtml(format: string, d: number, h: number, m: number): string {
+function figuresHtml(format: string, d: number, h: number, m: number): string {
   const values = { days: d, hours: h, minutes: m };
   return [...format.matchAll(PARTS)]
     .map(([, figure, unit, text]) =>
@@ -71,8 +72,9 @@ export function figuresHtml(format: string, d: number, h: number, m: number): st
  *
  * Everything the ticker needs is on the element: the instants (data-until, data-now), the tone, the locale, the word
  * for "past" and the three messages, so its script carries no words of any language. The inside is HTML the ticker
- * rewrites on the minute: React sets it once (dangerouslySetInnerHTML, from text escaped here) and never reconciles
- * it, so a tick before or after hydration, or a refresh of the page, never makes React and the ticker disagree.
+ * rewrites on the minute: React sets it from text escaped here (dangerouslySetInnerHTML) and leaves it alone while that
+ * HTML is unchanged, so a tick before or after hydration never makes React and the ticker disagree. A refresh of the
+ * page that draws the clock again sets the new HTML and data-now, and the ticker starts again from those.
  */
 export function ClockFigures({
   until,
@@ -114,7 +116,8 @@ export function ClockFigures({
       data-format-hours={formats?.[1]}
       data-format-minutes={formats?.[2]}
       className={className}
-      // The ticker may have moved the figures and data-clock on before React hydrates them.
+      // The ticker may have moved the figures and data-clock on before React hydrates them (attributes: React does not
+      // patch them; the inside is dangerouslySetInnerHTML).
       suppressHydrationWarning
       dangerouslySetInnerHTML={{ __html: inside }}
     />
