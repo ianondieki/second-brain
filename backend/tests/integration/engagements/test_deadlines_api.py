@@ -207,6 +207,41 @@ async def test_the_developer_and_the_organisation_see_their_deadlines(
         assert (await outsider.get("/api/me/deadlines")).json()["items"] == []
 
 
+async def test_a_developer_sees_the_briefs_of_the_organisations_they_pitched_to_only(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Contract A, "a Brief they pitched to": the Brief's organisation is the one the live engagement or open tag
+    names. A Brief of one organisation linked to a proposal pitched to another is not the developer's deadline; nor is
+    the Brief of a pitch that ended (its engagement declined, its tag closed)."""
+    world = await build(owner_engine)
+    today = await db_today(owner_engine)
+    linked_elsewhere, pitched_elsewhere, declining = [await dw.add_org(owner_engine) for _ in range(3)]
+    soon, later = today + timedelta(days=10), today + timedelta(days=11)
+    other_brief = await dw.add_brief(owner_engine, linked_elsewhere.id, linked_elsewhere.owner, soon, title="Water")
+    elsewhere = await dw.pitch(owner_engine, app_engine, world.developer, pitched_elsewhere.id, other_brief)
+    ended_brief = await dw.add_brief(owner_engine, declining.id, declining.owner, later, title="Grid")
+    ended = await dw.pitch(owner_engine, app_engine, world.developer, declining.id, ended_brief)
+    settings = get_settings()
+    async with clients(app_engine, settings, world.developer, declining.signatory) as (dev, signatory):
+
+        async def briefs() -> set[str]:
+            items = (await ok(await dev.get("/api/me/deadlines")))["items"]
+            return {i["key"] for i in items if i["kind"] == "brief"}
+
+        assert await briefs() == {f"brief:{ended_brief}"}  # a live pitch to the Brief's own organisation
+        assert (await dev.get(f"/api/me/deadlines/brief/{other_brief}/calendar.ics")).status_code == 404
+        declined = await Tracker(ended).ok(signatory, "decline", {"reason": "NOT_PRIORITY"})
+        assert declined["state"] == "DECLINED"
+        assert await briefs() == set()
+        assert (await dev.get(f"/api/me/deadlines/brief/{ended_brief}/calendar.ics")).status_code == 404
+    closed = "SELECT count(*) FROM tags WHERE developer_id = :d AND org_id = :o AND closed_at IS NOT NULL"
+    assert await dw.one(owner_engine, closed, d=world.developer, o=declining.id) == 1  # the tag closed with it
+    assert await dw.one(owner_engine, "SELECT ended_at IS NOT NULL FROM engagements WHERE id = :e", e=ended)
+    assert await dw.one(owner_engine, "SELECT org_id FROM engagements WHERE id = :e", e=elsewhere) == (
+        pitched_elsewhere.id
+    )
+
+
 async def test_a_feed_carries_the_list_to_a_calendar_app_and_nothing_else(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:

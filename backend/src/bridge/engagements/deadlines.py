@@ -11,7 +11,8 @@ read under their Row-Level Security:
   its due date while the developer works on it, its review date (the review window after the latest submission)
   while the organisation reviews it.
 - ``brief``: the open Briefs with a deadline (published, closing today or later): the organisation's own; for a
-  developer, the Briefs of the problems their proposals link to where they have a live engagement or an open pitch.
+  developer, the Briefs they pitched to: a Brief whose problem a proposal of theirs links to, where that proposal has a
+  live engagement or an open tag with the Brief's own organisation (not another's; not once the pitch has ended).
 - ``event``: published events: the organisation's own; for a developer, those they asked to be reminded of.
 
 ``mine`` is whose turn it is (the state machine's ``whose_turn``; a milestone the developer's until submitted, then the
@@ -30,7 +31,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select, tuple_, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge import web_paths
@@ -381,17 +382,18 @@ async def _brief_items(db: AsyncSession, viewer: Viewer, *, today: date, only: U
     )
     if viewer.org_id is not None:
         query = query.where(ProblemBrief.org_id == viewer.org_id)
-    else:
-        engaged = select(Engagement.proposal_id).where(
+    else:  # a Brief they pitched to: its problem linked to a proposal of a live pitch to the Brief's organisation
+        engaged = select(Engagement.proposal_id, Engagement.org_id).where(
             Engagement.developer_id == viewer.user_id, Engagement.ended_at.is_(None)
         )
-        pitched = select(Tag.proposal_id).where(Tag.developer_id == viewer.user_id, Tag.closed_at.is_(None))
+        pitched = select(Tag.proposal_id, Tag.org_id).where(Tag.developer_id == viewer.user_id, Tag.closed_at.is_(None))
+        pitches = union(engaged, pitched).subquery()
         linked = (
-            select(ProposalProblem.problem_id)
+            select(ProposalProblem.problem_id, pitches.c.org_id)
             .join(ProposalVersion, ProposalVersion.id == ProposalProblem.proposal_version_id)
-            .where(or_(ProposalVersion.proposal_id.in_(engaged), ProposalVersion.proposal_id.in_(pitched)))
+            .join(pitches, pitches.c.proposal_id == ProposalVersion.proposal_id)
         )
-        query = query.where(ProblemBrief.problem_id.in_(linked))
+        query = query.where(tuple_(ProblemBrief.problem_id, ProblemBrief.org_id).in_(linked))
     if only is not None:
         query = query.where(ProblemBrief.problem_id == only)
     items = []
