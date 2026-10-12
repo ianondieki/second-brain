@@ -325,6 +325,18 @@ describe("the Team sheet", () => {
     expect(document.activeElement).toBe(note);
   });
 
+  it("refuses a note with an invisible or control character before sending (the API's one-line rule)", async () => {
+    const c = calls();
+    await sheet(c);
+    fireEvent.click(screen.getByRole("radio", { name: "Pursue" }));
+    const note = screen.getByLabelText("Note (optional)");
+    fireEvent.change(note, { target: { value: `Looks right${String.fromCharCode(0x200b)} to me` } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save recommendation" })));
+    expect(c.recommend).not.toHaveBeenCalled();
+    expect(note.getAttribute("aria-invalid")).toBe("true");
+    expect(document.activeElement).toBe(note);
+  });
+
   it("offers Remove for the caller's own recommendation", async () => {
     const mine = team({
       recommendations: [
@@ -391,6 +403,10 @@ describe("the refusals by code", () => {
     expect(teamRefusal(429, code("too_many_assignments"))).toBe("tooMany");
     expect(teamRefusal(422, code("invalid_note"))).toBe("invalidNote");
     expect(teamRefusal(404, code("not_found"))).toBe("notFound");
+    // A request-validation error is about the note only when the call sent one (the recommendation).
+    const validation = { detail: [{ loc: ["body", "note"], msg: "x", type: "value_error" }] };
+    expect(teamRefusal(422, validation, true)).toBe("invalidNote");
+    expect(teamRefusal(422, validation)).toBe("generic");
     expect(teamRefusal(500, undefined)).toBe("generic");
   });
 });
