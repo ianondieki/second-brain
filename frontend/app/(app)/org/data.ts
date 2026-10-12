@@ -21,6 +21,8 @@ export type EvaluationNda = components["schemas"]["EvaluationNdaOut"];
 const TIMEOUT_MS = 5000;
 /** Proposals per Inbox page: a phone's worth of teasers on mobile data. */
 export const INBOX_PAGE_SIZE = 20;
+/** The API's largest Inbox page (pitch_router.org_inbox `limit` ≤ 50): the "Assigned to me" view reads it. */
+export const INBOX_MAX_PAGE = 50;
 
 export interface OrgContext {
   me: Me;
