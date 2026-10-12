@@ -45,7 +45,9 @@ vi.mock("@/components/PortalNavFor", () => ({ PortalNavFor: () => null }));
 afterEach(cleanup);
 
 async function open() {
-  const page = await NotificationSettingsPage({ searchParams: Promise.resolve({}) } as PageProps<"/settings/notifications">);
+  const page = await NotificationSettingsPage({
+    searchParams: Promise.resolve({}),
+  } as PageProps<"/settings/notifications">);
   return renderWithIntl(<>{await resolveServerTree(page)}</>).container;
 }
 

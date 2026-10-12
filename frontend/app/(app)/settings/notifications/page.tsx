@@ -113,11 +113,7 @@ export default async function NotificationSettingsPage({ searchParams }: PagePro
               >
                 <div className="flex flex-col gap-4">
                   {feedOrg && me.memberships.length > 1 ? (
-                    <OrgPicker
-                      memberships={me.memberships}
-                      current={feedOrg.org_id}
-                      action="/settings/notifications"
-                    />
+                    <OrgPicker memberships={me.memberships} current={feedOrg.org_id} action="/settings/notifications" />
                   ) : null}
                   {feedOrg ? <p className="text-ink">{tf("forOrg", { org: feedOrg.org_name })}</p> : null}
                   <p className="max-w-[62ch] text-sm text-ink-soft" data-feed-private="">
