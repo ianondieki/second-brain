@@ -335,13 +335,14 @@ describe("what the service worker keeps", () => {
     ).toBeUndefined();
   });
 
-  it.each([
+  it.each<[Answer, string]>([
     [{ contentType: "text/html; charset=utf-8", body: "<html>not found</html>", status: 200 }, "an HTML answer"],
     [{ contentType: "application/json", body: "{}", status: 200 }, "JSON"],
     [{ contentType: "text/javascript", body: "x", status: 404 }, "a 404"],
     [{ contentType: "text/javascript", body: "x", redirectedTo: "/login" }, "a redirect"],
-  ])("serves but never keeps %o under /_next/static (%s)", async (given) => {
+  ])("serves but never keeps %o under /_next/static (%s)", async (given, what) => {
     const w = await signedIn();
+    expect(what).toBeTruthy();
     w.network.answers.set("/_next/static/chunks/odd.js", given);
     await w.request("/_next/static/chunks/odd.js", { destination: "script" });
     await new Promise((r) => setTimeout(r, 0));
