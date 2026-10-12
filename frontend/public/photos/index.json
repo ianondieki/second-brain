@@ -184,7 +184,8 @@
     "changes": "cropped and resized",
     "credit": "Photo: Arthur Buliva / Arthurbuliva at en.wikipedia, CC BY-SA 3.0 (cropped and resized), via Wikimedia Commons",
     "niche": "ict",
-    "role": "niche"
+    "role": "niche",
+    "institution": true
   },
   {
     "slug": "nairobi-strathmore-campus",
@@ -201,7 +202,8 @@
     "changes": "resized",
     "credit": "Photo: Mathewabiero, CC BY-SA 4.0 (resized), via Wikimedia Commons",
     "niche": "education",
-    "role": "niche"
+    "role": "niche",
+    "institution": true
   },
   {
     "slug": "nairobi-city-hall",
@@ -218,7 +220,8 @@
     "changes": "resized",
     "credit": "Photo: Jorge Láscar, CC BY-SA 2.0 (resized), via Wikimedia Commons",
     "niche": "public-sector",
-    "role": "niche"
+    "role": "niche",
+    "institution": true
   },
   {
     "slug": "turkana-naipekarr-dispensary",
@@ -235,7 +238,8 @@
     "changes": "resized",
     "credit": "Photo: SellyDessy, CC BY-SA 4.0 (resized), via Wikimedia Commons",
     "niche": "health",
-    "role": "niche"
+    "role": "niche",
+    "institution": true
   },
   {
     "slug": "ngong-hills-wind",
@@ -252,7 +256,8 @@
     "changes": "cropped and resized",
     "credit": "Photo: Singularity Preparation, CC BY-SA 4.0 (cropped and resized), via Wikimedia Commons",
     "niche": "energy",
-    "role": "niche"
+    "role": "niche",
+    "institution": true
   },
   {
     "slug": "otho-abwao-water-point",

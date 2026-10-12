@@ -4,6 +4,7 @@ import { use, type ReactNode } from "react";
 import { Picture } from "@/components/landing/Picture";
 import { photoWidths } from "@/lib/photos/files";
 import { nichePhoto } from "@/lib/photos/niche";
+import { photo as photoBySlug } from "@/lib/photos/photos";
 
 import { cn } from "./cn";
 
@@ -58,6 +59,13 @@ export interface NicheBandProps {
   wide?: boolean;
   /** The crop: the photograph's own centre unless given (P26: the Companies list cycles three crops). */
   position?: BandPosition;
+  /**
+   * The photograph chosen by the caller, by its slug (P26: a Companies section picks each card's own), or null for the
+   * lattice; when not given, the band chooses from `niche` and `county`. Save-Data still drops it.
+   */
+  photo?: string | null;
+  /** The page's first, largest picture (a company page's hero, its LCP): fetched at once, at high priority. */
+  eager?: boolean;
 }
 
 /**
@@ -74,8 +82,11 @@ export function NicheBand({
   sizes = "(min-width: 1280px) 26rem, (min-width: 640px) 45vw, 92vw",
   wide = false,
   position,
+  photo,
+  eager = false,
 }: NicheBandProps) {
-  const found = useSavesData() ? undefined : nichePhoto({ niche, county });
+  const chosen = photo === undefined ? nichePhoto({ niche, county }) : photo ? photoBySlug(photo) : undefined;
+  const found = useSavesData() ? undefined : chosen;
   return (
     <div
       className={cn(
@@ -93,6 +104,7 @@ export function NicheBand({
           sizes={sizes}
           widths={wide ? photoWidths(found) : bandWidths(photoWidths(found))}
           className={position ? POSITIONS[position] : undefined}
+          eager={eager}
         />
       ) : null}
       {children ? (

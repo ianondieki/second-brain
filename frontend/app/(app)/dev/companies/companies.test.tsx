@@ -191,16 +191,20 @@ describe("OrgTile", () => {
     expect(card.querySelector("[data-response]")).toBeNull();
   });
 
-  it("takes the niche's photograph where the county has none, the section's niche where the organisation lists none, and the lattice last", () => {
+  it("takes the niche's photograph where the county has none (never a named organisation's premises), the section's niche where the organisation lists none, and the lattice last", () => {
     const { container } = renderTile(
+      org({ county: { code: "KE-01", name: "Baringo" }, niches: [{ ...TELECOMS, slug: "agriculture" }] }),
+    );
+    expect(container.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("kenya-tea");
+    cleanup();
+    // ICT's photograph is Longonot earth station, one organisation's premises: another ICT company's card shows the lattice.
+    const telecoms = renderTile(
       org({
         county: { code: "KE-01", name: "Baringo" },
         niches: [{ ...TELECOMS, slug: "networks-telecommunications" }],
       }),
     );
-    expect(container.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe(
-      "longonot-earth-station",
-    );
+    expect(telecoms.container.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("lattice");
     cleanup();
     const unsorted = renderTile(org({ county: null, niches: [] }), "agriculture");
     expect(unsorted.container.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("kenya-tea");
@@ -237,6 +241,10 @@ describe("OrgProfile (the company page)", () => {
     expect(band.textContent).toBe("Nairobi City");
     expect(band.className).toContain("niche-band-scrim"); // the night gradient under the words
     expect(meaningfulImages(container)).toHaveLength(0);
+    // The hero band is the page's LCP: fetched at once, at high priority (the list's card bands stay lazy).
+    const hero = band.querySelector("img") as HTMLImageElement;
+    expect(hero.getAttribute("loading")).toBe("eager");
+    expect(hero.getAttribute("fetchpriority")).toBe("high");
     expect(container.querySelector("[data-avatar='org']")?.className).toContain("size-20");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Telkom Kenya Limited");
     expect(screen.getByText("Company, Nairobi City")).toBeTruthy();
@@ -245,12 +253,12 @@ describe("OrgProfile (the company page)", () => {
     );
   });
 
-  it("says what pitching an E0 organisation means in the held-tag sentence, and shows the badge verbatim", () => {
+  it("says what pitching an E0 organisation would mean, before any pitch, and shows the badge verbatim", () => {
     const { container } = renderProfile(org());
     expect(screen.getByText(E0_TEXT)).toBeTruthy();
     expect(container.querySelectorAll("[data-badge]")).toHaveLength(1);
     expect(container.querySelector("[data-held]")?.textContent).toBe(
-      "Telkom Kenya Limited isn't on the platform yet. Your proposal is saved and they'll see it if they join and verify. We don't email them on your behalf.",
+      "Telkom Kenya Limited isn't on the platform yet. A proposal you pitch here is saved, and they'll see it if they join and verify. We don't email them on your behalf.",
     );
     cleanup();
     const verified = renderProfile(org({ badge: { level: "e2", text: E2_TEXT } }));
@@ -282,6 +290,24 @@ describe("OrgProfile (the company page)", () => {
       ["ICT › Networks & Telecoms", "/dev/discover?niche=networks"],
       ["Financial services › Microfinance & SACCOs", "/dev/discover?niche=microfinance-saccos"],
     ]);
+  });
+
+  it("names the county on the hero only when the photograph is the county's; never another institution's premises", () => {
+    // Kiambu has no photograph of its own and Education's is Strathmore's campus: the lattice, the county not on it.
+    const jkuat = renderProfile(
+      org({ county: { code: "KE-22", name: "Kiambu" }, niches: [{ ...TELECOMS, slug: "higher-education" }] }),
+    );
+    let band = jkuat.container.querySelector("[data-niche-band]") as HTMLElement;
+    expect(band.getAttribute("data-niche-band")).toBe("lattice");
+    cleanup();
+    // Baringo has none either, but agriculture's tea fields are no one's premises: the tea, and not "Baringo" on it.
+    const farm = renderProfile(
+      org({ county: { code: "KE-01", name: "Baringo" }, niches: [{ ...TELECOMS, slug: "agriculture" }] }),
+    );
+    band = farm.container.querySelector("[data-niche-band]") as HTMLElement;
+    expect(band.getAttribute("data-niche-band")).toBe("kenya-tea");
+    expect(band.textContent).toBe("");
+    expect(screen.getByText("Company, Baringo")).toBeTruthy(); // the county is still said, in the meta line
   });
 
   it("hides the primary action and the niches without a niche; the photograph falls back to the lattice", () => {
@@ -329,8 +355,8 @@ describe("DirectoryResults", () => {
     const { container } = renderWithIntl(<DirectoryResults kind="page" page={PAGE} filters={{}} />);
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
     expect(headings).toEqual(["ICT › Networks & Telecoms", "Not yet sorted by niche"]); // one line, no label above
-    expect(screen.getByText("3 organisations")).toBeTruthy();
-    expect(screen.getByText("1 organisation")).toBeTruthy();
+    // A paged list (a next page here) counts nothing: a count would be this page's, not the section's.
+    expect(screen.queryByText(/\d+ organisations?$/)).toBeNull();
     // Each niche's organisations as a grid of cards, each card a list item; never a logo.
     const telecoms = screen.getByRole("region", { name: "ICT › Networks & Telecoms" });
     expect(within(telecoms).getAllByRole("listitem")).toHaveLength(3);
@@ -348,7 +374,17 @@ describe("DirectoryResults", () => {
     expect(screen.getByText(E1_TEXT)).toBeTruthy();
   });
 
-  it("varies a section's photographs: four Nairobi universities alternate the county's and the niche's, in three crops", () => {
+  it("counts each section's organisations only when the whole list is on this page", () => {
+    renderWithIntl(<DirectoryResults kind="page" page={{ ...PAGE, next_cursor: null }} filters={{}} />);
+    expect(screen.getByText("3 organisations")).toBeTruthy();
+    expect(screen.getByText("1 organisation")).toBeTruthy();
+    cleanup();
+    // A later page (a cursor) with nothing after it: still only a part of the list.
+    renderWithIntl(<DirectoryResults kind="page" page={{ ...PAGE, next_cursor: null }} filters={{ cursor: "c1" }} />);
+    expect(screen.queryByText(/\d+ organisations?$/)).toBeNull();
+  });
+
+  it("gives four Nairobi universities four different Nairobi photographs, never another institution's, in three crops", () => {
     const HIGHER_ED = {
       id: "0199a000-0000-7000-8000-0000000000e1",
       slug: "higher-education",
@@ -377,35 +413,46 @@ describe("DirectoryResults", () => {
     );
     const bands = [...container.querySelectorAll("[data-niche-band]")];
     const files = bands.map((band) => band.getAttribute("data-niche-band"));
-    // County first for the first card, then never the same file twice in a row.
-    expect(files).toEqual([
-      "nairobi-jacaranda",
-      "nairobi-strathmore-campus",
-      "nairobi-jacaranda",
-      "nairobi-strathmore-campus",
-    ]);
-    expect(new Set(files).size).toBeGreaterThanOrEqual(2);
-    const positions = bands.map((band) => band.getAttribute("data-band-position"));
-    expect(new Set(positions).size).toBeGreaterThanOrEqual(3);
-    expect([...container.querySelectorAll("[data-niche-band] img")].map((img) => img.className)).toEqual([
+    // The county's own photographs in turn, the county role first; never a niche's photograph of a named campus.
+    expect(files[0]).toBe("nairobi-jacaranda");
+    expect(new Set(files).size).toBe(4);
+    expect(files).not.toContain("nairobi-strathmore-campus");
+    expect(files.every((slug) => slug?.startsWith("nairobi-"))).toBe(true);
+    expect(bands.map((band) => band.getAttribute("data-band-position"))).toEqual(["top", "center", "bottom", "top"]);
+    const images = [...container.querySelectorAll<HTMLImageElement>("[data-niche-band] img")];
+    expect(images.map((img) => img.className)).toEqual([
       expect.stringContaining("object-[50%_20%]"),
       expect.stringContaining("object-[50%_50%]"),
       expect.stringContaining("object-[50%_80%]"),
       expect.stringContaining("object-[50%_20%]"),
     ]);
+    for (const img of images) expect(img.getAttribute("loading")).toBe("lazy"); // card bands stay lazy
   });
 
-  it("keeps a card's place where it does not repeat, and cycles the crop where only one photograph exists", () => {
-    const mombasa = org({ county: { code: "KE-28", name: "Mombasa" } });
-    expect(sectionBands([org(), mombasa, org()], "networks-telecommunications")).toEqual([
-      { niche: "networks", county: "KE-30", position: "top" },
-      { niche: "networks", county: "KE-28", position: "center" },
-      { niche: "networks", county: "KE-30", position: "bottom" },
+  it("keeps a one-photograph county's file and cycles its crop; without one, the niche's mark; else the lattice", () => {
+    const nakuru = org({ county: { code: "KE-31", name: "Nakuru" } });
+    expect(sectionBands([nakuru, nakuru, nakuru, nakuru], "higher-education")).toEqual([
+      { photo: "nakuru-lake", position: "top" },
+      { photo: "nakuru-lake", position: "center" },
+      { photo: "nakuru-lake", position: "bottom" },
+      { photo: "nakuru-lake", position: "top" },
     ]);
-    // No niche photograph to alternate with (the lattice niche of an unknown slug): the same file, three crops.
-    const same = sectionBands([org(), org(), org(), org()], "unknown-niche");
-    expect(same.map((band) => band.county)).toEqual(["KE-30", "KE-30", "KE-30", "KE-30"]);
-    expect(same.map((band) => band.position)).toEqual(["top", "center", "bottom", "top"]);
+    // Kajiado's only photograph is the retail niche's market: not the county's, so the organisation's niche mark, but
+    // never one of a named organisation's premises (ICT's is Longonot earth station): the lattice instead.
+    const kajiado = (slug: string) =>
+      org({ county: { code: "KE-10", name: "Kajiado" }, niches: [{ ...TELECOMS, slug }] });
+    const unknown = org({ county: { code: "KE-01", name: "Baringo" }, niches: [] });
+    expect(
+      sectionBands([kajiado("agriculture"), kajiado("networks-telecommunications"), unknown], "a-niche-added-later"),
+    ).toEqual([
+      { photo: "kenya-tea", position: "top" },
+      { photo: null, position: "center" },
+      { photo: null, position: "bottom" },
+    ]);
+    // The same for the other named premises: Education's campus, the public sector's city hall, health's dispensary.
+    for (const slug of ["higher-education", "county-government", "health"]) {
+      expect(sectionBands([kajiado(slug)], slug)[0]!.photo).toBeNull();
+    }
   });
 
   it("links each organisation with the list's filters and page", () => {

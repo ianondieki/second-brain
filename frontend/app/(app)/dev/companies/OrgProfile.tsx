@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { BackLink } from "@/components/ui/BackLink";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { NicheBand } from "@/components/ui/NicheBand";
+import { placePhotos } from "@/lib/photos/niche";
 import { Section } from "@/components/ui/Section";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
 import { Icon, type IconProps } from "@/components/ui/status-icons";
@@ -20,28 +21,31 @@ const IDEAS_PATH = "/dev/ideas";
 
 /**
  * One organisation's page (P26): the HQ county's photograph as the page's band with the county named on it (the
- * niche's where the county has none, the lattice where neither does; decorative, never a logo), the monogram on its
- * edge, the name in Fraunces, type and county, the badge verbatim and, for an E0 listing, the held-tag sentence; the
- * screen's one primary action (problems in its first niche on Discover) and a way to pitch an idea; the facts as tiles;
- * its niches as links to Discover. Server-rendered, no script.
+ * niche's where the county has none, unless it shows a named organisation's premises; the lattice otherwise; decorative, never a logo; fetched at once, as the
+ * page's LCP), the monogram on its edge, the name in Fraunces, type and county, the badge verbatim and, for an E0
+ * listing, what a pitch to it means (the held-tag sentence's shape, said before any pitch); the screen's one primary
+ * action (problems in its first niche on Discover) and a way to pitch an idea; the facts as tiles; its niches as links
+ * to Discover. Server-rendered, no script.
  */
 export function OrgProfile({ org, back }: { org: OrgCard; back: string }) {
   const t = useTranslations("companies");
   const kinds = useTranslations("orgKind");
-  const pitch = useTranslations("pitch");
   const kind = kinds(org.kind);
   const first = org.niches[0];
+  const hero = placePhotos({ county: org.county?.code, niche: first?.slug })[0];
   return (
     <article aria-labelledby="org-title" data-org={org.slug} className="flex max-w-4xl flex-col">
       <BackLink href={back}>{t("detailBack")}</BackLink>
       <NicheBand
-        county={org.county?.code}
-        niche={first?.slug}
+        photo={hero?.slug ?? null}
         wide
         sizes="(min-width: 1024px) 56rem, 100vw"
         className="h-40 sm:h-56"
+        // The page's largest picture in the first screen (its LCP): fetched at once.
+        eager
       >
-        {org.county ? (
+        {/* The county named on the photograph only when the photograph is of the county. */}
+        {org.county && hero?.county_code === org.county.code ? (
           <span className="flex justify-end">
             <span className="inline-flex items-center gap-1.5 font-display text-lg font-semibold sm:text-xl">
               <PlaceIcon className="size-5 shrink-0" />
@@ -74,7 +78,7 @@ export function OrgProfile({ org, back }: { org: OrgCard; back: string }) {
             </p>
             {org.badge.level === "e0" ? (
               <p data-held="" className="mt-2 max-w-[62ch] text-sm text-ink-soft">
-                {pitch("heldUnclaimed", { name: org.name })}
+                {t("heldUnclaimedHint", { name: org.name })}
               </p>
             ) : null}
           </div>
