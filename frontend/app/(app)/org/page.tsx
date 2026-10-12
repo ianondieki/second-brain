@@ -18,6 +18,7 @@ import { NeedsYouCard } from "@/components/tracker/NeedsYouCard";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Callout } from "@/components/ui/Callout";
+import { ClockTicker } from "@/components/ui/ClockTicker";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { NicheBand } from "@/components/ui/NicheBand";
 import { Section } from "@/components/ui/Section";
@@ -329,6 +330,8 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
                       </li>
                     ))}
                   </ul>
+                  {/* The cards' clocks tick from one script for the page, after them (no island per card). */}
+                  <ClockTicker />
                 </Section>
               ) : null}
 

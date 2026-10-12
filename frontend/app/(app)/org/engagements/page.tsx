@@ -11,6 +11,7 @@ import { Section } from "@/components/ui/Section";
 import { appNow } from "@/lib/api/server";
 
 import { getTeaser, orgContext } from "../data";
+import { ClockTicker } from "@/components/ui/ClockTicker";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
 import { ENGAGEMENTS_PATH, inboxHref, type Membership } from "../membership";
@@ -80,7 +81,13 @@ async function Body({ memberships, org, query }: { memberships: Membership[]; or
       <EmptyState sentence={t("emptyOrg")} action={t("emptyOrgAction")} href={inboxHref(memberships, org.org_id)} />
     );
   } else {
-    body = <EngagementGrid items={read.value} query={query} />;
+    body = (
+      <>
+        <EngagementGrid items={read.value} query={query} />
+        {/* The cards' clocks tick from one script for the page, after them (no island per card). */}
+        <ClockTicker />
+      </>
+    );
   }
   return (
     <>

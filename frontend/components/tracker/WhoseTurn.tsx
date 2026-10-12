@@ -9,8 +9,7 @@ import { ChipMark } from "./Chip";
 import { formatDay } from "@/lib/format";
 
 import { formatDate, myNextSteps, sideBanner, theirNextSteps, turnOf, type Detail, type SideBanner } from "./model";
-import { DeadlineClock } from "@/components/ui/DeadlineClock";
-import { TimeLeft } from "@/components/ui/TimeLeft";
+import { DeadlineClock, DeadlineLine } from "@/components/ui/DeadlineClock";
 
 import { DueText } from "./When";
 
@@ -67,10 +66,10 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
   // count; "due today" stays a sentence.
   const figure = !clock && countdown && detail.due && (detail.due.overdue ? late > 0 : detail.due.business_days_left > 0);
   // While a question is open, the time left to its answer-by date as a sentence under the question's clock line
-  // ("in 5 h 59 min", P23-3).
+  // ("in 5 hours 59 minutes", P23-3), kept by the page's ticker as the clocks are (P27).
   const timeLeft =
     now && until && !clock ? (
-      <TimeLeft until={until} now={now} labelWhenPast={t("chip.overdue")} mine={awaited.has(detail.my_party)} className="text-sm text-ink-soft" />
+      <DeadlineLine until={until} now={now} labelWhenPast={t("chip.overdue")} mine={awaited.has(detail.my_party)} className="text-sm text-ink-soft" />
     ) : null;
   return (
     <section
@@ -150,7 +149,7 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
               <DueText due={detail.due} className={detail.due.overdue ? "font-semibold text-error" : "text-ink-soft"} />
             </p>
           ) : null}
-          {timeLeft ? <p>{timeLeft}</p> : null}
+          {timeLeft ? <p data-clock-line="">{timeLeft}</p> : null}
         </div>
       </div>
       {clock && detail.due ? (

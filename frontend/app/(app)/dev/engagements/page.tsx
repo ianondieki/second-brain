@@ -7,6 +7,7 @@ import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { myEngagements } from "@/components/tracker/data";
 import { EngagementCard } from "@/components/engagements/EngagementCard";
+import { ClockTicker } from "@/components/ui/ClockTicker";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
@@ -84,6 +85,8 @@ export default async function DeveloperEngagementsPage() {
                 </ul>
               </Section>
             ))}
+            {/* The cards' clocks tick from one script for the page, after them (no island per card). */}
+            <ClockTicker />
           </div>
         ) : (
           <EmptyState sentence={t("emptyDev")} action={t("emptyDevAction")} href="/dev/ideas" />
