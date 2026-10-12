@@ -188,13 +188,17 @@ beforeEach(() => {
 });
 
 describe("the service worker's install and versions", () => {
-  it("caches /offline and the build files it loads when it installs, then takes over at once", async () => {
+  it("caches /offline when it installs (never reading it for addresses), then takes over at once", async () => {
     const w = await signedIn();
     expect(await w.caches.named.get("offline-build-1")!.match("/offline")).toBeTruthy();
-    expect([...w.caches.named.get("static-build-1")!.entries.keys()]).toEqual([
-      `${ORIGIN}/_next/static/css/app.css`,
-      `${ORIGIN}/_next/static/chunks/main.js`,
+    // The page names two build files: neither is fetched for it (the pages' own requests keep them).
+    expect(
+      w.fetch.mock.calls.map(([input]) => new URL(typeof input === "string" ? input : input.url, ORIGIN).pathname),
+    ).toEqual([
+      "/offline",
+      "/offline", // fetched again when the shell says whose the cache is: the page in that person's language
     ]);
+    expect(w.caches.named.get("static-build-1")?.entries.size ?? 0).toBe(0);
     expect(w.self.skipWaiting).toHaveBeenCalled();
     expect(w.self.clients.claim).toHaveBeenCalled();
   });
@@ -202,13 +206,18 @@ describe("the service worker's install and versions", () => {
   it("drops another build's files and every kept page when a new version activates", async () => {
     const w = await signedIn();
     await w.load(`/dev/engagements/${ID}`);
+    w.network.answers.set("/_next/static/chunks/a.js", { contentType: "text/javascript", body: "x" });
+    await w.request("/_next/static/chunks/a.js", { destination: "script" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect([...w.caches.named.keys()].sort()).toEqual(["offline-build-1", "static-build-1", `trackers-${ALICE}`]);
     const next = worker("build-2");
     // The new version starts from the same storage.
     for (const [name, cache] of w.caches.named) next.caches.named.set(name, cache);
     next.network.answers.set("/offline", { body: "<html>offline</html>" });
     await next.install();
     await next.activate();
-    expect([...next.caches.named.keys()].sort()).toEqual(["offline-build-2", "static-build-2"]);
+    // Only the new version's shell cache is left (its build files are kept as its pages request them).
+    expect([...next.caches.named.keys()].sort()).toEqual(["offline-build-2"]);
   });
 });
 
@@ -254,6 +263,8 @@ describe("what the service worker keeps", () => {
     `/dev/engagements/${ID}?tab=history`,
     `/org/engagements?org=${ORG}&full=1`,
     `/org/proposals/${ID}/render`,
+    "/dev/engagements?view=calendar",
+    `/org/engagements?view=board&org=${ORG}`,
   ])("never keeps %s, and gives /offline when it cannot be loaded", async (path) => {
     const w = await signedIn();
     expect(await textOf(await w.load(path))).toBe("<html><body>page</body></html>");
@@ -277,7 +288,7 @@ describe("what the service worker keeps", () => {
   ])("never intercepts %s (%o)", async (path, request) => {
     const w = await signedIn();
     expect(await w.request(path, request)).toBeUndefined();
-    expect(w.fetch).toHaveBeenCalledTimes(3); // the install's /offline and its two build files only
+    expect(w.fetch).toHaveBeenCalledTimes(2); // the install's /offline and its refetch for the person only
   });
 
   it("never intercepts another origin", async () => {
@@ -296,15 +307,58 @@ describe("what the service worker keeps", () => {
     expect(await textOf(await w.request("/_next/static/chunks/page-abc.js", { destination: "script" }))).toBe("chunk");
   });
 
-  it("keeps the build files a kept page loads, so its copy renders offline", async () => {
+  it("never reads a kept page's text for addresses, whatever a title an adversary wrote says", async () => {
     const w = await signedIn();
     w.network.answers.set(`/dev/engagements/${ID}`, {
-      body: '<html><script src="/_next/static/chunks/app/tracker-1.js" async=""></script><script>self.__next_f.push([1,"\\"/_next/static/chunks/x-2.js\\""])</script></html>',
+      body: '<html><h1>/_next/static/../../api/me/profile /_next/static/%2e%2e/%2e%2e/org/proposals/x/render</h1><script src="/_next/static/chunks/a.js"></script></html>',
     });
+    const before = w.fetch.mock.calls.length;
     await w.load(`/dev/engagements/${ID}`);
-    const files = [...w.caches.named.get("static-build-1")!.entries.keys()];
-    expect(files).toContain(`${ORIGIN}/_next/static/chunks/app/tracker-1.js`);
-    expect(files).toContain(`${ORIGIN}/_next/static/chunks/x-2.js`);
+    expect(w.fetch.mock.calls.length - before).toBe(1); // the page itself
+    expect(w.caches.named.get("static-build-1")?.entries.size ?? 0).toBe(0);
+  });
+
+  it.each([
+    ["/_next/static/../../api/me/profile", "a path that climbs out of /_next/static"],
+    ["/_next/static/%2e%2e/%2e%2e/org/proposals/x/render", "an encoded climb"],
+    ["/_next/static/chunks/a.js?x=1", "a query"],
+  ])("never treats %s as a build file (%s)", async (path) => {
+    const w = await signedIn();
+    expect(await w.request(path, { destination: "script" })).toBeUndefined();
+    expect(w.caches.named.get("static-build-1")?.entries.size ?? 0).toBe(0);
+  });
+
+  it("never treats another origin's /_next/static as a build file", async () => {
+    const w = await signedIn();
+    expect(
+      await w.request("https://elsewhere.test/_next/static/chunks/a.js", { destination: "script" }),
+    ).toBeUndefined();
+  });
+
+  it.each([
+    [{ contentType: "text/html; charset=utf-8", body: "<html>not found</html>", status: 200 }, "an HTML answer"],
+    [{ contentType: "application/json", body: "{}", status: 200 }, "JSON"],
+    [{ contentType: "text/javascript", body: "x", status: 404 }, "a 404"],
+    [{ contentType: "text/javascript", body: "x", redirectedTo: "/login" }, "a redirect"],
+  ])("serves but never keeps %o under /_next/static (%s)", async (given) => {
+    const w = await signedIn();
+    w.network.answers.set("/_next/static/chunks/odd.js", given);
+    await w.request("/_next/static/chunks/odd.js", { destination: "script" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(w.caches.named.get("static-build-1")?.entries.size ?? 0).toBe(0);
+  });
+
+  it.each([
+    ["text/css; charset=utf-8", "/_next/static/chunks/a.css"],
+    ["application/javascript; charset=UTF-8", "/_next/static/chunks/a.js"],
+    ["font/woff2", "/_next/static/media/a.woff2"],
+    ["image/svg+xml", "/_next/static/media/a.svg"],
+  ])("keeps a 200 %s build file the page requested", async (contentType, path) => {
+    const w = await signedIn();
+    w.network.answers.set(path, { contentType, body: "x" });
+    await w.request(path, { destination: "script" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect([...w.caches.named.get("static-build-1")!.entries.keys()]).toEqual([`${ORIGIN}${path}`]);
   });
 
   it("keeps nothing that is not a whole HTML page of this origin: an error, a redirect to sign-in, another type", async () => {
@@ -393,6 +447,37 @@ describe("whose cache it is", () => {
     expect([...w.caches.named.keys()].filter((name) => name.startsWith("trackers-"))).toEqual([]);
   });
 
+  it("sweeps every copy older than 7 days when the person is told again and whenever a page is kept", async () => {
+    const w = await signedIn();
+    const fresh = `/dev/engagements/${ID}`;
+    w.network.answers.set(fresh, { body: "fresh" });
+    await w.load(fresh);
+    // Make the kept copy 8 days old, as if the browser had been closed since.
+    const cache = w.caches.named.get(`trackers-${ALICE}`)!;
+    const old = new Date(Date.now() - 8 * DAY).toUTCString();
+    await cache.put(`${ORIGIN}${fresh}`, new Response("old", { headers: { date: old, "content-type": "text/html" } }));
+    await w.tell({ type: "user", hash: ALICE });
+    expect(w.kept()).toEqual([]);
+    await cache.put(`${ORIGIN}${fresh}`, new Response("old", { headers: { date: old, "content-type": "text/html" } }));
+    await w.load("/dev/engagements");
+    expect(w.kept()).toEqual(["/dev/engagements"]);
+  });
+
+  it("fetches /offline again when told whose the cache is and on sign-out, so it follows the person's language", async () => {
+    const w = await signedIn();
+    const offlineFetches = () =>
+      w.fetch.mock.calls.filter(([input]) => String(typeof input === "string" ? input : input.url).endsWith("/offline"))
+        .length;
+    const before = offlineFetches();
+    w.network.answers.set("/offline", { body: "Huna mtandao" });
+    await w.tell({ type: "user", hash: BRIAN });
+    expect(offlineFetches()).toBe(before + 1);
+    await w.tell({ type: "clear" });
+    expect(offlineFetches()).toBe(before + 2);
+    w.network.online = false;
+    expect(await textOf(await w.load("/dev/ideas"))).toBe("Huna mtandao");
+  });
+
   it("ignores a hash that is not one", async () => {
     const w = await signedIn();
     expect(await w.tell({ type: "user", hash: "../../etc" })).toBeNull();
@@ -414,6 +499,10 @@ describe("a page reached inside the app ({type: visit})", () => {
     const before = w.fetch.mock.calls.length;
     expect(await w.tell({ type: "visit", url: `${ORIGIN}/dev/engagements/${ID}/messages` })).toEqual({ ok: false });
     expect(await w.tell({ type: "visit", url: "https://elsewhere.test/dev/engagements" })).toEqual({ ok: false });
+    expect(await w.tell({ type: "visit", url: `${ORIGIN}/dev/engagements?view=calendar` })).toEqual({ ok: false });
+    expect(await w.tell({ type: "visit", url: `${ORIGIN}/org/engagements?view=board&org=${ORG}` })).toEqual({
+      ok: false,
+    });
     expect(w.fetch.mock.calls.length).toBe(before);
     await w.load("/dev/engagements");
     const after = w.fetch.mock.calls.length;

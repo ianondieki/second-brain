@@ -1,7 +1,8 @@
 /* Wazo's service worker (P27 track F; REQ-UX-08; D-69). Hand-written, no library, no build step.
  *
  * What it does, and nothing more:
- * - /_next/static/* (the hashed, immutable build files): cache-first, kept per build version.
+ * - /_next/static/* (the hashed, immutable build files the pages request): cache-first, kept per build version, and
+ *   only a 200 script, stylesheet, font or image of this origin with no query. No page's text is read for addresses.
  * - A full-page load (mode "navigate", destination "document") of exactly /dev/engagements, /org/engagements,
  *   /dev/engagements/<id> or /org/engagements/<id> (an ?org= query allowed, nothing else): network first, the
  *   answer kept in the signed-in person's cache (trackers-<hash>), and that copy served when the network fails, if it
@@ -37,8 +38,8 @@ const NEVER = /^\/(?:api(?:\/|$)|admin(?:\/|$))/;
 /** Where a signed-out person lands: whatever was kept for the last person goes. */
 const SIGNED_OUT = /^\/(?:login|signup)(?:\/|$)/;
 const HASH = /^[0-9a-f]{8,64}$/;
-/** In the HTML of a cached page: the build files it loads, so the copy renders offline as it did online. */
-const ASSET = /\/_next\/static\/[^"'\s<>)\\]+/g;
+/** What a build file may be: a script, a stylesheet, a font or an image. Anything else under /_next/static is not kept. */
+const BUILD_TYPE = /^(?:text\/css|(?:application|text)\/javascript|font\/|image\/)/;
 
 /** Whether a page may be kept: the path, and at most an ?org= query. */
 function keepable(url) {
@@ -74,29 +75,29 @@ function storable(response) {
   );
 }
 
-/** Puts the build files a page names into the static cache (those already there are not fetched again). */
-async function keepAssets(html) {
-  const cache = await caches.open(STATIC);
-  const paths = [...new Set(html.match(ASSET) || [])].map((path) => path.replace(/&amp;/g, "&"));
+/** Deletes every stored page older than 7 days by its Date header (or without one). */
+async function sweep(cache) {
+  const keys = await cache.keys();
   await Promise.all(
-    paths.map(async (path) => {
-      if (await cache.match(path)) return;
-      const response = await fetch(path).catch(() => null);
-      if (response && response.ok) await cache.put(path, response);
+    keys.map(async (key) => {
+      const response = await cache.match(key, { ignoreVary: true });
+      if (!response || age(response) > MAX_AGE_MS) await cache.delete(key);
     }),
   );
 }
 
-/** Stores a page in the person's cache, drops the oldest beyond 20, and keeps the build files it names. */
+/**
+ * Stores a page in the person's cache, drops what is older than 7 days, then the oldest beyond 20. The build files the
+ * page loads are kept as the page requests them (buildFile); the page's text is never read for addresses.
+ */
 async function keepPage(url, response) {
   const name = await personCache();
   if (!name) return;
   const cache = await caches.open(name);
-  const html = await response.clone().text();
   await cache.put(url, response);
+  await sweep(cache);
   const keys = await cache.keys();
   await Promise.all(keys.slice(0, Math.max(0, keys.length - MAX_PAGES)).map((key) => cache.delete(key)));
-  await keepAssets(html);
 }
 
 /** The person's copy of a page if it is at most 7 days old (an older one is deleted). */
@@ -122,6 +123,14 @@ function serial(task) {
   const run = queue.then(task, task);
   queue = run.catch(() => {});
   return run;
+}
+
+/** Fetches /offline again (in the person's language, by their cookie) for the shell cache; a failure keeps the old one. */
+async function keepOfflinePage() {
+  const response = await fetch(OFFLINE_URL, { cache: "reload", credentials: "same-origin" });
+  if (!response.ok || response.type !== "basic" || response.redirected)
+    throw new Error("the offline page could not be fetched");
+  await (await caches.open(SHELL)).put(OFFLINE_URL, response);
 }
 
 async function offlinePage() {
@@ -152,12 +161,21 @@ async function navigate(event, url) {
   }
 }
 
+/**
+ * A build file the page itself requested: from the cache when it is there, else fetched and, when it is a whole
+ * same-origin script, stylesheet, font or image, kept (an HTML 404 under /_next/static, say, is not).
+ */
 async function buildFile(request) {
   const cache = await caches.open(STATIC);
   const hit = await cache.match(request);
   if (hit) return hit;
   const response = await fetch(request);
-  if (response.ok && response.type === "basic") {
+  if (
+    response.status === 200 &&
+    response.type === "basic" &&
+    !response.redirected &&
+    BUILD_TYPE.test(response.headers.get("content-type") || "")
+  ) {
     const copy = response.clone();
     cache.put(request, copy).catch(() => {});
   }
@@ -167,11 +185,7 @@ async function buildFile(request) {
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
-      const response = await fetch(OFFLINE_URL, { cache: "reload", credentials: "same-origin" });
-      if (!response.ok) throw new Error("the offline page could not be fetched");
-      const html = await response.clone().text();
-      await (await caches.open(SHELL)).put(OFFLINE_URL, response);
-      await keepAssets(html);
+      await keepOfflinePage();
       await self.skipWaiting();
     })(),
   );
@@ -200,7 +214,8 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || NEVER.test(url.pathname)) return;
-  if (url.pathname.startsWith("/_next/static/")) {
+  // The URL is already resolved ("..", "%2e%2e"): a path that leaves /_next/static is not a build file. No query either.
+  if (url.pathname.startsWith("/_next/static/") && !url.search) {
     event.respondWith(buildFile(request));
   } else if (request.mode === "navigate" && request.destination === "document") {
     event.respondWith(navigate(event, url));
@@ -213,11 +228,13 @@ async function answer(data, source) {
   if (data.type === "user" && typeof data.hash === "string" && HASH.test(data.hash)) {
     const name = `${PEOPLE}${data.hash}`;
     await forgetPeople(name);
-    await caches.open(name);
+    await sweep(await caches.open(name));
+    await keepOfflinePage().catch(() => {}); // in this person's language
     return { ok: true };
   }
   if (data.type === "clear") {
     await forgetPeople(null);
+    await keepOfflinePage().catch(() => {});
     return { ok: true };
   }
   if (data.type === "visit" && typeof data.url === "string") {
