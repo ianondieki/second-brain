@@ -6,6 +6,7 @@ import { AccountMenu } from "./AccountMenu";
 import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
 import { PaletteSlot } from "./palette/PaletteSlot";
 import { TopBar } from "./TopBar";
+import { BLEED_FRAME } from "./TopBarBase";
 
 export interface SignedInShellProps {
   homeHref: string;
@@ -16,8 +17,9 @@ export interface SignedInShellProps {
   wide?: boolean;
   /**
    * The content runs on to the window's right edge (a 24 px margin) instead of stopping at the 72 rem frame, the rail
-   * staying where every other page has it, level with the logo: the Engagements Board's five columns (P27), which the
-   * frame leaves at 160 px each. Below 1152 px the frame is the window already, so nothing changes. Implies `wide`.
+   * staying where every other page has it, level with the logo, and the top bar's frame running on with it (never
+   * narrower than the content): the Engagements Board's five columns (P27), which the frame leaves at 160 px each.
+   * Below 1152 px the frame is the window already, so nothing changes. Implies `wide`.
    */
   bleed?: boolean;
   /** The page is the bell's own (/notifications): the bell carries aria-current="page". */
@@ -49,7 +51,7 @@ export function SignedInShell({
 }: SignedInShellProps) {
   return (
     <>
-      <TopBar homeHref={homeHref} sticky>
+      <TopBar homeHref={homeHref} sticky bleed={bleed}>
         {/* docs/spec/07 item 1: the bell, then the avatar menu, on the right of the bar; P25 puts Search before them
             (the command palette, D-67). */}
         <div className="flex min-w-0 items-center gap-1 sm:gap-2" data-top-bar-controls="">
@@ -64,9 +66,8 @@ export function SignedInShell({
       <div
         className={cn(
           "flex w-full flex-1 lg:gap-10",
-          // The bleed's left padding is the frame's own (half of what is left beside 72 rem, plus its 24 px), so the
-          // rail does not move between pages; `100%` is the body's width, scrollbar excluded (never a sideways scroll).
-          bleed ? "lg:pr-6 lg:pl-[max(1.5rem,calc((100%_-_72rem)/2_+_1.5rem))]" : "mx-auto max-w-6xl lg:px-6",
+          // The bleed's left padding is the frame's own, so the rail does not move between pages (TopBarBase).
+          bleed ? BLEED_FRAME : "mx-auto max-w-6xl lg:px-6",
         )}
         data-bleed={bleed ? "" : undefined}
       >
@@ -76,7 +77,6 @@ export function SignedInShell({
           tabIndex={-1}
           className={cn(
             "w-full min-w-0 flex-1 px-4 pt-8 focus:outline-none sm:px-6 lg:px-0 lg:pt-16",
-            bleed && "lg:max-w-[88rem]",
             // Room for the fixed tab bar (56 px + the safe area) under 1024 px.
             nav ? "pb-28 lg:pb-16" : "pb-16",
           )}

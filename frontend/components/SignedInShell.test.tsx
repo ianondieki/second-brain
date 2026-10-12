@@ -139,6 +139,16 @@ describe("SignedInShell", () => {
     );
     // The content is not held to the form column.
     expect(main.firstElementChild!.hasAttribute("class")).toBe(false);
+    // The top bar's frame runs on with it, the wordmark level with the rail: never narrower than the content.
+    const bar = screen.getByRole("banner").firstElementChild!.className.split(" ");
+    expect(bar).toEqual(expect.arrayContaining(["lg:pr-6", "lg:pl-[max(1.5rem,calc((100%_-_72rem)/2_+_1.5rem))]"]));
+    expect(bar).not.toContain("max-w-6xl");
+  });
+
+  it("keeps the top bar in the 72 rem frame on every other page", async () => {
+    await renderShell({ homeHref: "/org", wide: true });
+    const bar = screen.getByRole("banner").firstElementChild!.className.split(" ");
+    expect(bar).toEqual(expect.arrayContaining(["mx-auto", "max-w-6xl"]));
   });
 
   // P27 (REQ-UX-08; D-69): the offline part, given by the pages the worker keeps, sits at the top of <main>, above the
