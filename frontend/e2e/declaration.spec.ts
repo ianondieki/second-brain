@@ -138,6 +138,8 @@ test("Telco A's signatory declares prior knowledge inside the window; the develo
       "declared",
       SERVER_STEP,
     );
+    // Focus follows the refreshed line (the button it came from is gone).
+    await expect(signatory.page.locator("#prior-knowledge")).toBeFocused(SERVER_STEP);
     await expect(signatory.page.getByRole("button", { name: "Declare prior knowledge" })).toHaveCount(0);
 
     // --- One per engagement ------------------------------------------------------------------------------------------
