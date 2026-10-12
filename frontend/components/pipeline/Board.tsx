@@ -22,10 +22,10 @@ export interface BoardProps {
 /**
  * The Board tab of the organisation's Engagements (P27 track B; REQ-ENG-14), server-rendered: the funnel strip of the
  * last 90 days, then the five stage groups as columns, each headed by its name, count and median days in stage, its
- * cards compact (BoardCard). On a phone the columns are one row that scrolls sideways inside itself, a column about
- * 85 % of the screen wide and snapping into place, the page itself never wider than the screen; from 1024 px the five
- * stand side by side. "Assigned to me" narrows the cards (a link pair; the address keeps the choice). The cards' clocks
- * tick from the page's one script.
+ * cards compact (BoardCard). The columns are one row that scrolls sideways inside itself, a column about 85 % of a
+ * phone's width (18 rem at most) and snapping into place, the page itself never wider than the screen; from 1280 px
+ * the five stand side by side (at 1024 px the portal's rail leaves the main column too narrow for five). "Assigned to
+ * me" narrows the cards (a link pair; the address keeps the choice). The cards' clocks tick from the page's one script.
  */
 export async function Board({ pipeline, cardHref, filter, emptyHref }: BoardProps) {
   const [t, tt, te] = await Promise.all([
@@ -64,7 +64,12 @@ export async function Board({ pipeline, cardHref, filter, emptyHref }: BoardProp
     return (
       <div className="flex flex-col gap-6" data-board="">
         {filterBar}
-        <EmptyState sentence={t("emptyMine")} action={t("emptyMineAction")} href={filter.allHref} data-board="mine-empty" />
+        <EmptyState
+          sentence={t("emptyMine")}
+          action={t("emptyMineAction")}
+          href={filter.allHref}
+          data-board="mine-empty"
+        />
       </div>
     );
   }
@@ -86,15 +91,15 @@ export async function Board({ pipeline, cardHref, filter, emptyHref }: BoardProp
           aria-labelledby="columns-title"
           // A keyboard user can scroll the row (it takes focus); the page never widens (the row scrolls in itself).
           tabIndex={0}
-          className="-mx-4 overflow-x-auto overscroll-x-contain px-4 pb-2 [scroll-padding-inline:1rem] snap-x snap-mandatory sm:-mx-6 sm:px-6 lg:mx-0 lg:overflow-visible lg:px-0 lg:pb-0"
+          className="-mx-4 snap-x snap-mandatory overflow-x-auto overscroll-x-contain px-4 pb-2 [scroll-padding-inline:1rem] sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0 xl:overflow-visible xl:pb-0"
           data-board-row=""
         >
-          <ol className="flex gap-3 lg:grid lg:grid-cols-5">
+          <ol className="flex gap-3 xl:grid xl:grid-cols-5">
             {pipeline.columns.map((column) => (
               <li
                 key={column.group}
                 data-column={column.group}
-                className="flex w-[85vw] max-w-80 shrink-0 snap-start flex-col gap-3 rounded-panel bg-paper lg:w-auto lg:max-w-none lg:min-w-0"
+                className="flex w-[85vw] max-w-72 shrink-0 snap-start flex-col gap-3 xl:w-auto xl:max-w-none xl:min-w-0"
               >
                 <section aria-labelledby={`column-${column.group}`} className="flex min-w-0 flex-col gap-3">
                   <header className="flex flex-col gap-0.5 border-b border-line pb-2">

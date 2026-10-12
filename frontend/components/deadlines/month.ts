@@ -12,9 +12,12 @@ const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 /** The Nairobi date of an instant ("2026-10-12" for 2026-10-12T21:30Z, already the 13th in Nairobi: "2026-10-13"). */
 export function nairobiDay(iso: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: NAIROBI, year: "numeric", month: "2-digit", day: "2-digit" }).format(
-    new Date(iso),
-  );
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: NAIROBI,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
 }
 
 /** A day `n` days after `day` (negative: before). */
@@ -69,6 +72,14 @@ export function byDay(items: readonly Deadline[]): Map<string, Deadline[]> {
   return days;
 }
 
+/**
+ * The viewer's own step, open: an engagement's stage, an answer or a milestone that waits on them (`mine`), not
+ * overdue. An event or a Brief's closing is nobody's turn, so it never takes the "Your turn" look.
+ */
+export function isTurn(item: Pick<Deadline, "kind" | "mine" | "overdue">): boolean {
+  return item.mine && !item.overdue && (item.kind === "stage" || item.kind === "answer" || item.kind === "milestone");
+}
+
 /** The kind and the item's id from its key ("stage:<uuid>"), for its `.ics` route. */
 export function keyParts(item: Pick<Deadline, "key" | "kind">): { kind: DeadlineKind; id: string } {
   const at = item.key.indexOf(":");
@@ -86,7 +97,11 @@ export function upcoming(items: readonly Deadline[], today: string): { overdue: 
 
 /** A Google Calendar template link for a deadline: a 15-minute entry at its instant, as the `.ics` file has (D-61). */
 export function googleCalendarHref(item: Pick<Deadline, "due_at">, text: string, details: string): string {
-  const stamp = (time: number) => new Date(time).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const stamp = (time: number) =>
+    new Date(time)
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}/, "");
   const start = Date.parse(item.due_at);
   const params = new URLSearchParams({
     action: "TEMPLATE",

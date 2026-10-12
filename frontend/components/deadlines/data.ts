@@ -22,10 +22,7 @@ export interface Deadlines {
  * The caller's deadlines (GET /api/me/deadlines, or the organisation's with `orgId`). `from` omitted: every overdue
  * item and what falls due up to `to`; both given: the days between, inclusive (Nairobi dates).
  */
-export async function readDeadlines(
-  span: { from?: string; to: string },
-  orgId?: string,
-): Promise<Read<Deadlines>> {
+export async function readDeadlines(span: { from?: string; to: string }, orgId?: string): Promise<Read<Deadlines>> {
   const query = { from: span.from, to: span.to };
   const { data, error, response } = orgId
     ? await serverApi().GET("/api/orgs/{org_id}/deadlines", {
@@ -34,7 +31,10 @@ export async function readDeadlines(
       })
     : await serverApi().GET("/api/me/deadlines", { params: { query }, ...(await options()) });
   if (data) return { ok: true, value: { items: data.items, now: data.now } };
-  return { ok: false, refusal: refused(response.status, error, orgId ? "GET /api/orgs/{org_id}/deadlines" : "GET /api/me/deadlines") };
+  return {
+    ok: false,
+    refusal: refused(response.status, error, orgId ? "GET /api/orgs/{org_id}/deadlines" : "GET /api/me/deadlines"),
+  };
 }
 
 /** A deadline's `.ics` file (same-origin /api, the browser's session): the caller's own, or the organisation's. */

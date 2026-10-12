@@ -69,14 +69,14 @@ describe("the columns", () => {
     expect(columns[2].querySelectorAll("[data-engagement]")).toHaveLength(1);
   });
 
-  it("scroll sideways inside their own focusable region on a phone, five equal columns from 1024 px", async () => {
+  it("scroll sideways inside their own focusable region, five equal columns from 1280 px", async () => {
     const container = await board(pipeline({ review: [pipelineItem()] }, { review: 1 }));
     const row = container.querySelector<HTMLElement>("[data-board-row]")!;
     expect(row.getAttribute("role")).toBe("region");
     expect(row.getAttribute("tabindex")).toBe("0");
     expect(row.className).toContain("overflow-x-auto");
     expect(row.className).toContain("snap-x");
-    expect(row.querySelector("ol")?.className).toContain("lg:grid-cols-5");
+    expect(row.querySelector("ol")?.className).toContain("xl:grid-cols-5");
     expect(container.querySelector("[data-column]")?.className).toContain("w-[85vw]");
   });
 });
@@ -98,13 +98,19 @@ describe("a card", () => {
   });
 
   it("drops the stage chip (the column says it) and carries no chip when it is neither ours nor stalled", async () => {
-    const container = await board(pipeline({ review: [pipelineItem({ id: ID(1), whose_turn: ["developer"] })] }, { review: 1 }));
+    const container = await board(
+      pipeline({ review: [pipelineItem({ id: ID(1), whose_turn: ["developer"] })] }, { review: 1 }),
+    );
     const card = container.querySelector<HTMLElement>(`[data-engagement="${ID(1)}"]`)!;
     expect(card.querySelectorAll("[data-chip]")).toHaveLength(0);
   });
 
   it("names the assignee in a quiet line, not a chip", async () => {
-    const team = { assignee: { user_id: "u-2", display_name: "Wanjiru Kamau" }, recommendations: { pursue: 1, pass: 0, discuss: 0 }, mine: null };
+    const team = {
+      assignee: { user_id: "u-2", display_name: "Wanjiru Kamau" },
+      recommendations: { pursue: 1, pass: 0, discuss: 0 },
+      mine: null,
+    };
     const container = await board(pipeline({ review: [pipelineItem({ id: ID(1), team })] }, { review: 1 }));
     const line = container.querySelector<HTMLElement>("[data-assignee='u-2']")!;
     expect(line.textContent).toBe("Assigned to Wanjiru Kamau");
@@ -120,14 +126,22 @@ describe("the funnel", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Entered in the last 90 days" })).toBeTruthy();
     const groups = [...container.querySelectorAll<HTMLElement>("[data-funnel-group]")];
     expect(groups.map((g) => g.querySelector("[data-entered]")?.textContent)).toEqual(["12", "8", "4", "0", "0"]);
-    expect(groups.map((g) => g.querySelector("[data-bar]")?.getAttribute("width"))).toEqual(["100", String((8 / 12) * 100), String((4 / 12) * 100), "0", "0"]);
+    expect(groups.map((g) => g.querySelector("[data-bar]")?.getAttribute("width"))).toEqual([
+      "100",
+      String((8 / 12) * 100),
+      String((4 / 12) * 100),
+      "0",
+      "0",
+    ]);
     // Between neighbours: the share that went on, a picture of the sentence read out; none after a group with none.
     expect(groups[0].querySelector("[data-conversion]")).toBeNull();
     expect(groups[1].querySelector("[data-conversion] [aria-hidden='true']")?.textContent).toBe("67%");
     expect(groups[1].querySelector(".sr-only")?.textContent).toBe("8 of 12 went on to Contact and NDA");
     expect(groups[3].querySelector("[data-conversion] [aria-hidden='true']")?.textContent).toBe("0%");
     expect(groups[4].querySelector("[data-conversion]")?.textContent).toBe("");
-    expect(container.querySelector("[data-funnel-outcome]")?.textContent).toBe("1 closed and 2 ended in the same window.");
+    expect(container.querySelector("[data-funnel-outcome]")?.textContent).toBe(
+      "1 closed and 2 ended in the same window.",
+    );
     expect(container.querySelector("svg [data-bar]")?.getAttribute("class")).toContain("fill-(--heat-3)");
   });
 
@@ -139,7 +153,11 @@ describe("the funnel", () => {
 });
 
 describe("Assigned to me", () => {
-  const mine = { assignee: { user_id: "me", display_name: "Me" }, recommendations: { pursue: 0, pass: 0, discuss: 0 }, mine: null };
+  const mine = {
+    assignee: { user_id: "me", display_name: "Me" },
+    recommendations: { pursue: 0, pass: 0, discuss: 0 },
+    mine: null,
+  };
   const theirs = { ...mine, assignee: { user_id: "them", display_name: "Them" } };
 
   it("keeps only the person's cards, the counts and medians theirs; offered only with the triage facts", () => {
@@ -158,7 +176,11 @@ describe("Assigned to me", () => {
   });
 
   it("is a pair of links, the current one marked; nothing assigned: one sentence and the way back to all", async () => {
-    const filter = { on: false, allHref: "/org/engagements?view=board", mineHref: "/org/engagements?view=board&assignee=me" };
+    const filter = {
+      on: false,
+      allHref: "/org/engagements?view=board",
+      mineHref: "/org/engagements?view=board&assignee=me",
+    };
     await board(pipeline({ review: [pipelineItem({ team: mine })] }, { review: 1 }), filter);
     const nav = screen.getByRole("navigation", { name: "Whose engagements" });
     expect(within(nav).getByRole("link", { name: "All" }).getAttribute("aria-current")).toBe("page");
@@ -177,7 +199,9 @@ describe("an empty board", () => {
     const empty = container.querySelector<HTMLElement>("[data-board='empty']")!;
     expect(empty.textContent).toContain("No engagements to show on the board yet.");
     expect(within(empty).getAllByRole("link")).toHaveLength(1);
-    expect(within(empty).getByRole("link", { name: "Set up a scout" }).getAttribute("href")).toBe("/org/inbox/scouts/new");
+    expect(within(empty).getByRole("link", { name: "Set up a scout" }).getAttribute("href")).toBe(
+      "/org/inbox/scouts/new",
+    );
     expect(container.querySelector("[data-funnel]")).toBeNull();
   });
 });

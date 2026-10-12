@@ -2,9 +2,10 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { cn } from "@/components/ui/cn";
+import { ChevronDownIcon } from "@/components/ui/icons";
 
 import { KindMark } from "./KindMark";
-import { byDay, monthWeeks, shiftMonth, type Deadline } from "./month";
+import { byDay, isTurn, monthWeeks, shiftMonth, type Deadline } from "./month";
 
 /** How many chips a day's cell shows before "+n more". */
 export const CHIPS_PER_DAY = 2;
@@ -54,7 +55,9 @@ export async function MonthCalendar({ month, today, items, href, selected }: Mon
   const previous = shiftMonth(month, -1);
   const next = shiftMonth(month, 1);
   const weekday = (day: string, style: "long" | "short" | "narrow") =>
-    new Intl.DateTimeFormat(intlLocale(locale), { weekday: style, timeZone: "UTC" }).format(new Date(`${day}T00:00:00Z`));
+    new Intl.DateTimeFormat(intlLocale(locale), { weekday: style, timeZone: "UTC" }).format(
+      new Date(`${day}T00:00:00Z`),
+    );
   return (
     <section aria-labelledby="month-title" data-month={month}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
@@ -65,20 +68,20 @@ export async function MonthCalendar({ month, today, items, href, selected }: Mon
           <Link
             href={href({ month: previous })}
             aria-label={t("previous", { month: monthName(locale, previous) })}
-            className="inline-flex min-h-11 items-center gap-1 rounded-control px-2 font-semibold text-accent no-underline hover:underline"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-control px-2 font-semibold text-accent no-underline hover:underline"
             data-month-link="previous"
           >
-            <span aria-hidden="true">‹</span>
+            <ChevronDownIcon className="size-4 shrink-0 rotate-90" />
             <span className="max-sm:sr-only">{monthName(locale, previous)}</span>
           </Link>
           <Link
             href={href({ month: next })}
             aria-label={t("next", { month: monthName(locale, next) })}
-            className="inline-flex min-h-11 items-center gap-1 rounded-control px-2 font-semibold text-accent no-underline hover:underline"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-control px-2 font-semibold text-accent no-underline hover:underline"
             data-month-link="next"
           >
             <span className="max-sm:sr-only">{monthName(locale, next)}</span>
-            <span aria-hidden="true">›</span>
+            <ChevronDownIcon className="size-4 shrink-0 -rotate-90" />
           </Link>
         </p>
       </div>
@@ -178,32 +181,30 @@ export async function MonthCalendar({ month, today, items, href, selected }: Mon
 
 function dayNumberClass(today: boolean, inMonth: boolean, linked: boolean) {
   return cn(
-    // A 44 px target where it is a link (a phone's whole cell is close to it), a figure in the figure face.
-    "inline-flex size-8 shrink-0 items-center justify-center rounded-full font-figure text-sm tabular-nums sm:size-7",
+    // A 44 px target on a phone (the same size linked or not, so the numbers line up), a figure in the figure face.
+    "inline-flex size-11 shrink-0 items-center justify-center rounded-full font-figure text-sm tabular-nums sm:size-7",
     inMonth ? "text-ink" : "text-ink-soft",
-    linked && "font-bold no-underline hover:bg-accent-wash max-sm:size-11",
+    linked && "font-bold no-underline hover:bg-accent-wash",
     today && "ring-2 ring-accent",
   );
 }
 
 /** The phone's dot: overdue in the error colour, the viewer's own turn saffron, any other bloom. */
 function dotTone(item: Deadline) {
-  return item.overdue ? "bg-error" : item.mine ? "bg-flourish" : "bg-accent";
+  return item.overdue ? "bg-error" : isTurn(item) ? "bg-flourish" : "bg-accent";
 }
 
 /** A deadline in its day's cell: the kind's mark and the title on one line, cut with an ellipsis. */
 function DayChip({ item, overdueWord }: { item: Deadline; overdueWord: string }) {
   return (
     <span
-      data-tone={item.overdue ? "overdue" : item.mine ? "mine" : "open"}
+      data-tone={item.overdue ? "overdue" : isTurn(item) ? "mine" : "open"}
       className={cn(
         "flex min-w-0 items-center gap-1 rounded-sm px-1 py-0.5 text-xs leading-tight font-semibold",
         item.overdue ? "bg-error-wash text-error" : "bg-paper text-ink",
       )}
     >
-      {item.mine && !item.overdue ? (
-        <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-flourish" />
-      ) : null}
+      {isTurn(item) ? <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-flourish" /> : null}
       <KindMark kind={item.kind} className="size-3.5 shrink-0" />
       <span className="min-w-0 truncate">
         {item.overdue ? <span className="sr-only">{`${overdueWord}: `}</span> : null}

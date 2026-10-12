@@ -11,7 +11,7 @@ import { DeadlineClock } from "@/components/ui/DeadlineClock";
 
 import { icsHref } from "./data";
 import { KindMark } from "./KindMark";
-import { googleCalendarHref, keyParts, type Deadline } from "./month";
+import { googleCalendarHref, isTurn, keyParts, type Deadline } from "./month";
 
 const sr = (chunks: ReactNode) => <span className="sr-only">{chunks}</span>;
 const calendarLinkClass =
@@ -27,16 +27,26 @@ export interface DeadlineListProps {
   orgId?: string;
   /** The rows' heading level under the list's own heading. */
   headingLevel?: 3 | 4;
+  /** Whose deadlines: the turn chip says "Your turn" to a developer, "Our turn" to an organisation. */
+  side?: "developer" | "org";
 }
 
 /**
  * Deadlines as rows (P27 track A; REQ-ENG-13), server-rendered: the kind in words with its mark, the title as the one
  * link (the tracker, the Brief or the event), the other party or the Brief's or event's name, and the deadline: the
  * live clock on the next thing due (DeadlineClock, kept by the page's ticker), the business-days sentence elsewhere
- * (overdue in the error tone). "Your turn" is the one chip, on the viewer's own steps. Each row puts its deadline in
- * the person's calendar two ways, as the event page does (D-61): the `.ics` file and a Google Calendar entry.
+ * (overdue in the error tone). "Your turn" is the one chip, on the viewer's own open steps (never an event's or a
+ * Brief's). Each row puts its deadline in the person's calendar two ways, as the event page does (D-61): the `.ics`
+ * file and a Google Calendar entry.
  */
-export async function DeadlineList({ items, now, clockFirst = false, orgId, headingLevel = 3 }: DeadlineListProps) {
+export async function DeadlineList({
+  items,
+  now,
+  clockFirst = false,
+  orgId,
+  headingLevel = 3,
+  side = "developer",
+}: DeadlineListProps) {
   const [t, tt] = await Promise.all([getTranslations("deadlines"), getTranslations("tracker")]);
   const Heading = headingLevel === 3 ? "h3" : "h4";
   return (
@@ -64,10 +74,10 @@ export async function DeadlineList({ items, now, clockFirst = false, orgId, head
                   </Link>
                 </Heading>
                 <p className="text-sm [overflow-wrap:anywhere] text-ink-soft">{item.context}</p>
-                {item.mine && !item.overdue ? (
+                {isTurn(item) ? (
                   <p>
                     <Badge tone="warm" solid data-chip="turn" icon={<ChipMark kind="current" />}>
-                      {t("yours")}
+                      {side === "org" ? tt("ourTurn") : t("yours")}
                     </Badge>
                   </p>
                 ) : null}
@@ -78,7 +88,7 @@ export async function DeadlineList({ items, now, clockFirst = false, orgId, head
                     until={item.due_at}
                     now={now}
                     labelWhenPast={tt("chip.overdue")}
-                    mine={item.mine}
+                    mine={isTurn(item)}
                     words={<DueText due={due} />}
                     className="sm:items-end"
                   />
@@ -110,4 +120,3 @@ export async function DeadlineList({ items, now, clockFirst = false, orgId, head
     </ul>
   );
 }
-

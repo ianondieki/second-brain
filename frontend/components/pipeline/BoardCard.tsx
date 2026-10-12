@@ -3,21 +3,23 @@ import { useTranslations } from "next-intl";
 
 import { ChipMark } from "@/components/tracker/Chip";
 import { awaitsMe } from "@/components/tracker/model";
-import { DueClock } from "@/components/tracker/When";
+import { clockUntil, DueLine } from "@/components/tracker/When";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { cardLinkClass } from "@/components/ui/Card";
 import { cn } from "@/components/ui/cn";
+import { DeadlineClock } from "@/components/ui/DeadlineClock";
 import { ClockIcon } from "@/components/ui/status-icons";
 
 import type { PipelineItem } from "./data";
 
 /**
  * One engagement on the board (P27 track B; REQ-ENG-14): the compact EngagementCard of the organisation's side. The
- * developer's monogram, the idea's title as the card's one link, the deadline (the live clock while the window is
- * open, words otherwise; the page's ticker), then at most two chips: "Our turn" when the step is the organisation's
- * and the stalled mark ("No movement for N business days", neutral, words with the clock mark). The stage chip is
- * dropped: the column says it. The assignee, when there is one, is a quiet line, not a chip.
+ * idea's title as the card's one link; the deadline (the live clock's figure while the window is open, compact, its
+ * business days left to the tracker; words otherwise; the page's ticker); the developer's monogram beside at most two
+ * chips: "Our turn" when the step is the organisation's and the stalled mark ("No movement for N business days",
+ * neutral, words with the clock mark). The stage chip is dropped: the column says it. The assignee, when there is one,
+ * is a quiet line, not a chip.
  */
 export function BoardCard({
   item,
@@ -34,6 +36,7 @@ export function BoardCard({
   const t = useTranslations("pipeline");
   const tt = useTranslations("tracker");
   const ours = awaitsMe(item, "org");
+  const until = clockUntil(item, "org");
   return (
     <article
       data-engagement={item.id}
@@ -45,29 +48,34 @@ export function BoardCard({
         ours && "shadow-card",
       )}
     >
-      <div className="flex min-w-0 items-start gap-2.5">
+      <h3 className="min-w-0 text-sm leading-snug font-semibold [overflow-wrap:anywhere] text-ink">
+        <Link href={href} className={cardLinkClass}>
+          {item.proposal_title}
+        </Link>
+      </h3>
+      {/* The figure only: the business days are the tracker's line (the column is narrow). */}
+      {until ? (
+        <DeadlineClock size="xs" until={until} now={now} labelWhenPast={tt("chip.overdue")} mine={ours} />
+      ) : (
+        <DueLine item={item} mine="org" />
+      )}
+      <div className="flex flex-wrap items-center gap-2">
         <Avatar name={item.developer_name} kind="person" size="sm" active={ours} />
-        <h3 className="min-w-0 text-sm leading-snug font-semibold [overflow-wrap:anywhere] text-ink">
-          <Link href={href} className={cardLinkClass}>
-            {item.proposal_title}
-          </Link>
-        </h3>
+        {ours || item.stalled ? (
+          <p className="flex min-w-0 flex-wrap items-center gap-2">
+            {ours ? (
+              <Badge tone="warm" solid data-chip="turn" icon={<ChipMark kind="current" />}>
+                {tt("ourTurn")}
+              </Badge>
+            ) : null}
+            {item.stalled ? (
+              <Badge tone="neutral" data-chip="stalled" icon={<ClockIcon />}>
+                {t("stalled", { count: stalledAfter })}
+              </Badge>
+            ) : null}
+          </p>
+        ) : null}
       </div>
-      <DueClock item={item} mine="org" now={now} />
-      {ours || item.stalled ? (
-        <p className="flex flex-wrap items-center gap-2">
-          {ours ? (
-            <Badge tone="warm" solid data-chip="turn" icon={<ChipMark kind="current" />}>
-              {tt("ourTurn")}
-            </Badge>
-          ) : null}
-          {item.stalled ? (
-            <Badge tone="neutral" data-chip="stalled" icon={<ClockIcon />}>
-              {t("stalled", { count: stalledAfter })}
-            </Badge>
-          ) : null}
-        </p>
-      ) : null}
       {item.team?.assignee ? (
         <p className="text-xs text-ink-soft" data-assignee={item.team.assignee.user_id}>
           {t("assignee", { name: item.team.assignee.display_name })}

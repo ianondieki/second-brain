@@ -48,7 +48,10 @@ export async function CalendarView({
   const today = nairobiDay(appNow());
   const month = pickMonth(monthParam, today);
   const span = gridSpan(month);
-  const [grid, list] = await Promise.all([readDeadlines(span, orgId), readDeadlines({ to: addDays(today, 30) }, orgId)]);
+  const [grid, list] = await Promise.all([
+    readDeadlines(span, orgId),
+    readDeadlines({ to: addDays(today, 30) }, orgId),
+  ]);
   if (!grid.ok) return <ViewRefused refusal={grid.refusal} basePath={basePath} />;
   if (!list.ok) return <ViewRefused refusal={list.refusal} basePath={basePath} />;
   const now = list.value.now;
@@ -79,9 +82,13 @@ export async function CalendarView({
     <div className="flex flex-col gap-12" data-deadlines="">
       <MonthCalendar month={month} today={nairobiDay(now)} items={grid.value.items} href={href} selected={picked} />
       {picked ? (
-        <Section title={t("dayList", { date: dayName(locale, picked) })} headingId="day-list" data-deadlines-day={picked}>
+        <Section
+          title={t("dayList", { date: dayName(locale, picked) })}
+          headingId="day-list"
+          data-deadlines-day={picked}
+        >
           {ofDay.length > 0 ? (
-            <DeadlineList items={ofDay} now={now} orgId={orgId} />
+            <DeadlineList items={ofDay} now={now} orgId={orgId} side={side} />
           ) : (
             <p className="text-ink-soft">{t("nextEmpty")}</p>
           )}
@@ -89,12 +96,12 @@ export async function CalendarView({
       ) : null}
       {overdue.length > 0 ? (
         <Section title={t("overdueTitle")} headingId="deadlines-overdue" data-deadlines-group="overdue">
-          <DeadlineList items={overdue} now={now} orgId={orgId} />
+          <DeadlineList items={overdue} now={now} orgId={orgId} side={side} />
         </Section>
       ) : null}
       <Section title={t("nextTitle")} headingId="deadlines-next" data-deadlines-group="next">
         {next.length > 0 ? (
-          <DeadlineList items={next} now={now} orgId={orgId} clockFirst />
+          <DeadlineList items={next} now={now} orgId={orgId} side={side} clockFirst />
         ) : (
           <p className="text-ink-soft">{t("nextEmpty")}</p>
         )}

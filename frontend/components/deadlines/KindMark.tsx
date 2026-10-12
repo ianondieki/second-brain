@@ -20,6 +20,12 @@ function MilestoneIcon(props: IconProps) {
  * a Brief (its page), an event (a calendar page). Decorative, the outline set's stroke.
  */
 export function KindMark({ kind, className }: { kind: DeadlineKind; className?: string }) {
-  const Mark = { stage: EngagementsIcon, answer: MessageIcon, milestone: MilestoneIcon, brief: BriefIcon, event: CalendarIcon }[kind];
+  const Mark = {
+    stage: EngagementsIcon,
+    answer: MessageIcon,
+    milestone: MilestoneIcon,
+    brief: BriefIcon,
+    event: CalendarIcon,
+  }[kind];
   return <Mark className={className} data-kind-mark={kind} />;
 }

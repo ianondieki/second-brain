@@ -39,12 +39,22 @@ describe("the views", () => {
   it("are one TabNav: two tabs for a developer, three for an organisation, the current one marked", async () => {
     renderWithIntl(<>{await resolveServerTree(<EngagementTabs basePath="/dev/engagements" current="calendar" />)}</>);
     let nav = screen.getByRole("navigation", { name: "Engagement views" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["List", "Calendar"]);
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["List", "Calendar"]);
     expect(within(nav).getByRole("link", { name: "Calendar" }).getAttribute("aria-current")).toBe("page");
     cleanup();
-    renderWithIntl(<>{await resolveServerTree(<EngagementTabs basePath="/org/engagements" current="board" board org="o-1" />)}</>);
+    renderWithIntl(
+      <>{await resolveServerTree(<EngagementTabs basePath="/org/engagements" current="board" board org="o-1" />)}</>,
+    );
     nav = screen.getByRole("navigation", { name: "Engagement views" });
-    expect(within(nav).getAllByRole("link").map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
+    expect(
+      within(nav)
+        .getAllByRole("link")
+        .map((link) => [link.textContent, link.getAttribute("href")]),
+    ).toEqual([
       ["List", "/org/engagements?org=o-1"],
       ["Calendar", "/org/engagements?view=calendar&org=o-1"],
       ["Board", "/org/engagements?view=board&org=o-1"],

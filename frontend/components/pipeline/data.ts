@@ -9,7 +9,13 @@ export type PipelineColumn = components["schemas"]["PipelineColumn"];
 export type PipelineItem = components["schemas"]["PipelineItem"];
 export type Group = PipelineColumn["group"];
 
-export const GROUPS = ["review", "contact_nda", "agreement", "implementation", "close"] as const satisfies readonly Group[];
+export const GROUPS = [
+  "review",
+  "contact_nda",
+  "agreement",
+  "implementation",
+  "close",
+] as const satisfies readonly Group[];
 
 export async function readPipeline(orgId: string): Promise<Read<Pipeline>> {
   const { data, error, response } = await serverApi().GET("/api/orgs/{org_id}/pipeline", {
@@ -22,7 +28,7 @@ export async function readPipeline(orgId: string): Promise<Read<Pipeline>> {
   return { ok: false, refusal: refused(response.status, error, "GET /api/orgs/{org_id}/pipeline") };
 }
 
-/** Only the cards assigned to `userId` (the "Assigned to me" filter); the counts and medians become the filtered ones'. */
+/** Only the cards assigned to `userId` ("Assigned to me"); the counts and medians are the filtered cards' own. */
 export function assignedTo(pipeline: Pipeline, userId: string): Pipeline {
   return {
     ...pipeline,

@@ -53,8 +53,9 @@ const href = ({ month, day }: { month: string; day?: string }) =>
   `/dev/engagements?view=calendar&month=${month}${day ? `&day=${day}#day-list` : ""}`;
 
 async function month(items: Deadline[], today = "2026-10-12") {
-  return renderWithIntl(<>{await resolveServerTree(<MonthCalendar month="2026-10" today={today} items={items} href={href} />)}</>)
-    .container;
+  return renderWithIntl(
+    <>{await resolveServerTree(<MonthCalendar month="2026-10" today={today} items={items} href={href} />)}</>,
+  ).container;
 }
 
 const cell = (container: HTMLElement, day: string) => container.querySelector<HTMLElement>(`td[data-day="${day}"]`)!;
@@ -64,9 +65,11 @@ describe("the month", () => {
     const container = await month([]);
     expect(screen.getByRole("heading", { level: 2, name: "October 2026" })).toBeTruthy();
     const table = screen.getByRole("table", { name: "October 2026" });
-    expect(within(table).getAllByRole("columnheader").map((th) => th.querySelector("abbr")?.getAttribute("title"))).toEqual(
-      ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-    );
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((th) => th.querySelector("abbr")?.getAttribute("title")),
+    ).toEqual(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]);
     expect(table.querySelectorAll("tbody tr")).toHaveLength(5);
     expect(cell(container, "2026-09-28").hasAttribute("data-out")).toBe(true);
     expect(cell(container, "2026-10-01").hasAttribute("data-out")).toBe(false);
@@ -123,9 +126,13 @@ describe("the month", () => {
 });
 
 describe("the list", () => {
-  async function list(items: Deadline[], options: { clockFirst?: boolean; orgId?: string } = {}) {
-    return renderWithIntl(<>{await resolveServerTree(<DeadlineList items={items} now="2026-10-12T06:36:00.000Z" {...options} />)}</>)
-      .container;
+  async function list(
+    items: Deadline[],
+    options: { clockFirst?: boolean; orgId?: string; side?: "developer" | "org" } = {},
+  ) {
+    return renderWithIntl(
+      <>{await resolveServerTree(<DeadlineList items={items} now="2026-10-12T06:36:00.000Z" {...options} />)}</>,
+    ).container;
   }
 
   it("draws the live clock on the next thing due only; the rest say their deadline in words", async () => {
@@ -134,12 +141,18 @@ describe("the list", () => {
       { clockFirst: true },
     );
     expect(container.querySelectorAll("[data-clock]")).toHaveLength(1);
-    expect(container.querySelector("[data-deadline='stage:a'] [data-clock] time")?.getAttribute("datetime")).toBe("P4DT14H23M");
-    expect(container.querySelector("[data-deadline='stage:b']")?.textContent).toContain("6 business days left, due 20 Oct 2026");
+    expect(container.querySelector("[data-deadline='stage:a'] [data-clock] time")?.getAttribute("datetime")).toBe(
+      "P4DT14H23M",
+    );
+    expect(container.querySelector("[data-deadline='stage:b']")?.textContent).toContain(
+      "6 business days left, due 20 Oct 2026",
+    );
   });
 
   it("names the kind, links the title to its page and says the other party", async () => {
-    const container = await list([deadline({ kind: "answer", key: "answer:x", title: "Answer the question", context: "SACCO B" })]);
+    const container = await list([
+      deadline({ kind: "answer", key: "answer:x", title: "Answer the question", context: "SACCO B" }),
+    ]);
     const row = container.querySelector<HTMLElement>("[data-deadline='answer:x']")!;
     expect(row.textContent).toContain("Answer by");
     expect(within(row).getByRole("link", { name: "Answer the question" }).getAttribute("href")).toBe(
@@ -158,9 +171,11 @@ describe("the list", () => {
     expect(google.getAttribute("rel")).toBe("noopener noreferrer");
     cleanup();
     container = await list([deadline({ key: "event:e1", kind: "event" })], { orgId: "org-1" });
-    expect(within(container).getByRole("link", { name: /^Add to calendar/ }).getAttribute("href")).toBe(
-      "/api/orgs/org-1/deadlines/event/e1/calendar.ics",
-    );
+    expect(
+      within(container)
+        .getByRole("link", { name: /^Add to calendar/ })
+        .getAttribute("href"),
+    ).toBe("/api/orgs/org-1/deadlines/event/e1/calendar.ics");
   });
 
   it("carries one chip at most, Your turn on the viewer's own open steps; overdue words in the error tone", async () => {
@@ -173,6 +188,21 @@ describe("the list", () => {
     const late = container.querySelector("[data-deadline='stage:late'] [data-due]")!;
     expect(late.textContent).toBe("Overdue by 2 business days, was due 8 Oct 2026");
     expect(late.className).toContain("text-error");
+  });
+
+  it("says Our turn to an organisation, and never puts an event or a Brief's closing on anyone's turn", async () => {
+    const container = await list(
+      [
+        deadline({ key: "stage:ours", mine: true }),
+        deadline({ key: "event:e", kind: "event", mine: true }),
+        deadline({ key: "brief:b", kind: "brief", mine: true }),
+      ],
+      { orgId: "org-1", side: "org" },
+    );
+    expect(container.querySelector("[data-deadline='stage:ours'] [data-chip]")?.textContent).toBe("Our turn");
+    expect(
+      container.querySelectorAll("[data-deadline='event:e'] [data-chip], [data-deadline='brief:b'] [data-chip]"),
+    ).toHaveLength(0);
   });
 });
 
@@ -202,7 +232,9 @@ describe("the Calendar view", () => {
     const empty = container.querySelector<HTMLElement>("[data-deadlines='empty']")!;
     expect(empty.textContent).toContain("No deadlines in October 2026.");
     expect(within(empty).getAllByRole("link")).toHaveLength(1);
-    expect(within(empty).getByRole("link", { name: "Find a problem to work on" }).getAttribute("href")).toBe("/dev/discover");
+    expect(within(empty).getByRole("link", { name: "Find a problem to work on" }).getAttribute("href")).toBe(
+      "/dev/discover",
+    );
     expect(container.querySelector("table")).toBeNull();
   });
 
@@ -221,7 +253,10 @@ describe("the Calendar view", () => {
   });
 
   it("opens a day's list from the grid (?day=), the day marked; a day outside the grid is ignored", async () => {
-    state.grid = [deadline({ key: "stage:a", due_on: "2026-10-16" }), deadline({ key: "brief:b", kind: "brief", due_on: "2026-10-16" })];
+    state.grid = [
+      deadline({ key: "stage:a", due_on: "2026-10-16" }),
+      deadline({ key: "brief:b", kind: "brief", due_on: "2026-10-16" }),
+    ];
     let container = await view({ month: "2026-10", day: "2026-10-16" });
     expect(screen.getByRole("heading", { level: 2, name: "Deadlines on 16 October" })).toBeTruthy();
     expect(container.querySelectorAll("[data-deadlines-day] [data-deadline]")).toHaveLength(2);

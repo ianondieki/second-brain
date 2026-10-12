@@ -19,6 +19,8 @@ const look = cn(
 );
 
 const sizes = {
+  // The board's compact cards (P27): figures about 17 px, five columns side by side.
+  xs: "text-xs [&_[data-figure]]:text-[1.0625rem] [&_[data-gap]]:ms-0.5 [&_[data-unit]]:mx-px data-[clock=warm]:before:me-1.5 data-[clock=warm]:before:size-1.5 data-[clock=past]:text-sm",
   // Cards: figures about 22 px over 12 px words.
   sm: "text-xs [&_[data-figure]]:text-[1.375rem] [&_[data-gap]]:ms-1 [&_[data-unit]]:mx-px data-[clock=warm]:before:size-2 data-[clock=past]:text-sm",
   // The tracker's figure panel: about 34 px on phones, 40 px from 640 px.
@@ -34,7 +36,7 @@ export interface DeadlineClockProps {
   labelWhenPast: string;
   /** The step is the viewer's: under 24 hours the figures take the saffron "your turn" look. */
   mine?: boolean;
-  /** `sm` on cards, `lg` for the tracker's figure panel. */
+  /** `xs` on the board's compact cards, `sm` on cards, `lg` for the tracker's figure panel. */
   size?: keyof typeof sizes;
   /** The deadline in words under the figures ("4 business days left, due 16 Oct 2026"): what the figures picture. */
   words?: ReactNode;
