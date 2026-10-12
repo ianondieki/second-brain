@@ -302,6 +302,50 @@ async def test_a_developer_who_is_also_a_member_never_reads_the_triage_of_their_
         assert code(await dev.get(f"/api/engagements/{engagement}")) == (403, "both_parties")
 
 
+async def test_the_developer_is_never_assigned_their_own_engagement_even_as_a_reviewer(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """D-68 (the review of P27-BE-2): a developer who is also a reviewer of the organisation is not assignable to their
+    own proposal's engagement (N30 would tell them the organisation's triage of it) and is never on its roster."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    async with owner_engine.begin() as conn:
+        await run(
+            conn,
+            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :o, :u, '{reviewer}')",
+            id=uuid7(),
+            o=world.org,
+            u=world.developer,
+        )
+    recommendation = team_path(world, engagement, "recommendation")
+    async with seats(app_engine, SETTINGS, world) as s:
+        refused = await assign(s.signatory, world, engagement, world.developer)
+        assert code(refused) == (422, "invalid_assignee")
+        assert str(world.developer) not in refused.text  # no echo
+        sheets = [
+            await s.owner.get(team_path(world, engagement)),
+            await s.reviewer.put(recommendation, json={"stance": "pursue"}),
+            await assign(s.owner, world, engagement, world.signatory),
+            await s.reviewer.delete(recommendation),
+        ]
+        for sheet in sheets:
+            assert sheet.status_code == 200, sheet.text
+            assert {m["user_id"] for m in sheet.json()["members"]} == {
+                str(world.owner),
+                str(world.signatory),
+                str(world.reviewer),
+            }
+        assert code(await assign(s.owner, world, engagement, world.developer)) == (422, "invalid_assignee")
+    assignees = await rows(
+        owner_engine, "SELECT assignee_user_id FROM engagement_assignments WHERE engagement_id = :e", e=engagement
+    )
+    assert [r.assignee_user_id for r in assignees] == [world.signatory]
+    told = await rows(
+        owner_engine, "SELECT 1 FROM in_app_notifications WHERE user_id = :u AND kind = :k", u=world.developer, k=N30
+    )
+    assert told == []
+
+
 async def test_each_member_reads_their_own_recommendation_as_mine(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:

@@ -36,7 +36,7 @@ async def get_team(engagement_id: UUID, org: OrgMember, db: Db) -> TeamOut:
     """The team sheet: who the engagement may be assigned to, who it is assigned to and the members' internal
     recommendations (the organisation's own; never the developer's)."""
     engagement = await team.org_engagement(db, org.org_id, engagement_id, org.live.user.id)
-    return await team.team_view(db, org.org_id, engagement.id)
+    return await team.team_view(db, org.org_id, engagement)
 
 
 @router.put(f"{ORG_ENGAGEMENT}/assignee")

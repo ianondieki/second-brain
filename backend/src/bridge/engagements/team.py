@@ -8,9 +8,13 @@ and never on a developer's. Neither changes the engagement's state; only the tra
 
 - **Assign** (``PUT …/assignee``): an owner, admin, reviewer or signatory (403 ``role_not_allowed`` otherwise, checked
   before any write) assigns an owner, admin, reviewer or signatory of the organisation (422 ``invalid_assignee``), or
-  nobody (``user_id`` null); the same assignee again is 409 ``unchanged``. The live row is closed (the database stamps
-  ``unassigned_at``) and the next inserted in one transaction; a concurrent assignment loses on the partial unique index
-  (409). The assignee is told (N30, in-app) unless they assigned themselves.
+  nobody (``user_id`` null); the same assignee again is 409 ``unchanged``. The engagement's own developer is never
+  assignable, even as a member (422 ``invalid_assignee``, before any write: N30 would tell them the organisation's
+  triage of their own proposal, D-68), and never on the team sheet's roster. The database's backstop for this (an
+  assignee-is-not-the-developer clause in ``engagement_assignments_guard``) is for the next revision; until then the
+  API's check is the only one. The live row is closed (the database stamps ``unassigned_at``) and the next inserted in
+  one transaction; a concurrent assignment loses on the partial unique index (409). The assignee is told (N30, in-app)
+  unless they assigned themselves.
 - **Recommend** (``PUT …/recommendation``): the same roles; one row per member, upserted; an empty note is none
   (NULL). **Withdraw** (``DELETE …/recommendation``): any member removes their own.
 - Each assignment and recommendation change appends an ``audit_events`` row on the organisation's chain: ids and the
@@ -175,12 +179,18 @@ def first_role(roles: Iterable[OrgRole]) -> OrgRole | None:
     return next((role for role in ROLE_ORDER if role in held), None)
 
 
-async def team_view(db: AsyncSession, org_id: UUID, engagement_id: UUID) -> TeamOut:
-    """The team sheet: the members the engagement may be assigned to, its assignee and every recommendation."""
+async def team_view(db: AsyncSession, org_id: UUID, engagement: Engagement) -> TeamOut:
+    """The team sheet: the members the engagement may be assigned to (never its own developer, a member or not), its
+    assignee and every recommendation."""
+    engagement_id = engagement.id
     members = await db.execute(
         select(Membership.user_id, Membership.roles, User.display_name)
         .join(User, User.id == Membership.user_id)
-        .where(Membership.org_id == org_id, Membership.status == MembershipStatus.ACTIVE)
+        .where(
+            Membership.org_id == org_id,
+            Membership.status == MembershipStatus.ACTIVE,
+            Membership.user_id != engagement.developer_id,
+        )
         .order_by(User.display_name, Membership.user_id)
     )
     roster = []
@@ -253,6 +263,8 @@ async def assign(db: AsyncSession, org: OrgContext, engagement_id: UUID, user_id
     """Assign the engagement to ``user_id`` (None: nobody), in the caller's transaction (the router commits)."""
     require_triage(org)
     engagement = await org_engagement(db, org.org_id, engagement_id, org.live.user.id)
+    if user_id is not None and user_id == engagement.developer_id:  # D-68: never their own proposal's triage
+        raise ApiError(422, "invalid_assignee", INVALID_ASSIGNEE)
     if await _live_assignee(db, engagement.id) == user_id:
         raise ApiError(409, "unchanged", UNCHANGED)
     if user_id is not None and not await _is_triage_member(db, org.org_id, user_id):
@@ -292,7 +304,7 @@ async def assign(db: AsyncSession, org: OrgContext, engagement_id: UUID, user_id
     )
     title = await db.scalar(select(ProposalVersion.title).where(ProposalVersion.id == engagement.version_id))
     told = user_id if user_id is not None and user_id != org.live.user.id else None
-    team = await team_view(db, org.org_id, engagement.id)
+    team = await team_view(db, org.org_id, engagement)
     return Assigned(team=team, assignment_id=assignment_id, assignee_id=told, title=title or SOME_PROPOSAL)
 
 
@@ -334,7 +346,7 @@ async def recommend(db: AsyncSession, org: OrgContext, engagement_id: UUID, body
             subject_id=engagement.id,
             payload={"engagement_id": str(engagement.id), "stance": body.stance.value},
         )
-    return await team_view(db, org.org_id, engagement.id)
+    return await team_view(db, org.org_id, engagement)
 
 
 async def withdraw(db: AsyncSession, org: OrgContext, engagement_id: UUID) -> TeamOut:
@@ -354,7 +366,7 @@ async def withdraw(db: AsyncSession, org: OrgContext, engagement_id: UUID) -> Te
             subject_id=engagement.id,
             payload={"engagement_id": str(engagement.id)},
         )
-    return await team_view(db, org.org_id, engagement.id)
+    return await team_view(db, org.org_id, engagement)
 
 
 # ------------------------------------------------------------------------------------------------------------ N30
