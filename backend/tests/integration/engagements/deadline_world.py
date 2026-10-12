@@ -170,13 +170,21 @@ async def _tagged_proposal(conn: AsyncConnection, developer: UUID, org_id: UUID,
     return tag
 
 
+async def pitch(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, developer: UUID, org_id: UUID, problem_id: UUID | None = None
+) -> UUID:
+    """Another proposal of ``developer`` (linked to ``problem_id``, or a problem of its own) pitched to ``org_id``:
+    the SUBMITTED engagement."""
+    async with owner_engine.begin() as conn:
+        tag = await _tagged_proposal(conn, developer, org_id, problem_id)
+    return await open_tag(app_engine, developer, tag)
+
+
 async def pitch_to_brief(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, world: World, org: Org, brief: UUID
 ) -> UUID:
     """The world's developer's second proposal, linked to ``brief``, pitched to its organisation: the engagement."""
-    async with owner_engine.begin() as conn:
-        tag = await _tagged_proposal(conn, world.developer, org.id, brief)
-    return await open_tag(app_engine, world.developer, tag)
+    return await pitch(owner_engine, app_engine, world.developer, org.id, brief)
 
 
 async def another_developer(owner_engine: AsyncEngine, app_engine: AsyncEngine, org_id: UUID) -> tuple[UUID, UUID]:

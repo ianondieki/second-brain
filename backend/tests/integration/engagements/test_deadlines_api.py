@@ -1,7 +1,8 @@
 """REQ-ENG-13 (docs/platform/tasks/P27.md track A, acceptance 1; D-61, D-70), through the API.
 
-Given a developer with a SUBMITTED engagement, an INFO_REQUESTED one and a Brief they pitched to, their calendar lists
-exactly those three, sorted by ``due_at``, the SUBMITTED one the organisation's turn and the question theirs; the
+Given a developer with a SUBMITTED engagement, an INFO_REQUESTED one, a Brief they pitched to and an engagement on
+hold, their calendar lists exactly the first three, sorted by ``due_at``, the SUBMITTED one the organisation's turn and
+the question theirs (the hold contributes nothing: its resume date is not a deadline, on either side or in a feed); the
 organisation's calendar lists its stage deadlines, its open Briefs and its published events; each entry's ``.ics``
 opens at the right instant (the end of the Nairobi day); a deadline that is not the caller's is 404. A feed URL created
 in Settings returns the same entries to an unauthenticated ``GET`` (no cookie, ``private, no-store``, the product's
@@ -45,6 +46,7 @@ from tests.unit.events.ics_parser import instant, parse
 QUESTION = "Which depots would the pilot cover, and how many sensors each?"
 ANSWER = "Three depots in Kiambu, twelve sensors each, maintained by us."
 MESSAGE = "Thank you; our procurement lead will call on Thursday about the pilot budget."
+HOLD_DAYS = timedelta(days=20)  # a hold's resume date, inside the default window
 
 
 def vevents(body: bytes) -> list[dict[str, str]]:
@@ -75,16 +77,26 @@ async def test_the_developer_and_the_organisation_see_their_deadlines(
     telco_brief = await dw.add_brief(owner_engine, world.org, world.owner, today + timedelta(days=30), title="Billing")
     starts = datetime.combine(today + timedelta(days=12), time(9, 0), tzinfo=NAIROBI)
     meetup = await dw.add_event(owner_engine, world.org, world.owner, starts, title="Meetup", staff=world.staff)
+    third = await dw.add_org(owner_engine)
+    held = await dw.pitch(owner_engine, app_engine, world.developer, third.id)
     settings = get_settings()
-    async with clients(app_engine, settings, world.developer, world.owner, sacco.reviewer, world.outsider) as (
-        dev,
-        owner,
-        reviewer,
-        outsider,
+    people = (world.developer, world.owner, sacco.reviewer, world.outsider)
+    third_people = (third.owner, third.reviewer, third.signatory)
+    async with (
+        clients(app_engine, settings, *people, *third_people) as (dev, owner, reviewer, outsider, *third_seats),
+        make_client(app_engine, settings, ip="127.0.9.5") as anon,
     ):
+        third_owner, third_reviewer, third_signatory = third_seats
         question = Tracker(asked)
         await question.ok(reviewer, "start-review")
         await question.ok(reviewer, "request-info", {"question": QUESTION})
+        # on hold after the organisation's interest: its resume date is not a deadline (contract A)
+        hold = Tracker(held)
+        await hold.ok(third_reviewer, "start-review")
+        contact = {"contact_user_id": str(third.owner), "contact_channel": "phone", "contact_by": str(today)}
+        assert (await hold.ok(third_signatory, "approve", contact))["state"] == "INTEREST_CONFIRMED"
+        paused = await hold.ok(dev, "pause", {"reason": "Budget committee", "resume_at": str(today + HOLD_DAYS)})
+        assert paused["state"] == "ON_HOLD"
 
         mine = await ok(await dev.get("/api/me/deadlines"))
         items = mine["items"]
@@ -99,6 +111,8 @@ async def test_the_developer_and_the_organisation_see_their_deadlines(
             key=lambda row: (row[1], row[0]),  # by due_at (the end of the Nairobi day), then by key
         )
         assert [(i["key"], i["due_on"], i["mine"], i["engagement_id"]) for i in items] == expected
+        assert not [i for i in items if i["engagement_id"] == str(held)]  # on hold: nothing, not its resume date
+        assert str(today + HOLD_DAYS) not in {i["due_on"] for i in items}
         by_kind = {i["kind"]: i for i in items}
         assert by_kind["stage"]["title"] == "Proposal submitted: RLS proposal"
         assert by_kind["stage"]["context"] == world.org_name
@@ -137,6 +151,7 @@ async def test_the_developer_and_the_organisation_see_their_deadlines(
         # the organisation's calendar: its stage deadlines, its open Briefs and its published events
         theirs = (await ok(await owner.get(f"/api/orgs/{world.org}/deadlines")))["items"]
         assert {i["key"] for i in theirs} == {f"stage:{submitted}", f"brief:{telco_brief}", f"event:{meetup}"}
+        assert f"stage:{held}" not in {i["key"] for i in theirs}
         org_stage = next(i for i in theirs if i["kind"] == "stage")
         assert org_stage["mine"] is True  # the organisation starts the review
         assert org_stage["href"] == f"/org/engagements/{submitted}"
@@ -164,8 +179,23 @@ async def test_the_developer_and_the_organisation_see_their_deadlines(
         assert instant(org_entry["DTSTART"]) == starts.astimezone(UTC)
         assert instant(org_entry["DTEND"]) == (starts + timedelta(hours=2)).astimezone(UTC)
 
-        # not the caller's: 404 (another developer, another organisation, a kind that does not apply)
+        # the held engagement's organisation lists nothing for it either; nor does either side's feed
+        third_items = (await ok(await third_owner.get(f"/api/orgs/{third.id}/deadlines")))["items"]
+        assert not [i for i in third_items if i["engagement_id"] == str(held)]
+        public = settings.public_base_url.rstrip("/")
+        read: dict[str, set[str]] = {}
+        for side, client, path in (("dev", dev, "/api/me"), ("third", third_owner, f"/api/orgs/{third.id}")):
+            feed = await anon.get((await client.post(f"{path}/calendar-feed")).json()["url"].removeprefix(public))
+            assert feed.status_code == 200, feed.text
+            read[side] = {entry["UID"].split("@")[0] for entry in vevents(feed.content)}
+            assert not {f"stage-{held}", f"answer-{held}"} & read[side]
+        assert read["dev"] == {i["key"].replace(":", "-", 1) for i in reminded}  # the list's entries, no more
+        assert read["third"] == set()  # its only engagement is on hold
+
+        # not the caller's: 404 (another developer, another organisation, a kind that does not apply, on hold)
         for client, path in (
+            (dev, f"/api/me/deadlines/stage/{held}/calendar.ics"),
+            (third_owner, f"/api/orgs/{third.id}/deadlines/stage/{held}/calendar.ics"),
             (outsider, f"/api/me/deadlines/stage/{submitted}/calendar.ics"),
             (reviewer, f"/api/orgs/{sacco.id}/deadlines/stage/{submitted}/calendar.ics"),
             (dev, f"/api/me/deadlines/answer/{submitted}/calendar.ics"),
