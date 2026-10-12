@@ -8,13 +8,19 @@ import { renderWithIntl } from "@/test/intl";
 // Remove ends it; a live feed is not shown again (the API keeps only its hash); a failure says so; the organisation's
 // feed is its own route.
 
-const calls = vi.hoisted(() => ({ list: [] as Array<{ method: string; path: string; params?: unknown }>, fail: false }));
+const calls = vi.hoisted(() => ({
+  list: [] as Array<{ method: string; path: string; params?: unknown }>,
+  fail: false,
+}));
 vi.mock("@/lib/api/client", () => {
   const answer = (method: string) => async (path: string, init?: { params?: unknown }) => {
     calls.list.push({ method, path, params: init?.params });
     if (calls.fail) return { data: undefined, response: { ok: false, status: 500 } };
     if (method === "DELETE") return { data: undefined, response: { ok: true, status: 204 } };
-    return { data: { url: `https://wazo.example/api/calendar/tok${calls.list.length}.ics` }, response: { ok: true, status: 201 } };
+    return {
+      data: { url: `https://wazo.example/api/calendar/tok${calls.list.length}.ics` },
+      response: { ok: true, status: 201 },
+    };
   };
   return { api: { POST: answer("POST"), DELETE: answer("DELETE") } };
 });
@@ -73,7 +79,9 @@ describe("the calendar feed", () => {
     const field = await screen.findByRole("textbox", { name: "Feed link" });
     expect((field as HTMLInputElement).value).toContain("tok1");
     fireEvent.click(screen.getByRole("button", { name: "Remove the feed" }));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toBe("The feed is removed. Its link no longer works."));
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toBe("The feed is removed. Its link no longer works."),
+    );
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.getByRole("button", { name: "Create a feed link" })).toBeTruthy();
     expect(calls.list.map((call) => call.method)).toEqual(["POST", "DELETE"]);
@@ -98,6 +106,8 @@ describe("the calendar feed", () => {
   });
 
   it("makes a relative link absolute against the site", () => {
-    expect(feedLinks("/api/calendar/abc.ics", "http://localhost:3000").webcal).toBe("webcal://localhost:3000/api/calendar/abc.ics");
+    expect(feedLinks("/api/calendar/abc.ics", "http://localhost:3000").webcal).toBe(
+      "webcal://localhost:3000/api/calendar/abc.ics",
+    );
   });
 });
