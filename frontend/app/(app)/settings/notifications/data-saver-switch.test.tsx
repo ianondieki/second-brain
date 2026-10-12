@@ -6,8 +6,8 @@ import { renderWithIntl } from "@/test/intl";
 
 import { DataSaverSwitch } from "./DataSaverSwitch";
 
-// P27 track F (REQ-UX-08; docs/spec/07 item 5): Settings › Profile's data-saver switch sets or clears the data-saver
-// cookie at once, on this device (the server then treats it like Save-Data: on; lib/data-saver.test.ts and
+// P27 track F (REQ-UX-08; docs/spec/07 item 5): the data-saver switch (Settings › Notifications › Data, for both
+// sides; P27 UX: its one place) sets or clears the data-saver cookie at once, on this device (the server then treats it like Save-Data: on; lib/data-saver.test.ts and
 // components/offline/data-saver-readers.test.tsx).
 
 afterEach(() => {
@@ -23,7 +23,7 @@ describe("the data-saver switch", () => {
     expect(document.getElementById(toggle.getAttribute("aria-describedby")!)!.textContent).toBe(
       "No photographs and the smallest images, on this device.",
     );
-    expect(document.querySelectorAll("[data-primary]")).toHaveLength(0); // Save stays the page's one primary action
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(0); // "Save choices" stays the page's one primary action
   });
 
   it("sets the cookie when turned on and clears it when turned off", () => {

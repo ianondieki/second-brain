@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -14,12 +13,10 @@ import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
-import { DATA_SAVER_COOKIE } from "@/lib/data-saver";
 import { clientStrings } from "@/lib/i18n/client-strings";
 
 import { SettingsTabs } from "../SettingsTabs";
 import { BlockedList } from "./BlockedList";
-import { DataSaverSwitch } from "./DataSaverSwitch";
 import { ProfileForm } from "./ProfileForm";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -30,20 +27,19 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * Settings › Profile (REQ-DEV-03; D-58), developers only (anyone else goes to Security, the first tab): the headline,
  * the county and "Visible to peers" with its one sentence, kept with "Save" (the one primary action); then the
- * developers the caller blocked, each with "Unblock", when there are any; last, the data-saver switch (P27), which acts
- * at once on this device and is not part of Save.
+ * developers the caller blocked, each with "Unblock", when there are any. The data-saver switch (P27) is under
+ * Settings › Notifications › Data, its one place for both sides.
  */
 export default async function ProfileSettingsPage() {
   const me = await requireMe();
   const home = homeOf(me);
   if (me.side !== "developer") redirect("/settings/security");
-  const [t, tNav, profile, blocks, countyNames, jar] = await Promise.all([
+  const [t, tNav, profile, blocks, countyNames] = await Promise.all([
     getTranslations("profileSettings"),
     getTranslations("settingsNav"),
     myProfile(),
     myBlocks(),
     getCountyNames(),
-    cookies(),
   ]);
   const counties = [...countyNames]
     .map(([code, name]) => ({ code, name }))
@@ -83,9 +79,6 @@ export default async function ProfileSettingsPage() {
                 </Section>
               </Card>
             ) : null}
-            <Card variant="flat" className="p-5 sm:p-6" data-data-saver-card="">
-              <DataSaverSwitch initial={jar.get(DATA_SAVER_COOKIE)?.value === "1"} />
-            </Card>
           </div>
         </ClientStrings>
       </div>

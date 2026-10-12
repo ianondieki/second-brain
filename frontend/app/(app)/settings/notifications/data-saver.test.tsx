@@ -9,9 +9,9 @@ import { resolveServerTree } from "@/test/server-tree";
 
 import NotificationSettingsPage from "./page";
 
-// P27 track F (REQ-UX-08): Settings › Notifications carries the data-saver switch under "Data" for both sides (an
-// organisation member has no Profile tab), the same component as Profile's, in the state of this device's cookie, and
-// not a second primary action.
+// P27 track F (REQ-UX-08): Settings › Notifications carries the data-saver switch under "Data" for both sides, its one
+// place (P27 UX: a developer's Profile no longer repeats it), in the state of this device's cookie, and not a second
+// primary action.
 
 const state = vi.hoisted(() => ({ side: "org" as "org" | "developer", cookie: "1" as string | undefined }));
 
