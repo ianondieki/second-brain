@@ -28,7 +28,11 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function OrganisationEngagementsPage({ searchParams }: PageProps<"/org/engagements">) {
   const { memberships, org, missing, query } = await orgContext((await searchParams).org);
-  const [t, ti, tp] = await Promise.all([getTranslations("tracker"), getTranslations("inbox"), getTranslations("portal")]);
+  const [t, ti, tp] = await Promise.all([
+    getTranslations("tracker"),
+    getTranslations("inbox"),
+    getTranslations("portal"),
+  ]);
 
   return (
     <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="engagements" query={query} />} wide>
@@ -59,10 +63,16 @@ async function Body({ memberships, org, query }: { memberships: Membership[]; or
       read.refusal === "mfaSetup" ? (
         <EmptyState sentence={t("refused.mfaSetup")} action={t("turnOnMfa")} href="/settings/security" primary />
       ) : (
-        <EmptyState sentence={t("refused.notFound")} action={t("emptyOrgAction")} href={inboxHref(memberships, org.org_id)} />
+        <EmptyState
+          sentence={t("refused.notFound")}
+          action={t("emptyOrgAction")}
+          href={inboxHref(memberships, org.org_id)}
+        />
       );
   } else if (read.value.length === 0) {
-    body = <EmptyState sentence={t("emptyOrg")} action={t("emptyOrgAction")} href={inboxHref(memberships, org.org_id)} />;
+    body = (
+      <EmptyState sentence={t("emptyOrg")} action={t("emptyOrgAction")} href={inboxHref(memberships, org.org_id)} />
+    );
   } else {
     body = <EngagementGrid items={read.value} query={query} />;
   }
@@ -98,13 +108,18 @@ async function EngagementGrid({ items, query }: { items: Summary[]; query: strin
     { key: "needs", title: t("needsUs"), items: waiting },
     { key: "rest", title: t("others"), items: rest },
   ].filter((group) => group.items.length > 0);
-  const grid = (list: Summary[], level: 2 | 3, group: string, label?: string) => (
+  // `first`: the first group drawn; its first card's band is the page's largest picture, fetched at once.
+  const grid = (list: Summary[], level: 2 | 3, group: string, first: boolean, label?: string) => (
     // As many 20 rem columns as fit, sharing the width, as the developer's list.
-    <ul aria-label={label} data-group={label ? group : undefined} className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
+    <ul
+      aria-label={label}
+      data-group={label ? group : undefined}
+      className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]"
+    >
       {list.map((item, i) => (
         <li key={item.id} className="cv-auto flex min-w-0 [--cv-size:16rem] [&>article]:flex-1">
           <EngagementCard
-            eager={i === 0}
+            eager={first && i === 0}
             item={item}
             mine="org"
             headingLevel={level}
@@ -116,12 +131,12 @@ async function EngagementGrid({ items, query }: { items: Summary[]; query: strin
       ))}
     </ul>
   );
-  if (groups.length === 1) return grid(groups[0].items, 2, groups[0].key, groups[0].title);
+  if (groups.length === 1) return grid(groups[0].items, 2, groups[0].key, true, groups[0].title);
   return (
     <div className="flex flex-col gap-12 lg:gap-14">
-      {groups.map((group) => (
+      {groups.map((group, gi) => (
         <Section key={group.key} title={group.title} headingId={`engagements-${group.key}`} data-group={group.key}>
-          {grid(group.items, 3, group.key)}
+          {grid(group.items, 3, group.key, gi === 0)}
         </Section>
       ))}
     </div>

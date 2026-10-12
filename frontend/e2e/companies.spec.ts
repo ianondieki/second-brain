@@ -48,6 +48,9 @@ test.describe("a signed-in developer", () => {
       await expect(row.locator("[data-chip]")).toHaveCount(0);
       await expect(row.locator("img:not([alt=''])")).toHaveCount(0);
     }
+    // The first two cards' bands are the page's largest picture: fetched at once; every other band lazy.
+    await expect(page.locator("main [data-niche-band] img[loading='eager']")).toHaveCount(2);
+    await expect(rows(page).nth(2).locator("img[loading='eager']")).toHaveCount(0);
     // The whole directory runs to more than one page: a section's count would be this page's only, so none is said.
     await expect(page.locator("main section[data-niche]").first()).not.toContainText(/\d+ organisations?/);
     await checkScreen(page, { strict: true });

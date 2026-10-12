@@ -1,8 +1,25 @@
-import { expect, test, type APIRequestContext, type Browser, type Locator, type Page, type TestInfo } from "@playwright/test";
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Browser,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 
 import { appToday, plusDays } from "./support/clock";
 import { checkScreen } from "./support/screen";
-import { actionsReady, OWNER_DATABASE_URL, ownerSql, pitchFromDeveloper, post, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
+import {
+  actionsReady,
+  OWNER_DATABASE_URL,
+  ownerSql,
+  pitchFromDeveloper,
+  post,
+  signUpOrg,
+  type DevSide,
+  type OrgSide,
+} from "./support/tracker-scene";
 
 // REQ-ENG-10 part (AC-TRACK-4 part; docs/spec/06 6.9 side branches): the tracker's side states walked by both parties
 // in their own browsers against the compose stack: a question and its answer, a hold and an early resume, a question
@@ -130,7 +147,10 @@ const bannerClock = (page: Page) => banner(page).locator("[data-clock-panel] [da
 /** An engagement's live clock on a card (the Engagements lists, Home's Needs-you cards; P26). */
 const cardClock = (page: Page, id: string) => page.locator(`[data-engagement="${id}"] [data-clock]`);
 
-test("the deadline counts down in days, hours and minutes on Home, the cards and the tracker, from the API's clock", async ({ page, browser }, info) => {
+test("the deadline counts down in days, hours and minutes on Home, the cards and the tracker, from the API's clock", async ({
+  page,
+  browser,
+}, info) => {
   test.setTimeout(150_000);
   const { dev, devPage, orgPage, close } = await scene(page, browser, info);
   try {
@@ -142,6 +162,11 @@ test("the deadline counts down in days, hours and minutes on Home, the cards and
     await checkScreen(devPage, { strict: true });
     // The developer's Engagements list: the card's live clock, its figures and its words under it.
     await devPage.goto("/dev/engagements");
+    // At most one band is fetched at once, and it is the first card's (the page's largest picture; P26-C).
+    expect(await devPage.locator("main img[loading='eager']").count()).toBeLessThanOrEqual(1);
+    await expect(devPage.locator("main article").first().locator("img[loading='eager']")).toHaveCount(
+      await devPage.locator("main img[loading='eager']").count(),
+    );
     await expect(cardClock(devPage, dev.engagementId).locator('time[datetime^="P"]')).toBeVisible();
     await expectCountdown(devPage, cardClock(devPage, dev.engagementId), dev.engagementId);
     await expect(cardClock(devPage, dev.engagementId).locator("[data-figure]")).not.toHaveCount(0);
@@ -150,16 +175,25 @@ test("the deadline counts down in days, hours and minutes on Home, the cards and
     await devPage.goto(`/dev/engagements/${dev.engagementId}`);
     await expectCountdown(devPage, bannerClock(devPage), dev.engagementId);
     // One deadline, said once: the clock's line carries the business days and the date.
-    await expect(banner(devPage).locator("[data-clock-panel] [data-due]")).toHaveText(/(business days? left, due|^Due today,) \d{1,2} \w{3} \d{4}$/);
+    await expect(banner(devPage).locator("[data-clock-panel] [data-due]")).toHaveText(
+      /(business days? left, due|^Due today,) \d{1,2} \w{3} \d{4}$/,
+    );
     await expect(banner(devPage).locator("[data-due]")).toHaveCount(1);
     await expect(bannerClock(devPage)).not.toHaveAttribute("data-clock", "warm");
     // The organisation's Engagements list and its Home's "Needs us" card show the same clock.
     await orgPage.goto("/org/engagements");
+    // At most one band is fetched at once, and it is the first card's (the page's largest picture; P26-C).
+    expect(await orgPage.locator("main img[loading='eager']").count()).toBeLessThanOrEqual(1);
+    await expect(orgPage.locator("main article").first().locator("img[loading='eager']")).toHaveCount(
+      await orgPage.locator("main img[loading='eager']").count(),
+    );
     await expect(cardClock(orgPage, dev.engagementId).locator('time[datetime^="P"]')).toBeVisible();
     await expectCountdown(orgPage, cardClock(orgPage, dev.engagementId), dev.engagementId);
     await checkScreen(orgPage, { strict: true });
     await orgPage.goto("/org");
-    await expect(orgPage.locator(`[data-home="needs-us"] [data-engagement="${dev.engagementId}"] time[datetime^="P"]`)).toBeVisible();
+    await expect(
+      orgPage.locator(`[data-home="needs-us"] [data-engagement="${dev.engagementId}"] time[datetime^="P"]`),
+    ).toBeVisible();
     await orgPage.goto(`/org/engagements/${dev.engagementId}`);
     await expectCountdown(orgPage, bannerClock(orgPage), dev.engagementId);
     // No live region: a ticking figure is never announced.
@@ -170,7 +204,10 @@ test("the deadline counts down in days, hours and minutes on Home, the cards and
   }
 });
 
-test("the organisation asks a question, the developer answers it, both read it in the History", async ({ page, browser }, info) => {
+test("the organisation asks a question, the developer answers it, both read it in the History", async ({
+  page,
+  browser,
+}, info) => {
   test.setTimeout(180_000);
   const { dev, org, devPage, orgPage, close } = await scene(page, browser, info);
   const question = "Which co-ops ran the pilot?\nA rough count of litres a day is enough.";
@@ -238,7 +275,9 @@ test("the organisation asks a question, the developer answers it, both read it i
     // The History: both texts under their events, the same list for both parties (AC-TRACK-3).
     await devPage.goto(`/dev/engagements/${dev.engagementId}?tab=history`);
     await orgPage.goto(`/org/engagements/${dev.engagementId}?tab=history`);
-    await expect(devPage.locator("[data-event='request_info'] [data-note='info_request']")).toContainText("Which co-ops ran the pilot?");
+    await expect(devPage.locator("[data-event='request_info'] [data-note='info_request']")).toContainText(
+      "Which co-ops ran the pilot?",
+    );
     await expect(devPage.locator("[data-event='answer_info'] [data-note='info_answer']")).toContainText(answer);
     // Both parties read the same events and notes; the developer is their handle to the organisation until contact
     // is agreed (docs/spec/06 6.9) and their own name to themselves, so only the names differ.
@@ -281,19 +320,28 @@ test("either party pauses before the agreement and the other resumes it early", 
     await expect(banner(devPage)).toContainText(`Awaiting: ${org.orgName}`);
     await expect(stepper(devPage).locator("[aria-current='step']")).toContainText("Now: Under review");
     await devPage.goto(`/dev/engagements/${dev.engagementId}?tab=history`);
-    await expect(devPage.locator("[data-event='pause'] [data-note='hold']")).toContainText("Our budget committee meets next week");
-    await expect(devPage.locator("[data-event='resume'] [data-note='resume']")).toContainText("The committee met early");
+    await expect(devPage.locator("[data-event='pause'] [data-note='hold']")).toContainText(
+      "Our budget committee meets next week",
+    );
+    await expect(devPage.locator("[data-event='resume'] [data-note='resume']")).toContainText(
+      "The committee met early",
+    );
   } finally {
     await close();
   }
 });
 
-test("a question with contact details is refused in words; the organisation withdraws the one it sent", async ({ page, browser }, info) => {
+test("a question with contact details is refused in words; the organisation withdraws the one it sent", async ({
+  page,
+  browser,
+}, info) => {
   test.setTimeout(180_000);
   const { dev, org, devPage, orgPage, close } = await scene(page, browser, info);
   try {
     const ask = await openSheet(orgPage, "Request information");
-    await ask.getByLabel("Your question").fill("Please write to desk@example.com or call 0712 345 678 about the pilot.");
+    await ask
+      .getByLabel("Your question")
+      .fill("Please write to desk@example.com or call 0712 345 678 about the pilot.");
     await ask.getByRole("button", { name: "Send the question", exact: true }).click();
     // The refusal sits on the field (aria-invalid, aria-describedby), which keeps the focus; the text is kept to edit.
     await expect(ask.getByText(CONTACT_REFUSAL)).toBeVisible(SERVER_STEP);
@@ -324,7 +372,10 @@ test("a question with contact details is refused in words; the organisation with
 
 test.describe("on the test clock", () => {
   test.describe.configure({ mode: "serial" });
-  test.skip(!process.env.E2E_TEST_CLOCK, "moves the shared clock: run alone with E2E_TEST_CLOCK=1 (see the file's header)");
+  test.skip(
+    !process.env.E2E_TEST_CLOCK,
+    "moves the shared clock: run alone with E2E_TEST_CLOCK=1 (see the file's header)",
+  );
 
   async function advance(request: APIRequestContext, days: number) {
     await post(request, "/api/test-clock/advance", { days });
@@ -341,7 +392,10 @@ test.describe("on the test clock", () => {
     );
   }
 
-  test("a question answered days later keeps the review's business days: its deadline moved by the days it was open", async ({ page, browser }, info) => {
+  test("a question answered days later keeps the review's business days: its deadline moved by the days it was open", async ({
+    page,
+    browser,
+  }, info) => {
     test.setTimeout(180_000);
     const { dev, devPage, orgPage, close } = await scene(page, browser, info);
     try {
@@ -360,9 +414,13 @@ test.describe("on the test clock", () => {
       // The clock was paused while the question was open: the business days left are those the review had when it
       // was asked, so the due day moved by exactly the business days the question was open (holidays included).
       const after = await dueOf(devPage.request, dev.engagementId);
-      expect(after.business_days_left, "the review's business days left, unchanged by the pause").toBe(before.business_days_left);
+      expect(after.business_days_left, "the review's business days left, unchanged by the pause").toBe(
+        before.business_days_left,
+      );
       expect(after.due_on > before.due_on, `${before.due_on} → ${after.due_on}`).toBe(true);
-      await expect(banner(devPage).locator("[data-due]")).toContainText(`${after.business_days_left} business days left`);
+      await expect(banner(devPage).locator("[data-due]")).toContainText(
+        `${after.business_days_left} business days left`,
+      );
       await checkScreen(devPage, { strict: true });
     } finally {
       await close();
@@ -405,14 +463,17 @@ test.describe("on the test clock", () => {
       await expect
         .poll(
           async () =>
-            ((await (await devPage.request.get(`/api/engagements/${dev.engagementId}`)).json()) as { state: string }).state,
+            ((await (await devPage.request.get(`/api/engagements/${dev.engagementId}`)).json()) as { state: string })
+              .state,
           { timeout: 60_000 },
         )
         .toBe("EXPIRED");
 
       await devPage.goto(`/dev/engagements/${dev.engagementId}`);
       await expect(banner(devPage)).toContainText("This engagement has ended.");
-      await expect(banner(devPage).locator("[data-side='expired']")).toHaveText("Expired: the developer did not answer in time.");
+      await expect(banner(devPage).locator("[data-side='expired']")).toHaveText(
+        "Expired: the developer did not answer in time.",
+      );
       await expect(stepper(devPage).locator("[data-state='ended']")).toContainText("Review");
       await expect(actions(devPage)).toHaveCount(0);
       await checkScreen(devPage, { strict: true });
