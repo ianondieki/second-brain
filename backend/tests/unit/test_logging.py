@@ -5,6 +5,7 @@ calendar feed's token, a path segment (REQ-ENG-13, D-70)."""
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
 import logging
 import socket
@@ -142,7 +143,9 @@ def test_a_download_links_signature_never_reaches_the_access_log(access_log: io.
 
 # ------------------------------------------------------------------------- a capability in the path (D-70)
 
-FEED_TOKEN = "IQ7ShzVq3mJ0a9f1sKxW2bYcR5tUe8gHnLpDoAv4ZkM"  # the shape of a live feed token (43 base64url characters)
+# The shape of a live feed token (32 bytes as 43 base64url characters), derived rather than written out so no
+# secret scanner takes the fixture for a credential.
+FEED_TOKEN = base64.urlsafe_b64encode(bytes(range(7, 39))).rstrip(b"=").decode()
 NEAR_MISS = "A" * 42 + "B"  # 43 characters, but not a canonical token: answered 404 before the database is asked
 
 

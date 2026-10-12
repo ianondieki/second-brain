@@ -173,7 +173,7 @@ test("Telco A's signatory declares prior knowledge inside the window; the develo
 });
 
 test.describe("on the test clock", () => {
-  test.skip(!process.env.E2E_TEST_CLOCK, "moves the shared clock 15 days forward: run alone with E2E_TEST_CLOCK=1");
+  test.skip(!process.env.E2E_TEST_CLOCK, "moves the shared clock past the window: run alone with E2E_TEST_CLOCK=1");
 
   test("day 11 refuses with declaration_window_closed and the action is gone", async ({ page, browser }, info) => {
     test.setTimeout(180_000);
@@ -189,8 +189,11 @@ test.describe("on the test clock", () => {
           prior_knowledge: { window_closes_on: string };
         }
       ).prior_knowledge.window_closes_on;
-      // 15 calendar days hold at least 11 business days (the window is 10).
-      await post(signatory.request, "/api/test-clock/advance", { days: 15 });
+      // The window's last day is the API's (ten business days, Kenyan holidays included: a fixed 15 calendar days
+      // landed exactly on the closing day when Mashujaa Day fell inside the window); the clock moves to the day after.
+      const today = await appToday(signatory.request);
+      const days = Math.round((Date.parse(closesOn) - Date.parse(today)) / 86_400_000) + 1;
+      await post(signatory.request, "/api/test-clock/advance", { days });
       expect((await appToday(signatory.request)) > closesOn).toBe(true);
       const late = await send(signatory.request, "post", declarationPath(signatory.orgId, id), evidence());
       expect(late.status()).toBe(403);
