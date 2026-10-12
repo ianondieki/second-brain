@@ -33,6 +33,7 @@ from bridge.config import Settings, get_settings
 from bridge.db import API_IDLE_IN_TRANSACTION_MS, create_engine, create_session_factory
 from bridge.directory.responsiveness import NoResponsivenessData
 from bridge.directory.router import router as directory_router
+from bridge.engagements.deadlines_router import router as deadlines_router
 from bridge.engagements.interest_router import router as interest_router
 from bridge.engagements.messages_router import router as messages_router
 from bridge.engagements.router import router as engagements_router
@@ -238,6 +239,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(briefs_router)
     app.include_router(engagements_router)
     app.include_router(messages_router)
+    app.include_router(deadlines_router)
     app.include_router(plans_router)
     app.include_router(billing_router)
     app.include_router(interest_router)
