@@ -1,20 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import {
-  lazy,
-  Suspense,
-  useId,
-  useRef,
-  useState,
-  type ComponentProps,
-  type ComponentType,
-  type ReactNode,
-} from "react";
+import { lazy, Suspense, useId, useState, type ComponentProps, type ComponentType } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Button } from "@/components/ui/Button";
-import { api } from "@/lib/api/client";
 
 // The tracker's rarely shown client parts (P23-3; docs/spec/07 item 5: the tracker route sits at its JS budget), each
 // in its own chunk that loads only on a page that draws it: the developer's Tier-2 share (until it is shared), the
@@ -67,40 +57,43 @@ export function LazyContactReveal(props: ComponentProps<typeof ContactRevealChun
   );
 }
 
-// The organisation's Team sheet and prior-knowledge declaration (P27: REQ-ENG-15, REQ-PROV-06): the server draws the
-// line and its opener's words; the sheet's chunk is fetched when the pointer reaches the opener or it takes focus,
-// and drawn when it is pressed. Closing gives focus back to the opener (or, once the opener is gone because the
-// change removed it, to the element `after` names) and refreshes the tracker when something changed.
-const loadTeam = () => import("@/components/team/TeamSheet");
-const loadDeclaration = () => import("@/components/provenance/DeclarationSheet");
-const TeamSheetChunk = failSafe(() => loadTeam().then((m) => m.TeamSheet));
-const DeclarationSheetChunk = failSafe(() => loadDeclaration().then((m) => m.DeclarationSheet));
+// The P27 parts behind a button (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04): the organisation's Team sheet and its
+// prior-knowledge declaration, and the developer's dismissal of the IP note. The server draws the line and the
+// button's words; the part's chunk is fetched when the pointer reaches the button or it takes focus, and drawn when it
+// is pressed (pressed again, drawn anew). Closing gives focus back to the button (or, once the change removed it, to
+// the element `after` names) and refreshes the tracker when something changed.
+const PARTS = {
+  team: () => import("@/components/team/TeamSheet").then((m) => m.TeamSheet),
+  declaration: () => import("@/components/provenance/DeclarationSheet").then((m) => m.DeclarationSheet),
+  nudge: () => import("./NudgeDismiss").then((m) => m.NudgeDismiss),
+};
+type Parts = typeof PARTS;
+type PartName = keyof Parts;
+type Close = { onClose: (changed: boolean) => void };
+export type PartProps<K extends PartName> = Omit<ComponentProps<Awaited<ReturnType<Parts[K]>>>, "onClose">;
+const CHUNKS = { team: failSafe(PARTS.team), declaration: failSafe(PARTS.declaration), nudge: failSafe(PARTS.nudge) };
 
-interface OpenerProps {
-  label: string;
-  className?: string;
-  /** The id to focus when the change removed the opener itself (the declaration's line). */
-  after?: string;
-}
-
-function Opener({
+export function PartButton<K extends PartName>({
+  part,
   label,
   className,
   after,
-  name,
-  load,
-  sheet,
-}: OpenerProps & {
-  name: string;
-  load: () => Promise<unknown>;
-  sheet: (onClose: (changed: boolean) => void) => ReactNode;
+  props,
+}: {
+  part: K;
+  label: string;
+  className?: string;
+  /** The id to focus when the change removed the button itself (the declaration's line). */
+  after?: string;
+  props: PartProps<K>;
 }) {
-  const [open, setOpen] = useState(false);
+  const [shown, show] = useState(0);
   const router = useRouter();
   const id = useId();
-  const prefetch = () => void load().catch(() => undefined);
+  const Part = CHUNKS[part] as unknown as ComponentType<PartProps<K> & Close>;
+  const prefetch = () => void PARTS[part]().catch(() => undefined);
   function close(changed: boolean) {
-    setOpen(false);
+    show(0);
     document.getElementById(id)?.focus();
     if (!changed) return;
     router.refresh();
@@ -111,88 +104,19 @@ function Opener({
       <button
         id={id}
         type="button"
-        data-opens={name}
+        data-opens={part}
         className={className}
-        onClick={() => setOpen(true)}
+        onClick={() => show((n) => n + 1)}
         onPointerEnter={prefetch}
         onFocus={prefetch}
       >
         {label}
       </button>
-      {open ? <Suspense fallback={null}>{sheet(close)}</Suspense> : null}
-    </>
-  );
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SheetProps<C extends ComponentType<any>> = Omit<ComponentProps<C>, "onClose">;
-
-export function TeamSheetButton({
-  label,
-  className,
-  after,
-  ...props
-}: OpenerProps & SheetProps<typeof TeamSheetChunk>) {
-  return (
-    <Opener
-      label={label}
-      className={className}
-      after={after}
-      name="team"
-      load={loadTeam}
-      sheet={(onClose) => <TeamSheetChunk {...props} onClose={onClose} />}
-    />
-  );
-}
-
-export function DeclarationSheetButton({
-  label,
-  className,
-  after,
-  ...props
-}: OpenerProps & SheetProps<typeof DeclarationSheetChunk>) {
-  return (
-    <Opener
-      label={label}
-      className={className}
-      after={after}
-      name="declaration"
-      load={loadDeclaration}
-      sheet={(onClose) => <DeclarationSheetChunk {...props} onClose={onClose} />}
-    />
-  );
-}
-
-/**
- * The developer's IP note's Dismiss (REQ-DEV-04): POST /api/me/profile/ip-nudge/dismiss, then the note is hidden
- * (and gone from the refreshed tracker); focus moves to the actions' heading. A refusal says so beside the button.
- */
-export function DismissNudge({ label, failed }: { label: string; failed: string }) {
-  const router = useRouter();
-  const [state, setState] = useState<"idle" | "busy" | "failed">("idle");
-  const box = useRef<HTMLSpanElement>(null);
-  async function dismiss() {
-    if (state === "busy") return;
-    setState("busy");
-    const ok = await api.POST("/api/me/profile/ip-nudge/dismiss").then(
-      ({ response }) => response.ok,
-      () => false,
-    );
-    if (!ok) return setState("failed");
-    box.current?.closest("[data-ip-nudge]")?.setAttribute("hidden", "");
-    document.getElementById("actions-heading")?.focus();
-    router.refresh();
-  }
-  return (
-    <span ref={box} className="flex flex-col items-start gap-2">
-      {state === "failed" ? (
-        <span role="alert" className="text-sm font-medium text-error">
-          {failed}
-        </span>
+      {shown ? (
+        <Suspense fallback={null}>
+          <Part key={shown} {...props} onClose={close} />
+        </Suspense>
       ) : null}
-      <Button variant="secondary" busy={state === "busy"} onClick={() => void dismiss()} data-dismiss-nudge="">
-        {label}
-      </Button>
-    </span>
+    </>
   );
 }

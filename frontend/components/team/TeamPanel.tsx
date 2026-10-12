@@ -1,7 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
-import { DeclarationSheetButton, TeamSheetButton } from "@/components/tracker/lazy";
+import { PartButton } from "@/components/tracker/lazy";
 import { isFinished, type TrackerDetail } from "@/components/tracker/model";
 import { Avatar } from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
@@ -51,7 +51,12 @@ export async function TeamPanel({ detail, myUserId }: { detail: TrackerDetail; m
           {assignee ? (mine ? t("assignedToYou") : t("assignedTo", { name: assignee.display_name })) : t("unassigned")}
         </span>
         {triage ? (
-          <TeamSheetButton {...sheet} focus="assign" label={assignee ? t("change") : t("assign")} className={OPENER} />
+          <PartButton
+            part="team"
+            props={{ ...sheet, focus: "assign" }}
+            label={assignee ? t("change") : t("assign")}
+            className={OPENER}
+          />
         ) : null}
       </p>
       <p
@@ -64,9 +69,9 @@ export async function TeamPanel({ detail, myUserId }: { detail: TrackerDetail; m
             : t("none")}
         </span>
         {total > 0 || triage ? (
-          <TeamSheetButton
-            {...sheet}
-            focus="recommendations"
+          <PartButton
+            part="team"
+            props={{ ...sheet, focus: "recommendations" }}
             label={total > 0 ? t("see") : t("recommend")}
             className={OPENER}
           />
@@ -119,12 +124,15 @@ export async function DeclarationLine({ detail }: { detail: TrackerDetail }) {
         {sentence}
       </p>
       {pk.can_declare && pk.first_tier2_view_at && pk.window_closes_on ? (
-        <DeclarationSheetButton
-          orgId={detail.org_id}
-          engagementId={detail.id}
-          closesOn={pk.window_closes_on}
-          firstViewOn={nairobiDay(pk.first_tier2_view_at)}
-          locale={locale}
+        <PartButton
+          part="declaration"
+          props={{
+            orgId: detail.org_id,
+            engagementId: detail.id,
+            closesOn: pk.window_closes_on,
+            firstViewOn: nairobiDay(pk.first_tier2_view_at),
+            locale,
+          }}
           after="prior-knowledge"
           label={t("declare")}
           className={buttonClass("secondary", "w-full shrink-0 sm:w-auto")}

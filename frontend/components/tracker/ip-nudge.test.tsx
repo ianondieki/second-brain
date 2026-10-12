@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { createTranslator } from "next-intl";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -78,18 +78,26 @@ describe("the IP note", () => {
   it("Dismiss posts to the API, hides the note and refreshes the tracker", async () => {
     post.mockResolvedValue({ response: new Response(null, { status: 204 }) });
     const { container } = await nudge();
+    // Its call loads when pressed (a lazy part), then posts once.
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Dismiss" })));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(post).toHaveBeenCalledTimes(1);
     expect(post).toHaveBeenCalledWith("/api/me/profile/ip-nudge/dismiss");
     expect(container.querySelector("[data-ip-nudge]")!.hasAttribute("hidden")).toBe(true);
-    expect(refresh).toHaveBeenCalled();
   });
 
   it("says so when Dismiss fails, and keeps the note", async () => {
     post.mockRejectedValue(new TypeError("offline"));
     const { container } = await nudge();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Dismiss" })));
-    expect(screen.getByRole("alert").textContent).toBe("Could not dismiss the note. Try again.");
+    expect((await screen.findByRole("alert")).textContent).toBe("Could not dismiss the note. Try again.");
     expect(container.querySelector("[data-ip-nudge]")!.hasAttribute("hidden")).toBe(false);
+    expect(refresh).not.toHaveBeenCalled();
+    // Pressed again, it tries again.
+    post.mockResolvedValue({ response: new Response(null, { status: 204 }) });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Dismiss" })));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(post).toHaveBeenCalledTimes(2);
   });
 
   it("sits in the turn card, under the developer's buttons", async () => {
