@@ -19,7 +19,8 @@ const UNTIL = new Date(Date.parse(NOW) + ((6 * 24 + 14) * 60 + 23) * MIN).toISOS
 const UNITS = ["1 day {hours} h {minutes} min", "99 days {hours} h {minutes} min", "{hours} h {minutes} min", "{minutes} min"] as const;
 const at = (minutes: number) => new Date(Date.parse(NOW) + minutes * MIN).toISOString();
 
-// The app clock is the module's own (one per page): each test loads a fresh copy.
+// The app clock is the page's (one per page; its gap is the window's, shared with the clock ticker): each test loads a
+// fresh copy of the module and starts without a gap.
 let Countdown: typeof import("./Countdown").Countdown;
 let TimeLeft: typeof import("./TimeLeft").TimeLeft;
 
@@ -43,6 +44,7 @@ beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   vi.setSystemTime(new Date(NOW));
   vi.resetModules();
+  delete (globalThis as { __appGap?: number }).__appGap;
   ({ Countdown } = await import("./Countdown"));
   ({ TimeLeft } = await import("./TimeLeft"));
 });

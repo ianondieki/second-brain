@@ -6,10 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "@/locales/en.json";
 import sw from "@/locales/sw.json";
 
+import { CLOCK_TICKER_SCRIPT } from "./ClockTicker";
+
 // P26 (REQ-TRACK-03; REQ-UX-02): the live deadline clock, days, hours and minutes as figures (no leading zero units) in the figure face
 // with their unit words, in one <time> carrying the duration and the full Nairobi instant, ticking on the minute from
 // the page's app clock (the same clock as Countdown's, useAppClock.ts), warm under 24 hours only on the viewer's step,
-// the screen's own word once past, no live region; the deadline in words as its line.
+// the screen's own word once past, no live region; the deadline in words as its line. P27: drawn on the server, kept
+// by the page's ticker (ClockTicker.tsx, run here as the browser runs it), no React of its own.
 
 const MIN = 60_000;
 const NOW = "2026-10-10T06:36:00.000Z";
@@ -17,7 +20,8 @@ const NOW = "2026-10-10T06:36:00.000Z";
 const UNTIL = "2026-10-16T20:59:59.999Z";
 const at = (minutes: number) => new Date(Date.parse(NOW) + minutes * MIN).toISOString();
 
-// The app clock is the module's own (one per page): each test loads fresh copies.
+// The app clock is the page's (the window's gap, shared by the ticker and Countdown's hook): each test starts without
+// one, and with fresh copies of the modules.
 let DeadlineClock: typeof import("./DeadlineClock").DeadlineClock;
 let Countdown: typeof import("./Countdown").Countdown;
 
@@ -30,12 +34,16 @@ function withMessages(ui: ReactElement, locale: "en" | "sw" = "en") {
 }
 
 const clock = () => document.querySelector<HTMLElement>("[data-clock]")!;
+/** The page's ticker, run as the browser runs the inline script. */
+const tick = () => new Function(CLOCK_TICKER_SCRIPT)();
 const figures = () => [...document.querySelectorAll("[data-figure]")].map((figure) => figure.textContent);
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   vi.setSystemTime(new Date(NOW));
   vi.resetModules();
+  delete (window as { __appGap?: number }).__appGap;
+  delete (window as { __clocks?: () => void }).__clocks;
   ({ DeadlineClock } = await import("./DeadlineClock"));
   ({ Countdown } = await import("./Countdown"));
 });
@@ -106,6 +114,10 @@ describe("DeadlineClock", () => {
   it("ticks on the minute: the server's figure first, then the minutes figure moves down each whole minute, one timer", () => {
     withMessages(<DeadlineClock until={UNTIL} now={NOW} labelWhenPast="Overdue" />);
     expect(figures()).toEqual(["6", "14", "23"]);
+    // No timer of its own: the page's ticker keeps it.
+    expect(vi.getTimerCount()).toBe(0);
+    tick();
+    expect(figures()).toEqual(["6", "14", "23"]);
     expect(vi.getTimerCount()).toBe(1);
     act(() => vi.advanceTimersByTime(MIN));
     expect(figures()).toEqual(["6", "14", "22"]);
@@ -139,6 +151,7 @@ describe("DeadlineClock", () => {
     cleanup();
     withMessages(<DeadlineClock until={at(1)} now={NOW} labelWhenPast="Overdue" />);
     expect(figures()).toEqual(["1"]);
+    tick();
     act(() => vi.advanceTimersByTime(MIN + 1));
     expect(clock().textContent).toBe("Overdue");
     expect(vi.getTimerCount()).toBe(0);
@@ -163,6 +176,9 @@ describe("DeadlineClock", () => {
       </>,
     );
     expect(figures()).toEqual(["6", "14", "23"]);
+    // The ticker runs where the page is parsed: the clock put right at once, then Countdown's hook on hydration.
+    tick();
+    expect(figures()).toEqual(["6", "13", "53"]);
     act(() => vi.advanceTimersByTime(0));
     expect(figures()).toEqual(["6", "13", "53"]);
     expect(document.querySelector("[data-timer] time")?.getAttribute("dateTime")).toBe("P6DT13H53M");

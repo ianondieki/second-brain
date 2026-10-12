@@ -9,7 +9,7 @@ import { cn } from "./cn";
 // The figures in the figure face (Bricolage, tabular, bold, set solid), the unit words small and ink-soft beside each;
 // under 24 hours on the viewer's own step ("warm"), the saffron mark before the figures (a pseudo-element, never read
 // out) and the figures in the warm text colour; past the instant, the screen's word in the error colour. Here, on the
-// server, not in the bundle.
+// server, not in the bundle; the page's ticker (ClockTicker.tsx) only changes data-clock and the figures.
 const look = cn(
   "block leading-none whitespace-nowrap text-ink",
   "[&_[data-figure]]:font-figure [&_[data-figure]]:font-bold [&_[data-figure]]:tracking-[-0.02em] [&_[data-figure]]:tabular-nums",
@@ -43,9 +43,10 @@ export interface DeadlineClockProps {
 
 /**
  * The live deadline clock (P26; REQ-TRACK-03): the time left to `until` as a timer, days, hours and minutes in the
- * figure face with their unit words, ticking on the minute from the app clock (the client part, ClockFigures), and the
- * deadline in words as its line. The <time> reads as the duration and carries the full instant in Nairobi time as its
- * title; the words line says the date and the business days. No live region. A server component wherever it is drawn.
+ * figure face with their unit words, drawn on the server (ClockFigures) and moved on the minute from the app clock by
+ * the page's ticker (ClockTicker.tsx, which the page renders once), and the deadline in words as its line. The <time>
+ * reads as the duration and carries the full instant in Nairobi time as its title; the words line says the date and the
+ * business days. No live region. A server component wherever it is drawn: no JavaScript of its own.
  */
 export function DeadlineClock({
   until,
@@ -75,8 +76,8 @@ export function DeadlineClock({
         now={now}
         labelWhenPast={labelWhenPast}
         tone={mine ? "warm" : "neutral"}
-        // Each language's messages with their tags and slots kept for the ticking part to fill (order and spacing are the
-        // message's own); formatted here, so they work however the catalogues are compiled.
+        // Each language's messages with their tags and slots kept for the figures to fill, here and by the ticker (order
+        // and spacing are the message's own); formatted here, so they work however the catalogues are compiled.
         formats={[t.markup("clockDays", slots), t.markup("clockHours", slots), t.markup("clockMinutes", slots)]}
         title={t("at", nairobiParts(locale, until))}
         locale={locale}
@@ -84,5 +85,40 @@ export function DeadlineClock({
       />
       {words ? <p className="text-sm leading-snug text-pretty text-ink-soft">{words}</p> : null}
     </div>
+  );
+}
+
+// The sentence clock's look: tabular figures; on the viewer's own step under 24 hours, the saffron mark before the
+// words and the time in the warm text colour (as TimeLeft's).
+const line =
+  "tabular-nums data-[clock=warm]:before:me-1.5 data-[clock=warm]:before:inline-block data-[clock=warm]:before:size-2 data-[clock=warm]:before:rounded-full data-[clock=warm]:before:bg-flourish data-[clock=warm]:before:align-middle [&[data-clock=warm]>time]:font-semibold [&[data-clock=warm]>time]:text-warm [&>time]:whitespace-nowrap";
+
+export interface DeadlineLineProps {
+  until: string;
+  now: string;
+  labelWhenPast: string;
+  mine?: boolean;
+  className?: string;
+}
+
+/**
+ * The time left to `until` as a sentence ("in 6 days 14 hours 23 minutes", the units the language's own from Intl),
+ * kept on the minute by the page's ticker as DeadlineClock is (P27): for a deadline that is not the viewer's figure to
+ * watch (the organisation's line under an open question). The screen's word once the instant has passed.
+ */
+export function DeadlineLine({ until, now, labelWhenPast, mine = false, className }: DeadlineLineProps) {
+  const t = useTranslations("countdown");
+  const locale = useLocale();
+  return (
+    <ClockFigures
+      until={until}
+      now={now}
+      labelWhenPast={labelWhenPast}
+      tone={mine ? "warm" : "neutral"}
+      frame={t("in", { time: "{time}" })}
+      title={t("at", nairobiParts(locale, until))}
+      locale={locale}
+      className={cn(line, className)}
+    />
   );
 }

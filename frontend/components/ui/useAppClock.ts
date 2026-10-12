@@ -2,20 +2,21 @@
 
 import { useEffect, useState } from "react";
 
-export const MINUTE = 60_000;
-export const DAY = 1_440 * MINUTE;
+import { MINUTE } from "./clock-time";
 
 // The app clock as this page keeps it: the browser's clock less a gap, taken from the first server instant a
 // countdown was given (the API's X-App-Now) and moved only by an instant ahead of the clock's own reading. It lives as
 // long as the page, so a screen drawn from the router's cache, prefetched earlier or restored from the back/forward
 // cache, whose `now` is old (even if newer than the last one seen), never sets it back; a browser clock set wrong is
-// absorbed by the gap; time asleep is counted, since the browser's clock runs on through it. One module, so every
-// countdown on the page (Countdown, DeadlineClock) reads the same clock and none drifts from another.
-let gap: number | null = null;
+// absorbed by the gap; time asleep is counted, since the browser's clock runs on through it. The gap is the window's
+// (`__appGap`), shared with the page's clock ticker (ClockTicker.tsx), so every countdown on the page (Countdown here,
+// the DeadlineClocks there) reads the same clock and none drifts from another, whichever set it first.
+type AppClockWindow = typeof globalThis & { __appGap?: number };
 
 function appTime(served: number): number {
-  if (gap === null || served > Date.now() - gap) gap = Date.now() - served;
-  return Date.now() - gap;
+  const page = globalThis as AppClockWindow;
+  if (page.__appGap === undefined || served > Date.now() - page.__appGap) page.__appGap = Date.now() - served;
+  return Date.now() - page.__appGap;
 }
 
 /**
@@ -56,14 +57,4 @@ export function useTimeLeft(end: number, served: number): number {
   }, [end, served]);
 
   return end - Math.max(at, served);
-}
-
-/** Whole days, hours and minutes in a span of milliseconds (floored to the minute). */
-export function splitLeft(left: number): { d: number; h: number; m: number } {
-  const total = Math.floor(left / MINUTE);
-  return {
-    d: Math.floor(total / 1_440),
-    h: Math.floor(total / 60) % 24,
-    m: total % 60,
-  };
 }

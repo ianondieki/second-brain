@@ -1,6 +1,4 @@
-"use client";
-
-import { DAY, splitLeft, useTimeLeft } from "./useAppClock";
+import { DAY, splitLeft } from "./clock-time";
 
 export interface ClockFiguresProps {
   /** The instant the window closes (the API's `due_at`). */
@@ -14,20 +12,31 @@ export interface ClockFiguresProps {
   /**
    * The clock's messages as written, from its largest unit down: days, hours, minutes. Each tags a figure as
    * <f>{days}</f> (or {hours}, {minutes}) and a unit word as <u>…</u>; the text between groups is the language's own.
+   * Without them the clock is a sentence instead (`frame`).
    */
-  formats: readonly [string, string, string];
+  formats?: readonly [string, string, string];
+  /**
+   * A sentence clock (no figures): the sentence around the time left with its {time} slot ("in {time}"), the time
+   * left said in the language's own unit words ("in 6 days 14 hours 23 minutes"). Used when `formats` is not given.
+   */
+  frame?: string;
   /** The full instant in words (Nairobi time), the <time>'s title. */
   title: string;
-  /** The page's locale: the duration in words for screen readers ("6 days 14 hours 23 minutes") comes from Intl. */
+  /** The page's locale: the duration in words ("6 days 14 hours 23 minutes") comes from Intl in this language. */
   locale: string;
   className?: string;
 }
 
-// A figure, a unit word, or the text between them, in a clock message.
+// A figure, a unit word, or the text between them, in a clock message. ClockTicker.tsx's script reads them the same way.
 export const PARTS = /<f>\{(days|hours|minutes)\}<\/f>|<u>([^<]*)<\/u>|([^<]+)/g;
 
+/** Text for HTML (an element's text or an attribute's value in double quotes). */
+function html(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
+
 /** The duration in words for a screen reader (Intl's long units in the page's language: "siku 6 saa 14 dakika 23"). */
-function spoken(locale: string, d: number, h: number, m: number): string {
+export function spoken(locale: string, d: number, h: number, m: number): string {
   // Day, hour and minute are sanctioned units (ECMA-402) in every browser the browserslist names: no fallback.
   const unit = (value: number, kind: "day" | "hour" | "minute") =>
     new Intl.NumberFormat(locale, { style: "unit", unit: kind, unitDisplay: "long" }).format(value);
@@ -38,12 +47,32 @@ function spoken(locale: string, d: number, h: number, m: number): string {
   return parts.join(" ");
 }
 
+/** A clock message filled: each figure and unit word in its own span, in the message's order. */
+export function figuresHtml(format: string, d: number, h: number, m: number): string {
+  const values = { days: d, hours: h, minutes: m };
+  return [...format.matchAll(PARTS)]
+    .map(([, figure, unit, text]) =>
+      figure
+        ? `<span data-figure="">${values[figure as keyof typeof values]}</span>`
+        : unit !== undefined
+          ? `<span data-unit="">${html(unit)}</span>`
+          : `<span data-gap="">${html(text)}</span>`,
+    )
+    .join("");
+}
+
 /**
- * The ticking part of DeadlineClock (P26): days, hours and minutes as figures (leading units that are zero left out),
- * each with its unit word where the language's message puts it, in one <time> whose figures read as the duration
- * ("6 d 14 h 23 min", "siku 6 saa 14 dak 23") beside its words for screen readers. Counted on the page's app clock
- * (useAppClock.ts), the server's figure first. No live region. The look is the caller's className, keyed on
- * data-clock, data-figure, data-unit and data-gap; the figures sit under data-clock-figures, aria-hidden.
+ * A deadline clock's figures (P26), drawn on the server and kept by the page's ticker (ClockTicker.tsx; P27): days,
+ * hours and minutes as figures (leading units that are zero left out), each with its unit word where the language's
+ * message puts it, in one <time> whose figures read as the duration ("6 d 14 h 23 min", "siku 6 saa 14 dak 23") beside
+ * its words for screen readers; or, given a `frame` instead of `formats`, the time left as words in a sentence. No live
+ * region. The look is the caller's className, keyed on data-clock, data-figure, data-unit and data-gap; the figures sit
+ * under data-clock-figures, aria-hidden.
+ *
+ * Everything the ticker needs is on the element: the instants (data-until, data-now), the tone, the locale, the word
+ * for "past" and the three messages, so its script carries no words of any language. The inside is HTML the ticker
+ * rewrites on the minute: React sets it once (dangerouslySetInnerHTML, from text escaped here) and never reconciles
+ * it, so a tick before or after hydration, or a refresh of the page, never makes React and the ticker disagree.
  */
 export function ClockFigures({
   until,
@@ -51,44 +80,43 @@ export function ClockFigures({
   labelWhenPast,
   tone,
   formats,
+  frame = "{time}",
   title,
   className,
   locale,
 }: ClockFiguresProps) {
-  const left = useTimeLeft(Date.parse(until), Date.parse(now));
+  const left = Date.parse(until) - Date.parse(now);
   const { d, h, m } = splitLeft(left);
+  let inside = html(labelWhenPast);
+  if (left > 0) {
+    const time = `<time datetime="P${d}DT${h}H${m}M" title="${html(title)}">`;
+    const words = html(spoken(locale, d, h, m));
+    if (formats) {
+      // Leading units that are zero are not drawn ("14 h 23 min", "23 min"): the message for the largest unit left.
+      const figures = figuresHtml(formats[d ? 0 : h ? 1 : 2], d, h, m);
+      // The duration in words for screen readers; the figures beside it are its picture (a letter "d" read out would
+      // not be).
+      inside = `${time}<span class="sr-only">${words}</span><span data-clock-figures="" aria-hidden="true">${figures}</span></time>`;
+    } else {
+      const [before, after = ""] = frame.split("{time}");
+      inside = `${html(before)}${time}${words}</time>${html(after)}`;
+    }
+  }
   return (
-    <span data-clock={left > 0 ? (tone === "warm" && left < DAY ? "warm" : "open") : "past"} className={className}>
-      {left > 0 ? (
-        <time dateTime={`P${d}DT${h}H${m}M`} title={title} suppressHydrationWarning>
-          {/* The duration in words for screen readers; the figures beside it are its picture (a letter "d" read out
-              would not be). */}
-          <span className="sr-only" suppressHydrationWarning>
-            {spoken(locale, d, h, m)}
-          </span>
-          <span data-clock-figures="" aria-hidden="true">
-            {/* Leading units that are zero are not drawn ("14 h 23 min", "23 min"): the message for the largest unit
-                left. */}
-            {[...formats[d ? 0 : h ? 1 : 2].matchAll(PARTS)].map(([, figure, unit, text], index) =>
-              figure ? (
-                <span key={index} data-figure="" suppressHydrationWarning>
-                  {{ days: d, hours: h, minutes: m }[figure as "days" | "hours" | "minutes"]}
-                </span>
-              ) : unit !== undefined ? (
-                <span key={index} data-unit="">
-                  {unit}
-                </span>
-              ) : (
-                <span key={index} data-gap="">
-                  {text}
-                </span>
-              ),
-            )}
-          </span>
-        </time>
-      ) : (
-        labelWhenPast
-      )}
-    </span>
+    <span
+      data-clock={left > 0 ? (tone === "warm" && left < DAY ? "warm" : "open") : "past"}
+      data-until={until}
+      data-now={now}
+      data-tone={tone === "warm" ? "warm" : undefined}
+      data-locale={locale}
+      data-past={labelWhenPast}
+      data-format-days={formats?.[0]}
+      data-format-hours={formats?.[1]}
+      data-format-minutes={formats?.[2]}
+      className={className}
+      // The ticker may have moved the figures and data-clock on before React hydrates them.
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: inside }}
+    />
   );
 }

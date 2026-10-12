@@ -1,6 +1,7 @@
 "use client";
 
-import { DAY, splitLeft, useTimeLeft } from "./useAppClock";
+import { DAY, splitLeft } from "./clock-time";
+import { useTimeLeft } from "./useAppClock";
 
 export interface CountdownProps {
   /** The instant the window closes (ISO 8601). */
@@ -32,7 +33,7 @@ export interface CountdownProps {
 export function Countdown({ until, now, labelWhenPast, tone, units, frame, title, className }: CountdownProps) {
   const end = Date.parse(until);
   const served = Date.parse(now);
-  // The app clock's scheduling is shared with DeadlineClock (useAppClock.ts): one clock per page.
+  // The app clock is the page's, shared with the DeadlineClocks' ticker (useAppClock.ts, ClockTicker.tsx): one clock per page.
   const left = useTimeLeft(end, served);
   const { d, h, m } = splitLeft(left);
   const [before, after] = frame.split("{time}");
