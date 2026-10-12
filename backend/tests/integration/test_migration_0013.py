@@ -29,7 +29,7 @@ Every test runs in one rolled-back transaction (``tracker.as_app``); the downgra
 from __future__ import annotations
 
 import hashlib
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from bridge.engagements.calendar import add_business_days, local_date
 from bridge.ids import uuid7
+from bridge.models.text import is_one_line
 from tests.integration.engagements import tracker as t
 
 ASSIGN = (
@@ -63,6 +64,13 @@ HIDDEN = "no engagement of the caller's with that id"
 RLS = "row-level security"
 DENIED = "permission denied"
 EVIDENCE = hashlib.sha256(b"internal pilot memo, 2026-03-02").digest()
+REDACTED = "[redacted]"  # bridge.engagements.models.EVIDENCE_TITLE_REDACTED
+STORED = (
+    "SELECT evidence_sha256, evidence_title, evidence_dated_on, first_tier2_view_at, window_closes_on, declared_at,"
+    " declared_by FROM prior_knowledge_declarations"
+)
+ENDED = "the engagement has ended"
+AFTER_FIRST_VIEW = "the evidence is dated after the organisation's first Tier-2 view"
 
 
 async def scene(conn: AsyncConnection) -> tuple[t.Parties, UUID]:
@@ -251,6 +259,43 @@ async def test_assignments_are_read_by_the_organisations_members_only(owner_engi
             assert await count(conn, "engagement_assignments", engagement) == 0, reader
 
 
+async def test_the_engagements_developer_reads_and_writes_no_triage_even_as_a_member(owner_engine: AsyncEngine) -> None:
+    """The security review's MINOR 1 (D-68): the engagement's own developer, added to the organisation as a viewer and
+    then made a reviewer, reads none of its assignments or recommendations, with or without the organisation's context;
+    assigns nothing and recommends nothing (as a viewer the role refuses, as a reviewer the engagement being theirs
+    does); and closes, changes or withdraws nothing, their own recommendation (planted by the owner) included. The
+    other members still read every row."""
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await scene(conn)
+        await t.act(conn, p.reviewer, p.org)
+        await t.run(conn, ASSIGN, **assign(p, engagement, p.reviewer, p.reviewer))
+        await t.run(conn, RECOMMEND, **recommend(p, engagement, p.reviewer))
+        await t.as_owner(conn)
+        await t.member(conn, p.org, p.developer, "{reviewer}")
+        # planted by the owner while the developer is a reviewer (the guard admits it); the app could not write it
+        await t.run(conn, RECOMMEND, **recommend(p, engagement, p.developer))
+        roles_of = "UPDATE memberships SET roles = CAST(:r AS org_role[]) WHERE org_id = :o AND user_id = :u"
+        for roles, refusal in (("{viewer}", "the member must be"), ("{reviewer}", RLS)):
+            await t.as_owner(conn)
+            await t.run(conn, roles_of, r=roles, o=p.org, u=p.developer)
+            for org in (p.org, None):
+                await t.act(conn, p.developer, org)
+                for table in ("engagement_assignments", "engagement_recommendations"):
+                    assert await count(conn, table, engagement) == 0, (roles, org, table)
+            await t.act(conn, p.developer, p.org)
+            await t.expect(conn, ASSIGN, RLS, **assign(p, engagement, p.reviewer, p.developer))
+            await t.expect(conn, RECOMMEND, refusal, **recommend(p, engagement, p.developer, "pass"))
+            for statement in (
+                "UPDATE engagement_assignments SET unassigned_at = now() WHERE engagement_id = :e",
+                "UPDATE engagement_recommendations SET stance = 'pass' WHERE engagement_id = :e",
+                "DELETE FROM engagement_recommendations WHERE engagement_id = :e",
+            ):
+                assert await t.rowcount(conn, statement, e=engagement) == 0, (roles, statement)
+        await t.act(conn, p.signatory, p.org)
+        assert await count(conn, "engagement_assignments", engagement) == 1
+        assert await count(conn, "engagement_recommendations", engagement) == 2  # the developer's planted row stays
+
+
 # --- engagement_recommendations ------------------------------------------------------------------------------------
 
 
@@ -395,8 +440,9 @@ async def test_a_declaration_needs_a_tier2_view_and_takes_the_databases_window(o
 async def test_the_window_closes_after_ten_kenyan_business_days(owner_engine: AsyncEngine) -> None:
     """Given the organisation's first Tier-2 view and a holiday three business days later, Then the window closes on
     the 10th business day after the view's Nairobi day counting the holiday out; with the shared clock on the day after
-    it the declaration is refused (window closed), evidence dated after today is refused, and on the closing day itself
-    it is accepted, dated that day."""
+    it the declaration is refused (window closed), and on the closing day itself evidence dated after the first view's
+    day is refused (the security review's MINOR 4: existing work predates the access) while evidence dated that day is
+    accepted, the declaration dated the closing day."""
     async with t.as_app(owner_engine) as conn:
         p, engagement = await scene(conn)
         first = await view(conn, p, p.reviewer)
@@ -426,13 +472,10 @@ async def test_the_window_closes_after_ten_kenyan_business_days(owner_engine: As
         await move_clock(conn, (closes - today).days)
         await t.act(conn, p.signatory, p.org)
         assert await t.run(conn, "SELECT app_nairobi_today()") == closes
-        await t.expect(
-            conn,
-            DECLARE,
-            "the evidence is dated after today",
-            **declaration(p, engagement, p.signatory, dated=closes + timedelta(days=1)),
-        )
-        params = declaration(p, engagement, p.signatory, dated=closes)
+        after = "the evidence is dated after the organisation's first Tier-2 view"
+        for dated in (start + timedelta(days=1), closes):  # both before today on the moved clock
+            await t.expect(conn, DECLARE, after, **declaration(p, engagement, p.signatory, dated=dated))
+        params = declaration(p, engagement, p.signatory, dated=start)  # the boundary: the first view's own day
         await t.run(conn, DECLARE, **params)
         declared = await t.run(
             conn,
@@ -482,9 +525,11 @@ async def test_only_a_declarer_of_the_engagements_organisation_declares_its_own_
             await savepoint.rollback()
 
 
-async def test_a_declaration_is_append_only_for_every_role(owner_engine: AsyncEngine) -> None:
-    """Given a declaration, Then bridge_app holds no UPDATE or DELETE of it, and the triggers refuse UPDATE, DELETE and
-    TRUNCATE to the owner too."""
+async def test_a_declaration_is_append_only_but_for_the_owners_one_redaction(owner_engine: AsyncEngine) -> None:
+    """Given a declaration, Then bridge_app holds no UPDATE or DELETE of it, and the triggers refuse DELETE, TRUNCATE
+    and every UPDATE to the owner too, but one (the security review's MINOR 6, a DSR's pseudonymisation): the owner
+    role sets ``evidence_title`` alone to ``'[redacted]'``, once; the same change with any other column, any other
+    title, and a second redaction are refused, and the hash, date and window stay."""
     async with t.as_app(owner_engine) as conn:
         p, engagement = await scene(conn)
         await view(conn, p, p.reviewer)
@@ -499,6 +544,20 @@ async def test_a_declaration_is_append_only_for_every_role(owner_engine: AsyncEn
             await t.expect(conn, statement, "append-only evidence", e=engagement)
         await t.expect(conn, "TRUNCATE prior_knowledge_declarations", "append-only evidence")
         assert await count(conn, "prior_knowledge_declarations", engagement) == 1
+        redact = "UPDATE prior_knowledge_declarations SET evidence_title = :title{more} WHERE engagement_id = :e"
+        for more in (", evidence_dated_on = DATE '2026-01-01'", ", evidence_sha256 = :sha", ", declared_at = now()"):
+            await t.expect(
+                conn, redact.format(more=more), "append-only evidence", title=REDACTED, sha=bytes(32), e=engagement
+            )
+        await t.expect(conn, redact.format(more=""), "append-only evidence", title="Pseudonym 7", e=engagement)
+        before = (await conn.execute(sa.text(f"{STORED} WHERE engagement_id = :e"), {"e": engagement})).one()
+        assert await t.rowcount(conn, redact.format(more=""), title=REDACTED, e=engagement) == 1
+        after = (await conn.execute(sa.text(f"{STORED} WHERE engagement_id = :e"), {"e": engagement})).one()
+        assert after.evidence_title == REDACTED
+        assert dict(after._mapping) | {"evidence_title": None} == dict(before._mapping) | {"evidence_title": None}
+        await t.expect(conn, redact.format(more=""), "append-only evidence", title=REDACTED, e=engagement)  # once
+        await t.act(conn, p.signatory, p.org)
+        await t.expect(conn, redact.format(more=""), DENIED, title=REDACTED, e=engagement)  # never the app
 
 
 async def test_a_declaration_is_read_by_the_engagements_readers_only(owner_engine: AsyncEngine) -> None:
@@ -541,6 +600,162 @@ async def test_the_evidence_is_a_sha256_and_a_one_line_title(owner_engine: Async
         ):
             await t.expect(conn, DECLARE, constraint, **declaration(p, engagement, p.signatory, **overrides))
         await t.run(conn, DECLARE, **declaration(p, engagement, p.signatory, title="x" * 200))
+
+
+OWNER_DECLARE = (
+    "INSERT INTO prior_knowledge_declarations (id, engagement_id, org_id, proposal_id, version_id, declared_by,"
+    " evidence_sha256, evidence_title, evidence_dated_on, first_tier2_view_at, window_closes_on, declared_at)"
+    " VALUES (:id, :e, :org, :p, :v, :by, :sha, :title, :dated, :first, :closes, :declared)"
+)
+
+
+async def test_only_the_owner_with_no_user_bound_keeps_its_own_window(owner_engine: AsyncEngine) -> None:
+    """The security review's MINOR 2: the owner role with a user bound (as a definer function runs in a request) gets
+    the database's rules: before any Tier-2 view it is refused. The owner with no user bound (a seed, the test world, a
+    backfill) keeps the view, window and time it sends, within the CHECKs: evidence dated after the first view's day is
+    refused even then."""
+    first = datetime(2026, 9, 1, 6, 0, tzinfo=UTC)  # 09:00 in Nairobi, 1 September
+    sent = {"first": first, "closes": date(2026, 9, 15), "declared": datetime(2026, 9, 10, 9, 0, tzinfo=UTC)}
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await scene(conn)
+        await t.act(conn, p.signatory, p.org)
+        await t.as_owner(conn)  # the owner role with the signatory still bound
+        await t.expect(
+            conn,
+            OWNER_DECLARE,
+            "has not viewed",
+            **declaration(p, engagement, p.signatory, dated=date(2026, 9, 1)),
+            **sent,
+        )
+        await t.act(conn, None)
+        await t.as_owner(conn)  # no user bound
+        await t.expect(
+            conn,
+            OWNER_DECLARE,
+            "ck_prior_knowledge_declarations_evidence_predates_first_view",
+            **declaration(p, engagement, p.signatory, dated=date(2026, 9, 2)),
+            **sent,
+        )
+        params = declaration(p, engagement, p.signatory, dated=date(2026, 9, 1))
+        await t.run(conn, OWNER_DECLARE, **params, **sent)
+        row = (await conn.execute(sa.text(f"{STORED} WHERE id = :id"), {"id": params["id"]})).one()
+        assert (row.first_tier2_view_at, row.window_closes_on, row.declared_at) == (
+            sent["first"],
+            sent["closes"],
+            sent["declared"],
+        )
+
+
+async def test_an_ended_engagement_takes_no_declaration(owner_engine: AsyncEngine) -> None:
+    """The security review's MINOR 3: after the organisation's first Tier-2 view the developer withdraws; inside the
+    window, the signatory's declaration is refused because the engagement has ended (the database's backstop; the API
+    answers 409 engagement_ended first), and so is the owner role's with a user bound."""
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await scene(conn)
+        await view(conn, p, p.reviewer)
+        await t.act(conn, p.developer)
+        await t.append(conn, engagement, p.developer, "developer", "withdraw", "SUBMITTED", "WITHDRAWN")
+        assert await t.state_of(conn, engagement) == "WITHDRAWN"
+        await t.act(conn, p.signatory, p.org)
+        first, closes = (await conn.execute(sa.text(WINDOW), {"e": engagement})).one()
+        assert first is not None  # the window is open
+        assert closes >= await t.run(conn, "SELECT app_nairobi_today()")
+        await t.expect(conn, DECLARE, ENDED, **declaration(p, engagement, p.signatory))
+        await t.as_owner(conn)
+        await t.expect(conn, DECLARE, ENDED, **declaration(p, engagement, p.signatory))
+
+
+async def test_the_evidence_is_dated_on_or_before_the_first_views_day(owner_engine: AsyncEngine) -> None:
+    """The security review's MINOR 4 (existing similar work predates the access), both sides of the boundary, with the
+    shared clock two days on and inside the window (so "after the first view" is not "after today"): evidence dated
+    the day after the organisation's first Tier-2 view is refused; dated that day it is accepted."""
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await scene(conn)
+        first = await view(conn, p, p.reviewer)
+        start = local_date(first)
+        await move_clock(conn, 2)
+        await t.act(conn, p.signatory, p.org)
+        assert await t.run(conn, "SELECT app_nairobi_today()") == start + timedelta(days=2)
+        await t.expect(
+            conn, DECLARE, AFTER_FIRST_VIEW, **declaration(p, engagement, p.signatory, dated=start + timedelta(days=1))
+        )
+        params = declaration(p, engagement, p.signatory, dated=start)
+        await t.run(conn, DECLARE, **params)
+        assert await t.run(conn, f"SELECT evidence_dated_on FROM ({STORED} WHERE id = :id) d", id=params["id"]) == start
+
+
+# The security review's MINOR 5: one character of each kind the one-line rule refuses (bridge.models.text), by code
+# point (never typed into this file).
+FORBIDDEN_SAMPLES: dict[str, str] = {
+    name: chr(code)
+    for name, code in (
+        ("tab", 0x09),
+        ("line feed", 0x0A),
+        ("C1 next line", 0x85),
+        ("no-break space", 0xA0),
+        ("soft hyphen", 0xAD),
+        ("ogham space mark", 0x1680),
+        ("en quad", 0x2000),
+        ("zero-width space", 0x200B),
+        ("right-to-left mark", 0x200F),
+        ("line separator", 0x2028),
+        ("right-to-left override", 0x202E),
+        ("narrow no-break space", 0x202F),
+        ("word joiner", 0x2060),
+        ("left-to-right isolate", 0x2066),
+        ("pop directional isolate", 0x2069),
+        ("ideographic space", 0x3000),
+        ("byte order mark", 0xFEFF),
+        ("interlinear annotation", 0xFFF9),
+        ("tag latin capital a", 0xE0041),
+    )
+}
+# Ordinary text passes: accents, an en dash, another script, ASCII spaces.
+ACCEPTED_TEXT = (
+    "Internal pilot memo",
+    "Caf" + chr(0xE9) + " pilot " + chr(0x2013) + " v2",
+    chr(0x65E5) + chr(0x672C) + " memo 2026",
+)
+
+
+async def test_one_line_text_refuses_controls_format_characters_and_other_spaces(owner_engine: AsyncEngine) -> None:
+    """The security review's MINOR 5: a recommendation's note, a declaration's evidence title and a developer's KECOBO
+    and KIPI references refuse every control, Unicode format (Cf) and non-ASCII space (Zs, separators) character, and
+    ``bridge.models.text.is_one_line`` (the API's validator) refuses exactly the same strings; ordinary text in any
+    script passes both."""
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await scene(conn)
+        await view(conn, p, p.reviewer)
+        profile = "UPDATE developer_profiles SET {column} = :v WHERE user_id = :u"
+        for name, char in FORBIDDEN_SAMPLES.items():
+            value = f"Memo{char}one"
+            assert not is_one_line(value, 200), name
+            await t.act(conn, p.reviewer, p.org)
+            note = recommend(p, engagement, p.reviewer, note=value)
+            await t.expect(conn, RECOMMEND, "ck_engagement_recommendations_note_valid", **note)
+            await t.act(conn, p.signatory, p.org)
+            title = declaration(p, engagement, p.signatory, title=value)
+            await t.expect(conn, DECLARE, "ck_prior_knowledge_declarations_evidence_title_valid", **title)
+            await t.act(conn, p.developer)
+            for column in ("kecobo_number", "kipi_number"):
+                await t.expect(
+                    conn,
+                    profile.format(column=column),
+                    f"ck_developer_profiles_{column}_valid",
+                    v=value,
+                    u=p.developer,
+                )
+        for value in ACCEPTED_TEXT:
+            assert is_one_line(value, 200), value
+            await t.act(conn, p.reviewer, p.org)
+            await t.run(conn, RECOMMEND, **recommend(p, engagement, p.reviewer, note=value))
+            await t.act(conn, p.developer)
+            for column in ("kecobo_number", "kipi_number"):
+                await t.run(conn, profile.format(column=column), v=value, u=p.developer)
+        await t.act(conn, p.signatory, p.org)
+        await t.run(conn, DECLARE, **declaration(p, engagement, p.signatory, title=ACCEPTED_TEXT[1]))
+        assert not is_one_line(" " * 3, 200)  # blank
+        assert not is_one_line("x" * 201, 200)  # too long
 
 
 # --- calendar_feeds ------------------------------------------------------------------------------------------------
@@ -641,6 +856,52 @@ async def test_the_lookup_answers_only_a_live_feed_of_an_active_member(owner_eng
         await t.run(conn, "UPDATE users SET status = 'suspended' WHERE id = :u", u=p.signatory)
         await t.act(conn, None)
         assert (await conn.execute(sa.text(LOOKUP), {"hash": personal})).all() == []  # a suspended user
+
+
+LIVE_FEEDS = "SELECT org_id FROM calendar_feeds WHERE user_id = :u AND revoked_at IS NULL"
+
+
+async def test_a_feed_dies_with_its_membership_or_its_account(owner_engine: AsyncEngine) -> None:
+    """The security review's MINOR 7: a role change that keeps a membership active revokes nothing; when the
+    signatory's membership of the organisation leaves active, their feed for it is revoked (the database's time) while
+    their personal feed, their feed of another organisation and another member's feed stay live; when the user is
+    suspended, every remaining feed of theirs is revoked, and reinstating the account revives none."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.member(conn, p.other_org, p.signatory, "{viewer}")
+        hashes = {name: token_hash(name) for name in ("personal", "org", "other", "owner")}
+        await t.act(conn, p.signatory, p.org)
+        await t.run(conn, FEED, **feed(p.signatory, None, hashes["personal"]))
+        await t.run(conn, FEED, **feed(p.signatory, p.org, hashes["org"]))
+        await t.act(conn, p.signatory, p.other_org)
+        await t.run(conn, FEED, **feed(p.signatory, p.other_org, hashes["other"]))
+        await t.act(conn, p.owner, p.org)
+        await t.run(conn, FEED, **feed(p.owner, p.org, hashes["owner"]))
+
+        async def live(user: UUID) -> set[UUID | None]:
+            await t.as_owner(conn)
+            return set((await conn.execute(sa.text(LIVE_FEEDS), {"u": user})).scalars())
+
+        await t.as_owner(conn)
+        membership = "UPDATE memberships SET {change} WHERE org_id = :o AND user_id = :u"
+        await t.run(conn, membership.format(change="roles = '{reviewer}'"), o=p.org, u=p.signatory)
+        assert await live(p.signatory) == {None, p.org, p.other_org}  # still active: nothing revoked
+        await t.run(conn, membership.format(change="status = 'removed'"), o=p.org, u=p.signatory)
+        assert await live(p.signatory) == {None, p.other_org}
+        assert await live(p.owner) == {p.org}
+        revoked = "SELECT revoked_at >= created_at FROM calendar_feeds WHERE token_hash = :h"
+        assert await t.run(conn, revoked, h=hashes["org"]) is True
+        await t.act(conn, None)
+        assert (await conn.execute(sa.text(LOOKUP), {"hash": hashes["org"]})).all() == []
+        await t.as_owner(conn)
+        await t.run(conn, "UPDATE users SET status = 'suspended' WHERE id = :u", u=p.signatory)
+        assert await live(p.signatory) == set()
+        assert await live(p.owner) == {p.org}
+        await t.run(conn, "UPDATE users SET status = 'active' WHERE id = :u", u=p.signatory)
+        assert await live(p.signatory) == set()  # reinstated: the feeds stay revoked
+        await t.act(conn, None)
+        for name in ("personal", "org", "other"):
+            assert (await conn.execute(sa.text(LOOKUP), {"hash": hashes[name]})).all() == [], name
 
 
 # --- developer_profiles: D3 ----------------------------------------------------------------------------------------
