@@ -202,8 +202,8 @@ describe("the offline island", () => {
     online(false);
     renderWithIntl(page());
     await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
-    // A fresh page without a connection: "offline", not "cached" (its clocks' instant is right; they stay).
-    expect(document.documentElement.getAttribute("data-offline")).toBe("offline");
+    // The worker says the page was not its copy: "offline", not "cached" (its clocks' instant is right; they stay).
+    await waitFor(() => expect(document.documentElement.getAttribute("data-offline")).toBe("offline"));
     for (const name of ["Note", "Choice", "Message"]) expect(off(screen.getByLabelText(name))).toBe(true);
     expect(off(screen.getByRole("button", { name: "Send" }))).toBe(true);
     // Nothing can be sent: the submit button does nothing.
@@ -294,6 +294,15 @@ describe("the offline island", () => {
     });
     expect(reload).toHaveBeenCalledTimes(1);
     expect(off(screen.getByRole("button", { name: "Send" }))).toBe(true);
+  });
+
+  it("takes a page read without a connection for the worker's copy until the worker says otherwise", async () => {
+    // A worker that has not answered yet (sw.ready never settles here).
+    const container = { register: vi.fn(async () => ({})), ready: new Promise(() => {}), getRegistration: vi.fn() };
+    Object.defineProperty(navigator, "serviceWorker", { value: container, configurable: true });
+    online(false);
+    renderWithIntl(page());
+    await waitFor(() => expect(document.documentElement.getAttribute("data-offline")).toBe("cached"));
   });
 
   it("marks the page offline when the worker answered it from its cache, though the browser says it is online", async () => {
