@@ -2,6 +2,7 @@
 
 import type { useRouter } from "next/navigation";
 
+import { forgetOffline } from "@/components/offline/clear";
 import { api } from "@/lib/api/client";
 import { isPending } from "@/lib/auth/routing";
 import { continueAfterSignIn } from "@/lib/auth/session";
@@ -17,6 +18,8 @@ type Router = ReturnType<typeof useRouter>;
 export async function continueToReturnPath(router: Router, mfaRequired: boolean, next?: string): Promise<void> {
   const back = safeReturnPath(next);
   if (!back) return continueAfterSignIn(router, mfaRequired);
+  // As continueAfterSignIn: no other person's offline copies stay, before any routing (P27, D-69).
+  await forgetOffline();
   if (mfaRequired) {
     router.replace(mfaHref(back));
     return;
