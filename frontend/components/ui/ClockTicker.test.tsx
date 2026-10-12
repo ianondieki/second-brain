@@ -445,10 +445,10 @@ describe("sentence clocks (DeadlineLine) on the ticker", () => {
 });
 
 describe("offline (a page from this device's copy)", () => {
-  it("hides the clocks, figures and words, so the banner's time is the page's time", () => {
+  it("hides the clocks of a page from the cache, figures and words, so the banner's time is the page's time", () => {
     // The rule as globals.css writes it.
     const css = readFileSync(`${process.cwd()}/app/globals.css`, "utf8");
-    const rule = /html\[data-offline\] \[data-clock\] \{[^}]*\}/.exec(css)?.[0];
+    const rule = /html\[data-offline="cached"\] \[data-clock\] \{[^}]*\}/.exec(css)?.[0];
     expect(rule).toContain("display: none");
     const style = document.createElement("style");
     style.textContent = rule!;
@@ -460,7 +460,10 @@ describe("offline (a page from this device's copy)", () => {
       </p>,
     );
     expect(getComputedStyle(clockOf("far")).display).not.toBe("none");
-    document.documentElement.setAttribute("data-offline", "");
+    // A fresh page without a connection keeps its clocks (their instant is right); a page from the cache does not.
+    document.documentElement.setAttribute("data-offline", "offline");
+    expect(getComputedStyle(clockOf("far")).display).not.toBe("none");
+    document.documentElement.setAttribute("data-offline", "cached");
     for (const id of ["far", "near", "in"]) expect(getComputedStyle(clockOf(id)).display).toBe("none");
     // The card's words line (the business days) is not the clock: it stays.
     document.documentElement.removeAttribute("data-offline");
@@ -556,6 +559,31 @@ describe("the clock boot (root layout)", () => {
     await settle();
     expect(run).toHaveBeenCalledTimes(3);
     card.remove();
+  });
+
+  it("with React: a refresh drawn a little behind the app clock is redrawn from the new pair, not left at the server's minute", async () => {
+    const view = (now: string) => (
+      <div data-testid="card">
+        <DeadlineClock until={at(10 * MIN + 2_000)} now={now} labelWhenPast="Overdue" />
+      </div>
+    );
+    const { rerender } = withMessages(view(NOW));
+    tick();
+    expect(figures("card")).toEqual(["10"]);
+    // The minute turns 2 s in; at 3 s the ticker shows 9.
+    vi.advanceTimersByTime(3_000);
+    expect(figures("card")).toEqual(["9"]);
+    // router.refresh(): the server drew the page at NOW + 1 s (its instant a little behind the app clock, before the
+    // minute turned), so its HTML says 10. The ticker starts again from that pair and redraws: 9 is the app clock's.
+    rerender(
+      <NextIntlClientProvider locale="en" messages={en} timeZone="Africa/Nairobi">
+        {view(at(1_000))}
+      </NextIntlClientProvider>,
+    );
+    expect(clockOf("card").getAttribute("data-now")).toBe(at(1_000));
+    await settle();
+    expect(figures("card")).toEqual(["9"]);
+    expect(clockOf("card").querySelector("time")?.getAttribute("datetime")).toBe("P0DT0H9M");
   });
 
   it("with React: a refresh that redraws a clock turned past makes it tick again, its state and figures the server's", async () => {
