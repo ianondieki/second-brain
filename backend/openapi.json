@@ -10537,7 +10537,7 @@
                 "type": "null"
               }
             ],
-            "description": "Your GitHub login (GitHub's rule, at most 39 characters); null or empty clears it",
+            "description": "Your GitHub login (GitHub's rule, at most 39 characters; one leading @ is dropped); null or empty clears it",
             "title": "Github Login"
           },
           "headline": {

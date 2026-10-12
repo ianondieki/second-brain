@@ -94,7 +94,11 @@ async def test_a_developer_saves_changes_and_clears_their_references(
         ("github_login", "oc--to"),
         ("github_login", "octo_cat"),
         ("github_login", "octo cat"),
-        ("github_login", "@octo"),
+        ("github_login", "@@octo"),  # one leading @ is GitHub's mention sign, not part of the login; two are wrong
+        ("github_login", "@-octo"),
+        ("github_login", "@"),
+        ("github_login", "@ octo"),
+        ("github_login", "octo@"),
         ("github_login", "a" * 40),
         ("github_login", "\u043ecto"),  # a Cyrillic o
         ("kecobo_number", "K" * 41),
@@ -122,6 +126,19 @@ async def test_the_longest_login_and_reference_are_taken(
     saved = await dev.patch("/api/me/profile", json={"github_login": login, "kecobo_number": reference})
     assert saved.status_code == 200, saved.text
     assert await stored(owner_engine, built.owner_id) == (login, reference, None)
+
+
+async def test_a_login_typed_with_its_at_sign_is_saved_without_it(
+    dev: httpx.AsyncClient, owner_engine: AsyncEngine, built: Built
+) -> None:
+    """The certificate prints ``GitHub @login``: a developer who types ``@octocat`` means ``octocat``."""
+    saved = await dev.patch("/api/me/profile", json={"github_login": " @octocat "})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["github_login"] == "octocat"
+    assert await stored(owner_engine, built.owner_id) == ("octocat", None, None)
+    longest = "a" + "-b" * 19  # 39 characters: the @ is not counted
+    assert (await dev.patch("/api/me/profile", json={"github_login": f"@{longest}"})).status_code == 200
+    assert await stored(owner_engine, built.owner_id) == (longest, None, None)
 
 
 async def test_the_certificate_says_self_reported_and_verify_never_shows_them(

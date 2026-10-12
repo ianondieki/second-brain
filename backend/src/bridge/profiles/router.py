@@ -78,8 +78,8 @@ class ProfileUpdate(BaseModel):
     github_login: str | None = Field(
         default=None,
         max_length=RAW_REFERENCE_MAX_CHARS,
-        description=f"Your GitHub login (GitHub's rule, at most {GITHUB_LOGIN_MAX_CHARS} characters); null or empty"
-        " clears it",
+        description=f"Your GitHub login (GitHub's rule, at most {GITHUB_LOGIN_MAX_CHARS} characters; one leading @ is"
+        " dropped); null or empty clears it",
     )
     kecobo_number: str | None = Field(
         default=None,
@@ -95,9 +95,13 @@ class ProfileUpdate(BaseModel):
     @field_validator("github_login")
     @classmethod
     def _github_login(cls, value: str | None) -> str | None:
+        """Trimmed of ASCII spaces (nothing left clears it), then one leading ``@`` dropped: GitHub's mention sign,
+        which the certificate prints itself (``GitHub @login``). What is left must be a login (``@`` alone, ``@@x`` and
+        ``@-x`` are refused)."""
         login = (value or "").strip(" ")
         if not login:
             return None
+        login = login.removeprefix("@")
         if len(login) > GITHUB_LOGIN_MAX_CHARS or _GITHUB_LOGIN.fullmatch(login) is None:
             raise ValueError(GITHUB_LOGIN_RULE)
         return login
