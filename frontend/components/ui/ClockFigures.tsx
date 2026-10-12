@@ -22,7 +22,7 @@ export interface ClockFiguresProps {
 }
 
 // A figure, a unit word, or the text between them, in a clock message.
-const PARTS = /<f>\{(days|hours|minutes)\}<\/f>|<u>([^<]*)<\/u>|([^<]+)/g;
+export const PARTS = /<f>\{(days|hours|minutes)\}<\/f>|<u>([^<]*)<\/u>|([^<]+)/g;
 
 /**
  * The ticking part of DeadlineClock (P26): days, hours and minutes as figures (leading units that are zero left out),
