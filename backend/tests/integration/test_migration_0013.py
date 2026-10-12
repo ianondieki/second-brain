@@ -29,6 +29,8 @@ Every test runs in one rolled-back transaction (``tracker.as_app``); the downgra
 from __future__ import annotations
 
 import hashlib
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
@@ -138,6 +140,52 @@ async def move_clock(conn: AsyncConnection, days: int) -> None:
     """As the owner, inside the test's transaction: the shared clock ``days`` ahead of the database clock."""
     await t.as_owner(conn)
     await t.run(conn, "UPDATE test_clock SET enabled = true, clock_offset = make_interval(days => :d)", d=days)
+
+
+@asynccontextmanager
+async def logged_in_as(conn: AsyncConnection, role: str) -> AsyncIterator[None]:
+    """Inside a savepoint (rolled back on exit, writes included): the session's login is ``role`` (``SET LOCAL SESSION
+    AUTHORIZATION``; the harness logs in as a superuser and sets roles) with no user bound, as production's API and
+    workers log in as bridge_app and its migrations and seed as bridge_owner."""
+    savepoint = await conn.begin_nested()
+    try:
+        await conn.execute(sa.text(f"SET LOCAL SESSION AUTHORIZATION {role}"))  # the current role too
+        await t.run(conn, "SELECT set_config('app.user_id', '', true), set_config('app.org_id', '', true)")
+        assert await t.run(conn, "SELECT session_user::text || ' ' || current_user::text") == f"{role} {role}"
+        yield
+    finally:
+        await savepoint.rollback()
+
+
+# The security re-check's (A) and (B): definer functions a request could reach, created by the owner (so owned by it and
+# run as it) and executable by bridge_app; rolled back with the test.
+PROBE_DECLARE = (
+    "CREATE FUNCTION probe_declare(p_id uuid, p_e uuid, p_org uuid, p_p uuid, p_v uuid, p_by uuid, p_sha bytea,"
+    " p_title text, p_dated date, p_first timestamptz, p_closes date, p_declared timestamptz) RETURNS void"
+    " LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$"
+    " INSERT INTO public.prior_knowledge_declarations (id, engagement_id, org_id, proposal_id, version_id,"
+    " declared_by, evidence_sha256, evidence_title, evidence_dated_on, first_tier2_view_at, window_closes_on,"
+    " declared_at) VALUES (p_id, p_e, p_org, p_p, p_v, p_by, p_sha, p_title, p_dated, p_first, p_closes, p_declared)"
+    " $$"
+)
+CALL_PROBE_DECLARE = (
+    "SELECT probe_declare(:id, :e, :org, :p, :v, :by, :sha, :title, :dated, :first, :closes, :declared)"
+)
+PROBE_DECLARE_SIGNATURE = (
+    "probe_declare(uuid, uuid, uuid, uuid, uuid, uuid, bytea, text, date, timestamptz, date, timestamptz)"
+)
+PROBE_REDACT = (
+    "CREATE FUNCTION probe_redact(p_e uuid) RETURNS void LANGUAGE sql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$"
+    " UPDATE public.prior_knowledge_declarations SET evidence_title = '[redacted]' WHERE engagement_id = p_e $$"
+)
+
+
+async def create_probe(conn: AsyncConnection, statement: str, signature: str) -> None:
+    """As the owner: the probe definer ``statement``, executable by bridge_app."""
+    await t.as_owner(conn)
+    await t.run(conn, statement)
+    await t.run(conn, f"GRANT EXECUTE ON FUNCTION {signature} TO bridge_app")
 
 
 # --- engagement_assignments ----------------------------------------------------------------------------------------
@@ -528,8 +576,11 @@ async def test_only_a_declarer_of_the_engagements_organisation_declares_its_own_
 async def test_a_declaration_is_append_only_but_for_the_owners_one_redaction(owner_engine: AsyncEngine) -> None:
     """Given a declaration, Then bridge_app holds no UPDATE or DELETE of it, and the triggers refuse DELETE, TRUNCATE
     and every UPDATE to the owner too, but one (the security review's MINOR 6, a DSR's pseudonymisation): the owner
-    role sets ``evidence_title`` alone to ``'[redacted]'``, once; the same change with any other column, any other
-    title, and a second redaction are refused, and the hash, date and window stay."""
+    role in its own session with no user bound sets ``evidence_title`` alone to ``'[redacted]'``, once; the same change
+    with any other column, any other title, and a second redaction are refused, and the hash, date and window stay.
+    The re-check's (B): the owner role with a user bound (a definer function in a request) and a definer function
+    reached from a bridge_app login with no user bound (an unauthenticated request) never redact; the owner's own login
+    (``session_user`` bridge_owner, as a DSR script) does."""
     async with t.as_app(owner_engine) as conn:
         p, engagement = await scene(conn)
         await view(conn, p, p.reviewer)
@@ -539,12 +590,22 @@ async def test_a_declaration_is_append_only_but_for_the_owners_one_redaction(own
         delete = "DELETE FROM prior_knowledge_declarations WHERE engagement_id = :e"
         for statement in (update, delete):
             await t.expect(conn, statement, DENIED, e=engagement)
-        await t.as_owner(conn)
+        redact = "UPDATE prior_knowledge_declarations SET evidence_title = :title{more} WHERE engagement_id = :e"
+        await t.as_owner(conn)  # the signatory still bound
+        await t.expect(conn, redact.format(more=""), "append-only evidence", title=REDACTED, e=engagement)
+        await create_probe(conn, PROBE_REDACT, "probe_redact(uuid)")
+        async with logged_in_as(conn, "bridge_app"):
+            await t.expect(conn, "SELECT probe_redact(:e)", "append-only evidence", e=engagement)
+        async with logged_in_as(conn, "bridge_owner"):  # the owner's own login (rolled back)
+            assert await t.rowcount(conn, redact.format(more=""), title=REDACTED, e=engagement) == 1
+        await t.act(conn, None)
+        await t.as_owner(conn)  # the harness's own session (a superuser login), no user bound
         for statement in (update, delete):
             await t.expect(conn, statement, "append-only evidence", e=engagement)
         await t.expect(conn, "TRUNCATE prior_knowledge_declarations", "append-only evidence")
         assert await count(conn, "prior_knowledge_declarations", engagement) == 1
-        redact = "UPDATE prior_knowledge_declarations SET evidence_title = :title{more} WHERE engagement_id = :e"
+        title = "SELECT evidence_title FROM prior_knowledge_declarations WHERE engagement_id = :e"
+        assert await t.run(conn, title, e=engagement) == "Internal pilot memo"  # refused, or rolled back
         for more in (", evidence_dated_on = DATE '2026-01-01'", ", evidence_sha256 = :sha", ", declared_at = now()"):
             await t.expect(
                 conn, redact.format(more=more), "append-only evidence", title=REDACTED, sha=bytes(32), e=engagement
@@ -611,13 +672,27 @@ OWNER_DECLARE = (
 
 async def test_only_the_owner_with_no_user_bound_keeps_its_own_window(owner_engine: AsyncEngine) -> None:
     """The security review's MINOR 2: the owner role with a user bound (as a definer function runs in a request) gets
-    the database's rules: before any Tier-2 view it is refused. The owner with no user bound (a seed, the test world, a
-    backfill) keeps the view, window and time it sends, within the CHECKs: evidence dated after the first view's day is
-    refused even then."""
+    the database's rules: before any Tier-2 view it is refused. The re-check's (A): so does a definer function reached
+    from a bridge_app login with no user bound (an unauthenticated request), while the same definer from the owner's
+    own login keeps what it sends. The owner in its own session with no user bound (a seed, the test world, a backfill)
+    keeps the view, window and time it sends, within the CHECKs: evidence dated after the first view's day is refused
+    even then."""
     first = datetime(2026, 9, 1, 6, 0, tzinfo=UTC)  # 09:00 in Nairobi, 1 September
     sent = {"first": first, "closes": date(2026, 9, 15), "declared": datetime(2026, 9, 10, 9, 0, tzinfo=UTC)}
     async with t.as_app(owner_engine) as conn:
         p, engagement = await scene(conn)
+        await create_probe(conn, PROBE_DECLARE, PROBE_DECLARE_SIGNATURE)
+        probed = declaration(p, engagement, p.signatory, dated=date(2026, 9, 1)) | sent
+        async with logged_in_as(conn, "bridge_app"):
+            await t.expect(conn, CALL_PROBE_DECLARE, "has not viewed", **probed)
+        async with logged_in_as(conn, "bridge_owner"):  # rolled back
+            await t.run(conn, CALL_PROBE_DECLARE, **probed)
+            row = (await conn.execute(sa.text(f"{STORED} WHERE id = :id"), {"id": probed["id"]})).one()
+            assert (row.first_tier2_view_at, row.window_closes_on, row.declared_at) == (
+                first,
+                sent["closes"],
+                sent["declared"],
+            )
         await t.act(conn, p.signatory, p.org)
         await t.as_owner(conn)  # the owner role with the signatory still bound
         await t.expect(
