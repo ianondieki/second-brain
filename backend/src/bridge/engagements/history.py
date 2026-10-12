@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.audit.service import record as audit
 from bridge.auth.models import User
-from bridge.engagements import chain, documents
+from bridge.engagements import chain, documents, prior_knowledge, team
 from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import add_business_days, local_date
 from bridge.engagements.commands import agreement_document
@@ -47,6 +47,7 @@ from bridge.engagements.schemas import (
     AgreementOut,
     ContactOut,
     ContactRevealOut,
+    DeveloperEngagementDetail,
     DocumentOut,
     DocumentRefOut,
     DueOut,
@@ -58,6 +59,7 @@ from bridge.engagements.schemas import (
     HistoryOut,
     MilestoneOut,
     NoteOut,
+    OrgEngagementDetail,
     PaymentOut,
     PendingOut,
     SideLimitsOut,
@@ -75,8 +77,9 @@ from bridge.models.enums import (
     MilestoneState,
     SignatureDocumentKind,
 )
+from bridge.profiles.models import DeveloperProfile
 from bridge.proposals.access import REVEALED_STATES
-from bridge.proposals.models import ProposalVersion
+from bridge.proposals.models import DocumentView, ProposalVersion
 from bridge.tenancy.models import Organization
 
 
@@ -315,7 +318,11 @@ async def _endorsements(db: AsyncSession, engagement_id: UUID) -> list[Engagemen
     return list(rows.scalars())
 
 
-async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> EngagementDetail:
+async def detail(
+    db: AsyncSession, party: Party, *, deals_enabled: bool
+) -> DeveloperEngagementDetail | OrgEngagementDetail:
+    """The tracker as the caller's side reads it: the developer's (with the prior-knowledge declaration on their
+    proposal and the IP nudge) or an organisation member's (with the organisation's triage and declaration window)."""
     engagement = await db.get(Engagement, party.engagement_id, populate_existing=True)
     if engagement is None:
         raise not_found()
@@ -393,11 +400,12 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
         for ref in (loaded.nda, loaded.certificate)
         if ref is not None
     ]
-    return EngagementDetail(
+    actions = list(sm.available(party.actor, engagement.state, loaded.facts))
+    shared = EngagementDetail(
         **base.model_dump(),
         my_party=party.actor.party,
         my_roles=sorted(party.actor.roles),
-        actions=list(sm.available(party.actor, engagement.state, loaded.facts)),
+        actions=actions,
         awaiting=[PendingOut(command=p.command, party=p.party) for p in sm.pending(engagement.state, loaded.facts)],
         contact=contact,
         endorsements=[_endorsement(e, names, hidden) for e in endorsements],
@@ -462,7 +470,38 @@ async def detail(db: AsyncSession, party: Party, *, deals_enabled: bool) -> Enga
         ],
         side_limits=_side_limits(engagement.state, loaded.facts),
         today=sm.platform_day(now),  # the clock the commands check a hold's date against
+    ).model_dump(exclude={"my_party"})
+    if party.is_developer:  # never the organisation's triage (D-68)
+        return DeveloperEngagementDetail(
+            **shared,
+            my_party=EngagementParty.DEVELOPER,
+            prior_knowledge=await prior_knowledge.for_developer(db, engagement),
+            ip_nudge=await ip_nudge(db, engagement, actions),
+        )
+    team_facts = await team.team_facts(db, engagement.org_id, [engagement.id], party.user_id)
+    return OrgEngagementDetail(
+        **shared,
+        my_party=EngagementParty.ORG,
+        team=team_facts.get(engagement.id),
+        prior_knowledge=await prior_knowledge.for_org(db, engagement, party.org_roles, sm.platform_day(now)),
     )
+
+
+async def ip_nudge(db: AsyncSession, engagement: Engagement, actions: Sequence[sm.Command]) -> bool:
+    """REQ-DEV-04 (docs/spec/06 6.1: "before first Tier-2 release: non-blocking nudge about KIPI utility-model/patent
+    filing and KECOBO voluntary registration"): the developer's next step is ``send_nda``, no organisation has viewed
+    the proposal's Tier 2 yet and the developer has not dismissed the note."""
+    if sm.Command.SEND_NDA not in actions:
+        return False
+    viewed = select(DocumentView.id).where(DocumentView.proposal_id == engagement.proposal_id).exists()
+    row = (
+        await db.execute(
+            select(DeveloperProfile.ip_nudge_dismissed_at, viewed).where(
+                DeveloperProfile.user_id == engagement.developer_id
+            )
+        )
+    ).first()
+    return row is not None and row[0] is None and not row[1]
 
 
 _ASKING: Final = frozenset({EngagementState.SUBMITTED, EngagementState.UNDER_REVIEW})

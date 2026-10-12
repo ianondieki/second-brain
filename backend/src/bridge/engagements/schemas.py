@@ -3,12 +3,19 @@
 Every command body carries ``lock_version``: the engagement's version the caller last read (409 ``stale`` when it
 moved on). Money is KES in minor units (cents). Views never carry a signer's IP address or user agent (evidence kept
 for disputes), and the History (``HistoryOut``) is the same JSON for both parties (AC-TRACK-3).
+
+The tracker's detail is one shape per side (P27, D-68): ``DeveloperEngagementDetail`` (the developer's: the
+prior-knowledge declaration made on their proposal and the IP nudge) and ``OrgEngagementDetail`` (an organisation
+member's: the team facts and the declaration window), told apart by ``my_party``. The organisation's own triage
+(``TeamFacts``: who is assigned, the members' internal recommendations) is on organisation-side schemas only
+(``OrgEngagementSummary``, ``OrgEngagementDetail``, the Inbox's engagement, the pipeline's items); the developer's
+``EngagementSummary`` and ``DeveloperEngagementDetail`` have no ``team`` field at all.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -462,6 +469,38 @@ class DeveloperPriorKnowledgeOut(BaseModel):
     evidence_sha256_hex: str
     evidence_title: str = Field(description="The organisation's own words: plain text")
     evidence_dated_on: date
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The tracker's detail, one shape per side (``my_party`` tells them apart).
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+class DeveloperEngagementDetail(EngagementDetail):
+    """The developer's tracker (no organisation triage: D-68)."""
+
+    my_party: Literal[EngagementParty.DEVELOPER]
+    prior_knowledge: DeveloperPriorKnowledgeOut | None = Field(
+        default=None, description="The organisation's prior-knowledge declaration on this proposal; null when none"
+    )
+    ip_nudge: bool = Field(
+        default=False,
+        description="Show the one note about KIPI and KECOBO registration: the developer's next step is send_nda, the"
+        " proposal has no Tier-2 view yet and the developer has not dismissed the note",
+    )
+
+
+class OrgEngagementDetail(EngagementDetail):
+    """An organisation member's tracker: the organisation's triage and its declaration window."""
+
+    my_party: Literal[EngagementParty.ORG]
+    team: TeamFacts | None = Field(default=None, description="The organisation's triage (always sent to a member)")
+    prior_knowledge: OrgPriorKnowledgeOut | None = Field(
+        default=None, description="The organisation's declaration window (always sent to a member)"
+    )
+
+
+TrackerDetail = Annotated[DeveloperEngagementDetail | OrgEngagementDetail, Field(discriminator="my_party")]
 
 
 class HistoryEventOut(BaseModel):
