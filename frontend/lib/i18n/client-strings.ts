@@ -69,6 +69,8 @@ export const CLIENT_STRING_NAMESPACES = [
   "validation",
   "errors",
   "tour",
+  "teamSheet",
+  "declarationSheet",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 
