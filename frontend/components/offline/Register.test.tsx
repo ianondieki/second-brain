@@ -121,7 +121,7 @@ describe("the offline island", () => {
     const types = told.map((m) => (m as { type: string }).type);
     expect(types.indexOf("user")).toBeGreaterThanOrEqual(0);
     expect(types.indexOf("user")).toBeLessThan(types.indexOf("visit"));
-    expect(told).toContainEqual({ type: "user", hash: HASH });
+    expect(told).toContainEqual({ type: "user", hash: HASH, lang: document.documentElement.lang });
     expect(document.documentElement.hasAttribute("data-offline")).toBe(false);
   });
 

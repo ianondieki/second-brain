@@ -47,6 +47,9 @@ class FakeStorage {
   async keys() {
     return [...this.named.keys()];
   }
+  async has(name: string) {
+    return this.named.has(name);
+  }
   async delete(name: string) {
     return this.named.delete(name);
   }
@@ -89,9 +92,11 @@ type Listener = (event: unknown) => void;
 function worker(version = "build-1") {
   const listeners = new Map<string, Listener>();
   const caches = new FakeStorage();
-  const network = { online: true, answers: new Map<string, Answer>() };
+  const network = { online: true, answers: new Map<string, Answer>(), hold: new Map<string, Promise<void>>() };
   const fetch = vi.fn(async (input: string | { url: string }) => {
     if (!network.online) throw new TypeError("Failed to fetch");
+    const hold = network.hold.get(new URL(typeof input === "string" ? input : input.url, ORIGIN).pathname);
+    if (hold) await hold;
     const url = new URL(typeof input === "string" ? input : input.url, ORIGIN);
     return answer(url.href, network.answers.get(url.pathname + url.search) ?? {});
   });
@@ -152,6 +157,12 @@ function worker(version = "build-1") {
       fire("fetch", {
         request: { url: new URL(path, ORIGIN).href, method: "GET", mode: "cors", destination: "", ...request },
       }),
+    /** Sends a message and resolves with its answer as soon as it is posted, without waiting for the rest of its work. */
+    reply(data: unknown, source = { id: "client-1" }) {
+      return new Promise((resolve) => {
+        listeners.get("message")!({ data, source, ports: [{ postMessage: resolve }], waitUntil: () => {} });
+      });
+    },
     async tell(data: unknown, source = { id: "client-1" }) {
       let reply: unknown;
       await fire("message", { data, source, ports: [{ postMessage: (value: unknown) => (reply = value) }] });
@@ -477,6 +488,30 @@ describe("whose cache it is", () => {
     expect(offlineFetches()).toBe(before + 2);
     w.network.online = false;
     expect(await textOf(await w.load("/dev/ideas"))).toBe("Huna mtandao");
+  });
+
+  it("fetches /offline again for the same person only when the page's language changed", async () => {
+    const w = await signedIn();
+    const offlineFetches = () =>
+      w.fetch.mock.calls.filter(([input]) => String(typeof input === "string" ? input : input.url).endsWith("/offline"))
+        .length;
+    await w.tell({ type: "user", hash: ALICE, lang: "en" }); // the language first said
+    const before = offlineFetches();
+    await w.tell({ type: "user", hash: ALICE, lang: "en" });
+    await w.tell({ type: "user", hash: ALICE, lang: "en" });
+    expect(offlineFetches()).toBe(before);
+    await w.tell({ type: "user", hash: ALICE, lang: "sw" });
+    expect(offlineFetches()).toBe(before + 1);
+  });
+
+  it("never holds the answers behind it while /offline is fetched again", async () => {
+    const w = await signedIn();
+    let release!: () => void;
+    w.network.hold.set("/offline", new Promise<void>((resolve) => (release = resolve)));
+    expect(await w.reply({ type: "user", hash: BRIAN, lang: "sw" })).toEqual({ ok: true });
+    expect(await w.reply({ type: "status" })).toMatchObject({ cached: false });
+    expect(await w.reply({ type: "visit", url: `${ORIGIN}/dev/ideas` })).toEqual({ ok: false });
+    release();
   });
 
   it("ignores a hash that is not one", async () => {

@@ -127,7 +127,11 @@ function serial(task) {
 
 /** Fetches /offline again (in the person's language, by their cookie) for the shell cache; a failure keeps the old one. */
 async function keepOfflinePage() {
-  const response = await fetch(OFFLINE_URL, { cache: "reload", credentials: "same-origin" });
+  const response = await fetch(OFFLINE_URL, {
+    cache: "reload",
+    credentials: "same-origin",
+    signal: AbortSignal.timeout(8000),
+  });
   if (!response.ok || response.type !== "basic" || response.redirected)
     throw new Error("the offline page could not be fetched");
   await (await caches.open(SHELL)).put(OFFLINE_URL, response);
@@ -222,19 +226,32 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-/** What the shell asks, one at a time and in order (so a visit never lands before the person is set; serial). */
-async function answer(data, source) {
+/** The page language /offline was last fetched in for a person ({type: "user", lang}); this worker's lifetime only. */
+let offlineLang = null;
+
+/**
+ * What the shell asks, one at a time and in order (so a visit never lands before the person is set; serial). `later`
+ * takes work that must not hold the answers queued behind this one (the /offline refetch: its own cache, no person's).
+ */
+async function answer(data, source, later) {
   if (!data || typeof data !== "object") return null;
   if (data.type === "user" && typeof data.hash === "string" && HASH.test(data.hash)) {
     const name = `${PEOPLE}${data.hash}`;
+    const created = !(await caches.has(name));
+    const lang = typeof data.lang === "string" ? data.lang : "";
     await forgetPeople(name);
     await sweep(await caches.open(name));
-    await keepOfflinePage().catch(() => {}); // in this person's language
+    // /offline in this person's language: fetched again only for a new person's cache or a page language changed.
+    if (created || lang !== offlineLang) {
+      offlineLang = lang;
+      later(keepOfflinePage().catch(() => {}));
+    }
     return { ok: true };
   }
   if (data.type === "clear") {
     await forgetPeople(null);
-    await keepOfflinePage().catch(() => {});
+    offlineLang = null;
+    later(keepOfflinePage().catch(() => {}));
     return { ok: true };
   }
   if (data.type === "visit" && typeof data.url === "string") {
@@ -262,6 +279,7 @@ async function answer(data, source) {
 
 self.addEventListener("message", (event) => {
   const port = event.ports && event.ports[0];
-  const done = serial(() => answer(event.data, event.source)).catch(() => ({ ok: false }));
+  const later = (work) => event.waitUntil(work);
+  const done = serial(() => answer(event.data, event.source, later)).catch(() => ({ ok: false }));
   event.waitUntil(done.then((reply) => port && port.postMessage(reply)));
 });

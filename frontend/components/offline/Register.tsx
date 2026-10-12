@@ -51,7 +51,7 @@ export function Register({ hash, version }: { hash: string | null; version: stri
           .register(`/sw.js?v=${version}`)
           .then(() => sw.ready)
           .then(({ active }) => {
-            active?.postMessage(hash ? { type: "user", hash } : { type: "clear" });
+            active?.postMessage(hash ? { type: "user", hash, lang: html.lang } : { type: "clear" });
             // Did the worker answer this page from its cache (the network failed though the browser says online)?
             const channel = new MessageChannel();
             channel.port1.onmessage = ({ data }) => offline((cached = Boolean(data?.cached)) || !navigator.onLine);
