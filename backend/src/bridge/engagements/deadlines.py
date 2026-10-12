@@ -117,8 +117,9 @@ class Deadline:
 
 def window(today: date, start: date | None, end: date | None) -> Window:
     """The window asked for (see the module docstring); 422 ``invalid_range`` for a reversed or overlong one."""
-    last = end if end is not None else (start or today) + timedelta(days=DEFAULT_DAYS)
-    if start is not None and (last < start or (last - start).days > MAX_SPAN_DAYS):
+    first = start if start is not None else today
+    last = end if end is not None else first + timedelta(days=DEFAULT_DAYS)
+    if (start is not None and last < start) or (last - first).days > MAX_SPAN_DAYS:
         raise ApiError(422, "invalid_range", INVALID_RANGE)
     return Window(start, last)
 
@@ -187,8 +188,10 @@ async def list_deadlines(
 ) -> list[Deadline]:
     """The viewer's deadlines inside ``frame``, sorted by ``due_at``."""
     today = local_date(now)
-    items = await _items(db, viewer, today=today, deals_enabled=deals_enabled, platform_name=platform_name)
     holidays = await all_holidays(db)
+    items = await _items(
+        db, viewer, today=today, holidays=holidays, deals_enabled=deals_enabled, platform_name=platform_name
+    )
     built = (build(item, now=now, holidays=holidays) for item in items)
     return ordered(d for d in built if in_window(d, frame, today))
 
@@ -204,10 +207,12 @@ async def one_deadline(
     platform_name: str,
 ) -> Deadline:
     """One of the viewer's deadlines, whatever its date; 404 when it is not theirs (or not a deadline now)."""
+    holidays = await all_holidays(db)
     items = await _items(
         db,
         viewer,
         today=local_date(now),
+        holidays=holidays,
         deals_enabled=deals_enabled,
         platform_name=platform_name,
         only=(kind, item_id),
@@ -215,7 +220,7 @@ async def one_deadline(
     found = [item for item in items if item.kind is kind and item.item_id == item_id]
     if not found:
         raise not_found(NO_DEADLINE)
-    return build(found[0], now=now, holidays=await all_holidays(db))
+    return build(found[0], now=now, holidays=holidays)
 
 
 async def _items(
@@ -223,6 +228,7 @@ async def _items(
     viewer: Viewer,
     *,
     today: date,
+    holidays: frozenset[date],
     deals_enabled: bool,
     platform_name: str,
     only: tuple[DeadlineKind, UUID] | None = None,
@@ -230,7 +236,7 @@ async def _items(
     kind = only[0] if only else None
     items: list[Item] = []
     if kind is None or kind in _ENGAGEMENT_KINDS:
-        items += await _engagement_items(db, viewer, deals_enabled=deals_enabled, only=only)
+        items += await _engagement_items(db, viewer, holidays=holidays, deals_enabled=deals_enabled, only=only)
     if kind is None or kind is DeadlineKind.BRIEF:
         items += await _brief_items(db, viewer, today=today, only=only[1] if only else None)
     if kind is None or kind is DeadlineKind.EVENT:
@@ -245,7 +251,12 @@ async def all_holidays(db: AsyncSession) -> frozenset[date]:
 
 
 async def _engagement_items(
-    db: AsyncSession, viewer: Viewer, *, deals_enabled: bool, only: tuple[DeadlineKind, UUID] | None
+    db: AsyncSession,
+    viewer: Viewer,
+    *,
+    holidays: frozenset[date],
+    deals_enabled: bool,
+    only: tuple[DeadlineKind, UUID] | None,
 ) -> list[Item]:
     query = select(Engagement).where(Engagement.ended_at.is_(None), Engagement.state.not_in(list(_NO_STAGE_DEADLINE)))
     if viewer.org_id is None:
@@ -285,10 +296,12 @@ async def _engagement_items(
                 engagement_id=engagement.id,
             )
         )
-    return items + await _milestone_items(db, viewer, working)
+    return items + await _milestone_items(db, viewer, working, holidays)
 
 
-async def _milestone_items(db: AsyncSession, viewer: Viewer, working: dict[UUID, tuple[str, str, str]]) -> list[Item]:
+async def _milestone_items(
+    db: AsyncSession, viewer: Viewer, working: dict[UUID, tuple[str, str, str]], holidays: frozenset[date]
+) -> list[Item]:
     """The signed agreements' milestones not yet accepted, of the engagements in ``working``."""
     if not working:
         return []
@@ -305,7 +318,8 @@ async def _milestone_items(db: AsyncSession, viewer: Viewer, working: dict[UUID,
         .order_by(Milestone.engagement_id, Milestone.seq)
     )
     milestones = list(rows.scalars())
-    reviews = await _review_dates(db, [m for m in milestones if m.state is MilestoneState.SUBMITTED_FOR_REVIEW])
+    waiting = [m for m in milestones if m.state is MilestoneState.SUBMITTED_FOR_REVIEW]
+    reviews = await _review_dates(db, waiting, holidays)
     items = []
     for m in milestones:
         title, context, href = working[m.engagement_id]
@@ -330,7 +344,7 @@ async def _milestone_items(db: AsyncSession, viewer: Viewer, working: dict[UUID,
     return items
 
 
-async def _review_dates(db: AsyncSession, waiting: Sequence[Milestone]) -> dict[UUID, date]:
+async def _review_dates(db: AsyncSession, waiting: Sequence[Milestone], holidays: frozenset[date]) -> dict[UUID, date]:
     """REQ-ENG-09's review date of each milestone under review (as the tracker's ``review_due_on``): its review
     window in business days after the Nairobi date of its latest submission, for every engagement at once."""
     if not waiting:
@@ -346,7 +360,6 @@ async def _review_dates(db: AsyncSession, waiting: Sequence[Milestone]) -> dict[
         )
         .group_by(milestone_id)
     )
-    holidays = await all_holidays(db)
     return {
         by_id[key].id: add_business_days(local_date(at), by_id[key].review_window_bd, holidays)
         for key, at in rows.tuples()

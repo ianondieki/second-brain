@@ -221,7 +221,7 @@ async def read_feed(token: str, db: Db, settings: SettingsDep) -> Response:
     if digest is None or feed is None:
         raise not_found(NO_FEED)
     await bind_tenant(db, user_id=feed.user_id, org_id=feed.org_id)
-    if not await feeds.verify(db, feed, digest):  # pragma: no cover - the lookup found this very row
+    if not await feeds.verify(db, feed, digest):  # pragma: no cover - a revoke committed between the two reads
         raise not_found(NO_FEED)
     await feeds.spend_fetch(db, settings, feed)
     now = await app_now(db)

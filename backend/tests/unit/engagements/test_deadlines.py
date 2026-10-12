@@ -73,9 +73,9 @@ def test_an_explicit_window_and_a_start_alone() -> None:
 
 @pytest.mark.parametrize(
     ("start", "end"),
-    [(date(2026, 10, 31), date(2026, 10, 1)), (date(2026, 1, 1), date(2027, 1, 3))],
+    [(date(2026, 10, 31), date(2026, 10, 1)), (date(2026, 1, 1), date(2027, 1, 3)), (None, date(2027, 10, 14))],
 )
-def test_a_reversed_or_overlong_window_is_refused(start: date, end: date) -> None:
+def test_a_reversed_or_overlong_window_is_refused(start: date | None, end: date) -> None:
     with pytest.raises(ApiError) as refused:
         deadlines.window(MONDAY, start, end)
     assert refused.value.status_code == 422
