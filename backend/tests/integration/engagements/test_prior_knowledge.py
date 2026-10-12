@@ -10,8 +10,8 @@ spec's sentence and the organisation's tracker no longer offers it; before any v
 ``no_tier2_access_yet``; a second declaration refuses 409; the row cannot be updated or deleted (its triggers); the
 engagement's event chain verifies with the ``prior_knowledge_declared`` event in it (ids and the hash only).
 
-A Tier-2 view and the declaration that follows it happen in the same clock epoch: the view is stamped by the database's
-clock and the window closes on the shared clock, so the clock moves only after the views (the boundary tests)."""
+A Tier-2 view is stamped on the shared clock (revision 0014), the clock the window closes on; the boundary tests move
+the clock after the views (a view after a move: ``test_migration_0014.py``)."""
 
 from __future__ import annotations
 
