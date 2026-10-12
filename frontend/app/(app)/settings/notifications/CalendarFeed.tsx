@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { api, type ApiClient } from "@/lib/api/client";
@@ -71,19 +71,30 @@ export function CalendarFeed({
   const fieldId = useId();
   const noteId = useId();
   const questionId = useId();
+  // Where the focus goes once the change it follows is on screen: an effect after the commit, never a frame that can
+  // come before it (the element to focus may not be there yet).
+  const focusTo = useRef<null | "question" | "rotate" | "create" | "field">(null);
+  useEffect(() => {
+    const target = focusTo.current;
+    if (!target) return;
+    focusTo.current = null;
+    const element = { question, rotate: rotateButton, create: createButton, field }[target].current;
+    element?.focus();
+    if (target === "field") field.current?.select();
+  });
 
   function ask() {
     if (busy) return;
     setNotice("");
     setConfirming(true);
     // The question takes the focus (read out with its two buttons next); never a held key landing on Replace.
-    requestAnimationFrame(() => question.current?.focus());
+    focusTo.current = "question";
   }
 
   function answer(replace: boolean) {
     setConfirming(false);
     // Back to the button the question stood in for (it says "Making a new link…" while the new one comes).
-    requestAnimationFrame(() => rotateButton.current?.focus());
+    focusTo.current = "rotate";
     if (replace) void run("rotate");
   }
 
@@ -98,15 +109,12 @@ export function CalendarFeed({
       setState({ kind: "removed" });
       setNotice("removed");
       // The button pressed is gone: focus goes to the one that takes its place, never to the page's start.
-      requestAnimationFrame(() => createButton.current?.focus());
+      focusTo.current = "create";
       return;
     }
-    setState({ kind: "shown", url: result.url });
     // The new link has the focus's attention: the field it is in, selected for copying.
-    requestAnimationFrame(() => {
-      field.current?.focus();
-      field.current?.select();
-    });
+    focusTo.current = "field";
+    setState({ kind: "shown", url: result.url });
   }
 
   async function copy(url: string) {
