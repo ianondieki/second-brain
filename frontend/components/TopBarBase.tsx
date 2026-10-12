@@ -37,10 +37,16 @@ export async function TopBarBase({ homeHref = "/", Anchor: Home, children, stick
       <header
         data-top-bar=""
         data-sticky={sticky ? "" : undefined}
-        className={sticky ? "border-b border-line bg-field lg:sticky lg:top-0 lg:z-20" : "border-b border-line bg-field"}
+        className={
+          sticky ? "border-b border-line bg-field lg:sticky lg:top-0 lg:z-20" : "border-b border-line bg-field"
+        }
       >
         <div className="mx-auto flex min-h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Home href={homeHref} className="-mx-1 inline-flex min-h-11 items-center px-1 no-underline" aria-label={t("workingName")}>
+          <Home
+            href={homeHref}
+            className="-mx-1 inline-flex min-h-11 items-center px-1 no-underline"
+            aria-label={t("workingName")}
+          >
             <Wordmark size={30} />
           </Home>
           {children}
