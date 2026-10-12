@@ -52,39 +52,13 @@ export async function MonthCalendar({ month, today, items, href, selected }: Mon
   const [t, locale] = await Promise.all([getTranslations("deadlines"), getLocale()]);
   const weeks = monthWeeks(month);
   const days = byDay(items);
-  const previous = shiftMonth(month, -1);
-  const next = shiftMonth(month, 1);
   const weekday = (day: string, style: "long" | "short" | "narrow") =>
     new Intl.DateTimeFormat(intlLocale(locale), { weekday: style, timeZone: "UTC" }).format(
       new Date(`${day}T00:00:00Z`),
     );
   return (
     <section aria-labelledby="month-title" data-month={month}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <h2 id="month-title" className="text-2xl text-ink">
-          {monthName(locale, month)}
-        </h2>
-        <p className="flex items-center gap-1">
-          <Link
-            href={href({ month: previous })}
-            aria-label={t("previous", { month: monthName(locale, previous) })}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-control px-2 font-semibold text-accent no-underline hover:underline"
-            data-month-link="previous"
-          >
-            <ChevronDownIcon className="size-4 shrink-0 rotate-90" />
-            <span className="max-sm:sr-only">{monthName(locale, previous)}</span>
-          </Link>
-          <Link
-            href={href({ month: next })}
-            aria-label={t("next", { month: monthName(locale, next) })}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-control px-2 font-semibold text-accent no-underline hover:underline"
-            data-month-link="next"
-          >
-            <span className="max-sm:sr-only">{monthName(locale, next)}</span>
-            <ChevronDownIcon className="size-4 shrink-0 -rotate-90" />
-          </Link>
-        </p>
-      </div>
+      <MonthHeader month={month} href={href} />
       <table aria-labelledby="month-title" className="w-full table-fixed border-collapse">
         <thead>
           <tr>
@@ -127,9 +101,10 @@ export async function MonthCalendar({ month, today, items, href, selected }: Mon
                           href={href({ month, day })}
                           aria-label={label}
                           aria-current={isToday ? "date" : undefined}
-                          className={dayNumberClass(isToday, inMonth, true)}
+                          className={DAY_LINK}
+                          data-day-link=""
                         >
-                          {Number(day.slice(8))}
+                          <span className={dayNumberClass(isToday, inMonth, true)}>{Number(day.slice(8))}</span>
                         </Link>
                       ) : (
                         <span
@@ -179,12 +154,62 @@ export async function MonthCalendar({ month, today, items, href, selected }: Mon
   );
 }
 
+const MONTH_LINK =
+  "inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-control px-2 font-semibold text-accent no-underline hover:underline";
+
+/**
+ * The month's name as the view's heading and the links to the months either side (‹ October 2026, December 2026 ›; the
+ * names hidden under 640 px, read out in full). Above the grid, and above an empty month's one sentence too, so a
+ * month with nothing due is never a dead end: the deadline next month is one press away.
+ */
+export async function MonthHeader({ month, href }: Pick<MonthCalendarProps, "month" | "href">) {
+  const [t, locale] = await Promise.all([getTranslations("deadlines"), getLocale()]);
+  const previous = shiftMonth(month, -1);
+  const next = shiftMonth(month, 1);
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <h2 id="month-title" className="text-2xl text-ink">
+        {monthName(locale, month)}
+      </h2>
+      <p className="flex items-center gap-1">
+        <Link
+          href={href({ month: previous })}
+          aria-label={t("previous", { month: monthName(locale, previous) })}
+          className={MONTH_LINK}
+          data-month-link="previous"
+        >
+          <ChevronDownIcon className="size-4 shrink-0 rotate-90" />
+          <span className="max-sm:sr-only">{monthName(locale, previous)}</span>
+        </Link>
+        <Link
+          href={href({ month: next })}
+          aria-label={t("next", { month: monthName(locale, next) })}
+          className={MONTH_LINK}
+          data-month-link="next"
+        >
+          <span className="max-sm:sr-only">{monthName(locale, next)}</span>
+          <ChevronDownIcon className="size-4 shrink-0 -rotate-90" />
+        </Link>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A day with deadlines is a 44 px target at every width (docs/spec/07 item 6): on a phone its number fills it; from
+ * 640 px the number is drawn 28 px and the link keeps 44 px around it, its 8 px overhang taken back by a negative
+ * margin so the cell's layout is the 28 px one (the overhang lies over the cell's padding and the first chip, which is
+ * not a control). The focus ring hugs the drawn number.
+ */
+const DAY_LINK =
+  "group inline-flex size-11 shrink-0 items-center justify-center rounded-full no-underline sm:-m-2 sm:[--focus-offset:-6px]";
+
 function dayNumberClass(today: boolean, inMonth: boolean, linked: boolean) {
   return cn(
-    // A 44 px target on a phone (the same size linked or not, so the numbers line up), a figure in the figure face.
+    // A 44 px day on a phone (the same size linked or not, so the numbers line up), a figure in the figure face.
     "inline-flex size-11 shrink-0 items-center justify-center rounded-full font-figure text-sm tabular-nums sm:size-7",
     inMonth ? "text-ink" : "text-ink-soft",
-    linked && "font-bold no-underline hover:bg-accent-wash",
+    linked && "font-bold group-hover:bg-accent-wash",
     today && "ring-2 ring-accent",
   );
 }

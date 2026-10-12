@@ -204,6 +204,15 @@ test("an organisation's calendar shows every deadline the API lists for it: stag
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date(listed.now));
   const end = new Date(Date.parse(`${today}T00:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10);
   const shown = listed.items.filter((item) => item.due_on <= end);
+  // The month's heading and its links either side, whether anything is due or not: an empty month is never a dead
+  // end (the one sentence replaces the grid and the lists only).
+  await expect(page.locator("h2#month-title")).toBeVisible();
+  for (const side of ["previous", "next"]) {
+    await expect(page.locator(`[data-month-link="${side}"]`)).toHaveAttribute(
+      "href",
+      /[?&]view=calendar&month=\d{4}-\d{2}/,
+    );
+  }
   if (shown.length === 0) {
     await expect(page.locator("[data-deadlines='empty']")).toBeVisible();
   } else {
