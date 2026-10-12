@@ -38,7 +38,8 @@
     "reviewP26": "[[COPY-REVIEW]] [[SW-REVIEW]] P26-B (REQ-DIR-01, REQ-UX-01, REQ-UX-02; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: companies.lead, companies.groupCount, companies.findProblems, companies.pitchIdea, companies.otherNiches, companies.responseFigure; companies.heldUnclaimedHint (maelezo ya E0 kabla ya kuwasilisha, kwa umbo la pitch.heldUnclaimed); imeondolewa: companies.detailNiches, companies.nichesTitle (badala yake companies.otherNiches)",
     "reviewP27cde": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.team.*, tracker.declaration.*, tracker.ipNudge.*, tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (\"alama ya kidijitali\" kwa fingerprint/SHA-256; \"ujuzi wa awali\" kwa prior knowledge), engagements.*, profileSettings.references.*, help.confidential.priorKnowledge",
     "reviewP27clock": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"baada ya siku 6 saa 14 dakika 23\"), not \"dak 23\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
-    "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term."
+    "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term. P27 UX fixes for the G5 review: calendarFeed.shownOnce now opens with the imperative \"Nakili sasa\" (was \"Kinakili sasa\"); pipeline.funnelTitle and pipeline.conversionMore agree with ushirikiano (u- class: \"ulioingia\", \"uliingia\"), not the people class (\"walioingia\", \"waliingia\"); pipeline.outcome says \"umefungwa\" and \"umekoma\" (u- class) for every count, no longer mixing \"umefungwa\"/\"imefungwa\"; pipeline.stalled reads \"siku {count}+ za kazi\" (the threshold as a floor); \"Briefs\" in calendarFeed.lead is left in English as the product term: confirm or translate.",
+    "reviewP27ux": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, calendarFeed.rotateYes, calendarFeed.rotateCancel (\"Tengeneza kiungo kipya\" first asks in place whether to replace the live link: calendars on the old one stop updating); pipeline.stalled now \"Hakuna hatua kwa siku {count}+ za kazi\"."
   },
   "app": {
     "name": "Wazo",
@@ -4438,12 +4439,12 @@
     "emptyOrgAction": "Kagua mapendekezo kwenye Kikasha"
   },
   "pipeline": {
-    "funnelTitle": "Walioingia katika siku {days} zilizopita",
+    "funnelTitle": "Ushirikiano ulioingia katika siku {days} zilizopita",
     "funnelLead": "Ushirikiano mingapi ulifika kila hatua, na mingapi kati yake uliendelea hatua inayofuata.",
     "conversion": "{count} kati ya {from} uliendelea hadi {stage}",
     "conversionNone": "Hakuna kilichoingia {stage} katika kipindi hiki, kwa hiyo hakuna sehemu ya kuonyesha.",
-    "conversionMore": "{count} waliingia {stage}: zaidi ya {from} walioingia hatua iliyotangulia katika kipindi hiki.",
-    "outcome": "{closed, plural, one {# umefungwa} other {# imefungwa}} na {ended, plural, one {# umekoma} other {# imekoma}} katika kipindi hicho.",
+    "conversionMore": "{count} uliingia {stage}: zaidi ya {from} ulioingia hatua iliyotangulia katika kipindi hiki.",
+    "outcome": "{closed} umefungwa na {ended} umekoma katika kipindi hicho.",
     "columnsLabel": "Hatua za mchakato",
     "count": "ushirikiano {count}",
     "median": "wastani wa kati: siku {days} katika hatua",
@@ -4464,7 +4465,7 @@
     "create": "Tengeneza kiungo cha mlisho",
     "creating": "Inatengeneza…",
     "urlLabel": "Kiungo cha mlisho",
-    "shownOnce": "Kinakili sasa: kinaonyeshwa mara hii moja tu.",
+    "shownOnce": "Nakili sasa: kinaonyeshwa mara hii moja tu.",
     "copy": "Nakili",
     "copied": "Kimenakiliwa",
     "copyFailed": "Chagua kiungo na ukinakili mwenyewe.",
