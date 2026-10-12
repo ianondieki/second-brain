@@ -67,6 +67,8 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
       {niche !== undefined ? (
         <NicheBand
           niche={niche?.slug}
+          // Titled by the organisation, the band sits over its name: never another organisation's premises (P26).
+          forOrganisation={titleBy === "organisation"}
           // A card can run the column's width (one engagement for an idea): every vendored size, chosen by width.
           wide
           sizes="(min-width: 1024px) 54rem, 92vw"

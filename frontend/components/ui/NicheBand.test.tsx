@@ -1,7 +1,7 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { countyPhoto, nichePhoto, topNiche } from "@/lib/photos/niche";
+import { countyPhoto, countyPhotos, nichePhoto, topNiche } from "@/lib/photos/niche";
 import { resolveServerTree } from "@/test/server-tree";
 
 import { NicheBand } from "./NicheBand";
@@ -68,6 +68,19 @@ describe("nichePhoto", () => {
     expect(countyPhoto("KE-99")).toBeUndefined();
   });
 
+  it("lists a county's own photographs, the county role first, never a niche's photograph taken there (P26)", () => {
+    expect(countyPhotos("KE-30").map((p) => p.slug)).toEqual([
+      "nairobi-jacaranda",
+      "nairobi-skyline",
+      "nairobi-golden-hour",
+      "nairobi-morning",
+    ]);
+    expect(countyPhotos("KE-31").map((p) => p.slug)).toEqual(["nakuru-lake"]);
+    expect(countyPhotos("KE-10")).toEqual([]); // Kajiado: only the retail niche's market
+    expect(countyPhotos("KE-99")).toEqual([]);
+    expect(countyPhotos(null)).toEqual([]);
+  });
+
   it("gives nothing where there is no fitting photograph (the lattice band)", () => {
     expect(nichePhoto({ niche: "a-niche-added-later" })).toBeUndefined();
     expect(nichePhoto({ county: "KE-99" })).toBeUndefined();
@@ -76,6 +89,60 @@ describe("nichePhoto", () => {
 });
 
 describe("NicheBand", () => {
+  it("crops a photograph where it is told (position), never the lattice or a Save-Data band", async () => {
+    const top = await band({ county: "KE-30", position: "top" });
+    expect(top.getAttribute("data-band-position")).toBe("top");
+    expect(top.querySelector("img")?.className).toContain("object-[50%_20%]");
+    const bottom = await band({ county: "KE-30", position: "bottom" });
+    expect(bottom.getAttribute("data-band-position")).toBe("bottom");
+    expect(bottom.querySelector("img")?.className).toContain("object-[50%_80%]");
+    const plain = await band({ county: "KE-30" });
+    expect(plain.hasAttribute("data-band-position")).toBe(false);
+    expect(plain.querySelector("img")?.className).not.toContain("object-[");
+    const lattice = await band({ niche: "a-niche-added-later", position: "center" });
+    expect(lattice.getAttribute("data-niche-band")).toBe("lattice");
+    expect(lattice.hasAttribute("data-band-position")).toBe(false);
+    request.headers = new Headers({ "save-data": "on" });
+    const saving = await band({ county: "KE-30", position: "center" });
+    expect(saving.getAttribute("data-niche-band")).toBe("lattice");
+    expect(saving.hasAttribute("data-band-position")).toBe(false);
+    expect(saving.querySelector("img")).toBeNull();
+  });
+
+  it("shows the photograph a caller picks (null: the lattice), and drops it under Save-Data", async () => {
+    expect((await band({ county: "KE-30", photo: "nairobi-skyline" })).getAttribute("data-niche-band")).toBe(
+      "nairobi-skyline",
+    );
+    expect((await band({ county: "KE-30", photo: null })).getAttribute("data-niche-band")).toBe("lattice");
+    request.headers = new Headers({ "save-data": "on" });
+    expect((await band({ photo: "nairobi-skyline" })).getAttribute("data-niche-band")).toBe("lattice");
+  });
+
+  it("never shows a named organisation's premises on a band that stands for an organisation (a Brief: forOrganisation)", async () => {
+    const slug = async (props: Parameters<typeof NicheBand>[0]) => (await band(props)).getAttribute("data-niche-band");
+    // A Kiambu university's Brief: Education's photograph is Strathmore's campus, so the lattice; a problem keeps it.
+    expect(await slug({ niche: "higher-education", county: "KE-22", forOrganisation: true })).toBe("lattice");
+    expect(await slug({ niche: "higher-education", county: "KE-22" })).toBe("nairobi-strathmore-campus");
+    for (const niche of ["ict", "public-sector", "health", "energy"]) {
+      expect(await slug({ niche, county: "KE-22", forOrganisation: true })).toBe("lattice");
+    }
+    // No one's premises: the tea fields stay; a county with its own photographs shows them first.
+    expect(await slug({ niche: "agriculture", county: "KE-22", forOrganisation: true })).toBe("kenya-tea");
+    expect(await slug({ niche: "higher-education", county: "KE-30", forOrganisation: true })).toBe("nairobi-jacaranda");
+    // An organisation's event in Turkana: the county's only photograph is a named dispensary, so the lattice.
+    expect(await slug({ county: "KE-43", forOrganisation: true })).toBe("lattice");
+    expect(await slug({ county: "KE-43" })).toBe("turkana-naipekarr-dispensary");
+  });
+
+  it("fetches a hero band at once and at high priority (eager); a band is lazy and low otherwise", async () => {
+    const hero = (await band({ county: "KE-30", eager: true, wide: true })).querySelector("img")!;
+    expect(hero.getAttribute("loading")).toBe("eager");
+    expect(hero.getAttribute("fetchpriority")).toBe("high");
+    const card = (await band({ county: "KE-30" })).querySelector("img")!;
+    expect(card.getAttribute("loading")).toBe("lazy");
+    expect(card.getAttribute("fetchpriority")).toBe("low");
+  });
+
   it("is a decorative picture (AVIF, then WebP) with its size, lazy and decoded off the main thread", async () => {
     const el = await band({ niche: "agriculture" });
     expect(el.dataset.nicheBand).toBe("kenya-tea");

@@ -136,6 +136,44 @@ describe("Home when recommendations cannot be shown", () => {
   });
 });
 
+describe("a Brief's photograph band (P26)", () => {
+  it("never shows a named organisation's premises on a Brief; a research problem keeps its niche's photograph", () => {
+    const place = (source: "org_brief" | "research_agent") =>
+      trendingProblem({
+        problem: {
+          ...trendingProblem().problem,
+          source,
+          county_code: "KE-22",
+          niche: { id: "0199a000-0000-7000-8000-0000000000e1", slug: "higher-education", label: "Education › Higher education" },
+        },
+      });
+    const band = () => document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band");
+    // Posted by a Kiambu university: Education's photograph is Strathmore's campus, so the lattice.
+    const { unmount } = renderWithIntl(<ProblemRow item={place("org_brief")} counties={COUNTIES} query={{ view: "problems" }} />);
+    expect(band()).toBe("lattice");
+    unmount();
+    renderWithIntl(<ProblemRow item={place("research_agent")} counties={COUNTIES} query={{ view: "problems" }} />);
+    expect(band()).toBe("nairobi-strathmore-campus");
+  });
+
+  it("does the same on a recommendation: a recommended Brief never carries another organisation's premises", () => {
+    // Health's photograph is the Naipekarr dispensary (named premises); the fixture has no county.
+    const as = (source: "org_brief" | "research_agent") => recommendation({ problem: { ...recommendation().problem, source } });
+    const band = () => document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band");
+    const { unmount } = renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [as("org_brief")] }))} />);
+    expect(band()).toBe("lattice");
+    unmount();
+    renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [as("research_agent")] }))} />);
+    expect(band()).toBe("turkana-naipekarr-dispensary");
+  });
+
+  it("puts a recommended problem's county first, as Discover's cards do", () => {
+    const inKisumu = recommendation({ problem: { ...recommendation().problem, county_code: "KE-17" } });
+    renderWithIntl(<RecommendedForYou state={recommendationsState(recommendations({ items: [inKisumu] }))} />);
+    expect(document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("kisumu-lake-victoria");
+  });
+});
+
 describe("the API's words are text", () => {
   it("renders markup in a chip, a badge, a source and a Why-not line literally", () => {
     const item = trendingProblem({

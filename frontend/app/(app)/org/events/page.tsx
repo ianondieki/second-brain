@@ -108,7 +108,7 @@ export default async function EventsPage({ searchParams }: PageProps<"/org/event
               <EventItem
                 event={event}
                 href={orgEventHref(memberships, org.org_id, event.id)}
-                band={<NicheBand county={event.online ? null : event.county_code} sizes={CARD_BAND} />}
+                band={<NicheBand county={event.online ? null : event.county_code} forOrganisation sizes={CARD_BAND} />}
               />
             </li>
           ))}

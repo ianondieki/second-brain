@@ -55,7 +55,7 @@ interface Shot {
   path: string;
   who: Who;
   /** The screenshots folder under docs/demo/screenshots/ (default p18). */
-  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c" | "p24" | "p25";
+  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c" | "p24" | "p25" | "p26";
   /** Only these widths (default SHOT_WIDTHS). */
   widths?: number[];
   /** Shoot this element only (the top bar), not the page. */
@@ -1115,6 +1115,13 @@ SHOTS.push({
     await dialog.getByRole("option").nth(1).waitFor();
   },
 });
+
+// P26 (REQ-DIR-01): Companies in the portal's language, into docs/demo/screenshots/p26/: the list as cards under its
+// niche headings and an organisation's page (SHOT_SET=p26).
+for (const name of ["companies", "company"]) {
+  const base = SHOTS.find((shot) => shot.name === name && !shot.set);
+  if (base) SHOTS.push({ ...base, set: "p26" });
+}
 
 function wanted(shot: Shot) {
   return (!FILTER || FILTER.test(shot.name)) && (!SET || shot.set === SET);

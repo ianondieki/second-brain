@@ -93,7 +93,7 @@ export default async function OrgEventPage({ params, searchParams }: PageProps<"
 
       {/* The county's photograph (the lattice online or where there is none): decorative, the place is in the details. */}
       <div className="detail-band mt-8 overflow-hidden rounded-panel">
-        <NicheBand county={event.online ? null : event.county_code} sizes="(min-width: 1024px) 48rem, 100vw" />
+        <NicheBand county={event.online ? null : event.county_code} forOrganisation sizes="(min-width: 1024px) 48rem, 100vw" />
       </div>
       <div className="mt-6">
         <EventDetails event={event} />

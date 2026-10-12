@@ -48,7 +48,7 @@ export async function ProblemCard({
       <Card padding="none" className="overflow-hidden">
         {/* The niche's photograph as the card's top edge (P25; the lattice where there is none, or under Save-Data),
             decorative: the niche is named in the facts below. */}
-        <NicheBand niche={problem.niche?.slug} county={problem.county_code} className="h-20 rounded-none sm:h-28" sizes="(min-width: 1024px) 48rem, 100vw" wide />
+        <NicheBand niche={problem.niche?.slug} county={problem.county_code} forOrganisation={Boolean(brief)} className="h-20 rounded-none sm:h-28" sizes="(min-width: 1024px) 48rem, 100vw" wide />
         <header className="flex flex-col gap-3 p-5 sm:p-8">
         <h1 id="problem-title" className="text-2xl [overflow-wrap:anywhere] text-ink lg:text-3xl">
           {/* A Discover card's title morphs into this one where View Transitions run (P25). */}
