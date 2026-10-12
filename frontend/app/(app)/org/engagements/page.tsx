@@ -7,6 +7,7 @@ import { orgEngagements } from "@/components/tracker/data";
 import { EngagementCard } from "@/components/engagements/EngagementCard";
 import { awaitsMe, type Summary } from "@/components/tracker/model";
 import { Section } from "@/components/ui/Section";
+import { appNow } from "@/lib/api/server";
 
 import { getTeaser, orgContext } from "../data";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -89,6 +90,8 @@ async function EngagementGrid({ items, query }: { items: Summary[]; query: strin
   const ids = [...new Set(items.map((item) => item.proposal_id))];
   const teasers = await Promise.all(ids.map((id) => getTeaser(id).catch(() => null)));
   const nicheOf = new Map(ids.map((id, index) => [id, teasers[index]?.teaser.niche ?? null]));
+  // The app clock's instant (the API's X-App-Now): every card's live clock counts from it.
+  const now = appNow();
   const waiting = items.filter((item) => awaitsMe(item, "org"));
   const rest = items.filter((item) => !awaitsMe(item, "org"));
   const groups = [
@@ -106,6 +109,7 @@ async function EngagementGrid({ items, query }: { items: Summary[]; query: strin
             headingLevel={level}
             href={`${ENGAGEMENTS_PATH}/${encodeURIComponent(item.id)}${query}`}
             niche={nicheOf.get(item.proposal_id) ?? null}
+            now={now}
           />
         </li>
       ))}

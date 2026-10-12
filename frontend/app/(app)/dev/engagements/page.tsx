@@ -9,7 +9,7 @@ import { EngagementCard } from "@/components/engagements/EngagementCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
-import { requireMe } from "@/lib/api/server";
+import { appNow, requireMe } from "@/lib/api/server";
 import { homeFor } from "@/lib/auth/routing";
 
 import { myIdeas } from "../ideas/data";
@@ -36,6 +36,8 @@ export default async function DeveloperEngagementsPage() {
   const te = await getTranslations("eyebrow");
   const [engagements, ideas] = await Promise.all([myEngagements(), myIdeas().catch(() => [])]);
   const groups = byProposal(engagements);
+  // The app clock's instant, read once the API answered (its X-App-Now): every card's live clock counts from it.
+  const now = appNow();
   // Each idea's niche, for its cards' photograph band (D-67).
   const nicheOf = new Map(ideas.map((idea) => [idea.id, idea.niche ?? null]));
 
@@ -65,6 +67,7 @@ export default async function DeveloperEngagementsPage() {
                         titleBy="organisation"
                         href={`/dev/engagements/${encodeURIComponent(item.id)}`}
                         niche={nicheOf.get(item.proposal_id) ?? null}
+                        now={now}
                       />
                     </li>
                   ))}
