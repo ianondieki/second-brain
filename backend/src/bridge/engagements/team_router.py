@@ -1,0 +1,68 @@
+"""The organisation's own work on an engagement (P27; members of its organisation only, under
+``/api/orgs/{org_id}/engagements/{engagement_id}``; a non-member gets 404, as does another organisation's engagement).
+
+Team triage (REQ-ENG-15, D-68; ``bridge.engagements.team``):
+
+- ``GET …/team``: the team sheet (any member): the members it may be assigned to, the assignee, every recommendation.
+- ``PUT …/assignee`` ``{user_id|null}``: assign (owner, admin, reviewer or signatory; 403 ``role_not_allowed``
+  otherwise, 409 ``unchanged``, 422 ``invalid_assignee``); N30 to the assignee unless they assigned themselves.
+- ``PUT …/recommendation`` ``{stance, note}`` (the same roles) and ``DELETE …/recommendation`` (the caller's own).
+"""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from fastapi import APIRouter, Request
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from bridge.auth.deps import Db
+from bridge.engagements import team
+from bridge.engagements.schemas import AssigneeBody, RecommendationBody, TeamOut
+from bridge.errors import ERROR_RESPONSES
+from bridge.tenancy.deps import OrgMember
+
+router = APIRouter(tags=["engagements"], responses=ERROR_RESPONSES)
+ORG_ENGAGEMENT = "/api/orgs/{org_id}/engagements/{engagement_id}"
+
+
+@router.get(f"{ORG_ENGAGEMENT}/team")
+async def get_team(engagement_id: UUID, org: OrgMember, db: Db) -> TeamOut:
+    """The team sheet: who the engagement may be assigned to, who it is assigned to and the members' internal
+    recommendations (the organisation's own; never the developer's)."""
+    engagement = await team.org_engagement(db, org.org_id, engagement_id, org.live.user.id)
+    return await team.team_view(db, org.org_id, engagement.id)
+
+
+@router.put(f"{ORG_ENGAGEMENT}/assignee")
+async def put_assignee(engagement_id: UUID, body: AssigneeBody, request: Request, org: OrgMember, db: Db) -> TeamOut:
+    """Assign the engagement to a member (an owner, admin, reviewer or signatory), or to nobody (``user_id`` null)."""
+    assigned = await team.assign(db, org, engagement_id, body.user_id)
+    await db.commit()
+    factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    await team.tell_assignee(
+        factory,
+        assigned=assigned,
+        org_id=org.org_id,
+        engagement_id=engagement_id,
+        assigner_name=org.live.user.display_name,
+    )
+    return assigned.team
+
+
+@router.put(f"{ORG_ENGAGEMENT}/recommendation")
+async def put_recommendation(engagement_id: UUID, body: RecommendationBody, org: OrgMember, db: Db) -> TeamOut:
+    """Record or change your internal recommendation (pursue, pass or discuss, with an optional one-line note). It
+    changes nothing on the engagement and the developer never sees it."""
+    out = await team.recommend(db, org, engagement_id, body)
+    await db.commit()
+    return out
+
+
+@router.delete(f"{ORG_ENGAGEMENT}/recommendation")
+async def delete_recommendation(engagement_id: UUID, org: OrgMember, db: Db) -> TeamOut:
+    """Withdraw your own recommendation (nothing to withdraw is no change)."""
+    out = await team.withdraw(db, org, engagement_id)
+    await db.commit()
+    return out
+

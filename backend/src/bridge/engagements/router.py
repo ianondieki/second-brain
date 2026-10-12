@@ -3,7 +3,8 @@
 Reads (parties only; anyone else gets 404):
 
 - ``GET /api/me/engagements``: the caller's engagements as the developer.
-- ``GET /api/orgs/{org_id}/engagements``: the organisation's engagements (any member; the org inbox).
+- ``GET /api/orgs/{org_id}/engagements``: the organisation's engagements (any member; the org inbox), each with the
+  organisation's triage (``team``; D-68: never on the developer's list).
 - ``GET /api/engagements/{id}``: one engagement with whose turn, the caller's actions, the contact, endorsements,
   agreements, signatures and payments.
 - ``GET /api/engagements/{id}/history``: the History tab (the hash chain and endorsements), the same for both parties.
@@ -29,7 +30,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 
 from bridge.auth.deps import CurrentSession, Db, SettingsDep
-from bridge.engagements import history
+from bridge.engagements import history, team
 from bridge.engagements import state_machine as sm
 from bridge.engagements.commands import (
     ContactInput,
@@ -52,6 +53,7 @@ from bridge.engagements.schemas import (
     EngagementDetail,
     EngagementList,
     HistoryOut,
+    OrgEngagementList,
     PauseBody,
     PaymentBody,
     RequestInfoBody,
@@ -94,7 +96,7 @@ async def my_engagements(live: CurrentSession, db: Db, settings: SettingsDep) ->
 
 
 @router.get("/api/orgs/{org_id}/engagements")
-async def org_engagements(org: OrgMember, db: Db, settings: SettingsDep) -> EngagementList:
+async def org_engagements(org: OrgMember, db: Db, settings: SettingsDep) -> OrgEngagementList:
     rows = await db.execute(
         select(Engagement).where(Engagement.org_id == org.org_id).order_by(Engagement.updated_at.desc())
     )
@@ -105,7 +107,7 @@ async def org_engagements(org: OrgMember, db: Db, settings: SettingsDep) -> Enga
         developer_caller=False,
         reader_id=org.live.user.id,
     )
-    return EngagementList(items=items)
+    return OrgEngagementList(items=await team.with_team(db, org.org_id, org.live.user.id, items))
 
 
 @router.get(PREFIX)
