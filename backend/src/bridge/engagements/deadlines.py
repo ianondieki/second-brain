@@ -188,7 +188,7 @@ async def list_deadlines(
     """The viewer's deadlines inside ``frame``, sorted by ``due_at``."""
     today = local_date(now)
     items = await _items(db, viewer, today=today, deals_enabled=deals_enabled, platform_name=platform_name)
-    holidays = await _holidays(db)
+    holidays = await all_holidays(db)
     built = (build(item, now=now, holidays=holidays) for item in items)
     return ordered(d for d in built if in_window(d, frame, today))
 
@@ -215,7 +215,7 @@ async def one_deadline(
     found = [item for item in items if item.kind is kind and item.item_id == item_id]
     if not found:
         raise not_found(NO_DEADLINE)
-    return build(found[0], now=now, holidays=await _holidays(db))
+    return build(found[0], now=now, holidays=await all_holidays(db))
 
 
 async def _items(
@@ -238,7 +238,7 @@ async def _items(
     return items
 
 
-async def _holidays(db: AsyncSession) -> frozenset[date]:
+async def all_holidays(db: AsyncSession) -> frozenset[date]:
     """Every observed Kenyan holiday (a short table: tens of rows a year), so a count over any window is right."""
     rows = await db.execute(select(Holiday.observed_on).where(Holiday.country == "KE"))
     return frozenset(rows.scalars().all())
@@ -346,7 +346,7 @@ async def _review_dates(db: AsyncSession, waiting: Sequence[Milestone]) -> dict[
         )
         .group_by(milestone_id)
     )
-    holidays = await _holidays(db)
+    holidays = await all_holidays(db)
     return {
         by_id[key].id: add_business_days(local_date(at), by_id[key].review_window_bd, holidays)
         for key, at in rows.tuples()
