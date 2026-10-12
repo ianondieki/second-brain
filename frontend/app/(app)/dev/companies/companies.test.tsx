@@ -185,7 +185,7 @@ describe("OrgTile", () => {
     expect(seal.textContent).toBe("TK");
     expect(seal.getAttribute("aria-hidden")).toBe("true");
     expect(card.querySelector("p")?.textContent).toBe("Company, Nairobi City"); // the meta line is the card's first line
-    expect(screen.getByText(E0_TEXT)).toBeTruthy();
+    expect(document.querySelector("[data-badge='e0']")?.textContent).toBe(E0_TEXT); // AC-DIR-3: verbatim
     expect(card.querySelectorAll("[data-badge]")).toHaveLength(1);
     expect(card.querySelectorAll("[data-chip]")).toHaveLength(0);
     expect(card.querySelector("[data-response]")).toBeNull();
@@ -256,7 +256,7 @@ describe("OrgProfile (the company page)", () => {
 
   it("says what pitching an E0 organisation would mean, before any pitch, and shows the badge verbatim", () => {
     const { container } = renderProfile(org());
-    expect(screen.getByText(E0_TEXT)).toBeTruthy();
+    expect(document.querySelector("[data-badge='e0']")?.textContent).toBe(E0_TEXT); // AC-DIR-3: verbatim
     expect(container.querySelectorAll("[data-badge]")).toHaveLength(1);
     expect(container.querySelector("[data-held]")?.textContent).toBe(
       "Telkom Kenya Limited isn't on the platform yet. A proposal you pitch to them is saved, and they'll see it if they join and verify. We don't email them on your behalf.",
@@ -432,6 +432,26 @@ describe("DirectoryResults", () => {
     // The first two cards of the first section hold the page's largest picture: fetched at once; the rest lazy.
     expect(images.map((img) => img.getAttribute("loading"))).toEqual(["eager", "eager", "lazy", "lazy"]);
     expect(images.map((img) => img.getAttribute("fetchpriority"))).toEqual(["high", "high", "low", "low"]);
+    cleanup();
+    // A second section's cards are all lazy, whatever their place in it.
+    const two = renderWithIntl(
+      <DirectoryResults
+        kind="page"
+        page={{
+          groups: [
+            { niche: HIGHER_ED, orgs: [nairobi(0)] },
+            { niche: HIGHER_ED, orgs: [nairobi(1), nairobi(2)] },
+          ],
+          next_cursor: null,
+        }}
+        filters={{}}
+      />,
+    );
+    expect(
+      [...two.container.querySelectorAll<HTMLImageElement>("[data-niche-band] img")].map((img) =>
+        img.getAttribute("loading"),
+      ),
+    ).toEqual(["eager", "lazy", "lazy"]);
   });
 
   it("keeps a one-photograph county's file and cycles its crop; without one, the niche's mark; else the lattice", () => {
