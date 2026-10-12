@@ -186,11 +186,13 @@ async def test_one_live_assignment_per_engagement_closed_once_by_the_database(ow
 
 
 async def test_only_triage_members_assign_and_only_to_triage_members(owner_engine: AsyncEngine) -> None:
-    """Given an engagement, Then the owner, admin, reviewer and signatory may assign (as themselves); a viewer, a
-    finance member and the developer are refused by RLS, another organisation's member is told there is no such
-    engagement, an assigner who is not the caller is refused, and the assignee must be an active owner, admin, reviewer
-    or signatory of the engagement's organisation (a viewer, the developer, a removed member are refused, every role);
-    the organisation is the engagement's."""
+    """Given an engagement, Then the owner, admin, reviewer and signatory may assign (as themselves); a viewer and a
+    finance member are refused by RLS; the developer, who reads the engagement but not the organisation's roster, gets
+    the same refusal whoever they name (the guard reads the roster under the writer's RLS: no oracle of who is a
+    triage member); another organisation's member is told there is no such engagement; an assigner who is not the
+    caller is refused; the assignee must be an active owner, admin, reviewer or signatory of the engagement's
+    organisation (a viewer, the developer, a removed member are refused, every role); the organisation is the
+    engagement's."""
     async with t.as_app(owner_engine) as conn:
         p, engagement = await scene(conn)
         for member in (p.owner, p.signatory, p.reviewer):  # each assigns once (closing the live row first)
@@ -205,8 +207,9 @@ async def test_only_triage_members_assign_and_only_to_triage_members(owner_engin
         for member in (p.viewer, p.finance):
             await t.act(conn, member, p.org)
             await t.expect(conn, ASSIGN, RLS, **assign(p, engagement, p.reviewer, member))
-        await t.act(conn, p.developer)
-        await t.expect(conn, ASSIGN, RLS, **assign(p, engagement, p.reviewer, p.developer))
+        await t.act(conn, p.developer)  # reads the engagement, never the roster: one refusal, whoever is named
+        for named in (p.reviewer, p.signatory, p.viewer, p.outsider):
+            await t.expect(conn, ASSIGN, "the assignee must be", **assign(p, engagement, named, p.developer))
         await t.act(conn, p.other_member, p.other_org)
         await t.expect(conn, ASSIGN, HIDDEN, **assign(p, engagement, p.reviewer, p.other_member))
         await t.act(conn, p.reviewer, p.org)

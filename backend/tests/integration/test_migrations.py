@@ -600,8 +600,8 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_calendar_feed_lookup(bytea)": (True, {"bridge_app"}),  # the unauthenticated feed read
     "app_calendar_feed_touch(uuid)": (True, {"bridge_app"}),  # the feed read, after the lookup
     "kenyan_business_days_after(date, integer)": (False, set()),
-    "engagement_assignments_guard()": (True, set()),  # reads the engagement and the assignee's membership
-    "engagement_recommendations_guard()": (True, set()),  # reads the engagement and the member's membership
+    "engagement_assignments_guard()": (False, set()),  # SECURITY INVOKER: the writer's RLS reads the roster
+    "engagement_recommendations_guard()": (False, set()),  # SECURITY INVOKER: likewise
     "prior_knowledge_declarations_window()": (False, set()),  # SECURITY INVOKER: current_user is the writer
     "calendar_feeds_guard()": (False, set()),
 }

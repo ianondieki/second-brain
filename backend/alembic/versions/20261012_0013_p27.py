@@ -28,40 +28,44 @@ offset applies where the owner enabled it).
   ``assignee_user_id``, ``assigned_by``, UPDATE of ``unassigned_at``): who at the organisation works an engagement. A
   member reads every row of their organisation's; a triage member assigns as themselves (``assigned_by``) on an
   engagement of the row's organisation and closes a live row; nobody else reads or writes (the developer, another
-  organisation, staff: D-68). ``engagement_assignments_guard`` (every role, SECURITY DEFINER): the organisation is the
+  organisation, staff: D-68). ``engagement_assignments_guard`` (every role, SECURITY INVOKER): the organisation is the
   engagement's and the assignee an active triage member of it (check_violation); a row's keys, people and time never
   change; it is closed once (``unassigned_at``, the shared clock whatever is sent) and never reopened
-  (object_not_in_prerequisite_state). One live row per engagement: the partial unique index
-  ``uq_engagement_assignments_live`` (a second live row is a unique violation, the API's 409 or retry);
-  ``ix_engagement_assignments_assignee_live`` (org, assignee) serves "Assigned to me". Never deleted.
+  (object_not_in_prerequisite_state). The guard reads the roster under the writer's RLS (a member reads their
+  organisation's; anyone else none of it), so its refusal tells a writer who is not a member nothing about who is.
+  One live row per engagement: the partial unique index ``uq_engagement_assignments_live`` (a second live row is a
+  unique violation, the API's 409 or retry); ``ix_engagement_assignments_assignee_live`` (org, assignee) serves
+  "Assigned to me". Never deleted.
 - ``engagement_recommendations`` (ORG; bridge_app: SELECT, INSERT of ``id``, ``engagement_id``, ``org_id``,
   ``member_user_id``, ``stance``, ``note``, UPDATE of ``stance`` and ``note``, DELETE): one per member and engagement
   (``uq_engagement_recommendations_engagement_id_member_user_id``; the API upserts). A member reads every row of
   their organisation's; a triage member writes their own row (``member_user_id`` the caller) on an engagement of the
   row's organisation; a member withdraws their own (DELETE, whatever their role now). ``note`` is plain text on one
   line, 1 to 200 characters, or NULL (CHECK ``note_valid``). ``engagement_recommendations_guard`` (every role,
-  SECURITY DEFINER): the organisation is the engagement's and the member an active triage member of it; keys and
-  ``created_at`` never change; ``updated_at`` is the shared clock on every update. Changes no engagement state.
+  SECURITY INVOKER, as the assignments' guard): the organisation is the engagement's and the member an active triage
+  member of it; keys and ``created_at`` never change; ``updated_at`` is the shared clock on every update. Changes no
+  engagement state.
 - ``prior_knowledge_declarations`` (ORG_OR_USER through the engagement; bridge_app: SELECT, INSERT of ``id``,
   ``engagement_id``, ``org_id``, ``proposal_id``, ``version_id``, ``declared_by``, ``evidence_sha256``,
   ``evidence_title``, ``evidence_dated_on``): one per engagement (``uq_prior_knowledge_declarations_engagement_id``).
   Read by whoever reads the engagement (revisions 0002 and 0003's policies: its developer, the proposal's owner; the
-  organisation's members; staff admin, for the evidence pack of docs/spec/06 6.12). Inserted by a declarer as
-  themselves (``declared_by``), naming the engagement's organisation, proposal and version. Append-only for every
-  role, the owner included: ``_no_update_delete`` and ``_no_truncate`` (``block_mutation()``). The evidence is its
-  SHA-256 only (32 bytes, CHECK) with the organisation's own title (one line, 1 to 200 characters, CHECK) and its date;
-  no file and no text of it is ever stored. On INSERT, ``_0_visible`` (``tracker_engagement_visible()``) refuses an
-  engagement the caller does not read, then ``_1_window`` (``prior_knowledge_declarations_window()``, SECURITY
-  INVOKER: ``current_user`` is the writer) refuses an organisation, proposal or version that is not the engagement's
-  (check_violation, every role) and, for every writer but the table's owner (a seed or a backfill keeps what it sends;
-  no definer function inserts here, a test scans for one), makes the window the database's: the organisation's first
-  Tier-2 view and the closing day from ``app_prior_knowledge_window`` (object_not_in_prerequisite_state, "has not
-  viewed", before any view; "window closed on <day>" once the Nairobi day on the shared clock is past it), the evidence
-  dated no later than that day (check_violation), and ``first_tier2_view_at``, ``window_closes_on`` and
-  ``declared_at`` set whatever was sent. CHECKs keep the three consistent for every writer (``window_after_first_view``,
-  ``declared_within_window``, ``evidence_dated_by_declaration``). The engagement's state is not a condition here (the
-  window is docs/spec/06's rule); the chain event the contract adds (``prior_knowledge_declared``) is refused by
-  revision 0003 once the engagement has ended, so the API checks first.
+  organisation's members; staff admin, for the evidence pack of docs/spec/06 6.12), never by another organisation.
+  Inserted by a declarer as themselves (``declared_by``), naming the engagement's organisation, proposal and version.
+  Append-only for every role, the owner included: ``_no_update_delete`` and ``_no_truncate`` (``block_mutation()``).
+  The evidence is its SHA-256 only (32 bytes, CHECK) with the organisation's own title (one line, 1 to 200
+  characters, CHECK) and its date; no file and no text of it is ever stored. On INSERT, ``_0_visible``
+  (``tracker_engagement_visible()``) refuses an engagement the caller does not read, then ``_1_window``
+  (``prior_knowledge_declarations_window()``, SECURITY INVOKER: ``current_user`` is the writer) refuses an
+  organisation, proposal or version that is not the engagement's (check_violation, every role) and, for every writer
+  but the table's owner (a seed or a backfill keeps what it sends; no definer function inserts here, a test scans for
+  one), makes the window the database's: the organisation's first Tier-2 view and the closing day from
+  ``app_prior_knowledge_window`` (object_not_in_prerequisite_state, "has not viewed", before any view; "window closed
+  on <day>" once the Nairobi day on the shared clock is past it), the evidence dated no later than that day
+  (check_violation), and ``first_tier2_view_at``, ``window_closes_on`` and ``declared_at`` set whatever was sent.
+  CHECKs keep the three consistent for every writer (``window_after_first_view``, ``declared_within_window``,
+  ``evidence_dated_by_declaration``). The engagement's state is not a condition here (the window is docs/spec/06's
+  rule); the chain event the contract adds (``prior_knowledge_declared``) is refused by revision 0003 once the
+  engagement has ended, so the API checks first.
 - ``calendar_feeds`` (USER; bridge_app: SELECT, INSERT of ``id``, ``user_id``, ``org_id``, ``token_hash``, UPDATE of
   ``revoked_at``): D-70's capability URLs, the token stored only as its SHA-256 (32 bytes, CHECK; unique). The user's
   own rows only; a feed for an organisation only by a member of it. One live feed per user (``org_id`` NULL,
@@ -89,9 +93,8 @@ Functions (pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_ap
 - Internal (no EXECUTE grant; called as the owner): ``kenyan_business_days_after(start, n)``: the n-th business day
   after ``start`` (Monday to Friday, not an observed holiday of ``holidays`` with country ``KE``; ``start`` never
   counted), ``bridge.engagements.calendar.add_business_days`` for n >= 1 on the holidays the app loads.
-- Trigger functions: ``engagement_assignments_guard()`` and ``engagement_recommendations_guard()`` (SECURITY DEFINER:
-  they read the engagement and the membership whatever the caller's visibility), ``prior_knowledge_declarations_
-  window()`` and ``calendar_feeds_guard()`` (SECURITY INVOKER).
+- Trigger functions (SECURITY INVOKER, all four): ``engagement_assignments_guard()``,
+  ``engagement_recommendations_guard()``, ``prior_knowledge_declarations_window()`` and ``calendar_feeds_guard()``.
 
 Operating rules for the code that uses this schema:
 
@@ -100,12 +103,13 @@ Operating rules for the code that uses this schema:
   text a member typed: keep it out of event payloads, logs, audit details, emails and notices.
 - Assign: in one transaction, ``UPDATE engagement_assignments SET unassigned_at = now() WHERE engagement_id = :e AND
   unassigned_at IS NULL`` (the database sets the time), then INSERT the new row (``assigned_by`` the caller) leaving
-  ``assigned_at`` out. Map check_violation from ``engagement_assignments_guard`` to 422 (an assignee who is not a
-  triage member), a row-level security refusal to 403 (the caller is not a triage member) and
-  ``uq_engagement_assignments_live`` to 409 (a concurrent assignment).
-- Recommend: ``INSERT ... ON CONFLICT (engagement_id, member_user_id) DO UPDATE SET stance = EXCLUDED.stance, note =
-  EXCLUDED.note`` as the member, sending NULL for no note; withdraw with ``DELETE ... WHERE engagement_id = :e AND
-  member_user_id = :me``.
+  ``assigned_at`` out. Check the caller's role first (403: not an owner, admin, reviewer or signatory); then map
+  check_violation from ``engagement_assignments_guard`` to 422 (an assignee who is not a triage member), a
+  row-level security refusal to 403 and ``uq_engagement_assignments_live`` to 409 (a concurrent assignment).
+- Recommend: check the caller's role first (403; the guard refuses a member who is not a triage member with
+  check_violation, before the policy would), then ``INSERT ... ON CONFLICT (engagement_id, member_user_id) DO UPDATE SET
+  stance = EXCLUDED.stance, note = EXCLUDED.note`` as the member, sending NULL for no note; withdraw with ``DELETE ...
+  WHERE engagement_id = :e AND member_user_id = :me``.
 - Declare: read ``app_prior_knowledge_window(:e)`` for the 403s (``no_tier2_access_yet`` while the first view is NULL,
   ``declaration_window_closed`` once ``app_nairobi_today()`` is past the closing day) and the 409 (a row exists),
   then INSERT as the declarer with the engagement's ``org_id``, ``proposal_id`` and ``version_id``, leaving the three
@@ -114,8 +118,9 @@ Operating rules for the code that uses this schema:
   the window closing (403); the unique violation on ``engagement_id`` the race of two declarations (409).
 - Feeds: create or rotate in one transaction (``UPDATE calendar_feeds SET revoked_at = now() WHERE user_id = :me AND
   org_id IS NOT DISTINCT FROM :org AND revoked_at IS NULL``, then INSERT the new hash); revoke with the same UPDATE.
-  The unauthenticated read: ``SELECT * FROM app_calendar_feed_lookup(sha256(:token))`` (no row: 404), bind that user
-  (and organisation), read the deadlines under their RLS, then ``SELECT app_calendar_feed_touch(:feed)``.
+  The unauthenticated read: ``SELECT * FROM app_calendar_feed_lookup(:token_hash)`` with the SHA-256 computed from the
+  URL's token exactly as at creation (no row: 404), bind that user (and organisation), read the deadlines under their
+  RLS, then ``SELECT app_calendar_feed_touch(:feed)``.
 
 Revision ID: 0013
 Revises: 0012
@@ -365,9 +370,11 @@ $$;
 -- assignment names the engagement's organisation and an assignee who is an active owner, admin, reviewer or signatory
 -- of it (check_violation); an assignment's keys, people and time never change (check_violation); it is closed once,
 -- unassigned_at the shared clock whatever is sent, and never reopened (object_not_in_prerequisite_state). SECURITY
--- DEFINER: reads the engagement and the assignee's membership whatever the caller's visibility.
+-- INVOKER: the engagement and the roster are read under the writer's RLS (revision 0001: a member reads their
+-- organisation's roster, anyone else only their own memberships), so a writer who is not a member learns nothing of
+-- who is (the refusal is the same for every assignee); the owner reads everything.
 CREATE FUNCTION engagement_assignments_guard() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER
+    LANGUAGE plpgsql
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
@@ -405,10 +412,9 @@ $$;
 -- engagement_recommendations, BEFORE INSERT OR UPDATE (on INSERT after engagement_recommendations_0_visible), every
 -- role: a new recommendation names the engagement's organisation and a member who is an active owner, admin, reviewer
 -- or signatory of it (check_violation); its keys, member and creation time never change (check_violation), and
--- updated_at is the shared clock on every update. SECURITY DEFINER: reads the engagement and the membership whatever
--- the caller's visibility.
+-- updated_at is the shared clock on every update. SECURITY INVOKER, as engagement_assignments_guard().
 CREATE FUNCTION engagement_recommendations_guard() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER
+    LANGUAGE plpgsql
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
