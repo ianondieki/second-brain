@@ -167,6 +167,7 @@ test("a developer's deadlines: the month, the list with the live clock, each in 
       expect(text).not.toContain("feed-must-not-carry-this");
 
       await card.getByRole("button", { name: "Make a new link" }).click();
+      await card.getByRole("button", { name: "Replace the link" }).click();
       await expect(field).not.toHaveValue(first, STEP);
       const second = await field.inputValue();
       expect((await anonymous.get(first)).status()).toBe(404);

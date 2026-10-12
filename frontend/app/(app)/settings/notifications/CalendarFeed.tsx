@@ -45,8 +45,8 @@ export async function changeFeed(
 /**
  * Settings › Notifications › Calendar feed (P27 track A; REQ-ENG-13; D-70), the page's one client part for it: create
  * the private feed link, see it once in a read-only field with Copy and the two ways to subscribe (Google Calendar,
- * and Apple Calendar or any app through webcal://), make a new link (the old one stops working at once) or remove the
- * feed. The link is never shown again after the page is left: the API keeps only its hash. `lastRead` is the time a
+ * and Apple Calendar or any app through webcal://), make a new link (the old one stops working at once, so the button
+ * first asks, in place: "Replace the link?" with Replace and Keep, no dialog) or remove the feed. The link is never shown again after the page is left: the API keeps only its hash. `lastRead` is the time a
  * calendar app last fetched it, formatted by the server.
  */
 export function CalendarFeed({
@@ -62,10 +62,30 @@ export function CalendarFeed({
   const [state, setState] = useState<FeedState>({ kind: initial });
   const [busy, setBusy] = useState<Busy>(null);
   const [notice, setNotice] = useState<"" | "copied" | "copyFailed" | "failed" | "removed">("");
+  // "Make a new link" asks first: a live subscription stops updating the moment its link is replaced.
+  const [confirming, setConfirming] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   const createButton = useRef<HTMLButtonElement>(null);
+  const rotateButton = useRef<HTMLButtonElement>(null);
+  const question = useRef<HTMLDivElement>(null);
   const fieldId = useId();
   const noteId = useId();
+  const questionId = useId();
+
+  function ask() {
+    if (busy) return;
+    setNotice("");
+    setConfirming(true);
+    // The question takes the focus (read out with its two buttons next); never a held key landing on Replace.
+    requestAnimationFrame(() => question.current?.focus());
+  }
+
+  function answer(replace: boolean) {
+    setConfirming(false);
+    // Back to the button the question stood in for (it says "Making a new link…" while the new one comes).
+    requestAnimationFrame(() => rotateButton.current?.focus());
+    if (replace) void run("rotate");
+  }
 
   async function run(kind: Exclude<Busy, null>) {
     if (busy) return;
@@ -133,7 +153,8 @@ export function CalendarFeed({
               value={links.https}
               aria-describedby={noteId}
               onFocus={(event) => event.currentTarget.select()}
-              className={cn(controlClass, "min-w-0 flex-1 font-mono text-sm")}
+              // Grows beside Copy from 640 px only: in the phone's column a zero basis would squash it to its text.
+              className={cn(controlClass, "min-w-0 font-mono text-sm sm:flex-1")}
               data-feed-url=""
             />
             <button type="button" className={actionClass} onClick={() => copy(links.https)} data-feed-copy="">
@@ -166,13 +187,39 @@ export function CalendarFeed({
       {state.kind === "live" ? (
         <p className="text-ink">{lastRead ? t("live", { date: lastRead }) : t("liveUnread")}</p>
       ) : null}
-      {state.kind === "live" || state.kind === "shown" ? (
+      {(state.kind === "live" || state.kind === "shown") && confirming ? (
+        <div
+          ref={question}
+          role="group"
+          aria-labelledby={questionId}
+          tabIndex={-1}
+          className="flex flex-col gap-3 focus-visible:outline-none"
+          data-feed-confirm=""
+          onKeyDown={(event) => {
+            if (event.key === "Escape") answer(false);
+          }}
+        >
+          <p id={questionId} className="max-w-[60ch] font-semibold text-ink">
+            {t("rotateConfirm")}
+          </p>
+          <p className="flex flex-wrap gap-3">
+            <button type="button" className={actionClass} onClick={() => answer(true)} data-feed-rotate-confirm="">
+              {t("rotateYes")}
+            </button>
+            <button type="button" className={buttonClass("link")} onClick={() => answer(false)}>
+              {t("rotateCancel")}
+            </button>
+          </p>
+        </div>
+      ) : null}
+      {(state.kind === "live" || state.kind === "shown") && !confirming ? (
         <p className="flex flex-wrap gap-3">
           <button
+            ref={rotateButton}
             type="button"
             className={actionClass}
             aria-disabled={busy !== null || undefined}
-            onClick={() => run("rotate")}
+            onClick={ask}
             data-feed-rotate=""
           >
             {busy === "rotate" ? t("rotating") : t("rotate")}
