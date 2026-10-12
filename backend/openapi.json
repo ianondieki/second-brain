@@ -553,6 +553,29 @@
         "title": "ApproveBody",
         "type": "object"
       },
+      "AssigneeBody": {
+        "additionalProperties": false,
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The member to assign (an owner, admin, reviewer or signatory of the organisation); null unassigns",
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "AssigneeBody",
+        "type": "object"
+      },
       "AssistantConsentIn": {
         "additionalProperties": false,
         "properties": {
@@ -3396,6 +3419,93 @@
         "title": "CsrfResponse",
         "type": "object"
       },
+      "DeclarationBody": {
+        "additionalProperties": false,
+        "description": "An organisation's prior-knowledge declaration: the SHA-256 of dated internal evidence (hashed in the browser;\nthe file never leaves the device), the organisation's own title for it and the evidence's date.",
+        "properties": {
+          "evidence_dated_on": {
+            "description": "The evidence's date: no later than today in Africa/Nairobi",
+            "format": "date",
+            "title": "Evidence Dated On",
+            "type": "string"
+          },
+          "evidence_sha256_hex": {
+            "description": "The evidence's SHA-256: 64 hex digits",
+            "pattern": "^[0-9A-Fa-f]{64}$",
+            "title": "Evidence Sha256 Hex",
+            "type": "string"
+          },
+          "evidence_title": {
+            "description": "One line of plain text, at most 200 characters once trimmed (the developer reads it)",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Evidence Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_sha256_hex",
+          "evidence_title",
+          "evidence_dated_on"
+        ],
+        "title": "DeclarationBody",
+        "type": "object"
+      },
+      "DeclarationOut": {
+        "description": "A recorded declaration (append-only; hashed into the engagement's event chain).",
+        "properties": {
+          "declared_at": {
+            "format": "date-time",
+            "title": "Declared At",
+            "type": "string"
+          },
+          "engagement_id": {
+            "format": "uuid",
+            "title": "Engagement Id",
+            "type": "string"
+          },
+          "evidence_dated_on": {
+            "format": "date",
+            "title": "Evidence Dated On",
+            "type": "string"
+          },
+          "evidence_sha256_hex": {
+            "title": "Evidence Sha256 Hex",
+            "type": "string"
+          },
+          "evidence_title": {
+            "title": "Evidence Title",
+            "type": "string"
+          },
+          "first_tier2_view_at": {
+            "format": "date-time",
+            "title": "First Tier2 View At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "window_closes_on": {
+            "format": "date",
+            "title": "Window Closes On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "engagement_id",
+          "evidence_sha256_hex",
+          "evidence_title",
+          "evidence_dated_on",
+          "declared_at",
+          "first_tier2_view_at",
+          "window_closes_on"
+        ],
+        "title": "DeclarationOut",
+        "type": "object"
+      },
       "DeclineBody": {
         "properties": {
           "attested": {
@@ -3485,6 +3595,362 @@
           "headline"
         ],
         "title": "DeveloperCard",
+        "type": "object"
+      },
+      "DeveloperEngagementDetail": {
+        "description": "The developer's tracker (no organisation triage: D-68).",
+        "properties": {
+          "actions": {
+            "description": "The commands the caller may run now (the action buttons)",
+            "items": {
+              "$ref": "#/components/schemas/Command"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "agreements": {
+            "items": {
+              "$ref": "#/components/schemas/AgreementOut"
+            },
+            "title": "Agreements",
+            "type": "array"
+          },
+          "awaiting": {
+            "description": "What moves the engagement on, and whose turn each is",
+            "items": {
+              "$ref": "#/components/schemas/PendingOut"
+            },
+            "title": "Awaiting",
+            "type": "array"
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContactOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "developer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The developer's user id; null for the organisation until the developer is named",
+            "title": "Developer Id"
+          },
+          "developer_name": {
+            "description": "The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)",
+            "title": "Developer Name",
+            "type": "string"
+          },
+          "developer_named": {
+            "description": "False while developer_name is the pseudonymous handle",
+            "title": "Developer Named",
+            "type": "boolean"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRefOut"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DueOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "endorsements": {
+            "description": "The current stage's endorsements (this round)",
+            "items": {
+              "$ref": "#/components/schemas/EndorsementOut"
+            },
+            "title": "Endorsements",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "ip_nudge": {
+            "default": false,
+            "description": "Show the one note about KIPI and KECOBO registration: the developer's next step is send_nda, the proposal has no Tier-2 view yet and the developer has not dismissed the note",
+            "title": "Ip Nudge",
+            "type": "boolean"
+          },
+          "lock_version": {
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "my_party": {
+            "const": "developer",
+            "title": "My Party",
+            "type": "string"
+          },
+          "my_roles": {
+            "items": {
+              "$ref": "#/components/schemas/EngagementActorRole"
+            },
+            "title": "My Roles",
+            "type": "array"
+          },
+          "notes": {
+            "description": "The side states' questions, answers and reasons, in event order",
+            "items": {
+              "$ref": "#/components/schemas/NoteOut"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "org_id": {
+            "format": "uuid",
+            "title": "Org Id",
+            "type": "string"
+          },
+          "org_name": {
+            "title": "Org Name",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EngagementOrigin"
+          },
+          "paused_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/PaymentOut"
+            },
+            "title": "Payments",
+            "type": "array"
+          },
+          "prior_knowledge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeveloperPriorKnowledgeOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's prior-knowledge declaration on this proposal; null when none"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "proposal_title": {
+            "title": "Proposal Title",
+            "type": "string"
+          },
+          "side_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SideLimitsOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caps left for the current stage's side states; null once ended or none apply"
+          },
+          "signatures": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureOut"
+            },
+            "title": "Signatures",
+            "type": "array"
+          },
+          "stage_deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Deadline At"
+          },
+          "stage_entered_at": {
+            "format": "date-time",
+            "title": "Stage Entered At",
+            "type": "string"
+          },
+          "stage_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Group"
+          },
+          "stage_label": {
+            "title": "Stage Label",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngagementState"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from",
+            "title": "Today"
+          },
+          "unread_messages": {
+            "description": "Messages of the engagement's thread by others that the caller has not read",
+            "minimum": 0.0,
+            "title": "Unread Messages",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          },
+          "whose_turn": {
+            "items": {
+              "$ref": "#/components/schemas/EngagementParty"
+            },
+            "title": "Whose Turn",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "proposal_id",
+          "version_id",
+          "proposal_title",
+          "org_id",
+          "org_name",
+          "developer_id",
+          "developer_name",
+          "developer_named",
+          "origin",
+          "state",
+          "stage_label",
+          "stage_group",
+          "end_reason",
+          "stage_entered_at",
+          "stage_deadline_at",
+          "due",
+          "ended_at",
+          "lock_version",
+          "whose_turn",
+          "updated_at",
+          "paused_from",
+          "my_party",
+          "my_roles",
+          "actions",
+          "awaiting",
+          "contact",
+          "endorsements",
+          "agreements",
+          "signatures",
+          "payments",
+          "documents",
+          "notes"
+        ],
+        "title": "DeveloperEngagementDetail",
+        "type": "object"
+      },
+      "DeveloperPriorKnowledgeOut": {
+        "description": "The prior-knowledge declaration an organisation made on the developer's proposal, as the developer reads it.",
+        "properties": {
+          "declared_at": {
+            "format": "date-time",
+            "title": "Declared At",
+            "type": "string"
+          },
+          "evidence_dated_on": {
+            "format": "date",
+            "title": "Evidence Dated On",
+            "type": "string"
+          },
+          "evidence_sha256_hex": {
+            "title": "Evidence Sha256 Hex",
+            "type": "string"
+          },
+          "evidence_title": {
+            "description": "The organisation's own words: plain text",
+            "title": "Evidence Title",
+            "type": "string"
+          },
+          "org_name": {
+            "title": "Org Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "org_name",
+          "declared_at",
+          "evidence_sha256_hex",
+          "evidence_title",
+          "evidence_dated_on"
+        ],
+        "title": "DeveloperPriorKnowledgeOut",
         "type": "object"
       },
       "DirectoryGroup": {
@@ -4092,305 +4558,6 @@
         ],
         "title": "EngagementActorRole",
         "type": "string"
-      },
-      "EngagementDetail": {
-        "properties": {
-          "actions": {
-            "description": "The commands the caller may run now (the action buttons)",
-            "items": {
-              "$ref": "#/components/schemas/Command"
-            },
-            "title": "Actions",
-            "type": "array"
-          },
-          "agreements": {
-            "items": {
-              "$ref": "#/components/schemas/AgreementOut"
-            },
-            "title": "Agreements",
-            "type": "array"
-          },
-          "awaiting": {
-            "description": "What moves the engagement on, and whose turn each is",
-            "items": {
-              "$ref": "#/components/schemas/PendingOut"
-            },
-            "title": "Awaiting",
-            "type": "array"
-          },
-          "contact": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ContactOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "developer_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The developer's user id; null for the organisation until the developer is named",
-            "title": "Developer Id"
-          },
-          "developer_name": {
-            "description": "The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)",
-            "title": "Developer Name",
-            "type": "string"
-          },
-          "developer_named": {
-            "description": "False while developer_name is the pseudonymous handle",
-            "title": "Developer Named",
-            "type": "boolean"
-          },
-          "documents": {
-            "items": {
-              "$ref": "#/components/schemas/DocumentRefOut"
-            },
-            "title": "Documents",
-            "type": "array"
-          },
-          "due": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DueOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "end_reason": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EngagementEndReason"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "ended_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ended At"
-          },
-          "endorsements": {
-            "description": "The current stage's endorsements (this round)",
-            "items": {
-              "$ref": "#/components/schemas/EndorsementOut"
-            },
-            "title": "Endorsements",
-            "type": "array"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "lock_version": {
-            "title": "Lock Version",
-            "type": "integer"
-          },
-          "my_party": {
-            "$ref": "#/components/schemas/EngagementParty"
-          },
-          "my_roles": {
-            "items": {
-              "$ref": "#/components/schemas/EngagementActorRole"
-            },
-            "title": "My Roles",
-            "type": "array"
-          },
-          "notes": {
-            "description": "The side states' questions, answers and reasons, in event order",
-            "items": {
-              "$ref": "#/components/schemas/NoteOut"
-            },
-            "title": "Notes",
-            "type": "array"
-          },
-          "org_id": {
-            "format": "uuid",
-            "title": "Org Id",
-            "type": "string"
-          },
-          "org_name": {
-            "title": "Org Name",
-            "type": "string"
-          },
-          "origin": {
-            "$ref": "#/components/schemas/EngagementOrigin"
-          },
-          "paused_from": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EngagementState"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
-          },
-          "payments": {
-            "items": {
-              "$ref": "#/components/schemas/PaymentOut"
-            },
-            "title": "Payments",
-            "type": "array"
-          },
-          "proposal_id": {
-            "format": "uuid",
-            "title": "Proposal Id",
-            "type": "string"
-          },
-          "proposal_title": {
-            "title": "Proposal Title",
-            "type": "string"
-          },
-          "side_limits": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SideLimitsOut"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The caps left for the current stage's side states; null once ended or none apply"
-          },
-          "signatures": {
-            "items": {
-              "$ref": "#/components/schemas/SignatureOut"
-            },
-            "title": "Signatures",
-            "type": "array"
-          },
-          "stage_deadline_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stage Deadline At"
-          },
-          "stage_entered_at": {
-            "format": "date-time",
-            "title": "Stage Entered At",
-            "type": "string"
-          },
-          "stage_group": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Stage Group"
-          },
-          "stage_label": {
-            "title": "Stage Label",
-            "type": "string"
-          },
-          "state": {
-            "$ref": "#/components/schemas/EngagementState"
-          },
-          "today": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from",
-            "title": "Today"
-          },
-          "unread_messages": {
-            "description": "Messages of the engagement's thread by others that the caller has not read",
-            "minimum": 0.0,
-            "title": "Unread Messages",
-            "type": "integer"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "version_id": {
-            "format": "uuid",
-            "title": "Version Id",
-            "type": "string"
-          },
-          "whose_turn": {
-            "items": {
-              "$ref": "#/components/schemas/EngagementParty"
-            },
-            "title": "Whose Turn",
-            "type": "array"
-          }
-        },
-        "required": [
-          "id",
-          "proposal_id",
-          "version_id",
-          "proposal_title",
-          "org_id",
-          "org_name",
-          "developer_id",
-          "developer_name",
-          "developer_named",
-          "origin",
-          "state",
-          "stage_label",
-          "stage_group",
-          "end_reason",
-          "stage_entered_at",
-          "stage_deadline_at",
-          "due",
-          "ended_at",
-          "lock_version",
-          "whose_turn",
-          "updated_at",
-          "paused_from",
-          "my_party",
-          "my_roles",
-          "actions",
-          "awaiting",
-          "contact",
-          "endorsements",
-          "agreements",
-          "signatures",
-          "payments",
-          "documents",
-          "notes"
-        ],
-        "title": "EngagementDetail",
-        "type": "object"
       },
       "EngagementEndReason": {
         "description": "docs/spec/06 6.9 ``end_reason``: DECLINED codes, then EXPIRED codes.",
@@ -5861,6 +6028,17 @@
           },
           "state": {
             "$ref": "#/components/schemas/EngagementState"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamFacts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's triage of the engagement (always sent to a member)"
           }
         },
         "required": [
@@ -7318,6 +7496,31 @@
         "title": "MyProposals",
         "type": "object"
       },
+      "MyRecommendationOut": {
+        "description": "The caller's own recommendation on the engagement.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "stance": {
+            "$ref": "#/components/schemas/RecommendationStance"
+          }
+        },
+        "required": [
+          "stance",
+          "note"
+        ],
+        "title": "MyRecommendationOut",
+        "type": "object"
+      },
       "MyTags": {
         "properties": {
           "cap": {
@@ -8067,6 +8270,542 @@
         "title": "OrgCard",
         "type": "object"
       },
+      "OrgEngagementDetail": {
+        "description": "An organisation member's tracker: the organisation's triage and its declaration window.",
+        "properties": {
+          "actions": {
+            "description": "The commands the caller may run now (the action buttons)",
+            "items": {
+              "$ref": "#/components/schemas/Command"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "agreements": {
+            "items": {
+              "$ref": "#/components/schemas/AgreementOut"
+            },
+            "title": "Agreements",
+            "type": "array"
+          },
+          "awaiting": {
+            "description": "What moves the engagement on, and whose turn each is",
+            "items": {
+              "$ref": "#/components/schemas/PendingOut"
+            },
+            "title": "Awaiting",
+            "type": "array"
+          },
+          "contact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContactOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "developer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The developer's user id; null for the organisation until the developer is named",
+            "title": "Developer Id"
+          },
+          "developer_name": {
+            "description": "The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)",
+            "title": "Developer Name",
+            "type": "string"
+          },
+          "developer_named": {
+            "description": "False while developer_name is the pseudonymous handle",
+            "title": "Developer Named",
+            "type": "boolean"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRefOut"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DueOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "endorsements": {
+            "description": "The current stage's endorsements (this round)",
+            "items": {
+              "$ref": "#/components/schemas/EndorsementOut"
+            },
+            "title": "Endorsements",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lock_version": {
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "my_party": {
+            "const": "org",
+            "title": "My Party",
+            "type": "string"
+          },
+          "my_roles": {
+            "items": {
+              "$ref": "#/components/schemas/EngagementActorRole"
+            },
+            "title": "My Roles",
+            "type": "array"
+          },
+          "notes": {
+            "description": "The side states' questions, answers and reasons, in event order",
+            "items": {
+              "$ref": "#/components/schemas/NoteOut"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "org_id": {
+            "format": "uuid",
+            "title": "Org Id",
+            "type": "string"
+          },
+          "org_name": {
+            "title": "Org Name",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EngagementOrigin"
+          },
+          "paused_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/PaymentOut"
+            },
+            "title": "Payments",
+            "type": "array"
+          },
+          "prior_knowledge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OrgPriorKnowledgeOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's declaration window (always sent to a member)"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "proposal_title": {
+            "title": "Proposal Title",
+            "type": "string"
+          },
+          "side_limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SideLimitsOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caps left for the current stage's side states; null once ended or none apply"
+          },
+          "signatures": {
+            "items": {
+              "$ref": "#/components/schemas/SignatureOut"
+            },
+            "title": "Signatures",
+            "type": "array"
+          },
+          "stage_deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Deadline At"
+          },
+          "stage_entered_at": {
+            "format": "date-time",
+            "title": "Stage Entered At",
+            "type": "string"
+          },
+          "stage_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Group"
+          },
+          "stage_label": {
+            "title": "Stage Label",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngagementState"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamFacts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's triage (always sent to a member)"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from",
+            "title": "Today"
+          },
+          "unread_messages": {
+            "description": "Messages of the engagement's thread by others that the caller has not read",
+            "minimum": 0.0,
+            "title": "Unread Messages",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          },
+          "whose_turn": {
+            "items": {
+              "$ref": "#/components/schemas/EngagementParty"
+            },
+            "title": "Whose Turn",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "proposal_id",
+          "version_id",
+          "proposal_title",
+          "org_id",
+          "org_name",
+          "developer_id",
+          "developer_name",
+          "developer_named",
+          "origin",
+          "state",
+          "stage_label",
+          "stage_group",
+          "end_reason",
+          "stage_entered_at",
+          "stage_deadline_at",
+          "due",
+          "ended_at",
+          "lock_version",
+          "whose_turn",
+          "updated_at",
+          "paused_from",
+          "my_party",
+          "my_roles",
+          "actions",
+          "awaiting",
+          "contact",
+          "endorsements",
+          "agreements",
+          "signatures",
+          "payments",
+          "documents",
+          "notes"
+        ],
+        "title": "OrgEngagementDetail",
+        "type": "object"
+      },
+      "OrgEngagementList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrgEngagementSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "OrgEngagementList",
+        "type": "object"
+      },
+      "OrgEngagementSummary": {
+        "description": "An engagement in the organisation's list: the summary and the organisation's own triage.",
+        "properties": {
+          "developer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The developer's user id; null for the organisation until the developer is named",
+            "title": "Developer Id"
+          },
+          "developer_name": {
+            "description": "The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)",
+            "title": "Developer Name",
+            "type": "string"
+          },
+          "developer_named": {
+            "description": "False while developer_name is the pseudonymous handle",
+            "title": "Developer Named",
+            "type": "boolean"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DueOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lock_version": {
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "org_id": {
+            "format": "uuid",
+            "title": "Org Id",
+            "type": "string"
+          },
+          "org_name": {
+            "title": "Org Name",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EngagementOrigin"
+          },
+          "paused_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "proposal_title": {
+            "title": "Proposal Title",
+            "type": "string"
+          },
+          "stage_deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Deadline At"
+          },
+          "stage_entered_at": {
+            "format": "date-time",
+            "title": "Stage Entered At",
+            "type": "string"
+          },
+          "stage_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Group"
+          },
+          "stage_label": {
+            "title": "Stage Label",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngagementState"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamFacts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's triage (always sent to a member)"
+          },
+          "unread_messages": {
+            "description": "Messages of the engagement's thread by others that the caller has not read",
+            "minimum": 0.0,
+            "title": "Unread Messages",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          },
+          "whose_turn": {
+            "items": {
+              "$ref": "#/components/schemas/EngagementParty"
+            },
+            "title": "Whose Turn",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "proposal_id",
+          "version_id",
+          "proposal_title",
+          "org_id",
+          "org_name",
+          "developer_id",
+          "developer_name",
+          "developer_named",
+          "origin",
+          "state",
+          "stage_label",
+          "stage_group",
+          "end_reason",
+          "stage_entered_at",
+          "stage_deadline_at",
+          "due",
+          "ended_at",
+          "lock_version",
+          "whose_turn",
+          "updated_at",
+          "paused_from"
+        ],
+        "title": "OrgEngagementSummary",
+        "type": "object"
+      },
       "OrgEntitlementsOut": {
         "properties": {
           "limits": {
@@ -8153,6 +8892,61 @@
           "website"
         ],
         "title": "OrgOut",
+        "type": "object"
+      },
+      "OrgPriorKnowledgeOut": {
+        "description": "The organisation's declaration window on the engagement: it opens at the organisation's first Tier-2 view of the\nproposal and closes at the end of ``window_closes_on`` (the 10th Kenyan business day after that view's day) in\nAfrica/Nairobi; null before any view.",
+        "properties": {
+          "can_declare": {
+            "description": "The caller may declare now: a Tier-2 view exists, the window is open, no declaration yet, the engagement has not ended and the caller is an owner, admin or signatory",
+            "title": "Can Declare",
+            "type": "boolean"
+          },
+          "declared_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the organisation declared; null while it has not",
+            "title": "Declared At"
+          },
+          "first_tier2_view_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Tier2 View At"
+          },
+          "window_closes_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Closes On"
+          }
+        },
+        "required": [
+          "first_tier2_view_at",
+          "window_closes_on",
+          "declared_at",
+          "can_declare"
+        ],
+        "title": "OrgPriorKnowledgeOut",
         "type": "object"
       },
       "OrgRef": {
@@ -9635,6 +10429,18 @@
             "description": "The county's name, when the profile names one",
             "title": "County Name"
           },
+          "github_login": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your GitHub login (self-reported; D3)",
+            "title": "Github Login"
+          },
           "handle": {
             "title": "Handle",
             "type": "string"
@@ -9649,6 +10455,30 @@
               }
             ],
             "title": "Headline"
+          },
+          "kecobo_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your KECOBO registration reference (self-reported)",
+            "title": "Kecobo Number"
+          },
+          "kipi_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your KIPI filing reference (self-reported)",
+            "title": "Kipi Number"
           },
           "peers_visible": {
             "description": "Peers is on: developers in your county or niches see your handle, headline and shared niches",
@@ -9697,6 +10527,19 @@
             ],
             "title": "County Code"
           },
+          "github_login": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your GitHub login (GitHub's rule, at most 39 characters); null or empty clears it",
+            "title": "Github Login"
+          },
           "headline": {
             "anyOf": [
               {
@@ -9708,6 +10551,32 @@
               }
             ],
             "title": "Headline"
+          },
+          "kecobo_number": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your KECOBO reference: 1 to 40 characters; null or empty clears it",
+            "title": "Kecobo Number"
+          },
+          "kipi_number": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your KIPI reference: 1 to 40 characters; null or empty clears it",
+            "title": "Kipi Number"
           },
           "peers_visible": {
             "anyOf": [
@@ -11273,6 +12142,84 @@
         ],
         "title": "Recommendation",
         "type": "object"
+      },
+      "RecommendationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One line of plain text, at most 200 characters once trimmed; empty or null for none. Members of the organisation read it; the developer never does",
+            "title": "Note"
+          },
+          "stance": {
+            "$ref": "#/components/schemas/RecommendationStance"
+          }
+        },
+        "required": [
+          "stance"
+        ],
+        "title": "RecommendationBody",
+        "type": "object"
+      },
+      "RecommendationOut": {
+        "description": "One member's internal recommendation: plain text, rendered as text; members of the organisation only.",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "stance": {
+            "$ref": "#/components/schemas/RecommendationStance"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name",
+          "stance",
+          "note",
+          "updated_at"
+        ],
+        "title": "RecommendationOut",
+        "type": "object"
+      },
+      "RecommendationStance": {
+        "description": "A member's internal recommendation on an engagement (revision 0013; REQ-ENG-15, D-68; docs/spec/03 ``reviewer``:\n\"may Recommend internally without changing state\"). The organisation's own: never shown to a developer.",
+        "enum": [
+          "pursue",
+          "pass",
+          "discuss"
+        ],
+        "title": "RecommendationStance",
+        "type": "string"
       },
       "RecommendationsOut": {
         "properties": {
@@ -13004,6 +13951,33 @@
         "title": "StagedAttachmentOut",
         "type": "object"
       },
+      "StanceCounts": {
+        "description": "How many of the organisation's members recommend each stance on the engagement (the header's tally).",
+        "properties": {
+          "discuss": {
+            "minimum": 0.0,
+            "title": "Discuss",
+            "type": "integer"
+          },
+          "pass": {
+            "minimum": 0.0,
+            "title": "Pass",
+            "type": "integer"
+          },
+          "pursue": {
+            "minimum": 0.0,
+            "title": "Pursue",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pursue",
+          "pass",
+          "discuss"
+        ],
+        "title": "StanceCounts",
+        "type": "object"
+      },
       "StepUpMethod": {
         "description": "The step-up that preceded an internal e-signature (docs/spec/06 6.9 SignatureProvider).",
         "enum": [
@@ -13202,6 +14176,67 @@
         "title": "TagsIn",
         "type": "object"
       },
+      "TeamFacts": {
+        "description": "The organisation's triage of one engagement, as one of its members reads it (D-68: never a developer).",
+        "properties": {
+          "assignee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamPerson"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The member the engagement is assigned to; null when nobody"
+          },
+          "mine": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MyRecommendationOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The caller's own recommendation; null when they made none"
+          },
+          "recommendations": {
+            "$ref": "#/components/schemas/StanceCounts"
+          }
+        },
+        "required": [
+          "assignee",
+          "recommendations",
+          "mine"
+        ],
+        "title": "TeamFacts",
+        "type": "object"
+      },
+      "TeamMemberOut": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole",
+            "description": "The member's first role of owner, admin, signatory and reviewer"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name",
+          "role"
+        ],
+        "title": "TeamMemberOut",
+        "type": "object"
+      },
       "TeamMessageIn": {
         "additionalProperties": false,
         "properties": {
@@ -13254,6 +14289,70 @@
           "created_at"
         ],
         "title": "TeamMessageOut",
+        "type": "object"
+      },
+      "TeamOut": {
+        "description": "The team sheet of one engagement (members of its organisation only).",
+        "properties": {
+          "assignee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamPerson"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "engagement_id": {
+            "format": "uuid",
+            "title": "Engagement Id",
+            "type": "string"
+          },
+          "members": {
+            "description": "The members the engagement may be assigned to: active owners, admins, signatories and reviewers",
+            "items": {
+              "$ref": "#/components/schemas/TeamMemberOut"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "recommendations": {
+            "description": "Every member's recommendation, newest first",
+            "items": {
+              "$ref": "#/components/schemas/RecommendationOut"
+            },
+            "title": "Recommendations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "engagement_id",
+          "members",
+          "assignee",
+          "recommendations"
+        ],
+        "title": "TeamOut",
+        "type": "object"
+      },
+      "TeamPerson": {
+        "description": "A member of the organisation as the team sheet names them (\"Former member\" once their name is not readable).",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "display_name"
+        ],
+        "title": "TeamPerson",
         "type": "object"
       },
       "TeamProblemOut": {
@@ -22528,7 +23627,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Get Engagement Api Engagements  Engagement Id  Get"
                 }
               }
             },
@@ -22652,7 +23766,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Accept Delivery Api Engagements  Engagement Id  Accept Delivery Post"
                 }
               }
             },
@@ -22776,7 +23905,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Accept Interest Api Engagements  Engagement Id  Accept Interest Post"
                 }
               }
             },
@@ -22900,7 +24044,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Answer Info Api Engagements  Engagement Id  Answer Info Post"
                 }
               }
             },
@@ -23024,7 +24183,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Approve Api Engagements  Engagement Id  Approve Post"
                 }
               }
             },
@@ -23148,7 +24322,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Cancel Request Api Engagements  Engagement Id  Cancel Request Post"
                 }
               }
             },
@@ -23272,7 +24461,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Confirm Contact Api Engagements  Engagement Id  Confirm Contact Post"
                 }
               }
             },
@@ -23396,7 +24600,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Confirm Payment Api Engagements  Engagement Id  Confirm Payment Post"
                 }
               }
             },
@@ -23633,7 +24852,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Decline Api Engagements  Engagement Id  Decline Post"
                 }
               }
             },
@@ -23757,7 +24991,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Decline Interest Api Engagements  Engagement Id  Decline Interest Post"
                 }
               }
             },
@@ -23881,7 +25130,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Deliver Api Engagements  Engagement Id  Deliver Post"
                 }
               }
             },
@@ -24239,7 +25503,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Mark Contacted Api Engagements  Engagement Id  Mark Contacted Post"
                 }
               }
             },
@@ -24363,7 +25642,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Mark Final Api Engagements  Engagement Id  Mark Final Post"
                 }
               }
             },
@@ -25638,7 +26932,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Milestone Accept Milestone Api Engagements  Engagement Id  Milestones  Milestone Id  Accept Post"
                 }
               }
             },
@@ -25772,7 +27081,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Milestone Request Changes Api Engagements  Engagement Id  Milestones  Milestone Id  Request Changes Post"
                 }
               }
             },
@@ -25906,7 +27230,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Milestone Start Milestone Api Engagements  Engagement Id  Milestones  Milestone Id  Start Post"
                 }
               }
             },
@@ -26040,7 +27379,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Milestone Submit Milestone Api Engagements  Engagement Id  Milestones  Milestone Id  Submit Post"
                 }
               }
             },
@@ -26164,7 +27518,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Pause Api Engagements  Engagement Id  Pause Post"
                 }
               }
             },
@@ -26288,7 +27657,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Propose Terms Api Engagements  Engagement Id  Propose Terms Post"
                 }
               }
             },
@@ -26412,7 +27796,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Record Payment Api Engagements  Engagement Id  Record Payment Post"
                 }
               }
             },
@@ -26536,7 +27935,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Reopen Negotiation Api Engagements  Engagement Id  Reopen Negotiation Post"
                 }
               }
             },
@@ -26660,7 +28074,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Request Info Api Engagements  Engagement Id  Request Info Post"
                 }
               }
             },
@@ -26784,7 +28213,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Resume Api Engagements  Engagement Id  Resume Post"
                 }
               }
             },
@@ -26908,7 +28352,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Send Nda Api Engagements  Engagement Id  Send Nda Post"
                 }
               }
             },
@@ -27258,7 +28717,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Sign Agreement Api Engagements  Engagement Id  Sign Agreement Post"
                 }
               }
             },
@@ -27382,7 +28856,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Sign Certificate Api Engagements  Engagement Id  Sign Certificate Post"
                 }
               }
             },
@@ -27506,7 +28995,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Sign Nda Api Engagements  Engagement Id  Sign Nda Post"
                 }
               }
             },
@@ -27630,7 +29134,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Start Review Api Engagements  Engagement Id  Start Review Post"
                 }
               }
             },
@@ -27754,7 +29273,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Engagement Withdraw Api Engagements  Engagement Id  Withdraw Post"
                 }
               }
             },
@@ -30940,7 +32474,7 @@
         ]
       },
       "patch": {
-        "description": "Change your headline, bio, county or the Peers switch (only the fields sent).",
+        "description": "Change your headline, bio, county, the Peers switch or your self-reported GitHub, KECOBO and KIPI references\n(only the fields sent; a null reference clears it).",
         "operationId": "update_profile_api_me_profile_patch",
         "requestBody": {
           "content": {
@@ -31045,6 +32579,101 @@
           }
         },
         "summary": "Update Profile",
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/profile/ip-nudge/dismiss": {
+      "post": {
+        "description": "Dismiss the note about KIPI and KECOBO registration on your tracker, for good (again is no change).",
+        "operationId": "dismiss_ip_nudge_api_me_profile_ip_nudge_dismiss_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Dismiss Ip Nudge",
         "tags": [
           "me"
         ]
@@ -37902,7 +39531,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementList"
+                  "$ref": "#/components/schemas/OrgEngagementList"
                 }
               }
             },
@@ -37990,6 +39619,654 @@
           }
         },
         "summary": "Org Engagements",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/engagements/{engagement_id}/assignee": {
+      "put": {
+        "description": "Assign the engagement to a member (an owner, admin, reviewer or signatory), or to nobody (``user_id`` null).",
+        "operationId": "put_assignee_api_orgs__org_id__engagements__engagement_id__assignee_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssigneeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Put Assignee",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/engagements/{engagement_id}/prior-knowledge": {
+      "post": {
+        "description": "Declare prior knowledge (docs/spec/06 6.4 pt 5): the SHA-256 of dated internal evidence (hashed on your device;\nno file is uploaded), its title and date, within 10 business days of your organisation's first view of the full\nproposal. The developer is told. Declarations are not recorded on the platform after this window.",
+        "operationId": "post_prior_knowledge_api_orgs__org_id__engagements__engagement_id__prior_knowledge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclarationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeclarationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Post Prior Knowledge",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/engagements/{engagement_id}/recommendation": {
+      "delete": {
+        "description": "Withdraw your own recommendation (nothing to withdraw is no change).",
+        "operationId": "delete_recommendation_api_orgs__org_id__engagements__engagement_id__recommendation_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Delete Recommendation",
+        "tags": [
+          "engagements"
+        ]
+      },
+      "put": {
+        "description": "Record or change your internal recommendation (pursue, pass or discuss, with an optional one-line note). It\nchanges nothing on the engagement and the developer never sees it.",
+        "operationId": "put_recommendation_api_orgs__org_id__engagements__engagement_id__recommendation_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Put Recommendation",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/engagements/{engagement_id}/team": {
+      "get": {
+        "description": "The team sheet: who the engagement may be assigned to, who it is assigned to and the members' internal\nrecommendations (the organisation's own; never the developer's).",
+        "operationId": "get_team_api_orgs__org_id__engagements__engagement_id__team_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Team",
         "tags": [
           "engagements"
         ]
@@ -38910,7 +41187,22 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EngagementDetail"
+                  "discriminator": {
+                    "mapping": {
+                      "developer": "#/components/schemas/DeveloperEngagementDetail",
+                      "org": "#/components/schemas/OrgEngagementDetail"
+                    },
+                    "propertyName": "my_party"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DeveloperEngagementDetail"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OrgEngagementDetail"
+                    }
+                  ],
+                  "title": "Response Post Interest Api Orgs  Org Id  Interest Post"
                 }
               }
             },
