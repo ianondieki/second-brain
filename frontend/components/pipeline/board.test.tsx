@@ -122,17 +122,19 @@ describe("a card", () => {
 });
 
 describe("the funnel", () => {
-  it("shows what entered each group in the window as figures, bars scaled to the largest, and the conversions", async () => {
+  it("shows what entered each group in the window as figures, and the conversions as bars filled to their share", async () => {
     const container = await board(
       pipeline({ review: [pipelineItem()] }, { review: 12, contact_nda: 8, agreement: 4, implementation: 0, close: 0 }),
     );
     expect(screen.getByRole("heading", { level: 2, name: "Entered in the last 90 days" })).toBeTruthy();
     const groups = [...container.querySelectorAll<HTMLElement>("[data-funnel-group]")];
     expect(groups.map((g) => g.querySelector("[data-entered]")?.textContent)).toEqual(["12", "8", "4", "0", "0"]);
+    // Each bar is filled to the percentage printed under it (P27 UX: a bar marked 100 % is full, 50 % half); the first
+    // group's is the whole the shares start from; none drawn where there is no share ("–").
     expect(groups.map((g) => g.querySelector("[data-bar]")?.getAttribute("width"))).toEqual([
       "100",
-      String((8 / 12) * 100),
-      String((4 / 12) * 100),
+      "67",
+      "50",
       "0",
       "0",
     ]);
@@ -167,6 +169,13 @@ describe("the funnel", () => {
     expect(next.querySelector(".sr-only")?.textContent).toBe(
       "5 entered Contact and NDA: more than the 2 that entered the stage before it in the window.",
     );
+    expect(container.querySelector("[data-funnel-group='contact_nda'] [data-bar]")?.getAttribute("width")).toBe("100");
+  });
+
+  it("leaves the first group's bar empty when nothing entered it", async () => {
+    const container = await board(pipeline({ review: [pipelineItem()] }, { review: 0, contact_nda: 1 }));
+    expect(container.querySelector("[data-funnel-group='review'] [data-bar]")?.getAttribute("width")).toBe("0");
+    expect(container.querySelector("[data-funnel-group='contact_nda'] [data-bar]")?.getAttribute("width")).toBe("0");
   });
 });
 

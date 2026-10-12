@@ -12,14 +12,15 @@ export function conversion(from: number, to: number): number | null {
 
 /**
  * The funnel strip above the board (P27 track B; REQ-ENG-14): how many engagements entered each stage group in the
- * window (the figures, as text first), a bar for each scaled to the largest (inline SVG in the bloom scale, light and
- * dark from the tokens; no library), and between neighbours how many went on, as a small percentage beside a sentence
- * read out instead ("8 of 12 went on to Contact and NDA"). Closed and ended in the window under it. Server-rendered.
+ * window (the figures, as text first), then between neighbours how many went on, as a bar and the small percentage it
+ * is labelled with (the bar is that share filled, so a bar marked 50 % is half full; inline SVG in the bloom scale,
+ * light and dark from the tokens; no library), with a sentence read out instead ("8 of 12 went on to Contact and
+ * NDA"). The first group has no stage before it: its bar is the whole it starts from, full when anything entered.
+ * Closed and ended in the window under it. Server-rendered.
  */
 export async function Funnel({ funnel }: { funnel: Pipeline["funnel"] }) {
   const [t, tt, locale] = await Promise.all([getTranslations("pipeline"), getTranslations("tracker"), getLocale()]);
   const counts = GROUPS.map((group) => funnel.entered[group]);
-  const most = Math.max(1, ...counts);
   const percent = new Intl.NumberFormat(locale === "en" ? "en-GB" : `${locale}-KE`, { style: "percent" });
   return (
     <section aria-labelledby="funnel-title" data-funnel="">
@@ -32,6 +33,8 @@ export async function Funnel({ funnel }: { funnel: Pipeline["funnel"] }) {
           const count = counts[index];
           const previous = index > 0 ? counts[index - 1] : null;
           const rate = previous === null ? null : conversion(previous, count);
+          // The bar shows the figure under it: the share that went on (none drawn when there is no share).
+          const filled = previous === null ? (count > 0 ? 100 : 0) : (rate ?? 0);
           return (
             <li key={group} data-funnel-group={group} className="flex min-w-0 flex-col gap-1.5">
               <span className="flex items-baseline justify-between gap-2 sm:flex-col sm:items-start sm:gap-0.5">
@@ -48,15 +51,7 @@ export async function Funnel({ funnel }: { funnel: Pipeline["funnel"] }) {
                 className="h-2 w-full overflow-visible"
               >
                 <rect x="0" y="0" width="100" height="8" rx="4" className="fill-(--heat-0)" />
-                <rect
-                  x="0"
-                  y="0"
-                  width={(count / most) * 100}
-                  height="8"
-                  rx="4"
-                  className="fill-(--heat-3)"
-                  data-bar=""
-                />
+                <rect x="0" y="0" width={filled} height="8" rx="4" className="fill-(--heat-3)" data-bar="" />
               </svg>
               {previous !== null ? (
                 <span className="text-xs text-ink-soft" data-conversion={rate ?? "none"}>
