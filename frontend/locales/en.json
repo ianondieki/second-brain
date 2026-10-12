@@ -2361,10 +2361,10 @@
     },
     "at": "{date}, {time} EAT",
     "due": {
-      "left": "{count, plural, one {# business day left} other {# business days left}}, due <nowrap>{date}</nowrap>",
+      "left": "{count, plural, one {# business day left} other {# business days left}}, <nowrap>due {date}</nowrap>",
       "today": "Due today, <nowrap>{date}</nowrap>",
-      "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, was due <nowrap>{date}</nowrap>",
-      "overdueToday": "Overdue, was due <nowrap>{date}</nowrap>",
+      "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, <nowrap>was due {date}</nowrap>",
+      "overdueToday": "Overdue, <nowrap>was due {date}</nowrap>",
       "resumes": "Resumes <nowrap>{date}</nowrap>",
       "answerBy": "Answer from {name} due by <nowrap>{date}</nowrap>",
       "answerLate": "Answer from {name} was due <nowrap>{date}</nowrap>"

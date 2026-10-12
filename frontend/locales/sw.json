@@ -2361,10 +2361,10 @@
     },
     "at": "{date}, {time} EAT",
     "due": {
-      "left": "Zimebaki siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho <nowrap>{date}</nowrap>",
+      "left": "Zimebaki siku {count, plural, one {# ya kazi} other {# za kazi}}, <nowrap>mwisho {date}</nowrap>",
       "today": "Mwisho leo, <nowrap>{date}</nowrap>",
-      "overdue": "Imechelewa siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho ulikuwa <nowrap>{date}</nowrap>",
-      "overdueToday": "Imechelewa, mwisho ulikuwa <nowrap>{date}</nowrap>",
+      "overdue": "Imechelewa siku {count, plural, one {# ya kazi} other {# za kazi}}, <nowrap>mwisho ulikuwa {date}</nowrap>",
+      "overdueToday": "Imechelewa, <nowrap>mwisho ulikuwa {date}</nowrap>",
       "resumes": "Kuendelea tena <nowrap>{date}</nowrap>",
       "answerBy": "Jibu kutoka kwa {name} linatarajiwa kufikia <nowrap>{date}</nowrap>",
       "answerLate": "Jibu kutoka kwa {name} lilitarajiwa kufikia <nowrap>{date}</nowrap>"
