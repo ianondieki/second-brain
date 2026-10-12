@@ -474,17 +474,17 @@ The full entries (why, options, default, what they blocked) are kept below for t
 ### D-70 · Calendar feeds are capability URLs, one live per person (and per organisation membership) (P27; REQ-ENG-13)
 - Why: a calendar app subscribes without signing in, so the feed URL is the secret. The alternative (OAuth calendar scopes) was declined in D-61.
 - Decision (the orchestrator under the standing mandate, 2026-10-12): a feed URL carries a 32-byte random token stored only as its SHA-256; one live feed per user and per (user, organisation); rotating makes the old URL 404 at once; revoking too; reads are rate limited per token and set no cookie; a feed carries titles, dates and the other party's name only, never a note, a message or a proposal's text. Settings says the URL is private and shows how to rotate it.
-- Status: building (P27-BE-1, P27-FE-1).
+- Status: built (P27; gate 2026-10-12, PROGRESS.md "P27 report"); the owner confirms or reverses at the next check-in.
 
 ### D-69 · What the offline cache may hold (P27; REQ-UX-08; docs/spec/07 item 5, docs/spec/10)
 - Why: docs/spec/07 item 5 asks for a service worker caching last-seen trackers for offline read-only use (Release 2, brought forward). A cache of signed-in pages on a shared phone is a disclosure risk if it outlives the session or crosses users.
 - Decision (the orchestrator, 2026-10-12): the worker caches only the HTML of the two engagements lists and of trackers the person opened (at most 20, for 7 days), named by the signed-in user's hash and deleted on sign-out and on another user's sign-in; it never caches `/api/*`, the messages pages, the inbox, any full-proposal or Tier-2 render, billing, settings or the staff console; offline pages are read-only (controls disabled under an "as of" banner); the data-saver switch is a cookie the server treats as `Save-Data: on`. The security-reviewer gates it. The cached HTML carries whatever the page shows, so the tracker's quoted side-state notes (a question, an answer, a hold reason) and, on the organisation's tracker, the assignee's name and the recommendation tally are kept with it (never the notes, which only the uncached team read carries), and on the developer's the received declaration; a copy outlives a session ended server-side (a password change, "sign out everywhere", an admin revocation, the 30-day expiry) for at most 7 days, and the help text of "sign out everywhere" says that kept offline copies on other devices are cleared by that device's next sign-in or within 7 days; the island checks the page's hash against the live session before announcing a cache, so a tab rendered for someone else reloads instead of taking the cache over (security review, P27-FE-SW).
-- Status: building (P27-FE-SW).
+- Status: built (P27; gate 2026-10-12, PROGRESS.md "P27 report"); the owner confirms or reverses at the next check-in.
 
 ### D-68 · Team triage is the organisation's own data; nothing of it reaches a developer (P27; REQ-ENG-15; docs/spec/03)
 - Why: docs/spec/03 gives the `reviewer` role "may Recommend internally without changing state", unbuilt until now; assigning an engagement to a member is the same kind of internal work. A developer who could read a "pass" recommendation or see who was assigned would learn things the organisation never said to them.
 - Decision (the orchestrator, 2026-10-12): assignments and recommendations live in org-scoped tables, appear only on organisation-side API responses (separate schemas; a test asserts the developer's responses carry no `team` key and no recommendation text), are audited by ids, and send one in-app notice (N30) to the assignee. A recommendation never changes the engagement's state; only the signatory's commands do, as before.
-- Status: building (P27-BE-2, P27-FE-2).
+- Status: built (P27; gate 2026-10-12, PROGRESS.md "P27 report"); the owner confirms or reverses at the next check-in.
 
 ### D-67 · "Portal in print": the landing's craft carried into every signed-in screen (P25; REQ-UX-01, REQ-UX-02, REQ-UX-04..07, D-55, D-66)
 - Why: the owner (2026-10-08), after P24: "Landing page has the taste I want … the other pages seem lifeless … bring life

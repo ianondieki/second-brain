@@ -192,7 +192,8 @@ funnel), **REQ-ENG-15** Team triage (assignment and internal recommendations, th
 **REQ-PROV-06** Prior-knowledge declaration (docs/spec/06 §6.4 pt 5, built as specified), **REQ-DEV-04** D3
 self-reported references and the IP nudge (docs/spec/06 §6.4 pt 8, §6.1), **REQ-UX-08** Offline trackers, install
 and the data-saver switch (docs/spec/07 item 5, brought forward) (P27, `tasks/P27.md`, D-68 to D-70; N30 and N31
-below are P27's). The ids are used in commits, code and tests as every other REQ-ID is.
+below are P27's; all six built and gated 2026-10-12, PROGRESS.md "P27 report"). The ids are used in commits, code and
+tests as every other REQ-ID is.
 
 ## 4. Acceptance tests (one row per AC or AC clause)
 
