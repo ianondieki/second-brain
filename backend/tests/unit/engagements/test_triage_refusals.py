@@ -17,6 +17,7 @@ from bridge.engagements.schemas import TeamOut
 from bridge.errors import ApiError
 
 ENGAGEMENT = UUID("01900000-0000-7000-8000-00000000000c")
+CLOSES_ON = date(2026, 10, 26)  # the window's last day, as the caller read it before inserting
 
 
 @dataclass
@@ -88,13 +89,23 @@ def answer(error: ApiError) -> tuple[int, str]:
     ],
 )
 def test_the_declarations_backstop_answers_as_the_api(exc: DBAPIError, expected: tuple[int, str]) -> None:
-    assert answer(prior_knowledge._refusal(exc)) == expected
+    assert answer(prior_knowledge._refusal(exc, CLOSES_ON)) == expected
+
+
+def test_a_window_closed_in_the_race_names_the_last_day_the_caller_read() -> None:
+    exc = refused("55000", "prior_knowledge_declarations: the declaration window closed on 2026-10-26")
+    detail: dict[str, Any] = prior_knowledge._refusal(exc, CLOSES_ON).detail  # type: ignore[assignment]
+    assert detail == {
+        "code": "declaration_window_closed",
+        "message": prior_knowledge.WINDOW_CLOSED,
+        "window_closed_on": "2026-10-26",
+    }
 
 
 def test_an_unknown_database_error_is_re_raised() -> None:
     unknown = refused("XX000", "internal")
     with pytest.raises(DBAPIError):
-        prior_knowledge._refusal(unknown)
+        prior_knowledge._refusal(unknown, CLOSES_ON)
     with pytest.raises(DBAPIError):
         team._refusal(unknown, check=ApiError(422, "c", "m"), unique=ApiError(409, "u", "m"))
 

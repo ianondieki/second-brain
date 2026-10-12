@@ -288,6 +288,35 @@ async def test_the_tenth_business_day_is_inside_and_the_eleventh_refuses_with_th
     assert await declarations(owner_engine, late_engagement) == []
 
 
+async def test_a_window_that_closes_during_the_declaration_still_names_its_last_day(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The race the window trigger backstops: open when the API reads the window, closed when the row goes in (the
+    shared clock moves past the last day in between). The trigger refuses and the 403 still names the last day."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    viewed_on = await tier2_view(owner_engine, world)
+    closes_on = add_business_days(viewed_on, 10, await holidays_of(owner_engine))
+    read_window = prior_knowledge.window
+    async with moved_clock(owner_engine) as advance, clients(app_engine, SETTINGS, world.signatory) as (signatory,):
+        moved: list[date] = []
+
+        async def then_the_clock_moves(db: Any, engagement_id: UUID) -> Window:
+            found = await read_window(db, engagement_id)
+            moved.append(await business_days_later(owner_engine, advance, 11))
+            return found
+
+        with monkeypatch.context() as patched:
+            patched.setattr(prior_knowledge, "window", then_the_clock_moves)
+            refused = await signatory.post(path(world, engagement), json=body(viewed_on))
+        [moved_to] = moved
+        assert moved_to > closes_on  # the API read an open window; the trigger saw it closed
+        assert code(refused) == (403, "declaration_window_closed")
+        detail = refused.json()["detail"]
+        assert (detail["message"], detail["window_closed_on"]) == (WINDOW_CLOSED, str(closes_on))
+    assert await declarations(owner_engine, engagement) == []
+
+
 async def test_who_may_declare_and_what(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
     world = await build(owner_engine)
     other = await build(owner_engine)

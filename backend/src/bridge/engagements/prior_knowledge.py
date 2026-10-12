@@ -164,10 +164,11 @@ def _closed(closes_on: date | None) -> ApiError:
     return ApiError(403, "declaration_window_closed", WINDOW_CLOSED, **extra)
 
 
-def _refusal(exc: DBAPIError) -> ApiError:
+def _refusal(exc: DBAPIError, closes_on: date) -> ApiError:
     """The database's backstop (revision 0013's window trigger and CHECKs, revision 0003's chain), in the API's words:
     the checks above run first, so these are races (the engagement ending, the window closing, a second declaration)
-    or a bug (re-raised)."""
+    or a bug (re-raised). ``closes_on`` is the window's last day as the caller read it (the day does not move; only
+    "today" does), so a window closed in the race names it as the API's own check does."""
     sqlstate = getattr(exc.orig, "sqlstate", None)
     message = str(getattr(getattr(exc.orig, "diag", None), "message_primary", "") or "")
     constraint = str(getattr(getattr(exc.orig, "diag", None), "constraint_name", "") or "")
@@ -178,7 +179,7 @@ def _refusal(exc: DBAPIError) -> ApiError:
             return ApiError(409, "engagement_ended", ENGAGEMENT_ENDED)
         if "has not viewed" in message:
             return forbidden("no_tier2_access_yet", NO_TIER2_YET)
-        return _closed(None)
+        return _closed(closes_on)
     if sqlstate == "23505" and "prior_knowledge_declarations" in constraint:
         return ApiError(409, "already_declared", ALREADY_DECLARED)
     if sqlstate == "23514" and ("dated after" in message or "evidence_predates_first_view" in constraint):
@@ -215,10 +216,11 @@ async def declare(db: AsyncSession, org: OrgContext, engagement_id: UUID, body: 
     if engagement.ended_at is not None or engagement.state in sm.TERMINAL:
         raise ApiError(409, "engagement_ended", ENGAGEMENT_ENDED)
     found = await window(db, engagement.id)
-    if found.first_tier2_view_at is None:
+    closes_on = found.window_closes_on
+    if found.first_tier2_view_at is None or closes_on is None:  # both or neither (app_prior_knowledge_window)
         raise forbidden("no_tier2_access_yet", NO_TIER2_YET)
     if not found.open_on(today):
-        raise _closed(found.window_closes_on)
+        raise _closed(closes_on)
     if body.evidence_dated_on > local_date(found.first_tier2_view_at):
         raise ApiError(422, "evidence_after_first_view", EVIDENCE_AFTER_VIEW)
     declaration_id = uuid7()
@@ -252,7 +254,7 @@ async def declare(db: AsyncSession, org: OrgContext, engagement_id: UUID, body: 
         db.add(event)
         await db.flush()
     except DBAPIError as exc:
-        raise _refusal(exc) from exc
+        raise _refusal(exc, closes_on) from exc
     stored = (  # inserted a moment ago in this transaction: the declarer reads it (the engagement's reader)
         await db.execute(select(d.first_tier2_view_at, d.window_closes_on, d.declared_at).where(d.id == declaration_id))
     ).one()
