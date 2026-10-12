@@ -8,6 +8,7 @@ import { useStrings } from "./ClientStrings";
 import { withCsrf } from "@/lib/api/csrf";
 import { forgetEmail } from "@/lib/auth/remembered-email";
 
+import { forgetOffline } from "./offline/worker";
 import { forgetRecent } from "./palette/remember";
 
 import { Button } from "./ui/Button";
@@ -26,6 +27,8 @@ export function SignOutButton() {
   async function signOut() {
     setBusy(true);
     setFailed(false);
+    // This device's offline copies of trackers go first (P27, D-69), awaited, whatever the API then answers.
+    await forgetOffline();
     // Only the CSRF helper, not the typed client: this button is on every signed-in page (the 150 KB JS budget).
     const status = await withCsrf()("/api/auth/logout", { method: "POST", credentials: "same-origin" }).then(
       (response) => response.status,
@@ -48,7 +51,10 @@ export function SignOutButton() {
         {busy ? t("signingOut") : failed ? t("signOutRetry") : t("signOut")}
       </Button>
       {failed ? (
-        <p role="alert" className="mb-2 flex max-w-[18rem] items-start gap-1.5 text-right text-sm font-medium text-error">
+        <p
+          role="alert"
+          className="mb-2 flex max-w-[18rem] items-start gap-1.5 text-right text-sm font-medium text-error"
+        >
           <AlertIcon className="mt-px size-5 shrink-0" />
           <span>{t("signOutFailed")}</span>
         </p>
