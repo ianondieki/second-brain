@@ -1448,6 +1448,62 @@
         "title": "BudgetBandOut",
         "type": "object"
       },
+      "CalendarFeedOut": {
+        "description": "A new private calendar feed (D-70): the URL is shown once; only its token's SHA-256 is kept.",
+        "properties": {
+          "url": {
+            "description": "The absolute feed URL to subscribe to; treat it like a password",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "CalendarFeedOut",
+        "type": "object"
+      },
+      "CalendarFeedStatus": {
+        "description": "Whether the caller has a live feed (the URL itself cannot be shown again: create a new one to see it).",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "last_fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last time a calendar app read the live feed",
+            "title": "Last Fetched At"
+          }
+        },
+        "required": [
+          "active",
+          "created_at",
+          "last_fetched_at"
+        ],
+        "title": "CalendarFeedStatus",
+        "type": "object"
+      },
       "CandidateList": {
         "properties": {
           "items": {
@@ -3417,6 +3473,124 @@
           "csrf_token"
         ],
         "title": "CsrfResponse",
+        "type": "object"
+      },
+      "DeadlineKind": {
+        "description": "What a deadline is (docs/platform/tasks/P27.md track A): an engagement's stage deadline, the answer-by date of\nthe organisation's question, a signed agreement's milestone, a Brief's closing day, an event's start.",
+        "enum": [
+          "stage",
+          "answer",
+          "milestone",
+          "brief",
+          "event"
+        ],
+        "title": "DeadlineKind",
+        "type": "string"
+      },
+      "DeadlineList": {
+        "description": "The viewer's deadlines sorted by ``due_at``; ``now`` is the platform clock they were read at.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DeadlineOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "now": {
+            "format": "date-time",
+            "title": "Now",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "now"
+        ],
+        "title": "DeadlineList",
+        "type": "object"
+      },
+      "DeadlineOut": {
+        "description": "One deadline the viewer carries. Titles, dates and names only (D-70): never a note, a message, a Brief's\nstatement or a proposal's text.",
+        "properties": {
+          "business_days_left": {
+            "description": "Kenyan business days from today (Nairobi) to due_on; negative past it",
+            "title": "Business Days Left",
+            "type": "integer"
+          },
+          "context": {
+            "description": "The other party's name for an engagement's deadline (the developer's handle for an organisation until they are named); the organisation that posted a Brief or an event (the product's name for the platform's events)",
+            "title": "Context",
+            "type": "string"
+          },
+          "due_at": {
+            "description": "The instant it falls due, in UTC: the end of the Nairobi day of a stage, answer, milestone or Brief deadline; an event's start",
+            "format": "date-time",
+            "title": "Due At",
+            "type": "string"
+          },
+          "due_on": {
+            "description": "The Africa/Nairobi date of due_at",
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "engagement_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The engagement of a stage, answer or milestone deadline",
+            "title": "Engagement Id"
+          },
+          "href": {
+            "description": "The web app's page of the item, in the viewer's portal",
+            "title": "Href",
+            "type": "string"
+          },
+          "key": {
+            "description": "'{kind}:{id}': unique in the list, stable while the item lasts",
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/DeadlineKind"
+          },
+          "mine": {
+            "description": "The viewer's side acts: whose turn it is on an engagement's step; always true for a Brief or an event (the viewer's own entry)",
+            "title": "Mine",
+            "type": "boolean"
+          },
+          "overdue": {
+            "description": "due_at has passed (never for an event: an event is not missed)",
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "title": {
+            "description": "What falls due: the stage's label and the proposal's title (stage), 'Information requested' and the title (answer), 'Milestone n' and the title (milestone), the Brief's title (brief), the event's title (event)",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "title",
+          "context",
+          "href",
+          "due_at",
+          "due_on",
+          "business_days_left",
+          "overdue",
+          "mine",
+          "engagement_id"
+        ],
+        "title": "DeadlineOut",
         "type": "object"
       },
       "DeclarationBody": {
@@ -5784,6 +5958,76 @@
         ],
         "title": "Freshness",
         "type": "string"
+      },
+      "FunnelEntered": {
+        "description": "Engagements whose first entry into each stage group fell inside the window.",
+        "properties": {
+          "agreement": {
+            "minimum": 0.0,
+            "title": "Agreement",
+            "type": "integer"
+          },
+          "close": {
+            "minimum": 0.0,
+            "title": "Close",
+            "type": "integer"
+          },
+          "contact_nda": {
+            "minimum": 0.0,
+            "title": "Contact Nda",
+            "type": "integer"
+          },
+          "implementation": {
+            "minimum": 0.0,
+            "title": "Implementation",
+            "type": "integer"
+          },
+          "review": {
+            "minimum": 0.0,
+            "title": "Review",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "review",
+          "contact_nda",
+          "agreement",
+          "implementation",
+          "close"
+        ],
+        "title": "FunnelEntered",
+        "type": "object"
+      },
+      "FunnelOut": {
+        "properties": {
+          "closed": {
+            "description": "Engagements that reached CLOSED inside the window",
+            "minimum": 0.0,
+            "title": "Closed",
+            "type": "integer"
+          },
+          "ended": {
+            "description": "Engagements that ended DECLINED, WITHDRAWN, EXPIRED or TERMINATED inside it",
+            "minimum": 0.0,
+            "title": "Ended",
+            "type": "integer"
+          },
+          "entered": {
+            "$ref": "#/components/schemas/FunnelEntered"
+          },
+          "window_days": {
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "window_days",
+          "entered",
+          "closed",
+          "ended"
+        ],
+        "title": "FunnelOut",
+        "type": "object"
       },
       "GrantSource": {
         "enum": [
@@ -9557,6 +9801,303 @@
           "attempts_allowed"
         ],
         "title": "PhoneCodeSent",
+        "type": "object"
+      },
+      "PipelineColumn": {
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "group": {
+            "enum": [
+              "review",
+              "contact_nda",
+              "agreement",
+              "implementation",
+              "close"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "items": {
+            "description": "Longest in the stage first",
+            "items": {
+              "$ref": "#/components/schemas/PipelineItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "median_days_in_stage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The median days_in_stage of the column's open engagements (CLOSED ones left out); null with none",
+            "title": "Median Days In Stage"
+          }
+        },
+        "required": [
+          "group",
+          "count",
+          "median_days_in_stage",
+          "items"
+        ],
+        "title": "PipelineColumn",
+        "type": "object"
+      },
+      "PipelineItem": {
+        "description": "An engagement on the organisation's board: its summary and how long it has been where it is.",
+        "properties": {
+          "days_in_stage": {
+            "description": "Calendar days (Nairobi) since stage_entered_at",
+            "minimum": 0.0,
+            "title": "Days In Stage",
+            "type": "integer"
+          },
+          "developer_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The developer's user id; null for the organisation until the developer is named",
+            "title": "Developer Id"
+          },
+          "developer_name": {
+            "description": "The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)",
+            "title": "Developer Name",
+            "type": "string"
+          },
+          "developer_named": {
+            "description": "False while developer_name is the pseudonymous handle",
+            "title": "Developer Named",
+            "type": "boolean"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DueOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_event_at": {
+            "description": "The engagement's latest tracker event (its hash chain)",
+            "format": "date-time",
+            "title": "Last Event At",
+            "type": "string"
+          },
+          "lock_version": {
+            "title": "Lock Version",
+            "type": "integer"
+          },
+          "org_id": {
+            "format": "uuid",
+            "title": "Org Id",
+            "type": "string"
+          },
+          "org_name": {
+            "title": "Org Name",
+            "type": "string"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/EngagementOrigin"
+          },
+          "paused_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngagementState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to"
+          },
+          "proposal_id": {
+            "format": "uuid",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "proposal_title": {
+            "title": "Proposal Title",
+            "type": "string"
+          },
+          "stage_deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Deadline At"
+          },
+          "stage_entered_at": {
+            "description": "When the engagement entered the stage of its column from the main path: a side state (INFO_REQUESTED, ON_HOLD) does not restart it",
+            "format": "date-time",
+            "title": "Stage Entered At",
+            "type": "string"
+          },
+          "stage_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Group"
+          },
+          "stage_label": {
+            "title": "Stage Label",
+            "type": "string"
+          },
+          "stalled": {
+            "description": "Active, not on hold, and no tracker event for stalled_after_bd Kenyan business days or more",
+            "title": "Stalled",
+            "type": "boolean"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngagementState"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamFacts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's triage facts (REQ-ENG-15): the assignee and the recommendations' tally"
+          },
+          "unread_messages": {
+            "description": "Messages of the engagement's thread by others that the caller has not read",
+            "minimum": 0.0,
+            "title": "Unread Messages",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version_id": {
+            "format": "uuid",
+            "title": "Version Id",
+            "type": "string"
+          },
+          "whose_turn": {
+            "items": {
+              "$ref": "#/components/schemas/EngagementParty"
+            },
+            "title": "Whose Turn",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "proposal_id",
+          "version_id",
+          "proposal_title",
+          "org_id",
+          "org_name",
+          "developer_id",
+          "developer_name",
+          "developer_named",
+          "origin",
+          "state",
+          "stage_label",
+          "stage_group",
+          "end_reason",
+          "stage_entered_at",
+          "stage_deadline_at",
+          "due",
+          "ended_at",
+          "lock_version",
+          "whose_turn",
+          "updated_at",
+          "paused_from",
+          "last_event_at",
+          "days_in_stage",
+          "stalled"
+        ],
+        "title": "PipelineItem",
+        "type": "object"
+      },
+      "PipelineOut": {
+        "description": "The organisation's engagements by stage group (Review, Contact and NDA, Agreement, Implementation, Close; an\nengagement in a side state under the stage it left; ended ones in none, and Close only those closed inside the\nfunnel's window) and the funnel of the last ``window_days`` days.",
+        "properties": {
+          "columns": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineColumn"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "funnel": {
+            "$ref": "#/components/schemas/FunnelOut"
+          },
+          "now": {
+            "format": "date-time",
+            "title": "Now",
+            "type": "string"
+          },
+          "stalled_after_bd": {
+            "title": "Stalled After Bd",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "columns",
+          "funnel",
+          "stalled_after_bd",
+          "now"
+        ],
+        "title": "PipelineOut",
         "type": "object"
       },
       "PitchGroup": {
@@ -22465,6 +23006,116 @@
         ]
       }
     },
+    "/api/calendar/{token}.ics": {
+      "get": {
+        "description": "A calendar app's read of a private feed: no session, the token in the URL is the capability (D-70).",
+        "operationId": "read_feed_api_calendar__token__ics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/calendar": {}
+            },
+            "description": "The deadlines as a named iCalendar feed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [],
+        "summary": "Read Feed",
+        "tags": [
+          "deadlines"
+        ]
+      }
+    },
     "/api/consents": {
       "get": {
         "description": "The current consent wording and its version (shown on signup and settings; public).",
@@ -30035,6 +30686,301 @@
         ]
       }
     },
+    "/api/me/calendar-feed": {
+      "delete": {
+        "description": "Turn the personal feed off: its URL answers 404 from now on.",
+        "operationId": "revoke_my_feed_api_me_calendar_feed_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Revoke My Feed",
+        "tags": [
+          "deadlines"
+        ]
+      },
+      "get": {
+        "description": "Whether the caller has a live personal feed (its URL is shown only when it is created).",
+        "operationId": "my_feed_api_me_calendar_feed_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarFeedStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "My Feed",
+        "tags": [
+          "deadlines"
+        ]
+      },
+      "post": {
+        "description": "A private feed of the caller's deadlines (a new URL; the previous one stops working at once).",
+        "operationId": "create_my_feed_api_me_calendar_feed_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarFeedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create My Feed",
+        "tags": [
+          "deadlines"
+        ]
+      }
+    },
     "/api/me/consents": {
       "get": {
         "description": "Your decision on each purpose the settings page offers. The writing assistant's opt-in\n(``tier2_llm_assistant``) is not listed: it lasts one sign-in and is given in the proposal editor.",
@@ -30468,6 +31414,266 @@
         "summary": "Leave Contribution",
         "tags": [
           "teams"
+        ]
+      }
+    },
+    "/api/me/deadlines": {
+      "get": {
+        "description": "Every deadline the caller carries as a developer: stage deadlines, answer-by dates, milestones, the Briefs they\npitched to and the events they asked to be reminded of.",
+        "operationId": "my_deadlines_api_me_deadlines_get",
+        "parameters": [
+          {
+            "description": "First Nairobi date; omitted: every overdue item",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "First Nairobi date; omitted: every overdue item",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Last Nairobi date; omitted: 90 days after from (or today)",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Last Nairobi date; omitted: 90 days after from (or today)",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeadlineList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "My Deadlines",
+        "tags": [
+          "deadlines"
+        ]
+      }
+    },
+    "/api/me/deadlines/{kind}/{item_id}/calendar.ics": {
+      "get": {
+        "description": "Add to calendar: one of the caller's deadlines as an ``.ics`` file (a 15-minute entry at its instant).",
+        "operationId": "my_deadline_calendar_api_me_deadlines__kind___item_id__calendar_ics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DeadlineKind"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/calendar": {}
+            },
+            "description": "The deadline as an iCalendar file"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "My Deadline Calendar",
+        "tags": [
+          "deadlines"
         ]
       }
     },
@@ -39511,6 +40717,617 @@
         ]
       }
     },
+    "/api/orgs/{org_id}/calendar-feed": {
+      "delete": {
+        "description": "Turn the caller's feed of this organisation off.",
+        "operationId": "revoke_org_feed_api_orgs__org_id__calendar_feed_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Revoke Org Feed",
+        "tags": [
+          "deadlines"
+        ]
+      },
+      "get": {
+        "description": "Whether the caller has a live feed of this organisation's deadlines.",
+        "operationId": "org_feed_api_orgs__org_id__calendar_feed_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarFeedStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Org Feed",
+        "tags": [
+          "deadlines"
+        ]
+      },
+      "post": {
+        "description": "A private feed of the organisation's deadlines, for the caller (one per member).",
+        "operationId": "create_org_feed_api_orgs__org_id__calendar_feed_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarFeedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create Org Feed",
+        "tags": [
+          "deadlines"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/deadlines": {
+      "get": {
+        "description": "Every deadline of the organisation: its engagements' stage deadlines, answer-by dates and milestones, its open\nBriefs and its published events.",
+        "operationId": "org_deadlines_api_orgs__org_id__deadlines_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "First Nairobi date; omitted: every overdue item",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "First Nairobi date; omitted: every overdue item",
+              "title": "From"
+            }
+          },
+          {
+            "description": "Last Nairobi date; omitted: 90 days after from (or today)",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Last Nairobi date; omitted: 90 days after from (or today)",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeadlineList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Org Deadlines",
+        "tags": [
+          "deadlines"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/deadlines/{kind}/{item_id}/calendar.ics": {
+      "get": {
+        "description": "Add to calendar: one of the organisation's deadlines as an ``.ics`` file.",
+        "operationId": "org_deadline_calendar_api_orgs__org_id__deadlines__kind___item_id__calendar_ics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/DeadlineKind"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/calendar": {}
+            },
+            "description": "The deadline as an iCalendar file"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Org Deadline Calendar",
+        "tags": [
+          "deadlines"
+        ]
+      }
+    },
     "/api/orgs/{org_id}/engagements": {
       "get": {
         "operationId": "org_engagements_api_orgs__org_id__engagements_get",
@@ -41942,6 +43759,120 @@
         "summary": "Set Member Roles",
         "tags": [
           "organisations"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/pipeline": {
+      "get": {
+        "description": "The organisation's engagements by stage group, what has stalled, and the funnel of the last 90 days.",
+        "operationId": "org_pipeline_api_orgs__org_id__pipeline_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Org Pipeline",
+        "tags": [
+          "engagements"
         ]
       }
     },

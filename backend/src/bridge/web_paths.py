@@ -61,3 +61,18 @@ def discover_path(view: str, *, niche: str | None, county: str | None, words: st
         if len(with_words) <= MAX_PATH_CHARS:
             return with_words
     return f"{DEV_DISCOVER}?{urlencode(params)}" if params else DEV_DISCOVER
+
+
+def problem_path(problem_id: UUID) -> str:
+    """A published problem or Brief, as a developer reads it (a calendar entry's link; P27-A, REQ-ENG-13)."""
+    return f"/problems/{problem_id}"
+
+
+def org_problem_path(org_id: UUID, problem_id: UUID) -> str:
+    """One of the organisation's Briefs in its portal, for that organisation (P27-A, REQ-ENG-13)."""
+    return f"/org/problems/{problem_id}?org={org_id}"
+
+
+def org_event_path(org_id: UUID, event_id: UUID) -> str:
+    """One of the organisation's events in its portal, for that organisation (P27-A, REQ-ENG-13)."""
+    return f"/org/events/{event_id}?org={org_id}"
