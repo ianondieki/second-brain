@@ -16,7 +16,8 @@ and never on a developer's. Neither changes the engagement's state; only the tra
   one transaction; a concurrent assignment loses on the partial unique index (409). The assignee is told (N30, in-app)
   unless they assigned themselves.
 - **Recommend** (``PUT …/recommendation``): the same roles; one row per member, upserted; an empty note is none
-  (NULL). **Withdraw** (``DELETE …/recommendation``): any member removes their own.
+  (NULL); a note of exactly ``NOTE_REDACTED`` (D-54's marker of a redaction) is refused (422 ``invalid_note``).
+  **Withdraw** (``DELETE …/recommendation``): any member removes their own.
 - Each assignment and recommendation change appends an ``audit_events`` row on the organisation's chain: ids and the
   stance only. A note is never in an audit row, an event payload, a log line, a notice or an email.
 """
@@ -38,6 +39,7 @@ from bridge.audit.service import record as audit
 from bridge.auth.models import User
 from bridge.db import bind_tenant
 from bridge.engagements.models import (
+    NOTE_REDACTED,
     RECOMMENDATION_NOTE_MAX_CHARS,
     TRIAGE_ROLES,
     Engagement,
@@ -316,6 +318,8 @@ async def recommend(db: AsyncSession, org: OrgContext, engagement_id: UUID, body
         note = one_line(body.note, RECOMMENDATION_NOTE_MAX_CHARS)
     except ValueError as exc:
         raise ApiError(422, "invalid_note", INVALID_NOTE) from exc
+    if note == NOTE_REDACTED:  # D-54's marker of a redaction: never a member's words
+        raise ApiError(422, "invalid_note", INVALID_NOTE)
     r = EngagementRecommendation
     mine = (r.engagement_id == engagement.id, r.member_user_id == org.live.user.id)
     current = (await db.execute(select(r.stance, r.note).where(*mine))).first()

@@ -210,6 +210,26 @@ async def test_recommendations_show_to_members_with_their_notes_and_in_the_tally
     assert all("Wanjiku" not in e.p and "recommend" not in e.p for e in events)
 
 
+async def test_a_note_of_the_redaction_marker_is_refused(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
+    """``'[redacted]'`` is D-54's marker of a redaction: never a member's note (422); another case is a note."""
+    world = await build(owner_engine)
+    engagement = await open_engagement(app_engine, world)
+    path = team_path(world, engagement, "recommendation")
+    async with clients(app_engine, SETTINGS, world.reviewer) as (reviewer,):
+        for note in ("[redacted]", "  [redacted] "):
+            assert code(await reviewer.put(path, json={"stance": "pass", "note": note})) == (422, "invalid_note")
+        assert (
+            await rows(owner_engine, "SELECT 1 FROM engagement_recommendations WHERE engagement_id = :e", e=engagement)
+            == []
+        )
+        taken = await reviewer.put(path, json={"stance": "pass", "note": "[REDACTED] in v2"})
+        assert taken.status_code == 200, taken.text
+    [row] = await rows(
+        owner_engine, "SELECT note FROM engagement_recommendations WHERE engagement_id = :e", e=engagement
+    )
+    assert row.note == "[REDACTED] in v2"
+
+
 async def test_the_developer_never_sees_the_organisations_triage(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
