@@ -105,7 +105,7 @@ test("a reviewer assigns and recommends; the signatory is told and sees it; the 
     };
     expect(notices.items.some((n) => n.kind === "engagement.n30" && (n.link ?? "").includes(id))).toBe(true);
     await signatory.page.goto("/org/engagements?assignee=me");
-    const filter = signatory.page.getByRole("navigation", { name: "Show" });
+    const filter = signatory.page.getByRole("navigation", { name: "Whose engagements" });
     await expect(filter.getByRole("link", { name: "Assigned to me" })).toHaveAttribute("aria-current", "page");
     const card = signatory.page.locator(`[data-engagement="${id}"]`);
     await expect(card).toBeVisible();

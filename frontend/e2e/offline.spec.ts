@@ -157,6 +157,9 @@ test("a tracker opened online reads offline, read-only under the banner; nothing
   const banner = page.locator("[data-offline-banner]");
   await expect(banner).toBeVisible();
   await expect(banner).toHaveAttribute("role", "status");
+  // The page is the worker's copy, said as such: its deadline clocks (drawn at the copy's instant) are hidden (P27).
+  await expect(page.locator("html")).toHaveAttribute("data-offline", "cached");
+  for (const clock of await page.locator("[data-clock]").all()) await expect(clock).toBeHidden();
   await expect(banner).toHaveText(
     new RegExp(
       `^You're offline\\. This is ${dev.title} as of \\d{1,2} \\w{3} \\d{4}, \\d{2}:\\d{2} EAT\\. Actions are available once you're back online\\.$`,

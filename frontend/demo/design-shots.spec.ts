@@ -1153,6 +1153,8 @@ for (const name of ["companies", "company", "home", "dev-engagements", "tracker"
   if (base) SHOTS.push({ ...base, set: "p26" });
 }
 
+// P27 (REQ-ENG-13, REQ-ENG-14): the Calendar tab for both sides, the organisation's Board and the calendar feed in
+// Settings › Notifications (as the person first finds it, no link made), into docs/demo/screenshots/p27/ (SHOT_SET=p27).
 // P27 (REQ-ENG-15, REQ-PROV-06): the Team sheet over Telco A's reviewer's tracker (opened, nothing assigned or
 // recommended), and the declaration sheet over a new organisation's tracker once it viewed the full proposal (opened,
 // nothing sent), into docs/demo/screenshots/p27/ (SHOT_SET=p27).
@@ -1184,6 +1186,10 @@ SHOTS.push(
       await page.getByRole("dialog").locator("[data-declaration-form]").waitFor();
     },
   },
+  { name: "dev-calendar", path: "/dev/engagements?view=calendar", who: "dev", set: "p27" },
+  { name: "org-calendar", path: "/org/engagements?view=calendar", who: "org", set: "p27" },
+  { name: "org-board", path: "/org/engagements?view=board", who: "org", set: "p27" },
+  { name: "settings-feed", path: "/settings/notifications", who: "dev", set: "p27" },
 );
 
 function wanted(shot: Shot) {

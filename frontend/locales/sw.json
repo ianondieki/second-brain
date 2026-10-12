@@ -36,7 +36,9 @@
     "reviewP24": "[[COPY-REVIEW]] [[SW-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: landing.eyebrow, landing.title (kifungu cha italiki, lebo yake ya accent), landing.sample.*, landing.stats.*, landing.counties.*, landing.how.* (vibandiko vitatu), landing.reasons.* (values.* ni maandishi ya Kiingereza ya mpangaji kama bidhaa inavyoyaonyesha; je, yabaki kwa Kiingereza?), landing.activity.*, landing.nav.explore, landing.footer.*, explore.*, credits.*, home.greeting (asubuhi/mchana/jioni kwa saa ya Nairobi), og.*; \"niche\" imeachwa kama ilivyo katika sehemu nyingine za programu; explore.nationwide/nationwideNote/seeded, problemPage.*, og.problemAlt",
     "reviewP25": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: palette.* (kitufe cha Tafuta, makundi, vitendo, vitufe), activity.* (kalenda ya shughuli; activity.mon/wed/fri ni vifupisho vya siku, je, vinafaa?), \"Brief\" imetafsiriwa kama \"maelezo ya tatizo\" kama katika briefs.*; eyebrow.* (P25-C2: lebo ndogo juu ya kila skrini ya msanidi programu, inayosema uko wapi); engagementCard.* (mstari wa vitone vitano wa kadi ya ushirikiano); activity.busiest",
     "reviewP26": "[[COPY-REVIEW]] [[SW-REVIEW]] P26-B (REQ-DIR-01, REQ-UX-01, REQ-UX-02; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: companies.lead, companies.groupCount, companies.findProblems, companies.pitchIdea, companies.otherNiches, companies.responseFigure; companies.heldUnclaimedHint (maelezo ya E0 kabla ya kuwasilisha, kwa umbo la pitch.heldUnclaimed); imeondolewa: companies.detailNiches, companies.nichesTitle (badala yake companies.otherNiches)",
-    "reviewP27cde": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.team.*, tracker.declaration.*, tracker.ipNudge.*, tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (\"alama ya kidijitali\" kwa fingerprint/SHA-256; \"ujuzi wa awali\" kwa prior knowledge), engagements.*, profileSettings.references.*, help.confidential.priorKnowledge"
+    "reviewP27cde": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.team.*, tracker.declaration.*, tracker.ipNudge.*, tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (\"alama ya kidijitali\" kwa fingerprint/SHA-256; \"ujuzi wa awali\" kwa prior knowledge), engagements.*, profileSettings.references.*, help.confidential.priorKnowledge",
+    "reviewP27clock": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"baada ya siku 6 saa 14 dakika 23\"), not \"dak 23\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
+    "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term."
   },
   "app": {
     "name": "Wazo",
@@ -4399,13 +4401,86 @@
     }
   },
   "engagements": {
-    "filterLabel": "Onyesha",
-    "all": "Zote",
-    "assignedToMe": "Nilizopewa",
+    "filterLabel": "Ushirikiano wa nani",
+    "assignedToMe": "Niliyopewa mimi",
     "assignedTo": "Amepewa {name}",
     "assignedToYou": "Umepewa wewe",
     "noneMine": "Hakuna kitu hapa ulichopewa.",
     "noneMineOnPage": "Hakuna kitu kwenye ukurasa huu ulichopewa.",
-    "showAll": "Onyesha zote"
+    "showAll": "Onyesha zote",
+    "tabsLabel": "Mionekano ya ushirikiano",
+    "tab": {
+      "list": "Orodha",
+      "calendar": "Kalenda",
+      "board": "Ubao"
+    },
+    "filterAll": "Yote"
+  },
+  "deadlines": {
+    "previous": "Mwezi uliopita, {month}",
+    "next": "Mwezi ujao, {month}",
+    "more": "{count, plural, other {+# zaidi}}",
+    "dayDeadlines": "{date}: tarehe za mwisho {count}",
+    "dayList": "Tarehe za mwisho za {date}",
+    "overdueTitle": "Zimechelewa",
+    "nextTitle": "Siku 30 zijazo",
+    "nextEmpty": "Hakuna kinachotakiwa katika siku 30 zijazo.",
+    "kind": {
+      "stage": "Tarehe ya hatua",
+      "answer": "Jibu kabla ya",
+      "milestone": "Hatua muhimu",
+      "brief": "Brief inafungwa",
+      "event": "Tukio"
+    },
+    "yours": "Zamu yako",
+    "addToCalendar": "Ongeza kwenye kalenda<sr>: {title}</sr>",
+    "google": "Kalenda ya Google<sr>: {title}</sr>",
+    "googleText": "Inatakiwa: {title}",
+    "emptyDev": "Hakuna tarehe za mwisho mwezi wa {month}.",
+    "emptyDevAction": "Tafuta tatizo la kufanyia kazi",
+    "emptyOrg": "Hakuna tarehe za mwisho mwezi wa {month}.",
+    "emptyOrgAction": "Kagua mapendekezo kwenye Kikasha"
+  },
+  "pipeline": {
+    "funnelTitle": "Walioingia katika siku {days} zilizopita",
+    "funnelLead": "Ushirikiano mingapi ulifika kila hatua, na mingapi kati yake uliendelea hatua inayofuata.",
+    "conversion": "{count} kati ya {from} uliendelea hadi {stage}",
+    "conversionNone": "Hakuna kilichoingia {stage} katika kipindi hiki, kwa hiyo hakuna sehemu ya kuonyesha.",
+    "conversionMore": "{count} waliingia {stage}: zaidi ya {from} walioingia hatua iliyotangulia katika kipindi hiki.",
+    "outcome": "{closed, plural, one {# umefungwa} other {# imefungwa}} na {ended, plural, one {# umekoma} other {# imekoma}} katika kipindi hicho.",
+    "columnsLabel": "Hatua za mchakato",
+    "count": "ushirikiano {count}",
+    "median": "wastani wa kati: siku {days} katika hatua",
+    "stalled": "Hakuna hatua kwa siku {count} za kazi",
+    "assignee": "Amepewa {name}",
+    "columnEmpty": "Hakuna katika hatua hii.",
+    "empty": "Bado hakuna ushirikiano wa kuonyesha kwenye ubao.",
+    "emptyAction": "Weka skauti",
+    "emptyMine": "Hakuna uliyopewa.",
+    "emptyMineAction": "Onyesha ushirikiano wote"
+  },
+  "calendarFeed": {
+    "title": "Mlisho wa kalenda",
+    "lead": "Jisajili mara moja kwenye programu yako ya kalenda na kila tarehe ya mwisho itafuata: hatua, tarehe za kujibu, hatua muhimu, Briefs na matukio.",
+    "forOrg": "Tarehe za mwisho za {org}.",
+    "private": "Kiungo hiki ni cha faragha: yeyote aliye nacho anaweza kuona majina na tarehe za tarehe zako za mwisho. Ikiwa kilishirikiwa, tengeneza kiungo kipya na cha zamani kitaacha kufanya kazi.",
+    "none": "Bado huna kiungo cha mlisho.",
+    "create": "Tengeneza kiungo cha mlisho",
+    "creating": "Inatengeneza…",
+    "urlLabel": "Kiungo cha mlisho",
+    "shownOnce": "Kinakili sasa: kinaonyeshwa mara hii moja tu.",
+    "copy": "Nakili",
+    "copied": "Kimenakiliwa",
+    "copyFailed": "Chagua kiungo na ukinakili mwenyewe.",
+    "google": "Fungua kwenye Kalenda ya Google",
+    "apple": "Fungua kwenye Kalenda ya Apple",
+    "live": "Mlisho wako unafanya kazi. Programu ya kalenda iliusoma mara ya mwisho tarehe {date}.",
+    "liveUnread": "Mlisho wako unafanya kazi. Bado hakuna programu ya kalenda iliyousoma.",
+    "rotate": "Tengeneza kiungo kipya",
+    "rotating": "Inatengeneza kiungo kipya…",
+    "remove": "Ondoa mlisho",
+    "removing": "Inaondoa…",
+    "removed": "Mlisho umeondolewa. Kiungo chake hakifanyi kazi tena.",
+    "failed": "Haikufanikiwa. Jaribu tena."
   }
 }

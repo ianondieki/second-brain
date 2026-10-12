@@ -2,6 +2,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { ClockTicker } from "@/components/ui/ClockTicker";
 import { cn } from "@/components/ui/cn";
 import { Lattice } from "@/components/ui/Lattice";
 import { SharedTitle } from "@/components/motion/SharedTitle";
@@ -99,6 +100,8 @@ export function TurnCard({
       {yours ? <Lattice /> : null}
       <WhoseTurn detail={detail} now={now} />
       {strip}
+      {/* The clocks' ticker, once for the page, after the turn card's clocks (the tracker's only ones). */}
+      {now ? <ClockTicker /> : null}
       {children ? <div className="border-t border-line p-5 has-[>div:empty]:hidden sm:px-7 sm:py-6">{children}</div> : null}
       {footer}
     </div>

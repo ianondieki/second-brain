@@ -12,11 +12,18 @@ online event; ``URL`` the event's own link when it has one; the description is t
 ``google_calendar_url(event)`` is Google Calendar's template link (``action=TEMPLATE``), every value percent-encoded,
 the times as ``<start>Z/<end>Z`` and ``ctz=Africa/Nairobi``: the developer's own browser opens it and they save it
 themselves. Both are served for published events only (``bridge.events.router``).
+
+``calendar_file(entries, ...)`` is the same writer for any list of ``Entry`` (REQ-ENG-13, D-70: the deadlines' files and
+private feeds, ``bridge.engagements.deadlines``): one ``VEVENT`` per entry in the order given, ``X-WR-CALNAME`` and an
+hourly ``X-PUBLISHED-TTL`` when the calendar is named (a subscribed feed), no ``LOCATION`` or ``DESCRIPTION`` line for
+an entry without one, and ``TRANSP:TRANSPARENT`` for an entry that marks a moment rather than busy time (a deadline).
+``ics(event)`` is one entry through it, byte for byte the file it always was. A calendar with no entry is still a
+``VCALENDAR`` (an empty feed): calendar apps read it as a calendar with nothing in it.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
@@ -28,6 +35,7 @@ FOLD_OCTETS: Final = 75
 NAIROBI_TZ: Final = "Africa/Nairobi"
 GOOGLE_TEMPLATE: Final = "https://calendar.google.com/calendar/render"
 MEDIA_TYPE: Final = "text/calendar; charset=utf-8"
+FEED_TTL: Final = "PT1H"  # how often a subscribed calendar should look again (X-PUBLISHED-TTL)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,27 +106,73 @@ def fold(line: str) -> str:
     return (CRLF + " ").join(_chunks(line))
 
 
-def ics(event: CalendarEvent, *, host: str, product: str) -> bytes:
-    """The event as an iCalendar file (see the module docstring)."""
+@dataclass(frozen=True, slots=True)
+class Entry:
+    """One ``VEVENT``: a stable ``uid`` (``<kind>-<id>@<host>``), its ``stamp`` (DTSTAMP), its span, the summary and,
+    when set, a location, a description and a URL (an https address: a URI value, not TEXT). ``transparent``: the
+    entry marks a moment (a deadline) and never makes the person busy."""
+
+    uid: str
+    stamp: datetime
+    starts_at: datetime
+    ends_at: datetime
+    summary: str
+    location: str | None = None
+    description: str | None = None
+    url: str | None = None
+    transparent: bool = False
+
+
+def _vevent(entry: Entry) -> list[str]:
+    lines = [
+        "BEGIN:VEVENT",
+        f"UID:{entry.uid}",
+        f"DTSTAMP:{utc_stamp(entry.stamp)}",
+        f"DTSTART:{utc_stamp(entry.starts_at)}",
+        f"DTEND:{utc_stamp(entry.ends_at)}",
+        f"SUMMARY:{escape(entry.summary)}",
+    ]
+    if entry.location is not None:
+        lines.append(f"LOCATION:{escape(entry.location)}")
+    if entry.description is not None:
+        lines.append(f"DESCRIPTION:{escape(entry.description)}")
+    if entry.url:
+        lines.append(f"URL:{entry.url}")
+    transparency = "TRANSPARENT" if entry.transparent else "OPAQUE"
+    return [*lines, "STATUS:CONFIRMED", f"TRANSP:{transparency}", "END:VEVENT"]
+
+
+def calendar_file(entries: Sequence[Entry], *, product: str, section: str, name: str | None = None) -> bytes:
+    """``entries`` as one iCalendar file (see the module docstring); ``section`` names the product's part in the
+    ``PRODID`` and ``name`` the calendar a subscription shows."""
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        f"PRODID:-//{escape(product)}//This week//EN",
+        f"PRODID:-//{escape(product)}//{escape(section)}//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
-        "BEGIN:VEVENT",
-        f"UID:event-{event.id}@{host}",
-        f"DTSTAMP:{utc_stamp(event.updated_at)}",
-        f"DTSTART:{utc_stamp(event.starts_at)}",
-        f"DTEND:{utc_stamp(event.ends_at)}",
-        f"SUMMARY:{escape(event.title)}",
-        f"LOCATION:{escape(place(event))}",
-        f"DESCRIPTION:{escape(event.description)}",
     ]
-    if event.link:
-        lines.append(f"URL:{event.link}")  # a URI value (https, no whitespace): not TEXT, so not escaped
-    lines += ["STATUS:CONFIRMED", "TRANSP:OPAQUE", "END:VEVENT", "END:VCALENDAR"]
+    if name is not None:
+        lines += [f"X-WR-CALNAME:{escape(name)}", f"X-PUBLISHED-TTL:{FEED_TTL}"]
+    for entry in entries:
+        lines += _vevent(entry)
+    lines.append("END:VCALENDAR")
     return "".join(fold(line) + CRLF for line in lines).encode("utf-8")
+
+
+def ics(event: CalendarEvent, *, host: str, product: str) -> bytes:
+    """The event as an iCalendar file (see the module docstring)."""
+    entry = Entry(
+        uid=f"event-{event.id}@{host}",
+        stamp=event.updated_at,
+        starts_at=event.starts_at,
+        ends_at=event.ends_at,
+        summary=event.title,
+        location=place(event),
+        description=event.description,
+        url=event.link,  # a URI value (https, no whitespace): not TEXT, so not escaped
+    )
+    return calendar_file([entry], product=product, section="This week")
 
 
 def google_calendar_url(event: CalendarEvent, *, location: str | None = None, details: bool = True) -> str:

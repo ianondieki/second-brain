@@ -21,7 +21,7 @@ const rise = (ms: number) => ({ "--rise-delay": `${ms}ms` }) as CSSProperties;
  *
  * One orchestrated story on load, CSS only, about 2.4 s (P23-2): the cards rise, the match arrives, the tracker
  * advances a stage and "Your turn" lights, the seal draws. The countdown is in days, hours and minutes, as the
- * product's (components/ui/Countdown.tsx), and its minutes step once a minute (globals.css .due-m: a registered integer,
+ * product's (components/ui/DeadlineClock), and its minutes step once a minute (globals.css .due-m: a registered integer,
  * no script; nothing moves in between, WCAG 2.2.2); the figure itself is decorative and its words are said once to
  * assistive technology. Reduced motion shows the end of the story in place and the countdown still.
  */

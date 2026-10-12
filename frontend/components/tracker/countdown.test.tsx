@@ -21,7 +21,8 @@ const DUE = { due_on: "2026-10-07", business_days_left: 4, overdue: false, due_a
 const panel = () => document.querySelector<HTMLElement>("[data-whose-turn] [data-clock-panel]");
 const clock = () => document.querySelector<HTMLElement>("[data-whose-turn] [data-clock]");
 const figures = () => [...(panel()?.querySelectorAll("[data-figure]") ?? [])].map((figure) => figure.textContent);
-const timer = () => document.querySelector<HTMLElement>("[data-whose-turn] [data-timer]");
+/** The sentence clock under an open question (P27: kept by the page's ticker as the panel's clock is). */
+const timer = () => document.querySelector<HTMLElement>("[data-whose-turn] [data-clock-line] [data-clock]");
 
 describe("the tracker's countdown", () => {
   it("is the figure panel's live clock, the business days its line: one deadline, said once and readable", () => {
@@ -102,8 +103,11 @@ describe("the tracker's countdown", () => {
     // The organisation waits on the answer: no clock of its own, the time left in the question's sentence.
     renderWithIntl(<WhoseTurn detail={detail({ ...question, my_party: "org" })} now={NOW} />);
     expect(panel()).toBeNull();
-    expect(timer()?.textContent).toBe("in 6 days 14 h 23 min");
-    expect(timer()?.getAttribute("data-timer")).toBe("open");
+    expect(timer()?.textContent).toBe("in 6\u00a0days 14\u00a0hours 23\u00a0minutes");
+    expect(timer()?.querySelector("time")?.getAttribute("datetime")).toBe("P6DT14H23M");
+    expect(timer()?.querySelector("time")?.getAttribute("title")).toBe("7 Oct 2026, 23:59 EAT");
+    expect(timer()?.getAttribute("data-clock")).toBe("open");
+    expect(timer()?.getAttribute("data-until")).toBe(DUE!.due_at);
   });
 
   it("gives the clock panel the clock's own width from 640 px, never narrower than 16 rem (two-digit days, Swahili)", () => {

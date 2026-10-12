@@ -15,6 +15,7 @@ member's: the team facts and the declaration window), told apart by ``my_party``
 from __future__ import annotations
 
 from datetime import date, datetime
+from enum import StrEnum
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -582,3 +583,129 @@ class Tier2ShareOut(BaseModel):
     source: GrantSource | None
     shared_at: datetime | None
     counts_as_unlock: bool = Field(description="True for a proposal not tagged to the organisation (REQ-BIL-03).")
+
+
+# ------------------------------------------------------------------------------------------- deadlines (REQ-ENG-13)
+
+
+class DeadlineKind(StrEnum):
+    """What a deadline is (docs/platform/tasks/P27.md track A): an engagement's stage deadline, the answer-by date of
+    the organisation's question, a signed agreement's milestone, a Brief's closing day, an event's start."""
+
+    STAGE = "stage"
+    ANSWER = "answer"
+    MILESTONE = "milestone"
+    BRIEF = "brief"
+    EVENT = "event"
+
+
+class DeadlineOut(BaseModel):
+    """One deadline the viewer carries. Titles, dates and names only (D-70): never a note, a message, a Brief's
+    statement or a proposal's text."""
+
+    key: str = Field(description="'{kind}:{id}': unique in the list, stable while the item lasts")
+    kind: DeadlineKind
+    title: str = Field(
+        description="What falls due: the stage's label and the proposal's title (stage), 'Information requested' and"
+        " the title (answer), 'Milestone n' and the title (milestone), the Brief's title (brief), the event's title"
+        " (event)"
+    )
+    context: str = Field(
+        description="The other party's name for an engagement's deadline (the developer's handle for an organisation"
+        " until they are named); the organisation that posted a Brief or an event (the product's name for the"
+        " platform's events)"
+    )
+    href: str = Field(description="The web app's page of the item, in the viewer's portal")
+    due_at: datetime = Field(
+        description="The instant it falls due, in UTC: the end of the Nairobi day of a stage, answer, milestone or"
+        " Brief deadline; an event's start"
+    )
+    due_on: date = Field(description="The Africa/Nairobi date of due_at")
+    business_days_left: int = Field(description="Kenyan business days from today (Nairobi) to due_on; negative past it")
+    overdue: bool = Field(description="due_at has passed (never for an event: an event is not missed)")
+    mine: bool = Field(
+        description="The viewer's side acts: whose turn it is on an engagement's step; always true for a Brief or an"
+        " event (the viewer's own entry)"
+    )
+    engagement_id: UUID | None = Field(description="The engagement of a stage, answer or milestone deadline")
+
+
+class DeadlineList(BaseModel):
+    """The viewer's deadlines sorted by ``due_at``; ``now`` is the platform clock they were read at."""
+
+    items: list[DeadlineOut]
+    now: datetime
+
+
+class CalendarFeedOut(BaseModel):
+    """A new private calendar feed (D-70): the URL is shown once; only its token's SHA-256 is kept."""
+
+    url: str = Field(description="The absolute feed URL to subscribe to; treat it like a password")
+
+
+class CalendarFeedStatus(BaseModel):
+    """Whether the caller has a live feed (the URL itself cannot be shown again: create a new one to see it)."""
+
+    active: bool
+    created_at: datetime | None
+    last_fetched_at: datetime | None = Field(description="The last time a calendar app read the live feed")
+
+
+# -------------------------------------------------------------------------------------------- pipeline (REQ-ENG-14)
+
+StageGroup = Literal["review", "contact_nda", "agreement", "implementation", "close"]
+
+
+class PipelineItem(EngagementSummary):
+    """An engagement on the organisation's board: its summary and how long it has been where it is."""
+
+    stage_entered_at: datetime = Field(
+        description="When the engagement entered the stage of its column from the main path: a side state"
+        " (INFO_REQUESTED, ON_HOLD) does not restart it"
+    )
+    last_event_at: datetime = Field(description="The engagement's latest tracker event (its hash chain)")
+    days_in_stage: int = Field(ge=0, description="Calendar days (Nairobi) since stage_entered_at")
+    stalled: bool = Field(
+        description="Active, not on hold, and no tracker event for stalled_after_bd Kenyan business days or more"
+    )
+    team: TeamFacts | None = Field(
+        default=None,
+        description="The organisation's triage facts (REQ-ENG-15): the assignee and the recommendations' tally",
+    )
+
+
+class PipelineColumn(BaseModel):
+    group: StageGroup
+    count: int = Field(ge=0)
+    median_days_in_stage: float | None = Field(
+        description="The median days_in_stage of the column's open engagements (CLOSED ones left out); null with none"
+    )
+    items: list[PipelineItem] = Field(description="Longest in the stage first")
+
+
+class FunnelEntered(BaseModel):
+    """Engagements whose first entry into each stage group fell inside the window."""
+
+    review: int = Field(ge=0)
+    contact_nda: int = Field(ge=0)
+    agreement: int = Field(ge=0)
+    implementation: int = Field(ge=0)
+    close: int = Field(ge=0)
+
+
+class FunnelOut(BaseModel):
+    window_days: int
+    entered: FunnelEntered
+    closed: int = Field(ge=0, description="Engagements that reached CLOSED inside the window")
+    ended: int = Field(ge=0, description="Engagements that ended DECLINED, WITHDRAWN, EXPIRED or TERMINATED inside it")
+
+
+class PipelineOut(BaseModel):
+    """The organisation's engagements by stage group (Review, Contact and NDA, Agreement, Implementation, Close; an
+    engagement in a side state under the stage it left; ended ones in none, and Close only those closed inside the
+    funnel's window) and the funnel of the last ``window_days`` days."""
+
+    columns: list[PipelineColumn]
+    funnel: FunnelOut
+    stalled_after_bd: int
+    now: datetime

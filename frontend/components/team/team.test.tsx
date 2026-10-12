@@ -430,7 +430,7 @@ describe("Assigned to me", () => {
         )}
       </>,
     );
-    const nav = within(container).getByRole("navigation", { name: "Show" });
+    const nav = within(container).getByRole("navigation", { name: "Whose engagements" });
     const links = within(nav).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href"), l.getAttribute("aria-current")])).toEqual([
       ["All", "/org/engagements", null],

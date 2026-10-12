@@ -195,6 +195,13 @@ teams:
   peers_pages_per_hour: 60          # pages of the peers list one developer reads in any hour (too_many_peer_pages)
   profile_changes_per_day: 10       # changes of the county or the liked niches in any 24 hours (too_many_profile_changes)
 
+pipeline:
+  # The organisation's board (REQ-ENG-14; docs/platform/tasks/P27.md track B). Read by
+  # bridge/engagements/pipeline_policy.py. An active engagement that is not on hold and has had no tracker event (its
+  # hash chain: a command, an endorsement, a signature) for this many Kenyan business days or more is marked "no
+  # movement" on its card. Messages are not tracker events.
+  stalled_after_bd: 5
+
 embeddings:
   # Profile and problem embeddings for the ranker's f1 (REQ-PERS-01, REQ-PERS-02, REQ-EMB-01; P23.md "P23-1 as
   # built"). Read by bridge/embeddings/policy.py. The embeddings.reembed job runs every 15 minutes on the worker and

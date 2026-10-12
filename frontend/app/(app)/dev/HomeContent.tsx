@@ -18,10 +18,11 @@ import { Callout } from "@/components/ui/Callout";
 import { ActivityCalendar } from "@/components/activity/ActivityCalendar";
 import type { Activity } from "@/components/activity/calendar";
 import { Card } from "@/components/ui/Card";
+import { ClockTicker } from "@/components/ui/ClockTicker";
+import { DeadlineLine } from "@/components/ui/DeadlineClock";
 import { Row, RowList } from "@/components/ui/RowList";
 import { Section } from "@/components/ui/Section";
 import { StatTile } from "@/components/ui/StatTile";
-import { TimeLeft } from "@/components/ui/TimeLeft";
 import { ClientStrings } from "@/components/ClientStrings";
 import { FirstLoginTour } from "@/components/tour/FirstLoginTour";
 import { tourDoneFromCookies } from "@/components/tour/tour-store";
@@ -198,7 +199,7 @@ export async function HomeContent({
                 // then in the tile's title; otherwise the business days as the meta line.
                 meta={
                   until ? (
-                    <TimeLeft
+                    <DeadlineLine
                       until={until}
                       now={now}
                       labelWhenPast={t("stats.deadlineOverdue")}
@@ -376,6 +377,9 @@ async function HomeBelow({
           ) : null}
         </div>
       ) : null}
+
+      {/* The page's clocks (Needs you above, the other engagements here) tick from one script, after them all. */}
+      <ClockTicker />
     </>
   );
 }

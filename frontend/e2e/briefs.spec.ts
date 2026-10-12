@@ -186,8 +186,12 @@ test.describe("a Problem Brief", () => {
     expect(stamp, "the API stamps its clock").toBeTruthy();
     const expected = Math.floor((Date.parse(deadlineAt) - Date.parse(stamp)) / 60_000);
     await devPage.goto(`/problems/${briefId}`);
-    const closes = devPage.locator("[data-problem] dl [data-timer]");
-    await expect(closes).toHaveText(/^Proposals close in (\d+ days? )?(\d+ h )?\d+ min$/, SERVER_STEP);
+    // The sentence clock on the page's ticker (P27), its units the language's own words.
+    const closes = devPage.locator("[data-problem] dl [data-clock]");
+    await expect(closes).toHaveText(
+      /^Proposals close in (\d+\u00a0days? )?(\d+\u00a0hours? )?\d+\u00a0minutes?$/,
+      SERVER_STEP,
+    );
     const [, d, h, m] = /^P(\d+)DT(\d+)H(\d+)M$/.exec((await closes.locator("time").getAttribute("datetime")) ?? "") ?? [];
     expect(Math.abs((Number(d) * 24 + Number(h)) * 60 + Number(m) - expected)).toBeLessThanOrEqual(2);
     await checkScreen(devPage, { strict: true });
@@ -253,7 +257,7 @@ test.describe("a Problem Brief", () => {
     // Its problem page stays readable (revision 0006), for the proposals that answer it.
     await devPage.goto(`/problems/${briefId}`);
     await expect(devPage.getByRole("heading", { level: 1 })).toHaveText(title, SERVER_STEP);
-    await expect(devPage.locator("[data-timer]")).toHaveCount(0); // closed: ProblemStart's words, no countdown
+    await expect(devPage.locator("[data-clock]")).toHaveCount(0); // closed: ProblemStart's words, no countdown
     await devContext.close();
   });
 });

@@ -921,6 +921,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/calendar/{token}.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Feed
+         * @description A calendar app's read of a private feed: no session, the token in the URL is the capability (D-70).
+         */
+        get: operations["read_feed_api_calendar__token__ics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/consents": {
         parameters: {
             query?: never;
@@ -1973,6 +1993,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/calendar-feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Feed
+         * @description Whether the caller has a live personal feed (its URL is shown only when it is created).
+         */
+        get: operations["my_feed_api_me_calendar_feed_get"];
+        put?: never;
+        /**
+         * Create My Feed
+         * @description A private feed of the caller's deadlines (a new URL; the previous one stops working at once).
+         */
+        post: operations["create_my_feed_api_me_calendar_feed_post"];
+        /**
+         * Revoke My Feed
+         * @description Turn the personal feed off: its URL answers 404 from now on.
+         */
+        delete: operations["revoke_my_feed_api_me_calendar_feed_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/consents": {
         parameters: {
             query?: never;
@@ -2035,6 +2083,47 @@ export interface paths {
          * @description Remove your own credit from an idea (for good).
          */
         delete: operations["leave_contribution_api_me_contributions__proposal_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/deadlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Deadlines
+         * @description Every deadline the caller carries as a developer: stage deadlines, answer-by dates, milestones, the Briefs they
+         *     pitched to and the events they asked to be reminded of.
+         */
+        get: operations["my_deadlines_api_me_deadlines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/deadlines/{kind}/{item_id}/calendar.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Deadline Calendar
+         * @description Add to calendar: one of the caller's deadlines as an ``.ics`` file (a 15-minute entry at its instant).
+         */
+        get: operations["my_deadline_calendar_api_me_deadlines__kind___item_id__calendar_ics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3261,6 +3350,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs/{org_id}/calendar-feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Org Feed
+         * @description Whether the caller has a live feed of this organisation's deadlines.
+         */
+        get: operations["org_feed_api_orgs__org_id__calendar_feed_get"];
+        put?: never;
+        /**
+         * Create Org Feed
+         * @description A private feed of the organisation's deadlines, for the caller (one per member).
+         */
+        post: operations["create_org_feed_api_orgs__org_id__calendar_feed_post"];
+        /**
+         * Revoke Org Feed
+         * @description Turn the caller's feed of this organisation off.
+         */
+        delete: operations["revoke_org_feed_api_orgs__org_id__calendar_feed_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/deadlines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Org Deadlines
+         * @description Every deadline of the organisation: its engagements' stage deadlines, answer-by dates and milestones, its open
+         *     Briefs and its published events.
+         */
+        get: operations["org_deadlines_api_orgs__org_id__deadlines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/deadlines/{kind}/{item_id}/calendar.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Org Deadline Calendar
+         * @description Add to calendar: one of the organisation's deadlines as an ``.ics`` file.
+         */
+        get: operations["org_deadline_calendar_api_orgs__org_id__deadlines__kind___item_id__calendar_ics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{org_id}/engagements": {
         parameters: {
             query?: never;
@@ -3579,6 +3737,26 @@ export interface paths {
          * @description Role changes are access-policy changes: owner only (404 for non-members first), then a fresh second factor.
          */
         put: operations["set_member_roles_api_orgs__org_id__members__user_id__roles_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/pipeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Org Pipeline
+         * @description The organisation's engagements by stage group, what has stalled, and the funnel of the last 90 days.
+         */
+        get: operations["org_pipeline_api_orgs__org_id__pipeline_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -4757,6 +4935,32 @@ export interface components {
             /** Label */
             label: string;
         };
+        /**
+         * CalendarFeedOut
+         * @description A new private calendar feed (D-70): the URL is shown once; only its token's SHA-256 is kept.
+         */
+        CalendarFeedOut: {
+            /**
+             * Url
+             * @description The absolute feed URL to subscribe to; treat it like a password
+             */
+            url: string;
+        };
+        /**
+         * CalendarFeedStatus
+         * @description Whether the caller has a live feed (the URL itself cannot be shown again: create a new one to see it).
+         */
+        CalendarFeedStatus: {
+            /** Active */
+            active: boolean;
+            /** Created At */
+            created_at: string | null;
+            /**
+             * Last Fetched At
+             * @description The last time a calendar app read the live feed
+             */
+            last_fetched_at: string | null;
+        };
         /** CandidateList */
         CandidateList: {
             /** Items */
@@ -5457,6 +5661,86 @@ export interface components {
         CsrfResponse: {
             /** Csrf Token */
             csrf_token: string;
+        };
+        /**
+         * DeadlineKind
+         * @description What a deadline is (docs/platform/tasks/P27.md track A): an engagement's stage deadline, the answer-by date of
+         *     the organisation's question, a signed agreement's milestone, a Brief's closing day, an event's start.
+         * @enum {string}
+         */
+        DeadlineKind: "stage" | "answer" | "milestone" | "brief" | "event";
+        /**
+         * DeadlineList
+         * @description The viewer's deadlines sorted by ``due_at``; ``now`` is the platform clock they were read at.
+         */
+        DeadlineList: {
+            /** Items */
+            items: components["schemas"]["DeadlineOut"][];
+            /**
+             * Now
+             * Format: date-time
+             */
+            now: string;
+        };
+        /**
+         * DeadlineOut
+         * @description One deadline the viewer carries. Titles, dates and names only (D-70): never a note, a message, a Brief's
+         *     statement or a proposal's text.
+         */
+        DeadlineOut: {
+            /**
+             * Business Days Left
+             * @description Kenyan business days from today (Nairobi) to due_on; negative past it
+             */
+            business_days_left: number;
+            /**
+             * Context
+             * @description The other party's name for an engagement's deadline (the developer's handle for an organisation until they are named); the organisation that posted a Brief or an event (the product's name for the platform's events)
+             */
+            context: string;
+            /**
+             * Due At
+             * Format: date-time
+             * @description The instant it falls due, in UTC: the end of the Nairobi day of a stage, answer, milestone or Brief deadline; an event's start
+             */
+            due_at: string;
+            /**
+             * Due On
+             * Format: date
+             * @description The Africa/Nairobi date of due_at
+             */
+            due_on: string;
+            /**
+             * Engagement Id
+             * @description The engagement of a stage, answer or milestone deadline
+             */
+            engagement_id: string | null;
+            /**
+             * Href
+             * @description The web app's page of the item, in the viewer's portal
+             */
+            href: string;
+            /**
+             * Key
+             * @description '{kind}:{id}': unique in the list, stable while the item lasts
+             */
+            key: string;
+            kind: components["schemas"]["DeadlineKind"];
+            /**
+             * Mine
+             * @description The viewer's side acts: whose turn it is on an engagement's step; always true for a Brief or an event (the viewer's own entry)
+             */
+            mine: boolean;
+            /**
+             * Overdue
+             * @description due_at has passed (never for an event: an event is not missed)
+             */
+            overdue: boolean;
+            /**
+             * Title
+             * @description What falls due: the stage's label and the proposal's title (stage), 'Information requested' and the title (answer), 'Milestone n' and the title (milestone), the Brief's title (brief), the event's title (event)
+             */
+            title: string;
         };
         /**
          * DeclarationBody
@@ -6483,6 +6767,38 @@ export interface components {
          * @enum {string}
          */
         Freshness: "fresh" | "stale" | "archived";
+        /**
+         * FunnelEntered
+         * @description Engagements whose first entry into each stage group fell inside the window.
+         */
+        FunnelEntered: {
+            /** Agreement */
+            agreement: number;
+            /** Close */
+            close: number;
+            /** Contact Nda */
+            contact_nda: number;
+            /** Implementation */
+            implementation: number;
+            /** Review */
+            review: number;
+        };
+        /** FunnelOut */
+        FunnelOut: {
+            /**
+             * Closed
+             * @description Engagements that reached CLOSED inside the window
+             */
+            closed: number;
+            /**
+             * Ended
+             * @description Engagements that ended DECLINED, WITHDRAWN, EXPIRED or TERMINATED inside it
+             */
+            ended: number;
+            entered: components["schemas"]["FunnelEntered"];
+            /** Window Days */
+            window_days: number;
+        };
         /**
          * GrantSource
          * @enum {string}
@@ -8054,6 +8370,141 @@ export interface components {
              * Format: uuid
              */
             verification_id: string;
+        };
+        /** PipelineColumn */
+        PipelineColumn: {
+            /** Count */
+            count: number;
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "review" | "contact_nda" | "agreement" | "implementation" | "close";
+            /**
+             * Items
+             * @description Longest in the stage first
+             */
+            items: components["schemas"]["PipelineItem"][];
+            /**
+             * Median Days In Stage
+             * @description The median days_in_stage of the column's open engagements (CLOSED ones left out); null with none
+             */
+            median_days_in_stage: number | null;
+        };
+        /**
+         * PipelineItem
+         * @description An engagement on the organisation's board: its summary and how long it has been where it is.
+         */
+        PipelineItem: {
+            /**
+             * Days In Stage
+             * @description Calendar days (Nairobi) since stage_entered_at
+             */
+            days_in_stage: number;
+            /**
+             * Developer Id
+             * @description The developer's user id; null for the organisation until the developer is named
+             */
+            developer_id: string | null;
+            /**
+             * Developer Name
+             * @description The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)
+             */
+            developer_name: string;
+            /**
+             * Developer Named
+             * @description False while developer_name is the pseudonymous handle
+             */
+            developer_named: boolean;
+            due: components["schemas"]["DueOut"] | null;
+            end_reason: components["schemas"]["EngagementEndReason"] | null;
+            /** Ended At */
+            ended_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Last Event At
+             * Format: date-time
+             * @description The engagement's latest tracker event (its hash chain)
+             */
+            last_event_at: string;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Org Id
+             * Format: uuid
+             */
+            org_id: string;
+            /** Org Name */
+            org_name: string;
+            origin: components["schemas"]["EngagementOrigin"];
+            /** @description In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to */
+            paused_from: components["schemas"]["EngagementState"] | null;
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+            /** Proposal Title */
+            proposal_title: string;
+            /** Stage Deadline At */
+            stage_deadline_at: string | null;
+            /**
+             * Stage Entered At
+             * Format: date-time
+             * @description When the engagement entered the stage of its column from the main path: a side state (INFO_REQUESTED, ON_HOLD) does not restart it
+             */
+            stage_entered_at: string;
+            /** Stage Group */
+            stage_group: string | null;
+            /** Stage Label */
+            stage_label: string;
+            /**
+             * Stalled
+             * @description Active, not on hold, and no tracker event for stalled_after_bd Kenyan business days or more
+             */
+            stalled: boolean;
+            state: components["schemas"]["EngagementState"];
+            /** @description The organisation's triage facts (REQ-ENG-15): the assignee and the recommendations' tally */
+            team?: components["schemas"]["TeamFacts"] | null;
+            /**
+             * Unread Messages
+             * @description Messages of the engagement's thread by others that the caller has not read
+             */
+            unread_messages?: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Whose Turn */
+            whose_turn: components["schemas"]["EngagementParty"][];
+        };
+        /**
+         * PipelineOut
+         * @description The organisation's engagements by stage group (Review, Contact and NDA, Agreement, Implementation, Close; an
+         *     engagement in a side state under the stage it left; ended ones in none, and Close only those closed inside the
+         *     funnel's window) and the funnel of the last ``window_days`` days.
+         */
+        PipelineOut: {
+            /** Columns */
+            columns: components["schemas"]["PipelineColumn"][];
+            funnel: components["schemas"]["FunnelOut"];
+            /**
+             * Now
+             * Format: date-time
+             */
+            now: string;
+            /** Stalled After Bd */
+            stalled_after_bd: number;
         };
         /** PitchGroup */
         PitchGroup: {
@@ -15845,6 +16296,100 @@ export interface operations {
             };
         };
     };
+    read_feed_api_calendar__token__ics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The deadlines as a named iCalendar feed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/calendar": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     consent_texts_api_consents_get: {
         parameters: {
             query?: never;
@@ -21312,6 +21857,280 @@ export interface operations {
             };
         };
     };
+    my_feed_api_me_calendar_feed_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedStatus"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    create_my_feed_api_me_calendar_feed_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    revoke_my_feed_api_me_calendar_feed_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     get_consents_api_me_consents_get: {
         parameters: {
             query?: never;
@@ -21611,6 +22430,198 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    my_deadlines_api_me_deadlines_get: {
+        parameters: {
+            query?: {
+                /** @description First Nairobi date; omitted: every overdue item */
+                from?: string | null;
+                /** @description Last Nairobi date; omitted: 90 days after from (or today) */
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeadlineList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    my_deadline_calendar_api_me_deadlines__kind___item_id__calendar_ics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["DeadlineKind"];
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The deadline as an iCalendar file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/calendar": unknown;
+                };
             };
             /** @description Bad Request */
             400: {
@@ -29086,6 +30097,481 @@ export interface operations {
             };
         };
     };
+    org_feed_api_orgs__org_id__calendar_feed_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedStatus"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    create_org_feed_api_orgs__org_id__calendar_feed_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    revoke_org_feed_api_orgs__org_id__calendar_feed_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    org_deadlines_api_orgs__org_id__deadlines_get: {
+        parameters: {
+            query?: {
+                /** @description First Nairobi date; omitted: every overdue item */
+                from?: string | null;
+                /** @description Last Nairobi date; omitted: 90 days after from (or today) */
+                to?: string | null;
+            };
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeadlineList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    org_deadline_calendar_api_orgs__org_id__deadlines__kind___item_id__calendar_ics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["schemas"]["DeadlineKind"];
+                item_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The deadline as an iCalendar file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/calendar": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     org_engagements_api_orgs__org_id__engagements_get: {
         parameters: {
             query?: never;
@@ -30849,6 +32335,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    org_pipeline_api_orgs__org_id__pipeline_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineOut"];
                 };
             };
             /** @description Bad Request */

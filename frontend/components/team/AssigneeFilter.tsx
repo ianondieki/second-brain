@@ -5,7 +5,7 @@ import { cn } from "@/components/ui/cn";
 import type { TeamFacts } from "@/components/tracker/model";
 
 // "Assigned to me" (REQ-ENG-15): the organisation's Engagements list, Inbox and Board narrowed to what is assigned to
-// the signed-in member, as `?assignee=me` (FE-1's Board reads the same query). Links, so each view is its own
+// the signed-in member, as `?assignee=me`; the Board draws this same pair of links (components/pipeline/Board.tsx). Links, so each view is its own
 // address and works before any script loads; the chosen one carries aria-current and its own fill (never colour
 // alone: it is also the bolder, bordered one).
 
@@ -46,7 +46,7 @@ export async function AssigneeFilter({
 }) {
   const t = await getTranslations("engagements");
   const items = [
-    { key: "all", href: allHref, label: t("all"), current: !mine },
+    { key: "all", href: allHref, label: t("filterAll"), current: !mine },
     { key: "mine", href: mineHref, label: t("assignedToMe"), current: mine },
   ];
   return (
