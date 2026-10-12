@@ -2,21 +2,21 @@
 column of the stage it left (as the stepper shows it); the stage's age counts from its entry from the main path (a
 question or a hold does not restart it); "no movement" is an active engagement, not on hold, with no tracker event for
 ``stalled_after_bd`` Kenyan business days or more (a weekend and a holiday do not count); the column's median age
-leaves CLOSED out; the funnel counts each engagement once per group, at its first entry, inside the window."""
+leaves CLOSED out; the funnel counts what falls inside the window: each engagement's first entry per group and its
+ending."""
 
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
-from uuid import UUID
 
 import pytest
 
 from bridge.engagements import pipeline
 from bridge.engagements.pipeline import Change
+from bridge.engagements.schemas import StageGroup
 from bridge.models.enums import EngagementState as S
 
 MASHUJAA = date(2026, 10, 20)
-E1, E2, E3 = (UUID(f"01927f00-0000-7000-8000-00000000000{n}") for n in (1, 2, 3))
 
 
 def at(day: date, hour: int = 9) -> datetime:
@@ -81,43 +81,46 @@ def test_the_median_age_leaves_closed_out() -> None:
     assert pipeline.median([9, 1, 5]) == 5
 
 
-def test_the_funnel_counts_first_entries_inside_the_window() -> None:
+def test_the_funnel_counts_first_entries_and_endings_inside_the_window() -> None:
+    """The database returns each engagement's first entry per group (``min(created_at)``, tested through the API in
+    tests/integration/engagements/test_pipeline_api.py) and each ended engagement's terminal state; the window decides,
+    its two ends included."""
     now = at(date(2026, 10, 30))
-    old = now - timedelta(days=120)
+    start = pipeline.window_start(now, 90)
+    assert start == now - timedelta(days=90)
     recent = now - timedelta(days=10)
-    changes = {
-        # entered review long ago, came back to review recently (a returned question), then contact: counted once
-        E1: [
-            Change(None, S.SUBMITTED, old),
-            Change(S.SUBMITTED, S.UNDER_REVIEW, old),
-            Change(S.UNDER_REVIEW, S.INFO_REQUESTED, recent),
-            Change(S.INFO_REQUESTED, S.UNDER_REVIEW, recent),
-            Change(S.UNDER_REVIEW, S.INTEREST_CONFIRMED, recent),
-        ],
-        # all inside: review, contact, agreement, implementation, close, CLOSED
-        E2: [
-            Change(None, S.SUBMITTED, recent),
-            Change(S.SUBMITTED, S.UNDER_REVIEW, recent),
-            Change(S.UNDER_REVIEW, S.INTEREST_CONFIRMED, recent),
-            Change(S.INTEREST_CONFIRMED, S.NEGOTIATION, recent),
-            Change(S.NEGOTIATION, S.IN_IMPLEMENTATION, recent),
-            Change(S.IN_IMPLEMENTATION, S.SIGN_OFF, recent),
-            Change(S.SIGN_OFF, S.CLOSED, recent),
-        ],
-        # declined inside the window
-        E3: [Change(None, S.SUBMITTED, recent), Change(S.SUBMITTED, S.DECLINED, recent)],
-    }
-    found = pipeline.funnel(changes, now, 90)
+    firsts: list[tuple[StageGroup, datetime]] = [
+        ("review", start - timedelta(seconds=1)),  # first entered just before the window: not counted
+        ("review", start),  # the window's first instant
+        ("contact_nda", recent),
+        ("agreement", recent),
+        ("implementation", recent),
+        ("close", now),  # the window's last instant
+        ("close", now + timedelta(seconds=1)),  # after now (a moved clock): not counted
+    ]
+    endings = [
+        (S.CLOSED, recent),
+        (S.CLOSED, start - timedelta(days=1)),  # closed before the window
+        (S.DECLINED, recent),
+        (S.WITHDRAWN, start),
+        (S.EXPIRED, now),
+        (S.TERMINATED, now + timedelta(days=1)),
+    ]
+    found = pipeline.funnel(firsts, endings, now, 90)
     assert found.window_days == 90
     assert found.entered.model_dump() == {
-        "review": 2,
-        "contact_nda": 2,
+        "review": 1,
+        "contact_nda": 1,
         "agreement": 1,
         "implementation": 1,
         "close": 1,
     }
-    assert (found.closed, found.ended) == (1, 1)
-    assert pipeline.funnel(changes, now + timedelta(days=200), 90).entered.review == 0
+    assert (found.closed, found.ended) == (1, 3)
+    later = pipeline.funnel(firsts, endings, now + timedelta(days=200), 90)
+    assert later.entered.model_dump() == dict.fromkeys(pipeline.GROUPS, 0)
+    assert (later.closed, later.ended) == (0, 0)
+    empty = pipeline.funnel([], [], now, 90)
+    assert (empty.entered.review, empty.closed, empty.ended) == (0, 0, 0)
 
 
 def test_only_the_five_stepper_groups_are_columns() -> None:

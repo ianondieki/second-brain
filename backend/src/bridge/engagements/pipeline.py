@@ -5,7 +5,8 @@ brought forward read-only).
 - Columns: the five stage groups of the stepper (``state_machine.STAGE_GROUPS``: Review, Contact and NDA, Agreement,
   Implementation, Close; a public entity's procurement route with Contact and NDA, where the spec places it). An
   engagement in a side state (INFO_REQUESTED, ON_HOLD) sits under the stage it left (``paused_from``), as the stepper
-  shows it; an ended one (DECLINED, WITHDRAWN, EXPIRED, TERMINATED) sits in none; CLOSED sits in Close.
+  shows it; an ended one (DECLINED, WITHDRAWN, EXPIRED, TERMINATED) sits in none; CLOSED sits in Close while it
+  closed inside the funnel's window (``WINDOW_DAYS``; the column's count is that bounded count), and in none after.
 - Each card: the engagement's summary (as the organisation's list shows it: the developer's handle until named), when
   it entered the stage of its column from the main path (``stage_start``: a question or a hold does not restart it),
   its latest tracker event (``engagement_events``: messages are not tracker events), the calendar days since the stage
@@ -16,23 +17,27 @@ brought forward read-only).
   in a stage); None with none.
 - Funnel: over the last ``WINDOW_DAYS`` days, the engagements whose first entry into each group (an event whose
   ``to_state`` maps to it, ever) fell inside the window; ``closed`` those that reached CLOSED and ``ended`` those that
-  ended DECLINED, WITHDRAWN, EXPIRED or TERMINATED inside it.
+  ended DECLINED, WITHDRAWN, EXPIRED or TERMINATED inside it (a terminal state is entered once: the engagement's
+  ``ended_at``, which the database stamps from that event). The database computes each first entry
+  (``min(created_at)`` per engagement and group) and returns only those inside the window.
 
 Everything is read under the member's Row-Level Security (``app.org_id`` bound), with one query per kind of row
-however many engagements there are. Plain code decides every value.
+however many engagements there are; what is read is bounded by the board (its open engagements and those CLOSED inside
+the window: their state changes) and by the window (the funnel's rows), never by the organisation's whole history.
+Plain code decides every value.
 """
 
 from __future__ import annotations
 
 import statistics
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Final, get_args
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.engagements import history
@@ -70,6 +75,13 @@ _GROUP_OF: Final[Mapping[EngagementState, StageGroup]] = {
     S.PROCUREMENT_ROUTE: "contact_nda",  # stage 3b, between approval and first contact (docs/spec/06 6.9)
 }
 ENDED: Final = frozenset({S.DECLINED, S.WITHDRAWN, S.EXPIRED, S.TERMINATED})
+# The group an event's ``to_state`` enters, in SQL (NULL for a side or terminal state outside the five groups).
+_EVENT_GROUP: Final = case(
+    *(
+        (EngagementEvent.to_state.in_([state for state, of in _GROUP_OF.items() if of == group]), group)
+        for group in GROUPS
+    )
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,31 +127,36 @@ def median(days: Sequence[int]) -> float | None:
     return float(statistics.median(days)) if days else None
 
 
-def funnel(changes: Mapping[UUID, Sequence[Change]], now: datetime, window_days: int) -> FunnelOut:
-    """The funnel of the window ending at ``now`` from each engagement's state changes in chain order."""
-    start = now - timedelta(days=window_days)
+def window_start(now: datetime, window_days: int) -> datetime:
+    return now - timedelta(days=window_days)
+
+
+def funnel(
+    firsts: Iterable[tuple[StageGroup, datetime]],
+    endings: Iterable[tuple[EngagementState, datetime]],
+    now: datetime,
+    window_days: int,
+) -> FunnelOut:
+    """The funnel of the window ending at ``now``: ``firsts`` holds each engagement's first entry into a group (one
+    per engagement and group), ``endings`` each ended engagement's terminal state and when it was entered (one per
+    engagement). What falls inside the window counts."""
+    start = window_start(now, window_days)
     entered: dict[StageGroup, int] = dict.fromkeys(GROUPS, 0)
-    closed = ended = 0
-    for chain in changes.values():
-        first: dict[StageGroup, datetime] = {}
-        for change in chain:
-            group = _GROUP_OF.get(change.to_state)
-            if group is not None and group not in first:
-                first[group] = change.at
-        for group, at in first.items():
-            if start <= at <= now:
-                entered[group] += 1
-        inside = [c.to_state for c in chain if start <= c.at <= now]
-        closed += int(S.CLOSED in inside)
-        ended += int(any(state in ENDED for state in inside))
+    for group, at in firsts:
+        entered[group] += int(start <= at <= now)
+    inside = [state for state, at in endings if start <= at <= now]
+    closed = sum(state is S.CLOSED for state in inside)
+    ended = sum(state in ENDED for state in inside)
     return FunnelOut(window_days=window_days, entered=FunnelEntered(**entered), closed=closed, ended=ended)
 
 
 # ------------------------------------------------------------------------------------------------- the read
 
 
-async def _changes(db: AsyncSession, org_id: UUID) -> dict[UUID, list[Change]]:
-    """Every state change of the organisation's engagements (ended ones too: the funnel), in chain order."""
+async def _changes(db: AsyncSession, engagement_ids: Sequence[UUID]) -> dict[UUID, list[Change]]:
+    """The state changes of the board's engagements, in chain order (each card's ``stage_start``)."""
+    if not engagement_ids:
+        return {}
     rows = await db.execute(
         select(
             EngagementEvent.engagement_id,
@@ -147,14 +164,49 @@ async def _changes(db: AsyncSession, org_id: UUID) -> dict[UUID, list[Change]]:
             EngagementEvent.to_state,
             EngagementEvent.created_at,
         )
-        .join(Engagement, Engagement.id == EngagementEvent.engagement_id)
-        .where(Engagement.org_id == org_id, EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state))
+        .where(
+            EngagementEvent.engagement_id.in_(list(engagement_ids)),
+            EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state),
+        )
         .order_by(EngagementEvent.engagement_id, EngagementEvent.seq)
     )
     found: dict[UUID, list[Change]] = defaultdict(list)
     for engagement_id, from_state, to_state, created_at in rows.tuples():
         found[engagement_id].append(Change(from_state, to_state, created_at))
     return found
+
+
+async def _first_entries(
+    db: AsyncSession, org_id: UUID, start: datetime, now: datetime
+) -> list[tuple[StageGroup, datetime]]:
+    """Each of the organisation's engagements' first entry into each group, ever (``min(created_at)`` per engagement
+    and group, ended engagements too), returned only when it falls inside ``[start, now]``."""
+    events = (
+        select(EngagementEvent.engagement_id, _EVENT_GROUP.label("grp"), EngagementEvent.created_at)
+        .join(Engagement, Engagement.id == EngagementEvent.engagement_id)
+        .where(Engagement.org_id == org_id, EngagementEvent.from_state.is_distinct_from(EngagementEvent.to_state))
+        .subquery()
+    )
+    first = func.min(events.c.created_at)
+    rows = await db.execute(
+        select(events.c.grp, first)
+        .where(events.c.grp.is_not(None))
+        .group_by(events.c.engagement_id, events.c.grp)
+        .having(first.between(start, now))
+    )
+    return [(as_group(group), at) for group, at in rows.tuples()]
+
+
+async def _endings(
+    db: AsyncSession, org_id: UUID, start: datetime, now: datetime
+) -> list[tuple[EngagementState, datetime]]:
+    """The organisation's engagements that entered a terminal state inside ``[start, now]``: the state and when."""
+    rows = await db.execute(
+        select(Engagement.state, Engagement.ended_at).where(
+            Engagement.org_id == org_id, Engagement.ended_at.between(start, now)
+        )
+    )
+    return [(state, at) for state, at in rows.tuples() if at is not None]
 
 
 async def _last_events(db: AsyncSession, engagement_ids: Sequence[UUID]) -> dict[UUID, datetime]:
@@ -196,16 +248,21 @@ async def pipeline(
     """The organisation's board at ``now`` (see the module docstring); ``reader_id`` counts each card's unread
     messages for the member reading it."""
     after_bd = get_pipeline_policy().stalled_after_bd
+    start = window_start(now, WINDOW_DAYS)
     found = await db.execute(
         select(Engagement)
-        .where(Engagement.org_id == org_id, Engagement.state.not_in(list(ENDED)))
+        .where(
+            Engagement.org_id == org_id,
+            Engagement.state.not_in(list(ENDED)),
+            or_(Engagement.state != S.CLOSED, Engagement.ended_at.between(start, now)),  # Close: the window's
+        )
         .order_by(Engagement.stage_entered_at, Engagement.id)
     )
     engagements = list(found.scalars())
     summaries = await history.summaries(
         db, engagements, deals_enabled=deals_enabled, developer_caller=False, reader_id=reader_id
     )
-    changes = await _changes(db, org_id)
+    changes = await _changes(db, [e.id for e in engagements])
     last = await _last_events(db, [e.id for e in engagements])
     holidays = await all_holidays(db)
     columns: dict[StageGroup, list[PipelineItem]] = {group: [] for group in GROUPS}
@@ -220,4 +277,7 @@ async def pipeline(
         items.sort(key=lambda item: (item.stage_entered_at, item.id))
         ages = [item.days_in_stage for item in items if item.state is not S.CLOSED]
         out.append(PipelineColumn(group=group, count=len(items), median_days_in_stage=median(ages), items=items))
-    return PipelineOut(columns=out, funnel=funnel(changes, now, WINDOW_DAYS), stalled_after_bd=after_bd, now=now)
+    flow = funnel(
+        await _first_entries(db, org_id, start, now), await _endings(db, org_id, start, now), now, WINDOW_DAYS
+    )
+    return PipelineOut(columns=out, funnel=flow, stalled_after_bd=after_bd, now=now)

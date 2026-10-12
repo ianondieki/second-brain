@@ -5,7 +5,9 @@ after approval; in negotiation; CLOSED; declined), its board shows each in the r
 stage it left, CLOSED in Close, the declined one nowhere) with counts and median ages, the age of a stage counted from
 its main-path entry; with no event for 6 business days on the test clock the active ones are marked stalled (not after
 4; never one on hold or closed); the funnel's ``entered`` counts match the events in the 90-day window, and fall to
-zero once the window has passed them. Members only (a viewer reads it; anyone else 404); ``team`` is null here.
+zero once the window has passed them, the CLOSED engagement leaving the Close column with them; a return to a stage
+after the window is no first entry and does not restart the stage. Members only (a viewer reads it; anyone else 404);
+``team`` is null here.
 """
 
 from __future__ import annotations
@@ -131,7 +133,18 @@ async def test_the_board_columns_ageing_stalls_and_funnel(owner_engine: AsyncEng
             gone = (await viewer.get(f"/api/orgs/{world.org}/pipeline")).json()
             assert gone["funnel"]["entered"] == dict.fromkeys(GROUPS, 0)
             assert (gone["funnel"]["closed"], gone["funnel"]["ended"]) == (0, 0)
-            assert [c["count"] for c in gone["columns"]] == [2, 1, 1, 0, 1]
+            # Close holds what closed inside the window: the closed engagement has left the board
+            assert [c["count"] for c in gone["columns"]] == [2, 1, 1, 0, 0]
+            assert ids(columns(gone)["close"]) == set()
+            # a return to review after the window is not a first entry, and continues the stage
+            await asked.ok(dev["asked"], "answer-info", {"answer": "Three depots in Kiambu."})
+            back = (await viewer.get(f"/api/orgs/{world.org}/pipeline")).json()
+            assert back["funnel"]["entered"] == dict.fromkeys(GROUPS, 0)
+            returned = item(back, engagement["asked"])
+            assert (returned["state"], returned["paused_from"]) == ("UNDER_REVIEW", None)
+            assert datetime.fromisoformat(returned["stage_entered_at"]) == datetime.fromisoformat(review_entry[0])
+            assert returned["days_in_stage"] >= 91
+            assert returned["stalled"] is False  # it just moved
 
         assert (await outsider_check.get(f"/api/orgs/{world.org}/pipeline")).status_code == 404
 
