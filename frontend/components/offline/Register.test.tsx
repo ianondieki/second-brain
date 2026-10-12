@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -35,7 +36,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
 }));
 
-const HASH = "a1b2c3d4e5f60718293a";
+const USER_ID = "0b8f4c1e-0000-4000-8000-00000000a11c";
+/** The page's rendered hash, as the server computes it (PaletteSlot accountHash). */
+const HASH = createHash("sha256").update(`wazo-recent|${USER_ID}`).digest("hex").slice(0, 20);
+/** GET /api/auth/me: the live session's user id; null signed out (401); undefined unreadable (the request fails). */
+const session = { me: USER_ID as string | null | undefined };
 
 /** A worker that answers every message on its port (as sw.js does) and remembers what it was told. */
 function fakeWorker(answers: Record<string, unknown> = {}) {
@@ -100,6 +105,16 @@ function page() {
 const off = (element: Element) => element.matches(":disabled");
 
 beforeEach(() => {
+  session.me = USER_ID;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url !== "/api/auth/me" || session.me === undefined) throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify(session.me === null ? {} : { user: { id: session.me } }), {
+        status: session.me === null ? 401 : 200,
+      });
+    }),
+  );
   online(true);
   window.history.replaceState(null, "", "/dev/engagements/0b8f4c1e-5a2d-4e7f-9c3b-1d2e3f4a5b6c");
   document.documentElement.removeAttribute("data-offline");
@@ -126,6 +141,53 @@ describe("the offline island", () => {
     expect(types.indexOf("user")).toBeLessThan(types.indexOf("visit"));
     expect(told).toContainEqual({ type: "user", hash: HASH, lang: document.documentElement.lang });
     expect(document.documentElement.hasAttribute("data-offline")).toBe(false);
+  });
+
+  it("checks the page's hash against the live session before it speaks, with the session's cookie and no cache", async () => {
+    const { told } = fakeWorker();
+    renderWithIntl(page());
+    await waitFor(() => expect(told).toContainEqual({ type: "user", hash: HASH, lang: document.documentElement.lang }));
+    expect(fetch).toHaveBeenCalledWith("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
+  });
+
+  it.each([
+    ["someone else is signed in now", "0b8f4c1e-0000-4000-8000-0000000b41a2"],
+    ["no one is signed in (401)", null],
+  ])("a stale page (%s) says nothing to the worker and loads itself again", async (_why, me) => {
+    session.me = me;
+    const { told } = fakeWorker();
+    const reload = vi.fn();
+    vi.stubGlobal("location", {
+      ...window.location,
+      reload,
+      href: window.location.href,
+      pathname: window.location.pathname,
+    });
+    renderWithIntl(page());
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(told).toEqual([]);
+  });
+
+  it("takes the page's own word when the session cannot be read (offline: a cached page)", async () => {
+    session.me = undefined;
+    const { told } = fakeWorker();
+    renderWithIntl(page());
+    await waitFor(() => expect(told).toContainEqual(expect.objectContaining({ type: "user", hash: HASH })));
+  });
+
+  it("ignores a reply that arrives after its run ended (another page, person or build)", async () => {
+    let answer: (() => void) | undefined;
+    const { worker } = fakeWorker();
+    worker.postMessage.mockImplementation((message: { type: string }, ports?: MessagePort[]) => {
+      if (message.type === "status") answer = () => ports?.[0]?.postMessage({ cached: true });
+    });
+    const { unmount } = renderWithIntl(page());
+    await waitFor(() => expect(answer).toBeDefined());
+    unmount();
+    answer!();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(document.documentElement.hasAttribute("data-offline")).toBe(false);
+    expect(document.querySelectorAll("[data-offline-locked]")).toHaveLength(0);
   });
 
   it("clears the cache when the signed-in person cannot be read (no hash)", async () => {

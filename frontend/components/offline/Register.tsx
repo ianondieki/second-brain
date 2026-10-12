@@ -7,6 +7,15 @@ import { useEffect } from "react";
 const CONTROLS = "#main :is(button,input,select,textarea)";
 const LOCKED = "data-offline-locked";
 
+/** The hash the server renders for a person (components/palette/PaletteSlot.tsx accountHash): SHA-256 of
+ *  "wazo-recent|<user id>", hex, its first 20 characters. */
+async function accountHash(id: unknown): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`wazo-recent|${id}`));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 20);
+}
+
 /**
  * The script of the offline part (P27 track F; REQ-UX-08; D-69), on the pages that carry it (OfflineSlot). It registers
  * the service worker (public/sw.js, `?v=` the build), tells it whose cache it is (the hash the command palette's Recent
@@ -46,6 +55,10 @@ export function Register({ hash, version }: { hash: string | null; version: stri
         });
     };
     offline(!navigator.onLine);
+    // The controller is the listeners' options ({signal}) and says whether this run is still the live one: a reply
+    // that arrives after the page, the person or the build changed is ignored (aborted in the cleanup).
+    const listening = new AbortController();
+    const gone = () => listening.signal.aborted;
     const sw = navigator.serviceWorker;
     // The worker handles its messages one at a time, in order: "user" lands before any "status" or "visit".
     if (sw)
@@ -54,18 +67,29 @@ export function Register({ hash, version }: { hash: string | null; version: stri
         // never taken from the HTTP cache (updateViaCache "imports", the default, and /sw.js is no-cache).
         .register(`/sw.js?v=${version}`)
         .then(() => sw.ready)
-        .then(({ active }) => {
+        .then(async ({ active }) => {
+          // A tab rendered for one person that wakes after someone else signed in (a background tab) is stale: the
+          // page's hash is checked against the live session (the id hashed as accountHash() does) before it speaks
+          // for anyone. On another person or no one (401) it says nothing and loads itself again; when the session
+          // cannot be read (offline: a cached page of the person whose cache it is) its own word is taken.
+          const me = hash
+            ? await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" }).catch(() => null)
+            : null;
+          if (me && (me.status === 401 || (me.ok && (await accountHash((await me.json())?.user?.id)) !== hash))) {
+            if (!gone()) location.reload();
+            return;
+          }
+          if (gone()) return;
           active?.postMessage(hash ? { type: "user", hash, lang: html.lang } : { type: "clear" });
           // Did the worker answer this page from its cache (the network failed though the browser says online)?
           const channel = new MessageChannel();
-          channel.port1.onmessage = ({ data }) => offline((cached = Boolean(data?.cached)) || !navigator.onLine);
+          channel.port1.onmessage = ({ data }) =>
+            gone() || offline((cached = Boolean(data?.cached)) || !navigator.onLine);
           active?.postMessage({ type: "status" }, [channel.port2]);
           // A page reached inside the app loaded no page through the worker: it fetches and keeps it (if it may).
           active?.postMessage({ type: "visit", url: location.href });
         })
         .catch(() => {});
-    // The controller is the listeners' options ({signal}): aborting it removes both.
-    const listening = new AbortController();
     addEventListener("offline", () => offline(true), listening);
     addEventListener("online", () => (cached ? location.reload() : offline(false)), listening);
     return () => {
