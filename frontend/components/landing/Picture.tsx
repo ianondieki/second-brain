@@ -1,6 +1,7 @@
 import type { Photo } from "@/lib/photos/photos";
 
 import { cn } from "@/components/ui/cn";
+import { useSavesData } from "@/lib/data-saver-request";
 
 /** P24's two sizes, vendored for every photograph. */
 export const DEFAULT_WIDTHS: readonly number[] = [800, 1600];
@@ -10,7 +11,8 @@ export const DEFAULT_WIDTHS: readonly number[] = [800, 1600];
  * intrinsic width and height (no layout shift), lazy and decoded off the main thread (on the landing they sit below the
  * fold, never its LCP element; Explore's first one is `eager`), and the night colour until it paints (not the 24 px
  * blur: six more requests before the landing's first paint, which are LCP budget on Slow 4G). Decorative by default: the
- * link or heading beside it names the place.
+ * link or heading beside it names the place. When the request asks to save data (`Save-Data: on` or the data-saver
+ * switch, P27) no photograph is sent: the night colour fills the same box, so nothing around it moves.
  */
 export function Picture({
   photo,
@@ -29,6 +31,10 @@ export function Picture({
   /** The widths vendored for it (lib/photos/files.ts photoWidths: 480 px where the card-band files exist). */
   widths?: readonly number[];
 }) {
+  if (useSavesData()) {
+    const named = alt ? { role: "img", "aria-label": alt } : { "aria-hidden": true };
+    return <span {...named} data-photo-saved="" className={cn("block bg-night", className)} />;
+  }
   const base = `${photo.dir}/${photo.slug}`;
   const set = (ext: string) => widths.map((w) => `${base}-${w}.${ext} ${w}w`).join(", ");
   const fallback = widths.find((w) => w >= 800) ?? widths[widths.length - 1] ?? 800;

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
+import { forgetOffline } from "@/components/offline/clear";
 import { Form, SubmitButton } from "@/components/ui/Form";
 import { Alert } from "@/components/ui/Alert";
 import { Illustration } from "@/components/ui/Illustration";
@@ -85,6 +86,8 @@ export function LinkSignIn() {
     if (outcome.ok) {
       token.current = null;
       forgetEmail(); // the link has signed the person in; "Send the link again" has no further use
+      // Whoever this is, no other person's offline copies stay on this device, whichever way this goes on (P27, D-69).
+      await forgetOffline();
       // Signed in, but the account has no password (for example: the link was opened in a different browser from
       // the one that signed up, so the password chosen there was not kept). Say so calmly, with one way forward.
       if (!outcome.data.mfa_required && !outcome.data.user.password_set) {
@@ -187,9 +190,7 @@ export function LinkSignIn() {
     <>
       <h1 className="text-2xl text-ink lg:text-3xl">{t("link.failedTitle")}</h1>
       <p className="mt-3 text-ink-soft">
-        {failed === "invalid_or_expired_link"
-          ? t("link.failedLead", { minutes: LINK_MINUTES })
-          : t(`errors.${failed}`)}
+        {failed === "invalid_or_expired_link" ? t("link.failedLead", { minutes: LINK_MINUTES }) : t(`errors.${failed}`)}
       </p>
       <Form onSubmit={requestNewLink} className="mt-8 flex flex-col gap-6">
         {sendError ? <Alert>{t(`errors.${sendError}`)}</Alert> : null}

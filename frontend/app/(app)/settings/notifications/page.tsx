@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
@@ -8,13 +9,15 @@ import { Section } from "@/components/ui/Section";
 import { SignedInShell } from "@/components/SignedInShell";
 import { forwardHeaders, requireMe, serverApi } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
-import { clientStrings } from "@/lib/i18n/client-strings";
+import { DATA_SAVER_COOKIE } from "@/lib/data-saver";
+import { clientStrings, pickedStrings } from "@/lib/i18n/client-strings";
 
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BackLink } from "@/components/ui/BackLink";
 import { PageHero } from "@/components/ui/PageHero";
 
+import { DataSaverSwitch } from "../profile/DataSaverSwitch";
 import { SettingsTabs } from "../SettingsTabs";
 import { notificationChoices, preferenceChoices, type ConsentItem } from "./choices";
 import { NotificationChoices } from "./NotificationChoices";
@@ -40,13 +43,15 @@ async function myConsents(): Promise<ConsentItem[]> {
 /**
  * Notification settings (docs/spec/07 item 1, the avatar menu; every email footer's "Manage notifications"): the
  * consents that decide which messages are sent, for anyone signed in, on either side (REQ-CON-01, REQ-NOT-03), and
- * the notification preferences beside them in their channel's group (REQ-NOT-06; P21: the saved-search digest).
+ * the notification preferences beside them in their channel's group (REQ-NOT-06; P21: the saved-search digest). Then
+ * "Data": the data-saver switch (P27, REQ-UX-08), the same one developers also have on Profile, here for both sides; it
+ * acts at once on this device and is not part of "Save choices".
  */
 export default async function NotificationSettingsPage() {
   const me = await requireMe();
   const home = homeOf(me);
   const t = await getTranslations("notificationSettings");
-  const [consents, preferenceItems] = await Promise.all([myConsents(), myPreferences()]);
+  const [consents, preferenceItems, jar] = await Promise.all([myConsents(), myPreferences(), cookies()]);
   const choices = notificationChoices(consents);
   // A kind the page has words for reads in the page's language; any other keeps the API's own label.
   const preferences = preferenceChoices(preferenceItems, (item) =>
@@ -71,13 +76,27 @@ export default async function NotificationSettingsPage() {
             <EmptyState sentence={t("empty")} action={t("action.home")} href={home} />
           ) : (
             <Card variant="flat" className="p-5 sm:p-6">
-              <Section title={t("pageTitle")} headingId="notifications-heading" description={t("lead")} headingStyle="card">
+              <Section
+                title={t("pageTitle")}
+                headingId="notifications-heading"
+                description={t("lead")}
+                headingStyle="card"
+              >
                 <ClientStrings strings={await clientStrings(["notificationSettings"])}>
                   <NotificationChoices initial={choices} preferences={preferences} />
                 </ClientStrings>
               </Section>
             </Card>
           )}
+          <Card variant="flat" className="mt-6 p-5 sm:p-6" data-data-saver-card="">
+            <Section title={t("dataTitle")} headingId="data-heading" headingStyle="card">
+              <ClientStrings
+                strings={await pickedStrings("profileSettings", ["dataSaver", "dataSaverExplain", "on", "off"])}
+              >
+                <DataSaverSwitch initial={jar.get(DATA_SAVER_COOKIE)?.value === "1"} />
+              </ClientStrings>
+            </Section>
+          </Card>
         </div>
       </div>
     </SignedInShell>

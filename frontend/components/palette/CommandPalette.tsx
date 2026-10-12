@@ -9,6 +9,7 @@ import { applyTheme } from "@/lib/theme";
 
 import { matchParts, paletteGroups, type PaletteOption } from "./model";
 import { readRecent } from "./recent";
+import { forgetOffline } from "../offline/clear";
 import { forgetRecent } from "./remember";
 import { search, SEARCH_DEBOUNCE_MS, searchQuery, type SearchGroup } from "./search";
 import type { PaletteData } from "./types";
@@ -40,7 +41,17 @@ function Title({ text, query }: { text: string; query: string }) {
 
 function Arrow() {
   return (
-    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" className="size-4 shrink-0">
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className="size-4 shrink-0"
+    >
       <path d="M4 10h11M11 5.5 15.5 10 11 14.5" />
     </svg>
   );
@@ -61,7 +72,11 @@ export function CommandPalette({ data, onClose: done }: CommandPaletteProps) {
   const id = useId();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [answer, setAnswer] = useState<{ q: string; groups: SearchGroup[]; failed: boolean }>({ q: "", groups: [], failed: false });
+  const [answer, setAnswer] = useState<{ q: string; groups: SearchGroup[]; failed: boolean }>({
+    q: "",
+    groups: [],
+    failed: false,
+  });
   const [recent] = useState(() => readRecent(data.recentKey));
   // Closing ends the modal first, so the page is no longer inert when the opener takes focus back.
   const onClose = () => {
@@ -113,6 +128,7 @@ export function CommandPalette({ data, onClose: done }: CommandPaletteProps) {
   }, [current, id]);
 
   async function signOut() {
+    await forgetOffline(); // this device's offline copies go first (P27, D-69)
     const status = await withCsrf()("/api/auth/logout", { method: "POST", credentials: "same-origin" }).then(
       (response) => response.status,
       () => 0,
@@ -183,7 +199,16 @@ export function CommandPalette({ data, onClose: done }: CommandPaletteProps) {
       }}
     >
       <div className="flex items-center gap-2 border-b border-line px-3 sm:px-4">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true" focusable="false" className="size-5 shrink-0 text-ink-soft">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.9"
+          strokeLinecap="round"
+          aria-hidden="true"
+          focusable="false"
+          className="size-5 shrink-0 text-ink-soft"
+        >
           <circle cx="11" cy="11" r="6.5" />
           <path d="m16 16 4 4" />
         </svg>
@@ -249,7 +274,11 @@ export function CommandPalette({ data, onClose: done }: CommandPaletteProps) {
                     <span className="block font-medium text-ink max-sm:line-clamp-2 sm:truncate">
                       <Title text={option.title} query={query} />
                     </span>
-                    {option.subtitle ? <span className="block text-sm text-ink-soft max-sm:line-clamp-2 sm:truncate">{option.subtitle}</span> : null}
+                    {option.subtitle ? (
+                      <span className="block text-sm text-ink-soft max-sm:line-clamp-2 sm:truncate">
+                        {option.subtitle}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="palette-go">
                     <Arrow />
@@ -279,7 +308,10 @@ export function CommandPalette({ data, onClose: done }: CommandPaletteProps) {
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line px-4 py-2.5 text-xs text-ink-soft max-sm:hidden" aria-hidden="true">
+      <div
+        className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line px-4 py-2.5 text-xs text-ink-soft max-sm:hidden"
+        aria-hidden="true"
+      >
         <span className="inline-flex items-center gap-1.5">
           <kbd className="kbd">↑</kbd>
           <kbd className="kbd">↓</kbd>

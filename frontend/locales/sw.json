@@ -1,6 +1,7 @@
 {
   "_meta": {
     "reviewP26a": "[[COPY-REVIEW]] [[SW-REVIEW]] P26-A (REQ-TRACK-03, REQ-UX-02), rasimu ya Kiswahili: countdown.clockDays, countdown.clockHours, countdown.clockMinutes (saa ya mwisho: ujumbe mmoja kwa kila kipimo kikubwa; tarakimu na neno la kipimo zimewekewa lebo (f, u), hivyo kila lugha inaamua mpangilio na nafasi)",
+    "reviewP27f": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-F (REQ-UX-08; D-69): shell.install, offline.*, profileSettings.dataSaver, profileSettings.dataSaverExplain, notificationSettings.dataTitle (rasimu ya Kiswahili)",
     "reviewP25c2": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: portal.* (vichwa vidogo vya mahali ulipo, mistari mipya ya lango la shirika, dashibodi ya wafanyakazi na kurasa za kuingia: portal.eyebrow.*, portal.settings.*, portal.proposal.means, portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry, adminResearch.stepUp.loading, briefForm.preview.* (onyesho la moja kwa moja la jinsi Brief inavyosomeka kwenye Gundua)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack) [[SW-REVIEW]] draft Swahili",
     "reviewP15f": "[[COPY-REVIEW]] [[SW-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.* (rasimu ya Kiswahili)",
@@ -59,7 +60,8 @@
       "system": "Mfumo",
       "light": "Mwanga",
       "dark": "Giza"
-    }
+    },
+    "install": "Sakinisha {product}"
   },
   "panel": {
     "title": "Jinsi inavyofanya kazi",
@@ -503,6 +505,7 @@
   "notificationSettings": {
     "pageTitle": "Arifa",
     "lead": "Barua pepe kuhusu hatua katika mapendekezo na ushirikiano wako, kama idhini au sahihi, hutumwa kila mara. Chagua ujumbe mwingine unaotaka kupokea.",
+    "dataTitle": "Matumizi ya data",
     "channel": {
       "email": "Barua pepe",
       "whatsapp": "WhatsApp"
@@ -3073,6 +3076,14 @@
     "body": "Hakuna ukurasa kwenye anwani hii.",
     "home": "Nenda kwenye ukurasa wa mwanzo"
   },
+  "offline": {
+    "pageTitle": "Huna mtandao",
+    "banner": "Huna mtandao. Unaona {page} kama ilivyokuwa {time} EAT. Vitendo vitapatikana utakaporudi mtandaoni.",
+    "title": "Huna mtandao",
+    "body": "Ukurasa huu haujahifadhiwa kwenye kifaa hiki, kwa hivyo utafunguka utakaporudi mtandaoni.",
+    "retry": "Jaribu tena",
+    "kept": "Vifuatiliaji ulivyofungua hivi karibuni vimehifadhiwa kwenye kifaa hiki: <link>Ushirikiano</link>."
+  },
   "settingsNav": {
     "label": "Mipangilio",
     "security": "Usalama",
@@ -4054,6 +4065,8 @@
     "on": "Imewashwa",
     "off": "Imezimwa",
     "explain": "Wasanidi katika kaunti au nyanja zako wanaweza kuona jina lako la mtumiaji, kichwa chako na nyanja mnazoshiriki. Kamwe si mashirika.",
+    "dataSaver": "Kuokoa data",
+    "dataSaverExplain": "Bila picha za mandhari, na picha nyingine kwa ukubwa mdogo zaidi, kwenye kifaa hiki.",
     "save": "Hifadhi",
     "saving": "Inahifadhi…",
     "saved": "Wasifu umehifadhiwa.",

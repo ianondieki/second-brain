@@ -7,6 +7,7 @@ import { Picture } from "@/components/landing/Picture";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Lattice } from "@/components/ui/Lattice";
+import { savesData } from "@/lib/data-saver-request";
 import { countyAnchor, NATIONWIDE, photoOf, STRIP, type Photo } from "@/lib/photos/photos";
 import type { ExploreCounty, ExploreTeaser, PublicExplore } from "@/lib/public/public-data";
 
@@ -18,7 +19,10 @@ function Newest({ items, label, niche = true }: { items: readonly ExploreTeaser[
     <ul aria-label={label} className="flex flex-col divide-y divide-line">
       {items.slice(0, 3).map((item) => (
         <li key={item.id} className="py-2.5 first:pt-0 last:pb-0">
-          <Link href={problemHref(item.id)} className="inline-flex min-h-11 flex-col justify-center font-semibold text-ink underline-offset-4 hover:underline">
+          <Link
+            href={problemHref(item.id)}
+            className="inline-flex min-h-11 flex-col justify-center font-semibold text-ink underline-offset-4 hover:underline"
+          >
             {item.title}
             {niche && item.niche ? <span className="text-sm font-normal text-ink-soft">{item.niche}</span> : null}
           </Link>
@@ -31,9 +35,26 @@ function Newest({ items, label, niche = true }: { items: readonly ExploreTeaser[
 const TILE_SIZES = "(min-width: 1024px) 23rem, (min-width: 640px) 50vw, 100vw";
 
 /** A county's tile: its photograph (or the night band with the lattice) with the name and count over a night gradient. */
-function Tile({ anchor, name, count, photo, eager = false, children }: { anchor: string; name: string; count: string; photo?: Photo; eager?: boolean; children: ReactNode }) {
+function Tile({
+  anchor,
+  name,
+  count,
+  photo,
+  eager = false,
+  children,
+}: {
+  anchor: string;
+  name: string;
+  count: string;
+  photo?: Photo;
+  eager?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <article aria-labelledby={`${anchor}-name`} className="flex h-full flex-col overflow-hidden rounded-[1.25rem] border border-line bg-field">
+    <article
+      aria-labelledby={`${anchor}-name`}
+      className="flex h-full flex-col overflow-hidden rounded-[1.25rem] border border-line bg-field"
+    >
       <div className="relative">
         {photo ? (
           <Picture photo={photo} eager={eager} sizes={TILE_SIZES} className="aspect-[16/9] w-full object-cover" />
@@ -61,7 +82,15 @@ function Tile({ anchor, name, count, photo, eager = false, children }: { anchor:
  */
 export function countiesShown(counties: readonly ExploreCounty[]): ExploreCounty[] {
   const listed = new Set(counties.map((county) => county.code));
-  return [...counties, ...STRIP.filter((county) => !listed.has(county.code)).map((county) => ({ code: county.code, name: county.name, count: 0, newest: [] }))];
+  return [
+    ...counties,
+    ...STRIP.filter((county) => !listed.has(county.code)).map((county) => ({
+      code: county.code,
+      name: county.name,
+      count: 0,
+      newest: [],
+    })),
+  ];
 }
 
 /**
@@ -77,7 +106,8 @@ export async function ExploreContent({ explore }: { explore: PublicExplore | nul
   const t = await getTranslations("explore");
   const counties = explore ? countiesShown(explore.counties) : [];
   // The first tile's photograph is a phone's LCP: fetched from the head, at high priority, in the format it will use.
-  const first = counties[0] ? photoOf(counties[0].code) : undefined;
+  // Not under Save-Data or the data-saver switch (P27), where every tile is the night band (Picture).
+  const first = counties[0] && !(await savesData()) ? photoOf(counties[0].code) : undefined;
   if (first) {
     const base = `${first.dir}/${first.slug}`;
     preload(`${base}-800.avif`, {
@@ -89,7 +119,9 @@ export async function ExploreContent({ explore }: { explore: PublicExplore | nul
     });
   }
   // Problems that name no county are not in any county group: the remainder of the total is the nationwide group.
-  const nationwide = explore ? explore.totals.problems - explore.counties.reduce((sum, county) => sum + county.count, 0) : 0;
+  const nationwide = explore
+    ? explore.totals.problems - explore.counties.reduce((sum, county) => sum + county.count, 0)
+    : 0;
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pt-10 pb-20 sm:px-6 lg:pt-16 lg:pb-28">
       <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between sm:gap-10">
@@ -139,7 +171,12 @@ export async function ExploreContent({ explore }: { explore: PublicExplore | nul
               ))}
               {nationwide > 0 ? (
                 <li id="nationwide" className="scroll-mt-6">
-                  <Tile anchor="nationwide" name={t("nationwide")} count={t("count", { count: nationwide })} photo={NATIONWIDE}>
+                  <Tile
+                    anchor="nationwide"
+                    name={t("nationwide")}
+                    count={t("count", { count: nationwide })}
+                    photo={NATIONWIDE}
+                  >
                     <p className="text-sm text-ink-soft">{t("nationwideNote")}</p>
                   </Tile>
                 </li>

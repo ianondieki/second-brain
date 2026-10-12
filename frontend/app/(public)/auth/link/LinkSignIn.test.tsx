@@ -7,9 +7,11 @@ import { LinkSignIn, scrubToken } from "./LinkSignIn";
 
 const TOKEN = "tok_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456";
 
-const mocks = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), post: vi.fn(), get: vi.fn() }));
+const mocks = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn(), post: vi.fn(), get: vi.fn(), forget: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.replace, push: mocks.push }) }));
+// P27 (D-69): the previous person's offline copies; continueAfterSignIn clears them too (lib/auth/session.test.ts).
+vi.mock("@/components/offline/clear", () => ({ forgetOffline: (...args: unknown[]) => mocks.forget(...args) }));
 vi.mock("@/lib/api/client", () => ({
   api: {
     POST: (...args: unknown[]) => mocks.post(...args),
@@ -67,7 +69,12 @@ describe("LinkSignIn", () => {
     window.sessionStorage.setItem("bridge.pendingEmail", "wanjiru@example.com");
     mocks.post.mockResolvedValue(ok({ mfa_required: false, user: user(false) }));
     mocks.get.mockResolvedValue(
-      ok({ side: "org", mfa: { required: true, enrolled: false, verified: false }, memberships: [], user: user(false) }),
+      ok({
+        side: "org",
+        mfa: { required: true, enrolled: false, verified: false },
+        memberships: [],
+        user: user(false),
+      }),
     );
     renderWithIntl(<LinkSignIn />);
     expect(await screen.findByRole("heading", { name: "You are signed in" })).toBeTruthy();
@@ -80,6 +87,42 @@ describe("LinkSignIn", () => {
     expect(mocks.replace).not.toHaveBeenCalled();
     // The link signed the person in: the address kept for "Send the link again" is dropped.
     expect(window.sessionStorage.getItem("bridge.pendingEmail")).toBeNull();
+  });
+
+  // P27 (REQ-UX-08; D-69; security review): the no-password way on never reaches continueAfterSignIn, so the link
+  // itself deletes the previous person's offline copies as soon as it has signed this one in.
+  it("deletes this device's offline copies when the link signs someone in without a password", async () => {
+    mocks.post.mockResolvedValue(ok({ mfa_required: false, user: user(false) }));
+    mocks.get.mockResolvedValue(
+      ok({ side: "developer", mfa: { required: false }, memberships: [], user: user(false) }),
+    );
+    renderWithIntl(<LinkSignIn />);
+    expect(await screen.findByRole("heading", { name: "You are signed in" })).toBeTruthy();
+    expect(mocks.forget).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes them before any routing when the account has a password", async () => {
+    const order: string[] = [];
+    mocks.forget.mockImplementation(async () => {
+      order.push("forget");
+    });
+    mocks.replace.mockImplementation(() => order.push("route"));
+    mocks.post.mockResolvedValue(ok({ mfa_required: true, user: user(true) }));
+    renderWithIntl(<LinkSignIn />);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/auth/mfa"));
+    expect(order[0]).toBe("forget");
+  });
+
+  it("deletes nothing when the link does not sign anyone in", async () => {
+    mocks.post.mockResolvedValue({
+      data: undefined,
+      error: { detail: { code: "invalid_or_expired_link", message: "x" } },
+      response: new Response("{}", { status: 400 }),
+    });
+    renderWithIntl(<LinkSignIn />);
+    await waitFor(() => expect(mocks.post).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("heading")).toBeTruthy());
+    expect(mocks.forget).not.toHaveBeenCalled();
   });
 });
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
+import { savesData } from "@/lib/data-saver-request";
 import { AUTH_PHOTOS } from "@/lib/photos/photos";
 
 import { Seal } from "./brand/Seal";
@@ -32,30 +33,57 @@ const NOTHING = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAA
  */
 export async function AuthShell({ children, topBarAction, photo = "signIn" }: AuthShellProps) {
   const [t, tp] = await Promise.all([getTranslations("panel"), getTranslations("portal")]);
-  const picture = AUTH_PHOTOS[photo];
-  const base = `${picture.dir}/${picture.slug}`;
+  // Save-Data or the data-saver switch (P27): the night side keeps its colour and its words, without the photograph.
+  const picture = (await savesData()) ? null : AUTH_PHOTOS[photo];
+  const base = picture ? `${picture.dir}/${picture.slug}` : "";
   return (
     <>
       <TopBar>{topBarAction}</TopBar>
       <div className="flex w-full flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-        <main id="main" tabIndex={-1} className="flex w-full justify-center px-4 pt-6 pb-16 focus:outline-none sm:px-6 sm:pt-10 lg:items-start lg:px-10 lg:pt-20">
+        <main
+          id="main"
+          tabIndex={-1}
+          className="flex w-full justify-center px-4 pt-6 pb-16 focus:outline-none sm:px-6 sm:pt-10 lg:items-start lg:px-10 lg:pt-20"
+        >
           {/* A card on a phone; on the paper itself beside the night side. */}
-          <Card as="div" className="w-full max-w-[30rem] p-5 sm:p-8 lg:border-transparent lg:bg-transparent lg:px-2 lg:shadow-none">
+          <Card
+            as="div"
+            className="w-full max-w-[30rem] p-5 sm:p-8 lg:border-transparent lg:bg-transparent lg:px-2 lg:shadow-none"
+          >
             {children}
           </Card>
         </main>
         <aside
           aria-labelledby="how-it-works"
           className="auth-night relative hidden overflow-hidden bg-night text-on-night lg:order-first lg:block lg:pt-20 lg:pr-14 lg:pb-24 lg:pl-[max(3.5rem,calc((100vw-72rem)/2+1.5rem))]"
-          data-auth-photo={picture.slug}
+          data-auth-photo={picture ? picture.slug : "plain"}
         >
-          <div className="auth-photo" aria-hidden="true">
-            <picture>
-              <source media={WIDE} type="image/avif" srcSet={`${base}-800.avif 800w, ${base}-1600.avif 1600w`} sizes="55vw" />
-              <source media={WIDE} type="image/webp" srcSet={`${base}-800.webp 800w, ${base}-1600.webp 1600w`} sizes="55vw" />
-              <img src={NOTHING} alt="" width={picture.width} height={picture.height} decoding="async" fetchPriority="high" />
-            </picture>
-          </div>
+          {picture ? (
+            <div className="auth-photo" aria-hidden="true">
+              <picture>
+                <source
+                  media={WIDE}
+                  type="image/avif"
+                  srcSet={`${base}-800.avif 800w, ${base}-1600.avif 1600w`}
+                  sizes="55vw"
+                />
+                <source
+                  media={WIDE}
+                  type="image/webp"
+                  srcSet={`${base}-800.webp 800w, ${base}-1600.webp 1600w`}
+                  sizes="55vw"
+                />
+                <img
+                  src={NOTHING}
+                  alt=""
+                  width={picture.width}
+                  height={picture.height}
+                  decoding="async"
+                  fetchPriority="high"
+                />
+              </picture>
+            </div>
+          ) : null}
           {/* Sticky, so a long form (sign-up) scrolls past the panel's content instead of leaving it behind. */}
           <div className="relative lg:sticky lg:top-24">
             <h2 id="how-it-works" className="max-w-[16ch] text-3xl text-on-night">
@@ -76,12 +104,17 @@ export async function AuthShell({ children, topBarAction, photo = "signIn" }: Au
             </ol>
             <Seal size={112} className="mt-14 block" />
           </div>
-          <p className="auth-credit" data-photo-credit="">
-            <span>{picture.credit}</span>
-            <Link href="/credits" className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-2 hover:decoration-2">
-              {tp("auth.credits")}
-            </Link>
-          </p>
+          {picture ? (
+            <p className="auth-credit" data-photo-credit="">
+              <span>{picture.credit}</span>
+              <Link
+                href="/credits"
+                className="inline-flex min-h-11 items-center underline decoration-1 underline-offset-2 hover:decoration-2"
+              >
+                {tp("auth.credits")}
+              </Link>
+            </p>
+          ) : null}
           <div aria-hidden="true" className="lattice-band absolute inset-x-0 bottom-0 opacity-90" />
         </aside>
       </div>

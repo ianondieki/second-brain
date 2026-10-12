@@ -9,7 +9,8 @@ export const BLOOM = "#5a3fc0";
 /**
  * The web app manifest (P24; REQ-UX-04): Wazo installs on an Android home screen and opens standalone, from the
  * landing (a signed-in person is sent on to their home). Icons drawn from the mark (public/icons; the maskable one
- * keeps the mark inside the safe zone). No service worker yet (offline reading is Release 2, docs/spec/07 item 5).
+ * keeps the mark inside the safe zone). The service worker (public/sw.js, P27; D-69) keeps the trackers a person opened
+ * for offline reading; the account menu offers "Install Wazo" where the browser does (components/offline/install.ts).
  */
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const t = await getTranslations("app");
