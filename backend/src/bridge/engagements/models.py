@@ -85,6 +85,7 @@ from bridge.models.enums import (
     SignatureDocumentKind,
     StepUpMethod,
 )
+from bridge.models.text import one_line_sql
 from bridge.models.types import pg_enum
 
 DECLINED_REASONS = (
@@ -577,11 +578,8 @@ EVIDENCE_TITLE_MAX_CHARS = 200
 DECLARATION_WINDOW_BD = 10
 ORG_SCOPED = {"info": {"tenancy": Tenancy.ORG, "tenant_column": "org_id"}}
 NAIROBI_DAY = "({column} AT TIME ZONE 'Africa/Nairobi')::date"
-
-
-def one_line(column: str, max_chars: int) -> str:
-    """Plain text on one line: not blank, at most ``max_chars`` characters, no control character."""
-    return f"{column} ~ '[^[:space:]]' AND char_length({column}) <= {max_chars} AND {column} !~ '[[:cntrl:]]'"
+# The one body a declaration's evidence title may be changed to, once, by the owner role (a DSR's pseudonymisation).
+EVIDENCE_TITLE_REDACTED = "[redacted]"
 
 
 class EngagementAssignment(IdMixin, Base):
@@ -591,7 +589,7 @@ class EngagementAssignment(IdMixin, Base):
     ``assigned_at`` is the database's clock. One live row per engagement (``uq_engagement_assignments_live``):
     reassigning closes the live row (``UPDATE ... SET unassigned_at = now()``: the database replaces the value with its
     clock, once, for good) and inserts the next, in one transaction. Never deleted. Members read every row; nobody else
-    does."""
+    does, the engagement's own developer included even if they are also a member of the organisation."""
 
     __tablename__ = "engagement_assignments"
     __table_args__ = (
@@ -622,14 +620,15 @@ class EngagementAssignment(IdMixin, Base):
 class EngagementRecommendation(IdMixin, Base):
     """A member's internal recommendation on an engagement (REQ-ENG-15, D-68; docs/spec/03): one per member and
     engagement, upserted by the member as themselves while an owner, admin, reviewer or signatory; withdrawn by a DELETE
-    of their own row. Changes no state. ``note`` is plain text on one line (1 to 200 characters, or NULL for none),
-    never in an email, a log, an event payload or a developer-visible response. ``created_at`` and ``updated_at`` are
-    the database's clock (``updated_at`` moves on every update). Members read every row; nobody else does."""
+    of their own row. Changes no state. ``note`` is plain text on one line (``bridge.models.text``: 1 to 200
+    characters, or NULL for none), never in an email, a log, an event payload or a developer-visible response.
+    ``created_at`` and ``updated_at`` are the database's clock (``updated_at`` moves on every update). Members read
+    every row; nobody else does, the engagement's own developer included even if they are also a member."""
 
     __tablename__ = "engagement_recommendations"
     __table_args__ = (
         UniqueConstraint("engagement_id", "member_user_id"),
-        CheckConstraint(f"note IS NULL OR ({one_line('note', RECOMMENDATION_NOTE_MAX_CHARS)})", name="note_valid"),
+        CheckConstraint(f"note IS NULL OR ({one_line_sql('note', RECOMMENDATION_NOTE_MAX_CHARS)})", name="note_valid"),
         ORG_SCOPED,
     )
 
@@ -647,8 +646,10 @@ class EngagementRecommendation(IdMixin, Base):
 class PriorKnowledgeDeclaration(IdMixin, Base):
     """An organisation's prior-knowledge declaration (REQ-PROV-06; docs/spec/06 6.4 pt 5): the SHA-256 of dated internal
     evidence (hashed in the browser; no file is ever uploaded), the organisation's own short title for it and the
-    evidence's date, made once per engagement within 10 Kenyan business days of the organisation's first Tier-2 view.
-    Append-only (no UPDATE, DELETE or TRUNCATE for any role). A signatory, admin or owner inserts ``id``,
+    evidence's date (on or before the Nairobi day of that first view: the work predates the access), made once per
+    engagement within 10 Kenyan business days of the organisation's first Tier-2 view, while the engagement has not
+    ended. Append-only: no DELETE or TRUNCATE for any role, and no UPDATE but the owner role's one redaction of
+    ``evidence_title`` to ``EVIDENCE_TITLE_REDACTED`` (a DSR). A signatory, admin or owner inserts ``id``,
     ``engagement_id``, ``org_id``, ``proposal_id`` and ``version_id`` (the engagement's), ``declared_by`` (the caller),
     ``evidence_sha256``, ``evidence_title`` and ``evidence_dated_on``; ``first_tier2_view_at``, ``window_closes_on``
     and ``declared_at`` are the database's (read them back). Read by the engagement's readers: the developer, the
@@ -662,7 +663,7 @@ class PriorKnowledgeDeclaration(IdMixin, Base):
             name="fk_prior_knowledge_declarations_version",
         ),
         CheckConstraint(SHA256_SIZE.format(column="evidence_sha256"), name="evidence_sha256"),
-        CheckConstraint(one_line("evidence_title", EVIDENCE_TITLE_MAX_CHARS), name="evidence_title_valid"),
+        CheckConstraint(one_line_sql("evidence_title", EVIDENCE_TITLE_MAX_CHARS), name="evidence_title_valid"),
         CheckConstraint(
             f"window_closes_on > {NAIROBI_DAY.format(column='first_tier2_view_at')}", name="window_after_first_view"
         ),
@@ -670,8 +671,10 @@ class PriorKnowledgeDeclaration(IdMixin, Base):
             f"declared_at >= first_tier2_view_at AND {NAIROBI_DAY.format(column='declared_at')} <= window_closes_on",
             name="declared_within_window",
         ),
+        # Existing similar work predates the organisation's access (docs/spec/06 6.4 pt 5).
         CheckConstraint(
-            f"evidence_dated_on <= {NAIROBI_DAY.format(column='declared_at')}", name="evidence_dated_by_declaration"
+            f"evidence_dated_on <= {NAIROBI_DAY.format(column='first_tier2_view_at')}",
+            name="evidence_predates_first_view",
         ),
         {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "via": "engagements"}},
     )
@@ -695,9 +698,10 @@ class CalendarFeed(IdMixin, Base):
     organisation (a member's: the organisation's deadlines). The user inserts ``id``, ``user_id`` (themselves),
     ``org_id`` (NULL, or an organisation they are a member of) and ``token_hash``; rotating revokes the live feed
     (``UPDATE ... SET revoked_at = now()``: the database's clock, once, for good) and inserts the next in one
-    transaction. ``created_at`` is the database's; ``last_fetched_at`` only ``app_calendar_feed_touch`` stamps. The
-    unauthenticated read resolves a token through ``app_calendar_feed_lookup(sha256(token))``. The user's own rows
-    only."""
+    transaction. ``created_at`` is the database's; ``last_fetched_at`` only ``app_calendar_feed_touch`` stamps. A feed
+    dies with what it was made under: a membership leaving ``active`` revokes the member's feeds of that organisation,
+    and a user leaving ``active`` (a suspension) revokes all of theirs. The unauthenticated read resolves a token
+    through ``app_calendar_feed_lookup(token_hash)``. The user's own rows only."""
 
     __tablename__ = "calendar_feeds"
     __table_args__ = (

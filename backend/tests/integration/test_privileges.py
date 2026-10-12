@@ -431,30 +431,58 @@ async def test_only_bridge_app_executes_the_v13_definers(
         assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
 
 
-async def test_no_definer_function_inserts_a_prior_knowledge_declaration(owner_engine: AsyncEngine) -> None:
-    """Revision 0013: ``prior_knowledge_declarations_window`` makes the window the database's for every writer but the
-    table's owner (a seed or a backfill), so a SECURITY DEFINER function (it runs as the owner) that inserted a
-    declaration would carry a client's window and time. No definer function's body inserts into the table (the app
-    declares as bridge_app, through the policy and the trigger)."""
-    scan = text(
-        "SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.prosecdef AND p.pronamespace = 'public'::regnamespace"
-        " AND p.prosrc ~* 'insert[[:space:]]+into[[:space:]]+(public[.])?\"?prior_knowledge_declarations\"?'"
-    )
+# Revision 0013, the security review's MINOR 2. A function the owner runs (a SECURITY DEFINER one, or any function a
+# definer calls) acts as the owner; the declaration window's bypass is the owner's with no user bound only. So no
+# function body of the schema may insert a declaration, and every body that runs dynamic SQL (EXECUTE) or builds text
+# with format() is reviewed by hand (a dynamic statement can name the table in pieces): this list, with why each is
+# safe. A new one fails until it is reviewed here.
+DECLARATION_INSERT = 'insert[[:space:]]+into[[:space:]]+(public[.])?"?prior_knowledge_declarations"?([^_a-z0-9]|$)'
+DYNAMIC_SQL = "\\mexecute\\M|\\mformat[[:space:]]*[(]"
+REVIEWED_DYNAMIC: dict[str, str] = {
+    "app_decide_claim(uuid,boolean,text)": "format() builds a decision reason string; no EXECUTE, no declaration",
+}
+FUNCTION_SCAN = text(
+    "SELECT p.oid::regprocedure::text AS signature, p.prosrc ~* :insert AS inserts, p.prosrc ~* :dynamic AS dynamic"
+    " FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND NOT EXISTS (SELECT 1 FROM pg_depend d"
+    " WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')"
+    " AND (p.prosrc ~* :insert OR p.prosrc ~* :dynamic)"
+)
+# Probes the scan must catch (created and rolled back): the literal insert, the reviewer's insert built in pieces, a
+# format()-built statement, and dynamic SQL in an INVOKER function a definer could call.
+SCAN_PROBES = {
+    "probe_literal()": "CREATE FUNCTION probe_literal() RETURNS void LANGUAGE sql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ INSERT INTO public.prior_knowledge_declarations"
+    " (id, engagement_id, org_id, proposal_id, version_id, declared_by, evidence_sha256, evidence_title,"
+    " evidence_dated_on, first_tier2_view_at, window_closes_on) SELECT uuid7(), e.id, e.org_id, e.proposal_id,"
+    " e.version_id, e.developer_id, '\\x00', 'probe', current_date, now(), current_date + 1 FROM engagements e"
+    " WHERE false $$",
+    "probe_pieces()": "CREATE FUNCTION probe_pieces() RETURNS void LANGUAGE plpgsql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ BEGIN EXECUTE 'INSERT INTO public.' || 'prior_knowledge_'"
+    " || 'declarations SELECT * FROM public.' || 'prior_knowledge_' || 'declarations WHERE false'; END $$",
+    "probe_format()": "CREATE FUNCTION probe_format() RETURNS text LANGUAGE sql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ SELECT format('INSERT INTO %I', 'x') $$",
+    "probe_invoker()": "CREATE FUNCTION probe_invoker() RETURNS void LANGUAGE plpgsql"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ BEGIN EXECUTE 'SELECT 1'; END $$",
+}
+
+
+async def test_no_function_inserts_a_declaration_or_runs_unreviewed_dynamic_sql(owner_engine: AsyncEngine) -> None:
+    """Revision 0013 (the security review's MINOR 2): ``prior_knowledge_declarations_window`` keeps a writer's own
+    window only for the table's owner with no user bound (a seed, a backfill), and a function the owner runs acts as
+    the owner. No function body of the schema, definer or not, inserts a declaration; the only bodies with dynamic SQL
+    or format() are the reviewed ones; and the scan catches each probe: a literal insert, the review's insert built in
+    pieces (``'prior_knowledge_' || 'declarations'``), a format()-built statement and an INVOKER function's EXECUTE."""
+    patterns = {"insert": DECLARATION_INSERT, "dynamic": DYNAMIC_SQL}
     async with owner_engine.connect() as conn:
         transaction = await conn.begin()
         try:
-            assert list((await conn.execute(scan)).scalars()) == []
-            await conn.execute(  # the scan finds such a function (rolled back)
-                text(
-                    "CREATE FUNCTION scan_probe() RETURNS void LANGUAGE sql SECURITY DEFINER"
-                    " SET search_path = pg_catalog, public, pg_temp"
-                    " AS $$ INSERT INTO public.prior_knowledge_declarations (id, engagement_id, org_id, proposal_id,"
-                    " version_id, declared_by, evidence_sha256, evidence_title, evidence_dated_on, first_tier2_view_at,"
-                    " window_closes_on) SELECT uuid7(), e.id, e.org_id, e.proposal_id, e.version_id, e.developer_id,"
-                    " '\\x00', 'probe', current_date, now(), current_date + 1 FROM engagements e WHERE false $$"
-                )
-            )
-            assert list((await conn.execute(scan)).scalars()) == ["scan_probe()"]
+            found = (await conn.execute(FUNCTION_SCAN, patterns)).all()
+            assert [row.signature for row in found if row.inserts] == []
+            assert {row.signature for row in found if row.dynamic} == set(REVIEWED_DYNAMIC)
+            for statement in SCAN_PROBES.values():
+                await conn.execute(text(statement))
+            flagged = {row.signature for row in (await conn.execute(FUNCTION_SCAN, patterns)).all()}
+            assert flagged - set(REVIEWED_DYNAMIC) == set(SCAN_PROBES)
         finally:
             await transaction.rollback()
 

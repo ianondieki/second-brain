@@ -25,22 +25,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from bridge.models.base import Base, CreatedMixin, IdMixin, Tenancy, TimestampsMixin
 from bridge.models.enums import ConsentPurpose, DevVerification, KycStatus, NicheInterest
+from bridge.models.text import reference_sql
 from bridge.models.types import CIText, Vector, pg_enum
 
 USER = {"info": {"tenancy": Tenancy.USER, "tenant_column": "user_id"}}
 
 # Revision 0013 (REQ-DEV-04; docs/spec/06 6.4 pt 8, D3): a developer's self-reported references. GitHub's rule for a
 # login (letters, digits and single hyphens, neither first nor last; at most 39 characters); a KECOBO or KIPI reference
-# is up to 40 characters, not blank, without a control character. The API refuses anything else (422) before the
-# database's CHECKs would.
+# is one line of up to 40 characters (bridge.models.text: not blank, no control, format or non-ASCII space character).
+# The API refuses anything else (422, with bridge.models.text.is_one_line) before the database's CHECKs would.
 GITHUB_LOGIN_MAX_CHARS = 39
 GITHUB_LOGIN_PATTERN = "^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$"
 REFERENCE_MAX_CHARS = 40
-
-
-def reference_valid(column: str) -> str:
-    """A self-reported KECOBO or KIPI reference: NULL, or not blank and without a control character."""
-    return f"{column} IS NULL OR ({column} ~ '[^[:space:]]' AND {column} !~ '[[:cntrl:]]')"
 
 
 class DeveloperProfile(TimestampsMixin, Base):
@@ -64,8 +60,8 @@ class DeveloperProfile(TimestampsMixin, Base):
     __table_args__ = (
         CheckConstraint("peers_visible = (peers_opted_in_at IS NOT NULL)", name="peers_opt_in_complete"),
         CheckConstraint(f"github_login IS NULL OR github_login ~ '{GITHUB_LOGIN_PATTERN}'", name="github_login_valid"),
-        CheckConstraint(reference_valid("kecobo_number"), name="kecobo_number_valid"),
-        CheckConstraint(reference_valid("kipi_number"), name="kipi_number_valid"),
+        CheckConstraint(reference_sql("kecobo_number"), name="kecobo_number_valid"),
+        CheckConstraint(reference_sql("kipi_number"), name="kipi_number_valid"),
         Index(
             "ix_developer_profiles_profile_embedding",
             "profile_embedding",
