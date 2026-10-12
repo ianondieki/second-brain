@@ -2331,9 +2331,30 @@ export interface paths {
         head?: never;
         /**
          * Update Profile
-         * @description Change your headline, bio, county or the Peers switch (only the fields sent).
+         * @description Change your headline, bio, county, the Peers switch or your self-reported GitHub, KECOBO and KIPI references
+         *     (only the fields sent; a null reference clears it).
          */
         patch: operations["update_profile_api_me_profile_patch"];
+        trace?: never;
+    };
+    "/api/me/profile/ip-nudge/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Ip Nudge
+         * @description Dismiss the note about KIPI and KECOBO registration on your tracker, for good (again is no change).
+         */
+        post: operations["dismiss_ip_nudge_api_me_profile_ip_nudge_dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/me/proposals": {
@@ -3249,6 +3270,95 @@ export interface paths {
         };
         /** Org Engagements */
         get: operations["org_engagements_api_orgs__org_id__engagements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/engagements/{engagement_id}/assignee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Assignee
+         * @description Assign the engagement to a member (an owner, admin, reviewer or signatory), or to nobody (``user_id`` null).
+         *     At most 30 changes an hour per member and organisation (429 ``too_many_assignments``, ``Retry-After``).
+         */
+        put: operations["put_assignee_api_orgs__org_id__engagements__engagement_id__assignee_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/engagements/{engagement_id}/prior-knowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Prior Knowledge
+         * @description Declare prior knowledge (docs/spec/06 6.4 pt 5): the SHA-256 of dated internal evidence (hashed on your device;
+         *     no file is uploaded), its title and date, within 10 business days of your organisation's first view of the full
+         *     proposal. The developer is told. Declarations are not recorded on the platform after this window.
+         */
+        post: operations["post_prior_knowledge_api_orgs__org_id__engagements__engagement_id__prior_knowledge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/engagements/{engagement_id}/recommendation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Recommendation
+         * @description Record or change your internal recommendation (pursue, pass or discuss, with an optional one-line note). It
+         *     changes nothing on the engagement and the developer never sees it.
+         */
+        put: operations["put_recommendation_api_orgs__org_id__engagements__engagement_id__recommendation_put"];
+        post?: never;
+        /**
+         * Delete Recommendation
+         * @description Withdraw your own recommendation (nothing to withdraw is no change).
+         */
+        delete: operations["delete_recommendation_api_orgs__org_id__engagements__engagement_id__recommendation_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/engagements/{engagement_id}/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Team
+         * @description The team sheet: who the engagement may be assigned to, who it is assigned to and the members' internal
+         *     recommendations (the organisation's own; never the developer's).
+         */
+        get: operations["get_team_api_orgs__org_id__engagements__engagement_id__team_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4254,6 +4364,14 @@ export interface components {
              * @description The engagement's lock_version when the caller last read it
              */
             lock_version: number;
+        };
+        /** AssigneeBody */
+        AssigneeBody: {
+            /**
+             * User Id
+             * @description The member to assign (an owner, admin, reviewer or signatory of the organisation); null unassigns
+             */
+            user_id: string | null;
         };
         /** AssistantConsentIn */
         AssistantConsentIn: {
@@ -5340,6 +5458,69 @@ export interface components {
             /** Csrf Token */
             csrf_token: string;
         };
+        /**
+         * DeclarationBody
+         * @description An organisation's prior-knowledge declaration: the SHA-256 of dated internal evidence (hashed in the browser;
+         *     the file never leaves the device), the organisation's own title for it and the evidence's date.
+         */
+        DeclarationBody: {
+            /**
+             * Evidence Dated On
+             * Format: date
+             * @description The evidence's date: no later than today in Africa/Nairobi
+             */
+            evidence_dated_on: string;
+            /**
+             * Evidence Sha256 Hex
+             * @description The evidence's SHA-256: 64 hex digits
+             */
+            evidence_sha256_hex: string;
+            /**
+             * Evidence Title
+             * @description One line of plain text, at most 200 characters once trimmed (the developer reads it)
+             */
+            evidence_title: string;
+        };
+        /**
+         * DeclarationOut
+         * @description A recorded declaration (append-only; hashed into the engagement's event chain).
+         */
+        DeclarationOut: {
+            /**
+             * Declared At
+             * Format: date-time
+             */
+            declared_at: string;
+            /**
+             * Engagement Id
+             * Format: uuid
+             */
+            engagement_id: string;
+            /**
+             * Evidence Dated On
+             * Format: date
+             */
+            evidence_dated_on: string;
+            /** Evidence Sha256 Hex */
+            evidence_sha256_hex: string;
+            /** Evidence Title */
+            evidence_title: string;
+            /**
+             * First Tier2 View At
+             * Format: date-time
+             */
+            first_tier2_view_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Window Closes On
+             * Format: date
+             */
+            window_closes_on: string;
+        };
         /** DeclineBody */
         DeclineBody: {
             /**
@@ -5377,6 +5558,160 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /**
+         * DeveloperEngagementDetail
+         * @description The developer's tracker (no organisation triage: D-68).
+         */
+        DeveloperEngagementDetail: {
+            /**
+             * Actions
+             * @description The commands the caller may run now (the action buttons)
+             */
+            actions: components["schemas"]["Command"][];
+            /** Agreements */
+            agreements: components["schemas"]["AgreementOut"][];
+            /**
+             * Awaiting
+             * @description What moves the engagement on, and whose turn each is
+             */
+            awaiting: components["schemas"]["PendingOut"][];
+            contact: components["schemas"]["ContactOut"] | null;
+            /**
+             * Developer Id
+             * @description The developer's user id; null for the organisation until the developer is named
+             */
+            developer_id: string | null;
+            /**
+             * Developer Name
+             * @description The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)
+             */
+            developer_name: string;
+            /**
+             * Developer Named
+             * @description False while developer_name is the pseudonymous handle
+             */
+            developer_named: boolean;
+            /** Documents */
+            documents: components["schemas"]["DocumentRefOut"][];
+            due: components["schemas"]["DueOut"] | null;
+            end_reason: components["schemas"]["EngagementEndReason"] | null;
+            /** Ended At */
+            ended_at: string | null;
+            /**
+             * Endorsements
+             * @description The current stage's endorsements (this round)
+             */
+            endorsements: components["schemas"]["EndorsementOut"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Ip Nudge
+             * @description Show the one note about KIPI and KECOBO registration: the developer's next step is send_nda, the proposal has no Tier-2 view yet and the developer has not dismissed the note
+             * @default false
+             */
+            ip_nudge: boolean;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            my_party: "developer";
+            /** My Roles */
+            my_roles: components["schemas"]["EngagementActorRole"][];
+            /**
+             * Notes
+             * @description The side states' questions, answers and reasons, in event order
+             */
+            notes: components["schemas"]["NoteOut"][];
+            /**
+             * Org Id
+             * Format: uuid
+             */
+            org_id: string;
+            /** Org Name */
+            org_name: string;
+            origin: components["schemas"]["EngagementOrigin"];
+            /** @description In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to */
+            paused_from: components["schemas"]["EngagementState"] | null;
+            /** Payments */
+            payments: components["schemas"]["PaymentOut"][];
+            /** @description The organisation's prior-knowledge declaration on this proposal; null when none */
+            prior_knowledge?: components["schemas"]["DeveloperPriorKnowledgeOut"] | null;
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+            /** Proposal Title */
+            proposal_title: string;
+            /** @description The caps left for the current stage's side states; null once ended or none apply */
+            side_limits?: components["schemas"]["SideLimitsOut"] | null;
+            /** Signatures */
+            signatures: components["schemas"]["SignatureOut"][];
+            /** Stage Deadline At */
+            stage_deadline_at: string | null;
+            /**
+             * Stage Entered At
+             * Format: date-time
+             */
+            stage_entered_at: string;
+            /** Stage Group */
+            stage_group: string | null;
+            /** Stage Label */
+            stage_label: string;
+            state: components["schemas"]["EngagementState"];
+            /**
+             * Today
+             * @description Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from
+             */
+            today?: string | null;
+            /**
+             * Unread Messages
+             * @description Messages of the engagement's thread by others that the caller has not read
+             */
+            unread_messages?: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Whose Turn */
+            whose_turn: components["schemas"]["EngagementParty"][];
+        };
+        /**
+         * DeveloperPriorKnowledgeOut
+         * @description The prior-knowledge declaration an organisation made on the developer's proposal, as the developer reads it.
+         */
+        DeveloperPriorKnowledgeOut: {
+            /**
+             * Declared At
+             * Format: date-time
+             */
+            declared_at: string;
+            /**
+             * Evidence Dated On
+             * Format: date
+             */
+            evidence_dated_on: string;
+            /** Evidence Sha256 Hex */
+            evidence_sha256_hex: string;
+            /**
+             * Evidence Title
+             * @description The organisation's own words: plain text
+             */
+            evidence_title: string;
+            /** Org Name */
+            org_name: string;
         };
         /** DirectoryGroup */
         DirectoryGroup: {
@@ -5619,120 +5954,6 @@ export interface components {
          * @enum {string}
          */
         EngagementActorRole: "developer" | "owner" | "admin" | "reviewer" | "signatory" | "finance" | "system";
-        /** EngagementDetail */
-        EngagementDetail: {
-            /**
-             * Actions
-             * @description The commands the caller may run now (the action buttons)
-             */
-            actions: components["schemas"]["Command"][];
-            /** Agreements */
-            agreements: components["schemas"]["AgreementOut"][];
-            /**
-             * Awaiting
-             * @description What moves the engagement on, and whose turn each is
-             */
-            awaiting: components["schemas"]["PendingOut"][];
-            contact: components["schemas"]["ContactOut"] | null;
-            /**
-             * Developer Id
-             * @description The developer's user id; null for the organisation until the developer is named
-             */
-            developer_id: string | null;
-            /**
-             * Developer Name
-             * @description The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)
-             */
-            developer_name: string;
-            /**
-             * Developer Named
-             * @description False while developer_name is the pseudonymous handle
-             */
-            developer_named: boolean;
-            /** Documents */
-            documents: components["schemas"]["DocumentRefOut"][];
-            due: components["schemas"]["DueOut"] | null;
-            end_reason: components["schemas"]["EngagementEndReason"] | null;
-            /** Ended At */
-            ended_at: string | null;
-            /**
-             * Endorsements
-             * @description The current stage's endorsements (this round)
-             */
-            endorsements: components["schemas"]["EndorsementOut"][];
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Lock Version */
-            lock_version: number;
-            my_party: components["schemas"]["EngagementParty"];
-            /** My Roles */
-            my_roles: components["schemas"]["EngagementActorRole"][];
-            /**
-             * Notes
-             * @description The side states' questions, answers and reasons, in event order
-             */
-            notes: components["schemas"]["NoteOut"][];
-            /**
-             * Org Id
-             * Format: uuid
-             */
-            org_id: string;
-            /** Org Name */
-            org_name: string;
-            origin: components["schemas"]["EngagementOrigin"];
-            /** @description In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to */
-            paused_from: components["schemas"]["EngagementState"] | null;
-            /** Payments */
-            payments: components["schemas"]["PaymentOut"][];
-            /**
-             * Proposal Id
-             * Format: uuid
-             */
-            proposal_id: string;
-            /** Proposal Title */
-            proposal_title: string;
-            /** @description The caps left for the current stage's side states; null once ended or none apply */
-            side_limits?: components["schemas"]["SideLimitsOut"] | null;
-            /** Signatures */
-            signatures: components["schemas"]["SignatureOut"][];
-            /** Stage Deadline At */
-            stage_deadline_at: string | null;
-            /**
-             * Stage Entered At
-             * Format: date-time
-             */
-            stage_entered_at: string;
-            /** Stage Group */
-            stage_group: string | null;
-            /** Stage Label */
-            stage_label: string;
-            state: components["schemas"]["EngagementState"];
-            /**
-             * Today
-             * @description Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from
-             */
-            today?: string | null;
-            /**
-             * Unread Messages
-             * @description Messages of the engagement's thread by others that the caller has not read
-             */
-            unread_messages?: number;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /**
-             * Version Id
-             * Format: uuid
-             */
-            version_id: string;
-            /** Whose Turn */
-            whose_turn: components["schemas"]["EngagementParty"][];
-        };
         /**
          * EngagementEndReason
          * @description docs/spec/06 6.9 ``end_reason``: DECLINED codes, then EXPIRED codes.
@@ -6369,6 +6590,8 @@ export interface components {
             /** Stage Deadline At */
             stage_deadline_at: string | null;
             state: components["schemas"]["EngagementState"];
+            /** @description The organisation's triage of the engagement (always sent to a member) */
+            team?: components["schemas"]["TeamFacts"] | null;
         };
         /** InboxItem */
         InboxItem: {
@@ -6969,6 +7192,15 @@ export interface components {
             /** Items */
             items: components["schemas"]["MyProposalItem"][];
         };
+        /**
+         * MyRecommendationOut
+         * @description The caller's own recommendation on the engagement.
+         */
+        MyRecommendationOut: {
+            /** Note */
+            note: string | null;
+            stance: components["schemas"]["RecommendationStance"];
+        };
         /** MyTags */
         MyTags: {
             cap: components["schemas"]["TagCap"];
@@ -7278,6 +7510,216 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /**
+         * OrgEngagementDetail
+         * @description An organisation member's tracker: the organisation's triage and its declaration window.
+         */
+        OrgEngagementDetail: {
+            /**
+             * Actions
+             * @description The commands the caller may run now (the action buttons)
+             */
+            actions: components["schemas"]["Command"][];
+            /** Agreements */
+            agreements: components["schemas"]["AgreementOut"][];
+            /**
+             * Awaiting
+             * @description What moves the engagement on, and whose turn each is
+             */
+            awaiting: components["schemas"]["PendingOut"][];
+            contact: components["schemas"]["ContactOut"] | null;
+            /**
+             * Developer Id
+             * @description The developer's user id; null for the organisation until the developer is named
+             */
+            developer_id: string | null;
+            /**
+             * Developer Name
+             * @description The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)
+             */
+            developer_name: string;
+            /**
+             * Developer Named
+             * @description False while developer_name is the pseudonymous handle
+             */
+            developer_named: boolean;
+            /** Documents */
+            documents: components["schemas"]["DocumentRefOut"][];
+            due: components["schemas"]["DueOut"] | null;
+            end_reason: components["schemas"]["EngagementEndReason"] | null;
+            /** Ended At */
+            ended_at: string | null;
+            /**
+             * Endorsements
+             * @description The current stage's endorsements (this round)
+             */
+            endorsements: components["schemas"]["EndorsementOut"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            my_party: "org";
+            /** My Roles */
+            my_roles: components["schemas"]["EngagementActorRole"][];
+            /**
+             * Notes
+             * @description The side states' questions, answers and reasons, in event order
+             */
+            notes: components["schemas"]["NoteOut"][];
+            /**
+             * Org Id
+             * Format: uuid
+             */
+            org_id: string;
+            /** Org Name */
+            org_name: string;
+            origin: components["schemas"]["EngagementOrigin"];
+            /** @description In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to */
+            paused_from: components["schemas"]["EngagementState"] | null;
+            /** Payments */
+            payments: components["schemas"]["PaymentOut"][];
+            /** @description The organisation's declaration window (always sent to a member) */
+            prior_knowledge?: components["schemas"]["OrgPriorKnowledgeOut"] | null;
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+            /** Proposal Title */
+            proposal_title: string;
+            /** @description The caps left for the current stage's side states; null once ended or none apply */
+            side_limits?: components["schemas"]["SideLimitsOut"] | null;
+            /** Signatures */
+            signatures: components["schemas"]["SignatureOut"][];
+            /** Stage Deadline At */
+            stage_deadline_at: string | null;
+            /**
+             * Stage Entered At
+             * Format: date-time
+             */
+            stage_entered_at: string;
+            /** Stage Group */
+            stage_group: string | null;
+            /** Stage Label */
+            stage_label: string;
+            state: components["schemas"]["EngagementState"];
+            /** @description The organisation's triage (always sent to a member) */
+            team?: components["schemas"]["TeamFacts"] | null;
+            /**
+             * Today
+             * @description Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from
+             */
+            today?: string | null;
+            /**
+             * Unread Messages
+             * @description Messages of the engagement's thread by others that the caller has not read
+             */
+            unread_messages?: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Whose Turn */
+            whose_turn: components["schemas"]["EngagementParty"][];
+        };
+        /** OrgEngagementList */
+        OrgEngagementList: {
+            /** Items */
+            items: components["schemas"]["OrgEngagementSummary"][];
+        };
+        /**
+         * OrgEngagementSummary
+         * @description An engagement in the organisation's list: the summary and the organisation's own triage.
+         */
+        OrgEngagementSummary: {
+            /**
+             * Developer Id
+             * @description The developer's user id; null for the organisation until the developer is named
+             */
+            developer_id: string | null;
+            /**
+             * Developer Name
+             * @description The developer's display name; for the organisation, their pseudonymous handle until the engagement reaches INTEREST_CONFIRMED (docs/spec/06 6.1)
+             */
+            developer_name: string;
+            /**
+             * Developer Named
+             * @description False while developer_name is the pseudonymous handle
+             */
+            developer_named: boolean;
+            due: components["schemas"]["DueOut"] | null;
+            end_reason: components["schemas"]["EngagementEndReason"] | null;
+            /** Ended At */
+            ended_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Lock Version */
+            lock_version: number;
+            /**
+             * Org Id
+             * Format: uuid
+             */
+            org_id: string;
+            /** Org Name */
+            org_name: string;
+            origin: components["schemas"]["EngagementOrigin"];
+            /** @description In a side state (INFO_REQUESTED, ON_HOLD): the stage it was entered from and returns to */
+            paused_from: components["schemas"]["EngagementState"] | null;
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+            /** Proposal Title */
+            proposal_title: string;
+            /** Stage Deadline At */
+            stage_deadline_at: string | null;
+            /**
+             * Stage Entered At
+             * Format: date-time
+             */
+            stage_entered_at: string;
+            /** Stage Group */
+            stage_group: string | null;
+            /** Stage Label */
+            stage_label: string;
+            state: components["schemas"]["EngagementState"];
+            /** @description The organisation's triage (always sent to a member) */
+            team?: components["schemas"]["TeamFacts"] | null;
+            /**
+             * Unread Messages
+             * @description Messages of the engagement's thread by others that the caller has not read
+             */
+            unread_messages?: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Version Id
+             * Format: uuid
+             */
+            version_id: string;
+            /** Whose Turn */
+            whose_turn: components["schemas"]["EngagementParty"][];
+        };
         /** OrgEntitlementsOut */
         OrgEntitlementsOut: {
             /** Limits */
@@ -7311,6 +7753,28 @@ export interface components {
             verification: components["schemas"]["OrgVerification"];
             /** Website */
             website: string | null;
+        };
+        /**
+         * OrgPriorKnowledgeOut
+         * @description The organisation's declaration window on the engagement: it opens at the organisation's first Tier-2 view of the
+         *     proposal and closes at the end of ``window_closes_on`` (the 10th Kenyan business day after that view's day) in
+         *     Africa/Nairobi; null before any view.
+         */
+        OrgPriorKnowledgeOut: {
+            /**
+             * Can Declare
+             * @description The caller may declare now: a Tier-2 view exists, the window is open, no declaration yet, the engagement has not ended and the caller is an owner, admin or signatory
+             */
+            can_declare: boolean;
+            /**
+             * Declared At
+             * @description When the organisation declared; null while it has not
+             */
+            declared_at: string | null;
+            /** First Tier2 View At */
+            first_tier2_view_at: string | null;
+            /** Window Closes On */
+            window_closes_on: string | null;
         };
         /**
          * OrgRef
@@ -7918,10 +8382,25 @@ export interface components {
              * @description The county's name, when the profile names one
              */
             county_name: string | null;
+            /**
+             * Github Login
+             * @description Your GitHub login (self-reported; D3)
+             */
+            github_login?: string | null;
             /** Handle */
             handle: string;
             /** Headline */
             headline: string | null;
+            /**
+             * Kecobo Number
+             * @description Your KECOBO registration reference (self-reported)
+             */
+            kecobo_number?: string | null;
+            /**
+             * Kipi Number
+             * @description Your KIPI filing reference (self-reported)
+             */
+            kipi_number?: string | null;
             /**
              * Peers Visible
              * @description Peers is on: developers in your county or niches see your handle, headline and shared niches
@@ -7935,8 +8414,23 @@ export interface components {
             bio?: string | null;
             /** County Code */
             county_code?: string | null;
+            /**
+             * Github Login
+             * @description Your GitHub login (GitHub's rule, at most 39 characters; one leading @ is dropped); null or empty clears it
+             */
+            github_login?: string | null;
             /** Headline */
             headline?: string | null;
+            /**
+             * Kecobo Number
+             * @description Your KECOBO reference: 1 to 40 characters; null or empty clears it
+             */
+            kecobo_number?: string | null;
+            /**
+             * Kipi Number
+             * @description Your KIPI reference: 1 to 40 characters; null or empty clears it
+             */
+            kipi_number?: string | null;
             /**
              * Peers Visible
              * @description Turn Peers on or off (null: unchanged)
@@ -8652,6 +9146,43 @@ export interface components {
             /** Why Not */
             why_not: string | null;
         };
+        /** RecommendationBody */
+        RecommendationBody: {
+            /**
+             * Note
+             * @description One line of plain text, at most 200 characters once trimmed; empty or null for none. Members of the organisation read it; the developer never does
+             */
+            note?: string | null;
+            stance: components["schemas"]["RecommendationStance"];
+        };
+        /**
+         * RecommendationOut
+         * @description One member's internal recommendation: plain text, rendered as text; members of the organisation only.
+         */
+        RecommendationOut: {
+            /** Display Name */
+            display_name: string;
+            /** Note */
+            note: string | null;
+            stance: components["schemas"]["RecommendationStance"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * RecommendationStance
+         * @description A member's internal recommendation on an engagement (revision 0013; REQ-ENG-15, D-68; docs/spec/03 ``reviewer``:
+         *     "may Recommend internally without changing state"). The organisation's own: never shown to a developer.
+         * @enum {string}
+         */
+        RecommendationStance: "pursue" | "pass" | "discuss";
         /** RecommendationsOut */
         RecommendationsOut: {
             /**
@@ -9361,6 +9892,18 @@ export interface components {
             size_bytes: number;
         };
         /**
+         * StanceCounts
+         * @description How many of the organisation's members recommend each stance on the engagement (the header's tally).
+         */
+        StanceCounts: {
+            /** Discuss */
+            discuss: number;
+            /** Pass */
+            pass: number;
+            /** Pursue */
+            pursue: number;
+        };
+        /**
          * StepUpMethod
          * @description The step-up that preceded an internal e-signature (docs/spec/06 6.9 SignatureProvider).
          * @enum {string}
@@ -9442,6 +9985,29 @@ export interface components {
              */
             org_ids: string[];
         };
+        /**
+         * TeamFacts
+         * @description The organisation's triage of one engagement, as one of its members reads it (D-68: never a developer).
+         */
+        TeamFacts: {
+            /** @description The member the engagement is assigned to; null when nobody */
+            assignee: components["schemas"]["TeamPerson"] | null;
+            /** @description The caller's own recommendation; null when they made none */
+            mine: components["schemas"]["MyRecommendationOut"] | null;
+            recommendations: components["schemas"]["StanceCounts"];
+        };
+        /** TeamMemberOut */
+        TeamMemberOut: {
+            /** Display Name */
+            display_name: string;
+            /** @description The member's first role of owner, admin, signatory and reviewer */
+            role: components["schemas"]["OrgRole"];
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
         /** TeamMessageIn */
         TeamMessageIn: {
             /**
@@ -9474,6 +10040,41 @@ export interface components {
             mine: boolean;
             /** Redacted */
             redacted: boolean;
+        };
+        /**
+         * TeamOut
+         * @description The team sheet of one engagement (members of its organisation only).
+         */
+        TeamOut: {
+            assignee: components["schemas"]["TeamPerson"] | null;
+            /**
+             * Engagement Id
+             * Format: uuid
+             */
+            engagement_id: string;
+            /**
+             * Members
+             * @description The members the engagement may be assigned to: active owners, admins, signatories and reviewers
+             */
+            members: components["schemas"]["TeamMemberOut"][];
+            /**
+             * Recommendations
+             * @description Every member's recommendation, newest first
+             */
+            recommendations: components["schemas"]["RecommendationOut"][];
+        };
+        /**
+         * TeamPerson
+         * @description A member of the organisation as the team sheet names them ("Former member" once their name is not readable).
+         */
+        TeamPerson: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /** TeamProblemOut */
         TeamProblemOut: {
@@ -16032,7 +16633,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -16130,7 +16731,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -16228,7 +16829,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -16326,7 +16927,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -16424,7 +17025,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -16522,7 +17123,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -16620,7 +17221,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -16718,7 +17319,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -16910,7 +17511,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -17008,7 +17609,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -17106,7 +17707,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -17393,7 +17994,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -17491,7 +18092,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -18412,7 +19013,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -18511,7 +19112,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -18610,7 +19211,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -18709,7 +19310,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -18807,7 +19408,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -18905,7 +19506,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -19003,7 +19604,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -19101,7 +19702,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -19199,7 +19800,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -19297,7 +19898,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -19395,7 +19996,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -19681,7 +20282,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -19779,7 +20380,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -19877,7 +20478,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -19975,7 +20576,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -20073,7 +20674,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -22794,6 +23395,96 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProfileOut"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    dismiss_ip_nudge_api_me_profile_ip_nudge_dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {
@@ -28412,7 +29103,496 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementList"];
+                    "application/json": components["schemas"]["OrgEngagementList"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    put_assignee_api_orgs__org_id__engagements__engagement_id__assignee_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssigneeBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description invalid_assignee (or a request-validation error) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description too_many_assignments: more than 30 changes in an hour by this member in this organisation */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    post_prior_knowledge_api_orgs__org_id__engagements__engagement_id__prior_knowledge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeclarationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeclarationOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    put_recommendation_api_orgs__org_id__engagements__engagement_id__recommendation_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecommendationBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    delete_recommendation_api_orgs__org_id__engagements__engagement_id__recommendation_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    get_team_api_orgs__org_id__engagements__engagement_id__team_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamOut"];
                 };
             };
             /** @description Bad Request */
@@ -29184,7 +30364,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EngagementDetail"];
+                    "application/json": components["schemas"]["DeveloperEngagementDetail"] | components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */

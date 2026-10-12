@@ -3,7 +3,7 @@ import { createTranslator } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
-import { detail } from "@/test/engagement";
+import { detail, type DetailOverrides } from "@/test/engagement";
 import { renderWithIntl } from "@/test/intl";
 import { message, thread } from "@/test/messages";
 import { resolveServerTree } from "@/test/server-tree";
@@ -59,9 +59,9 @@ async function messagesOf(d: Detail, basePath = "/dev/engagements", query = "") 
   return renderWithIntl(<>{await resolveServerTree(<MessagesScreen detail={d} basePath={basePath} query={query} />)}</>);
 }
 
-const confirmed = (overrides: Partial<Detail> = {}) =>
+const confirmed = (overrides: DetailOverrides = {}) =>
   detail({ state: "INTEREST_CONFIRMED", stage_group: "contact_nda", actions: ["withdraw"], ...overrides });
-const orgTurn = (overrides: Partial<Detail> = {}) =>
+const orgTurn = (overrides: DetailOverrides = {}) =>
   confirmed({ my_party: "org", actions: ["mark_contacted"], awaiting: [{ command: "mark_contacted", party: "org" }], whose_turn: ["org"], ...overrides });
 
 describe("the Messages route's address", () => {

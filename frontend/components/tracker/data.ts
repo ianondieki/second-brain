@@ -5,7 +5,7 @@ import { apiErrorCode } from "@/lib/api/error-code";
 import { forwardHeaders, serverApi } from "@/lib/api/server";
 
 import type { Member } from "./CommandForm";
-import type { Detail, DocumentKind, History, Summary } from "./model";
+import type { Detail, DocumentKind, History, OrgSummary, Summary } from "./model";
 import type { Thread } from "./messages/thread";
 import type { Tier2Share } from "./share";
 
@@ -41,8 +41,8 @@ export async function myEngagements(): Promise<Summary[]> {
   throw new Error(`GET /api/me/engagements answered ${response.status}`);
 }
 
-/** An organisation's engagements (GET /api/orgs/{org_id}/engagements; any member). */
-export async function orgEngagements(orgId: string): Promise<Read<Summary[]>> {
+/** An organisation's engagements (GET /api/orgs/{org_id}/engagements; any member), each with its team facts. */
+export async function orgEngagements(orgId: string): Promise<Read<OrgSummary[]>> {
   const { data, error, response } = await serverApi().GET("/api/orgs/{org_id}/engagements", {
     params: { path: { org_id: orgId } },
     ...(await options()),

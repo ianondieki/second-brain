@@ -1,4 +1,4 @@
-import type { Detail, History, Summary } from "@/components/tracker/model";
+import type { Detail, DeveloperDetail, History, OrgDetail, Party, Summary } from "@/components/tracker/model";
 
 // Engagement fixtures for the tracker's tests (REQ-ENG-03), shaped like GET /api/engagements/{id} answers.
 
@@ -35,7 +35,18 @@ export function summary(overrides: Partial<Summary> = {}): Summary {
   };
 }
 
-export function detail(overrides: Partial<Detail> = {}): Detail {
+/**
+ * What a fixture may override: any field of either party's tracker (the two schemas differ only in `my_party`, the
+ * organisation's `team` and declaration window and the developer's `ip_nudge` and received declaration).
+ */
+export type DetailOverrides = Partial<
+  Omit<DeveloperDetail, "my_party" | "prior_knowledge"> & Omit<OrgDetail, "my_party" | "prior_knowledge">
+> & {
+  my_party?: Party;
+  prior_knowledge?: DeveloperDetail["prior_knowledge"] | OrgDetail["prior_knowledge"];
+};
+
+export function detail(overrides: DetailOverrides = {}): Detail {
   return {
     ...summary(),
     my_party: "developer",
@@ -49,12 +60,13 @@ export function detail(overrides: Partial<Detail> = {}): Detail {
     payments: [],
     documents: [],
     notes: [],
+    ip_nudge: false,
     ...overrides,
-  };
+  } as Detail;
 }
 
 /** An engagement in implementation with a signed agreement of two milestones. */
-export function inImplementation(overrides: Partial<Detail> = {}): Detail {
+export function inImplementation(overrides: DetailOverrides = {}): Detail {
   return detail({
     state: "IN_IMPLEMENTATION",
     stage_label: "Agreement signed: implementation",
