@@ -107,8 +107,13 @@ async def test_the_board_columns_ageing_stalls_and_funnel(owner_engine: AsyncEng
         for card in (i for c in board["columns"] for i in c["items"]):
             assert card["stalled"] is False
             assert card["days_in_stage"] == 0
-            assert "team" in card
-            assert card["team"] is None
+            # The organisation's triage facts ride on every card (REQ-ENG-15; BE-2's team_facts): nothing assigned or
+            # recommended in this scene, and the reader's own recommendation none.
+            assert card["team"] == {
+                "assignee": None,
+                "recommendations": {"pursue": 0, "pass": 0, "discuss": 0},
+                "mine": None,
+            }
             assert card["last_event_at"] >= card["stage_entered_at"]
         assert board["funnel"] == {
             "window_days": 90,

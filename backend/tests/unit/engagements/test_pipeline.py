@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 
 from bridge.engagements import pipeline
+from bridge.engagements.calendar import NAIROBI
 from bridge.engagements.pipeline import Change
 from bridge.engagements.schemas import StageGroup
 from bridge.models.enums import EngagementState as S
@@ -87,7 +88,9 @@ def test_the_funnel_counts_first_entries_and_endings_inside_the_window() -> None
     its two ends included."""
     now = at(date(2026, 10, 30))
     start = pipeline.window_start(now, 90)
-    assert start == now - timedelta(days=90)
+    # Whole Nairobi days: the window opens at midnight EAT 90 days before now's Nairobi day (security re-check MINOR).
+    assert start == datetime(2026, 8, 1, 0, 0, tzinfo=NAIROBI)
+    assert start == pipeline.window_start(now + timedelta(hours=10), 90)  # the same all day
     recent = now - timedelta(days=10)
     firsts: list[tuple[StageGroup, datetime]] = [
         ("review", start - timedelta(seconds=1)),  # first entered just before the window: not counted

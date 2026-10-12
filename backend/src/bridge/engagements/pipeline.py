@@ -33,7 +33,7 @@ import statistics
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Final, get_args
 from uuid import UUID
 
@@ -42,7 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.engagements import history
 from bridge.engagements import state_machine as sm
-from bridge.engagements.calendar import business_days_between, local_date
+from bridge.engagements.calendar import NAIROBI, business_days_between, local_date
 from bridge.engagements.deadlines import all_holidays
 from bridge.engagements.models import Engagement, EngagementEvent
 from bridge.engagements.pipeline_policy import get_pipeline_policy
@@ -54,7 +54,9 @@ from bridge.engagements.schemas import (
     PipelineItem,
     PipelineOut,
     StageGroup,
+    TeamFacts,
 )
+from bridge.engagements.team import team_facts
 from bridge.models.enums import EngagementState
 
 S = EngagementState
@@ -128,7 +130,9 @@ def median(days: Sequence[int]) -> float | None:
 
 
 def window_start(now: datetime, window_days: int) -> datetime:
-    return now - timedelta(days=window_days)
+    """The window's first instant: midnight in Nairobi ``window_days`` days before ``now``'s Nairobi day, so whole
+    days count and the Close column and the funnel do not shift through the day."""
+    return datetime.combine(local_date(now) - timedelta(days=window_days), time.min, tzinfo=NAIROBI)
 
 
 def funnel(
@@ -227,6 +231,7 @@ def _item(
     now: datetime,
     holidays: frozenset[date],
     after_bd: int,
+    team: TeamFacts | None,
 ) -> PipelineItem:
     stage = summary.paused_from if summary.state in sm.RETURNING and summary.paused_from else summary.state
     started = stage_start(changes, stage, summary.stage_entered_at)
@@ -237,7 +242,7 @@ def _item(
             "last_event_at": last_event_at,
             "days_in_stage": days_since(started, now),
             "stalled": stalled(summary.state, last_event_at, now, holidays, after_bd),
-            "team": None,
+            "team": team,
         }
     )
 
@@ -264,6 +269,9 @@ async def pipeline(
     )
     changes = await _changes(db, [e.id for e in engagements])
     last = await _last_events(db, [e.id for e in engagements])
+    # The organisation's triage per card (REQ-ENG-15, D-68): constant statements; nothing for an engagement whose
+    # developer is the reading member.
+    team = await team_facts(db, org_id, [e.id for e in engagements], reader_id)
     holidays = await all_holidays(db)
     columns: dict[StageGroup, list[PipelineItem]] = {group: [] for group in GROUPS}
     for summary in summaries:
@@ -271,7 +279,9 @@ async def pipeline(
         if group is None:  # pragma: no cover - a side state that left no main-path stage (never written)
             continue
         latest = last.get(summary.id, summary.stage_entered_at)
-        columns[group].append(_item(summary, changes.get(summary.id, []), latest, now, holidays, after_bd))
+        columns[group].append(
+            _item(summary, changes.get(summary.id, []), latest, now, holidays, after_bd, team.get(summary.id))
+        )
     out = []
     for group, items in columns.items():
         items.sort(key=lambda item: (item.stage_entered_at, item.id))
