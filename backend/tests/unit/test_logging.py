@@ -161,6 +161,8 @@ def log_status(path: str, status: int) -> None:
         (f"/api/calendar/{FEED_TOKEN}.ics/", "/api/calendar/[redacted]"),  # a trailing slash (a redirect): too
         (f"/api/calendar/{FEED_TOKEN}.ics/x?y=1", "/api/calendar/[redacted]?y=1"),
         ("/api/calendar/nope.ics", "/api/calendar/[redacted]"),
+        (f"/api//calendar/{FEED_TOKEN}.ics", "/api//calendar/[redacted]"),  # a doubled slash (404): still a token
+        (f"/API/Calendar/{FEED_TOKEN}.ics", "/API/Calendar/[redacted]"),  # letter case (404): still a token
     ],
 )
 def test_a_calendar_feed_token_never_reaches_the_access_log(
@@ -197,7 +199,7 @@ def test_the_feed_path_is_the_path_the_rule_redacts() -> None:
     assert [rule.match(path) is not None for rule in SECRET_SEGMENTS] == [True]
     assert redact_secret_segments(path) == "/api/calendar/[redacted]"
     assert feeds.FEED_PATH.startswith("/api/calendar/")
-    assert all(rule.pattern.startswith("^(/api/calendar/)") for rule in SECRET_SEGMENTS)
+    assert all(rule.match("/api/calendar/x") and rule.match("/api//calendar//x") for rule in SECRET_SEGMENTS)
 
 
 @pytest.mark.parametrize("http", ["h11", "httptools"])

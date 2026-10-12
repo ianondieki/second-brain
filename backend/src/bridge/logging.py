@@ -63,7 +63,9 @@ _QUERY_PAIR = re.compile(r"(^|&)([^&=]*)=([^&]*)")
 # ``[redacted]``, whatever it is: a live private calendar feed's token with its ``.ics`` suffix (REQ-ENG-13,
 # ``bridge.engagements.feeds.FEED_PATH``), a malformed or near-miss one, or one followed by more segments (a trailing
 # slash's redirect). Matched against the path without its query string.
-SECRET_SEGMENTS: Final = (re.compile(r"^(/api/calendar/).+$"),)
+# Repeated slashes and letter case are matched too (``/api//calendar/…``, ``/API/calendar/…`` answer 404 but would
+# otherwise log a live token in full; security re-check MINOR).
+SECRET_SEGMENTS: Final = (re.compile(r"^(/api/+calendar/+).+$", re.IGNORECASE),)
 
 
 def redact_secret_segments(path: str) -> str:
