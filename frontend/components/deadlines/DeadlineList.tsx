@@ -21,7 +21,7 @@ export interface DeadlineListProps {
   items: readonly Deadline[];
   /** The API's clock for the page (its `now`): the live clock counts from it. */
   now: string;
-  /** Draw the live clock on the first item (the next thing due); every other item says its deadline in words. */
+  /** Draw the live clock on the first item still ahead of `now` (the next thing due); the rest say theirs in words. */
   clockFirst?: boolean;
   /** The organisation whose deadlines these are (its `.ics` route); none for the caller's own. */
   orgId?: string;
@@ -49,12 +49,16 @@ export async function DeadlineList({
 }: DeadlineListProps) {
   const [t, tt] = await Promise.all([getTranslations("deadlines"), getTranslations("tracker")]);
   const Heading = headingLevel === 3 ? "h3" : "h4";
+  // The live clock goes on the next thing still ahead (an event earlier today, never overdue, has passed already).
+  const clockAt = clockFirst
+    ? items.findIndex((item) => !item.overdue && Date.parse(item.due_at) > Date.parse(now))
+    : -1;
   return (
     <ul className="flex flex-col">
       {items.map((item, index) => {
         const { kind, id } = keyParts(item);
         const due = { due_on: item.due_on, business_days_left: item.business_days_left, overdue: item.overdue };
-        const clock = clockFirst && index === 0 && !item.overdue && Date.parse(item.due_at) > Date.parse(now);
+        const clock = index === clockAt;
         return (
           <li key={item.key}>
             <article

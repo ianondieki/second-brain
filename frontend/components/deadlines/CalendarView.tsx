@@ -8,10 +8,8 @@ import { appNow } from "@/lib/api/server";
 
 import { readDeadlines } from "./data";
 import { DeadlineList } from "./DeadlineList";
-import { addDays, byDay, gridSpan, nairobiDay, pickMonth, upcoming } from "./month";
+import { addDays, byDay, gridSpan, monthWeeks, nairobiDay, pickMonth, upcoming } from "./month";
 import { dayName, monthName, MonthCalendar } from "./MonthCalendar";
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 export interface CalendarViewProps {
   /** "/dev/engagements" or "/org/engagements". */
@@ -56,10 +54,8 @@ export async function CalendarView({
   if (!list.ok) return <ViewRefused refusal={list.refusal} basePath={basePath} />;
   const now = list.value.now;
   const { overdue, next } = upcoming(list.value.items, nairobiDay(now));
-  const picked =
-    typeof dayParam === "string" && DAY.test(dayParam) && dayParam >= span.from && dayParam <= span.to
-      ? dayParam
-      : undefined;
+  // A picked day is one of the grid's own days, or none (a day such as 2026-10-99 is not a date to name).
+  const picked = pickDay(dayParam, month);
   const ofDay = picked ? (byDay(grid.value.items).get(picked) ?? []) : [];
   const href = ({ month: m, day }: { month: string; day?: string }) => {
     const params = new URLSearchParams({ view: "calendar", month: m });
@@ -110,6 +106,12 @@ export async function CalendarView({
       <ClockTicker />
     </div>
   );
+}
+
+/** `?day=` when it is one of the month grid's own days ("2026-10-16"); anything else picks no day. */
+export function pickDay(requested: string | string[] | undefined, month: string): string | undefined {
+  const value = Array.isArray(requested) ? requested[0] : requested;
+  return value && monthWeeks(month).some((week) => week.some((d) => d.day === value)) ? value : undefined;
 }
 
 /** A read the API refused: one sentence and one way on (docs/spec/07 item 4), under the page's own title. */

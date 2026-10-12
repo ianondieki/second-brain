@@ -149,6 +149,18 @@ describe("the list", () => {
     );
   });
 
+  it("puts the live clock on the first item still ahead: an event earlier today has passed", async () => {
+    const container = await list(
+      [
+        deadline({ key: "event:morning", kind: "event", due_at: "2026-10-12T05:00:00.000Z", due_on: "2026-10-12" }),
+        deadline({ key: "stage:next" }),
+      ],
+      { clockFirst: true },
+    );
+    expect(container.querySelectorAll("[data-clock]")).toHaveLength(1);
+    expect(container.querySelector("[data-deadline='stage:next'] [data-clock]")).not.toBeNull();
+  });
+
   it("names the kind, links the title to its page and says the other party", async () => {
     const container = await list([
       deadline({ kind: "answer", key: "answer:x", title: "Answer the question", context: "SACCO B" }),
@@ -262,8 +274,25 @@ describe("the Calendar view", () => {
     expect(container.querySelectorAll("[data-deadlines-day] [data-deadline]")).toHaveLength(2);
     expect(container.querySelector("td[data-day='2026-10-16']")?.hasAttribute("data-selected")).toBe(true);
     cleanup();
-    container = await view({ month: "2026-10", day: "2027-01-01" });
-    expect(container.querySelector("[data-deadlines-day]")).toBeNull();
+    // Not one of the grid's own days: no day picked, the calendar drawn (never a date that cannot be named).
+    for (const day of ["2027-01-01", "2026-10-99", "2026-10-32", "2026-10-00", "2026-13-01", "nonsense"]) {
+      container = await view({ month: "2026-10", day });
+      expect(container.querySelector("[data-deadlines-day]"), day).toBeNull();
+      expect(container.querySelector("table"), day).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("shows the current month for a month far off or malformed, at once", { timeout: 2_000 }, async () => {
+    state.grid = [deadline({ key: "stage:a" })];
+    for (const month of ["0000-01", "9999-12", "0050-06", "2026-13"]) {
+      await view({ month, day: "0000-01-01" });
+      expect(screen.getByRole("heading", { level: 2, name: "October 2026" }), month).toBeTruthy();
+      cleanup();
+    }
+    expect(state.reads.filter((read) => (read.span as { from?: string }).from).map((read) => read.span)).toEqual(
+      Array(4).fill({ from: "2026-09-28", to: "2026-11-01" }),
+    );
   });
 
   it("says why when the API refuses, with the one way on", async () => {
