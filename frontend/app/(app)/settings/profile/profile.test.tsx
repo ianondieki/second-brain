@@ -6,7 +6,7 @@ import en from "@/locales/en.json";
 import { renderWithIntl } from "@/test/intl";
 
 import { BlockedList } from "./BlockedList";
-import { profileChange, type ProfileCalls } from "./calls";
+import { profileChange, refusedField, type ProfileCalls } from "./calls";
 import { ProfileForm } from "./ProfileForm";
 
 // REQ-DEV-03 (P22-CF; D-58): Settings › Profile. The headline, the county and "Visible to peers" with its one sentence
@@ -107,5 +107,79 @@ describe("the blocked developers", () => {
     expect(status.textContent).toBe("dev-a is unblocked. Threads that closed stay closed.");
     await waitFor(() => expect(document.activeElement).toBe(status));
     expect(document.querySelector("[data-primary]")).toBeNull();
+  });
+});
+
+// REQ-DEV-04 (P27 track E; docs/spec/06 6.4 pt 8, D3): the self-reported references, saved with the form's Save,
+// shown on the certificates as self-reported; the API's 422s said on the field its `loc` names.
+describe("the self-reported references (D3)", () => {
+  function open(save: ProfileCalls["save"], initial: Profile = PROFILE) {
+    renderWithIntl(<ProfileForm initial={initial} counties={COUNTIES} calls={{ save }} />);
+  }
+
+  it("are three optional fields under one heading, with the sentence that they show as self-reported", () => {
+    open(vi.fn());
+    const group = screen.getByRole("group", { name: "Self-reported references" });
+    expect(group.textContent).toContain("Shown on your certificates as self-reported. Nobody checks them.");
+    const github = within(group).getByLabelText("GitHub login") as HTMLInputElement;
+    // The "@" shows before the field (decorative: the label names it).
+    expect(github.parentElement!.textContent).toBe("@");
+    expect(within(group).getByLabelText("KECOBO reference")).toBeTruthy();
+    expect((within(group).getByLabelText("KIPI reference") as HTMLInputElement).maxLength).toBe(40);
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
+  });
+
+  it("sends only the references that changed; a login typed with its @ is sent without, an emptied one clears", () => {
+    const saved = { ...PROFILE, github_login: "achieng", kecobo_number: "KE-CR-1", kipi_number: null };
+    expect(
+      profileChange(saved, {
+        headline: "",
+        county: "KE-30",
+        visible: false,
+        references: { github_login: "@achieng", kecobo_number: "", kipi_number: " KE/UM/2026/77 " },
+      }),
+    ).toEqual({ kecobo_number: null, kipi_number: "KE/UM/2026/77" });
+  });
+
+  it("saves them with Save and shows what the API kept", async () => {
+    const save = vi.fn(async () => ({
+      ok: true as const,
+      profile: { ...PROFILE, github_login: "achieng-o", kecobo_number: "KE-CR-1", kipi_number: null },
+    }));
+    open(save);
+    fireEvent.change(screen.getByLabelText("GitHub login"), { target: { value: "@achieng-o" } });
+    fireEvent.change(screen.getByLabelText("KECOBO reference"), { target: { value: "KE-CR-1" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
+    expect(save).toHaveBeenCalledWith({ github_login: "achieng-o", kecobo_number: "KE-CR-1" });
+    expect((screen.getByLabelText("GitHub login") as HTMLInputElement).value).toBe("achieng-o");
+    expect(screen.getByRole("status").textContent).toBe("Profile saved.");
+  });
+
+  it.each([
+    ["github_login", "GitHub login", en.profileSettings.references.invalidGithub],
+    ["kecobo_number", "KECOBO reference", en.profileSettings.references.invalidReference],
+    ["kipi_number", "KIPI reference", en.profileSettings.references.invalidReference],
+  ] as const)("says a 422 on %s on that field and puts focus there", async (field, label, words) => {
+    const save = vi.fn(async () => ({ ok: false as const, refusal: "invalid" as const, field }));
+    open(save);
+    fireEvent.change(screen.getByLabelText(label), { target: { value: "bad value" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
+    const input = screen.getByLabelText(label);
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(`${input.id}-error`)!.textContent).toBe(words);
+    expect(document.activeElement).toBe(input);
+    expect(screen.queryByRole("alert")).toBeNull();
+    // Editing the field clears its error.
+    fireEvent.change(input, { target: { value: "ok" } });
+    expect(input.getAttribute("aria-invalid")).toBeNull();
+  });
+
+  it("reads the field from the API's request-validation error", () => {
+    expect(refusedField({ detail: [{ loc: ["body", "github_login"], msg: "x", type: "value_error" }] })).toBe(
+      "github_login",
+    );
+    expect(refusedField({ detail: [{ loc: ["body", "kipi_number"] }] })).toBe("kipi_number");
+    expect(refusedField({ detail: [{ loc: ["body", "headline"] }] })).toBeUndefined();
+    expect(refusedField({ detail: { code: "too_many_profile_changes" } })).toBeUndefined();
   });
 });
