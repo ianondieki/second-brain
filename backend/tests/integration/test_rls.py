@@ -751,8 +751,9 @@ async def test_only_a_granted_viewer_logs_a_view_under_the_granting_org(
             )
         logged = uuid7()
         await _sql(conn, VIEW_INSERT, id=logged, org=scenario.context, **(registered | {"nda": ndas["own"]}))
-        started = await conn.execute(
-            text("SELECT started_at = now() FROM document_views WHERE id = :id"), {"id": logged}
+        started = await conn.execute(  # the shared clock at the insert (revision 0014), as bridge_app
+            text("SELECT started_at >= now() AND started_at <= app_clock_now() FROM document_views WHERE id = :id"),
+            {"id": logged},
         )
         assert started.scalar_one() is True  # the backdated start was replaced
 
