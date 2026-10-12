@@ -4,6 +4,7 @@ import type { StaffRole } from "./AdminNav";
 import { cn } from "./ui/cn";
 import { AccountMenu } from "./AccountMenu";
 import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
+import { OfflineSlot } from "./offline/OfflineSlot";
 import { PaletteSlot } from "./palette/PaletteSlot";
 import { TopBar } from "./TopBar";
 
@@ -22,9 +23,17 @@ export interface SignedInShellProps {
 
 /**
  * Signed-in screens: top bar with Search (the command palette), the notification bell and the account menu (Plan &
- * billing, Notification settings, Help, Sign out), the portal navigation when given, and one column of content.
+ * billing, Notification settings, Help, Sign out), the portal navigation when given, and one column of content, with
+ * the offline banner over it when the page is read offline (P27).
  */
-export function SignedInShell({ homeHref, children, nav, wide = false, bellCurrent = false, staffRole }: SignedInShellProps) {
+export function SignedInShell({
+  homeHref,
+  children,
+  nav,
+  wide = false,
+  bellCurrent = false,
+  staffRole,
+}: SignedInShellProps) {
   return (
     <>
       <TopBar homeHref={homeHref} sticky>
@@ -50,6 +59,13 @@ export function SignedInShell({ homeHref, children, nav, wide = false, bellCurre
             nav ? "pb-28 lg:pb-16" : "pb-16",
           )}
         >
+          {/* Offline (P27, D-69): the banner over a page read from this device's copy, and the service worker. Not in
+              the staff console, which is never kept. */}
+          {staffRole ? null : (
+            <Suspense fallback={null}>
+              <OfflineSlot />
+            </Suspense>
+          )}
           <div className={wide ? undefined : "max-w-xl"}>{children}</div>
         </main>
       </div>

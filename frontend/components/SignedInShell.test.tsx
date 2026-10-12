@@ -15,7 +15,8 @@ import { SignedInShell, type SignedInShellProps } from "./SignedInShell";
 // navigation when it has one (bottom tabs on phones, a left rail from 1024 px) and one column of content in <main>.
 
 vi.mock("next-intl/server", () => ({
-  getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+  getTranslations: async (namespace: string) =>
+    createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
@@ -23,6 +24,9 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/dev",
 }));
 vi.mock("@/lib/api/server", () => ({ getUnreadCount: async () => 2 }));
+// The offline island (P27, D-69) draws nothing until the browser has mounted it: here only whether the shell holds it.
+const offline = vi.hoisted(() => ({ slot: vi.fn(() => null) }));
+vi.mock("./offline/OfflineSlot", () => ({ OfflineSlot: offline.slot }));
 
 afterEach(cleanup);
 
@@ -70,7 +74,9 @@ describe("SignedInShell", () => {
   });
 
   it("holds the bell in a Suspense boundary whose fallback is the bell without a count", () => {
-    function find(node: ReactNode): ReactElement<{ fallback: ReactElement<{ count: unknown }>; children: ReactElement }> | null {
+    function find(
+      node: ReactNode,
+    ): ReactElement<{ fallback: ReactElement<{ count: unknown }>; children: ReactElement }> | null {
       for (const child of Children.toArray(node)) {
         if (!isValidElement(child)) continue;
         if (child.type === Suspense) return child as never;
@@ -118,5 +124,16 @@ describe("SignedInShell", () => {
     const wide = await renderShell({ homeHref: "/dev", wide: true });
     expect(wide.firstElementChild!.hasAttribute("class")).toBe(false);
     expect(within(wide).getByRole("heading", { name: "My ideas" })).toBeTruthy();
+  });
+
+  // P27 (REQ-UX-08; D-69): the offline banner and the service worker live in the portals' shell, never the console's.
+  it("holds the offline island on the portals' screens and not in the staff console", async () => {
+    offline.slot.mockClear();
+    await renderShell({ homeHref: "/dev" });
+    expect(offline.slot).toHaveBeenCalled();
+    cleanup();
+    offline.slot.mockClear();
+    await renderShell({ homeHref: "/admin", staffRole: "admin" });
+    expect(offline.slot).not.toHaveBeenCalled();
   });
 });

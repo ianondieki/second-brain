@@ -1,6 +1,7 @@
 {
   "_meta": {
     "reviewP26a": "[[COPY-REVIEW]] P26-A (REQ-TRACK-03, REQ-UX-02): countdown.clockDays, countdown.clockHours, countdown.clockMinutes (the live deadline clock, one message per largest unit, each figure and unit word tagged (f, u), so each language sets the order and spacing; a leading unit that is zero is not drawn, on the engagement cards of both lists, Home's Needs-you cards and the tracker's figure panel)",
+    "reviewP27f": "[[COPY-REVIEW]] P27-F (REQ-UX-08; D-69): shell.offline.* (the banner over a page shown from this device's copy while offline; {time} is the copy's Date in Nairobi time), shell.install (the account menu's entry where the browser offers installing), offline.* (the /offline page: one sentence and one action), profileSettings.dataSaver, profileSettings.dataSaverExplain (the data-saver switch)",
     "reviewP25c2": "[[COPY-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67): portal.* (the eyebrows saying where you are, the organisation portal's, the console's and the signed-out screens' new lines: portal.eyebrow.*, portal.settings.*, portal.proposal.means (the NDA step's second column heading; the step's own lead and the viewer-logging notice stay verbatim), portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry (\"Try again\" when the fresh-code form cannot be fetched), adminResearch.stepUp.loading, briefForm.preview.* (the live preview of how a Brief reads on Discover, mirroring discover.brief* and problem.label.org_brief)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
     "reviewP15f": "[[COPY-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.*; adminModeration.reason.* name the pre-screen's reason codes (bridge/proposals/prescreen.py, docs/spec/06 6.12); E0/E1/E2 follow docs/spec/03",
@@ -59,6 +60,11 @@
       "system": "System",
       "light": "Light",
       "dark": "Dark"
+    },
+    "install": "Install {product}",
+    "offline": {
+      "banner": "You're offline. This is {page} as of {time} EAT. Actions are available once you're back online.",
+      "bannerUndated": "You're offline. This is {page} as you last opened it. Actions are available once you're back online."
     }
   },
   "panel": {
@@ -3073,6 +3079,13 @@
     "body": "There is no page at this address.",
     "home": "Go to the home page"
   },
+  "offline": {
+    "pageTitle": "You're offline",
+    "title": "You're offline",
+    "body": "The trackers you opened recently are available from Engagements.",
+    "engagements": "Go to Engagements",
+    "home": "Go to the home page"
+  },
   "settingsNav": {
     "label": "Settings",
     "security": "Security",
@@ -4054,6 +4067,8 @@
     "on": "On",
     "off": "Off",
     "explain": "Developers in your county or niches can see your handle, headline and shared niches. Never organisations.",
+    "dataSaver": "Data saver",
+    "dataSaverExplain": "No photographs and the smallest images, on this device.",
     "save": "Save",
     "saving": "Saving…",
     "saved": "Profile saved.",
