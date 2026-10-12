@@ -183,7 +183,7 @@ describe("the declaration sheet", () => {
 
   it("takes a pasted hash instead, and refuses one that is not 64 hex digits", async () => {
     const { declareImpl } = open();
-    fireEvent.click(screen.getByRole("radio", { name: "Paste its SHA-256" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Paste a SHA-256" }));
     const field = screen.getByLabelText("SHA-256");
     fireEvent.change(field, { target: { value: "abc123" } });
     await fillRest();

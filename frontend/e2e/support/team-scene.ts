@@ -93,7 +93,7 @@ export async function signInMember(
 }
 
 /** The member accepts the Evaluation NDA for the proposal and opens its marked full details: one logged view. */
-export async function viewFullProposal(member: Member, proposalId: string): Promise<void> {
+export async function viewFullProposal(member: Pick<Member, "orgId" | "request">, proposalId: string): Promise<void> {
   const base = `/api/orgs/${member.orgId}/proposals/${proposalId}`;
   const nda = (await (await member.request.get(`${base}/nda`)).json()) as {
     template_id: string;

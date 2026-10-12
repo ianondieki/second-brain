@@ -310,7 +310,8 @@ export function TeamSheet(props: TeamSheetProps) {
               <p className="text-sm text-ink-soft">{t("mineLead")}</p>
             </div>
             <fieldset aria-describedby={stanceError ? `${id}-stance-error` : undefined}>
-              <legend className="mb-2 font-medium text-ink">{t("stanceLegend")}</legend>
+              {/* The heading above names it; the legend still names the group for screen readers. */}
+              <legend className="sr-only">{t("stanceLegend")}</legend>
               {stanceError ? (
                 <p id={`${id}-stance-error`} className="mb-2 text-sm font-medium text-error">
                   {stanceError}
