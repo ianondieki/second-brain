@@ -91,7 +91,7 @@ export function DeadlineClock({
 // The sentence clock's look: tabular figures; on the viewer's own step under 24 hours, the saffron mark before the
 // words and the time in the warm text colour (as the P23-3 countdown's).
 const line =
-  "tabular-nums data-[clock=warm]:before:me-1.5 data-[clock=warm]:before:inline-block data-[clock=warm]:before:size-2 data-[clock=warm]:before:rounded-full data-[clock=warm]:before:bg-flourish data-[clock=warm]:before:align-middle [&[data-clock=warm]>time]:font-semibold [&[data-clock=warm]>time]:text-warm [&>time]:whitespace-nowrap";
+  "tabular-nums data-[clock=warm]:before:me-1.5 data-[clock=warm]:before:inline-block data-[clock=warm]:before:size-2 data-[clock=warm]:before:rounded-full data-[clock=warm]:before:bg-flourish data-[clock=warm]:before:align-middle [&[data-clock=warm]>time]:font-semibold [&[data-clock=warm]>time]:text-warm";
 
 export interface DeadlineLineProps {
   /** The instant the window closes (the API's `due_at`, a Brief's `deadline_at`). */

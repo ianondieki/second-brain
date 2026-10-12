@@ -339,6 +339,8 @@ describe("sentence clocks (DeadlineLine) on the ticker", () => {
     expect(clockOf("in").className).toContain("tabular-nums");
     expect(clockOf("in").className).toContain("data-[clock=warm]:before:bg-flourish");
     expect(clockOf("in").className).toContain("[&[data-clock=warm]>time]:text-warm");
+    // It wraps between units (each held by no-break spaces), so a narrow tile never scrolls sideways.
+    expect(clockOf("in").className).not.toContain("whitespace-nowrap");
     // The words are the clock: nothing hidden, no live region.
     expect(document.querySelector("[aria-hidden], [aria-live], [role='timer']")).toBeNull();
     cleanup();
