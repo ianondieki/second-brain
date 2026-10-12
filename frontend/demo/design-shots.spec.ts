@@ -1116,9 +1116,10 @@ SHOTS.push({
   },
 });
 
-// P26 (REQ-DIR-01): Companies in the portal's language, into docs/demo/screenshots/p26/: the list as cards under its
-// niche headings and an organisation's page (SHOT_SET=p26).
-for (const name of ["companies", "company"]) {
+// P26 (REQ-DIR-01, REQ-TRACK-03): Companies in the portal's language (the list as cards under its niche headings and an
+// organisation's page) and the live deadline clock where it now shows (both Homes, both engagement lists, the
+// tracker), into docs/demo/screenshots/p26/ (SHOT_SET=p26).
+for (const name of ["companies", "company", "home", "dev-engagements", "tracker", "org-home", "org-engagements"]) {
   const base = SHOTS.find((shot) => shot.name === name && !shot.set);
   if (base) SHOTS.push({ ...base, set: "p26" });
 }
