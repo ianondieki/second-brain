@@ -3080,9 +3080,9 @@
     "pageTitle": "Huna mtandao",
     "banner": "Huna mtandao. Unaona {page} kama ilivyokuwa {time} EAT. Vitendo vitapatikana utakaporudi mtandaoni.",
     "title": "Huna mtandao",
-    "body": "Vifuatiliaji ulivyofungua hivi karibuni vinapatikana kwenye Ushirikiano.",
-    "engagements": "Nenda kwenye Ushirikiano",
-    "home": "Nenda kwenye ukurasa wa mwanzo"
+    "body": "Ukurasa huu haujahifadhiwa kwenye kifaa hiki, kwa hivyo utafunguka utakaporudi mtandaoni.",
+    "retry": "Jaribu tena",
+    "kept": "Vifuatiliaji ulivyofungua hivi karibuni vimehifadhiwa kwenye kifaa hiki: <link>Ushirikiano</link>."
   },
   "settingsNav": {
     "label": "Mipangilio",
