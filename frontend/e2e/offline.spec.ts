@@ -232,3 +232,36 @@ test("the data-saver switch sets its cookie, and the next pages carry no photogr
   await page.getByRole("switch", { name: "Data saver" }).click();
   await expect.poll(async () => (await context.cookies()).some((c) => c.name === "data-saver")).toBe(false);
 });
+
+test("an organisation member's data-saver switch is under Settings › Notifications › Data", async ({
+  page,
+  context,
+  browser,
+}, info) => {
+  const org = await signUpOrg(page.request);
+  // A pitch puts a proposal card, with its niche's photograph band, on the organisation's Home.
+  const devContext = await browser.newContext({ ...info.project.use });
+  await pitchFromDeveloper(devContext.request, org.orgId);
+  await devContext.close();
+  const home = `/org?org=${org.orgId}`;
+  await page.goto(home);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  const bands = await page.locator("[data-niche-band]").count();
+  expect(await page.locator("[data-niche-band]:not([data-niche-band='lattice'])").count()).toBeGreaterThan(0);
+
+  await page.goto("/settings/notifications");
+  const data = page.locator("[data-data-saver-card]");
+  await expect(data.getByRole("heading", { name: "Data" })).toBeVisible();
+  const toggle = data.getByRole("switch", { name: "Data saver" });
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  expect((await context.cookies()).find((c) => c.name === "data-saver")?.value).toBe("1");
+
+  // The next page carries no photograph: the org Home's bands are the lattice.
+  await page.goto(home);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.locator("[data-niche-band]")).toHaveCount(bands);
+  await expect(page.locator("[data-niche-band]:not([data-niche-band='lattice'])")).toHaveCount(0);
+  await expect(page.locator("img[src*='/photos/'], source[srcset*='/photos/']")).toHaveCount(0);
+});
