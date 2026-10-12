@@ -58,9 +58,7 @@ export function Register({ hash, version }: { hash: string | null; version: stri
           active?.postMessage(hash ? { type: "user", hash, lang: html.lang } : { type: "clear" });
           // Did the worker answer this page from its cache (the network failed though the browser says online)?
           const channel = new MessageChannel();
-          // Or is this page stale, rendered for someone the session is no longer for? Then it loads itself again.
-          channel.port1.onmessage = ({ data }) =>
-            data?.stale ? location.reload() : offline((cached = Boolean(data?.cached)) || !navigator.onLine);
+          channel.port1.onmessage = ({ data }) => offline((cached = Boolean(data?.cached)) || !navigator.onLine);
           active?.postMessage({ type: "status" }, [channel.port2]);
           // A page reached inside the app loaded no page through the worker: it fetches and keeps it (if it may).
           active?.postMessage({ type: "visit", url: location.href });
