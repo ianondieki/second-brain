@@ -76,13 +76,7 @@ export default async function OrganisationEngagementsPage({ searchParams }: Page
             emptyHref={inboxHref(memberships, org.org_id)}
           />
         ) : org && view === "board" ? (
-          <BoardView
-            orgId={org.org_id}
-            orgParam={orgParam}
-            query={query}
-            mine={mine}
-            userId={me.user.id}
-          />
+          <BoardView orgId={org.org_id} orgParam={orgParam} query={query} mine={mine} userId={me.user.id} />
         ) : org ? (
           <Body memberships={memberships} org={org} query={query} userId={me.user.id} mine={mine} />
         ) : (
