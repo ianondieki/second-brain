@@ -439,8 +439,8 @@ describe("DirectoryResults", () => {
         kind="page"
         page={{
           groups: [
-            { niche: HIGHER_ED, orgs: [nairobi(0)] },
-            { niche: HIGHER_ED, orgs: [nairobi(1), nairobi(2)] },
+            { niche: HIGHER_ED, orgs: [universities[0]!] },
+            { niche: HIGHER_ED, orgs: [universities[1]!, universities[2]!] },
           ],
           next_cursor: null,
         }}

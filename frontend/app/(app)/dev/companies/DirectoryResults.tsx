@@ -73,7 +73,7 @@ export function DirectoryResults(props: ResultsProps) {
  * One niche's organisations (AC-DIR-6): a Section titled with the niche's two-level name (the parent niche quieter,
  * in the same line: no label above it) and, when the whole list is on this one page (`counted`), how many
  * organisations it holds (a paged list would count only this page's), then the organisations as cards, two across
- * from 640 px, each card four rows the grid shares (subgrid). The section picks the cards' bands (bands.ts): each
+ * from 640 px, each card three rows the grid shares (subgrid). The section picks the cards' bands (bands.ts): each
  * card its own county's photographs in turn, the crop cycling.
  */
 function Group({

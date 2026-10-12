@@ -29,7 +29,8 @@ export interface OrgTileProps {
  * line), its monogram on the band's edge (initials in the display face, never a logo: docs/spec/04 principle 4), its
  * name in Fraunces as the card's one link, the org type and county, the verification badge verbatim as the card's one
  * chip (docs/spec/07 item 2), and the response record when the API sends one (E2 with enough history). A list item of
- * four rows the grid shares (subgrid), so a row of cards lines up its names, meta lines, badges and records.
+ * three rows the grid shares (subgrid: the name with its meta line, the badge, the record), so a row of cards lines
+ * up its badges and records.
  */
 export function OrgTile({ org, filters = {}, groupNiche, band, eager = false }: OrgTileProps) {
   const t = useTranslations("companies");
