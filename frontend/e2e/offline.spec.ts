@@ -3,10 +3,19 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type APIRequestContext, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
 
 import { checkScreen } from "./support/screen";
-import { OWNER_DATABASE_URL, PASSWORD, pitchFromDeveloper, signUp, signUpOrg, tag } from "./support/tracker-scene";
+import {
+  OWNER_DATABASE_URL,
+  ownerSql,
+  PASSWORD,
+  pitchFromDeveloper,
+  post,
+  signUp,
+  signUpOrg,
+  tag,
+} from "./support/tracker-scene";
 
 // P27 track F (REQ-UX-08; D-69; acceptance row 6): the trackers a person opened stay readable offline, read-only under
 // an "as of" banner; nothing else is ever served from the worker's cache (an unvisited tracker, the messages page and
@@ -78,6 +87,37 @@ async function goOffline(context: BrowserContext) {
 async function goOnline(context: BrowserContext) {
   await context.unroute("**/*");
   await context.setOffline(false);
+}
+
+/**
+ * A Problem Brief of `orgId` that anyone may read (GET /api/public/problems/<id> answers 200): posted through the API
+ * by the signed-in member, then published as staff approval does (app_moderate_problem: the problem published and
+ * clear, the Brief published), written as the database owner, for this test organisation only.
+ */
+async function publicBrief(request: APIRequestContext, orgId: string): Promise<string> {
+  const niches = (await (await request.get("/api/directory/niches")).json()) as Array<{ id: string }>;
+  const brief = await post<{ id: string }>(
+    request,
+    `/api/orgs/${orgId}/briefs`,
+    {
+      title: `Generators at tower sites run dry ${tag()}`,
+      statement: "Field teams learn that a generator tank is empty only after the site stops serving calls.",
+      niche_id: niches[0].id,
+      county_code: "KE-30",
+    },
+    201,
+  );
+  const id = brief.id; // a Brief's id is its problem's
+  expect(id, "the Brief's problem").toMatch(/^[0-9a-f-]{36}$/);
+  ownerSql(
+    "UPDATE problems SET moderation_state = 'clear', status = 'published', published_at = now(), updated_at = now()" +
+      " WHERE id = CAST(:'id' AS uuid) AND org_id = CAST(:'org' AS uuid) AND source = 'org_brief';" +
+      " UPDATE problem_briefs SET status = 'published', updated_at = now()" +
+      " WHERE problem_id = CAST(:'id' AS uuid) AND status = 'draft';",
+    { id, org: orgId },
+  );
+  await expect.poll(async () => (await request.get(`/api/public/problems/${id}`)).status(), SERVER_STEP).toBe(200);
+  return id;
 }
 
 async function signOutFromMenu(page: Page) {
@@ -282,19 +322,18 @@ test("a sign-in reached inside the app deletes the previous person's cache befor
   await signUp(other.request, { email, display_name: "Wanjiku Kamau", side: "developer" });
   await other.close();
 
-  // The first person keeps a tracker; then their session lapses (no sign-out, the cache stays).
+  // A public problem to start from, whatever the stack holds: the organisation posts a Brief, published as staff
+  // approval publishes it (briefs.spec.ts walks the approval itself through the moderation queue).
   const org = await signUpOrg(page.request);
+  const problem = await publicBrief(page.request, org.orgId);
+
+  // The first person keeps a tracker; then their session lapses (no sign-out, the cache stays).
   const dev = await pitchFromDeveloper(page.request, org.orgId);
   const tracker = `/dev/engagements/${dev.engagementId}`;
   await page.goto(tracker);
   await workerReady(page);
   await page.goto(tracker);
   await expect.poll(() => kept(page, tracker), SERVER_STEP).toBe(true);
-  const explore = (await (await page.request.get("/api/public/explore")).json()) as {
-    counties: Array<{ newest: Array<{ id: string }> }>;
-  };
-  const problem = explore.counties.flatMap((county) => county.newest)[0]?.id;
-  test.skip(!problem, "the stack has no public problem to start from");
   await context.clearCookies();
 
   // A public problem, then its "Log in" link: a client navigation to /login?next=/problems/<id>, which the worker
