@@ -407,6 +407,63 @@ class OrgEngagementList(BaseModel):
     items: list[OrgEngagementSummary]
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# The prior-knowledge declaration (REQ-PROV-06; docs/spec/06 6.4 pt 5).
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+class DeclarationBody(BaseModel):
+    """An organisation's prior-knowledge declaration: the SHA-256 of dated internal evidence (hashed in the browser;
+    the file never leaves the device), the organisation's own title for it and the evidence's date."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_sha256_hex: str = Field(pattern=r"^[0-9A-Fa-f]{64}$", description="The evidence's SHA-256: 64 hex digits")
+    evidence_title: str = Field(
+        min_length=1,
+        max_length=RAW_TEXT_MAX_CHARS,
+        description="One line of plain text, at most 200 characters once trimmed (the developer reads it)",
+    )
+    evidence_dated_on: date = Field(description="The evidence's date: no later than today in Africa/Nairobi")
+
+
+class DeclarationOut(BaseModel):
+    """A recorded declaration (append-only; hashed into the engagement's event chain)."""
+
+    id: UUID
+    engagement_id: UUID
+    evidence_sha256_hex: str
+    evidence_title: str
+    evidence_dated_on: date
+    declared_at: datetime
+    first_tier2_view_at: datetime
+    window_closes_on: date
+
+
+class OrgPriorKnowledgeOut(BaseModel):
+    """The organisation's declaration window on the engagement: it opens at the organisation's first Tier-2 view of the
+    proposal and closes at the end of ``window_closes_on`` (the 10th Kenyan business day after that view's day) in
+    Africa/Nairobi; null before any view."""
+
+    first_tier2_view_at: datetime | None
+    window_closes_on: date | None
+    declared_at: datetime | None = Field(description="When the organisation declared; null while it has not")
+    can_declare: bool = Field(
+        description="The caller may declare now: a Tier-2 view exists, the window is open, no declaration yet, the"
+        " engagement has not ended and the caller is an owner, admin or signatory"
+    )
+
+
+class DeveloperPriorKnowledgeOut(BaseModel):
+    """The prior-knowledge declaration an organisation made on the developer's proposal, as the developer reads it."""
+
+    org_name: str
+    declared_at: datetime
+    evidence_sha256_hex: str
+    evidence_title: str = Field(description="The organisation's own words: plain text")
+    evidence_dated_on: date
+
+
 class HistoryEventOut(BaseModel):
     id: UUID
     seq: int

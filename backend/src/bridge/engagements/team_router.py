@@ -7,6 +7,11 @@ Team triage (REQ-ENG-15, D-68; ``bridge.engagements.team``):
 - ``PUT …/assignee`` ``{user_id|null}``: assign (owner, admin, reviewer or signatory; 403 ``role_not_allowed``
   otherwise, 409 ``unchanged``, 422 ``invalid_assignee``); N30 to the assignee unless they assigned themselves.
 - ``PUT …/recommendation`` ``{stance, note}`` (the same roles) and ``DELETE …/recommendation`` (the caller's own).
+
+The prior-knowledge declaration (REQ-PROV-06; ``bridge.engagements.prior_knowledge``):
+
+- ``POST …/prior-knowledge`` ``{evidence_sha256_hex, evidence_title, evidence_dated_on}``: 201 (owner, admin or
+  signatory; inside the window).
 """
 
 from __future__ import annotations
@@ -17,8 +22,8 @@ from fastapi import APIRouter, Request
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.auth.deps import Db
-from bridge.engagements import team
-from bridge.engagements.schemas import AssigneeBody, RecommendationBody, TeamOut
+from bridge.engagements import prior_knowledge, team
+from bridge.engagements.schemas import AssigneeBody, DeclarationBody, DeclarationOut, RecommendationBody, TeamOut
 from bridge.errors import ERROR_RESPONSES
 from bridge.tenancy.deps import OrgMember
 
@@ -66,3 +71,12 @@ async def delete_recommendation(engagement_id: UUID, org: OrgMember, db: Db) -> 
     await db.commit()
     return out
 
+
+@router.post(f"{ORG_ENGAGEMENT}/prior-knowledge", status_code=201)
+async def post_prior_knowledge(engagement_id: UUID, body: DeclarationBody, org: OrgMember, db: Db) -> DeclarationOut:
+    """Declare prior knowledge (docs/spec/06 6.4 pt 5): the SHA-256 of dated internal evidence (hashed on your device;
+    no file is uploaded), its title and date, within 10 business days of your organisation's first view of the full
+    proposal. The developer is told. Declarations are not recorded on the platform after this window."""
+    out = await prior_knowledge.declare(db, org, engagement_id, body)
+    await db.commit()
+    return out
