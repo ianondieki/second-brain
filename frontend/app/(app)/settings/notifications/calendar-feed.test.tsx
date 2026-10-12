@@ -83,6 +83,7 @@ describe("the calendar feed", () => {
     const field = await screen.findByRole("textbox", { name: "Feed link" });
     expect((field as HTMLInputElement).value).toContain("tok1");
     fireEvent.click(screen.getByRole("button", { name: "Remove the feed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the link" }));
     await waitFor(() =>
       expect(screen.getByRole("status").textContent).toBe("The feed is removed. Its link no longer works."),
     );
@@ -117,6 +118,30 @@ describe("the calendar feed", () => {
     expect(calls.list).toEqual([]);
   });
 
+  it("asks before removing the feed, in place, the same way; keeping it calls nothing", async () => {
+    renderWithIntl(<CalendarFeed initial="live" lastRead={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Remove the feed" }));
+    const question = screen.getByRole("group", { name: "Remove the link? Calendars that use it stop updating." });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove the feed" })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(question));
+    expect(screen.getByRole("button", { name: "Remove the link" }).className).toContain("btn-danger");
+    fireEvent.click(screen.getByRole("button", { name: "Keep the link" }));
+    expect(calls.list).toEqual([]);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remove the feed" })));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the feed" }));
+    fireEvent.keyDown(screen.getByRole("group"), { key: "Escape" });
+    expect(screen.queryByRole("group")).toBeNull();
+    expect(calls.list).toEqual([]);
+    // Confirmed: the feed goes, and the focus goes to the button that takes the place of the pressed one.
+    fireEvent.click(screen.getByRole("button", { name: "Remove the feed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the link" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Create a feed link" })),
+    );
+    expect(calls.list.map((call) => call.method)).toEqual(["DELETE"]);
+  });
+
   it("keeps the link field at the controls' height on a phone (it grows beside Copy from 640 px only)", async () => {
     renderWithIntl(<CalendarFeed initial="none" lastRead={null} />);
     fireEvent.click(screen.getByRole("button", { name: "Create a feed link" }));
@@ -141,6 +166,7 @@ describe("the calendar feed", () => {
     calls.fail = true;
     renderWithIntl(<CalendarFeed initial="live" lastRead={null} />);
     fireEvent.click(screen.getByRole("button", { name: "Remove the feed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the link" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toBe("That did not work. Try again."));
     expect(screen.getByRole("button", { name: "Make a new link" })).toBeTruthy();
   });

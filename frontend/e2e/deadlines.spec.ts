@@ -174,6 +174,7 @@ test("a developer's deadlines: the month, the list with the live clock, each in 
       expect((await anonymous.get(second)).status()).toBe(200);
 
       await card.getByRole("button", { name: "Remove the feed" }).click();
+      await card.getByRole("button", { name: "Remove the link" }).click();
       await expect(card.getByRole("status")).toHaveText("The feed is removed. Its link no longer works.", STEP);
       expect((await anonymous.get(second)).status()).toBe(404);
       await checkScreen(page, { strict: true });
