@@ -3,6 +3,7 @@
     "reviewP26a": "[[COPY-REVIEW]] P26-A (REQ-TRACK-03, REQ-UX-02): countdown.clockDays, countdown.clockHours, countdown.clockMinutes (the live deadline clock, one message per largest unit, each figure and unit word tagged (f, u), so each language sets the order and spacing; a leading unit that is zero is not drawn, on the engagement cards of both lists, Home's Needs-you cards and the tracker's figure panel)",
     "reviewP27f": "[[COPY-REVIEW]] P27-F (REQ-UX-08; D-69): offline.banner (the banner over a page shown from this device's copy while offline; {time} is when that copy was made, in Nairobi time), shell.install (the account menu's entry where the browser offers installing), offline.* (the /offline page: one sentence and \"Try again\"; offline.kept shows only when this device keeps the portal's Engagements list), profileSettings.dataSaver, profileSettings.dataSaverExplain, notificationSettings.dataTitle (the data-saver switch)",
     "reviewP27clock": "[[COPY-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"in 6 days 14 hours 23 minutes\"), not \"14 h 23 min\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
+    "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private).",
     "reviewP25c2": "[[COPY-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67): portal.* (the eyebrows saying where you are, the organisation portal's, the console's and the signed-out screens' new lines: portal.eyebrow.*, portal.settings.*, portal.proposal.means (the NDA step's second column heading; the step's own lead and the viewer-logging notice stay verbatim), portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry (\"Try again\" when the fresh-code form cannot be fetched), adminResearch.stepUp.loading, briefForm.preview.* (the live preview of how a Brief reads on Discover, mirroring discover.brief* and problem.label.org_brief)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
     "reviewP15f": "[[COPY-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.*; adminModeration.reason.* name the pre-screen's reason codes (bridge/proposals/prescreen.py, docs/spec/06 6.12); E0/E1/E2 follow docs/spec/03",
@@ -4238,5 +4239,83 @@
   "engagementCard": {
     "stageOf": "Stage {step} of {total}: {stage}",
     "waitingOn": "Waiting on {name}"
+  },
+  "engagements": {
+    "tabsLabel": "Engagement views",
+    "tab": {
+      "list": "List",
+      "calendar": "Calendar",
+      "board": "Board"
+    },
+    "filterLabel": "Whose engagements",
+    "filterAll": "All",
+    "assignedToMe": "Assigned to me"
+  },
+  "deadlines": {
+    "monthLabel": "{month}",
+    "previous": "Previous month, {month}",
+    "next": "Next month, {month}",
+    "today": "Today",
+    "more": "{count, plural, other {+# more}}",
+    "dayDeadlines": "{date}: {count, plural, one {# deadline} other {# deadlines}}",
+    "dayList": "Deadlines on {date}",
+    "overdueTitle": "Overdue",
+    "nextTitle": "Next 30 days",
+    "nextEmpty": "Nothing falls due in the next 30 days.",
+    "kind": {
+      "stage": "Stage deadline",
+      "answer": "Answer by",
+      "milestone": "Milestone",
+      "brief": "Brief closes",
+      "event": "Event"
+    },
+    "yours": "Your turn",
+    "addToCalendar": "Add to calendar<sr>: {title}</sr>",
+    "google": "Google Calendar<sr>: {title}</sr>",
+    "googleText": "Due: {title}",
+    "emptyDev": "No deadlines in {month}.",
+    "emptyDevAction": "Find a problem to work on",
+    "emptyOrg": "No deadlines in {month}.",
+    "emptyOrgAction": "Review proposals in the Inbox"
+  },
+  "pipeline": {
+    "funnelTitle": "Entered in the last {days} days",
+    "funnelLead": "How many engagements reached each stage, and how many of them went on to the next.",
+    "conversion": "{count} of {from} went on to {stage}",
+    "outcome": "{closed, plural, one {# closed} other {# closed}} and {ended, plural, one {# ended} other {# ended}} in the same window.",
+    "columnsLabel": "Pipeline stages",
+    "count": "{count, plural, one {# engagement} other {# engagements}}",
+    "median": "median {days, plural, one {# day} other {# days}} in stage",
+    "stalled": "No movement for {count, plural, one {# business day} other {# business days}}",
+    "assignee": "Assigned to {name}",
+    "columnEmpty": "None at this stage.",
+    "empty": "No engagements to show on the board yet.",
+    "emptyAction": "Set up a scout",
+    "emptyMine": "Nothing is assigned to you.",
+    "emptyMineAction": "Show all engagements"
+  },
+  "calendarFeed": {
+    "title": "Calendar feed",
+    "lead": "Subscribe once in your calendar app and every deadline follows: stages, answer-by dates, milestones, Briefs and events.",
+    "forOrg": "The deadlines of {org}.",
+    "private": "This link is private: anyone who has it can see the titles and dates of your deadlines. If it was shared, make a new link and the old one stops working.",
+    "none": "You have no feed link yet.",
+    "create": "Create a feed link",
+    "creating": "Creating…",
+    "urlLabel": "Feed link",
+    "shownOnce": "Copy it now: it is shown only this once.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Select the link and copy it yourself.",
+    "google": "Open in Google Calendar",
+    "apple": "Open in Apple Calendar",
+    "live": "Your feed is live. A calendar app last read it on {date}.",
+    "liveUnread": "Your feed is live. No calendar app has read it yet.",
+    "rotate": "Make a new link",
+    "rotating": "Making a new link…",
+    "remove": "Remove the feed",
+    "removing": "Removing…",
+    "removed": "The feed is removed. Its link no longer works.",
+    "failed": "That did not work. Try again."
   }
 }

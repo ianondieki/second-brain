@@ -21,7 +21,7 @@ async function options() {
 /** Why an engagement read was refused, as the screens word it (`tracker.refused.*`). */
 export type ReadRefusal = "notFound" | "mfaSetup" | "bothParties";
 
-function refused(status: number, error: unknown, path: string): ReadRefusal {
+export function refused(status: number, error: unknown, path: string): ReadRefusal {
   // The session ended between the page's /me check and this call, or still owes its second factor.
   if (status === 401) redirect(apiErrorCode(error) === "mfa_required" ? "/auth/mfa" : "/login");
   const code = apiErrorCode(error);
