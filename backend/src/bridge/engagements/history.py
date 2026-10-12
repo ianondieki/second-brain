@@ -65,7 +65,16 @@ from bridge.engagements.schemas import (
     SideLimitsOut,
     SignatureOut,
 )
-from bridge.engagements.service import Loaded, Party, app_now, entering_event, load, load_holidays, load_many
+from bridge.engagements.service import (
+    Loaded,
+    Party,
+    all_holidays,
+    app_now,
+    entering_event,
+    load,
+    load_holidays,
+    load_many,
+)
 from bridge.errors import forbidden, not_found
 from bridge.legal.models import LegalTemplate, NdaTemplate
 from bridge.models.enums import (
@@ -283,7 +292,7 @@ async def summaries(
     if not engagements:
         return []
     now = await app_now(db)
-    holidays = await load_holidays(db, local_date(now))
+    holidays = await all_holidays(db)  # an overdue count looks back to the due day
     loaded = await load_many(db, engagements, deals_enabled=deals_enabled, developer_caller=developer_caller)
     shown = await _shown(db, engagements, developer_caller=developer_caller)
     unread = await unread_counts(db, reader_id, [e.id for e in engagements]) if reader_id else {}
@@ -328,7 +337,7 @@ async def detail(
         raise not_found()
     loaded = await load(db, engagement, deals_enabled=deals_enabled, developer_caller=party.is_developer)
     now = await app_now(db)
-    holidays = await load_holidays(db, local_date(now))
+    holidays = await all_holidays(db)  # an overdue count looks back to the due day
     base = await summary(
         db, engagement, loaded, now, holidays, developer_caller=party.is_developer, reader_id=party.user_id
     )
