@@ -57,6 +57,7 @@ import bridge.models.all  # noqa: F401  # registers every table
 from bridge.ids import uuid7
 from bridge.models import Base, Tenancy
 from bridge.models.base import RLS_TENANCIES
+from bridge.models.text import FORBIDDEN_TEXT_CHARS, NOT_BLANK
 from tests.integration import world as w
 from tests.integration.conftest import BACKEND, create_database, drop_database, role_engine, run_alembic
 from tests.integration.engagements import tracker
@@ -603,7 +604,10 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "engagement_assignments_guard()": (False, set()),  # SECURITY INVOKER: the writer's RLS reads the roster
     "engagement_recommendations_guard()": (False, set()),  # SECURITY INVOKER: likewise
     "prior_knowledge_declarations_window()": (False, set()),  # SECURITY INVOKER: current_user is the writer
+    "prior_knowledge_declarations_redaction_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer
     "calendar_feeds_guard()": (False, set()),
+    "memberships_revoke_calendar_feeds()": (True, set()),  # revokes another user's feeds
+    "users_revoke_calendar_feeds()": (True, set()),  # likewise
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -1616,7 +1620,6 @@ async def test_tags_keep_revision_0002s_policies(owner_engine: AsyncEngine) -> N
 _V13_IN_ORG = "((app_org_id() IS NULL) OR (org_id = app_org_id()))"
 _V13_MEMBER = f"app_is_member(org_id) AND {_V13_IN_ORG}"
 _V13_TRIAGE = f"app_is_member(org_id, '{{owner,admin,reviewer,signatory}}'::org_role[]) AND {_V13_IN_ORG}"
-_V13_OWN_RECOMMENDATION = f"((member_user_id = app_user_id()) AND {_V13_TRIAGE})"
 
 
 def _v13_of_engagement(table: str, extra: str = "") -> str:
@@ -1626,24 +1629,49 @@ def _v13_of_engagement(table: str, extra: str = "") -> str:
     )
 
 
+def _v13_not_its_developer(table: str) -> str:
+    """The security review's MINOR 1: the engagement's own developer, a member of the organisation or not."""
+    return (
+        "(NOT (EXISTS ( SELECT 1\n   FROM engagements e\n"
+        f"  WHERE ((e.id = {table}.engagement_id) AND (e.developer_id = app_user_id())))))"
+    )
+
+
+_V13_NOT_MINE = " AND (e.developer_id <> app_user_id())"
+_V13_ASSIGNMENTS_READER = f"({_V13_MEMBER} AND {_v13_not_its_developer('engagement_assignments')})"
+_V13_ASSIGNMENTS_CLOSER = f"{_V13_TRIAGE} AND {_v13_not_its_developer('engagement_assignments')}"
+_V13_RECOMMENDATIONS_READER = f"{_V13_MEMBER} AND {_v13_not_its_developer('engagement_recommendations')}"
+_V13_OWN_RECOMMENDATION = (
+    f"((member_user_id = app_user_id()) AND {_V13_TRIAGE} AND {_v13_not_its_developer('engagement_recommendations')})"
+)
+
+
 # Revision 0013's policies, whole (USING, WITH CHECK) per (table, command): each term stays even where another layer
 # already covers it (the guards' membership checks, the window trigger's engagement check).
 V13_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
-    ("engagement_assignments", "SELECT"): (f"({_V13_MEMBER})", None),
+    ("engagement_assignments", "SELECT"): (_V13_ASSIGNMENTS_READER, None),
     ("engagement_assignments", "INSERT"): (
         None,
-        f"((assigned_by = app_user_id()) AND {_V13_TRIAGE} AND {_v13_of_engagement('engagement_assignments')})",
+        f"((assigned_by = app_user_id()) AND {_V13_TRIAGE} AND "
+        + _v13_of_engagement("engagement_assignments", _V13_NOT_MINE)
+        + ")",
     ),
-    ("engagement_assignments", "UPDATE"): (f"((unassigned_at IS NULL) AND {_V13_TRIAGE})", f"({_V13_TRIAGE})"),
-    ("engagement_recommendations", "SELECT"): (f"({_V13_MEMBER})", None),
+    ("engagement_assignments", "UPDATE"): (
+        f"((unassigned_at IS NULL) AND {_V13_ASSIGNMENTS_CLOSER})",
+        f"({_V13_ASSIGNMENTS_CLOSER})",
+    ),
+    ("engagement_recommendations", "SELECT"): (f"({_V13_RECOMMENDATIONS_READER})", None),
     ("engagement_recommendations", "INSERT"): (
         None,
         f"((member_user_id = app_user_id()) AND {_V13_TRIAGE} AND "
-        + _v13_of_engagement("engagement_recommendations")
+        + _v13_of_engagement("engagement_recommendations", _V13_NOT_MINE)
         + ")",
     ),
     ("engagement_recommendations", "UPDATE"): (_V13_OWN_RECOMMENDATION, _V13_OWN_RECOMMENDATION),
-    ("engagement_recommendations", "DELETE"): (f"((member_user_id = app_user_id()) AND {_V13_MEMBER})", None),
+    ("engagement_recommendations", "DELETE"): (
+        f"((member_user_id = app_user_id()) AND {_V13_RECOMMENDATIONS_READER})",
+        None,
+    ),
     ("prior_knowledge_declarations", "SELECT"): (
         "(EXISTS ( SELECT 1\n   FROM engagements e\n  WHERE (e.id = prior_knowledge_declarations.engagement_id)))",
         None,
@@ -1670,9 +1698,10 @@ async def test_schema_v11_policies_are_exactly_the_planned_ones(owner_engine: As
     bridge_app's, and each is pinned whole: an assignment and a recommendation are read by the organisation's members
     (narrowed by app.org_id) and nobody else, written by an owner, admin, reviewer or signatory as themselves on an
     engagement of the row's organisation (a recommendation the member's own; withdrawn by its member whatever their
-    role); a declaration is read by whoever reads its engagement and inserted by an owner, admin or signatory as
-    themselves naming the engagement's organisation, proposal and version (no UPDATE or DELETE policy: append-only); a
-    calendar feed is its user's own, an organisation's only for a member of it."""
+    role), and never read, written, closed or withdrawn by the engagement's own developer, even as a member (the
+    security review's MINOR 1); a declaration is read by whoever reads its engagement and inserted by an owner, admin
+    or signatory as themselves naming the engagement's organisation, proposal and version (no UPDATE or DELETE policy:
+    append-only); a calendar feed is its user's own, an organisation's only for a member of it."""
     found = await rows(
         owner_engine,
         "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, qual, with_check FROM pg_policies"
@@ -1684,6 +1713,34 @@ async def test_schema_v11_policies_are_exactly_the_planned_ones(owner_engine: As
     }
     assert {role for row in found for role in row.roles} == {"bridge_app"}
     assert {(row.tablename, row.cmd): (row.qual, row.with_check) for row in found} == V13_POLICIES
+
+
+# Revision 0013's one-line text columns (the security review's MINOR 5): (table, column, constraint).
+V13_TEXT_CHECKS = (
+    ("engagement_recommendations", "note", "ck_engagement_recommendations_note_valid"),
+    ("prior_knowledge_declarations", "evidence_title", "ck_prior_knowledge_declarations_evidence_title_valid"),
+    ("developer_profiles", "kecobo_number", "ck_developer_profiles_kecobo_number_valid"),
+    ("developer_profiles", "kipi_number", "ck_developer_profiles_kipi_number_valid"),
+)
+
+
+async def test_every_one_line_check_is_the_shared_text_rule(owner_engine: AsyncEngine) -> None:
+    """Each one-line CHECK of revision 0013 carries ``bridge.models.text``'s pattern verbatim, in the database and in
+    the ORM (alembic check compares no CHECK), so the API's ``is_one_line`` and the database refuse the same strings
+    (``test_migration_0013.py`` sends them)."""
+    found = await rows(
+        owner_engine,
+        "SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conname = ANY (:names)",
+        names=[name for _, _, name in V13_TEXT_CHECKS],
+    )
+    definitions = {row.conname: row.definition for row in found}
+    assert set(definitions) == {name for _, _, name in V13_TEXT_CHECKS}
+    for table, column, name in V13_TEXT_CHECKS:
+        # a varchar column deparses as (column)::text
+        assert f"!~ '{FORBIDDEN_TEXT_CHARS}'::text)" in definitions[name], name
+        assert f"~ '{NOT_BLANK}'::text)" in definitions[name], name
+        orm = [str(c.sqltext) for c in TABLES[table].constraints if isinstance(c, sa.CheckConstraint)]
+        assert any(f"{column} !~ '{FORBIDDEN_TEXT_CHARS}'" in text for text in orm), (table, column)
 
 
 @pytest.mark.parametrize("role", sorted(ROLE_GRANTS))
@@ -3258,7 +3315,8 @@ V12_TRIGGERS = {
 }
 # Revision 0013: the engagement's visibility first on each engagement-scoped table's INSERT, then its guard (an
 # assignment's and a recommendation's organisation and member, the declaration's window); a declaration is append-only
-# for every role; a feed's revocation is the database's time, once.
+# for every role but the owner's one redaction of its title; a feed's revocation is the database's time, once, and a
+# membership or account leaving active revokes its feeds.
 V13_TRIGGERS = {
     ("engagement_assignments", "engagement_assignments_0_visible"): (
         "tracker_engagement_visible",
@@ -3284,15 +3342,22 @@ V13_TRIGGERS = {
         "prior_knowledge_declarations_window",
         ROW | BEFORE | ON_INSERT,
     ),
-    ("prior_knowledge_declarations", "prior_knowledge_declarations_no_update_delete"): (
+    ("prior_knowledge_declarations", "prior_knowledge_declarations_no_delete"): (
         "block_mutation",
-        ROW | BEFORE | ON_UPDATE | ON_DELETE,
+        ROW | BEFORE | ON_DELETE,
+    ),
+    ("prior_knowledge_declarations", "prior_knowledge_declarations_redaction_guard"): (
+        "prior_knowledge_declarations_redaction_guard",
+        ROW | BEFORE | ON_UPDATE,
     ),
     ("prior_knowledge_declarations", "prior_knowledge_declarations_no_truncate"): (
         "block_mutation",
         BEFORE | ON_TRUNCATE,
     ),
     ("calendar_feeds", "calendar_feeds_guard"): ("calendar_feeds_guard", ROW | BEFORE | ON_UPDATE),
+    # a feed dies with its membership or account (AFTER UPDATE OF status, WHEN it leaves active)
+    ("memberships", "memberships_revoke_calendar_feeds"): ("memberships_revoke_calendar_feeds", ROW | ON_UPDATE),
+    ("users", "users_revoke_calendar_feeds"): ("users_revoke_calendar_feeds", ROW | ON_UPDATE),
 }
 
 
