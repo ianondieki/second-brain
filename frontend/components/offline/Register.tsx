@@ -32,6 +32,9 @@ export function Register({ hash, version }: { hash: string | null; version: stri
     const html = document.documentElement;
     // Did the worker answer this page from its cache? Then, back online, the page is loaded again, not unlocked stale.
     let cached = false;
+    // Has the worker said yet whether it answered from its cache? Until it does, a page read without a connection is
+    // taken to be its copy (a fresh page cannot have loaded offline), so its clocks hide from the first moment.
+    let told = false;
     let watch: MutationObserver | undefined;
     // Read-only offline: every control in <main> the page had not disabled itself is disabled (those added later too,
     // by the observer), and given back online.
@@ -43,7 +46,10 @@ export function Register({ hash, version }: { hash: string | null; version: stri
       }
     };
     const offline = (down: boolean) => {
-      html.toggleAttribute("data-offline", down);
+      // "cached": the worker answered this page from its copy (its clocks' instant is that copy's, P27); "offline":
+      // the browser has no connection, the page itself fresh. Either way [data-offline] shows the banner and locks.
+      if (down) html.setAttribute("data-offline", cached || (!told && !navigator.onLine) ? "cached" : "offline");
+      else html.removeAttribute("data-offline");
       lock(down);
       watch?.disconnect();
       // A control a client component enables again is disabled again: "disabled" changes are watched too.
@@ -83,8 +89,11 @@ export function Register({ hash, version }: { hash: string | null; version: stri
           active?.postMessage(hash ? { type: "user", hash, lang: html.lang } : { type: "clear" });
           // Did the worker answer this page from its cache (the network failed though the browser says online)?
           const channel = new MessageChannel();
-          channel.port1.onmessage = ({ data }) =>
-            gone() || offline((cached = Boolean(data?.cached)) || !navigator.onLine);
+          channel.port1.onmessage = ({ data }) => {
+            if (gone()) return;
+            told = true;
+            offline((cached = Boolean(data?.cached)) || !navigator.onLine);
+          };
           active?.postMessage({ type: "status" }, [channel.port2]);
           // A page reached inside the app loaded no page through the worker: it fetches and keeps it (if it may).
           active?.postMessage({ type: "visit", url: location.href });

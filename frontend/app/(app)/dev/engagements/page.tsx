@@ -7,6 +7,9 @@ import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { myEngagements } from "@/components/tracker/data";
 import { EngagementCard } from "@/components/engagements/EngagementCard";
+import { CalendarView } from "@/components/deadlines/CalendarView";
+import { EngagementTabs, pickView } from "@/components/engagements/EngagementTabs";
+import { ClockTicker } from "@/components/ui/ClockTicker";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
 import { Section } from "@/components/ui/Section";
@@ -28,13 +31,32 @@ export async function generateMetadata(): Promise<Metadata> {
  * developer first. Each row opens the tracker; each proposal links to its idea page. No primary action: the list is
  * for reading.
  */
-export default async function DeveloperEngagementsPage() {
+export default async function DeveloperEngagementsPage({ searchParams }: PageProps<"/dev/engagements">) {
   const me = await requireMe();
   const home = homeFor(me.side);
   if (home !== "/dev") redirect(home);
   const t = await getTranslations("tracker");
   const td = await getTranslations("devEngagements");
   const te = await getTranslations("eyebrow");
+  const query = await searchParams;
+  const view = pickView(query.view, false);
+  const tabs = <EngagementTabs basePath="/dev/engagements" current={view} />;
+  if (view === "calendar") {
+    return (
+      <SignedInShell homeHref={home} nav={<DevNav current="engagements" />} wide>
+        <div className="max-w-5xl">
+          <PageHero eyebrow={te("engagements")} title={t("title")} lead={t("devLead")} tabs={tabs} />
+          <CalendarView
+            basePath="/dev/engagements"
+            month={query.month}
+            day={query.day}
+            side="developer"
+            emptyHref="/dev/discover"
+          />
+        </div>
+      </SignedInShell>
+    );
+  }
   const [engagements, ideas] = await Promise.all([myEngagements(), myIdeas().catch(() => [])]);
   const groups = byProposal(engagements);
   // The app clock's instant, read once the API answered (its X-App-Now): every card's live clock counts from it.
@@ -50,7 +72,7 @@ export default async function DeveloperEngagementsPage() {
       offline={<OfflineSlot page={(await getTranslations("nav"))("engagements")} />}
     >
       <div className="max-w-5xl">
-        <PageHero eyebrow={te("engagements")} title={t("title")} lead={t("devLead")} />
+        <PageHero eyebrow={te("engagements")} title={t("title")} lead={t("devLead")} tabs={tabs} />
         {groups.length > 0 ? (
           <div className="flex flex-col gap-12 lg:gap-14">
             {groups.map((group, gi) => (
@@ -84,6 +106,8 @@ export default async function DeveloperEngagementsPage() {
                 </ul>
               </Section>
             ))}
+            {/* The cards' clocks tick from one script for the page, after them (no island per card). */}
+            <ClockTicker />
           </div>
         ) : (
           <EmptyState sentence={t("emptyDev")} action={t("emptyDevAction")} href="/dev/ideas" />

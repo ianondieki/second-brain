@@ -4,6 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { ClientStrings } from "@/components/ClientStrings";
 import { RouteFocus } from "@/components/RouteFocus";
 import { CELEBRATION_INIT_SCRIPT } from "@/components/tracker/celebration-store";
+import { CLOCK_BOOT_SCRIPT } from "@/components/ui/ClockTicker";
 import { TOUR_INIT_SCRIPT } from "@/components/tour/tour-store";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { DEFERRED_FONTS_CSS, DEFERRED_FONTS_SCRIPT } from "@/lib/fonts";
@@ -48,8 +49,18 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <link key={href} rel="preload" href={href} as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
         ))}
         {/* Before the first paint: the remembered appearance (lib/theme.ts) and a stale first-login tour hidden
-            (components/tour/tour-store.ts); after it, the two decorative faces (lib/fonts.ts). */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT + TOUR_INIT_SCRIPT + CELEBRATION_INIT_SCRIPT + DEFERRED_FONTS_SCRIPT }} />
+            (components/tour/tour-store.ts); after it, the two decorative faces (lib/fonts.ts); once parsed, the deadline
+            clocks that arrive later run by the page's ticker (components/ui/ClockTicker.tsx). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              THEME_INIT_SCRIPT +
+              TOUR_INIT_SCRIPT +
+              CELEBRATION_INIT_SCRIPT +
+              DEFERRED_FONTS_SCRIPT +
+              CLOCK_BOOT_SCRIPT,
+          }}
+        />
         <noscript dangerouslySetInnerHTML={{ __html: `<style>${DEFERRED_FONTS_CSS}</style>` }} />
       </head>
       <body className="flex min-h-full flex-col bg-paper text-ink">

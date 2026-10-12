@@ -6,7 +6,19 @@ import { nairobiParts } from "@/lib/format";
 // from `whose_turn` and `awaiting`, the stepper's current group from `stage_group` (backend state_machine.py).
 
 type Schemas = components["schemas"];
-export type Detail = Schemas["EngagementDetail"];
+type DeveloperDetail = Schemas["DeveloperEngagementDetail"];
+type OrgDetail = Schemas["OrgEngagementDetail"];
+/**
+ * One engagement as its party reads it. P27: the API answers one of two shapes keyed by `my_party` (the developer's
+ * with `ip_nudge`, the organisation's with its `team` facts, each its own `prior_knowledge`; never the other's, D-68).
+ * The tracker reads the fields they share, so it takes one type with the party-specific ones optional.
+ */
+export type Detail = Omit<DeveloperDetail, "my_party" | "ip_nudge" | "prior_knowledge"> & {
+  my_party: Party;
+  ip_nudge?: DeveloperDetail["ip_nudge"];
+  team?: OrgDetail["team"];
+  prior_knowledge?: DeveloperDetail["prior_knowledge"] | OrgDetail["prior_knowledge"];
+};
 export type Summary = Schemas["EngagementSummary"];
 export type Command = Schemas["Command"];
 export type Party = Schemas["EngagementParty"];

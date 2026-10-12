@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { PortalNavFor } from "@/components/PortalNavFor";
@@ -9,6 +9,7 @@ import { Section } from "@/components/ui/Section";
 import { SignedInShell } from "@/components/SignedInShell";
 import { forwardHeaders, requireMe, serverApi } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
+import { formatMoment } from "@/lib/format";
 import { DATA_SAVER_COOKIE } from "@/lib/data-saver";
 import { clientStrings, pickedStrings } from "@/lib/i18n/client-strings";
 
@@ -17,9 +18,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BackLink } from "@/components/ui/BackLink";
 import { PageHero } from "@/components/ui/PageHero";
 
+import { pickMembership } from "../../org/membership";
+import { OrgPicker } from "../../org/OrgPicker";
 import { DataSaverSwitch } from "../profile/DataSaverSwitch";
 import { SettingsTabs } from "../SettingsTabs";
 import { notificationChoices, preferenceChoices, type ConsentItem } from "./choices";
+import { CalendarFeed } from "./CalendarFeed";
+import { feedStatus } from "./feed-data";
 import { NotificationChoices } from "./NotificationChoices";
 import { myPreferences } from "./preferences-data";
 
@@ -47,11 +52,21 @@ async function myConsents(): Promise<ConsentItem[]> {
  * "Data": the data-saver switch (P27, REQ-UX-08), the same one developers also have on Profile, here for both sides; it
  * acts at once on this device and is not part of "Save choices".
  */
-export default async function NotificationSettingsPage() {
+export default async function NotificationSettingsPage({ searchParams }: PageProps<"/settings/notifications">) {
   const me = await requireMe();
   const home = homeOf(me);
   const t = await getTranslations("notificationSettings");
-  const [consents, preferenceItems, jar] = await Promise.all([myConsents(), myPreferences(), cookies()]);
+  const tf = await getTranslations("calendarFeed");
+  // The calendar feed is the person's own, or, for an organisation member, the chosen organisation's (?org=).
+  const picked = me.side === "org" ? pickMembership(me.memberships, (await searchParams).org) : null;
+  const feedOrg = picked?.kind === "member" ? picked.membership : null;
+  const [consents, preferenceItems, jar, feed, locale] = await Promise.all([
+    myConsents(),
+    myPreferences(),
+    cookies(),
+    me.side === "org" && !feedOrg ? Promise.resolve(null) : feedStatus(feedOrg?.org_id),
+    getLocale(),
+  ]);
   const choices = notificationChoices(consents);
   // A kind the page has words for reads in the page's language; any other keeps the API's own label.
   const preferences = preferenceChoices(preferenceItems, (item) =>
@@ -88,6 +103,33 @@ export default async function NotificationSettingsPage() {
               </Section>
             </Card>
           )}
+          {me.side !== "org" || feedOrg ? (
+            <Card variant="flat" className="mt-6 p-5 sm:p-6" data-calendar-feed-card="">
+              <Section
+                title={tf("title")}
+                headingId="calendar-feed-heading"
+                headingStyle="card"
+                description={tf("lead")}
+              >
+                <div className="flex flex-col gap-4">
+                  {feedOrg && me.memberships.length > 1 ? (
+                    <OrgPicker memberships={me.memberships} current={feedOrg.org_id} action="/settings/notifications" />
+                  ) : null}
+                  {feedOrg ? <p className="text-ink">{tf("forOrg", { org: feedOrg.org_name })}</p> : null}
+                  <p className="max-w-[62ch] text-sm text-ink-soft" data-feed-private="">
+                    {tf("private")}
+                  </p>
+                  <ClientStrings strings={await clientStrings(["calendarFeed"])}>
+                    <CalendarFeed
+                      initial={feed?.active ? "live" : "none"}
+                      orgId={feedOrg?.org_id}
+                      lastRead={feed?.last_fetched_at ? formatMoment(locale, feed.last_fetched_at) : null}
+                    />
+                  </ClientStrings>
+                </div>
+              </Section>
+            </Card>
+          ) : null}
           <Card variant="flat" className="mt-6 p-5 sm:p-6" data-data-saver-card="">
             <Section title={t("dataTitle")} headingId="data-heading" headingStyle="card">
               <ClientStrings

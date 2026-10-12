@@ -11,9 +11,14 @@ import { Section } from "@/components/ui/Section";
 import { appNow } from "@/lib/api/server";
 
 import { getTeaser, orgContext } from "../data";
+import { CalendarView } from "@/components/deadlines/CalendarView";
+import { EngagementTabs, pickView, viewHref } from "@/components/engagements/EngagementTabs";
+import { Board } from "@/components/pipeline/Board";
+import { assignedTo, hasTeamFacts, readPipeline } from "@/components/pipeline/data";
+import { ClockTicker } from "@/components/ui/ClockTicker";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
-import { ENGAGEMENTS_PATH, inboxHref, type Membership } from "../membership";
+import { ENGAGEMENTS_PATH, first, inboxHref, type Membership } from "../membership";
 import { OrgPicker } from "../OrgPicker";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -28,7 +33,11 @@ export async function generateMetadata(): Promise<Metadata> {
  * pick one (?org=); an organisation the person is not a member of is refused, never silently swapped.
  */
 export default async function OrganisationEngagementsPage({ searchParams }: PageProps<"/org/engagements">) {
-  const { memberships, org, missing, query } = await orgContext((await searchParams).org);
+  const params = await searchParams;
+  const { me, memberships, org, missing, query } = await orgContext(params.org);
+  const view = pickView(params.view, true);
+  // The organisation's id in the views' links only when the person has several (as `query`).
+  const orgParam = org && memberships.length > 1 ? org.org_id : undefined;
   const [t, ti, tp] = await Promise.all([
     getTranslations("tracker"),
     getTranslations("inbox"),
@@ -42,9 +51,37 @@ export default async function OrganisationEngagementsPage({ searchParams }: Page
       wide
       offline={<OfflineSlot page={(await getTranslations("nav"))("engagements")} />}
     >
-      <div className="max-w-5xl">
-        <PageHero eyebrow={tp("eyebrow.engagements")} title={t("title")} lead={org ? t("orgLead") : undefined} />
-        {org ? (
+      <div className={view === "board" ? undefined : "max-w-5xl"}>
+        <PageHero
+          eyebrow={tp("eyebrow.engagements")}
+          title={t("title")}
+          lead={org ? t("orgLead") : undefined}
+          tabs={org ? <EngagementTabs basePath={ENGAGEMENTS_PATH} current={view} board org={orgParam} /> : undefined}
+        />
+        {org && view !== "list" && memberships.length > 1 ? (
+          <div className="mb-6">
+            <OrgPicker memberships={memberships} current={org.org_id} action={ENGAGEMENTS_PATH} keep={{ view }} />
+          </div>
+        ) : null}
+        {org && view === "calendar" ? (
+          <CalendarView
+            basePath={ENGAGEMENTS_PATH}
+            orgId={org.org_id}
+            orgQuery={orgParam}
+            month={params.month}
+            day={params.day}
+            side="org"
+            emptyHref={inboxHref(memberships, org.org_id)}
+          />
+        ) : org && view === "board" ? (
+          <BoardView
+            orgId={org.org_id}
+            orgParam={orgParam}
+            query={query}
+            mine={first(params.assignee) === "me"}
+            userId={me.user.id}
+          />
+        ) : org ? (
           <Body memberships={memberships} org={org} query={query} />
         ) : (
           <div>
@@ -57,6 +94,52 @@ export default async function OrganisationEngagementsPage({ searchParams }: Page
         )}
       </div>
     </SignedInShell>
+  );
+}
+
+/**
+ * The Board view (P27 track B; REQ-ENG-14): the organisation's pipeline, narrowed to the person's own engagements with
+ * "Assigned to me" (`?assignee=me`), a filter offered only when the cards carry the organisation's triage facts.
+ */
+async function BoardView({
+  orgId,
+  orgParam,
+  query,
+  mine,
+  userId,
+}: {
+  orgId: string;
+  orgParam?: string;
+  query: string;
+  mine: boolean;
+  userId: string;
+}) {
+  const t = await getTranslations("tracker");
+  const read = await readPipeline(orgId);
+  if (!read.ok) {
+    return read.refusal === "mfaSetup" ? (
+      <EmptyState sentence={t("refused.mfaSetup")} action={t("turnOnMfa")} href="/settings/security" primary />
+    ) : (
+      <EmptyState sentence={t("refused.notFound")} action={t("back")} href={`${ENGAGEMENTS_PATH}${query}`} />
+    );
+  }
+  const filterable = hasTeamFacts(read.value);
+  const on = filterable && mine;
+  return (
+    <Board
+      pipeline={on ? assignedTo(read.value, userId) : read.value}
+      cardHref={(id) => `${ENGAGEMENTS_PATH}/${encodeURIComponent(id)}${query}`}
+      filter={
+        filterable
+          ? {
+              on,
+              allHref: viewHref(ENGAGEMENTS_PATH, "board", { org: orgParam }),
+              mineHref: viewHref(ENGAGEMENTS_PATH, "board", { org: orgParam, assignee: "me" }),
+            }
+          : undefined
+      }
+      emptyHref={`/org/inbox/scouts/new${query}`}
+    />
   );
 }
 
@@ -80,7 +163,13 @@ async function Body({ memberships, org, query }: { memberships: Membership[]; or
       <EmptyState sentence={t("emptyOrg")} action={t("emptyOrgAction")} href={inboxHref(memberships, org.org_id)} />
     );
   } else {
-    body = <EngagementGrid items={read.value} query={query} />;
+    body = (
+      <>
+        <EngagementGrid items={read.value} query={query} />
+        {/* The cards' clocks tick from one script for the page, after them (no island per card). */}
+        <ClockTicker />
+      </>
+    );
   }
   return (
     <>

@@ -7,7 +7,7 @@ import { NicheBand } from "@/components/ui/NicheBand";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { CompaniesIcon, InfoIcon, PencilIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
-import { TimeLeft } from "@/components/ui/TimeLeft";
+import { DeadlineLine } from "@/components/ui/DeadlineClock";
 
 import { Citations } from "./Citations";
 import { confidenceWords, formatDate, problemLabel, type ProblemDetail } from "./problem";
@@ -86,9 +86,10 @@ export async function ProblemCard({
               </Description>
               <Description label={t("deadline")}>
                 {brief.deadline ? formatDate(locale, brief.deadline) : <span className="text-ink-soft">{t("noDeadline")}</span>}
-                {/* While it is open, the time left (P23-3); once it is not, ProblemStart says why in its own words. */}
+                {/* While it is open, the time left (P23-3), kept by the page's ticker (P27); once it is not,
+                    ProblemStart says why in its own words. */}
                 {deadlineAt && now ? (
-                  <TimeLeft
+                  <DeadlineLine
                     until={deadlineAt}
                     now={now}
                     labelWhenPast={tb("state.closed")}
