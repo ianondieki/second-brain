@@ -11,7 +11,7 @@ import { detail, inImplementation } from "@/test/engagement";
 import { renderWithIntl } from "@/test/intl";
 
 import { Actions, type ActionsProps } from "./Actions";
-import { refusalOf, runCommand, type CommandOutcome } from "./calls";
+import { refusalOf, runCommand, type CommandOutcome, type revealContact } from "./calls";
 import { ContactReveal, mailto } from "./ContactReveal";
 import { actionItems, type CommandRequest, type Detail } from "./model";
 
@@ -457,6 +457,27 @@ describe("the contact reveal", () => {
     expect(document.activeElement).not.toBe(document.body);
     expect(document.activeElement).toBe(details?.parentElement);
     expect(document.activeElement?.getAttribute("tabindex")).toBe("-1");
+  });
+
+  // P27 UX: on the tracker the part loads when its button is pressed and reveals at once (`start`), once only, its own
+  // button busy and focused in the meantime, then the details focused in its place.
+  it("reveals once on mount when started by the lazy button, focus on its busy button, then on the details", async () => {
+    let answer: (value: Awaited<ReturnType<typeof revealContact>>) => void = () => undefined;
+    const revealImpl = vi.fn(
+      () => new Promise<Awaited<ReturnType<typeof revealContact>>>((resolve) => (answer = resolve)),
+    );
+    renderWithIntl(<ContactReveal engagementId="e1" revealImpl={revealImpl} start />);
+    expect(revealImpl).toHaveBeenCalledTimes(1);
+    expect(revealImpl).toHaveBeenCalledWith("e1");
+    const busy = screen.getByRole("button", { name: "Working…" });
+    expect(busy.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(busy);
+    await act(async () =>
+      answer({ ok: true, contact: { developer_name: "Achieng Otieno", email: "achieng@example.com", phone: null } }),
+    );
+    const details = document.querySelector("[data-contact-revealed]");
+    expect(document.activeElement).toBe(details?.parentElement);
+    expect(revealImpl).toHaveBeenCalledTimes(1);
   });
 
   it("links to the one address only, whatever characters the address holds", () => {

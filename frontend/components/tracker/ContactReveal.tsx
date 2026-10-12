@@ -9,22 +9,45 @@ import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 
 import { revealContact, type Contact, type Refusal } from "./calls";
 
+type Outcome = Awaited<ReturnType<typeof revealContact>>;
+
 /**
  * The developer's contact details for the organisation's named contact person (GET …/contact; docs/spec/06 6.9 stage
- * 3, AC-TRACK-9). Fetched only when asked for: each reveal is recorded on the organisation's audit trail.
+ * 3, AC-TRACK-9). Fetched only when asked for: each reveal is recorded on the organisation's audit trail. On the
+ * tracker it loads only once its button is pressed (components/tracker/lazy.tsx, LazyContactReveal) and then `start`s
+ * at once, its own button taking the focus while it works: the press was the asking.
  */
 export function ContactReveal({
   engagementId,
   revealImpl = revealContact,
+  start = false,
 }: {
   engagementId: string;
   revealImpl?: typeof revealContact;
+  /** Reveal on mount (the button that loaded this part was the press); once only. */
+  start?: boolean;
 }) {
   const t = useStrings("trackerActions");
   const [contact, setContact] = useState<Contact | null>(null);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(start);
   const revealed = useRef<HTMLDivElement>(null);
+  const asking = useRef<HTMLDivElement>(null);
+  const started = useRef(false);
+
+  function settle(outcome: Outcome) {
+    setBusy(false);
+    if (outcome.ok) setContact(outcome.contact);
+    else setRefusal(outcome.refusal);
+  }
+
+  // Pressed already (the lazy button): the place the press left is this button, busy, until the details replace it.
+  useEffect(() => {
+    if (!start || started.current) return;
+    started.current = true;
+    asking.current?.querySelector("button")?.focus();
+    void revealImpl(engagementId).then(settle);
+  }, [start, revealImpl, engagementId]);
 
   // The button the person pressed is replaced by the details: focus moves to them, so they are announced where the
   // control was (WCAG 2.4.3; ECC review, P16-F), as ShareTier2 does.
@@ -36,10 +59,7 @@ export function ContactReveal({
     if (busy) return;
     setBusy(true);
     setRefusal(null);
-    const outcome = await revealImpl(engagementId);
-    setBusy(false);
-    if (outcome.ok) setContact(outcome.contact);
-    else setRefusal(outcome.refusal);
+    settle(await revealImpl(engagementId));
   }
 
   if (contact) {
@@ -56,7 +76,7 @@ export function ContactReveal({
   }
 
   return (
-    <div className="flex flex-col items-start gap-3">
+    <div ref={asking} className="flex flex-col items-start gap-3">
       {refusal ? <Alert className="w-full">{t(`refusal.${refusal}`)}</Alert> : null}
       <Button variant="secondary" busy={busy} onClick={reveal}>
         {busy ? t("busy") : t("contact.reveal")}

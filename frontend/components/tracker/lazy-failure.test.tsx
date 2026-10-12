@@ -50,6 +50,8 @@ describe("a tracker part whose chunk cannot load", () => {
         <LazyContactReveal engagementId="e1" />
       </>,
     );
+    // Its chunk loads only once the button is pressed (P27 UX), so that is when it can fail.
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: en.trackerActions.contact.reveal })));
     expect((await screen.findByRole("alert")).textContent).toContain(en.trackerActions.partFailed);
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
   });
