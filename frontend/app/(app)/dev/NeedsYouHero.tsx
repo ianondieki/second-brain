@@ -3,20 +3,20 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { Chip, ChipMark } from "@/components/tracker/Chip";
 import { isFinished, stageChip, type Summary } from "@/components/tracker/model";
-import { DueLine } from "@/components/tracker/When";
+import { clockUntil, DueClock, DueLine } from "@/components/tracker/When";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { buttonClass } from "@/components/ui/Button";
 import { Card, cardLinkClass } from "@/components/ui/Card";
 import { LinkPending } from "@/components/ui/LinkPending";
 import { cn } from "@/components/ui/cn";
-import { TimeLeft } from "@/components/ui/TimeLeft";
 import { formatShortDate } from "@/lib/format";
 
 /**
  * Developer Home's "Needs you" card (D-52, P20): the page's most important object, so it is the one raised card. The
  * organisation's avatar, the idea as the card's one stretched link, the stage and the saffron "Your turn", and the
- * deadline as a figure in the display face beside the way in. A hold has no deadline (its `due` is the day it
+ * deadline beside the way in: the live clock (P26: days, hours, minutes in the figure face, the business days and the
+ * date as its line) while the stage's window is open; the date as a figure with its business days otherwise. A hold has no deadline (its `due` is the day it
  * resumes) and an ended engagement none either: they keep the tracker's own line. The org portal keeps the shared
  * NeedsYouCard; this is the developer's Home only.
  */
@@ -25,7 +25,7 @@ export function NeedsYouHero({ item, href, action, now }: { item: Summary; href:
   const th = useTranslations("devHome");
   const locale = useLocale();
   const due = item.due && !isFinished(item.state) && item.state !== "ON_HOLD" ? item.due : null;
-  const timed = Boolean(due && due.due_at && now && !due.overdue);
+  const timed = Boolean(now && clockUntil(item, "developer"));
   const when = due
     ? due.overdue
       ? th("stats.deadlineOverdue")
@@ -64,18 +64,15 @@ export function NeedsYouHero({ item, href, action, now }: { item: Summary; href:
         </div>
       </div>
       <div className="flex flex-wrap items-end justify-between gap-4 border-t border-line pt-4 md:flex-col md:items-end md:border-t-0 md:border-l md:py-1 md:pt-1 md:pl-8">
-        {due ? (
-          <p className="flex flex-col md:items-end" data-due={due.overdue ? "overdue" : "open"} title={timed ? when ?? undefined : undefined}>
+        {timed ? (
+          <DueClock item={item} mine="developer" now={now} size="lg" className="md:items-end md:text-end" />
+        ) : due ? (
+          <p className="flex flex-col md:items-end" data-due={due.overdue ? "overdue" : "open"}>
             <time dateTime={due.due_on} className="font-figure text-3xl leading-none font-[720] tracking-[-0.03em] whitespace-nowrap text-ink tabular-nums">
               {formatShortDate(locale, due.due_on)}
             </time>
-            {/* One line under the date (P23-3): the time left, the step being the developer's, with the business days in
-                the title as on the Next deadline tile; the business days themselves when the API sends no instant. */}
-            {timed ? (
-              <TimeLeft until={due.due_at!} now={now!} labelWhenPast={th("stats.deadlineOverdue")} mine className="mt-1.5 text-sm text-ink-soft" />
-            ) : (
-              <span className={cn("mt-1.5 text-sm", due.overdue ? "font-semibold text-error" : "text-ink-soft")}>{when}</span>
-            )}
+            {/* The business days under the date when the API sends no instant (or once overdue). */}
+            <span className={cn("mt-1.5 text-sm", due.overdue ? "font-semibold text-error" : "text-ink-soft")}>{when}</span>
           </p>
         ) : null}
         <span aria-hidden="true" className={buttonClass("secondary", "shrink-0")}>

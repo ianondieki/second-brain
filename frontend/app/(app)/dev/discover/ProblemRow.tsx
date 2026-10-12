@@ -63,7 +63,7 @@ export function ProblemRow({ item, counties, projects = [], query }: ProblemRowP
       data-trending={trend.trending ? "" : undefined}
       className={discoverCardClass}
     >
-      <CardBand niche={problem.niche} county={problem.county_code} />
+      <CardBand niche={problem.niche} county={problem.county_code} forOrganisation={problem.source === "org_brief"} />
       <h3 id={titleId} className={discoverTitleClass}>
         <Link href={problemHref(problem.id)} className={titleLinkClass}>
           <SharedTitle kind="problem" id={problem.id}>

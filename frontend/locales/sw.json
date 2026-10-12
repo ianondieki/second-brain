@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "reviewP26a": "[[COPY-REVIEW]] [[SW-REVIEW]] P26-A (REQ-TRACK-03, REQ-UX-02), rasimu ya Kiswahili: countdown.clockDays, countdown.clockHours, countdown.clockMinutes (saa ya mwisho: ujumbe mmoja kwa kila kipimo kikubwa; tarakimu na neno la kipimo zimewekewa lebo (f, u), hivyo kila lugha inaamua mpangilio na nafasi)",
     "reviewP25c2": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: portal.* (vichwa vidogo vya mahali ulipo, mistari mipya ya lango la shirika, dashibodi ya wafanyakazi na kurasa za kuingia: portal.eyebrow.*, portal.settings.*, portal.proposal.means, portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry, adminResearch.stepUp.loading, briefForm.preview.* (onyesho la moja kwa moja la jinsi Brief inavyosomeka kwenye Gundua)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack) [[SW-REVIEW]] draft Swahili",
     "reviewP15f": "[[COPY-REVIEW]] [[SW-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.* (rasimu ya Kiswahili)",
@@ -32,7 +33,8 @@
     "reviewP22c": "[[COPY-REVIEW]] [[SW-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: teams.*, teamUp.*, profileSettings.*, settingsNav.profile, ideaContributors.*, ideas.contributorsLine, ideas.sheet.contributors; 'Shirikiana' for team up, 'mwaliko' for invitation, 'mchangiaji' for contributor, 'wenzako' for peers; trackerMessages.refusal.attachFailed (faili za kisanduku cha ujumbe hazikupakia)",
     "reviewP23c": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: countdown.* (muda uliobaki hadi tarehe ya mwisho: siku (haibadiliki kwa wingi, hivyo bila ICU plural), saa na dak (dakika) kuanzia kipimo kikubwa (countdown.days, .hours, .minutes), countdown.in (\"baada ya {time}\"), countdown.dueIn (\"Inatakiwa {date} · baada ya {time}\"), countdown.closesIn (\"Mapendekezo yatafungwa baada ya {time}\") na countdown.at (saa kamili ya Nairobi katika kichwa cha kipengele cha muda)); trackerActions.partFailed na .partReload (sehemu ya ukurasa ambayo msimbo wake haukupakia); je, \"dak\" inafaa kama kifupi cha dakika?",
     "reviewP24": "[[COPY-REVIEW]] [[SW-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: landing.eyebrow, landing.title (kifungu cha italiki, lebo yake ya accent), landing.sample.*, landing.stats.*, landing.counties.*, landing.how.* (vibandiko vitatu), landing.reasons.* (values.* ni maandishi ya Kiingereza ya mpangaji kama bidhaa inavyoyaonyesha; je, yabaki kwa Kiingereza?), landing.activity.*, landing.nav.explore, landing.footer.*, explore.*, credits.*, home.greeting (asubuhi/mchana/jioni kwa saa ya Nairobi), og.*; \"niche\" imeachwa kama ilivyo katika sehemu nyingine za programu; explore.nationwide/nationwideNote/seeded, problemPage.*, og.problemAlt",
-    "reviewP25": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: palette.* (kitufe cha Tafuta, makundi, vitendo, vitufe), activity.* (kalenda ya shughuli; activity.mon/wed/fri ni vifupisho vya siku, je, vinafaa?), \"Brief\" imetafsiriwa kama \"maelezo ya tatizo\" kama katika briefs.*; eyebrow.* (P25-C2: lebo ndogo juu ya kila skrini ya msanidi programu, inayosema uko wapi); engagementCard.* (mstari wa vitone vitano wa kadi ya ushirikiano); activity.busiest"
+    "reviewP25": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: palette.* (kitufe cha Tafuta, makundi, vitendo, vitufe), activity.* (kalenda ya shughuli; activity.mon/wed/fri ni vifupisho vya siku, je, vinafaa?), \"Brief\" imetafsiriwa kama \"maelezo ya tatizo\" kama katika briefs.*; eyebrow.* (P25-C2: lebo ndogo juu ya kila skrini ya msanidi programu, inayosema uko wapi); engagementCard.* (mstari wa vitone vitano wa kadi ya ushirikiano); activity.busiest",
+    "reviewP26": "[[COPY-REVIEW]] [[SW-REVIEW]] P26-B (REQ-DIR-01, REQ-UX-01, REQ-UX-02; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: companies.lead, companies.groupCount, companies.findProblems, companies.pitchIdea, companies.otherNiches, companies.responseFigure; companies.heldUnclaimedHint (maelezo ya E0 kabla ya kuwasilisha, kwa umbo la pitch.heldUnclaimed); imeondolewa: companies.detailNiches, companies.nichesTitle (badala yake companies.otherNiches)"
   },
   "app": {
     "name": "Wazo",
@@ -1001,7 +1003,7 @@
   "companies": {
     "pageTitle": "Makampuni",
     "title": "Makampuni",
-    "lead": "Mashirika yaliyo kwenye saraka, yamepangwa kwa fani. Kila moja linaonyesha kiwango chake cha uthibitisho.",
+    "lead": "Pata mashirika yanayofanya kazi katika fani yako, na uone kila moja limethibitishwa kwa kiwango gani kabla ya kuwasilisha wazo.",
     "searchLabel": "Tafuta kwa jina",
     "filters": "Vichujio",
     "filtersChosen": "Vichujio (vilivyochaguliwa: {count})",
@@ -1015,6 +1017,7 @@
     "submit": "Onyesha makampuni",
     "clear": "Futa vichujio",
     "noNiche": "Bado hayajapangwa kwa fani",
+    "groupCount": "{count, plural, one {# shirika} other {# mashirika}}",
     "meta": "{kind}, {county}",
     "pages": "Kurasa",
     "nextPage": "Ukurasa unaofuata",
@@ -1026,9 +1029,13 @@
     "detailBack": "Makampuni yote",
     "detailType": "Aina ya shirika",
     "detailCounty": "Kaunti",
-    "detailNiches": "Fani",
     "detailResponse": "Rekodi ya majibu",
     "detailNone": "Haijatolewa",
+    "heldUnclaimedHint": "{name} bado haliko kwenye jukwaa. Pendekezo utakalowasilisha kwao litahifadhiwa, na wataliona wakijiunga na kuthibitishwa. Hatuwatumii barua pepe kwa niaba yako.",
+    "findProblems": "Tafuta matatizo katika {niche}",
+    "pitchIdea": "Wasilisha mojawapo ya mawazo yako",
+    "otherNiches": "Pia hufanya kazi katika",
+    "responseFigure": "siku {days} · {pct}%",
     "notFound": "Shirika hili halipo kwenye saraka."
   },
   "verify": {
@@ -2354,10 +2361,10 @@
     },
     "at": "{date}, {time} EAT",
     "due": {
-      "left": "Zimebaki siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho <nowrap>{date}</nowrap>",
+      "left": "Zimebaki siku {count, plural, one {# ya kazi} other {# za kazi}}, <nowrap>mwisho {date}</nowrap>",
       "today": "Mwisho leo, <nowrap>{date}</nowrap>",
-      "overdue": "Imechelewa siku {count, plural, one {# ya kazi} other {# za kazi}}, mwisho ulikuwa <nowrap>{date}</nowrap>",
-      "overdueToday": "Imechelewa, mwisho ulikuwa <nowrap>{date}</nowrap>",
+      "overdue": "Imechelewa siku {count, plural, one {# ya kazi} other {# za kazi}}, <nowrap>mwisho ulikuwa {date}</nowrap>",
+      "overdueToday": "Imechelewa, <nowrap>mwisho ulikuwa {date}</nowrap>",
       "resumes": "Kuendelea tena <nowrap>{date}</nowrap>",
       "answerBy": "Jibu kutoka kwa {name} linatarajiwa kufikia <nowrap>{date}</nowrap>",
       "answerLate": "Jibu kutoka kwa {name} lilitarajiwa kufikia <nowrap>{date}</nowrap>"
@@ -4078,6 +4085,9 @@
     "days": "siku {days} saa {hours} dak {minutes}",
     "hours": "saa {hours} dak {minutes}",
     "minutes": "dak {minutes}",
+    "clockDays": "<u>siku </u><f>{days}</f> <u>saa </u><f>{hours}</f> <u>dak </u><f>{minutes}</f>",
+    "clockHours": "<u>saa </u><f>{hours}</f> <u>dak </u><f>{minutes}</f>",
+    "clockMinutes": "<u>dak </u><f>{minutes}</f>",
     "in": "baada ya {time}",
     "dueIn": "Inatakiwa {date} · baada ya {time}",
     "closesIn": "Mapendekezo yatafungwa baada ya {time}",

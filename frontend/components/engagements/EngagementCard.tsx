@@ -5,7 +5,7 @@ import { SharedTitle } from "@/components/motion/SharedTitle";
 import { Chip, ChipMark } from "@/components/tracker/Chip";
 import { awaitsMe, stageChip, turnOf, type Party, type Summary } from "@/components/tracker/model";
 import { UnreadLine } from "@/components/tracker/UnreadLine";
-import { DueLine } from "@/components/tracker/When";
+import { DueClock } from "@/components/tracker/When";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { cardLinkClass } from "@/components/ui/Card";
@@ -26,16 +26,31 @@ export interface EngagementCardProps {
   headingLevel?: 2 | 3;
   /** The idea's niche: its photograph as the card's top band (D-67; the lattice where there is none). */
   niche?: { slug: string } | null;
+  /** The list's first card: its band is the page's largest picture, fetched at once (P26-C). */
+  eager?: boolean;
+  /** The app clock's instant for the page (appNow, the API's X-App-Now): with it, an open deadline is a live clock. */
+  now?: string;
 }
 
 /**
  * One engagement as a card (P25, D-67), for both sides' lists: the other party's monogram and the title (the card's
  * one link, which morphs into the tracker's title), where it stands as five dots, then at most two chips (docs/spec/07
  * item 2: the stage in words and, when it waits on the viewer's side, the solid "Your turn"), otherwise who it waits
- * on, the countdown and any unread messages. Raised when it is the viewer's turn. With `niche`, the idea's niche
+ * on, the deadline and any unread messages. While the stage's window is open the deadline is the live clock (P26: days,
+ * hours and minutes, the business days as its line, a hairline above it); overdue, on hold, ended and the
+ * organisation's answer-by case keep their words. Raised when it is the viewer's turn. With `niche`, the idea's niche
  * photograph tops the card (never on the tracker itself). Reusable by the organisation's lists.
  */
-export function EngagementCard({ item, mine, href, titleBy = "proposal", headingLevel = 3, niche }: EngagementCardProps) {
+export function EngagementCard({
+  item,
+  mine,
+  href,
+  titleBy = "proposal",
+  headingLevel = 3,
+  niche,
+  now,
+  eager = false,
+}: EngagementCardProps) {
   const t = useTranslations("tracker");
   const tc = useTranslations("engagementCard");
   const turn = turnOf(item, mine);
@@ -63,6 +78,9 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
       {niche !== undefined ? (
         <NicheBand
           niche={niche?.slug}
+          // Titled by the organisation, the band sits over its name: never another organisation's premises (P26).
+          forOrganisation={titleBy === "organisation"}
+          eager={eager}
           // A card can run the column's width (one engagement for an idea): every vendored size, chosen by width.
           wide
           sizes="(min-width: 1024px) 54rem, 92vw"
@@ -74,10 +92,20 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
         <div className="min-w-0">
           <Heading className="font-sans text-base leading-snug font-semibold [overflow-wrap:anywhere] text-ink">
             {/* Titled by the idea, the title morphs into the tracker's (the same words); by the organisation it does not. */}
-            {titleBy === "proposal" ? <SharedTitle kind="engagement" id={item.id}>{link}</SharedTitle> : link}
+            {titleBy === "proposal" ? (
+              <SharedTitle kind="engagement" id={item.id}>
+                {link}
+              </SharedTitle>
+            ) : (
+              link
+            )}
           </Heading>
           {titleBy === "proposal" ? (
-            <p className="text-sm text-ink-soft">{mine === "developer" ? t("withOrg", { org: item.org_name }) : t("fromDeveloper", { name: item.developer_name })}</p>
+            <p className="text-sm text-ink-soft">
+              {mine === "developer"
+                ? t("withOrg", { org: item.org_name })
+                : t("fromDeveloper", { name: item.developer_name })}
+            </p>
           ) : null}
         </div>
       </div>
@@ -92,7 +120,7 @@ export function EngagementCard({ item, mine, href, titleBy = "proposal", heading
       </p>
       <div className="mt-auto flex flex-col gap-1 text-sm">
         {turn.kind === "other" ? <p className="text-ink-soft">{tc("waitingOn", { name: other })}</p> : null}
-        <DueLine item={item} mine={mine} />
+        <DueClock item={item} mine={mine} now={now} className="mt-2 border-t border-line pt-3" />
         <UnreadLine count={item.unread_messages} />
       </div>
     </article>

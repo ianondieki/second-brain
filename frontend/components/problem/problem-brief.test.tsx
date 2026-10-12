@@ -116,6 +116,15 @@ describe("a Brief's problem card", () => {
     expect(within(facts).getByText("Proposals wanted by").nextElementSibling?.textContent).toBe("30 Nov 2026");
   });
 
+  it("never shows a named organisation's premises on a Brief's band; a research problem keeps its niche's photograph", async () => {
+    // No county: ICT's photograph is Longonot earth station, one company's premises.
+    render(await ProblemCard({ problem: detail({ county_code: null }) }));
+    expect(document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("lattice");
+    cleanup();
+    render(await ProblemCard({ problem: detail({ county_code: null, source: "research_agent", label: null, org: null, brief: null }) }));
+    expect(document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("longonot-earth-station");
+  });
+
   it("says when the organisation gave no band or deadline", async () => {
     render(await ProblemCard({ problem: detail({ brief: { org: ORG, budget_band: null, deadline: null, open: true } }) }));
     expect(screen.getByText("Budget band").nextElementSibling?.textContent).toBe(en.problem.budgetOpen);

@@ -106,9 +106,7 @@ export function DirectoryFilters({ filters, niches, options, showClear = true }:
 
       {showClear && isNarrowed(filters) ? (
         <p>
-          <StandaloneLink href={BASE_PATH}>
-            {t("clear")}
-          </StandaloneLink>
+          <StandaloneLink href={BASE_PATH}>{t("clear")}</StandaloneLink>
         </p>
       ) : null}
     </form>

@@ -5,7 +5,14 @@ import { expect, test, type Browser, type Page, type TestInfo } from "@playwrigh
 
 import { appToday, plusDays } from "./support/clock";
 import { checkScreen } from "./support/screen";
-import { actionsReady, OWNER_DATABASE_URL, pitchFromDeveloper, signUpOrg, type DevSide, type OrgSide } from "./support/tracker-scene";
+import {
+  actionsReady,
+  OWNER_DATABASE_URL,
+  pitchFromDeveloper,
+  signUpOrg,
+  type DevSide,
+  type OrgSide,
+} from "./support/tracker-scene";
 import { loginReturningTo } from "./support/login";
 
 // REQ-ENG-03 (AC-TRACK-3, AC-TRACK-4 prototype part), REQ-UX-01: the engagement tracker walked by both parties in
@@ -31,7 +38,13 @@ async function shot(page: Page, info: TestInfo, name: string) {
   const size = page.viewportSize()!;
   const width = info.project.name.startsWith("mobile") ? 375 : 1440;
   await page.setViewportSize({ width, height: size.height });
-  await page.screenshot({ path: join(dir, `${name}-${width}.jpg`), fullPage: true, type: "jpeg", quality: 70, scale: "css" });
+  await page.screenshot({
+    path: join(dir, `${name}-${width}.jpg`),
+    fullPage: true,
+    type: "jpeg",
+    quality: 70,
+    scale: "css",
+  });
   await page.setViewportSize(size);
 }
 
@@ -61,7 +74,6 @@ async function banner(page: Page) {
   return page.locator("[data-whose-turn]");
 }
 
-
 interface Scene {
   dev: DevSide;
   org: OrgSide;
@@ -80,7 +92,11 @@ async function scene(page: Page, browser: Browser, info: TestInfo): Promise<Scen
 }
 
 test("signed-out visits to the tracker screens go to the login page", async ({ page }) => {
-  for (const path of ["/dev/engagements", "/org/engagements", "/dev/engagements/0199b000-0000-7000-8000-00000000e001"]) {
+  for (const path of [
+    "/dev/engagements",
+    "/org/engagements",
+    "/dev/engagements/0199b000-0000-7000-8000-00000000e001",
+  ]) {
     await page.goto(path);
     await expect(page, path).toHaveURL(loginReturningTo(path)); // back there after signing in (P16-C1)
   }
@@ -147,6 +163,13 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await expect(orgRow).not.toContainText(/achieng|otieno/i);
     await expect(orgRow).toContainText(/From dev-[0-9a-hjkmnp-tv-z]{8}/);
     await expect(orgRow.locator("[data-chip='turn']")).toHaveText("Our turn");
+    // One band at most is fetched at once on the whole list, on the first drawn group's first card (P26-C): the
+    // seeded organisation draws both "Needs us" and "Others", so a per-group eager would show here.
+    const eager = orgPage.locator("main img[loading='eager']");
+    expect(await eager.count()).toBeLessThanOrEqual(1);
+    await expect(orgPage.locator("[data-group] article").first().locator("img[loading='eager']")).toHaveCount(
+      await eager.count(),
+    );
     await checkScreen(orgPage, { strict: true });
     await shot(orgPage, info, "org-list");
     await orgRow.getByRole("link", { name: dev.title }).click();
@@ -197,10 +220,16 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
     await step(orgPage, "Sign the mutual NDA");
     await expect(orgPage.locator("[data-signature='mutual_nda']")).toHaveCount(2);
 
-    await orgPage.getByRole("navigation", { name: "Engagement sections" }).getByRole("link", { name: "Documents" }).click();
+    await orgPage
+      .getByRole("navigation", { name: "Engagement sections" })
+      .getByRole("link", { name: "Documents" })
+      .click();
     await expect(orgPage.locator("[data-document='mutual_nda']")).toContainText("Matches the recorded fingerprint");
     await checkScreen(orgPage, { strict: true });
-    await orgPage.getByRole("navigation", { name: "Engagement sections" }).getByRole("link", { name: "Tracker" }).click();
+    await orgPage
+      .getByRole("navigation", { name: "Engagement sections" })
+      .getByRole("link", { name: "Tracker" })
+      .click();
 
     // Terms by the organisation, marked final by the developer, signed by both.
     await formStep(orgPage, "Propose terms", async () => {
@@ -271,7 +300,10 @@ test("both parties walk an engagement from Submitted to Closed", async ({ page, 
   }
 });
 
-test("the organisation declines with a reason and the developer sees where it ended", async ({ page, browser }, info) => {
+test("the organisation declines with a reason and the developer sees where it ended", async ({
+  page,
+  browser,
+}, info) => {
   test.setTimeout(120_000);
   const { dev, orgPage, devPage, close } = await scene(page, browser, info);
   try {

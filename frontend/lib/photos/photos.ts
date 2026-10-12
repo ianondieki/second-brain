@@ -28,6 +28,11 @@ export interface PhotoEntry {
   niche?: string | null;
   /** What it is for (P25-A): "niche", "greeting-morning", "greeting-afternoon", "greeting-evening", "county". */
   role?: string | null;
+  /**
+   * It shows a named organisation's own premises (a campus, a city hall, a dispensary, an earth station, a wind farm):
+   * fine beside a niche's name, never on another organisation's card or page, where it would read as theirs (P26).
+   */
+  institution?: boolean;
 }
 
 /** A photograph with the folder its files are in. */

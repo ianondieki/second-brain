@@ -1,5 +1,6 @@
 {
   "_meta": {
+    "reviewP26a": "[[COPY-REVIEW]] P26-A (REQ-TRACK-03, REQ-UX-02): countdown.clockDays, countdown.clockHours, countdown.clockMinutes (the live deadline clock, one message per largest unit, each figure and unit word tagged (f, u), so each language sets the order and spacing; a leading unit that is zero is not drawn, on the engagement cards of both lists, Home's Needs-you cards and the tracker's figure panel)",
     "reviewP25c2": "[[COPY-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67): portal.* (the eyebrows saying where you are, the organisation portal's, the console's and the signed-out screens' new lines: portal.eyebrow.*, portal.settings.*, portal.proposal.means (the NDA step's second column heading; the step's own lead and the viewer-logging notice stay verbatim), portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry (\"Try again\" when the fresh-code form cannot be fetched), adminResearch.stepUp.loading, briefForm.preview.* (the live preview of how a Brief reads on Discover, mirroring discover.brief* and problem.label.org_brief)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
     "reviewP15f": "[[COPY-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.*; adminModeration.reason.* name the pre-screen's reason codes (bridge/proposals/prescreen.py, docs/spec/06 6.12); E0/E1/E2 follow docs/spec/03",
@@ -32,7 +33,8 @@
     "reviewP22c": "[[COPY-REVIEW]] P22-CF (REQ-DEV-03; D-58, D-62): teams.* (Home's Peers section, /dev/peers, /dev/teams, the team-up thread page), teamUp.* (the peers list, the Team up sheet, invitations, the thread's menu, the contributor sheet and credits), profileSettings.* (Settings > Profile with the Visible to peers sentence the task card fixes), settingsNav.profile, ideaContributors.*, ideas.contributorsLine and ideas.sheet.contributors (D-62 (a): handles only, nothing about shares); the copy says team up, invitation and contributor, never friend, match or connect; the engagement thread's own sentences (trackerMessages.*) serve the team thread's messages and composer; trackerMessages.refusal.attachFailed (the composer's files could not load)",
     "reviewP23c": "[[COPY-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01): countdown.* (the deadline countdown on Home's Next deadline tile and Needs you card, the tracker's deadline and a Brief's Proposals wanted by line: the figure from its largest unit down in words, days with an ICU plural, h and min kept short (countdown.days, .hours, .minutes, each the whole figure so no words are joined in code); countdown.in (\"in {time}\", Home), countdown.dueIn (\"Due {date} · in {time}\", the tracker's one deadline line), countdown.closesIn (\"Proposals close in {time}\") and countdown.at (the full instant in Nairobi time, the time element's title)); past the instant the existing words stay (devHome.stats.deadlineOverdue, tracker.deadline.was, briefs.state.closed); trackerActions.partFailed and .partReload (a part of the tracker whose code did not load: the share, the contact reveal, the code form)",
     "reviewP24": "[[COPY-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66): landing.eyebrow, landing.title (the italic accent phrase, its accent tag), landing.sample.demo/due/dueWords/units.*, landing.stats.* (product constants: 5 tracker stages, 47 counties, 16 niches in seed/reference.yaml, 0 contact details before an NDA), landing.counties.*, landing.how.eyebrow/title and the three mono chips (landing.how.*.chip), landing.reasons.* (the values.* are the ranker's own English chip texts, bridge/matching/ranker.py, shown as a seeded example), landing.activity.*, landing.nav.explore, landing.footer.explore/credits, explore.*, credits.*, home.greeting (by the hour of the app clock in Nairobi), og.* (share cards); removed with the strip and the sides panels: landing.trust.*, landing.who.*, landing.nav.organisations, landing.sample.label; explore.nationwide/nationwideNote/seeded, problemPage.* (the public problem page: the organisation line names the verification level only, never a name), og.problemAlt; removed: landing.activity.kind.stage_reached (deferred by the backend), og.alt (the idea card)",
-    "reviewP25": "[[COPY-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67): palette.* (the command palette, palette.unavailable when the search cannot answer: the Search button, its groups, the actions, the keys; palette.kind.* name the API's search groups), activity.* (the activity calendar: title, total, legend, the per-day tip and the hidden table, activity.kind.* the API's action kinds); eyebrow.* (P25-C2: each developer list screen's mono eyebrow saying where you are; eyebrow.devHome carries the day in Nairobi); engagementCard.* (the engagement card's five-dot stage line, read as one image, and who it waits on); activity.busiest (the busiest day in words)"
+    "reviewP25": "[[COPY-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67): palette.* (the command palette, palette.unavailable when the search cannot answer: the Search button, its groups, the actions, the keys; palette.kind.* name the API's search groups), activity.* (the activity calendar: title, total, legend, the per-day tip and the hidden table, activity.kind.* the API's action kinds); eyebrow.* (P25-C2: each developer list screen's mono eyebrow saying where you are; eyebrow.devHome carries the day in Nairobi); engagementCard.* (the engagement card's five-dot stage line, read as one image, and who it waits on); activity.busiest (the busiest day in words)",
+    "reviewP26": "[[COPY-REVIEW]] P26-B (REQ-DIR-01, REQ-UX-01, REQ-UX-02; D-67): companies.lead (one sentence), companies.groupCount (a niche section's count of organisations on the page), companies.findProblems (the company page's primary action: Discover filtered by its first niche, the niche's own name), companies.pitchIdea (the way to pitch: the picker lives on an idea), companies.otherNiches (the heading of the links to the organisation's other niches; the first is the primary action's), companies.responseFigure (the response record's figures; the API's own sentence stays beneath); companies.heldUnclaimedHint (the company page's E0 explanation before any pitch: docs/spec/06 6.2's held-tag sentence, pitch.heldUnclaimed, in the same shape, saying what a pitch to them would do rather than that one was saved; no new claim); removed: companies.detailNiches (the niches are links under their own heading), companies.nichesTitle (replaced by companies.otherNiches: the first niche is the primary action's)"
   },
   "app": {
     "name": "Wazo",
@@ -1001,7 +1003,7 @@
   "companies": {
     "pageTitle": "Companies",
     "title": "Companies",
-    "lead": "Organisations in the directory, grouped by niche. Each one shows its verification level.",
+    "lead": "Find the organisations working in your niche, and see how far each one is verified before you pitch an idea.",
     "searchLabel": "Search by name",
     "filters": "Filters",
     "filtersChosen": "Filters ({count} chosen)",
@@ -1015,6 +1017,7 @@
     "submit": "Show companies",
     "clear": "Clear filters",
     "noNiche": "Not yet sorted by niche",
+    "groupCount": "{count, plural, one {# organisation} other {# organisations}}",
     "meta": "{kind}, {county}",
     "pages": "Pages",
     "nextPage": "Next page",
@@ -1026,9 +1029,13 @@
     "detailBack": "All companies",
     "detailType": "Organisation type",
     "detailCounty": "County",
-    "detailNiches": "Niches",
     "detailResponse": "Response record",
     "detailNone": "Not given",
+    "heldUnclaimedHint": "{name} isn't on the platform yet. A proposal you pitch to them is saved, and they'll see it if they join and verify. We don't email them on your behalf.",
+    "findProblems": "Find problems in {niche}",
+    "pitchIdea": "Pitch one of your ideas",
+    "otherNiches": "Also works in",
+    "responseFigure": "{days, plural, one {# day} other {# days}} · {pct}%",
     "notFound": "This organisation is not in the directory."
   },
   "verify": {
@@ -2354,10 +2361,10 @@
     },
     "at": "{date}, {time} EAT",
     "due": {
-      "left": "{count, plural, one {# business day left} other {# business days left}}, due <nowrap>{date}</nowrap>",
+      "left": "{count, plural, one {# business day left} other {# business days left}}, <nowrap>due {date}</nowrap>",
       "today": "Due today, <nowrap>{date}</nowrap>",
-      "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, was due <nowrap>{date}</nowrap>",
-      "overdueToday": "Overdue, was due <nowrap>{date}</nowrap>",
+      "overdue": "Overdue by {count, plural, one {# business day} other {# business days}}, <nowrap>was due {date}</nowrap>",
+      "overdueToday": "Overdue, <nowrap>was due {date}</nowrap>",
       "resumes": "Resumes <nowrap>{date}</nowrap>",
       "answerBy": "Answer from {name} due by <nowrap>{date}</nowrap>",
       "answerLate": "Answer from {name} was due <nowrap>{date}</nowrap>"
@@ -4078,6 +4085,9 @@
     "days": "{days, plural, one {# day} other {# days}} {hours} h {minutes} min",
     "hours": "{hours} h {minutes} min",
     "minutes": "{minutes} min",
+    "clockDays": "<f>{days}</f><u> d</u> <f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
+    "clockHours": "<f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
+    "clockMinutes": "<f>{minutes}</f><u> min</u>",
     "in": "in {time}",
     "dueIn": "Due {date} · in {time}",
     "closesIn": "Proposals close in {time}",

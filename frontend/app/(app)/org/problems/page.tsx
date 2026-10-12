@@ -122,7 +122,7 @@ export default async function ProblemsPage({ searchParams }: PageProps<"/org/pro
                 brief={brief}
                 href={briefHref(memberships, org.org_id, brief.id)}
                 county={countyName(brief.county_code)}
-                band={<NicheBand niche={brief.niche?.slug} county={brief.county_code} sizes={CARD_BAND} />}
+                band={<NicheBand niche={brief.niche?.slug} county={brief.county_code} forOrganisation sizes={CARD_BAND} />}
               />
             </li>
           ))}

@@ -2,7 +2,11 @@ import { cn } from "./cn";
 
 /** The initials an avatar shows: the first letters of the first two words ("Achieng Otieno" → "AO"; "Telco A (fixture)" → "TA"). */
 export function initialsOf(name: string): string {
-  const words = name.replace(/\(.*?\)/g, " ").trim().split(/\s+/).filter(Boolean);
+  const words = name
+    .replace(/\(.*?\)/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   const letters = words.slice(0, 2).map((w) => w[0]!.toUpperCase());
   return letters.join("") || "?";
 }
@@ -11,7 +15,8 @@ export interface AvatarProps {
   name: string;
   /** Named for tests and styling hooks; both kinds are round (one avatar shape everywhere). */
   kind?: "person" | "org";
-  size?: "sm" | "md" | "lg";
+  /** `xl` is a company page's monogram under its photograph (P26). */
+  size?: "sm" | "md" | "lg" | "xl";
   /** Marks the party whose turn it is. */
   active?: boolean;
   /** Decorative when the name is written next to it (the default); otherwise the name is the accessible label. */
@@ -21,10 +26,18 @@ export interface AvatarProps {
   className?: string;
 }
 
-const SIZES = { sm: "size-7 text-xs", md: "size-9 text-sm", lg: "size-12 text-base" } as const;
+const SIZES = { sm: "size-7 text-xs", md: "size-9 text-sm", lg: "size-12 text-base", xl: "size-20 text-2xl" } as const;
 
 /** An avatar with initials (no photos in the prototype): round, accent on the wash, a ring when it is this party's turn. */
-export function Avatar({ name, kind = "person", size = "md", active = false, labelled = false, surface = "wash", className }: AvatarProps) {
+export function Avatar({
+  name,
+  kind = "person",
+  size = "md",
+  active = false,
+  labelled = false,
+  surface = "wash",
+  className,
+}: AvatarProps) {
   return (
     <span
       data-avatar={kind}

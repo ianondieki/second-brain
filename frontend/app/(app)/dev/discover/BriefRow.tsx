@@ -31,7 +31,7 @@ export function BriefRow({ item, counties }: { item: DiscoverBrief; counties: re
 
   return (
     <article id={problemAnchor(problem.id)} aria-labelledby={titleId} data-brief={problem.id} className={discoverCardClass}>
-      <CardBand niche={problem.niche} county={problem.county_code} />
+      <CardBand niche={problem.niche} county={problem.county_code} forOrganisation />
       <h3 id={titleId} className={discoverTitleClass}>
         <Link href={problemHref(problem.id)} className={titleLinkClass}>
           <SharedTitle kind="problem" id={problem.id}>

@@ -9,7 +9,7 @@ import { loginReturningTo } from "./support/login";
 
 const SERVER_STEP = { timeout: 20_000 };
 
-/** The organisation rows on the page. */
+/** The organisation cards on the page. */
 const rows = (page: Page) => page.locator("main article");
 
 test("signed-out visits to the directory go to the login page", async ({ page }) => {
@@ -39,11 +39,20 @@ test.describe("a signed-in developer", () => {
     const count = await rows(page).count();
     expect(count).toBeGreaterThan(0);
     for (const row of await rows(page).all()) {
-      // Name, type/county and the verification badge; at most two chips (AC-UX-1), never a logo.
+      // A card (P26): the place's band, the monogram, the name as its one link, type/county and the verification badge
+      // as its one chip (AC-UX-1); a photograph only as decoration (alt=""), never a logo (AC-DIR-3).
       await expect(row.getByRole("link")).toHaveCount(1);
+      await expect(row.locator("[data-niche-band]")).toHaveCount(1);
+      await expect(row.locator("[data-avatar='org']")).toHaveCount(1);
       await expect(row.locator("[data-badge]")).toHaveCount(1);
-      await expect(row.locator("img")).toHaveCount(0);
+      await expect(row.locator("[data-chip]")).toHaveCount(0);
+      await expect(row.locator("img:not([alt=''])")).toHaveCount(0);
     }
+    // The first two cards' bands are the page's largest picture: fetched at once; every other band lazy.
+    await expect(page.locator("main [data-niche-band] img[loading='eager']")).toHaveCount(2);
+    await expect(rows(page).nth(2).locator("img[loading='eager']")).toHaveCount(0);
+    // The whole directory runs to more than one page: a section's count would be this page's only, so none is said.
+    await expect(page.locator("main section[data-niche]").first()).not.toContainText(/\d+ organisations?/);
     await checkScreen(page, { strict: true });
   });
 
@@ -68,6 +77,8 @@ test.describe("a signed-in developer", () => {
     await expect(page.getByText("Filters (1 chosen)")).toBeVisible();
     expect(await rows(page).count()).toBeGreaterThan(0);
     for (const row of await rows(page).all()) await expect(row.locator("p").first()).toContainText("Nairobi");
+    // One county's organisations fit one page: each niche section says how many it holds.
+    await expect(page.locator("main section[data-niche]").first()).toContainText(/\d+ organisations?/);
     await checkScreen(page, { strict: true });
 
     await page.getByRole("link", { name: "Clear filters" }).click();
@@ -101,7 +112,18 @@ test.describe("a signed-in developer", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(name, SERVER_STEP);
     await expect(page).toHaveURL(/\/dev\/companies\/[0-9a-f-]{36}\?county=KE-30$/);
     await expect(page.locator("[data-badge]")).toHaveCount(1);
-    await expect(page.getByRole("term")).toContainText(["Organisation type", "County", "Niches"]);
+    // P26: the county's photograph with its name on it, decorative; the facts as tiles; the niches link to Discover.
+    await expect(page.locator("main [data-niche-band]")).toContainText("Nairobi City");
+    await expect(page.locator("main img:not([alt=''])")).toHaveCount(0);
+    await expect(page.getByRole("term")).toContainText(["Organisation type", "County"]);
+    // The seeded organisations list one niche each: the primary action says it and no second list repeats it.
+    await expect(page.getByRole("region", { name: "Also works in" })).toHaveCount(0);
+    // The screen's one primary action: problems in the organisation's first niche, on Discover.
+    const primary = page.locator("[data-primary]");
+    await expect(primary).toHaveCount(1);
+    await expect(primary).toHaveText(/^Find problems in /);
+    await expect(primary).toHaveAttribute("href", /^\/dev\/discover\?niche=[a-z0-9-]+$/);
+    await expect(page.getByRole("link", { name: "Pitch one of your ideas" })).toHaveAttribute("href", "/dev/ideas");
     await checkScreen(page, { strict: true });
     await page.getByRole("link", { name: "All companies" }).click();
     await expect(page).toHaveURL(/\/dev\/companies\?county=KE-30$/, SERVER_STEP);

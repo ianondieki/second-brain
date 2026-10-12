@@ -139,6 +139,8 @@ describe("the Problems list", () => {
     state.list = { kind: "ok", value: briefList({ items: [brief({ county_code: null })] }) };
     await listPage();
     expect(within(screen.getByRole("article")).getByText("Kenya")).toBeTruthy();
+    // Its band is the organisation's: never one company's premises (ICT's earth station), so the lattice.
+    expect(document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("lattice");
   });
 
   it("says a new Brief went for review, in a live region that takes focus", async () => {
@@ -204,6 +206,12 @@ describe("a Brief's page", () => {
     await briefPage();
     expect(document.querySelector(`[data-state-note='${briefState}']`)?.textContent).toContain(note);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Tower sites go dark when fuel runs out");
+  });
+
+  it("draws the Brief's band as the organisation's: never one company's premises (ICT's earth station without a county)", async () => {
+    state.one = { kind: "ok", value: brief({ state: "published", county_code: null }) };
+    await briefPage();
+    expect(document.querySelector("[data-niche-band]")?.getAttribute("data-niche-band")).toBe("lattice");
   });
 
   it("shows the facts developers read and Close for a member who posts, with no primary action", async () => {

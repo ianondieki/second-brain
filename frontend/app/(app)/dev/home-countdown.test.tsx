@@ -14,8 +14,9 @@ import { HomeContent } from "./HomeContent";
 import { NeedsYouHero } from "./NeedsYouHero";
 
 // P23-3 (REQ-TRACK-03, REQ-DEV-01): Home's "Next deadline" tile says the time left in days, hours and minutes as its
-// meta line (the business days in its title), and the "Needs you" card says it under its date; both count from the
-// page's app-clock instant (X-App-Now) and fall back to the business days when the API sends no instant.
+// meta line (the business days in its title); the "Needs you" card and the other engagements' rows show the live clock
+// (P26); all count from the page's app-clock instant (X-App-Now) and fall back to the business days when the API sends
+// no instant.
 
 vi.mock("next-intl/server", () => ({
   getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
@@ -73,22 +74,53 @@ describe("Home's Next deadline tile", () => {
 });
 
 describe("Home's Needs you card", () => {
-  it("says the time left as the one line under its date, quiet, the business days in its title; its chips stay two", () => {
+  // P26: the deadline beside the way in is the live clock (days, hours, minutes in the figure face), the business days
+  // and the date as its line; the date figure with its business days stays only without an instant or once overdue.
+  it("shows the live clock, the business days and the date as its line; its chips stay two", () => {
     renderWithIntl(<NeedsYouHero item={mine()} href="/dev/engagements/x" action="Open the tracker" now={NOW} />);
-    const timer = document.querySelector<HTMLElement>("[data-timer]")!;
-    expect(timer.textContent).toBe("in 6 days 14 h 23 min");
-    expect(timer.className).toContain("text-sm");
-    expect(timer.className).toContain("text-ink-soft");
-    const when = timer.closest("[data-due]")!;
-    expect(when.querySelector("time")?.textContent).toBe("16 Oct");
-    expect(when.textContent).toBe("16 Octin 6 days 14 h 23 min");
-    expect(when.getAttribute("title")).toBe("in 4 business days");
+    const clock = document.querySelector<HTMLElement>("[data-deadline-clock='lg']")!;
+    expect(clock.querySelector("time")?.getAttribute("dateTime")).toBe("P6DT14H23M");
+    expect(clock.querySelector("time")?.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");
+    expect([...clock.querySelectorAll("[data-figure]")].map((figure) => figure.textContent)).toEqual(["6", "14", "23"]);
+    expect(clock.querySelector("[data-due]")?.textContent).toBe("4 business days left, due 16 Oct 2026");
+    expect(clock.querySelector("[data-clock]")?.getAttribute("data-clock")).toBe("open");
+    expect(document.querySelector("[aria-live]")).toBeNull();
     expect(document.querySelectorAll("[data-chip]")).toHaveLength(2);
   });
 
-  it("takes the warm mark under 24 hours, the step being the developer's", () => {
+  it("takes the warm look under 24 hours, the step being the developer's", () => {
     renderWithIntl(<NeedsYouHero item={mine()} href="/dev/engagements/x" action="Open the tracker" now="2026-10-16T08:00:00.000Z" />);
-    expect(document.querySelector("[data-timer='warm']")?.textContent).toBe("in 12 h 59 min");
+    expect(document.querySelector("[data-clock='warm'] [data-clock-figures]")?.textContent).toBe("12 h 59 min");
     expect(document.querySelectorAll("[data-chip]")).toHaveLength(2);
+  });
+
+  it("keeps the date as its figure with the business days without an instant, and Overdue once overdue", () => {
+    renderWithIntl(<NeedsYouHero item={mine({ due: { due_on: "2026-10-16", business_days_left: 4, overdue: false } })} href="/x" action="Open the tracker" now={NOW} />);
+    expect(document.querySelector("[data-deadline-clock]")).toBeNull();
+    expect(document.querySelector("[data-due='open']")?.textContent).toBe("16 Octin 4 business days");
+    cleanup();
+    renderWithIntl(<NeedsYouHero item={mine({ due: { ...DUE, business_days_left: -1, overdue: true } as Summary["due"] })} href="/x" action="Open the tracker" now={NOW} />);
+    expect(document.querySelector("[data-deadline-clock]")).toBeNull();
+    expect(document.querySelector("[data-due='overdue']")?.textContent).toBe("16 OctOverdue");
+  });
+});
+
+describe("Home's other engagements", () => {
+  // P26: each row waiting on the organisation shows the small live clock, gated as the cards are (words when overdue,
+  // on hold, ended, or without the API's instant).
+  it("shows the small live clock on an open row and keeps the words on an overdue one", async () => {
+    const other = (id: string, due: Summary["due"]) => mine({ id, whose_turn: ["org"], due });
+    await home([
+      other("0199b000-0000-7000-8000-00000000e0a1", DUE as Summary["due"]),
+      other("0199b000-0000-7000-8000-00000000e0a2", { ...DUE, business_days_left: -1, overdue: true } as Summary["due"]),
+    ]);
+    const rows = document.querySelector("[data-home='others']")!;
+    const open = rows.querySelector("[data-engagement='0199b000-0000-7000-8000-00000000e0a1']")!;
+    expect(open.querySelector("[data-deadline-clock='sm'] time")?.getAttribute("dateTime")).toBe("P6DT14H23M");
+    expect([...open.querySelectorAll("[data-figure]")].map((figure) => figure.textContent)).toEqual(["6", "14", "23"]);
+    expect(open.querySelector("[data-clock]")?.getAttribute("data-clock")).toBe("open");
+    const late = rows.querySelector("[data-engagement='0199b000-0000-7000-8000-00000000e0a2']")!;
+    expect(late.querySelector("[data-deadline-clock]")).toBeNull();
+    expect(late.querySelector("[data-due='overdue']")?.textContent).toBe("Overdue by 1 business day, was due 16 Oct 2026");
   });
 });
