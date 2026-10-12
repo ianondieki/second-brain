@@ -1,14 +1,12 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { lazy, Suspense, use, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, use, useEffect, useId, useRef, useState } from "react";
 
 import { forgetEmail } from "@/lib/auth/remembered-email";
 
 import { MenuOptions } from "./AccountMenuScope";
 import { menuBillingHref } from "./billing-link";
-import { install, installOffered, subscribeInstall } from "./offline/install";
-import { forgetOffline } from "./offline/worker";
 import { forgetRecent } from "./palette/remember";
 import { useStrings } from "./ClientStrings";
 import { cn } from "./ui/cn";
@@ -38,11 +36,7 @@ const HELP_HREF = "/help";
 
 // The lower part loads on use. When its file cannot be fetched (offline, or a newer deploy replaced it), the menu keeps a
 // plain Sign out of its own instead of failing the page.
-export const loadExtras = () =>
-  import("./AccountMenuExtras").then(
-    (m) => m.AccountMenuExtras,
-    () => MenuFallback,
-  );
+export const loadExtras = () => import("./AccountMenuExtras").then((m) => m.AccountMenuExtras, () => MenuFallback);
 const MenuExtras = lazy(() => loadExtras().then((component) => ({ default: component })));
 
 /** The menu's own Sign out when the lower part could not load. Not lib/api/csrf (that would put about 430 B on the
@@ -52,15 +46,12 @@ export function MenuFallback() {
   const t = useStrings("shell");
   const [failed, setFailed] = useState(false);
   async function signOut() {
-    await forgetOffline(); // this device's offline copies go first (P27, D-69), whatever the API answers
     const cookie = (name: string) => document.cookie.match(`(?:^|; )${name}=([^;]*)`)?.[1];
     let token = cookie("__Host-bridge_csrf") ?? cookie("bridge_csrf");
     let response: Response | null = null;
     for (let tries = 0; tries < 2; tries += 1) {
       if (!token || tries) {
-        const fresh = await fetch("/api/auth/csrf", { credentials: "same-origin" })
-          .then((r) => r.json())
-          .catch(() => null);
+        const fresh = await fetch("/api/auth/csrf", { credentials: "same-origin" }).then((r) => r.json()).catch(() => null);
         token = fresh?.csrf_token ?? token;
       }
       response = await fetch("/api/auth/logout", {
@@ -87,8 +78,7 @@ export function MenuFallback() {
   );
 }
 
-const itemClass =
-  "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-accent-wash";
+const itemClass = "flex min-h-11 w-full items-center rounded-control px-3 font-medium text-ink no-underline hover:bg-accent-wash";
 
 // The popover floats over the page: the one elevation (shadow-overlay, docs/platform/design/p16-design-system.md).
 
@@ -107,8 +97,6 @@ export function AccountMenu() {
   const button = useRef<HTMLButtonElement>(null);
   // Organisation screens carry the organisation as ?org= (members of several): Plan & billing keeps it.
   const billing = menuBillingHref(useSearchParams().get("org"));
-  // "Install Wazo" only where the browser offered it (beforeinstallprompt, kept by components/offline/Register; P27).
-  const installable = useSyncExternalStore(subscribeInstall, installOffered, () => false);
 
   useEffect(() => {
     if (!open) return;
@@ -153,12 +141,7 @@ export function AccountMenu() {
         </span>
         {/* Under 640 px the avatar carries the name alone, so the working name keeps one line. */}
         <span className="sr-only sm:not-sr-only">{t("account")}</span>
-        <ChevronIcon
-          className={cn(
-            "size-4 text-ink-soft transition-transform motion-reduce:transition-none",
-            open && "rotate-180",
-          )}
-        />
+        <ChevronIcon className={cn("size-4 text-ink-soft transition-transform motion-reduce:transition-none", open && "rotate-180")} />
       </button>
       <div
         id={panelId}
@@ -188,21 +171,6 @@ export function AccountMenu() {
               {t("help")}
             </a>
           </li>
-          {installable ? (
-            <li>
-              <button
-                type="button"
-                className={itemClass}
-                data-install=""
-                onClick={() => {
-                  setOpen(false);
-                  void install();
-                }}
-              >
-                {t("install", { product: t("workingName") })}
-              </button>
-            </li>
-          ) : null}
         </ul>
         {/* The appearance and Sign out load with the menu's first opening (or as the pointer or focus reaches its
             button): about 2 KB of script no page needs before then (docs/spec/07 item 5; P25). */}

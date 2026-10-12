@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
+import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { engagement } from "@/components/tracker/data";
 import { asDocumentKind, asTab, EngagementScreen } from "@/components/tracker/EngagementScreen";
@@ -30,7 +31,14 @@ export default async function DeveloperEngagementPage({ params, searchParams }: 
   if (query.tab === "messages") redirect(messagesHref(BASE_PATH, id));
   const found = await engagement(id);
   return (
-    <SignedInShell homeHref={home} nav={<DevNav current="engagements" />} wide>
+    <SignedInShell
+      homeHref={home}
+      nav={<DevNav current="engagements" />}
+      wide
+      offline={
+        <OfflineSlot page={found.ok ? found.value.proposal_title : (await getTranslations("tracker"))("pageTitle")} />
+      }
+    >
       {found.ok ? (
         <EngagementScreen
           detail={found.value}

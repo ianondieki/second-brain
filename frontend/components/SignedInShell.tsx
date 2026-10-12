@@ -4,7 +4,6 @@ import type { StaffRole } from "./AdminNav";
 import { cn } from "./ui/cn";
 import { AccountMenu } from "./AccountMenu";
 import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
-import { OfflineSlot } from "./offline/OfflineSlot";
 import { PaletteSlot } from "./palette/PaletteSlot";
 import { TopBar } from "./TopBar";
 
@@ -19,6 +18,12 @@ export interface SignedInShellProps {
   bellCurrent?: boolean;
   /** The staff console's role, so the command palette lists the sections that role may open. */
   staffRole?: StaffRole;
+  /**
+   * The offline part (P27, D-69: components/offline/OfflineSlot), drawn at the top of <main>: given by the pages the
+   * service worker may keep (both Engagements lists and trackers) and both Homes, where a person lands on signing in.
+   * A prop, not an import here, so its script ships with those pages only (docs/spec/07 item 5: the JS budget).
+   */
+  offline?: ReactNode;
 }
 
 /**
@@ -33,6 +38,7 @@ export function SignedInShell({
   wide = false,
   bellCurrent = false,
   staffRole,
+  offline,
 }: SignedInShellProps) {
   return (
     <>
@@ -59,13 +65,9 @@ export function SignedInShell({
             nav ? "pb-28 lg:pb-16" : "pb-16",
           )}
         >
-          {/* Offline (P27, D-69): the banner over a page read from this device's copy, and the service worker. Not in
-              the staff console, which is never kept. */}
-          {staffRole ? null : (
-            <Suspense fallback={null}>
-              <OfflineSlot />
-            </Suspense>
-          )}
+          {/* Offline (P27, D-69): the banner over a page read from this device's copy, and the service worker; never
+              in the staff console, which is never kept. */}
+          {staffRole ? null : offline}
           <div className={wide ? undefined : "max-w-xl"}>{children}</div>
         </main>
       </div>

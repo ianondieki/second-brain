@@ -9,7 +9,7 @@ import { applyTheme } from "@/lib/theme";
 
 import { matchParts, paletteGroups, type PaletteOption } from "./model";
 import { readRecent } from "./recent";
-import { forgetOffline } from "../offline/worker";
+import { forgetOffline } from "../offline/clear";
 import { forgetRecent } from "./remember";
 import { search, SEARCH_DEBOUNCE_MS, searchQuery, type SearchGroup } from "./search";
 import type { PaletteData } from "./types";

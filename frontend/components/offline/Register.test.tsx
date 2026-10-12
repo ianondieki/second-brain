@@ -1,18 +1,33 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { createTranslator } from "next-intl";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AccountMenu } from "@/components/AccountMenu";
+import en from "@/locales/en.json";
 import { renderWithIntl } from "@/test/intl";
+import { resolveServerTree } from "@/test/server-tree";
 
 import { installOffered } from "./install";
+import { InstallOffer } from "./InstallOffer";
+import { OfflineBanner } from "./OfflineSlot";
 import { Register } from "./Register";
-import { forgetOffline } from "./worker";
+import { forgetOffline } from "./clear";
 
-// P27 track F (REQ-UX-08; D-69): the signed-in shell's offline island. It registers the worker with the build's
-// version and tells it whose cache it is; offline (or from the cache) it shows the "as of" banner and makes <main>
-// read-only until the connection is back; it keeps the install offer for the account menu; sign-out clears the cache.
+// P27 track F (REQ-UX-08; D-69): the offline part of the pages the worker keeps (and both Homes). The island registers
+// the worker with the build's version and tells it whose cache it is; offline (or from the cache) it marks the page
+// offline, which shows the server-drawn "as of" banner, and makes <main> read-only until the connection is back; it keeps
+// the install offer for the account menu; sign-out clears the cache.
 
+vi.mock("next-intl/server", () => ({
+  getTranslations: async (namespace: string) =>
+    createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+  getLocale: async () => "en",
+}));
+vi.mock("@/components/palette/PaletteSlot", () => ({ accountHash: async () => null }));
 vi.mock("next/navigation", () => ({
   usePathname: () => location.pathname,
   useSearchParams: () => new URLSearchParams(),
@@ -60,25 +75,31 @@ function page() {
   return (
     <main id="main">
       <Register hash={HASH} version="build-7" />
-      <h1>Maziwa baridi</h1>
-      <form data-testid="form" onSubmit={(event) => event.preventDefault()}>
-        <input aria-label="Note" />
-        <select aria-label="Choice">
-          <option>One</option>
-        </select>
-        <textarea aria-label="Message" />
-        <button type="submit">Send</button>
-        <button type="button" disabled>
-          Already off
-        </button>
-      </form>
+      <div>
+        <h1>Maziwa baridi</h1>
+        <form data-testid="form" onSubmit={(event) => event.preventDefault()}>
+          <input aria-label="Note" />
+          <select aria-label="Choice">
+            <option>One</option>
+          </select>
+          <textarea aria-label="Message" />
+          <button type="submit">Send</button>
+          <button type="button" disabled>
+            Already off
+          </button>
+        </form>
+      </div>
     </main>
   );
 }
 
+/** Whether a control cannot be used. */
+const off = (element: Element) => element.matches(":disabled");
+
 beforeEach(() => {
   online(true);
   window.history.replaceState(null, "", "/dev/engagements/0b8f4c1e-5a2d-4e7f-9c3b-1d2e3f4a5b6c");
+  document.documentElement.removeAttribute("data-offline");
 });
 afterEach(() => {
   cleanup();
@@ -86,106 +107,106 @@ afterEach(() => {
   Reflect.deleteProperty(navigator, "serviceWorker");
 });
 
-describe("the shell's offline island", () => {
-  it("draws nothing on the server, so the page hydrates as it was rendered", () => {
+describe("the offline island", () => {
+  it("draws nothing, on the server or in the browser, so the page hydrates as it was rendered", () => {
     expect(renderToString(<Register hash={HASH} version="build-7" />)).toBe("");
   });
 
-  it("registers /sw.js with the build's version for the whole site and tells it whose cache it is", async () => {
+  it("registers /sw.js with the build's version for the whole site, says whose cache it is, then asks to keep the page", async () => {
     const { container, told } = fakeWorker();
     fakeCaches(null);
     renderWithIntl(page());
-    await waitFor(() => expect(told).toContainEqual({ type: "user", hash: HASH }));
-    expect(container.register).toHaveBeenCalledWith("/sw.js?v=build-7", { scope: "/", updateViaCache: "none" });
-    // Then the tracker this page is, so it is kept even when it was reached inside the app.
     await waitFor(() => expect(told).toContainEqual({ type: "visit", url: location.href }));
-    expect(told.findIndex((m) => (m as { type: string }).type === "user")).toBeLessThan(
-      told.findIndex((m) => (m as { type: string }).type === "visit"),
-    );
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(container.register).toHaveBeenCalledWith("/sw.js?v=build-7", { scope: "/", updateViaCache: "none" });
+    const types = told.map((m) => (m as { type: string }).type);
+    expect(types.indexOf("user")).toBeGreaterThanOrEqual(0);
+    expect(types.indexOf("user")).toBeLessThan(types.indexOf("visit"));
+    expect(told).toContainEqual({ type: "user", hash: HASH });
+    expect(document.documentElement.hasAttribute("data-offline")).toBe(false);
   });
 
   it("clears the cache when the signed-in person cannot be read (no hash)", async () => {
     const { told } = fakeWorker();
-    fakeCaches(null);
     renderWithIntl(<Register hash={null} version="build-7" />);
     await waitFor(() => expect(told).toContainEqual({ type: "clear" }));
     expect(told).not.toContainEqual(expect.objectContaining({ type: "user" }));
   });
 
-  it("never registers in the staff console", async () => {
-    const { container } = fakeWorker();
-    window.history.replaceState(null, "", "/admin/moderation");
-    renderWithIntl(<Register hash={HASH} version="build-7" />);
-    await act(async () => {});
-    expect(container.register).not.toHaveBeenCalled();
-  });
-
-  it("offline: the banner says which page and as of when (EAT), and every control in main is disabled", async () => {
+  it("offline: marks the page offline (the banner shows) and disables every control in main", async () => {
     fakeWorker();
-    fakeCaches("Mon, 12 Oct 2026 11:05:00 GMT");
     online(false);
     renderWithIntl(page());
-    const banner = await screen.findByRole("status");
-    expect(banner.textContent).toBe(
-      "You're offline. This is Maziwa baridi as of 12 Oct 2026, 14:05 EAT. Actions are available once you're back online.",
-    );
-    expect(banner.closest("main")).toBe(document.getElementById("main"));
-    for (const name of ["Note", "Choice", "Message"])
-      expect((screen.getByLabelText(name) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
-    // A form cannot be sent another way either (Enter in a field the browser still submits).
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
+    for (const name of ["Note", "Choice", "Message"]) expect(off(screen.getByLabelText(name))).toBe(true);
+    expect(off(screen.getByRole("button", { name: "Send" }))).toBe(true);
+    // Nothing can be sent: the submit button does nothing.
     const submitted = vi.fn();
     screen.getByTestId("form").addEventListener("submit", submitted);
-    fireEvent.submit(screen.getByTestId("form"));
-    expect(submitted.mock.calls[0]?.[0].defaultPrevented).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(submitted).not.toHaveBeenCalled();
   });
 
-  it("disables controls that appear while offline, and gives them all back once online", async () => {
+  it("gives every control back once online, but those the page had disabled itself", async () => {
     fakeWorker();
-    fakeCaches(null);
     online(false);
     renderWithIntl(page());
-    await screen.findByRole("status");
-    const late = document.createElement("button");
-    late.textContent = "Late";
-    document.querySelector("form")!.append(late);
-    await waitFor(() => expect(late.disabled).toBe(true));
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
+    expect(screen.getByRole("button", { name: "Send" }).hasAttribute("data-offline-locked")).toBe(true);
 
     online(true);
     act(() => {
       window.dispatchEvent(new Event("online"));
     });
-    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
-    expect((screen.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(false);
-    expect(late.disabled).toBe(false);
-    expect((screen.getByLabelText("Note") as HTMLInputElement).disabled).toBe(false);
+    expect(document.documentElement.hasAttribute("data-offline")).toBe(false);
+    expect(off(screen.getByRole("button", { name: "Send" }))).toBe(false);
+    expect(off(screen.getByLabelText("Note"))).toBe(false);
+    expect(document.querySelectorAll("[data-offline-locked]")).toHaveLength(0);
     // What the page itself had disabled stays so.
-    expect((screen.getByRole("button", { name: "Already off" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(off(screen.getByRole("button", { name: "Already off" }))).toBe(true);
   });
 
-  it("shows the banner when the worker answered this page from its cache, though the browser says it is online", async () => {
+  it("marks the page offline when the worker answered it from its cache, though the browser says it is online", async () => {
     fakeWorker({ status: { cached: true, date: "" } });
-    fakeCaches("Mon, 12 Oct 2026 05:30:00 GMT");
     renderWithIntl(page());
-    expect((await screen.findByRole("status")).textContent).toContain("as of 12 Oct 2026, 08:30 EAT");
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
   });
 
-  it("without the copy's Date, says offline without a time", async () => {
+  it("follows the browser going offline after the page loaded, and leaves nothing behind when it goes", async () => {
     fakeWorker();
-    fakeCaches(null);
-    renderWithIntl(page());
+    const { unmount } = renderWithIntl(page());
+    await act(async () => {});
     act(() => {
       online(false);
       window.dispatchEvent(new Event("offline"));
     });
-    expect((await screen.findByRole("status")).textContent).toBe(
-      "You're offline. This is Maziwa baridi as you last opened it. Actions are available once you're back online.",
-    );
+    expect(document.documentElement.hasAttribute("data-offline")).toBe(true);
+    unmount();
+    expect(document.documentElement.hasAttribute("data-offline")).toBe(false);
   });
 });
 
-describe("Install Wazo", () => {
+describe("the offline banner", () => {
+  it("names the page and the time this answer was made, in Nairobi time, as a status", async () => {
+    const { container } = renderWithIntl(
+      <>
+        {await resolveServerTree(await OfflineBanner({ page: "Maziwa baridi", at: new Date("2026-10-12T11:05:00Z") }))}
+      </>,
+    );
+    const banner = container.querySelector<HTMLElement>("[data-offline-banner]")!;
+    expect(banner.getAttribute("role")).toBe("status");
+    expect(banner.textContent).toBe(
+      "You're offline. This is Maziwa baridi as of 12 Oct 2026, 14:05 EAT. Actions are available once you're back online.",
+    );
+  });
+
+  it("is shown by the stylesheet only while the page is marked offline", () => {
+    const css = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
+    expect(css).toMatch(/\n\[data-offline-banner\] \{\n  display: none;\n\}/);
+    expect(css).toMatch(/\nhtml\[data-offline\] \[data-offline-banner\] \{\n  display: flex;\n\}/);
+  });
+});
+
+describe("Install Wazo (the offer kept on both Homes)", () => {
   it("appears in the account menu only once the browser offered it, and shows the browser's prompt", async () => {
     fakeWorker();
     fakeCaches(null);
@@ -193,7 +214,7 @@ describe("Install Wazo", () => {
       <>
         <AccountMenu />
         <main id="main">
-          <Register hash={HASH} version="build-7" />
+          <InstallOffer />
         </main>
       </>,
     );
@@ -208,7 +229,7 @@ describe("Install Wazo", () => {
     });
     expect(offer.defaultPrevented).toBe(true); // kept for the menu, not the browser's own bar
     expect(installOffered()).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Install Wazo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Install Wazo" }));
     expect(offer.prompt).toHaveBeenCalledTimes(1);
     // An offer is used once.
     expect(installOffered()).toBe(false);
@@ -218,7 +239,7 @@ describe("Install Wazo", () => {
   it("goes once the app is installed", async () => {
     fakeWorker();
     fakeCaches(null);
-    renderWithIntl(<Register hash={HASH} version="build-7" />);
+    renderWithIntl(<InstallOffer />);
     act(() => {
       window.dispatchEvent(Object.assign(new Event("beforeinstallprompt", { cancelable: true }), { prompt: vi.fn() }));
     });

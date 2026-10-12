@@ -4,6 +4,8 @@ import { Suspense } from "react";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
+import { InstallOffer } from "@/components/offline/InstallOffer";
+import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Chip } from "@/components/tracker/Chip";
 import { stageChip, type Summary } from "@/components/tracker/model";
@@ -114,15 +116,36 @@ export async function HomeContent({
 
   const tourDone = tourDoneFromCookies(await cookies(), "developer");
   return (
-    <SignedInShell homeHref="/dev" nav={<DevNav current="home" />} wide>
+    <SignedInShell
+      homeHref="/dev"
+      nav={<DevNav current="home" />}
+      wide
+      offline={
+        <>
+          <OfflineSlot page={(await getTranslations("nav"))("home")} />
+          <InstallOffer />
+        </>
+      }
+    >
       <ClientStrings strings={await clientStrings(["tour"])}>
-        <FirstLoginTour side="developer" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("developer")} />
+        <FirstLoginTour
+          side="developer"
+          initialDone={tourDone}
+          scenes={tourDone ? undefined : tourScenes("developer")}
+        />
       </ClientStrings>
       {/* The greeting on Nairobi at this time of day (P25): the eyebrow, the name, the lead and the one primary action. */}
       <div className="max-w-4xl">
         <GreetingBand part={dayPart(now)}>
           <p className="page-eyebrow text-night-soft" data-eyebrow="">
-            {te("devHome", { date: new Intl.DateTimeFormat(`${locale}-KE`, { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Nairobi" }).format(new Date(now)) })}
+            {te("devHome", {
+              date: new Intl.DateTimeFormat(`${locale}-KE`, {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                timeZone: "Africa/Nairobi",
+              }).format(new Date(now)),
+            })}
           </p>
           <h1 className="mt-3 text-[2rem] leading-[1.08] text-ink [overflow-wrap:anywhere] sm:text-[2.75rem] sm:leading-[1.04]">
             {th(`greeting.${dayPart(now)}`, { name: me.user.display_name })}
@@ -141,13 +164,30 @@ export async function HomeContent({
           {/* The figures show their real values from the first paint: they drive what to do next (no count-up). */}
           <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <li>
-              <StatTile data-stat="ideas" label={t("stats.ideas")} value={stats.ideas} meta={t("stats.ideasMeta", { published: stats.published, drafts: stats.drafts })} href="/dev/ideas" />
+              <StatTile
+                data-stat="ideas"
+                label={t("stats.ideas")}
+                value={stats.ideas}
+                meta={t("stats.ideasMeta", { published: stats.published, drafts: stats.drafts })}
+                href="/dev/ideas"
+              />
             </li>
             <li>
-              <StatTile data-stat="engagements" label={t("stats.engagements")} value={stats.engagements} meta={t("stats.engagementsMeta", { count: stats.active })} href={ENGAGEMENTS_PATH} />
+              <StatTile
+                data-stat="engagements"
+                label={t("stats.engagements")}
+                value={stats.engagements}
+                meta={t("stats.engagementsMeta", { count: stats.active })}
+                href={ENGAGEMENTS_PATH}
+              />
             </li>
             <li>
-              <StatTile data-stat="needs-you" label={t("stats.needsYou")} value={waiting.length} meta={waiting.length > 0 ? t("stats.needsYouMeta") : undefined} />
+              <StatTile
+                data-stat="needs-you"
+                label={t("stats.needsYou")}
+                value={waiting.length}
+                meta={waiting.length > 0 ? t("stats.needsYouMeta") : undefined}
+              />
             </li>
             <li>
               <StatTile
@@ -157,7 +197,16 @@ export async function HomeContent({
                 // The time left in days, hours and minutes (P23-3) when the API gives the instant, the business days
                 // then in the tile's title; otherwise the business days as the meta line.
                 meta={
-                  until ? <TimeLeft until={until} now={now} labelWhenPast={t("stats.deadlineOverdue")} mine={stats.nextDueMine} /> : dueWords
+                  until ? (
+                    <TimeLeft
+                      until={until}
+                      now={now}
+                      labelWhenPast={t("stats.deadlineOverdue")}
+                      mine={stats.nextDueMine}
+                    />
+                  ) : (
+                    dueWords
+                  )
                 }
                 title={until ? dueWords : undefined}
                 href={stats.nextDueId ? rowHref(stats.nextDueId) : undefined}
@@ -168,7 +217,17 @@ export async function HomeContent({
 
         {/* Two-step sign-in: a notice only while it is off (the status needs no section of its own when it is on). */}
         {mfa !== "on" ? (
-          <Callout tone={mfa === "required" ? "error" : "info"} icon={mfa === "required" ? <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" /> : <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />} data-home="security">
+          <Callout
+            tone={mfa === "required" ? "error" : "info"}
+            icon={
+              mfa === "required" ? (
+                <AlertIcon className="mt-0.5 size-5 shrink-0 text-error" />
+              ) : (
+                <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+              )
+            }
+            data-home="security"
+          >
             <p>{mfa === "required" ? th("mfaRequired") : th("mfaOff")}</p>
             <Link href="/settings/security" className={standaloneLinkClass}>
               {th("setUp")}
@@ -287,7 +346,11 @@ async function HomeBelow({
                     href={rowHref(item.id)}
                     title={item.proposal_title}
                     meta={tr("withOrg", { org: item.org_name })}
-                    badges={[<Chip key="stage" kind={stageChip(item)}>{item.stage_label}</Chip>]}
+                    badges={[
+                      <Chip key="stage" kind={stageChip(item)}>
+                        {item.stage_label}
+                      </Chip>,
+                    ]}
                   >
                     {/* The live clock while the stage's window is open (P26), the words otherwise. */}
                     <DueClock item={item} mine="developer" now={now} className="mt-1" />
@@ -298,7 +361,12 @@ async function HomeBelow({
           ) : null}
 
           {ideas.length > 0 ? (
-            <Section title={t("ideasTitle")} headingId="home-ideas" data-home="ideas" link={{ href: "/dev/ideas", label: t("allIdeas") }}>
+            <Section
+              title={t("ideasTitle")}
+              headingId="home-ideas"
+              data-home="ideas"
+              link={{ href: "/dev/ideas", label: t("allIdeas") }}
+            >
               <RowList>
                 {ideas.slice(0, IDEAS_SHOWN).map((item) => (
                   <IdeaCard key={item.id} item={item} headingLevel={3} />

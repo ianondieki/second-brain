@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { OrgNav } from "@/components/OrgNav";
+import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { orgEngagements } from "@/components/tracker/data";
 import { EngagementCard } from "@/components/engagements/EngagementCard";
@@ -28,10 +29,19 @@ export async function generateMetadata(): Promise<Metadata> {
  */
 export default async function OrganisationEngagementsPage({ searchParams }: PageProps<"/org/engagements">) {
   const { memberships, org, missing, query } = await orgContext((await searchParams).org);
-  const [t, ti, tp] = await Promise.all([getTranslations("tracker"), getTranslations("inbox"), getTranslations("portal")]);
+  const [t, ti, tp] = await Promise.all([
+    getTranslations("tracker"),
+    getTranslations("inbox"),
+    getTranslations("portal"),
+  ]);
 
   return (
-    <SignedInShell homeHref={`/org${query}`} nav={<OrgNav current="engagements" query={query} />} wide>
+    <SignedInShell
+      homeHref={`/org${query}`}
+      nav={<OrgNav current="engagements" query={query} />}
+      wide
+      offline={<OfflineSlot page={(await getTranslations("nav"))("engagements")} />}
+    >
       <div className="max-w-5xl">
         <PageHero eyebrow={tp("eyebrow.engagements")} title={t("title")} lead={org ? t("orgLead") : undefined} />
         {org ? (
@@ -59,10 +69,16 @@ async function Body({ memberships, org, query }: { memberships: Membership[]; or
       read.refusal === "mfaSetup" ? (
         <EmptyState sentence={t("refused.mfaSetup")} action={t("turnOnMfa")} href="/settings/security" primary />
       ) : (
-        <EmptyState sentence={t("refused.notFound")} action={t("emptyOrgAction")} href={inboxHref(memberships, org.org_id)} />
+        <EmptyState
+          sentence={t("refused.notFound")}
+          action={t("emptyOrgAction")}
+          href={inboxHref(memberships, org.org_id)}
+        />
       );
   } else if (read.value.length === 0) {
-    body = <EmptyState sentence={t("emptyOrg")} action={t("emptyOrgAction")} href={inboxHref(memberships, org.org_id)} />;
+    body = (
+      <EmptyState sentence={t("emptyOrg")} action={t("emptyOrgAction")} href={inboxHref(memberships, org.org_id)} />
+    );
   } else {
     body = <EngagementGrid items={read.value} query={query} />;
   }
@@ -100,7 +116,11 @@ async function EngagementGrid({ items, query }: { items: Summary[]; query: strin
   ].filter((group) => group.items.length > 0);
   const grid = (list: Summary[], level: 2 | 3, group: string, label?: string) => (
     // As many 20 rem columns as fit, sharing the width, as the developer's list.
-    <ul aria-label={label} data-group={label ? group : undefined} className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
+    <ul
+      aria-label={label}
+      data-group={label ? group : undefined}
+      className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]"
+    >
       {list.map((item) => (
         <li key={item.id} className="cv-auto flex min-w-0 [--cv-size:16rem] [&>article]:flex-1">
           <EngagementCard

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
+import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { myEngagements } from "@/components/tracker/data";
 import { EngagementCard } from "@/components/engagements/EngagementCard";
@@ -42,7 +43,12 @@ export default async function DeveloperEngagementsPage() {
   const nicheOf = new Map(ideas.map((idea) => [idea.id, idea.niche ?? null]));
 
   return (
-    <SignedInShell homeHref={home} nav={<DevNav current="engagements" />} wide>
+    <SignedInShell
+      homeHref={home}
+      nav={<DevNav current="engagements" />}
+      wide
+      offline={<OfflineSlot page={(await getTranslations("nav"))("engagements")} />}
+    >
       <div className="max-w-5xl">
         <PageHero eyebrow={te("engagements")} title={t("title")} lead={t("devLead")} />
         {groups.length > 0 ? (
@@ -58,7 +64,10 @@ export default async function DeveloperEngagementsPage() {
                 data-proposal={group.proposalId}
               >
                 {/* As many 20 rem columns as fit, sharing the width: one card is never left narrow beside empty room. */}
-                <ul aria-label={td("rowsLabel", { title: group.title })} className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]">
+                <ul
+                  aria-label={td("rowsLabel", { title: group.title })}
+                  className="grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(20rem,1fr))]"
+                >
                   {group.items.map((item) => (
                     <li key={item.id} className="cv-auto flex min-w-0 [--cv-size:18rem] [&>article]:flex-1">
                       <EngagementCard

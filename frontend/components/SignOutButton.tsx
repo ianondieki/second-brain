@@ -8,7 +8,7 @@ import { useStrings } from "./ClientStrings";
 import { withCsrf } from "@/lib/api/csrf";
 import { forgetEmail } from "@/lib/auth/remembered-email";
 
-import { forgetOffline } from "./offline/worker";
+import { forgetOffline } from "./offline/clear";
 import { forgetRecent } from "./palette/remember";
 
 import { Button } from "./ui/Button";

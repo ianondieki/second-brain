@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { OrgNav } from "@/components/OrgNav";
+import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { engagement } from "@/components/tracker/data";
 import { asDocumentKind, asTab, EngagementScreen } from "@/components/tracker/EngagementScreen";
@@ -29,14 +30,27 @@ export default async function OrganisationEngagementPage({ params, searchParams 
   const { id } = await params;
   // The Messages tab is its own route; old links and the N18 notices (?tab=messages) land there, ?org= kept.
   if (query.tab === "messages") {
-    redirect(messagesHref(ENGAGEMENTS_PATH, id, typeof query.org === "string" ? `?${new URLSearchParams({ org: query.org })}` : ""));
+    redirect(
+      messagesHref(
+        ENGAGEMENTS_PATH,
+        id,
+        typeof query.org === "string" ? `?${new URLSearchParams({ org: query.org })}` : "",
+      ),
+    );
   }
   const { me, query: requested } = await orgContext(query.org);
   const found = await engagement(id);
   // Links act for the engagement's own organisation, whatever ?org= said (the API decides access by it anyway).
   const orgParam = found.ok ? orgQuery(me.memberships, found.value.org_id) : requested;
   return (
-    <SignedInShell homeHref={`/org${orgParam}`} nav={<OrgNav current="engagements" query={orgParam} />} wide>
+    <SignedInShell
+      homeHref={`/org${orgParam}`}
+      nav={<OrgNav current="engagements" query={orgParam} />}
+      wide
+      offline={
+        <OfflineSlot page={found.ok ? found.value.proposal_title : (await getTranslations("tracker"))("pageTitle")} />
+      }
+    >
       {found.ok ? (
         <EngagementScreen
           detail={found.value}

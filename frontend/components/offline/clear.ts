@@ -1,5 +1,6 @@
-// Talking to the service worker (public/sw.js; P27 track F, D-69) from the page: one message, its answer awaited for
-// at most `wait` ms (a worker that is busy or gone never holds the page). Shared by the shell's island and sign-out.
+// Sign-out's part of the offline cache (P27 track F, D-69): every person's copies deleted, here and by the worker
+// ({type: "clear"}, its answer awaited for at most a moment: a worker that is busy or gone never holds sign-out).
+// Loaded with the account menu's lower part and the command palette, never with a page.
 
 /** The worker that controls this origin now, or null (none registered, or the browser has none). */
 export async function activeWorker(): Promise<ServiceWorker | null> {

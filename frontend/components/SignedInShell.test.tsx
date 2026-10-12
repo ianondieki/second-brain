@@ -24,9 +24,6 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/dev",
 }));
 vi.mock("@/lib/api/server", () => ({ getUnreadCount: async () => 2 }));
-// The offline island (P27, D-69) draws nothing until the browser has mounted it: here only whether the shell holds it.
-const offline = vi.hoisted(() => ({ slot: vi.fn(() => null) }));
-vi.mock("./offline/OfflineSlot", () => ({ OfflineSlot: offline.slot }));
 
 afterEach(cleanup);
 
@@ -126,14 +123,17 @@ describe("SignedInShell", () => {
     expect(within(wide).getByRole("heading", { name: "My ideas" })).toBeTruthy();
   });
 
-  // P27 (REQ-UX-08; D-69): the offline banner and the service worker live in the portals' shell, never the console's.
-  it("holds the offline island on the portals' screens and not in the staff console", async () => {
-    offline.slot.mockClear();
-    await renderShell({ homeHref: "/dev" });
-    expect(offline.slot).toHaveBeenCalled();
+  // P27 (REQ-UX-08; D-69): the offline part, given by the pages the worker keeps, sits at the top of <main>, above the
+  // page; never in the staff console.
+  it("draws the offline part it is given at the top of main, and none in the staff console", async () => {
+    const main = await renderShell({ homeHref: "/dev", offline: <p data-offline-part="">offline</p> });
+    expect(main.firstElementChild!.hasAttribute("data-offline-part")).toBe(true);
     cleanup();
-    offline.slot.mockClear();
-    await renderShell({ homeHref: "/admin", staffRole: "admin" });
-    expect(offline.slot).not.toHaveBeenCalled();
+    const console = await renderShell({
+      homeHref: "/admin",
+      staffRole: "admin",
+      offline: <p data-offline-part="">offline</p>,
+    });
+    expect(console.querySelector("[data-offline-part]")).toBeNull();
   });
 });
