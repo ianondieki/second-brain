@@ -15,9 +15,10 @@
 //
 // How it runs: the page carries it as a data block (<script type="text/x-clock-ticker">, which no browser runs and
 // React renders without complaint after a navigation in the app, where a script of its own would be inert and logged as
-// an error), and the root layout's CLOCK_BOOT_SCRIPT runs it: once the document is parsed (DOMContentLoaded, so a full
-// load counts from the first minute boundary after it; a boundary passed before it is put right then), and whenever a
-// clock is added or drawn again later.
+// an error), and the root layout's CLOCK_BOOT_SCRIPT runs it: once the document is parsed (DOMContentLoaded), and
+// whenever a clock is added or drawn again later. The first run anchors the app clock (the gap) at that moment, so the
+// time between the server's instant and that run is not counted (by design: the browser's clock is not trusted, as
+// the islands anchored at hydration); a full load ticks from the first minute boundary after it.
 //
 // CSP: inline, like the root layout's and /offline's scripts (security-headers.ts: script-src 'self' 'unsafe-inline',
 // report-only). Phase 8's nonce CSP: the layout's head script needs the nonce like the others, and ClockTicker then takes
