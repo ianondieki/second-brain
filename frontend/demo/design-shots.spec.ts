@@ -55,7 +55,7 @@ interface Shot {
   path: string;
   who: Who;
   /** The screenshots folder under docs/demo/screenshots/ (default p18). */
-  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c" | "p24" | "p25" | "p26";
+  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c" | "p24" | "p25" | "p26" | "p27";
   /** Only these widths (default SHOT_WIDTHS). */
   widths?: number[];
   /** Shoot this element only (the top bar), not the page. */
@@ -1123,6 +1123,15 @@ for (const name of ["companies", "company", "home", "dev-engagements", "tracker"
   const base = SHOTS.find((shot) => shot.name === name && !shot.set);
   if (base) SHOTS.push({ ...base, set: "p26" });
 }
+
+// P27 (REQ-ENG-13, REQ-ENG-14): the Calendar tab for both sides, the organisation's Board and the calendar feed in
+// Settings › Notifications (as the person first finds it, no link made), into docs/demo/screenshots/p27/ (SHOT_SET=p27).
+SHOTS.push(
+  { name: "dev-calendar", path: "/dev/engagements?view=calendar", who: "dev", set: "p27" },
+  { name: "org-calendar", path: "/org/engagements?view=calendar", who: "org", set: "p27" },
+  { name: "org-board", path: "/org/engagements?view=board", who: "org", set: "p27" },
+  { name: "settings-feed", path: "/settings/notifications", who: "dev", set: "p27" },
+);
 
 function wanted(shot: Shot) {
   return (!FILTER || FILTER.test(shot.name)) && (!SET || shot.set === SET);
