@@ -1,6 +1,7 @@
 "use client";
 
-import { lazy, Suspense, type ComponentProps, type ComponentType } from "react";
+import { useRouter } from "next/navigation";
+import { lazy, Suspense, useId, useState, type ComponentProps, type ComponentType } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Button } from "@/components/ui/Button";
@@ -53,5 +54,64 @@ export function LazyContactReveal(props: ComponentProps<typeof ContactRevealChun
     <Suspense fallback={null}>
       <ContactRevealChunk {...props} />
     </Suspense>
+  );
+}
+
+// The P27 parts behind a button (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04): the organisation's Team sheet and its
+// prior-knowledge declaration, and the developer's dismissal of the IP note. The server draws the line and the
+// button's words; the part's chunk is fetched when the pointer reaches the button or it takes focus, and drawn when it
+// is pressed (pressed again, drawn anew). Closing gives focus back to the button and refreshes the tracker when
+// something changed (a part that removes its own button moves focus itself: provenance/focus-line.ts).
+const PARTS = {
+  team: () => import("@/components/team/TeamSheet").then((m) => m.TeamSheet),
+  declaration: () => import("@/components/provenance/DeclarationSheet").then((m) => m.DeclarationSheet),
+  nudge: () => import("./NudgeDismiss").then((m) => m.NudgeDismiss),
+};
+type Parts = typeof PARTS;
+type PartName = keyof Parts;
+type Close = { onClose: (changed: boolean) => void };
+export type PartProps<K extends PartName> = Omit<ComponentProps<Awaited<ReturnType<Parts[K]>>>, "onClose">;
+const CHUNKS = { team: failSafe(PARTS.team), declaration: failSafe(PARTS.declaration), nudge: failSafe(PARTS.nudge) };
+
+export function PartButton<K extends PartName>({
+  part,
+  label,
+  className,
+  props,
+}: {
+  part: K;
+  label: string;
+  className?: string;
+  props: PartProps<K>;
+}) {
+  const [shown, show] = useState(0);
+  const router = useRouter();
+  const id = useId();
+  const Part = CHUNKS[part] as unknown as ComponentType<PartProps<K> & Close>;
+  const prefetch = () => void PARTS[part]().catch(() => undefined);
+  function close(changed: boolean) {
+    show(0);
+    document.getElementById(id)?.focus();
+    if (changed) router.refresh();
+  }
+  return (
+    <>
+      <button
+        id={id}
+        type="button"
+        data-opens={part}
+        className={className}
+        onClick={() => show((n) => n + 1)}
+        onPointerEnter={prefetch}
+        onFocus={prefetch}
+      >
+        {label}
+      </button>
+      {shown ? (
+        <Suspense fallback={null}>
+          <Part key={shown} {...props} onClose={close} />
+        </Suspense>
+      ) : null}
+    </>
   );
 }

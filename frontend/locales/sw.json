@@ -2,8 +2,6 @@
   "_meta": {
     "reviewP26a": "[[COPY-REVIEW]] [[SW-REVIEW]] P26-A (REQ-TRACK-03, REQ-UX-02), rasimu ya Kiswahili: countdown.clockDays, countdown.clockHours, countdown.clockMinutes (saa ya mwisho: ujumbe mmoja kwa kila kipimo kikubwa; tarakimu na neno la kipimo zimewekewa lebo (f, u), hivyo kila lugha inaamua mpangilio na nafasi)",
     "reviewP27f": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-F (REQ-UX-08; D-69): shell.install, offline.*, profileSettings.dataSaver, profileSettings.dataSaverExplain, notificationSettings.dataTitle (rasimu ya Kiswahili)",
-    "reviewP27clock": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"baada ya siku 6 saa 14 dakika 23\"), not \"dak 23\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
-    "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term.",
     "reviewP25c2": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: portal.* (vichwa vidogo vya mahali ulipo, mistari mipya ya lango la shirika, dashibodi ya wafanyakazi na kurasa za kuingia: portal.eyebrow.*, portal.settings.*, portal.proposal.means, portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry, adminResearch.stepUp.loading, briefForm.preview.* (onyesho la moja kwa moja la jinsi Brief inavyosomeka kwenye Gundua)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack) [[SW-REVIEW]] draft Swahili",
     "reviewP15f": "[[COPY-REVIEW]] [[SW-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.* (rasimu ya Kiswahili)",
@@ -37,7 +35,10 @@
     "reviewP23c": "[[COPY-REVIEW]] [[SW-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: countdown.* (muda uliobaki hadi tarehe ya mwisho: siku (haibadiliki kwa wingi, hivyo bila ICU plural), saa na dak (dakika) kuanzia kipimo kikubwa (countdown.days, .hours, .minutes), countdown.in (\"baada ya {time}\"), countdown.dueIn (\"Inatakiwa {date} · baada ya {time}\"), countdown.closesIn (\"Mapendekezo yatafungwa baada ya {time}\") na countdown.at (saa kamili ya Nairobi katika kichwa cha kipengele cha muda)); trackerActions.partFailed na .partReload (sehemu ya ukurasa ambayo msimbo wake haukupakia); je, \"dak\" inafaa kama kifupi cha dakika?",
     "reviewP24": "[[COPY-REVIEW]] [[SW-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: landing.eyebrow, landing.title (kifungu cha italiki, lebo yake ya accent), landing.sample.*, landing.stats.*, landing.counties.*, landing.how.* (vibandiko vitatu), landing.reasons.* (values.* ni maandishi ya Kiingereza ya mpangaji kama bidhaa inavyoyaonyesha; je, yabaki kwa Kiingereza?), landing.activity.*, landing.nav.explore, landing.footer.*, explore.*, credits.*, home.greeting (asubuhi/mchana/jioni kwa saa ya Nairobi), og.*; \"niche\" imeachwa kama ilivyo katika sehemu nyingine za programu; explore.nationwide/nationwideNote/seeded, problemPage.*, og.problemAlt",
     "reviewP25": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: palette.* (kitufe cha Tafuta, makundi, vitendo, vitufe), activity.* (kalenda ya shughuli; activity.mon/wed/fri ni vifupisho vya siku, je, vinafaa?), \"Brief\" imetafsiriwa kama \"maelezo ya tatizo\" kama katika briefs.*; eyebrow.* (P25-C2: lebo ndogo juu ya kila skrini ya msanidi programu, inayosema uko wapi); engagementCard.* (mstari wa vitone vitano wa kadi ya ushirikiano); activity.busiest",
-    "reviewP26": "[[COPY-REVIEW]] [[SW-REVIEW]] P26-B (REQ-DIR-01, REQ-UX-01, REQ-UX-02; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: companies.lead, companies.groupCount, companies.findProblems, companies.pitchIdea, companies.otherNiches, companies.responseFigure; companies.heldUnclaimedHint (maelezo ya E0 kabla ya kuwasilisha, kwa umbo la pitch.heldUnclaimed); imeondolewa: companies.detailNiches, companies.nichesTitle (badala yake companies.otherNiches)"
+    "reviewP26": "[[COPY-REVIEW]] [[SW-REVIEW]] P26-B (REQ-DIR-01, REQ-UX-01, REQ-UX-02; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: companies.lead, companies.groupCount, companies.findProblems, companies.pitchIdea, companies.otherNiches, companies.responseFigure; companies.heldUnclaimedHint (maelezo ya E0 kabla ya kuwasilisha, kwa umbo la pitch.heldUnclaimed); imeondolewa: companies.detailNiches, companies.nichesTitle (badala yake companies.otherNiches)",
+    "reviewP27cde": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.team.*, tracker.declaration.*, tracker.ipNudge.*, tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (\"alama ya kidijitali\" kwa fingerprint/SHA-256; \"ujuzi wa awali\" kwa prior knowledge), engagements.*, profileSettings.references.*, help.confidential.priorKnowledge",
+    "reviewP27clock": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"baada ya siku 6 saa 14 dakika 23\"), not \"dak 23\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
+    "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term."
   },
   "app": {
     "name": "Wazo",
@@ -576,7 +577,8 @@
       "title": "Kinachobaki siri",
       "tier1": "Kiwango cha 1 ni muhtasari wa umma: kichwa, tatizo na muhtasari wake. Kila aliyeingia anaweza kuuona, kwa hivyo hauwezi kuwa na maelezo ya mawasiliano wala viungo.",
       "tier2": "Kiwango cha 2 ni maelezo kamili: huonyeshwa kwa watu waliothibitishwa katika mashirika yaliyokubali NDA yetu, pamoja na wafanyakazi wa jukwaa kwa ufikiaji wa dharura unaorekodiwa na ambao mmiliki hujulishwa, na kila utazamaji hurekodiwa na kuwekewa alama ya mtazamaji.",
-      "record": "Kuchapisha kunakupa ushahidi wenye muhuri wa muda wa ulichowasilisha na lini, na ukurasa wa wazo lako unaonyesha waliofungua maelezo kamili."
+      "record": "Kuchapisha kunakupa ushahidi wenye muhuri wa muda wa ulichowasilisha na lini, na ukurasa wa wazo lako unaonyesha waliofungua maelezo kamili.",
+      "priorKnowledge": "Ndani ya siku 10 za kazi tangu kuona pendekezo lako kamili kwa mara ya kwanza, shirika linaweza kutangaza kwamba tayari lilikuwa na kazi inayofanana kwa kurekodi alama ya kidijitali (SHA-256) ya ushahidi wake wenye tarehe. Unaliona tamko hilo kwenye kifuatiliaji chako. Matamko hayarekodiwi kwenye jukwaa baada ya muda huu."
     },
     "reminders": {
       "title": "Vikumbusho",
@@ -2549,7 +2551,8 @@
       "messageSide": {
         "developer": "Msanidi programu",
         "org": "Shirika"
-      }
+      },
+      "priorKnowledgeDeclared": "Ujuzi wa awali umetangazwa"
     },
     "event": {
       "create": "Ushirikiano umefunguliwa",
@@ -2640,6 +2643,44 @@
       "pageTitle": "Ujumbe: {title}",
       "endedBeforeOpen": "Ushirikiano huu uliisha kabla ujumbe haujafunguliwa, kwa hivyo hakuna mazungumzo.",
       "emptyViewer": "Bado hakuna ujumbe."
+    },
+    "team": {
+      "label": "Timu yako kwenye ushirikiano huu",
+      "assignedTo": "Amepewa {name}",
+      "assignedToYou": "Umepewa wewe",
+      "unassigned": "Bado hajapewa mtu",
+      "assign": "Mpe mtu",
+      "change": "Badilisha",
+      "tally": "Mapendekezo: endelea <f>{pursue}</f> · acha <f>{pass}</f> · jadili <f>{discuss}</f>",
+      "none": "Bado hakuna mapendekezo",
+      "see": "Ona mapendekezo",
+      "recommend": "Pendekeza"
+    },
+    "declaration": {
+      "label": "Tamko la ujuzi wa awali",
+      "notYet": "Muda wa kutoa tamko hufunguka baada ya shirika lako kuona pendekezo kamili kwa mara ya kwanza.",
+      "open": "Shirika lako linaweza kutangaza kazi inayofanana iliyokuwepo hadi {date}.",
+      "openOthers": "Mmiliki, msimamizi au mtia sahihi wa shirika lako anaweza kutangaza kazi inayofanana iliyokuwepo hadi {date}.",
+      "declare": "Tangaza ujuzi wa awali",
+      "declared": "Shirika lako lilitangaza ujuzi wa awali tarehe {date}.",
+      "closed": "Muda wa kutoa tamko ulifungwa tarehe {date}.",
+      "received": {
+        "title": "Tamko la ujuzi wa awali kutoka {org} tarehe {date}",
+        "lead": "{org} inasema tayari ilikuwa na kazi inayofanana kabla ya kuona pendekezo lako kamili kwa mara ya kwanza. Ilihifadhi alama ya kidijitali ya ushahidi wake wenye tarehe, si ushahidi wenyewe.",
+        "hash": "Alama ya kidijitali (SHA-256)",
+        "evidenceTitle": "Kichwa",
+        "evidenceDate": "Tarehe ya ushahidi",
+        "help": "Tamko linamaanisha nini"
+      }
+    },
+    "ipNudge": {
+      "label": "Kabla hujashiriki",
+      "body": "Kabla hujashiriki pendekezo kamili kwa mara ya kwanza, huenda ukataka kuangalia usajili wa KIPI wa modeli ya matumizi au hataza, na usajili wa hiari wa hakimiliki wa KECOBO. Hakuna kati ya hivi kinachohitajika hapa.",
+      "kipi": "KIPI (kipi.go.ke)",
+      "kecobo": "KECOBO (copyright.go.ke)",
+      "dismiss": "Ondoa",
+      "failed": "Imeshindwa kuondoa ujumbe. Jaribu tena.",
+      "newTab": "(inafunguka katika kichupo kipya)"
     }
   },
   "trackerActions": {
@@ -4083,6 +4124,18 @@
       "unblocking": "Inaondoa zuio…",
       "unblocked": "Zuio la {name} limeondolewa. Mazungumzo yaliyofungwa yanabaki yamefungwa.",
       "failed": "Imeshindikana kuondoa zuio. Jaribu tena."
+    },
+    "references": {
+      "title": "Marejeleo uliyoyataja mwenyewe",
+      "lead": "Huonyeshwa kwenye vyeti vyako kama uliyoyataja mwenyewe. Hakuna anayeyakagua.",
+      "github": "Jina la GitHub",
+      "githubHint": "Herufi, tarakimu na vistari kimoja kimoja, hadi herufi 39.",
+      "kecobo": "Marejeleo ya KECOBO",
+      "kecoboHint": "Nambari yako ya usajili wa hakimiliki, kama unayo. Hadi herufi 40.",
+      "kipi": "Marejeleo ya KIPI",
+      "kipiHint": "Nambari yako ya ombi la hataza au modeli ya matumizi, kama unayo. Hadi herufi 40.",
+      "invalidGithub": "Jina la GitHub lina herufi, tarakimu na vistari kimoja kimoja (si mwanzoni wala mwishoni), hadi herufi 39.",
+      "invalidReference": "Tumia mstari mmoja wa herufi hadi 40, bila herufi zisizoonekana."
     }
   },
   "ideaContributors": {
@@ -4097,10 +4150,14 @@
     "failed": "Imeshindikana kumwondoa. Jaribu tena."
   },
   "countdown": {
+    "days": "siku {days} saa {hours} dak {minutes}",
+    "hours": "saa {hours} dak {minutes}",
+    "minutes": "dak {minutes}",
     "clockDays": "<u>siku </u><f>{days}</f> <u>saa </u><f>{hours}</f> <u>dak </u><f>{minutes}</f>",
     "clockHours": "<u>saa </u><f>{hours}</f> <u>dak </u><f>{minutes}</f>",
     "clockMinutes": "<u>dak </u><f>{minutes}</f>",
     "in": "baada ya {time}",
+    "dueIn": "Inatakiwa {date} · baada ya {time}",
     "closesIn": "Mapendekezo yatafungwa baada ya {time}",
     "at": "{date}, {time} EAT"
   },
@@ -4240,16 +4297,124 @@
     "stageOf": "Hatua {step} kati ya {total}: {stage}",
     "waitingOn": "Inamsubiri {name}"
   },
+  "teamSheet": {
+    "title": "Timu kwenye ushirikiano huu",
+    "private": "Shirika lako pekee ndilo linaloona hili. Msanidi programu haoni kamwe.",
+    "loading": "Inapakia timu…",
+    "failed": "Imeshindwa kupakia timu. Jaribu tena.",
+    "retry": "Jaribu tena",
+    "working": "Inahifadhi…",
+    "assignLegend": "Amepewa",
+    "nobody": "Hakuna mtu",
+    "you": "{name} (wewe)",
+    "role": {
+      "owner": "Mmiliki",
+      "admin": "Msimamizi",
+      "reviewer": "Mkaguzi",
+      "signatory": "Mtia sahihi",
+      "finance": "Fedha",
+      "viewer": "Mtazamaji"
+    },
+    "assign": "Mpe",
+    "assigning": "Inampa…",
+    "assigned": "Amepewa {name}.",
+    "unassignedDone": "Sasa hakuna aliyepewa.",
+    "assignedTo": "Amepewa {name}.",
+    "nobodyAssigned": "Bado hakuna aliyepewa.",
+    "recommendations": "Mapendekezo",
+    "noRecommendations": "Bado hakuna mapendekezo.",
+    "stance": {
+      "pursue": "Endelea",
+      "pass": "Acha",
+      "discuss": "Jadili"
+    },
+    "mineTitle": "Pendekezo lako",
+    "mineLead": "Halibadilishi chochote kwenye ushirikiano.",
+    "stanceLegend": "Maoni yako",
+    "chooseStance": "Chagua endelea, acha au jadili.",
+    "note": "Maelezo (si lazima)",
+    "noteHint": "Mstari mmoja, wanachama wa shirika lako huusoma. Herufi {count} kati ya {max}.",
+    "save": "Hifadhi pendekezo",
+    "saving": "Inahifadhi…",
+    "saved": "Pendekezo lako limehifadhiwa.",
+    "remove": "Ondoa",
+    "removing": "Inaondoa…",
+    "removed": "Pendekezo lako limeondolewa.",
+    "close": "Funga",
+    "refusal": {
+      "notAllowed": "Mmiliki, msimamizi, mkaguzi au mtia sahihi pekee ndiye anayeweza kumpa mtu au kupendekeza.",
+      "invalidAssignee": "Mtu huyo hawezi kupewa. Chagua mmiliki, msimamizi, mkaguzi au mtia sahihi wa shirika lako.",
+      "unchanged": "Tayari amepewa hivyo.",
+      "conflict": "Mtu mwingine alibadilisha hili wakati huohuo. Karatasi inaonyesha hali ya sasa; jaribu tena.",
+      "tooMany": "Umefanya mabadiliko mengi saa iliyopita. Jaribu tena baada ya dakika chache.",
+      "invalidNote": "Maelezo yawe mstari mmoja wa herufi hadi 200, bila herufi zisizoonekana.",
+      "notFound": "Ushirikiano huu haupo tena.",
+      "network": "Hakuna muunganisho. Jaribu tena.",
+      "generic": "Hitilafu imetokea. Jaribu tena."
+    }
+  },
+  "declarationSheet": {
+    "title": "Tangaza ujuzi wa awali",
+    "lead": "Ikiwa shirika lako tayari lilikuwa na kazi inayofanana kabla ya kuona pendekezo hili kwa mara ya kwanza, liandike hapa.",
+    "private": "Alama ya kidijitali (SHA-256) ya faili yako pekee ndiyo inayotoka kwenye kifaa hiki; faili yenyewe haipakiwi kamwe.",
+    "window": "Matamko hayarekodiwi kwenye jukwaa baada ya {date}.",
+    "evidence": "Ushahidi",
+    "sourceFile": "Kutoka kwa faili",
+    "sourcePaste": "Bandika SHA-256",
+    "file": "Faili",
+    "fileHint": "Alama huundwa kwenye kifaa hiki. Hadi MB 50.",
+    "hashing": "Inaunda alama ya kidijitali…",
+    "hashed": "Alama ya kidijitali ya {name}:",
+    "tooLarge": "Faili zaidi ya MB 50 haziundiwi alama kwenye kivinjari. Endesha sha256sum kwenye faili na ubandike matokeo badala yake.",
+    "hashFailed": "Kivinjari hiki hakikuweza kusoma faili. Bandika SHA-256 yake badala yake.",
+    "needFile": "Chagua faili ya kuundia alama.",
+    "paste": "SHA-256",
+    "pasteHint": "Herufi 64, 0 hadi 9 na a hadi f.",
+    "invalidHash": "SHA-256 ina herufi 64, 0 hadi 9 na a hadi f.",
+    "titleLabel": "Kichwa",
+    "titleHint": "Kichwa kifupi, bila majina. Huhifadhiwa milele.",
+    "needTitle": "Upe ushahidi kichwa.",
+    "date": "Tarehe ya ushahidi",
+    "dateHint": "Tarehe {date} au kabla yake, siku ambayo shirika lako liliona pendekezo kamili kwa mara ya kwanza.",
+    "needDate": "Toa tarehe ya ushahidi.",
+    "dateAfter": "Chagua tarehe {date} au kabla yake.",
+    "submit": "Rekodi tamko",
+    "submitting": "Inarekodi…",
+    "cancel": "Ghairi",
+    "receipt": "Tamko lilirekodiwa tarehe {date}:",
+    "told": "Msanidi programu anaarifiwa na analiona kwenye kifuatiliaji chake.",
+    "done": "Imekamilika",
+    "refusal": {
+      "noTier2": "Muda wa kutoa tamko hufunguka shirika lako linapoona pendekezo kamili kwa mara ya kwanza.",
+      "windowClosed": "Muda wa kutoa tamko ulifungwa tarehe {date}. Matamko hayarekodiwi kwenye jukwaa baada ya muda huu.",
+      "windowClosedNoDate": "Matamko hayarekodiwi kwenye jukwaa baada ya muda huu.",
+      "alreadyDeclared": "Shirika lako tayari limetangaza ujuzi wa awali kwenye ushirikiano huu.",
+      "ended": "Ushirikiano huu umeisha, kwa hivyo hakuna tamko linaloweza kurekodiwa.",
+      "notAllowed": "Mmiliki, msimamizi au mtia sahihi pekee ndiye anayeweza kutangaza ujuzi wa awali.",
+      "invalidTitle": "Kichwa kiwe mstari mmoja wa herufi hadi 200, bila herufi zisizoonekana.",
+      "future": "Tarehe ya ushahidi haiwezi kuwa baada ya leo.",
+      "afterView": "Ujuzi wa awali hutangulia shirika lako kuona pendekezo kamili kwa mara ya kwanza: chagua tarehe {date} au kabla yake.",
+      "invalidHash": "SHA-256 ina herufi 64, 0 hadi 9 na a hadi f.",
+      "notFound": "Ushirikiano huu haupo tena.",
+      "network": "Hakuna muunganisho. Hakuna kilichorekodiwa; jaribu tena.",
+      "generic": "Hitilafu imetokea. Hakuna kilichorekodiwa; jaribu tena."
+    }
+  },
   "engagements": {
+    "filterLabel": "Ushirikiano wa nani",
+    "assignedToMe": "Niliyopewa mimi",
+    "assignedTo": "Amepewa {name}",
+    "assignedToYou": "Umepewa wewe",
+    "noneMine": "Hakuna kitu hapa ulichopewa.",
+    "noneMineOnPage": "Hakuna kitu kwenye ukurasa huu ulichopewa.",
+    "showAll": "Onyesha zote",
     "tabsLabel": "Mionekano ya ushirikiano",
     "tab": {
       "list": "Orodha",
       "calendar": "Kalenda",
       "board": "Ubao"
     },
-    "filterLabel": "Ushirikiano wa nani",
-    "filterAll": "Yote",
-    "assignedToMe": "Niliyopewa mimi"
+    "filterAll": "Yote"
   },
   "deadlines": {
     "previous": "Mwezi uliopita, {month}",

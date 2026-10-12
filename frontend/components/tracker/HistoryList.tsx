@@ -131,7 +131,11 @@ export function HistoryList({
               {mark}
               <div className="min-w-0 flex-1">
                 <h3 className="font-semibold text-ink">
-                  {EVENT_KEYS.has(event.command) ? t(`event.${event.command as Command | "create" | "expire"}`) : t("event.other")}
+                  {EVENT_KEYS.has(event.command)
+                    ? t(`event.${event.command as Command | "create" | "expire"}`)
+                    : event.command === "prior_knowledge_declared"
+                      ? t("history.priorKnowledgeDeclared")
+                      : t("event.other")}
                 </h3>
                 <p className="mt-0.5 flex flex-wrap gap-x-3 text-sm text-ink-soft">
                   <span className="text-ink">

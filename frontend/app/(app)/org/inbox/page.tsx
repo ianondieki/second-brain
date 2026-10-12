@@ -7,9 +7,9 @@ import { Callout } from "@/components/ui/Callout";
 import { NicheBand } from "@/components/ui/NicheBand";
 import { PageHero } from "@/components/ui/PageHero";
 
-import { getInbox, orgContext, type InboxPage, type OrgVerification } from "../data";
+import { getInbox, INBOX_MAX_PAGE, orgContext, type InboxPage, type OrgVerification } from "../data";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { engagementsHref, first, inboxHref, proposalHref, type Membership } from "../membership";
+import { engagementsHref, first, INBOX_PATH, inboxHref, orgQuery, proposalHref, type Membership } from "../membership";
 import { OrgPicker } from "../OrgPicker";
 import { ACTION_HREF } from "../refusals";
 import { matchesHref } from "../scout";
@@ -19,6 +19,7 @@ import { InboxRow } from "./InboxRow";
 import { InboxTabs, inboxTab } from "./InboxTabs";
 import { ScoutMatches } from "./matches/ScoutMatches";
 import { StandaloneLink } from "@/components/ui/StandaloneLink";
+import { AssigneeFilter, assignedToMe, assigneeLine, isAssignedTo } from "@/components/team/AssigneeFilter";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("inbox");
@@ -35,7 +36,8 @@ const CURSOR = /^[A-Za-z0-9_-]{1,500}$/;
  */
 export default async function InboxScreen({ searchParams }: PageProps<"/org/inbox">) {
   const params = await searchParams;
-  const { memberships, org, missing, query } = await orgContext(params.org);
+  const { me, memberships, org, missing, query } = await orgContext(params.org);
+  const mine = assignedToMe(params.assignee);
   const [t, tm, tp25] = await Promise.all([getTranslations("inbox"), getTranslations("scoutMatches"), getTranslations("portal")]);
   const cursorParam = first(params.cursor);
   const cursor = cursorParam && CURSOR.test(cursorParam) ? cursorParam : undefined;
@@ -66,7 +68,7 @@ export default async function InboxScreen({ searchParams }: PageProps<"/org/inbo
             {tab === "matches" ? (
               <ScoutMatches memberships={memberships} org={org} />
             ) : (
-              <InboxBody memberships={memberships} org={org} cursor={cursor} />
+              <InboxBody memberships={memberships} org={org} cursor={cursor} mine={mine} userId={me.user.id} />
             )}
           </>
         ) : (
@@ -87,16 +89,22 @@ async function InboxBody({
   memberships,
   org,
   cursor,
+  mine,
+  userId,
 }: {
   memberships: Membership[];
   org: Membership;
   cursor?: string;
+  /** "Assigned to me" (`?assignee=me`): the page's proposals whose engagement is assigned to the caller. */
+  mine: boolean;
+  userId: string;
 }) {
   const t = await getTranslations("inbox");
   const tp = await getTranslations("orgProposal");
   const orgName = org.org_name;
-  const result = await getInbox(org.org_id, cursor);
-  const newest = inboxHref(memberships, org.org_id);
+  // Filtered, a page reads the API's largest page (50), so fewer pages hold nothing of the caller's.
+  const result = await getInbox(org.org_id, cursor, mine ? INBOX_MAX_PAGE : undefined);
+  const newest = mine ? inboxMineHref(memberships, org.org_id) : inboxHref(memberships, org.org_id);
 
   let body;
   if (result.kind === "staleCursor") {
@@ -121,7 +129,17 @@ async function InboxBody({
         <EmptyState sentence={t("refusedNotFound")} action={t("emptyAction")} href="/org" />
       );
   } else {
-    body = <InboxList page={result.page} memberships={memberships} org={org} cursor={cursor} newest={newest} />;
+    body = (
+      <InboxList
+        page={result.page}
+        memberships={memberships}
+        org={org}
+        cursor={cursor}
+        newest={newest}
+        mine={mine}
+        userId={userId}
+      />
+    );
   }
 
   return (
@@ -136,6 +154,11 @@ async function InboxBody({
   );
 }
 
+/** The Inbox's "Assigned to me" view, optionally at a later page. */
+function inboxMineHref(memberships: readonly Membership[], orgId: string, cursor?: string): string {
+  return `${INBOX_PATH}${orgQuery(memberships, orgId, { assignee: "me", cursor })}`;
+}
+
 function emptySentence(verification: OrgVerification): "emptyE2" | "emptyE1" | "emptyUnverified" {
   if (verification === "e2") return "emptyE2";
   if (verification === "e1") return "emptyE1";
@@ -148,15 +171,33 @@ async function InboxList({
   org,
   cursor,
   newest,
+  mine,
+  userId,
 }: {
   page: InboxPage;
   memberships: Membership[];
   org: Membership;
   cursor?: string;
   newest: string;
+  mine: boolean;
+  userId: string;
 }) {
   const t = await getTranslations("inbox");
+  const te = await getTranslations("engagements");
   const orgName = org.org_name;
+  const allHref = inboxHref(memberships, org.org_id);
+  const pageHref = (next: string) =>
+    mine ? inboxMineHref(memberships, org.org_id, next) : inboxHref(memberships, org.org_id, next);
+  const filter = (
+    <AssigneeFilter mine={mine} allHref={allHref} mineHref={inboxMineHref(memberships, org.org_id)} className="mb-6" />
+  );
+  const items = mine ? page.items.filter((item) => isAssignedTo(item.engagement?.team, userId)) : page.items;
+  // The assignee's quiet line in each card's meta (never a chip).
+  const assignees = new Map(
+    await Promise.all(
+      items.map(async (item) => [item.tag_id, await assigneeLine(item.engagement?.team, userId)] as const),
+    ),
+  );
   const held =
     page.held_count > 0 ? (
       <Callout data-held-count={page.held_count} className="mb-6 max-w-[62ch]">
@@ -164,6 +205,19 @@ async function InboxList({
       </Callout>
     ) : null;
 
+  if (mine && items.length === 0) {
+    // Nothing of the caller's here: on to the older page when there is one, else back to everything.
+    return (
+      <>
+        {filter}
+        {page.next_cursor ? (
+          <EmptyState sentence={te("noneMineOnPage")} action={t("older")} href={pageHref(page.next_cursor)} />
+        ) : (
+          <EmptyState sentence={te("noneMine")} action={te("showAll")} href={allHref} />
+        )}
+      </>
+    );
+  }
   if (page.items.length === 0) {
     if (cursor) return <EmptyState sentence={t("staleCursor")} action={t("newestPage")} href={newest} />;
     // Held proposals are all an E1 organisation sees: their count is then the empty state's one sentence.
@@ -177,8 +231,9 @@ async function InboxList({
   return (
     <>
       {held}
+      {filter}
       <ItemGrid aria-label={t("listLabel", { org: orgName })}>
-        {page.items.map((item) => (
+        {items.map((item) => (
           <li key={item.tag_id}>
             <InboxRow
               item={item}
@@ -186,6 +241,7 @@ async function InboxList({
               trackerHref={item.engagement ? engagementsHref(memberships, org.org_id, item.engagement.id) : undefined}
               org={org}
               band={<NicheBand niche={item.proposal.teaser.niche?.slug} county={item.proposal.teaser.county_code} sizes={CARD_BAND} />}
+              assignee={assignees.get(item.tag_id) ?? null}
             />
           </li>
         ))}
@@ -199,11 +255,7 @@ async function InboxList({
           ) : (
             <span />
           )}
-          {page.next_cursor ? (
-            <StandaloneLink href={inboxHref(memberships, org.org_id, page.next_cursor)}>
-              {t("older")}
-            </StandaloneLink>
-          ) : null}
+          {page.next_cursor ? <StandaloneLink href={pageHref(page.next_cursor)}>{t("older")}</StandaloneLink> : null}
         </nav>
       ) : null}
     </>

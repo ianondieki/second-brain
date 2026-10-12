@@ -6,20 +6,18 @@ import { nairobiParts } from "@/lib/format";
 // from `whose_turn` and `awaiting`, the stepper's current group from `stage_group` (backend state_machine.py).
 
 type Schemas = components["schemas"];
-type DeveloperDetail = Schemas["DeveloperEngagementDetail"];
-type OrgDetail = Schemas["OrgEngagementDetail"];
 /**
- * One engagement as its party reads it. P27: the API answers one of two shapes keyed by `my_party` (the developer's
- * with `ip_nudge`, the organisation's with its `team` facts, each its own `prior_knowledge`; never the other's, D-68).
- * The tracker reads the fields they share, so it takes one type with the party-specific ones optional.
+ * One engagement as its caller reads it: the developer's and the organisation's trackers are separate schemas,
+ * told apart by `my_party` (D-68: the organisation's triage, `team`, and its declaration window exist only on its own).
  */
-export type Detail = Omit<DeveloperDetail, "my_party" | "ip_nudge" | "prior_knowledge"> & {
-  my_party: Party;
-  ip_nudge?: DeveloperDetail["ip_nudge"];
-  team?: OrgDetail["team"];
-  prior_knowledge?: DeveloperDetail["prior_knowledge"] | OrgDetail["prior_knowledge"];
-};
+export type DeveloperDetail = Schemas["DeveloperEngagementDetail"];
+export type OrgDetail = Schemas["OrgEngagementDetail"];
+export type TrackerDetail = DeveloperDetail | OrgDetail;
+export type Detail = TrackerDetail;
 export type Summary = Schemas["EngagementSummary"];
+/** An organisation's list row: the summary with its team facts (the developer's rows carry none). */
+export type OrgSummary = Schemas["OrgEngagementSummary"];
+export type TeamFacts = Schemas["TeamFacts"];
 export type Command = Schemas["Command"];
 export type Party = Schemas["EngagementParty"];
 export type State = Schemas["EngagementState"];

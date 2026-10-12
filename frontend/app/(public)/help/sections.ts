@@ -5,7 +5,10 @@ export const NOTIFICATIONS_HREF = "/settings/notifications";
 
 export const HELP_SECTIONS = [
   { id: "pitching", paragraphs: ["pitching.parts", "pitching.pitch", "pitching.interest"] },
-  { id: "confidential", paragraphs: ["confidential.tier1", "confidential.tier2", "confidential.record"] },
+  {
+    id: "confidential",
+    paragraphs: ["confidential.tier1", "confidential.tier2", "confidential.record", "confidential.priorKnowledge"],
+  },
   { id: "reminders", paragraphs: ["reminders.daily", "reminders.always", "reminders.manage"] },
   { id: "support", paragraphs: ["support.body"] },
 ] as const;

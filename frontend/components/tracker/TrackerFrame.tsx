@@ -70,10 +70,26 @@ export async function TrackerHeader({ detail, basePath, query }: { detail: Detai
 
 /**
  * The turn card: the page's headline object. Whose turn, the next step and the countdown, then `children` (the
- * caller's buttons, or on the Messages tab the way to them) in a band that hides while it is empty. Raised and edged
+ * caller's buttons, or on the Messages tab the way to them) in a band that hides while it is empty; `strip` and
+ * `footer` are the slim lines above and below that band (P27: the organisation's team and declaration lines, the
+ * developer's IP note). Raised and edged
  * with the lattice when it is the viewer's turn; a flat card otherwise.
  */
-export function TurnCard({ detail, now, children }: { detail: Detail; now?: string; children?: ReactNode }) {
+export function TurnCard({
+  detail,
+  now,
+  children,
+  strip,
+  footer,
+}: {
+  detail: Detail;
+  now?: string;
+  children?: ReactNode;
+  /** A line under the banner, above the buttons (the organisation's team line). */
+  strip?: ReactNode;
+  /** A line under the buttons (the organisation's declaration line, the developer's IP note). */
+  footer?: ReactNode;
+}) {
   const turn = turnOf(detail, detail.my_party);
   const yours = turn.kind === "you" || turn.kind === "both";
   return (
@@ -83,9 +99,11 @@ export function TurnCard({ detail, now, children }: { detail: Detail; now?: stri
     >
       {yours ? <Lattice /> : null}
       <WhoseTurn detail={detail} now={now} />
+      {strip}
       {/* The clocks' ticker, once for the page, after the turn card's clocks (the tracker's only ones). */}
       {now ? <ClockTicker /> : null}
       {children ? <div className="border-t border-line p-5 has-[>div:empty]:hidden sm:px-7 sm:py-6">{children}</div> : null}
+      {footer}
     </div>
   );
 }

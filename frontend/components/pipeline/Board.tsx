@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 
+import { AssigneeFilter } from "@/components/team/AssigneeFilter";
 import { ClockTicker } from "@/components/ui/ClockTicker";
-import { cn } from "@/components/ui/cn";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 import { BoardCard } from "./BoardCard";
@@ -28,36 +27,11 @@ export interface BoardProps {
  * me" narrows the cards (a link pair; the address keeps the choice). The cards' clocks tick from the page's one script.
  */
 export async function Board({ pipeline, cardHref, filter, emptyHref }: BoardProps) {
-  const [t, tt, te] = await Promise.all([
-    getTranslations("pipeline"),
-    getTranslations("tracker"),
-    getTranslations("engagements"),
-  ]);
+  const [t, tt] = await Promise.all([getTranslations("pipeline"), getTranslations("tracker")]);
   const total = pipeline.columns.reduce((sum, column) => sum + column.items.length, 0);
+  // The same "Assigned to me" links as the list and the Inbox (`?assignee=me`).
   const filterBar = filter ? (
-    <nav aria-label={te("filterLabel")} data-board-filter="">
-      <ul className="flex gap-2">
-        {[
-          { key: "all", href: filter.allHref, label: te("filterAll"), current: !filter.on },
-          { key: "mine", href: filter.mineHref, label: te("assignedToMe"), current: filter.on },
-        ].map((option) => (
-          <li key={option.key}>
-            <Link
-              href={option.href}
-              aria-current={option.current ? "page" : undefined}
-              className={cn(
-                "inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-semibold no-underline",
-                option.current
-                  ? "border-accent bg-accent-wash text-accent"
-                  : "border-line bg-field text-ink-soft hover:border-accent-line hover:text-ink",
-              )}
-            >
-              {option.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </nav>
+    <AssigneeFilter mine={filter.on} allHref={filter.allHref} mineHref={filter.mineHref} />
   ) : null;
 
   if (total === 0 && filter?.on) {
