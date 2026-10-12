@@ -10,6 +10,7 @@ import { cn } from "@/components/ui/cn";
 import { SheetHandle, sheetClass } from "@/components/ui/ConfirmDialog";
 import { TextField } from "@/components/ui/TextField";
 import { formatDay } from "@/lib/format";
+import { isOneLine } from "@/lib/one-line";
 
 import {
   NOTE_MAX,
@@ -148,6 +149,12 @@ export function TeamSheet(props: TeamSheetProps) {
       return;
     }
     setStanceError(undefined);
+    // The API's one-line rule, said on the field before sending.
+    if (!isOneLine(note.trim())) {
+      setNoteError(refusalText("invalidNote"));
+      document.getElementById(`${id}-note`)?.focus();
+      return;
+    }
     setBusy("save");
     setMineSaid(null);
     const outcome = await calls.recommend(stance, note);

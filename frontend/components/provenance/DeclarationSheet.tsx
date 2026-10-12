@@ -12,6 +12,9 @@ import { TextField } from "@/components/ui/TextField";
 import { formatCalendarDate, formatDay } from "@/lib/format";
 
 import { declare as declareCall, type Declaration, type DeclarationOutcome, type DeclarationRefusal } from "./calls";
+import { isOneLine } from "@/lib/one-line";
+
+import { focusLineWhenRefreshed } from "./focus-line";
 import { asSha256, HASH_MAX_BYTES, sha256Hex } from "./hash";
 
 // The prior-knowledge declaration (REQ-PROV-06; docs/spec/06 6.4 pt 5), on the organisation's tracker while it may
@@ -43,6 +46,9 @@ type Source = "file" | "paste";
 type Errors = { hash?: string; title?: string; date?: string };
 type FileState = { kind: "none" } | { kind: "hashing"; name: string } | { kind: "done"; name: string; hash: string };
 
+/** Refusals after which the tracker has changed for good (the action is gone once it refreshes). */
+const FINAL: ReadonlySet<DeclarationRefusal> = new Set(["windowClosed", "alreadyDeclared", "ended"]);
+
 const FIELD_OF: Partial<Record<DeclarationRefusal, keyof Errors>> = {
   invalidTitle: "title",
   future: "date",
@@ -67,6 +73,10 @@ export function DeclarationSheet(props: DeclarationSheetProps) {
   const [problem, setProblem] = useState<{ text: string; n: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [recorded, setRecorded] = useState<Declaration | null>(null);
+  // Recorded, or refused for good: closing refreshes the tracker behind (the action goes).
+  const [changed, setChanged] = useState(false);
+  // Each file chosen gets a number: a fingerprint that comes back after a later choice is dropped.
+  const chosenRef = useRef(0);
   const receipt = useRef<HTMLHeadingElement>(null);
   const problemRef = useRef<HTMLDivElement>(null);
   const ids = { hash: `${id}-hash`, file: `${id}-file`, title: `${id}-title`, date: `${id}-date` };
@@ -90,33 +100,39 @@ export function DeclarationSheet(props: DeclarationSheetProps) {
   async function choose(chosen: File | undefined) {
     setErrors((now) => ({ ...now, hash: undefined }));
     if (!chosen) {
+      chosenRef.current++;
       setFile({ kind: "none" });
       return;
     }
     if (chosen.size > HASH_MAX_BYTES) {
+      chosenRef.current++;
       setFile({ kind: "none" });
       setErrors((now) => ({ ...now, hash: t("tooLarge") }));
       return;
     }
+    const tag = ++chosenRef.current;
     setFile({ kind: "hashing", name: chosen.name });
     try {
       const hash = await hashOf(chosen);
-      setFile({ kind: "done", name: chosen.name, hash });
+      if (tag === chosenRef.current) setFile({ kind: "done", name: chosen.name, hash });
     } catch {
+      if (tag !== chosenRef.current) return;
       setFile({ kind: "none" });
       setErrors((now) => ({ ...now, hash: t("hashFailed") }));
     }
   }
 
   const hash = source === "file" ? (file.kind === "done" ? file.hash : null) : asSha256(pasted);
+  // Only the file way waits for its fingerprint; a pasted hash sends at once.
+  const hashing = source === "file" && file.kind === "hashing";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || file.kind === "hashing") return;
+    if (busy || hashing) return;
     const value = title.trim();
     const next: Errors = {
       hash: hash ? undefined : source === "file" ? t("needFile") : t("invalidHash"),
-      title: value ? undefined : t("needTitle"),
+      title: !value ? t("needTitle") : isOneLine(value) ? undefined : t("refusal.invalidTitle"),
       date: !dated ? t("needDate") : dated > props.firstViewOn ? t("dateAfter", { date: firstView }) : undefined,
     };
     setErrors(next);
@@ -134,9 +150,11 @@ export function DeclarationSheet(props: DeclarationSheetProps) {
     });
     setBusy(false);
     if (outcome.ok) {
+      setChanged(true);
       setRecorded(outcome.declaration);
       return;
     }
+    if (FINAL.has(outcome.refusal)) setChanged(true);
     const field = FIELD_OF[outcome.refusal];
     if (field) {
       const text =
@@ -161,7 +179,10 @@ export function DeclarationSheet(props: DeclarationSheetProps) {
       onCancel={(event) => {
         if (busy) event.preventDefault();
       }}
-      onClose={() => props.onClose(recorded !== null)}
+      onClose={() => {
+        if (changed) focusLineWhenRefreshed();
+        props.onClose(changed);
+      }}
       data-sheet=""
       data-declaration-sheet=""
       className={cn(sheetClass("lg"), "max-sm:max-h-[92dvh]")}
@@ -171,7 +192,7 @@ export function DeclarationSheet(props: DeclarationSheetProps) {
         {t("title")}
       </h2>
       <span aria-live="polite" className="sr-only">
-        {busy ? t("submitting") : file.kind === "hashing" ? t("hashing") : ""}
+        {busy ? t("submitting") : hashing ? t("hashing") : ""}
       </span>
 
       {recorded ? (
@@ -344,7 +365,7 @@ export function DeclarationSheet(props: DeclarationSheetProps) {
             </Button>
             <button
               type="submit"
-              aria-disabled={busy || file.kind === "hashing" || undefined}
+              aria-disabled={busy || hashing || undefined}
               data-dialog-confirm=""
               className={buttonClass("primary")}
             >
