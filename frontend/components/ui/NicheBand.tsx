@@ -3,7 +3,7 @@ import { use, type ReactNode } from "react";
 
 import { Picture } from "@/components/landing/Picture";
 import { photoWidths } from "@/lib/photos/files";
-import { nichePhoto } from "@/lib/photos/niche";
+import { nichePhoto, placePhotos } from "@/lib/photos/niche";
 import { photo as photoBySlug } from "@/lib/photos/photos";
 
 import { cn } from "./cn";
@@ -66,6 +66,11 @@ export interface NicheBandProps {
   photo?: string | null;
   /** The page's first, largest picture (a company page's hero, its LCP): fetched at once, at high priority. */
   eager?: boolean;
+  /**
+   * The band stands for an organisation or something it posted (a Problem Brief): its place's photographs only, never
+   * one of a named organisation's premises, which would read as its own (lib/photos/niche.ts placePhotos; P26).
+   */
+  forOrganisation?: boolean;
 }
 
 /**
@@ -84,8 +89,16 @@ export function NicheBand({
   position,
   photo,
   eager = false,
+  forOrganisation = false,
 }: NicheBandProps) {
-  const chosen = photo === undefined ? nichePhoto({ niche, county }) : photo ? photoBySlug(photo) : undefined;
+  const chosen =
+    photo !== undefined
+      ? photo
+        ? photoBySlug(photo)
+        : undefined
+      : forOrganisation
+        ? placePhotos({ niche, county })[0]
+        : nichePhoto({ niche, county });
   const found = useSavesData() ? undefined : chosen;
   return (
     <div

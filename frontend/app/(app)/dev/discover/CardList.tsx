@@ -52,7 +52,8 @@ export function CardFoot({ children }: { children: ReactNode }) {
 /**
  * The card's photograph band (P25, D-67): its niche's photograph (or the county's for the public sector), or the
  * lattice where there is none, bleeding to the card's edges at its top. Decorative: the niche is named on the card.
+ * A Brief's band (`forOrganisation`) never shows a named organisation's premises under another's name (P26).
  */
-export function CardBand({ niche, county }: { niche?: { slug: string } | null; county?: string | null }) {
-  return <NicheBand niche={niche?.slug} county={county} className="-mx-4 -mt-4 mb-4 h-14 rounded-t-[15px] rounded-b-none sm:-mx-5 sm:-mt-5 sm:h-16" />;
+export function CardBand({ niche, county, forOrganisation = false }: { niche?: { slug: string } | null; county?: string | null; forOrganisation?: boolean }) {
+  return <NicheBand niche={niche?.slug} county={county} forOrganisation={forOrganisation} className="-mx-4 -mt-4 mb-4 h-14 rounded-t-[15px] rounded-b-none sm:-mx-5 sm:-mt-5 sm:h-16" />;
 }

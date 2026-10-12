@@ -118,6 +118,19 @@ describe("NicheBand", () => {
     expect((await band({ photo: "nairobi-skyline" })).getAttribute("data-niche-band")).toBe("lattice");
   });
 
+  it("never shows a named organisation's premises on a band that stands for an organisation (a Brief: forOrganisation)", async () => {
+    const slug = async (props: Parameters<typeof NicheBand>[0]) => (await band(props)).getAttribute("data-niche-band");
+    // A Kiambu university's Brief: Education's photograph is Strathmore's campus, so the lattice; a problem keeps it.
+    expect(await slug({ niche: "higher-education", county: "KE-22", forOrganisation: true })).toBe("lattice");
+    expect(await slug({ niche: "higher-education", county: "KE-22" })).toBe("nairobi-strathmore-campus");
+    for (const niche of ["ict", "public-sector", "health", "energy"]) {
+      expect(await slug({ niche, county: "KE-22", forOrganisation: true })).toBe("lattice");
+    }
+    // No one's premises: the tea fields stay; a county with its own photographs shows them first.
+    expect(await slug({ niche: "agriculture", county: "KE-22", forOrganisation: true })).toBe("kenya-tea");
+    expect(await slug({ niche: "higher-education", county: "KE-30", forOrganisation: true })).toBe("nairobi-jacaranda");
+  });
+
   it("fetches a hero band at once and at high priority (eager); a band is lazy and low otherwise", async () => {
     const hero = (await band({ county: "KE-30", eager: true, wide: true })).querySelector("img")!;
     expect(hero.getAttribute("loading")).toBe("eager");
