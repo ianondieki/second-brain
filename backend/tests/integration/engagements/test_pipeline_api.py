@@ -13,7 +13,7 @@ after the window is no first entry and does not restart the stage. Members only 
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -21,7 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from tests.integration.engagements import deadline_world as dw
 from tests.integration.engagements.api_world import (
+    Seats,
     Tracker,
+    World,
     build,
     business_days_later,
     clients,
@@ -35,6 +37,7 @@ from tests.integration.engagements.api_world import (
 from tests.integration.query_counts import LARGE, SMALL, counted
 
 GROUPS = ["review", "contact_nda", "agreement", "implementation", "close"]
+IMPLEMENTING = {"small": 1, "large": 1 + SMALL}  # IN_IMPLEMENTATION, a milestone under review, per scene
 
 
 def columns(board: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -149,25 +152,52 @@ async def test_the_board_columns_ageing_stalls_and_funnel(owner_engine: AsyncEng
         assert (await outsider_check.get(f"/api/orgs/{world.org}/pipeline")).status_code == 404
 
 
+async def under_review(t: Tracker, s: Seats, world: World, today: date) -> None:
+    """Walk the engagement to IN_IMPLEMENTATION and submit its first milestone: the organisation's review date."""
+    detail = await walk_to(t, s, world, today, "IN_IMPLEMENTATION")
+    milestone = detail["agreements"][0]["milestones"][0]["id"]
+    for step in ("start", "submit"):
+        await t.ok(s.dev, f"milestones/{milestone}/{step}")
+
+
 async def test_the_board_and_the_calendar_send_as_many_statements_for_many_engagements(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    """P16-E1 item 5's rule for the new reads: one query per kind of row, however many engagements."""
+    """P16-E1 item 5's rule for the new reads: one query per kind of row, however many engagements. Both scenes hold
+    SUBMITTED engagements and IN_IMPLEMENTATION ones with a milestone under review, so the board's and the calendar's
+    milestone and review-date reads are counted too."""
     world = await build(owner_engine)
-    await open_engagement(app_engine, world)
-    await dw.another_developer(owner_engine, app_engine, world.org)
+    world_engagement = await open_engagement(app_engine, world)
+    # the small scene's SUBMITTED engagements, walked to IN_IMPLEMENTATION for the large one
+    implementers = [await dw.another_developer(owner_engine, app_engine, world.org) for _ in range(SMALL)]
+    today = await db_today(owner_engine)
     settings = deals_on()
-    async with clients(app_engine, settings, world.viewer) as (viewer,):
+    people = [developer for developer, _ in implementers]
+    async with seats(app_engine, settings, world) as s, clients(app_engine, settings, world.viewer, *people) as signed:
+        viewer, implementer_seats = signed[0], signed[1:]
+        await under_review(Tracker(world_engagement), s, world, today)
         urls = (f"/api/orgs/{world.org}/pipeline", f"/api/orgs/{world.org}/deadlines")
-        small = [await counted(viewer, app_engine, url) for url in urls]
-        assert len(small[0][1]["columns"][0]["items"]) == SMALL  # both SUBMITTED, in Review
-        assert len(small[1][1]["items"]) == SMALL
-        for _ in range(LARGE - SMALL):
+
+        async def scene(submitted: int, implementing: int) -> list[int]:
+            found = [await counted(viewer, app_engine, url) for url in urls]
+            board, calendar = found[0][1], found[1][1]
+            assert [len(c["items"]) for c in board["columns"]] == [submitted, 0, 0, implementing, 0]
+            kinds = [i["kind"] for i in calendar["items"]]
+            assert (kinds.count("stage"), kinds.count("milestone"), len(kinds)) == (
+                submitted,
+                implementing,
+                submitted + implementing,
+            )
+            assert all(i["mine"] for i in calendar["items"] if i["kind"] == "milestone")  # the organisation reviews
+            return [n for n, _ in found]
+
+        small = await scene(SMALL, IMPLEMENTING["small"])
+        for _ in range(LARGE):
             await dw.another_developer(owner_engine, app_engine, world.org)
-        large = [await counted(viewer, app_engine, url) for url in urls]
-        assert len(large[0][1]["columns"][0]["items"]) == LARGE
-        assert len(large[1][1]["items"]) == LARGE
-        assert [n for n, _ in large] == [n for n, _ in small]
+        for (_, engagement), dev in zip(implementers, implementer_seats, strict=True):
+            await under_review(Tracker(engagement), replace(s, dev=dev), world, today)
+        large = await scene(LARGE, IMPLEMENTING["large"])
+        assert large == small
 
 
 async def test_an_organisation_with_no_engagement_has_an_empty_board(
