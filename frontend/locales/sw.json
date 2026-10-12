@@ -4150,14 +4150,10 @@
     "failed": "Imeshindikana kumwondoa. Jaribu tena."
   },
   "countdown": {
-    "days": "siku {days} saa {hours} dak {minutes}",
-    "hours": "saa {hours} dak {minutes}",
-    "minutes": "dak {minutes}",
     "clockDays": "<u>siku </u><f>{days}</f> <u>saa </u><f>{hours}</f> <u>dak </u><f>{minutes}</f>",
     "clockHours": "<u>saa </u><f>{hours}</f> <u>dak </u><f>{minutes}</f>",
     "clockMinutes": "<u>dak </u><f>{minutes}</f>",
     "in": "baada ya {time}",
-    "dueIn": "Inatakiwa {date} · baada ya {time}",
     "closesIn": "Mapendekezo yatafungwa baada ya {time}",
     "at": "{date}, {time} EAT"
   },

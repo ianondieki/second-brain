@@ -4150,14 +4150,10 @@
     "failed": "Could not remove them. Try again."
   },
   "countdown": {
-    "days": "{days, plural, one {# day} other {# days}} {hours} h {minutes} min",
-    "hours": "{hours} h {minutes} min",
-    "minutes": "{minutes} min",
     "clockDays": "<f>{days}</f><u> d</u> <f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
     "clockHours": "<f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
     "clockMinutes": "<f>{minutes}</f><u> min</u>",
     "in": "in {time}",
-    "dueIn": "Due {date} · in {time}",
     "closesIn": "Proposals close in {time}",
     "at": "{date}, {time} EAT"
   },
