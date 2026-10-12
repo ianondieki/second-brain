@@ -186,8 +186,13 @@ AC-HYG-01..06 are derived from `docs/spec/02-existing-repo.md`. Only the orchest
 
 Owner-authorised additions outside the spec's tables (so outside the check's R-id and AC rules; their acceptance
 tests live on the task card): **REQ-DEV-01** Today's five, **REQ-DEV-02** This week, **REQ-DEV-03** Peers and team up
-(P22, `tasks/P22.md`, D-58 to D-62; N26 and N27 below are P22-B's, N28 and N29 P22-C's). The ids are used in commits, code and tests as
-every other REQ-ID is.
+(P22, `tasks/P22.md`, D-58 to D-62; N26 and N27 below are P22-B's, N28 and N29 P22-C's); **REQ-ENG-13** Deadlines
+(the calendar, `.ics` files and private feeds, both sides), **REQ-ENG-14** Pipeline (the organisation's board and
+funnel), **REQ-ENG-15** Team triage (assignment and internal recommendations, the organisation's own data),
+**REQ-PROV-06** Prior-knowledge declaration (docs/spec/06 §6.4 pt 5, built as specified), **REQ-DEV-04** D3
+self-reported references and the IP nudge (docs/spec/06 §6.4 pt 8, §6.1), **REQ-UX-08** Offline trackers, install
+and the data-saver switch (docs/spec/07 item 5, brought forward) (P27, `tasks/P27.md`, D-68 to D-70; N30 and N31
+below are P27's). The ids are used in commits, code and tests as every other REQ-ID is.
 
 ## 4. Acceptance tests (one row per AC or AC clause)
 
@@ -347,6 +352,8 @@ occur, as sub-rows; DECISIONS-NEEDED D-06 asks whether they get their own ids.
 | N27 | An event the developer asked to be reminded of is today (P22-B, REQ-DEV-02, D-61) | The developer who pressed Remind me | in-app (08:00 EAT) | Yes (Remind me per event) | |
 | N28 | A developer invited the recipient to team up on a problem or Brief (P22-C, REQ-DEV-03, D-58) | The invited developer (opted in to peers) | in-app | Yes (the peers opt-in; a block stops it) | |
 | N29 | A new message in a team thread, or an invitation accepted (P22-C, REQ-DEV-03, D-58) | The other party | in-app | Yes (leave the thread or block) | |
+| N30 | An engagement was assigned to the recipient by a colleague (P27, REQ-ENG-15, D-68) | The assigned member | in-app | No (a work assignment inside the member's own organisation) | |
+| N31 | The organisation made a prior-knowledge declaration on the recipient's proposal (P27, REQ-PROV-06) | The proposal's owner | in-app + email | No (a provenance record the owner must see) | Status email: the organisation's name and the idea's title; never the evidence title or hash |
 | (side) | `WITHDRAWN` by developer before agreement (Tier-2 access revoked) | Org | in-app + email | Yes | Status email |
 | (side) | `EM8` verification result (D1/D2/E1/E2 decisions) | The verified user or org admin | in-app + email | Yes | EM8 |
 
