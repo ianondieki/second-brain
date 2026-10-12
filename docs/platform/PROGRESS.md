@@ -391,7 +391,7 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-07, session 6): none. P24 merged into the integration branch as `18e9fa9` (the feature branch at `4dcf057`; integration head before it `1e789b5`; see the P24 report). P23-3 merged into the integration branch (see the P23-3 report). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
+**Open branches** (2026-10-12): none. P27: the fix round after the ux-review is in progress; the integration merge is recorded here when done (integration head before it `9c96817`; see the P27 report). P26 merged into the integration branch as `9c96817` (the feature branch at `6358150`; integration head before it `18e9fa9`'s successor; see the P26 report). P24 merged into the integration branch as `18e9fa9` (the feature branch at `4dcf057`; integration head before it `1e789b5`; see the P24 report). P23-3 merged into the integration branch (see the P23-3 report). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
 before it `fbaa3dd`); from P23-2 on, a gated phase is merged into the integration branch without waiting for the owner's
 word (the owner, 2026-10-07). P23-1 merged as `4883047` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `68d5826`); integration head before it `e651622`. P22-C merged as `3316909` on the owner's instruction (merge commit of
@@ -1214,6 +1214,178 @@ old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
 **For the owner.** D-62 (the collaborator credit wording) still blocks P22-C; D-56 (npm audit) and the CI runner
 question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
 check before release.
+
+### P27 report (2026-10-12): the super round — deadlines and private calendar feeds, the organisation's pipeline, team triage, prior-knowledge declarations, self-reported references, offline trackers
+
+**Why.** The owner, after P26: "do another super round and improve adding more relevant features". Card:
+`tasks/P27.md` (six tracks chosen from the spec's unbuilt items: docs/spec/06 §6.4 point 5 and point 8, §6.1 D3,
+§6.2 reminders, docs/spec/03's `reviewer` role, docs/spec/07 item 5's offline trackers, Release 2 items brought
+forward); decisions D-68 (team triage is the organisation's own data), D-69 (what the offline cache may hold),
+D-70 (calendar feeds are capability URLs); requirements REQ-ENG-13/14/15, REQ-PROV-06, REQ-DEV-04, REQ-UX-08;
+notifications N30 (assigned, in-app) and N31 (declaration received, in-app and email).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`; worktree merges: schema `0ed22f7` and `4b04155`,
+F `8a22ed0`, C/D/E `862e4c4`, A/B `e2161d3`, FE-1 `f743c60`, FE-2 `a0e797b`):
+- **Schema** (revision 0013, db-migrations): `engagement_assignments`, `engagement_recommendations`,
+  `prior_knowledge_declarations` (append-only; the owner's own session may pseudonymise a title once), `calendar_feeds`
+  (the token as its SHA-256 only), the three D3 columns on developer profiles and `ip_nudge_dismissed_at`; RLS keeps
+  the organisation's triage from the engagement's developer even as a member (`_not_its_developer`); the
+  declaration window is one SQL rule (`app_prior_knowledge_window`: ten business days on Nairobi days from the first
+  Tier-2 view, on the shared clock) applied by the API and by a trigger; feeds die with their membership or account.
+  Amended twice in place after the security review and its re-check (eight and four MINORs; the revision had run on
+  test databases only). The harness logs in as the testcontainer superuser, so "the owner's own session" is
+  `session_user = current_user` or a superuser login (production unchanged).
+- **A. Deadlines and calendar feeds** (REQ-ENG-13, D-70): `GET /api/me/deadlines` and `/api/orgs/{org}/deadlines`
+  (stage deadlines, the organisation's answer-by, milestone due and review dates, Brief closing days, reminded
+  events; `mine` from `whose_turn`; on-hold engagements contribute nothing; a developer's Briefs are those of the
+  organisation they pitched to), a per-item `.ics`, and the private feed: one live per person and per membership,
+  32 random bytes stored as SHA-256, created or rotated under an advisory lock, revoked at once, read without a
+  session through a SECURITY DEFINER lookup, the tenant then bound and the row re-read (`hmac.compare_digest` and
+  the user/org binding), 60 reads an hour per feed, one identical 404 for malformed, unknown and revoked, the
+  token kept out of uvicorn's access log by a path-segment rule checked against `feeds.FEED_PATH`; the organisation's
+  calendar is named for it. Screens: the Engagements **Calendar** tab on both sides (a server-rendered month grid,
+  Monday-first Nairobi days, two chips a day and "+n more", today's ring, the picked day's list, Overdue, Next 30
+  days with the live clock on the first upcoming item, Add to calendar as `.ics` and Google Calendar; a 44 px day
+  strip with dots on phones) and the **Calendar feed** section under Settings › Notifications (create → the URL
+  shown once with Copy, Google and `webcal://` links, Rotate, Remove; the organisation's feed through the `?org=`
+  picker).
+- **B. The pipeline** (REQ-ENG-14): `GET /api/orgs/{org}/pipeline` — five stage groups (an engagement in a side
+  state under the stage it left), `stage_entered_at` from the main path, `days_in_stage`, the median per column
+  (CLOSED left out), the stalled mark (`policy.pipeline.stalled_after_bd: 5` Kenyan business days without a tracker
+  event), the funnel of first entries per group and endings over 90 Nairobi days (the Close column bounded to the
+  window; aggregates, constant statements), each card with the organisation's triage facts. Screen: the Engagements
+  **Board** tab — the funnel strip (figures, inline SVG bars in the tokens, the conversion between neighbours capped
+  at 100 with a read-out sentence), five columns side by side from 1280 px and a snap-scrolling row below (85vw on
+  phones, no sideways page scroll), compact cards (title, the `xs` clock, monogram, ≤ 2 chips, "No movement for N
+  business days" as a neutral Badge), "Assigned to me", an empty board with one action.
+- **C. Team triage** (REQ-ENG-15, D-68): assignment (`PUT …/assignee`; owner, admin, signatory, reviewer; never the
+  engagement's developer; 30 changes an hour per organisation and caller; N30 to the assignee unless self-assigned)
+  and internal recommendations (pursue · pass · discuss with a one-line note; the caller's own, the tally for all);
+  organisation-side responses only (`OrgEngagementSummary`/`OrgEngagementDetail` carry `team`; the developer's
+  models have no such field; a developer who is also a member gets 403 `both_parties`). Screens: the team line
+  under WhoseTurn (Assigned to … with Change/Assign; the tally with See recommendations), the **Team sheet** (roles,
+  radio assignment, each member's recommendation, the caller's own form), "Assigned to me" on the organisation's
+  Engagements list, Board and Inbox with the assignee as a quiet line.
+- **D. Prior-knowledge declaration** (REQ-PROV-06; docs/spec/06 §6.4 pt 5): `POST …/prior-knowledge` (201 with the
+  stored hash, title and dates; refusals by code in a fixed order: role, title, future date, 404, already declared,
+  ended, no Tier-2 view yet, window closed with its last day, evidence dated after the first view), the
+  `prior_knowledge_declared` chain event (ids and the hash only), N31 to the developer (in-app and always email). The
+  window and the evidence-date rule are the database's too (trigger), so no writer bypasses them. Screens: the
+  **Declaration sheet** (the file hashed in the browser with `crypto.subtle` up to 50 MB, or a pasted hash; a title
+  with "A short title, no names. It is kept permanently."; the evidence date bounded by the first view's day; every
+  refusal by code; the window's last day), the declaration line's four states, the developer's received panel
+  (organisation, hash, title, date, Help) and the History label.
+- **E. Self-reported references and the IP nudge** (REQ-DEV-04; docs/spec/06 §6.1 D3): GitHub login (one leading
+  `@` accepted and dropped), KECOBO and KIPI references on the profile, shown on the certificate as self-reported
+  (never on `/verify`), 422 by field without echo; the one-time note beside `send_nda` with the KIPI and KECOBO links
+  ("Neither is required here."), dismissed once (`POST /api/me/profile/ip-nudge/dismiss`).
+- **F. Offline trackers, install, data saver** (REQ-UX-08, D-69): a hand-written service worker keeps the two
+  engagements lists and the trackers a person opened (at most 20, for 7 days) in a cache named by the signed-in
+  user's hash, deleted on every sign-in (password, second factor, magic link including the no-password branch),
+  sign-out, a `/login` or `/signup` landing and a new build; never `/api/*`, messages, the inbox, documents, history
+  or Tier-2 pages; `?view=` pages never; a page is kept only once its own island has checked the page's hash against
+  the live session (a stale tab reloads instead); offline, the server-drawn "as of" banner shows, every control in
+  `<main>` is locked, the clocks are hidden on a cache-served page (`data-offline="cached"`), and `/offline` offers
+  one action. The install offer for the account menu (`beforeinstallprompt`); the data-saver switch under Settings
+  (every photograph reader treats it as `Save-Data: on`).
+- **The clock** (REQ-TRACK-03; the P26 residual): every deadline clock is drawn on the server and kept by one
+  957 B vanilla ticker per page (a `text/x-clock-ticker` data block installed by a 409 B boot in the layout's head
+  script on `DOMContentLoaded` and on client navigation; the minute boundary, `visibilitychange`, `pageshow`,
+  `focus`; the app-clock gap rule; a refresh resets a clock from its new `data-now`); the React clock islands,
+  `Countdown`, `TimeLeft` and `useAppClock` are gone; one sentence form everywhere ("in 6 days 14 hours 23
+  minutes", units held by a no-break space). Trackers 150,188 → 149,390 B gzipped; the lists 143,720 → 143,146 B.
+
+**Reviews.** Schema: security PASS with 8 MINORs (7 taken in place) and, on re-check, 4 more (taken: the owner's
+own session, the function-body scan over UPDATE/DELETE, the `[redacted]` sentinel refused on INSERT, the
+declaration policy excludes the developer). BE-1: security CHANGES_REQUIRED (MAJOR: the feed token in uvicorn's
+access log) and reviewer CHANGES_REQUIRED (MAJOR: "on hold contributes nothing" untested; mutation survived) →
+one fix round (nine items; both mutations now fail; the bound re-read checks the binding; Briefs tied to the
+organisation pitched to; the Close column and the funnel bounded; the organisation's calendar name; event entries
+text-only; golden bytes; milestone reads counted) → both re-checks PASS; at the merge the log rule also takes repeated
+slashes and letter case, the window opens at Nairobi midnight, and the board's cards carry the triage facts. BE-2:
+security PASS (3 MINORs) and reviewer CHANGES_REQUIRED (MAJOR: an engagement could be assigned to its own developer
+as a reviewer member → N30 to the developer) → one fix round (422 `invalid_assignee`, the roster omits them; the
+`[redacted]` 422s; the assignee throttle; `window_closed_on` on the race path; `@octocat`) → re-check PASS. FE-SW:
+security CHANGES_REQUIRED twice (BLOCKER: a page-text scan for asset URLs made credentialed GETs into a shared
+cache → removed; MAJOR: sign-in did not clear the previous person's copies → every sign-in does; the worker fetched
+`/api/*` for a stale-tab check → moved to the island) → PASS. FE-1: reviewer CHANGES_REQUIRED on part 1 (two
+MAJORs: the warm rule untested, no browser test of in-app ticking) → fix round → re-check PASS; CHANGES_REQUIRED on
+part 2 (BLOCKER: `?month=0000-01` or `9999-12` looped the month grid for ever and one signed-in request hung the web
+process; MAJOR: an impossible `?day=` threw in `Intl.DateTimeFormat`) → fix round (the month bounded to ±10 years,
+weeks computed arithmetically, `?day=` accepted only from the grid; edge URLs 200 in ≤ 0.3 s) → re-check PASS. FE-2:
+security PASS (2 MINORs taken) and reviewer CHANGES_REQUIRED (MAJOR: the trackers over budget until the ticker; nine
+MINORs, among them a `<dialog>` inside a `<p>`, a focus timer, a stale-hash race) → fix round (the guard-spy test
+found the developer's received panel would render an org-shaped object → fixed) → re-check PASS on the merged tree (trackers 149,719 B). ux-reviewer: CHANGES_REQUIRED on the first pass — axe strict 0 and Lighthouse performance ≥ 90 on every screen, but
+two frontend MAJORs (the Board cramped inside the prose width from 1280, the stalled pill wrapping word by word; an
+empty month replacing the month links so another month's deadline cannot be reached) and two backend MAJORs (overdue
+counts differ between the lists and the Calendar because `history.py` loaded holidays from today forward; the
+declaration window is unreachable on a moved demo clock because the Tier-2 view is stamped on the database clock) →
+a fix round (frontend, `history.py` holidays, revision 0014 stamping evidence on the app clock), the re-check and
+the second gate are recorded below when done.
+
+**Gate** (every image rebuilt from `a0e797b`; four fresh resets): Playwright 258 passed, 12 skipped (45 min); the
+test-clock stage 9 of 10 at first — the declaration window scenario moved a fixed 15 calendar days, which landed on
+the closing day exactly because Mashujaa Day fell inside the ten business days (the seed's clock sat on the holiday
+week): it now reads the closing day from the API and moves one day past it (`2b483c5`), and runs on the first project
+only, since a window opens on the database clock and closes on the shared clock (the 0013 residual; `23248dc`) — then
+10 of 10 (the stalled card, the moved countdown, the expiry, the late answer, the closed window); the walkthrough and the
+README set re-recorded; the P27 set in `docs/demo/screenshots/p27/` (both Calendars, the Board, the feed section, the
+Team sheet and the Declaration sheet; axe strict 0 light and dark at 375 and 1440). Every route under 150,000 B gzipped
+(tightest `/dev/ideas/new` 149,995 B, `/billing/upgrade` 149,969 B, the trackers 149,719 B, `/org/problems/new`
+149,566 B; the lists 143,146 B). Lighthouse mobile Slow 4G, medians of three, accessibility 100 everywhere:
+| Route | LCP light | LCP dark | Performance |
+|---|---|---|---|
+| `/dev` (one run each: see the residual) | 3.49 s | 3.17 s | 88–91 |
+| `/dev/engagements` | 2.60 s | 3.18 s | 91–99 |
+| `/dev/engagements?view=calendar` | 2.38 s | 2.21 s | 96–99 |
+| tracker | 2.21 s | 2.58 s | 97–99 |
+| `/dev/companies` | 2.81 s | 3.50 s | 90–96 |
+| `/org/engagements` | 2.62 s | 2.73 s | 92–97 |
+| `/org/engagements?view=board` | 2.20 s | 2.18 s | 96–99 |
+| `/org/engagements?view=calendar` | 2.43 s | 2.43 s | 97–99 |
+| `/admin/moderation` | 2.44 s | 2.45 s | 96–98 |
+| `/login` | 2.03 s | 2.12 s | 98–99 |
+The lists no longer lag their siblings (P26's residual): `/dev/engagements` 91–99 against 92–94 at P26's gate, LCP
+2.60 s against 3.14 s. CI `pr.yml` run 362 on `a0e797b`: frontend, Playwright with the clock scenarios, the demo story,
+hygiene, both legacy jobs, pip-audit, osv-scanner and Trivy green; gitleaks red on one finding — the logging test's
+made-up feed token (43 base64url characters) read as a credential: the fixture is now derived at runtime and the
+commit's fingerprint recorded (`2b483c5`); npm audit red (D-56); the backend job cancelled at its 35-minute limit (the
+owner's call); the informational no-skip-list legacy job red as off Windows. Run 363 on `2b483c5`: frontend, Playwright with the clock scenarios, the demo story, hygiene, both legacy jobs, gitleaks, pip-audit, osv-scanner and Trivy green; npm audit red (D-56); the backend job cancelled at its limit; the informational no-skip-list legacy job red as off Windows.
+
+**Deviations and residuals.**
+- Budget: 149,719 B gzipped on the trackers after FE-2's +308 B and the ticker's −812 B; the tightest route in the
+  product. The next tracker feature must be lazy or trade bytes.
+- The Board's five columns sit side by side from 1280 px, not 1024 (the main column is 700–856 px beside the rail);
+  the feed section's island handles create/rotate/remove/copy (the app has no server actions); the Inbox's "Assigned
+  to me" is a client-side filter over the API's 50-item page (an API `assignee` query: a later card).
+- Database backstops deferred to the next revision (db-migrations): the assignment guard's assignee-is-not-the-
+  developer clause; `login_attempts` retention (the fetch and assignment ledgers grow). Pagination of the
+  organisation's engagements list: a separate card.
+- Clock epoch: `document_views.started_at` is the database clock while the window closes on the shared clock (a
+  later revision moves it to `app_clock_now()`).
+- Offline copies outlive a session ended server-side for at most 7 days; the cached organisation tracker carries the
+  assignee's name and the tally (never the notes); `FetchEvent.resultingClientId` is missing on Safari ≤ 16, where
+  pages are kept through the island's `visit` only.
+- The Phase 8 nonce CSP must cover four inline scripts (theme, `/offline`, the clock ticker and its boot); the
+  retention schedule (Phase 8) lists `prior_knowledge_declarations` under legal hold; a DSR redaction must log in as
+  bridge_owner (or a superuser), never SET ROLE from another login.
+- The seed lacks a stalled engagement, anything in Telco A's Contact & NDA, Agreement or Implementation, and a
+  developer pitched to a Brief with a closing day (the e2e specs make their own; a seed follow-up card).
+- Commit hygiene: several commits over ~300 lines (BE-1 four, BE-2 two, FE-1 four, FE-2 eight); three FE-1 commits do
+  not build alone (each repaired by the next); one FE-2 commit tagged REQ-DEV-04 carries ENG/PROV rewiring. Recorded,
+  not rewritten.
+- Lighthouse cannot measure the two Homes under this harness any more: the run ends on `/login?next=…` with an
+  RSC MIME (`text/x-component`) on most attempts although `curl` with the same cookie and user agent gets the page
+  (one run each scored 90 light and 91 dark, LCP 3.2–3.5 s); the Homes are the pages that register the service worker
+  first, so the next round checks the worker's handling of a navigation under Lighthouse's header-injected session.
+- Orchestrator slip caught before pushing: a `git reset` after BE-1's first merge attempt left a merge commit with an
+  incomplete tree; redone from saved patches and verified against the feature branch.
+- `[[SW-REVIEW]]`: `_meta.reviewP27`, `reviewP27clock`, `reviewP27fe1` ("wastani wa kati" for median; count
+  fallbacks without plural forms), `reviewP27cde`; `[[COPY-REVIEW]]`: the same keys (the private-link sentence, the
+  declaration sheet's three sentences, the certificate sentence, the IP note, the window-closed sentence).
+
+**For the owner.** D-56 (npm audit), the backend CI limit, the Prettier configuration, the copy and Swahili reviews
+above; three decisions taken under the standing mandate to confirm or reverse: D-68, D-69, D-70. To run it: `git fetch origin && git checkout claude/eloquent-hypatia-aa3577 && git pull`, then `make demo-reset` (rebuilds the images, runs revision 0013 and the seed; the service worker of the previous build is replaced on the next sign-in).
 
 ### P26 report (2026-10-12): the live deadline clock everywhere it is due; Companies in the portal's language
 
