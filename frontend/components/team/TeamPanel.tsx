@@ -45,7 +45,8 @@ export async function TeamPanel({ detail, myUserId }: { detail: TrackerDetail; m
       data-team-panel=""
       className="flex flex-col gap-1 border-t border-line px-5 py-2 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-7"
     >
-      <p className="flex min-w-0 flex-wrap items-center gap-x-3" data-assignee={assignee?.user_id ?? ""}>
+      {/* Lines of their own (divs, not paragraphs): each holds a button whose sheet (a <dialog>) mounts beside it. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3" data-assignee={assignee?.user_id ?? ""}>
         {assignee ? <Avatar name={assignee.display_name} size="sm" active={mine} /> : null}
         <span className={assignee ? "[overflow-wrap:anywhere] text-ink" : "text-ink-soft"}>
           {assignee ? (mine ? t("assignedToYou") : t("assignedTo", { name: assignee.display_name })) : t("unassigned")}
@@ -58,8 +59,8 @@ export async function TeamPanel({ detail, myUserId }: { detail: TrackerDetail; m
             className={OPENER}
           />
         ) : null}
-      </p>
-      <p
+      </div>
+      <div
         className="flex min-w-0 flex-wrap items-center gap-x-3"
         data-tally={`${counts.pursue}-${counts.pass}-${counts.discuss}`}
       >
@@ -76,7 +77,7 @@ export async function TeamPanel({ detail, myUserId }: { detail: TrackerDetail; m
             className={OPENER}
           />
         ) : null}
-      </p>
+      </div>
     </section>
   );
 }
@@ -133,7 +134,6 @@ export async function DeclarationLine({ detail }: { detail: TrackerDetail }) {
             firstViewOn: nairobiDay(pk.first_tier2_view_at),
             locale,
           }}
-          after="prior-knowledge"
           label={t("declare")}
           className={buttonClass("secondary", "w-full shrink-0 sm:w-auto")}
         />

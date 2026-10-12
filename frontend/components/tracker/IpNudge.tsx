@@ -20,23 +20,23 @@ export async function IpNudge({ detail }: { detail: TrackerDetail }) {
       <Callout as="aside" tone="info" aria-label={t("label")}>
         <p className="max-w-[65ch] text-ink">{t("body")}</p>
         <p className="flex flex-wrap gap-x-5">
-          <a href="https://kipi.go.ke" target="_blank" rel="noopener" className={textLinkClass}>
+          <a href="https://kipi.go.ke" target="_blank" rel="noopener noreferrer" className={textLinkClass}>
             {t("kipi")}
             <span className="sr-only"> {t("newTab")}</span>
           </a>
-          <a href="https://copyright.go.ke" target="_blank" rel="noopener" className={textLinkClass}>
+          <a href="https://copyright.go.ke" target="_blank" rel="noopener noreferrer" className={textLinkClass}>
             {t("kecobo")}
             <span className="sr-only"> {t("newTab")}</span>
           </a>
         </p>
-        <span className="flex flex-col items-start gap-2">
+        <div className="flex flex-col items-start gap-2">
           <PartButton
             part="nudge"
             props={{ failed: t("failed") }}
             label={t("dismiss")}
             className={buttonClass("secondary")}
           />
-        </span>
+        </div>
       </Callout>
     </div>
   );
