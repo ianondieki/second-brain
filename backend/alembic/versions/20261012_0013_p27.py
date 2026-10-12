@@ -85,10 +85,11 @@ offset applies where the owner enabled it).
   <day>" once the Nairobi day on the shared clock is past it); the evidence is dated on or before the Nairobi day of
   that first view (check_violation: existing similar work predates the access); and ``first_tier2_view_at``,
   ``window_closes_on`` and ``declared_at`` are set whatever was sent. CHECKs keep them consistent for every writer
-  (``window_after_first_view``, ``declared_within_window``, ``evidence_predates_first_view``). Known and kept (the
-  review's eighth note): the window opens on the database clock (revision 0002's ``evidence_time_guard`` sets
-  ``document_views.started_at`` to ``now()``) and closes on the shared clock, so a test-clock scenario views and
-  declares in one clock epoch; a later revision may move ``started_at`` to ``app_clock_now()``.
+  (``window_after_first_view``, ``declared_within_window``, ``evidence_predates_first_view``). The review's eighth
+  note, kept here and closed by revision 0014: the window opened on the database clock (revision 0002's
+  ``evidence_time_guard`` set ``document_views.started_at`` to ``now()``) and closed on the shared clock, so a
+  test-clock scenario had to view and declare in one clock epoch; since revision 0014 a view's ``started_at`` is the
+  shared clock's (``app_clock_now()``), so the window opens and closes on one clock.
 - ``calendar_feeds`` (USER; bridge_app: SELECT, INSERT of ``id``, ``user_id``, ``org_id``, ``token_hash``, UPDATE of
   ``revoked_at``): D-70's capability URLs, the token stored only as its SHA-256 (32 bytes, CHECK; unique). The user's
   own rows only; a feed for an organisation only by a member of it. One live feed per user (``org_id`` NULL,

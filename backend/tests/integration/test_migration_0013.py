@@ -118,7 +118,8 @@ async def count(conn: AsyncConnection, table: str, engagement: UUID) -> int:
 
 
 async def view(conn: AsyncConnection, p: t.Parties, viewer: UUID) -> datetime:
-    """As the owner: the organisation's Tier-2 view of the proposal by ``viewer`` (its time is the database's now())."""
+    """As the owner: the organisation's Tier-2 view of the proposal by ``viewer`` (its time is the database's: the
+    shared clock, ``app_clock_now()``, since revision 0014)."""
     await t.as_owner(conn)
     view_id = uuid7()
     await t.run(

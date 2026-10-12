@@ -91,7 +91,8 @@ class LegalAcceptance(IdMixin, Base):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
     legal_template_id: Mapped[UUID] = mapped_column()
     template_sha256: Mapped[bytes] = mapped_column(LargeBinary)
-    # The database's (evidence_time_guard: now() on insert, whatever is sent): leave it out and read it back.
+    # The database's (evidence_time_guard: the shared clock, app_clock_now(), on insert whatever is sent; revision
+    # 0014): leave it out and read it back.
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -115,5 +116,6 @@ class NdaAcceptance(IdMixin, Base):
     template_sha256: Mapped[bytes] = mapped_column(LargeBinary)
     # The version of the "your name and viewing are logged and shown to the owner" notice shown at acceptance.
     logging_notice_version: Mapped[str] = mapped_column(String(32))
-    # The database's (evidence_time_guard: now() on insert, whatever is sent): leave it out and read it back.
+    # The database's (evidence_time_guard: the shared clock, app_clock_now(), on insert whatever is sent; revision
+    # 0014): leave it out and read it back.
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
