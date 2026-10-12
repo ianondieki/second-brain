@@ -2,7 +2,7 @@ import { cleanup, render } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { ReactElement } from "react";
 import { gzipSync } from "node:zlib";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
 import sw from "@/locales/sw.json";
@@ -247,9 +247,13 @@ describe("the clock ticker", () => {
 });
 
 describe("the clock boot (root layout)", () => {
-  it("runs the ticker when a navigation adds a clock, and only then; the first time from the page's inert copy", async () => {
+  // Once per document, as the browser runs the layout's head script and then parses the page.
+  beforeAll(() => {
     new Function(CLOCK_BOOT_SCRIPT)();
     document.dispatchEvent(new Event("DOMContentLoaded"));
+  });
+
+  it("runs the ticker when a navigation adds a clock, and only then; the first time from the page's inert copy", async () => {
     const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve));
     // Not installed yet: a navigation brings a page with clocks and React's copy of the script, which the browser never
     // runs; the boot puts a runnable copy in the head.
@@ -276,6 +280,24 @@ describe("the clock boot (root layout)", () => {
     expect(run).toHaveBeenCalledTimes(1);
     other.remove();
     card.remove();
+  });
+
+  it("runs the ticker when its script arrives after the clocks (a page's later part, streamed in a navigation)", async () => {
+    const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve));
+    // The clocks come first, with no ticker on the page yet: nothing to run.
+    const above = document.createElement("section");
+    above.innerHTML = '<span data-clock="open"></span>';
+    document.body.append(above);
+    await settle();
+    expect(document.head.querySelectorAll("script")).toHaveLength(0);
+    // The part below them arrives with the page's (inert) ticker and no clock of its own.
+    const below = document.createElement("section");
+    below.innerHTML = `<p>more</p><script data-clock-ticker="">${CLOCK_TICKER_SCRIPT}</script>`;
+    document.body.append(below);
+    await settle();
+    expect([...document.head.querySelectorAll("script")].map((script) => script.text)).toEqual([CLOCK_TICKER_SCRIPT]);
+    above.remove();
+    below.remove();
   });
 });
 

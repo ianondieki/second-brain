@@ -47,12 +47,14 @@ export const CLOCK_TICKER_SCRIPT =
 
 // In the root layout's head script (every page, run once per document): once the document is parsed, the clocks are
 // run again (one streamed in after the ticker), and from then on any element added to the page that is or holds a
-// clock (a navigation in the app, a refresh of the page) runs the ticker; the first time, a copy of the page's inert
-// ticker script, put in the head, is what runs it. Elements the ticker itself writes hold no clock.
+// clock or the ticker's script (a navigation in the app, a refresh of the page, a part of a page streamed in after its
+// clocks) runs the ticker; the first time, a copy of the page's inert ticker script, put in the head, is what runs it.
+// Elements the ticker itself writes hold neither.
+const WATCHED = "[data-clock],script[data-clock-ticker]";
 export const CLOCK_BOOT_SCRIPT =
   'document.addEventListener("DOMContentLoaded",function(){var w=window,d=document;w.__clocks&&w.__clocks();' +
   "new MutationObserver(function(r){for(var i=0;i<r.length;i++)for(var j=0,a=r[i].addedNodes;j<a.length;j++){var n=a[j];" +
-  'if(n.nodeType==1&&(n.matches("[data-clock]")||n.querySelector("[data-clock]"))){if(w.__clocks)return w.__clocks();' +
+  `if(n.nodeType==1&&(n.matches("${WATCHED}")||n.querySelector("${WATCHED}"))){if(w.__clocks)return w.__clocks();` +
   'var s=d.querySelector("script[data-clock-ticker]");if(s){var c=d.createElement("script");c.text=s.text;' +
   "c.nonce=s.nonce;d.head.appendChild(c)}return}}}).observe(d.body,{childList:true,subtree:true})});";
 
