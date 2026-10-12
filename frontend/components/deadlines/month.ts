@@ -9,6 +9,8 @@ export type DeadlineKind = components["schemas"]["DeadlineKind"];
 
 const DAY_MS = 86_400_000;
 const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
+/** How far from today's year `?month=` may go (a month further is the current month). */
+export const YEARS_EITHER_SIDE = 10;
 
 /** The Nairobi date of an instant ("2026-10-12" for 2026-10-12T21:30Z, already the 13th in Nairobi: "2026-10-13"). */
 export function nairobiDay(iso: string): string {
@@ -25,17 +27,29 @@ export function addDays(day: string, n: number): string {
   return new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
 }
 
-/** "2026-10" from `?month=`, when it is a real month; else the month of `today`. */
+/**
+ * "2026-10" from `?month=`, when it is a real month within ten years of `today`'s; anything else (another shape, a
+ * month 00 or 13, a year far off such as 0000 or 9999) is the month of `today`, never an error.
+ */
 export function pickMonth(requested: string | string[] | undefined, today: string): string {
   const value = Array.isArray(requested) ? requested[0] : requested;
-  return value && MONTH.test(value) ? value : today.slice(0, 7);
+  const match = value ? MONTH.exec(value) : null;
+  if (!match || Math.abs(Number(match[1]) - Number(today.slice(0, 4))) > YEARS_EITHER_SIDE) return today.slice(0, 7);
+  return value!;
 }
 
-/** The month before or after ("2026-10" → "2026-09" / "2026-11"). */
+/** The first of a month as a UTC date, the year set as written (Date.UTC would read 0–99 as 1900–1999). */
+function firstOf(year: number, monthIndex: number): Date {
+  const date = new Date(0);
+  date.setUTCFullYear(year, monthIndex, 1);
+  return date;
+}
+
+/** The month before or after ("2026-10" → "2026-09" / "2026-11"), by arithmetic on the year and month. */
 export function shiftMonth(month: string, by: -1 | 1): string {
   const [year, mon] = month.split("-").map(Number);
-  const date = new Date(Date.UTC(year, mon - 1 + by, 1));
-  return date.toISOString().slice(0, 7);
+  const index = year * 12 + (mon - 1) + by;
+  return `${String(Math.floor(index / 12)).padStart(4, "0")}-${String((((index % 12) + 12) % 12) + 1).padStart(2, "0")}`;
 }
 
 export interface MonthDay {
@@ -45,18 +59,23 @@ export interface MonthDay {
   inMonth: boolean;
 }
 
-/** The month's weeks, Monday first: four to six rows of seven days. */
+/**
+ * The month's weeks, Monday first: four to six rows of seven days. The number of weeks is computed (the days before
+ * the first Monday plus the month's days, in sevens), so the loop is bounded whatever the month.
+ */
 export function monthWeeks(month: string): MonthDay[][] {
-  const first = `${month}-01`;
-  const start = addDays(first, -((new Date(`${first}T00:00:00Z`).getUTCDay() + 6) % 7));
-  const last = addDays(`${shiftMonth(month, 1)}-01`, -1);
-  const weeks: MonthDay[][] = [];
-  for (let day = start; day <= last; ) {
-    const week: MonthDay[] = [];
-    for (let d = 0; d < 7; d += 1, day = addDays(day, 1)) week.push({ day, inMonth: day.slice(0, 7) === month });
-    weeks.push(week);
-  }
-  return weeks;
+  const [year, mon] = month.split("-").map(Number);
+  const first = firstOf(year, mon - 1);
+  const lead = (first.getUTCDay() + 6) % 7;
+  const length = new Date(firstOf(year, mon).getTime() - DAY_MS).getUTCDate();
+  const count = Math.min(6, Math.ceil((lead + length) / 7));
+  const start = first.getTime() - lead * DAY_MS;
+  return Array.from({ length: count }, (_, w) =>
+    Array.from({ length: 7 }, (_, d) => {
+      const day = new Date(start + (w * 7 + d) * DAY_MS).toISOString().slice(0, 10);
+      return { day, inMonth: day.slice(0, 7) === month };
+    }),
+  );
 }
 
 /** The first and last day the month's grid shows (the API's `from` and `to`). */

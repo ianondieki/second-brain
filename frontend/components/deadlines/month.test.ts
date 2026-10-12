@@ -41,6 +41,54 @@ describe("the month shown", () => {
     }
   });
 
+  it(
+    "takes no month far from today's year, or of any other shape: the current month, at once (no request can hang)",
+    { timeout: 1_000 },
+    () => {
+      for (const bad of [
+        "0000-01",
+        "9999-12",
+        "0050-06",
+        "2026-13",
+        "2026-00",
+        "abcd-ef",
+        "2026-10-01",
+        "2026-1",
+        "20261",
+        "2026-100",
+        "12345-01",
+        "+2026-10",
+        " 2026-10",
+        "2026-10 ",
+      ]) {
+        expect(pickMonth(bad, "2026-10-12"), bad).toBe("2026-10");
+      }
+      expect(pickMonth("x".repeat(10_000), "2026-10-12")).toBe("2026-10");
+      // Ten years either side are months to show.
+      expect(pickMonth("2016-10", "2026-10-12")).toBe("2016-10");
+      expect(pickMonth("2036-12", "2026-10-12")).toBe("2036-12");
+      expect(pickMonth("2015-12", "2026-10-12")).toBe("2026-10");
+      expect(pickMonth("2037-01", "2026-10-12")).toBe("2026-10");
+    },
+  );
+
+  it("draws a bounded grid for any month written, even one pickMonth would refuse", { timeout: 1_000 }, () => {
+    for (const month of ["0000-01", "0050-06", "1999-12", "9999-12", "2026-02"]) {
+      const weeks = monthWeeks(month);
+      expect(weeks.length, month).toBeGreaterThanOrEqual(4);
+      expect(weeks.length, month).toBeLessThanOrEqual(6);
+      for (const week of weeks) expect(week).toHaveLength(7);
+    }
+    // The year is the one written (never 1950 for 0050).
+    expect(
+      monthWeeks("0050-06")
+        .flat()
+        .filter((d) => d.inMonth)[0].day,
+    ).toBe("0050-06-01");
+    // A link a month past the range is just a month pickMonth turns back to today's.
+    expect(pickMonth(shiftMonth("2016-01", -1), "2026-10-12")).toBe("2026-10");
+  });
+
   it("moves a month at a time, across the year", () => {
     expect(shiftMonth("2026-10", -1)).toBe("2026-09");
     expect(shiftMonth("2026-12", 1)).toBe("2027-01");
