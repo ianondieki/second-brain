@@ -545,3 +545,12 @@ class PaymentStatus(StrEnum):
 
 # Payment providers the database accepts (``payments.provider`` CHECK). The prototype has the fake one only (D-36).
 PAYMENT_PROVIDERS = ("fake",)
+
+
+class RecommendationStance(StrEnum):
+    """A member's internal recommendation on an engagement (revision 0013; REQ-ENG-15, D-68; docs/spec/03 ``reviewer``:
+    "may Recommend internally without changing state"). The organisation's own: never shown to a developer."""
+
+    PURSUE = "pursue"
+    PASS = "pass"  # noqa: S105 - a stance, not a password
+    DISCUSS = "discuss"

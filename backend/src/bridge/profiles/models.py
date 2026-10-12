@@ -29,6 +29,19 @@ from bridge.models.types import CIText, Vector, pg_enum
 
 USER = {"info": {"tenancy": Tenancy.USER, "tenant_column": "user_id"}}
 
+# Revision 0013 (REQ-DEV-04; docs/spec/06 6.4 pt 8, D3): a developer's self-reported references. GitHub's rule for a
+# login (letters, digits and single hyphens, neither first nor last; at most 39 characters); a KECOBO or KIPI reference
+# is up to 40 characters, not blank, without a control character. The API refuses anything else (422) before the
+# database's CHECKs would.
+GITHUB_LOGIN_MAX_CHARS = 39
+GITHUB_LOGIN_PATTERN = "^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$"
+REFERENCE_MAX_CHARS = 40
+
+
+def reference_valid(column: str) -> str:
+    """A self-reported KECOBO or KIPI reference: NULL, or not blank and without a control character."""
+    return f"{column} IS NULL OR ({column} ~ '[^[:space:]]' AND {column} !~ '[[:cntrl:]]')"
+
 
 class DeveloperProfile(TimestampsMixin, Base):
     """A developer's profile, their own row only. Revision 0011 (D-58): ``peers_visible`` is the peers switch
@@ -40,11 +53,19 @@ class DeveloperProfile(TimestampsMixin, Base):
     ``profile_embedded_at`` and ``profile_embedding_hash`` (the SHA-256 of the text it was computed from) is written
     only by ``app_set_profile_embedding`` (the worker, while the ``profiling`` consent is granted) and cleared by
     ``app_clear_profile_embedding`` and by a withdrawal of that consent (a trigger on ``consents``); bridge_app never
-    updates them. HNSW cosine index ``ix_developer_profiles_profile_embedding``."""
+    updates them. HNSW cosine index ``ix_developer_profiles_profile_embedding``.
+
+    Revision 0013 (REQ-DEV-04, D3): ``github_login``, ``kecobo_number`` and ``kipi_number`` are the developer's own
+    self-reported references (bridge_app updates them on the own row; printed on the authorship certificate as
+    self-reported, never on ``/verify``), and ``ip_nudge_dismissed_at`` when they dismissed the one note about KIPI and
+    KECOBO filing (bridge_app updates it)."""
 
     __tablename__ = "developer_profiles"
     __table_args__ = (
         CheckConstraint("peers_visible = (peers_opted_in_at IS NOT NULL)", name="peers_opt_in_complete"),
+        CheckConstraint(f"github_login IS NULL OR github_login ~ '{GITHUB_LOGIN_PATTERN}'", name="github_login_valid"),
+        CheckConstraint(reference_valid("kecobo_number"), name="kecobo_number_valid"),
+        CheckConstraint(reference_valid("kipi_number"), name="kipi_number_valid"),
         Index(
             "ix_developer_profiles_profile_embedding",
             "profile_embedding",
@@ -76,6 +97,11 @@ class DeveloperProfile(TimestampsMixin, Base):
     peers_opted_in_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), server_default=FetchedValue(), server_onupdate=FetchedValue()
     )
+    # Revision 0013 (D3): self-reported, unverified; the certificate says so. Never on /verify.
+    github_login: Mapped[str | None] = mapped_column(String(GITHUB_LOGIN_MAX_CHARS))
+    kecobo_number: Mapped[str | None] = mapped_column(String(REFERENCE_MAX_CHARS))
+    kipi_number: Mapped[str | None] = mapped_column(String(REFERENCE_MAX_CHARS))
+    ip_nudge_dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class DeveloperNiche(Base):
