@@ -64,8 +64,7 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
   const clock = Boolean((countdown || answerClock) && now && until);
   // Without it (overdue, or no instant from the API), the countdown as a figure ("7 business days left") when it is a
   // count; "due today" stays a sentence.
-  const figure =
-    !clock && countdown && detail.due && (detail.due.overdue ? late > 0 : detail.due.business_days_left > 0);
+  const figure = !clock && countdown && detail.due && (detail.due.overdue ? late > 0 : detail.due.business_days_left > 0);
   // While a question is open, the time left to its answer-by date as a sentence under the question's clock line
   // ("in 5 hours 59 minutes", P23-3), kept by the page's ticker as the clocks are (P27).
   const timeLeft =
@@ -99,47 +98,19 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
           <h2 id="whose-turn" className="flex min-w-0 items-start gap-2.5 text-xl text-ink sm:text-2xl">
             {yours ? null : (
               <ChipMark
-                kind={
-                  turn.kind === "ended"
-                    ? detail.state === "CLOSED"
-                      ? "completed"
-                      : "ended"
-                    : onHold
-                      ? "onHold"
-                      : "current"
-                }
+                kind={turn.kind === "ended" ? (detail.state === "CLOSED" ? "completed" : "ended") : onHold ? "onHold" : "current"}
                 className={cn(
                   "mt-1.5 size-5 sm:mt-2",
-                  turn.kind === "ended"
-                    ? detail.state === "CLOSED"
-                      ? "text-ok"
-                      : "text-ink-soft"
-                    : onHold
-                      ? "text-ink"
-                      : "text-accent",
+                  turn.kind === "ended" ? (detail.state === "CLOSED" ? "text-ok" : "text-ink-soft") : onHold ? "text-ink" : "text-accent",
                 )}
               />
             )}
             <span className="min-w-0">{onHold ? t("turn.onHold") : headline}</span>
           </h2>
           <p className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label={t("parties")}>
-            <Avatar
-              name={detail.developer_name}
-              kind="person"
-              size="md"
-              surface="field"
-              active={!ended && awaited.has("developer")}
-              labelled
-            />
+            <Avatar name={detail.developer_name} kind="person" size="md" surface="field" active={!ended && awaited.has("developer")} labelled />
             <span aria-hidden="true" className="h-px w-3 bg-line sm:w-5" />
-            <Avatar
-              name={detail.org_name}
-              kind="org"
-              size="md"
-              surface="field"
-              active={!ended && awaited.has("org")}
-              labelled
-            />
+            <Avatar name={detail.org_name} kind="org" size="md" surface="field" active={!ended && awaited.has("org")} labelled />
           </p>
         </div>
         <div className="mt-4 flex flex-col gap-2.5 empty:hidden">
@@ -149,9 +120,7 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
           ) : null}
           {/* The next step, said once: when both parties owe the same step, one sentence names them both. */}
           {turn.kind === "both" && mine.length === 1 && theirs.length === 1 && mine[0] === theirs[0] ? (
-            <p className="text-lg font-semibold text-ink">
-              {t("nextBoth", { name: other, step: steps(`command.${mine[0]}`) })}
-            </p>
+            <p className="text-lg font-semibold text-ink">{t("nextBoth", { name: other, step: steps(`command.${mine[0]}`) })}</p>
           ) : (
             <>
               {yours
@@ -190,18 +159,8 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
         </div>
       </div>
       {clock && detail.due ? (
-        <div
-          data-clock-panel=""
-          className="shrink-0 border-t border-line pt-4 sm:w-min sm:min-w-64 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6"
-        >
-          <DeadlineClock
-            size="lg"
-            until={until!}
-            now={now!}
-            labelWhenPast={t("chip.overdue")}
-            mine={awaited.has(detail.my_party)}
-            words={answerClock ? undefined : <DueText due={detail.due} />}
-          />
+        <div data-clock-panel="" className="shrink-0 border-t border-line pt-4 sm:w-min sm:min-w-64 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
+          <DeadlineClock size="lg" until={until!} now={now!} labelWhenPast={t("chip.overdue")} mine={awaited.has(detail.my_party)} words={answerClock ? undefined : <DueText due={detail.due} />} />
         </div>
       ) : figure && detail.due ? (
         <div className="shrink-0 border-t border-line pt-3 sm:w-48 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-6">
@@ -247,10 +206,7 @@ function Countdown({ due }: { due: Detail["due"] & object }) {
 const nowrap = (chunks: ReactNode) => <span className="whitespace-nowrap">{chunks}</span>;
 /** A party's own words (a question, an answer, a reason), quoted as plain text on lines of their own. */
 const quote = (chunks: ReactNode) => (
-  <span
-    data-note-text=""
-    className="mt-1 block border-l-2 border-line pl-3 whitespace-pre-line text-ink [overflow-wrap:anywhere]"
-  >
+  <span data-note-text="" className="mt-1 block border-l-2 border-line pl-3 whitespace-pre-line text-ink [overflow-wrap:anywhere]">
     {chunks}
   </span>
 );
@@ -273,12 +229,7 @@ function SideState({ side, detail }: { side: SideBanner; detail: Detail }) {
   if (side.kind === "info") {
     return side.question ? (
       <p data-side="info" className="text-ink">
-        {t.rich("side.info", {
-          date: formatDay(locale, side.question.at),
-          question: side.question.body,
-          quote,
-          nowrap,
-        })}
+        {t.rich("side.info", { date: formatDay(locale, side.question.at), question: side.question.body, quote, nowrap })}
       </p>
     ) : null;
   }

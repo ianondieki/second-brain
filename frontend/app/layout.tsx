@@ -46,15 +46,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang={locale} className="h-full antialiased" suppressHydrationWarning>
       <head>
         {PRELOADED_FONTS.map((href) => (
-          <link
-            key={href}
-            rel="preload"
-            href={href}
-            as="font"
-            type="font/woff2"
-            crossOrigin="anonymous"
-            fetchPriority="high"
-          />
+          <link key={href} rel="preload" href={href} as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
         ))}
         {/* Before the first paint: the remembered appearance (lib/theme.ts) and a stale first-login tour hidden
             (components/tour/tour-store.ts); after it, the two decorative faces (lib/fonts.ts); once parsed, the deadline
