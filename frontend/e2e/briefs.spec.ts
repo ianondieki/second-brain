@@ -188,7 +188,10 @@ test.describe("a Problem Brief", () => {
     await devPage.goto(`/problems/${briefId}`);
     // The sentence clock on the page's ticker (P27), its units the language's own words.
     const closes = devPage.locator("[data-problem] dl [data-clock]");
-    await expect(closes).toHaveText(/^Proposals close in (\d+ days? )?(\d+ hours? )?\d+ minutes?$/, SERVER_STEP);
+    await expect(closes).toHaveText(
+      /^Proposals close in (\d+\u00a0days? )?(\d+\u00a0hours? )?\d+\u00a0minutes?$/,
+      SERVER_STEP,
+    );
     const [, d, h, m] = /^P(\d+)DT(\d+)H(\d+)M$/.exec((await closes.locator("time").getAttribute("datetime")) ?? "") ?? [];
     expect(Math.abs((Number(d) * 24 + Number(h)) * 60 + Number(m) - expected)).toBeLessThanOrEqual(2);
     await checkScreen(devPage, { strict: true });

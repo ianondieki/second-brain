@@ -141,7 +141,7 @@ async function expectCountdown(page: Page, timer: Locator, id: string) {
   return shown;
 }
 
-/** Home's Next deadline tile: the sentence clock on the page's ticker (P27). */
+/** Home's Next deadline tile: the sentence clock on the page's ticker (P27), each unit held by a no-break space. */
 const homeTimer = (page: Page) => page.locator("[data-stat='deadline'] [data-clock]");
 /** The tracker's figure panel: the live clock (P26). */
 const bannerClock = (page: Page) => banner(page).locator("[data-clock-panel] [data-clock]");
@@ -158,7 +158,7 @@ test("the deadline counts down in days, hours and minutes on Home, the cards and
     // The review is the organisation's step: the countdown is said to both parties, warm for neither on the developer's side.
     await devPage.goto("/dev");
     await expectCountdown(devPage, homeTimer(devPage), dev.engagementId);
-    await expect(homeTimer(devPage)).toHaveText(/^in (\d+ days? )?(\d+ hours? )?\d+ minutes?$/);
+    await expect(homeTimer(devPage)).toHaveText(/^in (\d+\u00a0days? )?(\d+\u00a0hours? )?\d+\u00a0minutes?$/);
     await expect(devPage.locator("[data-stat='deadline']")).toHaveAttribute("title", /business day/);
     await checkScreen(devPage, { strict: true });
     // The developer's Engagements list: the card's live clock, its figures and its words under it.
