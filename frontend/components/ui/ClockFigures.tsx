@@ -26,21 +26,11 @@ export interface ClockFiguresProps {
 // A figure, a unit word, or the text between them, in a clock message.
 export const PARTS = /<f>\{(days|hours|minutes)\}<\/f>|<u>([^<]*)<\/u>|([^<]+)/g;
 
-/**
- * The ticking part of DeadlineClock (P26): days, hours and minutes as figures (leading units that are zero left out),
- * each with its unit word where the language's message puts it, in one <time> whose text reads as the duration
- * ("6 d 14 h 23 min", "siku 6 saa 14 dak 23"). Counted on the page's app clock (useAppClock.ts), the server's figure
- * first. No live region. The look is the caller's className, keyed on data-clock, data-figure, data-unit and data-gap; the figures sit under data-clock-figures, aria-hidden.
- */
 /** The duration in words for a screen reader (Intl's long units in the page's language: "siku 6 saa 14 dakika 23"). */
 function spoken(locale: string, d: number, h: number, m: number): string {
-  const unit = (value: number, kind: "day" | "hour" | "minute") => {
-    try {
-      return new Intl.NumberFormat(locale, { style: "unit", unit: kind, unitDisplay: "long" }).format(value);
-    } catch {
-      return `${value} ${kind}`;
-    }
-  };
+  // Day, hour and minute are sanctioned units (ECMA-402) in every browser the browserslist names: no fallback.
+  const unit = (value: number, kind: "day" | "hour" | "minute") =>
+    new Intl.NumberFormat(locale, { style: "unit", unit: kind, unitDisplay: "long" }).format(value);
   const parts = [];
   if (d) parts.push(unit(d, "day"));
   if (d || h) parts.push(unit(h, "hour"));
@@ -48,6 +38,12 @@ function spoken(locale: string, d: number, h: number, m: number): string {
   return parts.join(" ");
 }
 
+/**
+ * The ticking part of DeadlineClock (P26): days, hours and minutes as figures (leading units that are zero left out),
+ * each with its unit word where the language's message puts it, in one <time> whose figures read as the duration
+ * ("6 d 14 h 23 min", "siku 6 saa 14 dak 23") beside its words for screen readers. Counted on the page's app clock (useAppClock.ts), the server's figure
+ * first. No live region. The look is the caller's className, keyed on data-clock, data-figure, data-unit and data-gap; the figures sit under data-clock-figures, aria-hidden.
+ */
 export function ClockFigures({
   until,
   now,

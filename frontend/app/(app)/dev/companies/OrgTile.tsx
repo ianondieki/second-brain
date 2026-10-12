@@ -52,7 +52,12 @@ export function OrgTile({ org, filters = {}, groupNiche, band, eager = false }: 
         }
       >
         <div className="min-w-0">
-          <NicheBand photo={photo} position={band?.position} eager={eager} className="h-20 rounded-t-[15px] rounded-b-none sm:h-24" />
+          <NicheBand
+            photo={photo}
+            position={band?.position}
+            eager={eager}
+            className="h-20 rounded-t-[15px] rounded-b-none sm:h-24"
+          />
           {/* Before the link in the document, so the link's cover stays above it: a click on the seal opens the page. */}
           <div className="relative -mt-6 px-5">
             <Avatar name={org.name} kind="org" size="lg" className="font-display ring-4 ring-field" />
