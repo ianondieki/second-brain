@@ -1215,6 +1215,85 @@ old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
 question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
 check before release.
 
+### P26 report (2026-10-12): the live deadline clock everywhere it is due; Companies in the portal's language
+
+**Why.** The owner, after P25: "I can't see the live timer with days, hours, minutes remaining for active projects …
+you have not improved the UI/UX for the companies, they are just plain text … Do so as a senior engineer." Card:
+`tasks/P26.md`. The clock existed (P23-3) only on Home's tiles, the tracker's secondary line and a Brief; the
+engagement cards of both lists and the Needs-you cards printed business days alone.
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`; worktree merges P26-A `10e3d15`, P26-B `fd0bc9b`;
+the screenshot set `28efe71`, `f932ee2`):
+- **A. The clock** (REQ-TRACK-03): `DeadlineClock` (server) and `ClockFigures` (a small client island) over one shared
+  app-clock hook (`useAppClock.ts`, also under `Countdown`, so no two clocks on a page drift): days · hours · minutes
+  in the figure face, ticking on the minute from `X-App-Now`, leading zero units not drawn, the ISO 8601 duration on
+  the `<time>`, each language's own message (`countdown.clockDays/Hours/Minutes`, figures and unit words tagged, so
+  Swahili puts "siku 6 saa 14 dak 23"), warm only under 24 h on the viewer's step, no live region. Shown on both
+  engagement lists' cards, Home's Needs-you hero, the organisation's Needs-us cards, the developer's other-engagement
+  rows and the tracker's figure panel (its width now the clock's, never under 15 rem; the developer's answer-by date
+  gets the clock while a question is open; the organisation reads the sentence). Overdue, on hold, ended and the
+  organisation's answer-by case keep their words.
+- **B. Companies** (REQ-DIR-01): the list as cards under their niche headings (a photograph band of the organisation's
+  own place, the monogram as a seal in Fraunces, the name in Fraunces, the meta line, the verification badge
+  verbatim as the one chip, the response record when sent; four-row subgrid so a row of cards lines up), a count per
+  section only when the list fits one page; the company page opens on the county's photograph with the county named
+  on it (fetched eagerly as the LCP), the seal, the name, the badge, an E0 explanation said before any pitch
+  (`companies.heldUnclaimedHint`), fact tiles, niche chips into Discover, one primary action.
+- **Honesty of the bands** (found by review, fixed across the product): a photograph of a named organisation's own
+  premises (Strathmore's campus, City Hall, the Naipekarr dispensary, Longonot earth station, the Ngong Hills wind
+  farm; `institution: true` in `public/photos/index.json`) is never set under another organisation's name: company
+  cards and pages draw only from their county's own photographs (`countyPhotos`, `placePhotos`), and every Brief band
+  (Discover's Briefs and problem cards from an `org_brief`, a recommended Brief, the problem page of a Brief, the
+  organisation's Briefs list and page), every organisation-titled engagement card and every organisation event band
+  passes `NicheBand`'s `forOrganisation`. Each call site has a test that fails if the switch is dropped.
+
+**Reviews.** P26-A: reviewer CHANGES_REQUIRED (the tracker panel clipped two-digit days and Swahili; units joined in
+code; the developer's answer-by date clocked on cards but not the tracker; format churn in the history) → fixed, the
+history rebuilt into six one-concern commits → PASS (one MINOR, a guard test for malformed clock messages, added as
+`locales/clock-messages.test.ts`). P26-B: reviewer CHANGES_REQUIRED three times (the alternating bands put another
+institution's premises on a card — the orchestrator's own follow-up; the E0 sentence "Your proposal is saved" before
+any pitch; the paged count; the lazy hero; a missed Brief render in Recommended for you; untested call sites) →
+fixed each time → PASS. ux-reviewer: pending at this commit (the verdict is recorded in the follow-up commit).
+
+**Gate** (web image rebuilt from the merged tree; three fresh resets): Playwright 230 passed, 6 skipped (41 min);
+clock scenarios 6/6; the walkthrough and the README set re-recorded; the P26 set in `docs/demo/screenshots/p26/`
+(companies, company, both Homes, both engagement lists, the tracker; axe strict 0 light and dark at 375 and 1440).
+Every route under 150,000 B gzipped (tightest `/dev/ideas/new` 149,994 B, `/billing/upgrade` 149,969 B;
+`/dev/companies` 142,456 B, `/dev/engagements` 143,073 B). Lighthouse mobile Slow 4G, medians of three,
+accessibility 100 everywhere:
+
+| Route | LCP light | LCP dark | Performance |
+|---|---|---|---|
+| `/dev` | 2.20 s | 2.57 s | 83–98 (one cold run) |
+| `/dev/engagements` | 3.14 s | 3.18 s | 92–94 |
+| tracker | 2.35 s | 3.17 s | 91–98 |
+| `/dev/companies` | 3.45 s | 3.29 s | 89–95 |
+| company page | 2.53 s | 2.75 s | 95–98 |
+| `/org` | 2.39 s | 3.36 s | 90–98 |
+| `/org/engagements` | 3.30 s | 3.38 s | 91–93 |
+| `/admin/moderation` | 2.44 s | — | 96–98 |
+| `/login` | 2.17 s | 2.03 s | 98–99 |
+
+CI `pr.yml` run 360 on `28efe71`: frontend, Playwright with the clock scenarios, the demo story, hygiene, both legacy
+jobs, gitleaks, pip-audit, osv-scanner and Trivy green; npm audit red (D-56); the backend job cancelled at its
+35-minute limit (the owner's call). CodeQL run 295 failed its gate as every run does (D-42).
+
+**Deviations and residuals.**
+- The two lists and the companies list measure 3.1–3.5 s LCP here against AC-UX-3's 2.5 s (performance still ≥ 90):
+  the first card's photograph band and the clock's hydration on a cold server; `/dev`'s own figure is 2.20 s. Next
+  revision: a `fetchpriority="high"` on the first visible card band and a static first paint of the lists' heads.
+- The first gate run failed on a full disk (Docker's build cache at 11 GB starved SeaweedFS and `e2e-env` was
+  SIGKILLed); pruned, the second run was clean. `docker builder prune` belongs in the gate script.
+- The repository has no Prettier configuration and the code is hand-wrapped at 120–160; three reviewers flagged it.
+  A `.prettierrc` with `printWidth: 120` would settle it (the owner's call: it reformats nothing by itself, but the
+  next `prettier --write` would touch many files).
+- `[[SW-REVIEW]]`: the clock's Swahili unit words ("siku / saa / dak"), `companies.groupCount` ("# shirika /
+  mashirika"), `responseFigure`, `heldUnclaimedHint`; `[[COPY-REVIEW]]`: `_meta.reviewP26`, `_meta.reviewP26a`.
+
+**For the owner.** D-56 (npm audit), the backend CI limit, the Prettier configuration, the copy and Swahili reviews
+above. P27 (the owner's "super round": deadlines, the pipeline, team triage, prior-knowledge declarations, D3, offline
+trackers) started on the same branch the moment this gate closed; see `tasks/P27.md` and D-68 to D-70.
+
 ### P25 report (2026-10-08): "Portal in print": life in every signed-in screen, the command palette, the activity calendar (D-67)
 
 **Why.** The owner, after P24: carry the landing's taste into the other pages, which "seem lifeless"; real photographs
