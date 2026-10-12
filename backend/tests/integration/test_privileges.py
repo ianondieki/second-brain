@@ -26,6 +26,11 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
   version, time or text hash, or inserts a problem's (the worker writes them through the definers); only bridge_app
   executes the embedding definers, and nobody their internal helpers; no definer function inserts a consent decision
   (its time is the database's for every writer but the owner).
+- Revision 0013 (REQ-ENG-15, REQ-PROV-06, REQ-ENG-13, REQ-DEV-04): only bridge_app touches the assignments,
+  recommendations, declarations and calendar feeds, with exactly its matrix; only bridge_app updates the profile's D3
+  references and nudge dismissal; only bridge_app executes the window and feed definers, nobody the business-day
+  helper; no definer function inserts a prior-knowledge declaration (its window is the database's for every writer but
+  the owner).
 """
 
 from __future__ import annotations
@@ -358,6 +363,95 @@ async def test_no_definer_function_inserts_a_consent_decision(owner_engine: Asyn
                     " AS $$ INSERT INTO public.consents (id, user_id, purpose, granted, text_version, text_sha256,"
                     " source, created_at) SELECT uuid7(), id, 'profiling', true, 'v1', '\\x00', 'probe', now()"
                     " FROM users WHERE false $$"
+                )
+            )
+            assert list((await conn.execute(scan)).scalars()) == ["scan_probe()"]
+        finally:
+            await transaction.rollback()
+
+
+V13_PRIVILEGES: dict[str, set[str]] = {
+    "engagement_assignments": {"SELECT", "INSERT", "UPDATE"},  # closed by an UPDATE, never deleted
+    "engagement_recommendations": {"SELECT", "INSERT", "UPDATE", "DELETE"},  # withdrawn by its member
+    "prior_knowledge_declarations": {"SELECT", "INSERT"},  # append-only
+    "calendar_feeds": {"SELECT", "INSERT", "UPDATE"},  # revoked by an UPDATE
+}
+
+
+@pytest.mark.parametrize("table", sorted(V13_PRIVILEGES))
+@pytest.mark.parametrize("privilege", PRIVILEGES)
+async def test_only_bridge_app_touches_the_v13_tables(owner_engine: AsyncEngine, table: str, privilege: str) -> None:
+    """Revision 0013: the assignments, recommendations, prior-knowledge declarations and calendar feeds are touched by
+    bridge_app alone (the worker included: it binds a recipient and reads under their RLS), with exactly the privileges
+    it needs; no other role of the cluster holds any privilege on them."""
+    expected = {"bridge_app"} if privilege in V13_PRIVILEGES[table] else set()
+    assert await roles_holding(owner_engine, table, privilege) == expected
+
+
+async def test_the_d3_references_are_bridge_apps_to_update(owner_engine: AsyncEngine) -> None:
+    """Revision 0013 (REQ-DEV-04): bridge_app updates the D3 references and the nudge's dismissal (its own profile, by
+    revision 0001's policy); no other role of the cluster updates them."""
+    async with owner_engine.connect() as conn:
+        for column in ("github_login", "kecobo_number", "kipi_number", "ip_nudge_dismissed_at"):
+            updaters = await conn.execute(
+                text(
+                    "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                    " AND r.rolname NOT LIKE 'pg\\_%'"
+                    " AND has_column_privilege(r.oid, 'public.developer_profiles', :c, 'UPDATE')"
+                ),
+                {"c": column},
+            )
+            assert sorted(updaters.scalars()) == ["bridge_app"], column
+
+
+@pytest.mark.parametrize(
+    ("signature", "callers"),
+    [
+        ("public.app_prior_knowledge_window(uuid)", {"bridge_app"}),
+        ("public.app_calendar_feed_lookup(bytea)", {"bridge_app"}),
+        ("public.app_calendar_feed_touch(uuid)", {"bridge_app"}),
+        ("public.kenyan_business_days_after(date, integer)", set()),
+    ],
+)
+async def test_only_bridge_app_executes_the_v13_definers(
+    owner_engine: AsyncEngine, signature: str, callers: set[str]
+) -> None:
+    """Revision 0013: the window and feed definers are executable by bridge_app alone of every role of the cluster,
+    PUBLIC included; the business-day helper by nobody but the owner."""
+    async with owner_engine.connect() as conn:
+        found = await conn.execute(
+            text(
+                "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                " AND r.rolname NOT LIKE 'pg\\_%' AND has_function_privilege(r.oid, :sig, 'EXECUTE')"
+            ),
+            {"sig": signature},
+        )
+        assert set(found.scalars()) == callers
+        public = "SELECT has_function_privilege('public', :sig, 'EXECUTE')"
+        assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
+
+
+async def test_no_definer_function_inserts_a_prior_knowledge_declaration(owner_engine: AsyncEngine) -> None:
+    """Revision 0013: ``prior_knowledge_declarations_window`` makes the window the database's for every writer but the
+    table's owner (a seed or a backfill), so a SECURITY DEFINER function (it runs as the owner) that inserted a
+    declaration would carry a client's window and time. No definer function's body inserts into the table (the app
+    declares as bridge_app, through the policy and the trigger)."""
+    scan = text(
+        "SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.prosecdef AND p.pronamespace = 'public'::regnamespace"
+        " AND p.prosrc ~* 'insert[[:space:]]+into[[:space:]]+(public[.])?\"?prior_knowledge_declarations\"?'"
+    )
+    async with owner_engine.connect() as conn:
+        transaction = await conn.begin()
+        try:
+            assert list((await conn.execute(scan)).scalars()) == []
+            await conn.execute(  # the scan finds such a function (rolled back)
+                text(
+                    "CREATE FUNCTION scan_probe() RETURNS void LANGUAGE sql SECURITY DEFINER"
+                    " SET search_path = pg_catalog, public, pg_temp"
+                    " AS $$ INSERT INTO public.prior_knowledge_declarations (id, engagement_id, org_id, proposal_id,"
+                    " version_id, declared_by, evidence_sha256, evidence_title, evidence_dated_on, first_tier2_view_at,"
+                    " window_closes_on) SELECT uuid7(), e.id, e.org_id, e.proposal_id, e.version_id, e.developer_id,"
+                    " '\\x00', 'probe', current_date, now(), current_date + 1 FROM engagements e WHERE false $$"
                 )
             )
             assert list((await conn.execute(scan)).scalars()) == ["scan_probe()"]
