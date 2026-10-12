@@ -2,9 +2,12 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { GROUPS, type Pipeline } from "./data";
 
-/** The conversion from one group to the next, as a whole percentage; none when nothing entered the first. */
+/**
+ * The conversion from one group to the next, as a whole percentage, at most 100 (more can enter the next group in the
+ * window than entered this one: those that entered this one before it); none when nothing entered this one.
+ */
 export function conversion(from: number, to: number): number | null {
-  return from > 0 ? Math.round((to / from) * 100) : null;
+  return from > 0 ? Math.min(100, Math.round((to / from) * 100)) : null;
 }
 
 /**
@@ -56,17 +59,17 @@ export async function Funnel({ funnel }: { funnel: Pipeline["funnel"] }) {
                 />
               </svg>
               {previous !== null ? (
-                <span className="text-xs text-ink-soft" data-conversion={rate ?? ""}>
-                  {rate !== null ? (
-                    <>
-                      <span aria-hidden="true" className="font-figure font-bold tabular-nums">
-                        {percent.format(rate / 100)}
-                      </span>
-                      <span className="sr-only">
-                        {t("conversion", { count, from: previous, stage: tt(`group.${group}`) })}
-                      </span>
-                    </>
-                  ) : null}
+                <span className="text-xs text-ink-soft" data-conversion={rate ?? "none"}>
+                  <span aria-hidden="true" className="font-figure font-bold tabular-nums">
+                    {rate !== null ? percent.format(rate / 100) : "–"}
+                  </span>
+                  <span className="sr-only">
+                    {rate === null
+                      ? t("conversionNone", { stage: tt(`group.${GROUPS[index - 1]}`) })
+                      : count > previous
+                        ? t("conversionMore", { count, from: previous, stage: tt(`group.${group}`) })
+                        : t("conversion", { count, from: previous, stage: tt(`group.${group}`) })}
+                  </span>
                 </span>
               ) : null}
             </li>

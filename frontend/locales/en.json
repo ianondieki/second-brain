@@ -4282,6 +4282,8 @@
     "funnelTitle": "Entered in the last {days} days",
     "funnelLead": "How many engagements reached each stage, and how many of them went on to the next.",
     "conversion": "{count} of {from} went on to {stage}",
+    "conversionNone": "Nothing entered {stage} in the window, so there is no share to show.",
+    "conversionMore": "{count} entered {stage}: more than the {from} that entered the stage before it in the window.",
     "outcome": "{closed, plural, one {# closed} other {# closed}} and {ended, plural, one {# ended} other {# ended}} in the same window.",
     "columnsLabel": "Pipeline stages",
     "count": "{count, plural, one {# engagement} other {# engagements}}",

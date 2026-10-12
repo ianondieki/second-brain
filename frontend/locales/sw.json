@@ -4282,6 +4282,8 @@
     "funnelTitle": "Walioingia katika siku {days} zilizopita",
     "funnelLead": "Ushirikiano mingapi ulifika kila hatua, na mingapi kati yake uliendelea hatua inayofuata.",
     "conversion": "{count} kati ya {from} uliendelea hadi {stage}",
+    "conversionNone": "Hakuna kilichoingia {stage} katika kipindi hiki, kwa hiyo hakuna sehemu ya kuonyesha.",
+    "conversionMore": "{count} waliingia {stage}: zaidi ya {from} walioingia hatua iliyotangulia katika kipindi hiki.",
     "outcome": "{closed, plural, one {# umefungwa} other {# imefungwa}} na {ended, plural, one {# umekoma} other {# imekoma}} katika kipindi hicho.",
     "columnsLabel": "Hatua za mchakato",
     "count": "ushirikiano {count}",
