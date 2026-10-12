@@ -6,7 +6,7 @@ import logging
 import os
 import re
 import sys
-from typing import Any
+from typing import Any, Final
 from urllib.parse import unquote_plus
 
 import structlog
@@ -59,6 +59,18 @@ FREE_TEXT_PARAMETERS = frozenset({"q"})
 SECRET_PARAMETERS = frozenset({"sig"})
 _REDACTED_PARAMETERS = FREE_TEXT_PARAMETERS | SECRET_PARAMETERS
 _QUERY_PAIR = re.compile(r"(^|&)([^&=]*)=([^&]*)")
+# Paths that carry a credential as a path segment (D-70: a capability URL): everything after the prefix is replaced by
+# ``[redacted]``, whatever it is: a live private calendar feed's token with its ``.ics`` suffix (REQ-ENG-13,
+# ``bridge.engagements.feeds.FEED_PATH``), a malformed or near-miss one, or one followed by more segments (a trailing
+# slash's redirect). Matched against the path without its query string.
+SECRET_SEGMENTS: Final = (re.compile(r"^(/api/calendar/).+$"),)
+
+
+def redact_secret_segments(path: str) -> str:
+    """``path`` with the credential of a ``SECRET_SEGMENTS`` path replaced; any other path unchanged."""
+    for rule in SECRET_SEGMENTS:
+        path = rule.sub(lambda match: f"{match.group(1)}{_REDACTED}", path)
+    return path
 
 
 def _redact_free_text(match: re.Match[str]) -> str:
@@ -68,19 +80,21 @@ def _redact_free_text(match: re.Match[str]) -> str:
 
 
 class DropQueryStrings(logging.Filter):
-    """Drops the query string from uvicorn access-log records for ``QUERYLESS_PATHS``, and the values of
-    ``FREE_TEXT_PARAMETERS`` and ``SECRET_PARAMETERS`` from every other. uvicorn logs ``'%s - "%s %s HTTP/%s" %d'``
-    with (client, method, path?query, HTTP version, status); records of any other shape pass unchanged."""
+    """Redacts what an uvicorn access-log record's path carries. First the path itself: the credential segment of a
+    ``SECRET_SEGMENTS`` path (D-70: a private calendar feed's URL is its capability, so its token never reaches the
+    log, whatever the answer); then the query string: dropped for ``QUERYLESS_PATHS``, and the values of
+    ``FREE_TEXT_PARAMETERS`` and ``SECRET_PARAMETERS`` redacted on every other. uvicorn logs
+    ``'%s - "%s %s HTTP/%s" %d'`` with (client, method, path?query, HTTP version, status); records of any other shape
+    pass unchanged."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         args = record.args
         if isinstance(args, tuple) and len(args) == 5 and isinstance(args[2], str):
             path, separator, query = args[2].partition("?")
-            if separator and path.startswith(QUERYLESS_PATHS):
-                record.args = (args[0], args[1], path, args[3], args[4])
-            elif separator:
-                redacted = _QUERY_PAIR.sub(_redact_free_text, query)
-                record.args = (args[0], args[1], f"{path}?{redacted}", args[3], args[4])
+            logged = redact_secret_segments(path)
+            if separator and not path.startswith(QUERYLESS_PATHS):
+                logged = f"{logged}?{_QUERY_PAIR.sub(_redact_free_text, query)}"
+            record.args = (args[0], args[1], logged, args[3], args[4])
         return True
 
 
