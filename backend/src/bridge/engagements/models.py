@@ -650,11 +650,11 @@ class PriorKnowledgeDeclaration(IdMixin, Base):
     engagement within 10 Kenyan business days of the organisation's first Tier-2 view, while the engagement has not
     ended. Append-only: no DELETE or TRUNCATE for any role, and no UPDATE but the owner role's one redaction of
     ``evidence_title`` to ``EVIDENCE_TITLE_REDACTED`` (a DSR), a title no declaration is inserted with (the database
-    refuses it; the API refuses it first, 422). A signatory, admin or owner inserts ``id``, ``engagement_id``,
-    ``org_id``, ``proposal_id`` and ``version_id`` (the engagement's), ``declared_by`` (the caller),
-    ``evidence_sha256``, ``evidence_title`` and ``evidence_dated_on``; ``first_tier2_view_at``, ``window_closes_on``
-    and ``declared_at`` are the database's (read them back). Read by the engagement's readers: the developer, the
-    organisation's members and staff admin (the evidence pack)."""
+    refuses it; the API refuses it first, 422). A signatory, admin or owner, never the engagement's own developer (a
+    member or not), inserts ``id``, ``engagement_id``, ``org_id``, ``proposal_id`` and ``version_id`` (the
+    engagement's), ``declared_by`` (the caller), ``evidence_sha256``, ``evidence_title`` and ``evidence_dated_on``;
+    ``first_tier2_view_at``, ``window_closes_on`` and ``declared_at`` are the database's (read them back). Read by
+    the engagement's readers: the developer, the organisation's members and staff admin (the evidence pack)."""
 
     __tablename__ = "prior_knowledge_declarations"
     __table_args__ = (

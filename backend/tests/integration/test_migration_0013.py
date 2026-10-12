@@ -10,13 +10,14 @@ the prior-knowledge declaration, calendar feeds and the D3 references.
   ``updated_at`` (the database's); a member withdraws their own and nobody else's; the note is one line of 1 to 200
   characters or none; the developer and another organisation read none.
 - The declaration: refused before the organisation's first Tier-2 view; then one per engagement, by an owner, admin or
-  signatory naming the engagement's organisation, proposal and version, with the window, its first view and its time
-  the database's (``app_prior_knowledge_window``: the 10th Kenyan business day after the first view's Nairobi day,
-  holidays included, as ``bridge.engagements.calendar.add_business_days``); refused once the Nairobi day on the shared
-  clock is past the closing day and for evidence dated after today; refused with the title ``'[redacted]'`` (the mark
-  of a DSR's redaction); append-only for every role, the owner included, but for the owner's one redaction in its own
-  session with no user bound (a definer reached from a bridge_app login never redacts, nor keeps its own window);
-  read by the engagement's readers (the developer, the members, staff admin), never by another organisation.
+  signatory naming the engagement's organisation, proposal and version (never the engagement's own developer, even as a
+  signatory), with the window, its first view and its time the database's (``app_prior_knowledge_window``: the 10th
+  Kenyan business day after the first view's Nairobi day, holidays included, as
+  ``bridge.engagements.calendar.add_business_days``); refused once the Nairobi day on the shared clock is past the
+  closing day and for evidence dated after today; refused with the title ``'[redacted]'`` (the mark of a DSR's
+  redaction); append-only for every role, the owner included, but for the owner's one redaction in its own session with
+  no user bound (a definer reached from a bridge_app login never redacts, nor keeps its own window); read by the
+  engagement's readers (the developer, the members, staff admin), never by another organisation.
 - Calendar feeds: one live feed per user and per user and organisation; rotation revokes (the database's time) and a
   revoked feed never changes; an organisation's feed only for a member of it; ``app_calendar_feed_lookup`` answers the
   live feed of an active user who is still a member of its organisation and nothing for a revoked, unknown or
@@ -576,6 +577,25 @@ async def test_only_a_declarer_of_the_engagements_organisation_declares_its_own_
             await t.run(conn, DECLARE, **declaration(p, engagement, declarer))
             assert await count(conn, "prior_knowledge_declarations", engagement) == 1
             await savepoint.rollback()
+
+
+async def test_the_engagements_developer_never_declares_even_as_a_signatory(owner_engine: AsyncEngine) -> None:
+    """The security re-check's (D), as the triage policies (D-68): the engagement's own developer, made a signatory of
+    the organisation, cannot declare prior knowledge against their own proposal after the organisation's first Tier-2
+    view and inside the window (row-level security), with or without the organisation's context; the organisation's
+    signatory still declares."""
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await scene(conn)
+        await view(conn, p, p.reviewer)
+        await t.as_owner(conn)
+        await t.member(conn, p.org, p.developer, "{signatory}")
+        for org in (p.org, None):
+            await t.act(conn, p.developer, org)
+            assert len((await conn.execute(sa.text(WINDOW), {"e": engagement})).all()) == 1  # a reader of the window
+            await t.expect(conn, DECLARE, RLS, **declaration(p, engagement, p.developer))
+        await t.act(conn, p.signatory, p.org)
+        await t.run(conn, DECLARE, **declaration(p, engagement, p.signatory))
+        assert await count(conn, "prior_knowledge_declarations", engagement) == 1
 
 
 async def test_a_declaration_is_append_only_but_for_the_owners_one_redaction(owner_engine: AsyncEngine) -> None:
