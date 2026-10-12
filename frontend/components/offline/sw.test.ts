@@ -123,6 +123,7 @@ function worker(version = "build-1") {
     Error,
     TypeError,
     Math,
+    setTimeout,
   });
 
   async function fire(type: string, event: Record<string, unknown>) {
@@ -139,20 +140,31 @@ function worker(version = "build-1") {
     return response;
   }
 
+  /** Who the pages of this browser say is signed in (the islands' {type: "user"}). */
+  const state = { person: null as string | null };
+
   return {
+    state,
     caches,
     network,
     fetch,
     self,
     install: () => fire("install", {}),
     activate: () => fire("activate", {}),
-    /** A full page load (the address bar, a reload, a link outside the app's router). */
-    load: (path: string, extra: Record<string, unknown> = {}) =>
-      fire("fetch", {
+    /**
+     * A full page load (the address bar, a reload, a link outside the app's router). Then, as the page's island does,
+     * the page says whose it is (the signed-in person, if any), unless `announce` is false (a page with no island).
+     */
+    async load(path: string, extra: Record<string, unknown> = {}, announce = true) {
+      const clientId = (extra.resultingClientId as string | undefined) ?? "client-1";
+      const response = await fire("fetch", {
         request: { url: new URL(path, ORIGIN).href, method: "GET", mode: "navigate", destination: "document" },
-        resultingClientId: "client-1",
+        resultingClientId: clientId,
         ...extra,
-      }),
+      });
+      if (announce && state.person) await this.tell({ type: "user", hash: state.person }, { id: clientId });
+      return response;
+    },
     request: (path: string, request: Record<string, unknown>) =>
       fire("fetch", {
         request: { url: new URL(path, ORIGIN).href, method: "GET", mode: "cors", destination: "", ...request },
@@ -164,6 +176,10 @@ function worker(version = "build-1") {
       });
     },
     async tell(data: unknown, source = { id: "client-1" }) {
+      const said = data as { type?: string; hash?: unknown };
+      if (said?.type === "user" && typeof said.hash === "string" && /^[0-9a-f]{8,64}$/.test(said.hash))
+        state.person = said.hash;
+      if (said?.type === "clear") state.person = null;
       let reply: unknown;
       await fire("message", { data, source, ports: [{ postMessage: (value: unknown) => (reply = value) }] });
       return reply;
@@ -455,8 +471,51 @@ describe("whose cache it is", () => {
     const w = await signedIn();
     await w.load(`/dev/engagements/${ID}`);
     w.network.answers.set("/dev/engagements", { redirectedTo: "/login?next=%2Fdev%2Fengagements" });
-    await w.load("/dev/engagements");
+    await w.load("/dev/engagements", {}, false); // the sign-in page has no offline part: it says nothing
     expect([...w.caches.named.keys()].filter((name) => name.startsWith("trackers-"))).toEqual([]);
+  });
+
+  it("keeps a page only once that page says it is the same person's: a load in flight never lands in a newcomer's cache", async () => {
+    const w = await signedIn(ALICE);
+    w.network.answers.set(`/dev/engagements/${ID}`, { body: "Alice's tracker" });
+    // Tab 1: Alice's tracker loads; its answer waits for the page to say whose it is.
+    await w.load(`/dev/engagements/${ID}`, { resultingClientId: "tab-1" }, false);
+    expect(w.kept()).toEqual([]);
+    // Tab 2: Brian signs in and his page says so first.
+    await w.tell({ type: "user", hash: BRIAN }, { id: "tab-2" });
+    expect([...w.caches.named.keys()].filter((name) => name.startsWith("trackers-"))).toEqual([`trackers-${BRIAN}`]);
+    expect(w.kept()).toEqual([]);
+    // Tab 1's page then speaks for Alice: Brian's cache goes, and the answer made for Alice's old cache is not kept.
+    await w.tell({ type: "user", hash: ALICE }, { id: "tab-1" });
+    expect(w.kept()).toEqual([]);
+    expect(w.caches.named.get(`trackers-${BRIAN}`)).toBeUndefined();
+  });
+
+  it("drops a waiting answer when its own page says it is someone else's, and on sign-out", async () => {
+    const w = await signedIn(ALICE);
+    await w.load(`/dev/engagements/${ID}`, {}, false);
+    await w.tell({ type: "user", hash: BRIAN });
+    expect(w.kept()).toEqual([]);
+    await w.tell({ type: "user", hash: ALICE });
+    await w.load(`/dev/engagements/${ID}`, {}, false);
+    await w.tell({ type: "clear" });
+    await w.tell({ type: "user", hash: ALICE });
+    expect(w.kept()).toEqual([]);
+  });
+
+  it("keeps a visit only into the cache of the person the asking page said it belongs to", async () => {
+    const w = await signedIn(ALICE);
+    w.network.answers.set(`/dev/engagements/${ID}`, { body: "a tracker" });
+    // A page that never said whose it is.
+    expect(await w.tell({ type: "visit", url: `${ORIGIN}/dev/engagements/${ID}` }, { id: "tab-9" })).toEqual({
+      ok: false,
+    });
+    // Tab 1 said Alice; Brian then signed in from tab 2: tab 1's visit is not Brian's to keep.
+    await w.tell({ type: "user", hash: BRIAN }, { id: "tab-2" });
+    expect(await w.tell({ type: "visit", url: `${ORIGIN}/dev/engagements/${ID}` }, { id: "client-1" })).toEqual({
+      ok: false,
+    });
+    expect(w.kept()).toEqual([]);
   });
 
   it("sweeps every copy older than 7 days when the person is told again and whenever a page is kept", async () => {

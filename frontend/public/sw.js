@@ -6,7 +6,9 @@
  * - A full-page load (mode "navigate", destination "document") of exactly /dev/engagements, /org/engagements,
  *   /dev/engagements/<id> or /org/engagements/<id> (an ?org= query allowed, nothing else): network first, the
  *   answer kept in the signed-in person's cache (trackers-<hash>), and that copy served when the network fails, if it
- *   is at most 7 days old by its Date header. At most 20 pages, the oldest dropped first.
+ *   is at most 7 days old by its Date header. At most 20 pages, the oldest dropped first. An answer is kept only once
+ *   the page it made says it belongs to the person whose cache it was made for (a load in flight never lands in the
+ *   cache of someone who signed in meanwhile).
  * - Any other page load that fails: the /offline page, cached when the worker installs.
  * - Never intercepted or stored: anything that is not GET, another origin, /api/*, /admin*, every other page (the
  *   messages pages, the inbox, ideas, billing, settings, any proposal or render route): those go to the network as if
@@ -145,14 +147,36 @@ async function offlinePage() {
 /** Clients the worker answered from its cache, by id, with the copy's Date (the shell asks to show its banner). */
 const servedFromCache = new Map();
 
+/** How long a page load's answer waits for its page to say whose it is before it is dropped. */
+const PENDING_MS = 20 * 1000;
+/**
+ * Answers to page loads, waiting to be kept, by the id of the page they made: {url, copy, name}, where name is the
+ * person's cache when the answer arrived. One is kept only when that page itself says ({type: "user", hash}) that it
+ * belongs to the same person; any announcement of someone else, a sign-out or the timeout drops it. So a load in
+ * flight for one person never lands in the cache of another who signed in meanwhile (in another tab, say).
+ */
+const pending = new Map();
+/** The person each page said it belongs to, by client id: a visit is kept only into that person's cache. */
+const announced = new Map();
+
+function pend(id, entry) {
+  if (!id || !entry.name) return;
+  pending.set(id, entry);
+  setTimeout(() => pending.get(id) === entry && pending.delete(id), PENDING_MS);
+}
+
 async function navigate(event, url) {
   try {
     const response = await fetch(event.request);
     const landed = response.url ? new URL(response.url) : url;
-    if (SIGNED_OUT.test(landed.pathname)) event.waitUntil(serial(() => forgetPeople(null)));
-    else if (keepable(url) && storable(response)) {
+    if (SIGNED_OUT.test(landed.pathname)) {
+      pending.clear();
+      announced.clear();
+      event.waitUntil(serial(() => forgetPeople(null)));
+    } else if (keepable(url) && storable(response)) {
       const copy = response.clone();
-      event.waitUntil(serial(() => keepPage(url.href, copy)));
+      const id = event.resultingClientId;
+      event.waitUntil(serial(async () => pend(id, { url: url.href, copy, name: await personCache() })));
     }
     return response;
   } catch {
@@ -241,6 +265,15 @@ async function answer(data, source, later) {
     const lang = typeof data.lang === "string" ? data.lang : "";
     await forgetPeople(name);
     await sweep(await caches.open(name));
+    // Answers waiting for someone else are dropped; this page's own is kept if it was made for this person.
+    for (const [id, entry] of pending) if (entry.name !== name) pending.delete(id);
+    const id = source && source.id;
+    if (id) announced.set(id, data.hash);
+    const own = id && pending.get(id);
+    if (own) {
+      pending.delete(id);
+      await keepPage(own.url, own.copy);
+    }
     // /offline in this person's language: fetched again only for a new person's cache or a page language changed.
     if (created || lang !== offlineLang) {
       offlineLang = lang;
@@ -249,6 +282,8 @@ async function answer(data, source, later) {
     return { ok: true };
   }
   if (data.type === "clear") {
+    pending.clear();
+    announced.clear();
     await forgetPeople(null);
     offlineLang = null;
     later(keepOfflinePage().catch(() => {}));
@@ -258,7 +293,9 @@ async function answer(data, source, later) {
     // A page reached inside the app (no page load went through the worker): fetched once more, as a page.
     const url = new URL(data.url, self.location.origin);
     url.hash = "";
-    if (!keepable(url)) return { ok: false };
+    // Only into the cache of the person this page said it belongs to, and only while that is still the person here.
+    const said = source && announced.get(source.id);
+    if (!keepable(url) || !said || (await personCache()) !== `${PEOPLE}${said}`) return { ok: false };
     const kept = await keptPage(url.href);
     if (kept && age(kept) < FRESH_MS) return { ok: true };
     const response = await fetch(url.href, {
@@ -266,8 +303,11 @@ async function answer(data, source, later) {
       headers: { accept: "text/html" },
       signal: AbortSignal.timeout(15000),
     }).catch(() => null);
-    if (response && SIGNED_OUT.test(new URL(response.url || url.href).pathname)) await forgetPeople(null);
-    else if (response && storable(response)) await keepPage(url.href, response);
+    if (response && SIGNED_OUT.test(new URL(response.url || url.href).pathname)) {
+      pending.clear();
+      announced.clear();
+      await forgetPeople(null);
+    } else if (response && storable(response)) await keepPage(url.href, response);
     return { ok: true };
   }
   if (data.type === "status") {
