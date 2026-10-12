@@ -11,8 +11,9 @@ import { formatCalendarDate, formatDay } from "@/lib/format";
  * no client code; nothing on the organisation's own tracker (it reads its line under its buttons instead).
  */
 export async function ReceivedDeclaration({ detail }: { detail: TrackerDetail }) {
-  if (detail.my_party !== "developer" || !detail.prior_knowledge) return null;
-  const pk = detail.prior_knowledge;
+  const pk = detail.my_party === "developer" ? detail.prior_knowledge : null;
+  // Only a received declaration's shape is drawn: anything else (the organisation's window, by mistake) draws nothing.
+  if (!pk || typeof pk.org_name !== "string" || typeof pk.evidence_sha256_hex !== "string") return null;
   const t = await getTranslations("tracker.declaration.received");
   const locale = await getLocale();
   return (
