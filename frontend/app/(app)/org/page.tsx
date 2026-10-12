@@ -167,6 +167,8 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
   const stats = orgHomeStats(inbox, matches, engagements);
   const briefs = briefsRead?.kind === "ok" ? briefStats(briefsRead.value) : null;
   const now = new Date();
+  // The app clock's instant once the API answered (its X-App-Now), for the live clocks on the "Needs us" cards.
+  const clock = appNow();
   const inboxLink = inboxHref(memberships, org.org_id);
   const engagementsLink = engagementsHref(memberships, org.org_id);
 
@@ -258,7 +260,7 @@ async function HomeBody({ memberships, org }: { memberships: Membership[]; org: 
                   <ul className="flex flex-col gap-4">
                     {stats.waiting.map((item) => (
                       <li key={item.id}>
-                        <NeedsYouCard item={item} mine="org" href={engagementsHref(memberships, org.org_id, item.id)} action={t("openTracker")} />
+                        <NeedsYouCard item={item} mine="org" href={engagementsHref(memberships, org.org_id, item.id)} action={t("openTracker")} now={clock} />
                       </li>
                     ))}
                   </ul>

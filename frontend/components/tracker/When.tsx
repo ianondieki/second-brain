@@ -1,7 +1,9 @@
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
-import { eatParts, formatDate, isFinished, type Due, type Party, type Summary } from "./model";
+import { DeadlineClock } from "@/components/ui/DeadlineClock";
+
+import { awaitsMe, eatParts, formatDate, isFinished, type Due, type Party, type Summary } from "./model";
 
 /** Formats moments as "23 Sep 2026, 14:05 EAT" (stored in UTC by the API, shown in Nairobi time; docs/spec/07 item 7). */
 export function useEat(): (iso: string) => string {
@@ -76,4 +78,40 @@ export function DueLine({ item, mine }: { item: Pick<Summary, "state" | "due" | 
     );
   }
   return <DueText due={due} className={tone} />;
+}
+
+type ClockItem = Pick<Summary, "state" | "due" | "developer_name" | "whose_turn">;
+
+/**
+ * The instant a card's live clock counts to (P26), or null where the card keeps DueLine's words: no instant from the
+ * API, overdue (no negative time), ended, on hold (nothing is due; its date is the day it resumes) and, for the
+ * organisation, an open question's answer-by date (the developer's deadline, never the organisation's own).
+ */
+export function clockUntil(item: ClockItem, mine: Party): string | null {
+  const due = item.due;
+  if (!due?.due_at || due.overdue || isFinished(item.state) || item.state === "ON_HOLD") return null;
+  if (item.state === "INFO_REQUESTED" && mine === "org") return null;
+  return due.due_at;
+}
+
+/**
+ * A card's deadline (P26; REQ-TRACK-03): while the stage's window is open, the live clock (days, hours, minutes), the
+ * business-days sentence as its line, warm under 24 hours when the step is the viewer's; otherwise, or without the
+ * page's app-clock instant, DueLine as before. `className` is the clock's (DueLine keeps its own).
+ */
+export function DueClock({ item, mine, now, size, className }: { item: ClockItem; mine: Party; now?: string; size?: "sm" | "lg"; className?: string }) {
+  const t = useTranslations("tracker");
+  const until = clockUntil(item, mine);
+  if (!until || !now || !item.due) return <DueLine item={item} mine={mine} />;
+  return (
+    <DeadlineClock
+      until={until}
+      now={now}
+      labelWhenPast={t("chip.overdue")}
+      mine={awaitsMe(item, mine)}
+      words={<DueText due={item.due} />}
+      size={size}
+      className={className}
+    />
+  );
 }

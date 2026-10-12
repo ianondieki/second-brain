@@ -7,7 +7,7 @@ import { DevNav } from "@/components/DevNav";
 import { SignedInShell } from "@/components/SignedInShell";
 import { Chip } from "@/components/tracker/Chip";
 import { stageChip, type Summary } from "@/components/tracker/model";
-import { DueLine } from "@/components/tracker/When";
+import { DueClock } from "@/components/tracker/When";
 import { standaloneLinkClass } from "@/components/ui/Button";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -198,6 +198,7 @@ export async function HomeContent({
           <HomeBelow
             ideas={ideas}
             others={others}
+            now={now}
             reads={{ recommended, quiz, week, peers, activity, mine }}
           />
         </Suspense>
@@ -214,10 +215,13 @@ export async function HomeContent({
 async function HomeBelow({
   ideas,
   others,
+  now,
   reads,
 }: {
   ideas: readonly MyProposalItem[];
   others: readonly Summary[];
+  /** The page's app-clock instant, for the other engagements' live clocks (P26). */
+  now: string;
   reads: Required<Pick<HomeContentProps, "recommended" | "quiz" | "week" | "peers" | "activity" | "mine">>;
 }) {
   const [t, tr, ta, tc, recommended, quiz, week, peers, activity, mine] = await Promise.all([
@@ -285,7 +289,8 @@ async function HomeBelow({
                     meta={tr("withOrg", { org: item.org_name })}
                     badges={[<Chip key="stage" kind={stageChip(item)}>{item.stage_label}</Chip>]}
                   >
-                    <DueLine item={item} mine="developer" />
+                    {/* The live clock while the stage's window is open (P26), the words otherwise. */}
+                    <DueClock item={item} mine="developer" now={now} className="mt-1" />
                   </Row>
                 ))}
               </RowList>
