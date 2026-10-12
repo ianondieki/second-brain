@@ -55,7 +55,9 @@ afterEach(() => {
 
 describe("DeadlineClock", () => {
   it("shows days, hours and minutes as three figures in one <time> with the duration and the Nairobi instant, its words under it", () => {
-    withMessages(<DeadlineClock until={UNTIL} now={NOW} labelWhenPast="Overdue" words="4 business days left, due 16 Oct 2026" />);
+    withMessages(
+      <DeadlineClock until={UNTIL} now={NOW} labelWhenPast="Overdue" words="4 business days left, due 16 Oct 2026" />,
+    );
     const time = clock().querySelector("time")!;
     expect(time.getAttribute("dateTime")).toBe("P6DT14H23M");
     expect(time.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");
@@ -64,12 +66,18 @@ describe("DeadlineClock", () => {
     expect(time.querySelector(".sr-only")?.textContent).toBe("6 days 14 hours 23 minutes");
     expect(time.querySelector("[data-clock-figures]")?.getAttribute("aria-hidden")).toBe("true");
     expect(figures()).toEqual(["6", "14", "23"]);
-    expect([...document.querySelectorAll("[data-unit]")].map((unit) => unit.textContent?.trim())).toEqual(["d", "h", "min"]);
+    expect([...document.querySelectorAll("[data-unit]")].map((unit) => unit.textContent?.trim())).toEqual([
+      "d",
+      "h",
+      "min",
+    ]);
     // The figure face, tabular and bold; the unit words ink-soft.
     expect(clock().className).toContain("[&_[data-figure]]:font-figure");
     expect(clock().className).toContain("[&_[data-figure]]:tabular-nums");
     expect(clock().className).toContain("[&_[data-unit]]:text-ink-soft");
-    expect(document.querySelector("[data-deadline-clock] p")?.textContent).toBe("4 business days left, due 16 Oct 2026");
+    expect(document.querySelector("[data-deadline-clock] p")?.textContent).toBe(
+      "4 business days left, due 16 Oct 2026",
+    );
     // No live region: a ticking figure is never announced; nothing hidden from screen readers.
     expect(document.querySelector("[aria-live], [role='status'], [role='timer']")).toBeNull();
     expect(document.querySelectorAll("[aria-hidden]")).toHaveLength(1); // only the figures, whose words sit beside them
@@ -85,7 +93,10 @@ describe("DeadlineClock", () => {
   it("takes its order and separators from the language's message, never from code", () => {
     const messages = {
       ...en,
-      countdown: { ...en.countdown, clockDays: "<f>{minutes}</f><u>m</u> / <f>{hours}</f><u>h</u> / <f>{days}</f><u>d</u>" },
+      countdown: {
+        ...en.countdown,
+        clockDays: "<f>{minutes}</f><u>m</u> / <f>{hours}</f><u>h</u> / <f>{days}</f><u>d</u>",
+      },
     };
     render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="Africa/Nairobi">
@@ -158,7 +169,16 @@ describe("DeadlineClock", () => {
   });
 
   it("reads the same app clock as Countdown: a page drawn from the cache is put right at once, and both agree", () => {
-    withMessages(<Countdown until={UNTIL} now={NOW} labelWhenPast="Overdue" units={["", "99 d", "{hours} h", "{minutes} min"]} frame="{time}" title="" />);
+    withMessages(
+      <Countdown
+        until={UNTIL}
+        now={NOW}
+        labelWhenPast="Overdue"
+        units={["", "99 d", "{hours} h", "{minutes} min"]}
+        frame="{time}"
+        title=""
+      />,
+    );
     cleanup();
     act(() => vi.advanceTimersByTime(30 * MIN));
     // A list drawn half an hour ago, restored: the server's figure first (hydration), then the app clock's.

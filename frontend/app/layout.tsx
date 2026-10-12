@@ -46,14 +46,27 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang={locale} className="h-full antialiased" suppressHydrationWarning>
       <head>
         {PRELOADED_FONTS.map((href) => (
-          <link key={href} rel="preload" href={href} as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
+          <link
+            key={href}
+            rel="preload"
+            href={href}
+            as="font"
+            type="font/woff2"
+            crossOrigin="anonymous"
+            fetchPriority="high"
+          />
         ))}
         {/* Before the first paint: the remembered appearance (lib/theme.ts) and a stale first-login tour hidden
             (components/tour/tour-store.ts); after it, the two decorative faces (lib/fonts.ts); once parsed, the deadline
             clocks that arrive later run by the page's ticker (components/ui/ClockTicker.tsx). */}
         <script
           dangerouslySetInnerHTML={{
-            __html: THEME_INIT_SCRIPT + TOUR_INIT_SCRIPT + CELEBRATION_INIT_SCRIPT + DEFERRED_FONTS_SCRIPT + CLOCK_BOOT_SCRIPT,
+            __html:
+              THEME_INIT_SCRIPT +
+              TOUR_INIT_SCRIPT +
+              CELEBRATION_INIT_SCRIPT +
+              DEFERRED_FONTS_SCRIPT +
+              CLOCK_BOOT_SCRIPT,
           }}
         />
         <noscript dangerouslySetInnerHTML={{ __html: `<style>${DEFERRED_FONTS_CSS}</style>` }} />

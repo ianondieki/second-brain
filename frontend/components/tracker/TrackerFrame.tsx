@@ -10,7 +10,16 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { TabNav } from "@/components/ui/TabNav";
 import { formatDay } from "@/lib/format";
 
-import { counterpartLine, isFinished, stageLeft, stepperSteps, turnOf, withQuery, type Detail, type History } from "./model";
+import {
+  counterpartLine,
+  isFinished,
+  stageLeft,
+  stepperSteps,
+  turnOf,
+  withQuery,
+  type Detail,
+  type History,
+} from "./model";
 import { Stepper } from "./Stepper";
 import { WhoseTurn } from "./WhoseTurn";
 
@@ -85,14 +94,18 @@ export function TurnCard({ detail, now, children }: { detail: Detail; now?: stri
       <WhoseTurn detail={detail} now={now} />
       {/* The clocks' ticker, once for the page, after the turn card's clocks (the tracker's only ones). */}
       {now ? <ClockTicker /> : null}
-      {children ? <div className="border-t border-line p-5 has-[>div:empty]:hidden sm:px-7 sm:py-6">{children}</div> : null}
+      {children ? (
+        <div className="border-t border-line p-5 has-[>div:empty]:hidden sm:px-7 sm:py-6">{children}</div>
+      ) : null}
     </div>
   );
 }
 
 /** Whether the spine needs the history: an ended engagement has no stage group, and its history says which it left. */
 export function needsHistory(detail: Detail): boolean {
-  return (isFinished(detail.state) && detail.state !== "CLOSED") || (detail.stage_group === null && !detail.paused_from);
+  return (
+    (isFinished(detail.state) && detail.state !== "CLOSED") || (detail.stage_group === null && !detail.paused_from)
+  );
 }
 
 /** The visual spine: the five stages on the canvas, a vertical timeline on phones and a line across from 1024 px. */
@@ -120,7 +133,9 @@ export async function TrackerSpine({ detail, history }: { detail: Detail; histor
               <span className="block font-semibold">{t("stageNow", { stage: detail.stage_label })}</span>
             )}
             {!isFinished(detail.state) ? (
-              <span className="block text-ink-soft">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>
+              <span className="block text-ink-soft">
+                {t("since", { date: formatDay(locale, detail.stage_entered_at) })}
+              </span>
             ) : null}
           </>
         }
@@ -163,7 +178,11 @@ export async function TrackerTabs({
               >
                 {unread}
               </span>
-              <span aria-hidden="true" data-unread-dot="" className="ml-1 inline-block size-2 self-start rounded-full bg-accent sm:hidden" />{" "}
+              <span
+                aria-hidden="true"
+                data-unread-dot=""
+                className="ml-1 inline-block size-2 self-start rounded-full bg-accent sm:hidden"
+              />{" "}
               <span className="sr-only">{t("unread", { count: unread })}</span>
             </>
           ) : (

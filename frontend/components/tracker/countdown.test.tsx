@@ -16,7 +16,12 @@ import { WhoseTurn } from "./WhoseTurn";
 afterEach(cleanup);
 
 const NOW = "2026-10-01T06:36:00.000Z";
-const DUE = { due_on: "2026-10-07", business_days_left: 4, overdue: false, due_at: "2026-10-07T20:59:59.999Z" } as Detail["due"];
+const DUE = {
+  due_on: "2026-10-07",
+  business_days_left: 4,
+  overdue: false,
+  due_at: "2026-10-07T20:59:59.999Z",
+} as Detail["due"];
 
 const panel = () => document.querySelector<HTMLElement>("[data-whose-turn] [data-clock-panel]");
 const clock = () => document.querySelector<HTMLElement>("[data-whose-turn] [data-clock]");
@@ -48,7 +53,10 @@ describe("the tracker's countdown", () => {
 
   it("is drawn for the organisation too, warm under 24 hours when the step is theirs", () => {
     renderWithIntl(
-      <WhoseTurn detail={detail({ due: DUE, my_party: "org", my_roles: ["reviewer"], whose_turn: ["org"] })} now="2026-10-07T08:00:00.000Z" />,
+      <WhoseTurn
+        detail={detail({ due: DUE, my_party: "org", my_roles: ["reviewer"], whose_turn: ["org"] })}
+        now="2026-10-07T08:00:00.000Z"
+      />,
     );
     expect(figures()).toEqual(["12", "59"]);
     expect(clock()?.getAttribute("data-clock")).toBe("warm");
@@ -68,12 +76,21 @@ describe("the tracker's countdown", () => {
   });
 
   it("keeps the error figure when overdue, the business-days figure without the API's instant, and adds nothing ended or on hold", () => {
-    renderWithIntl(<WhoseTurn detail={detail({ due: { ...DUE, business_days_left: -2, overdue: true } as Detail["due"] })} now={NOW} />);
+    renderWithIntl(
+      <WhoseTurn
+        detail={detail({ due: { ...DUE, business_days_left: -2, overdue: true } as Detail["due"] })}
+        now={NOW}
+      />,
+    );
     expect(panel()).toBeNull();
-    expect(document.querySelector("[data-countdown='overdue']")?.textContent).toBe("2 business days overdueWas due 7 Oct 2026");
+    expect(document.querySelector("[data-countdown='overdue']")?.textContent).toBe(
+      "2 business days overdueWas due 7 Oct 2026",
+    );
     expect(document.querySelector("time[datetime^='P']")).toBeNull();
     cleanup();
-    renderWithIntl(<WhoseTurn detail={detail({ due: { due_on: "2026-10-07", business_days_left: 4, overdue: false } })} now={NOW} />);
+    renderWithIntl(
+      <WhoseTurn detail={detail({ due: { due_on: "2026-10-07", business_days_left: 4, overdue: false } })} now={NOW} />,
+    );
     expect(panel()).toBeNull();
     expect(document.querySelector("[data-countdown='open']")?.textContent).toBe("4 business days leftDue 7 Oct 2026");
     cleanup();
@@ -91,7 +108,12 @@ describe("the tracker's countdown", () => {
   });
 
   it("draws the developer's answer-by date as their clock while a question is open; the organisation reads a sentence", () => {
-    const question = { due: DUE, state: "INFO_REQUESTED" as const, whose_turn: ["developer" as const], paused_from: "UNDER_REVIEW" as const };
+    const question = {
+      due: DUE,
+      state: "INFO_REQUESTED" as const,
+      whose_turn: ["developer" as const],
+      paused_from: "UNDER_REVIEW" as const,
+    };
     // The developer's own deadline: the clock, as on their cards.
     renderWithIntl(<WhoseTurn detail={detail({ ...question, my_party: "developer" })} now={NOW} />);
     expect(panel()).not.toBeNull();

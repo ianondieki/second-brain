@@ -16,7 +16,12 @@ const MIN = 60_000;
 const NOW = "2026-10-10T06:36:00.000Z";
 /** NOW plus 6 d 14 h 23 m. */
 const UNTIL = new Date(Date.parse(NOW) + ((6 * 24 + 14) * 60 + 23) * MIN).toISOString();
-const UNITS = ["1 day {hours} h {minutes} min", "99 days {hours} h {minutes} min", "{hours} h {minutes} min", "{minutes} min"] as const;
+const UNITS = [
+  "1 day {hours} h {minutes} min",
+  "99 days {hours} h {minutes} min",
+  "{hours} h {minutes} min",
+  "{minutes} min",
+] as const;
 const at = (minutes: number) => new Date(Date.parse(NOW) + minutes * MIN).toISOString();
 
 // The app clock is the page's (one per page; its gap is the window's, shared with the clock ticker): each test loads a
@@ -26,7 +31,15 @@ let TimeLeft: typeof import("./TimeLeft").TimeLeft;
 
 function countdown(props: Partial<CountdownProps> = {}) {
   return render(
-    <Countdown until={UNTIL} now={NOW} labelWhenPast="Overdue" units={UNITS} frame="in {time}" title="16 Oct 2026, 23:59 EAT" {...props} />,
+    <Countdown
+      until={UNTIL}
+      now={NOW}
+      labelWhenPast="Overdue"
+      units={UNITS}
+      frame="in {time}"
+      title="16 Oct 2026, 23:59 EAT"
+      {...props}
+    />,
   );
 }
 
@@ -180,7 +193,9 @@ describe("Countdown", () => {
   });
 
   it("places the figure inside the sentence's own words", () => {
-    expect(text(countdown({ frame: "Proposals close in {time}" }).container)).toBe("Proposals close in 6 days 14 h 23 min");
+    expect(text(countdown({ frame: "Proposals close in {time}" }).container)).toBe(
+      "Proposals close in 6 days 14 h 23 min",
+    );
   });
 });
 
