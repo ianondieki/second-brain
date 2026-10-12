@@ -44,6 +44,8 @@ function fakeWorker(answers: Record<string, unknown> = {}) {
     postMessage: vi.fn((message: { type: string }, ports?: MessagePort[]) => {
       told.push(message);
       ports?.[0]?.postMessage(answers[message.type] ?? { ok: true });
+      // As sw.js: "from the cache" is answered once per page load.
+      if (message.type === "status") delete answers.status;
     }),
   };
   const registration = { active: worker };

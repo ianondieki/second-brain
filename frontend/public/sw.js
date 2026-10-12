@@ -311,8 +311,10 @@ async function answer(data, source, later) {
     return { ok: true };
   }
   if (data.type === "status") {
+    // Once per page load: a page later reached inside the same tab was fetched, not served from the cache.
     const id = source && source.id;
-    return { cached: servedFromCache.has(id), date: servedFromCache.get(id) || "" };
+    const date = servedFromCache.get(id) || "";
+    return { cached: servedFromCache.delete(id), date };
   }
   return null;
 }

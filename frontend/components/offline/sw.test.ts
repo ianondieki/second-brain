@@ -265,6 +265,8 @@ describe("what the service worker keeps", () => {
     expect(await textOf(await w.load(path))).toBe(`<html>the page at ${path}</html>`);
     // The shell asks whether its page came from the cache, to show the banner.
     expect(await w.tell({ type: "status" })).toMatchObject({ cached: true });
+    // Once per page load: a page later reached inside the same tab was fetched, not served from the cache.
+    expect(await w.tell({ type: "status" })).toMatchObject({ cached: false });
   });
 
   it.each([
