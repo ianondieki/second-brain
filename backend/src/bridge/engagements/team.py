@@ -172,8 +172,9 @@ async def _assignees(db: AsyncSession, org_id: UUID, ids: Sequence[UUID]) -> dic
 async def with_team(
     db: AsyncSession, org_id: UUID, viewer_id: UUID, summaries: Sequence[EngagementSummary]
 ) -> list[OrgEngagementSummary]:
-    """The organisation's list items: each summary with its triage (``team_facts``: constant statements)."""
-    # TODO(P27 merge of wt/p27be1): the pipeline fills PipelineItem.team from team_facts(db, org, ids, viewer) too.
+    """The organisation's list items: each summary with its triage (``team_facts``: constant statements).
+    ``PipelineItem.team`` is filled by ``with_team`` at the merge with the pipeline (P27 card, contract B:
+    docs/platform/tasks/P27.md)."""
     facts = await team_facts(db, org_id, [item.id for item in summaries], viewer_id)
     return [OrgEngagementSummary(**item.model_dump(), team=facts.get(item.id)) for item in summaries]
 
