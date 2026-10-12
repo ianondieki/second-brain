@@ -279,7 +279,9 @@ test("a developer states their references and reads the IP note once, with the s
     const note = page.locator("[data-ip-nudge]");
     await expect(note).toContainText("Before you share a full proposal for the first time");
     await expect(note).toContainText("Neither is required here.");
-    await expect(note.getByRole("link", { name: /KIPI \(kipi\.go\.ke\)/ })).toHaveAttribute("rel", "noopener");
+    for (const name of [/KIPI \(kipi\.go\.ke\)/, /KECOBO \(copyright\.go\.ke\)/]) {
+      await expect(note.getByRole("link", { name })).toHaveAttribute("rel", "noopener noreferrer");
+    }
     await expect(note.getByRole("link", { name: /KECOBO \(copyright\.go\.ke\)/ })).toHaveAttribute(
       "href",
       "https://copyright.go.ke",

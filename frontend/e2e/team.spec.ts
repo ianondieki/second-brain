@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 import { checkScreen } from "./support/screen";
-import { codeOf, SACCO_B_OWNER, send, signInMember, TELCO_A_MEMBERS, type Member } from "./support/team-scene";
+import { codeOf, SACCO_B_OWNER, send, signInMember, TELCO_A, TELCO_A_MEMBERS, type Member } from "./support/team-scene";
 import { OWNER_DATABASE_URL, pitchFromDeveloper } from "./support/tracker-scene";
 
 // P27 track C (REQ-ENG-15; D-68; acceptance row 3): Telco A's reviewer assigns a new engagement to the signatory, who
@@ -37,7 +37,8 @@ test("a reviewer assigns and recommends; the signatory is told and sees it; the 
   browser,
 }, info) => {
   test.setTimeout(240_000);
-  const reviewer = await signInMember(browser, info, TELCO_A_MEMBERS.reviewer);
+  // The reviewer's scripts are read below (which chunk holds the Team sheet): no service worker in between.
+  const reviewer = await signInMember(browser, info, TELCO_A_MEMBERS.reviewer, TELCO_A, { serviceWorkers: "block" });
   const signatory = await signInMember(browser, info, TELCO_A_MEMBERS.signatory);
   const finance = await signInMember(browser, info, TELCO_A_MEMBERS.finance);
   const other = await signInMember(browser, info, SACCO_B_OWNER, "SACCO B (fixture)");
@@ -46,18 +47,31 @@ test("a reviewer assigns and recommends; the signatory is told and sees it; the 
     const id = dev.engagementId;
     const base = `/api/orgs/${reviewer.orgId}/engagements/${id}`;
 
+    // Every script the reviewer's page fetches, with its text: the Team sheet's chunk is the one that draws
+    // [data-team-sheet] (no other chunk carries that attribute).
+    const scripts: Array<{ url: string; text: Promise<string> }> = [];
+    reviewer.page.on("response", (response) => {
+      if (response.request().resourceType() === "script") {
+        scripts.push({ url: response.url(), text: response.text().catch(() => "") });
+      }
+    });
+    const teamChunk = async () => {
+      for (const script of scripts) if ((await script.text).includes("data-team-sheet")) return script.url;
+      return null;
+    };
+
     // --- The reviewer's tracker: the team line under the banner, nobody assigned yet --------------------------------
     await tracker(reviewer, id);
     const line = reviewer.page.locator("[data-team-panel]");
     await expect(line).toContainText("Not assigned yet");
     await expect(line).toContainText("No recommendations yet");
-    // The sheet's code is not on the page until the opener is reached (it is a lazy chunk).
-    const chunks: string[] = [];
-    reviewer.page.on("request", (r) => {
-      if (r.resourceType() === "script") chunks.push(r.url());
-    });
+    // The sheet's code is not on the page until the opener is reached (a lazy chunk): absent once the page has
+    // settled, fetched when the pointer reaches "Assign".
+    await reviewer.page.waitForLoadState("networkidle");
+    expect(scripts.length).toBeGreaterThan(0);
+    expect(await teamChunk()).toBeNull();
     await line.getByRole("button", { name: "Assign" }).hover();
-    await expect.poll(() => chunks.length, SERVER_STEP).toBeGreaterThan(0);
+    await expect.poll(teamChunk, SERVER_STEP).not.toBeNull();
     await line.getByRole("button", { name: "Assign" }).click();
     const sheet = reviewer.page.getByRole("dialog", { name: "Team on this engagement" });
     await expect(sheet.getByRole("radio", { name: /Peter Kamau/ })).toBeVisible(SERVER_STEP);
