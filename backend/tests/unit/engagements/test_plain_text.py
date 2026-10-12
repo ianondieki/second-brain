@@ -1,12 +1,14 @@
 """P27 (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; the security review of revision 0013): one line of plain text a person
 typed (a recommendation's note, an evidence title, a KECOBO or KIPI reference) is stored as typed, trimmed of ASCII
-spaces, or refused: never rewritten or stripped of a character silently."""
+spaces, or refused (``bridge.models.text``, the database's rule too): never rewritten or stripped of a character
+silently."""
 
 from __future__ import annotations
 
 import pytest
 
-from bridge.engagements.plain import is_plain, one_line
+from bridge.engagements.plain import one_line
+from bridge.models.text import is_one_line
 
 
 def test_plain_text_is_kept_as_typed_and_trimmed() -> None:
@@ -41,11 +43,14 @@ def test_nothing_left_is_no_text(value: str | None) -> None:
         "ideographic\u3000space",
         "line\u2028separator",
         "para\u2029separator",
-        "private\ue000use",
+        "soft\u00adhyphen",
+        "word\u2060joiner",
+        "tag\U000e0041",
+        "c1\u0085control",
     ],
 )
 def test_control_format_and_non_ascii_space_characters_are_refused(value: str) -> None:
-    assert not is_plain(value)
+    assert not is_one_line(value, 200)
     with pytest.raises(ValueError, match="one line of plain text") as refused:
         one_line(value, 200)
     assert value not in str(refused.value)  # the rule is named, never the text

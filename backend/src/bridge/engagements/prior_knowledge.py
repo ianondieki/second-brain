@@ -163,22 +163,23 @@ def _closed(closes_on: date | None) -> ApiError:
 
 
 def _refusal(exc: DBAPIError) -> ApiError:
-    """The database's backstop (revision 0013's triggers and CHECKs, revision 0003's chain), in the API's words: the
-    checks above run first, so these are races (the window closing, a second declaration) or a bug (re-raised)."""
+    """The database's backstop (revision 0013's window trigger and CHECKs, revision 0003's chain), in the API's words:
+    the checks above run first, so these are races (the engagement ending, the window closing, a second declaration)
+    or a bug (re-raised)."""
     sqlstate = getattr(exc.orig, "sqlstate", None)
     message = str(getattr(getattr(exc.orig, "diag", None), "message_primary", "") or "")
     constraint = str(getattr(getattr(exc.orig, "diag", None), "constraint_name", "") or "")
     if sqlstate == "55000":
+        if "has ended" in message:
+            return ApiError(409, "engagement_ended", ENGAGEMENT_ENDED)
         if "has not viewed" in message:
             return forbidden("no_tier2_access_yet", NO_TIER2_YET)
         return _closed(None)
     if sqlstate == "23505" and "prior_knowledge_declarations" in constraint:
         return ApiError(409, "already_declared", ALREADY_DECLARED)
-    if sqlstate == "23514" and "dated after today" in message:
-        return ApiError(422, "evidence_date_in_future", FUTURE_EVIDENCE)
-    if sqlstate == "23514" and "dated" in message:  # the amended trigger: on or before the first view's day
+    if sqlstate == "23514" and ("dated after" in message or "evidence_predates_first_view" in constraint):
         return ApiError(422, "evidence_after_first_view", EVIDENCE_AFTER_VIEW)
-    if sqlstate == "23514" and "ended" in message:
+    if sqlstate == "23514" and "ended" in message:  # revision 0003's chain: no event once an engagement ended
         return ApiError(409, "engagement_ended", ENGAGEMENT_ENDED)
     mapped = db_refusal(exc)
     if mapped is None:

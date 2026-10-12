@@ -53,13 +53,18 @@ def answer(error: ApiError) -> tuple[int, str]:
         ),
         (refused("23505", "duplicate key", "uq_prior_knowledge_declarations_engagement_id"), (409, "already_declared")),
         (
-            refused("23514", "prior_knowledge_declarations: the evidence is dated after today"),
-            (422, "evidence_date_in_future"),
-        ),
-        (
-            refused("23514", "prior_knowledge_declarations: the evidence is dated after the first Tier-2 view"),
+            refused(
+                "23514",
+                "prior_knowledge_declarations: the evidence is dated after the organisation's first Tier-2 view"
+                " (2026-10-12)",
+            ),
             (422, "evidence_after_first_view"),
         ),
+        (
+            refused("23514", "violates", "ck_prior_knowledge_declarations_evidence_predates_first_view"),
+            (422, "evidence_after_first_view"),
+        ),
+        (refused("55000", "prior_knowledge_declarations: the engagement has ended"), (409, "engagement_ended")),
         (
             refused("23514", "engagement_events: the engagement ended in DECLINED and takes no further event"),
             (409, "engagement_ended"),

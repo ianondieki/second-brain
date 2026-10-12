@@ -1,30 +1,22 @@
 """One line of plain text a person typed: a recommendation's note, a declaration's evidence title and a developer's
-KECOBO and KIPI references (P27; revision 0013's CHECKs behind them: not blank, a length cap, no control character).
+KECOBO and KIPI references (P27). The rule is ``bridge.models.text``'s, the one the database's CHECKs restate (revision
+0013, after its security review): at least one character other than the ASCII space, a length cap, and no control
+character (line breaks and tabs included: the text is one line), no format character that hides, joins or reorders
+text (zero-width characters, bidi embeddings, overrides and isolates, the byte-order mark ...) and no space but the
+ASCII space (the no-break space included).
 
-Refused (``ValueError`` naming the rule, never the text), never removed or rewritten silently, so what is stored is
-what was typed and what the database's rule accepts: a control character (Unicode Cc: line breaks and tabs included,
-the text is one line), a format character (Cf: zero-width spaces and joiners U+200B to U+200F, the bidi embeddings and
-overrides U+202A to U+202E and isolates U+2066 to U+2069, the byte-order mark U+FEFF), a space other than the ASCII
-space (Zs: the no-break space included), the line and paragraph separators, and surrogate or private-use characters
-(the security review of revision 0013). Then trimmed of ASCII spaces; nothing left is no text.
+ASCII spaces at the ends are trimmed; nothing left is no text. Any other refused character, wherever it is, is refused
+(``ValueError`` naming the rule, never the text), never removed or rewritten silently: what is stored is what was
+typed.
 """
 
 from __future__ import annotations
 
-import unicodedata
 from typing import Final
 
-REFUSED: Final = frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})
+from bridge.models.text import is_one_line
+
 RULE: Final = "one line of plain text: no line break, control or format character and no space but the ASCII space"
-
-
-def is_plain(text: str) -> bool:
-    """Whether every character of ``text`` may be stored (the rule above; the ASCII space is the one space)."""
-    for char in text:
-        category = unicodedata.category(char)
-        if category in REFUSED or (category == "Zs" and char != " "):
-            return False
-    return True
 
 
 def one_line(value: str | None, limit: int) -> str | None:
@@ -32,11 +24,11 @@ def one_line(value: str | None, limit: int) -> str | None:
     rule."""
     if value is None:
         return None
-    if not is_plain(value):
-        raise ValueError(RULE)
     text = value.strip(" ")
     if not text:
         return None
     if len(text) > limit:
         raise ValueError(f"at most {limit} characters")
+    if not is_one_line(text, limit):
+        raise ValueError(RULE)
     return text
