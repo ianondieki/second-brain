@@ -43,7 +43,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge.engagements import history
 from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import NAIROBI, business_days_between, local_date
-from bridge.engagements.deadlines import all_holidays
 from bridge.engagements.models import Engagement, EngagementEvent
 from bridge.engagements.pipeline_policy import get_pipeline_policy
 from bridge.engagements.schemas import (
@@ -56,6 +55,7 @@ from bridge.engagements.schemas import (
     StageGroup,
     TeamFacts,
 )
+from bridge.engagements.service import all_holidays
 from bridge.engagements.team import team_facts
 from bridge.models.enums import EngagementState
 

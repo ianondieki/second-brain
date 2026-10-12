@@ -134,13 +134,22 @@ async def app_now(db: AsyncSession) -> datetime:
 
 async def load_holidays(db: AsyncSession, today: date, *, since: date | None = None) -> frozenset[date]:
     """Observed Kenyan public holidays from ``today`` (or from ``since``, a past date a count starts at: the day a
-    stage was paused or entered) over the window any deadline needs (REQ-BD-01)."""
+    stage was paused or entered) over the window any deadline needs (REQ-BD-01). For a deadline set forward from
+    ``today`` only: a count that can look back (an overdue deadline's business days late) needs ``all_holidays``."""
     start = min(today, since) if since is not None else today
     rows = await db.execute(
         select(Holiday.observed_on).where(
             Holiday.country == "KE", Holiday.observed_on >= start, Holiday.observed_on <= today + HOLIDAY_WINDOW
         )
     )
+    return frozenset(rows.scalars().all())
+
+
+async def all_holidays(db: AsyncSession) -> frozenset[date]:
+    """Every observed Kenyan holiday (a short table: tens of rows a year), so a count over any window is right: an
+    overdue deadline counts its business days late back to its due day, the same number wherever it is shown
+    (REQ-TRACK-03; the lists, the tracker, the board and the calendar)."""
+    rows = await db.execute(select(Holiday.observed_on).where(Holiday.country == "KE"))
     return frozenset(rows.scalars().all())
 
 

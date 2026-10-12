@@ -35,12 +35,12 @@ from sqlalchemy import and_, func, select, tuple_, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge import web_paths
-from bridge.admin.models import Holiday
 from bridge.engagements import history
 from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import add_business_days, local_date
 from bridge.engagements.models import Agreement, Engagement, EngagementEvent, Milestone
 from bridge.engagements.schemas import DeadlineKind, DeadlineOut
+from bridge.engagements.service import all_holidays
 from bridge.errors import ApiError, not_found
 from bridge.events.calendar import Entry, public_host
 from bridge.events.models import Event, EventReminder
@@ -243,12 +243,6 @@ async def _items(
     if kind is None or kind is DeadlineKind.EVENT:
         items += await _event_items(db, viewer, platform_name=platform_name, only=only[1] if only else None)
     return items
-
-
-async def all_holidays(db: AsyncSession) -> frozenset[date]:
-    """Every observed Kenyan holiday (a short table: tens of rows a year), so a count over any window is right."""
-    rows = await db.execute(select(Holiday.observed_on).where(Holiday.country == "KE"))
-    return frozenset(rows.scalars().all())
 
 
 async def _engagement_items(
