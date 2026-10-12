@@ -251,3 +251,25 @@ def test_a_side_state_notice_is_titled_by_what_happened(
         )
     )
     assert rendered.subject == f'{title}: "Cold-chain alerts"'
+
+
+def test_a_prior_knowledge_declaration_tells_the_owner_n31_by_email_always() -> None:
+    """REQ-PROV-06: N31 names the organisation and the idea, never the evidence; its email is not mutable."""
+    declared = event(
+        sm.PRIOR_KNOWLEDGE_DECLARED,
+        R.SIGNATORY,
+        S.SUBMITTED,
+        payload={"declaration_id": str(ENGAGEMENT), "org_id": str(ENGAGEMENT), "evidence_sha256": "ab" * 32},
+    )
+    composed = notify.compose(declared, "Telco A", "Cold-chain alerts")
+    assert composed is not None
+    party, notice = composed
+    assert (party, notice.kind, notice.title) == (DEV, notify.N31_KIND, notify.DECLARED_TITLE)
+    assert notice.body == 'Telco A made a prior-knowledge declaration on "Cold-chain alerts". See it on your tracker.'
+    assert notice.link == f"/dev/engagements/{ENGAGEMENT}"
+    assert "ab" * 32 not in notice.body
+    assert notify.emailed(declared)
+    assert not notify.mutable(declared)
+    assert notify.mutable(event("start_review", R.REVIEWER, S.UNDER_REVIEW))
+    by_developer = event(sm.PRIOR_KNOWLEDGE_DECLARED, R.DEVELOPER, S.SUBMITTED)
+    assert notify.compose(by_developer, "Telco A", "Cold-chain alerts") is None  # only an organisation declares

@@ -6,7 +6,9 @@ Only ``delivered`` tags of the organisation the request is scoped to are read (t
 organisation sees only how many wait for its verification (``app_held_tag_count``, AC-PROP-1/a). Nothing names
 another organisation a proposal was pitched to (AC-REPO-6/a): an item is the tag, the engagement and the teaser.
 A proposal hidden or held after it was pitched drops out of the list (its teaser is no longer readable). Each item
-says whether the proposal is on the organisation's shortlist (``shortlisted``, the Inbox's star; P21 track B).
+says whether the proposal is on the organisation's shortlist (``shortlisted``, the Inbox's star; P21 track B), and
+its engagement carries the organisation's triage (``team``: the assignee and the members' recommendations, P27
+REQ-ENG-15, D-68; the organisation's own, as the Inbox is).
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bridge.engagements.schemas import TeamFacts
+from bridge.engagements.team import team_facts
 from bridge.models.enums import EngagementState, OrgVerification
 from bridge.proposals.serializers import TeaserItem, teaser_items
 from bridge.proposals.shortlist import starred
@@ -38,6 +42,9 @@ class InboxEngagement(BaseModel):
     id: UUID
     state: EngagementState
     stage_deadline_at: datetime | None
+    team: TeamFacts | None = Field(
+        default=None, description="The organisation's triage of the engagement (always sent to a member)"
+    )
 
 
 class InboxItem(BaseModel):
@@ -95,13 +102,18 @@ _ITEMS = text(
 _ORG = text("SELECT verification, app_held_tag_count(id) AS held FROM organizations WHERE id = :org")
 
 
-def _engagement(row: Any) -> InboxEngagement | None:
+def _engagement(row: Any, teams: dict[UUID, TeamFacts]) -> InboxEngagement | None:
     if row.engagement_id is None:
         return None
-    return InboxEngagement(id=row.engagement_id, state=row.state, stage_deadline_at=row.stage_deadline_at)
+    return InboxEngagement(
+        id=row.engagement_id,
+        state=row.state,
+        stage_deadline_at=row.stage_deadline_at,
+        team=teams.get(row.engagement_id),
+    )
 
 
-async def inbox(db: AsyncSession, *, org_id: UUID, cursor: Cursor | None, limit: int) -> InboxPage:
+async def inbox(db: AsyncSession, *, org_id: UUID, cursor: Cursor | None, limit: int, viewer_id: UUID) -> InboxPage:
     org = (await db.execute(_ORG, {"org": org_id})).one()
     params = {
         "org": org_id,
@@ -114,11 +126,12 @@ async def inbox(db: AsyncSession, *, org_id: UUID, cursor: Cursor | None, limit:
     rows = rows[:limit]
     teasers = await teaser_items(db, [row.proposal_id for row in rows])
     stars = await starred(db, org_id, list(teasers))
+    teams = await team_facts(db, org_id, [row.engagement_id for row in rows if row.engagement_id], viewer_id)
     items = [
         InboxItem(
             tag_id=row.id,
             pitched_at=row.created_at,
-            engagement=_engagement(row),
+            engagement=_engagement(row, teams),
             proposal=teasers[row.proposal_id],
             shortlisted=row.proposal_id in stars,
         )

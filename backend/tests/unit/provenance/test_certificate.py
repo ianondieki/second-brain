@@ -11,7 +11,16 @@ from typing import Any
 from uuid import UUID
 
 from bridge.models.enums import ProvenanceStatus
-from bridge.provenance.certificate import FOOTER, CertificateData, eat_text, render_pdf, utc_text, verify_url
+from bridge.provenance.certificate import (
+    FOOTER,
+    SELF_REPORTED,
+    CertificateData,
+    eat_text,
+    render_pdf,
+    self_reported,
+    utc_text,
+    verify_url,
+)
 
 SPEC_FOOTER = (
     "This certificate is evidence of what was submitted and when. It is not a patent, copyright registration or "
@@ -127,3 +136,25 @@ def test_contributors_follow_the_owner_row_when_there_are_any() -> None:
     # The markup is drawn as text, not applied (reportlab draws "<" and ">" as their own runs).
     assert "Contributorsdev-brian,dev-<b>carol</b>&" in text.replace(" ", "")
     assert text.index("Owner") < text.index("Contributors") < text.index("Timestamped")
+
+
+def test_d3_references_are_one_self_reported_row_of_the_set_ones() -> None:
+    """REQ-DEV-04 (docs/spec/06 6.4 pt 8): the developer's GitHub, KECOBO and KIPI references, as self-reported."""
+    assert self_reported(data()) is None
+    assert "Self-reported references" not in pdf_text(render_pdf(data()))
+    every = data(github_login="octo-cat", kecobo_number="KECOBO/LIT/2026/0042", kipi_number="KE/U/2026/1")
+    assert self_reported(every) == "GitHub @octo-cat · KECOBO KECOBO/LIT/2026/0042 · KIPI KE/U/2026/1"
+    assert self_reported(data(kipi_number="KE/U/2026/1")) == "KIPI KE/U/2026/1"
+    text = pdf_text(render_pdf(every))
+    assert SELF_REPORTED == "Self-reported references"
+    assert "Self-reported references" in text
+    for part in ("GitHub @octo-cat", "KECOBO KECOBO/LIT/2026/0042", "KIPI KE/U/2026/1"):
+        assert part in text
+    assert text.index("Owner") < text.index("Self-reported references") < text.index("Content hash")
+
+
+def test_d3_references_are_escaped_before_layout() -> None:
+    """The developer's words are drawn as text: markup in them is never read as markup (the tags show)."""
+    text = pdf_text(render_pdf(data(kecobo_number="<b>KE & co</b>")))
+    row = text[text.index("Self-reported references") :]
+    assert row.startswith("Self-reported references KECOBO < b > KE & co < /b >")
