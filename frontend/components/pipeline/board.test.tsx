@@ -88,6 +88,9 @@ describe("a card", () => {
     );
     const card = container.querySelector<HTMLElement>(`[data-engagement="${ID(1)}"]`)!;
     expect(within(card).getAllByRole("link")).toHaveLength(1);
+    // The card's title is a heading under its column's (h3 → h4).
+    expect(within(card).getByRole("heading", { level: 4 }).textContent).toBe(card.querySelector("a")?.textContent);
+    expect(card.closest("[data-column]")?.querySelector("h3")).not.toBeNull();
     expect(within(card).getByRole("link").getAttribute("href")).toBe(`/org/engagements/${ID(1)}`);
     expect(card.querySelector("[data-avatar='person']")).not.toBeNull();
     expect(card.querySelector("[data-clock]")).not.toBeNull();
@@ -138,7 +141,11 @@ describe("the funnel", () => {
     expect(groups[1].querySelector("[data-conversion] [aria-hidden='true']")?.textContent).toBe("67%");
     expect(groups[1].querySelector(".sr-only")?.textContent).toBe("8 of 12 went on to Contact and NDA");
     expect(groups[3].querySelector("[data-conversion] [aria-hidden='true']")?.textContent).toBe("0%");
-    expect(groups[4].querySelector("[data-conversion]")?.textContent).toBe("");
+    // After a group nothing entered: a dash, and the sentence says why there is no share.
+    expect(groups[4].querySelector("[data-conversion] [aria-hidden='true']")?.textContent).toBe("–");
+    expect(groups[4].querySelector("[data-conversion] .sr-only")?.textContent).toBe(
+      "Nothing entered Implementation in the window, so there is no share to show.",
+    );
     expect(container.querySelector("[data-funnel-outcome]")?.textContent).toBe(
       "1 closed and 2 ended in the same window.",
     );
@@ -149,6 +156,17 @@ describe("the funnel", () => {
     expect(conversion(12, 8)).toBe(67);
     expect(conversion(3, 3)).toBe(100);
     expect(conversion(0, 0)).toBeNull();
+    // More entered the next group than this one in the window (they entered this one before it): at most 100 %.
+    expect(conversion(2, 5)).toBe(100);
+  });
+
+  it("says so when more entered the next group than this one in the window, never a share above 100 %", async () => {
+    const container = await board(pipeline({ review: [pipelineItem()] }, { review: 2, contact_nda: 5 }));
+    const next = container.querySelector<HTMLElement>("[data-funnel-group='contact_nda'] [data-conversion]")!;
+    expect(next.querySelector("[aria-hidden='true']")?.textContent).toBe("100%");
+    expect(next.querySelector(".sr-only")?.textContent).toBe(
+      "5 entered Contact and NDA: more than the 2 that entered the stage before it in the window.",
+    );
   });
 });
 
@@ -172,6 +190,12 @@ describe("Assigned to me", () => {
     expect(filtered.columns[0].count).toBe(1);
     expect(filtered.columns[0].median_days_in_stage).toBe(2);
     expect(filtered.columns[4]).toMatchObject({ count: 0, median_days_in_stage: null });
+    // A closed card counts, but has no days in a stage for the median (as the API's Close column).
+    const closed = assignedTo(
+      pipeline({ close: [pipelineItem({ id: ID(4), state: "CLOSED", team: mine, days_in_stage: 40 })] }),
+      "me",
+    );
+    expect(closed.columns[4]).toMatchObject({ count: 1, median_days_in_stage: null });
     expect(filtered.funnel).toEqual(value.funnel);
   });
 

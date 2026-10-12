@@ -48,11 +48,12 @@ export function BoardCard({
         ours && "shadow-card",
       )}
     >
-      <h3 className="min-w-0 text-sm leading-snug font-semibold [overflow-wrap:anywhere] text-ink">
+      {/* Under its column's h3. */}
+      <h4 className="min-w-0 text-sm leading-snug font-semibold [overflow-wrap:anywhere] text-ink">
         <Link href={href} className={cardLinkClass}>
           {item.proposal_title}
         </Link>
-      </h3>
+      </h4>
       {/* The figure only: the business days are the tracker's line (the column is narrow). */}
       {until ? (
         <DeadlineClock size="xs" until={until} now={now} labelWhenPast={tt("chip.overdue")} mine={ours} />
