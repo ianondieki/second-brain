@@ -4451,7 +4451,7 @@
     "columnsLabel": "Hatua za mchakato",
     "count": "ushirikiano {count}",
     "median": "wastani wa kati: siku {days} katika hatua",
-    "stalled": "Hakuna hatua kwa siku {count} za kazi",
+    "stalled": "Hakuna hatua kwa siku {count}+ za kazi",
     "assignee": "Amepewa {name}",
     "columnEmpty": "Hakuna katika hatua hii.",
     "empty": "Bado hakuna ushirikiano wa kuonyesha kwenye ubao.",

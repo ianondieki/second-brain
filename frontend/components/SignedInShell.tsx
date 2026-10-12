@@ -14,6 +14,12 @@ export interface SignedInShellProps {
   nav?: ReactNode;
   /** Lists and directories use the full content width; forms and summaries keep a 36 rem column. */
   wide?: boolean;
+  /**
+   * The content runs on to the window's right edge (a 24 px margin) instead of stopping at the 72 rem frame, the rail
+   * staying where every other page has it, level with the logo: the Engagements Board's five columns (P27), which the
+   * frame leaves at 160 px each. Below 1152 px the frame is the window already, so nothing changes. Implies `wide`.
+   */
+  bleed?: boolean;
   /** The page is the bell's own (/notifications): the bell carries aria-current="page". */
   bellCurrent?: boolean;
   /** The staff console's role, so the command palette lists the sections that role may open. */
@@ -36,6 +42,7 @@ export function SignedInShell({
   children,
   nav,
   wide = false,
+  bleed = false,
   bellCurrent = false,
   staffRole,
   offline,
@@ -54,13 +61,22 @@ export function SignedInShell({
           <AccountMenu />
         </div>
       </TopBar>
-      <div className="mx-auto flex w-full max-w-6xl flex-1 lg:gap-10 lg:px-6">
+      <div
+        className={cn(
+          "flex w-full flex-1 lg:gap-10",
+          // The bleed's left padding is the frame's own (half of what is left beside 72 rem, plus its 24 px), so the
+          // rail does not move between pages; `100%` is the body's width, scrollbar excluded (never a sideways scroll).
+          bleed ? "lg:pr-6 lg:pl-[max(1.5rem,calc((100%_-_72rem)/2_+_1.5rem))]" : "mx-auto max-w-6xl lg:px-6",
+        )}
+        data-bleed={bleed ? "" : undefined}
+      >
         {nav}
         <main
           id="main"
           tabIndex={-1}
           className={cn(
             "w-full min-w-0 flex-1 px-4 pt-8 focus:outline-none sm:px-6 lg:px-0 lg:pt-16",
+            bleed && "lg:max-w-[88rem]",
             // Room for the fixed tab bar (56 px + the safe area) under 1024 px.
             nav ? "pb-28 lg:pb-16" : "pb-16",
           )}
@@ -68,7 +84,7 @@ export function SignedInShell({
           {/* Offline (P27, D-69): the banner over a page read from this device's copy, and the service worker; never
               in the staff console, which is never kept. */}
           {staffRole ? null : offline}
-          <div className={wide ? undefined : "max-w-xl"}>{children}</div>
+          <div className={wide || bleed ? undefined : "max-w-xl"}>{children}</div>
         </main>
       </div>
     </>

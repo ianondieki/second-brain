@@ -96,7 +96,7 @@ describe("a card", () => {
     expect(card.querySelector("[data-clock]")).not.toBeNull();
     const chips = [...card.querySelectorAll("[data-chip]")].map((chip) => chip.getAttribute("data-chip"));
     expect(chips).toEqual(["turn", "stalled"]);
-    expect(card.querySelector("[data-chip='stalled']")?.textContent).toBe("No movement for 5 business days");
+    expect(card.querySelector("[data-chip='stalled']")?.textContent).toBe("No movement for 5+ business days");
     expect(card.querySelector("[data-chip='turn']")?.textContent).toBe("Our turn");
   });
 

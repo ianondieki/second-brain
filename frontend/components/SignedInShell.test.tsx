@@ -123,6 +123,24 @@ describe("SignedInShell", () => {
     expect(within(wide).getByRole("heading", { name: "My ideas" })).toBeTruthy();
   });
 
+  // P27 (REQ-ENG-14): the Board's columns run on past the 72 rem frame to the window's right edge, the rail where every
+  // other page has it (the frame's own left padding), never wider than the body (no sideways scroll).
+  it("lets a bleeding page run on to the window's right edge, the rail left where the frame puts it", async () => {
+    const framed = await renderShell({ homeHref: "/org", wide: true });
+    expect(framed.parentElement!.className.split(" ")).toEqual(expect.arrayContaining(["mx-auto", "max-w-6xl"]));
+    expect(framed.parentElement!.hasAttribute("data-bleed")).toBe(false);
+    cleanup();
+    const main = await renderShell({ homeHref: "/org", bleed: true });
+    const row = main.parentElement!;
+    expect(row.hasAttribute("data-bleed")).toBe(true);
+    expect(row.className.split(" ")).not.toContain("max-w-6xl");
+    expect(row.className.split(" ")).toEqual(
+      expect.arrayContaining(["lg:pr-6", "lg:pl-[max(1.5rem,calc((100%_-_72rem)/2_+_1.5rem))]"]),
+    );
+    // The content is not held to the form column.
+    expect(main.firstElementChild!.hasAttribute("class")).toBe(false);
+  });
+
   // P27 (REQ-UX-08; D-69): the offline part, given by the pages the worker keeps, sits at the top of <main>, above the
   // page; never in the staff console.
   it("draws the offline part it is given at the top of main, and none in the staff console", async () => {

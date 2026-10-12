@@ -51,6 +51,8 @@ export default async function OrganisationEngagementsPage({ searchParams }: Page
       homeHref={`/org${query}`}
       nav={<OrgNav current="engagements" query={query} />}
       wide
+      // The Board's five columns run on to the window's right edge from 1152 px; the List and Calendar keep the frame.
+      bleed={view === "board"}
       offline={<OfflineSlot page={(await getTranslations("nav"))("engagements")} />}
     >
       <div className={view === "board" ? undefined : "max-w-5xl"}>

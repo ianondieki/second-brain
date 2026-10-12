@@ -47,6 +47,26 @@ describe("Badge", () => {
     expect(classes).not.toContain("text-accent");
   });
 
+  // P27 (REQ-ENG-14): on a board card the stalled mark wraps to a second line; a pill there swells into an oval.
+  it("keeps the controls' corner radius, not a pill, when its words may wrap", () => {
+    const { container } = render(<Badge wraps>No movement for 5+ business days</Badge>);
+    const classes = container.firstElementChild!.className.split(" ");
+    expect(classes).toContain("rounded-control");
+    expect(classes).not.toContain("rounded-full");
+  });
+
+  it("is compact on the board's cards (xs), with one size only, never text-sm beside text-xs", () => {
+    const { container } = render(
+      <Badge size="xs" icon={<CheckIcon />}>
+        Our turn
+      </Badge>,
+    );
+    const classes = container.firstElementChild!.className.split(" ");
+    expect(classes).toEqual(expect.arrayContaining(["text-xs", "[&>svg]:size-3.5"]));
+    expect(classes).not.toContain("text-sm");
+    expect(classes).not.toContain("[&>svg]:size-4");
+  });
+
   it("passes data-chip and data-badge through, so tests can count a card's chips", () => {
     const { container } = render(
       <>

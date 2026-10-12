@@ -4451,7 +4451,7 @@
     "columnsLabel": "Pipeline stages",
     "count": "{count, plural, one {# engagement} other {# engagements}}",
     "median": "median {days, plural, one {# day} other {# days}} in stage",
-    "stalled": "No movement for {count, plural, one {# business day} other {# business days}}",
+    "stalled": "No movement for {count}+ business days",
     "assignee": "Assigned to {name}",
     "columnEmpty": "None at this stage.",
     "empty": "No engagements to show on the board yet.",
