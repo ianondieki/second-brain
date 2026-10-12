@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { createTranslator } from "next-intl";
+import { useState } from "react";
 import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -174,6 +175,41 @@ describe("the offline island", () => {
     late.textContent = "Late";
     document.querySelector("form")!.append(late);
     await waitFor(() => expect(off(late)).toBe(true));
+  });
+
+  it("disables again a control a client component enables while offline", async () => {
+    fakeWorker();
+    online(false);
+    renderWithIntl(page());
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
+    const send = screen.getByRole("button", { name: "Send" }) as HTMLButtonElement;
+    send.disabled = false; // as React would, on a re-render with disabled={false}
+    await waitFor(() => expect(send.disabled).toBe(true));
+  });
+
+  it("unlocks a page reached inside the app from a cached one (it is fresh), and does not reload it once online", async () => {
+    fakeWorker({ status: { cached: true } });
+    const reload = vi.fn();
+    const at = (pathname: string) =>
+      vi.stubGlobal("location", { ...window.location, reload, href: `${window.location.origin}${pathname}`, pathname });
+    at(window.location.pathname);
+    let navigate = () => {};
+    function Shell() {
+      const [, setN] = useState(0);
+      navigate = () => setN((n) => n + 1);
+      return page();
+    }
+    renderWithIntl(<Shell />);
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(true));
+    // A client-side navigation to another page, fetched online: the same island, a new pathname.
+    at("/dev/engagements");
+    act(() => navigate());
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-offline")).toBe(false));
+    expect(off(screen.getByRole("button", { name: "Send" }))).toBe(false);
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it("back online, loads a page the worker answered from its cache again instead of unlocking it stale", async () => {

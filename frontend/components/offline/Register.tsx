@@ -18,6 +18,7 @@ const LOCKED = "data-offline-locked";
 export function Register({ hash, version }: { hash: string | null; version: string }) {
   const pathname = usePathname();
   const worker = useRef<Promise<ServiceWorker | null | undefined> | null>(null);
+  const fresh = useRef<() => void>(null);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -37,11 +38,22 @@ export function Register({ hash, version }: { hash: string | null; version: stri
       html.toggleAttribute("data-offline", down);
       lock(down);
       watch?.disconnect();
-      if (down) (watch = new MutationObserver(() => lock(true))).observe(html, { childList: true, subtree: true });
+      // A control a client component enables again is disabled again: "disabled" changes are watched too.
+      if (down)
+        (watch = new MutationObserver(() => lock(true))).observe(html, {
+          childList: true,
+          subtree: true,
+          attributeFilter: ["disabled"],
+        });
     };
     const goneOffline = () => offline(true);
     const backOnline = () => (cached ? location.reload() : offline(false));
     offline(!navigator.onLine);
+    // A page reached inside the app was fetched now: not the cached copy, so only the connection decides.
+    fresh.current = () => {
+      cached = false;
+      offline(!navigator.onLine);
+    };
     const sw = navigator.serviceWorker;
     // The worker handles its messages one at a time, in order: "user" lands before any "status" or "visit".
     worker.current = sw
@@ -69,8 +81,10 @@ export function Register({ hash, version }: { hash: string | null; version: stri
     };
   }, [hash, version]);
 
-  // A page reached inside the app loaded no page through the worker: it fetches and keeps it (if it may).
+  // A page reached inside the app loaded no page through the worker: it fetches and keeps it (if it may); and that page
+  // is fresh, not the cached one, so it is unlocked unless the browser is offline.
   useEffect(() => {
+    fresh.current?.();
     void worker.current?.then((active) => active?.postMessage({ type: "visit", url: location.href }));
   }, [pathname]);
 
