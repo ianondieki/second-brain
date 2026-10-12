@@ -36,6 +36,7 @@ from bridge.directory.router import router as directory_router
 from bridge.engagements.deadlines_router import router as deadlines_router
 from bridge.engagements.interest_router import router as interest_router
 from bridge.engagements.messages_router import router as messages_router
+from bridge.engagements.pipeline_router import router as pipeline_router
 from bridge.engagements.router import router as engagements_router
 from bridge.events.router import router as events_router
 from bridge.integrations.sms import sms_provider_from_settings
@@ -240,6 +241,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(engagements_router)
     app.include_router(messages_router)
     app.include_router(deadlines_router)
+    app.include_router(pipeline_router)
     app.include_router(plans_router)
     app.include_router(billing_router)
     app.include_router(interest_router)
