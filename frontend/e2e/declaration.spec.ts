@@ -176,6 +176,13 @@ test.describe("on the test clock", () => {
   test.skip(!process.env.E2E_TEST_CLOCK, "moves the shared clock past the window: run alone with E2E_TEST_CLOCK=1");
 
   test("day 11 refuses with declaration_window_closed and the action is gone", async ({ page, browser }, info) => {
+    // Once per stack: a window opens on the database clock (the first Tier-2 view's started_at) and closes on the
+    // shared clock, so after this scenario has moved the clock every later window is closed the moment it opens (the
+    // known clock-epoch residual, revision 0013). The second project would only meet that.
+    test.skip(
+      info.project.name !== "mobile-360",
+      "runs on the first project only: it moves the shared clock past the window",
+    );
     test.setTimeout(180_000);
     const signatory = await signInMember(browser, info, TELCO_A_MEMBERS.signatory);
     try {
