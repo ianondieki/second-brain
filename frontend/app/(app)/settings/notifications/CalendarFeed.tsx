@@ -63,6 +63,7 @@ export function CalendarFeed({
   const [busy, setBusy] = useState<Busy>(null);
   const [notice, setNotice] = useState<"" | "copied" | "copyFailed" | "failed" | "removed">("");
   const field = useRef<HTMLInputElement>(null);
+  const createButton = useRef<HTMLButtonElement>(null);
   const fieldId = useId();
   const noteId = useId();
 
@@ -75,11 +76,17 @@ export function CalendarFeed({
     if (result === null) return setNotice("failed");
     if (result === true) {
       setState({ kind: "removed" });
-      return setNotice("removed");
+      setNotice("removed");
+      // The button pressed is gone: focus goes to the one that takes its place, never to the page's start.
+      requestAnimationFrame(() => createButton.current?.focus());
+      return;
     }
     setState({ kind: "shown", url: result.url });
-    // The new link has the focus's attention: the field it is in.
-    requestAnimationFrame(() => field.current?.select());
+    // The new link has the focus's attention: the field it is in, selected for copying.
+    requestAnimationFrame(() => {
+      field.current?.focus();
+      field.current?.select();
+    });
   }
 
   async function copy(url: string) {
@@ -101,6 +108,7 @@ export function CalendarFeed({
           {state.kind === "none" ? <p className="text-ink-soft">{t("none")}</p> : null}
           <p>
             <button
+              ref={createButton}
               type="button"
               className={actionClass}
               aria-disabled={busy !== null || undefined}

@@ -43,6 +43,8 @@ describe("the calendar feed", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create a feed link" }));
     const field = await screen.findByRole("textbox", { name: "Feed link" });
     expect(calls.list).toEqual([{ method: "POST", path: "/api/me/calendar-feed", params: undefined }]);
+    // The new link takes the focus (selected, ready to copy).
+    await waitFor(() => expect(document.activeElement).toBe(field));
     expect((field as HTMLInputElement).value).toBe("https://wazo.example/api/calendar/tok1.ics");
     expect(field.hasAttribute("readonly")).toBe(true);
     expect(field.getAttribute("aria-describedby")).toBeTruthy();
@@ -83,7 +85,10 @@ describe("the calendar feed", () => {
       expect(screen.getByRole("status").textContent).toBe("The feed is removed. Its link no longer works."),
     );
     expect(screen.queryByRole("textbox")).toBeNull();
-    expect(screen.getByRole("button", { name: "Create a feed link" })).toBeTruthy();
+    // Focus moves to the button that took the pressed one's place, never back to the page's start.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Create a feed link" })),
+    );
     expect(calls.list.map((call) => call.method)).toEqual(["POST", "DELETE"]);
   });
 
