@@ -14,7 +14,8 @@ bound to nobody, so no feed row is readable to it) finds the live feed of an act
 feed, a still-active member). The request then binds that user (and organisation) for Row-Level Security, re-reads its
 own feed row and compares the stored hash with the computed one in constant time (``hmac.compare_digest``), counts the
 fetch against ``FETCHES_PER_HOUR`` per feed (the ``login_attempts`` ledger, keyed by an HMAC of the feed's id), reads
-the deadlines as that person and stamps ``last_fetched_at`` through ``app_calendar_feed_touch``.
+the deadlines as that person and stamps ``last_fetched_at`` through ``app_calendar_feed_touch``. The re-read trusts
+none of the lookup's values alone: the row must name the same user and organisation as well as hold the hash.
 """
 
 from __future__ import annotations
@@ -147,11 +148,18 @@ async def lookup(db: AsyncSession, digest: bytes) -> FeedRef | None:
 
 
 async def verify(db: AsyncSession, feed: FeedRef, digest: bytes) -> bool:
-    """With the session bound to the feed's user: their own live row still holds ``digest`` (constant time)."""
-    stored = await db.scalar(
-        select(CalendarFeed.token_hash).where(CalendarFeed.id == feed.feed_id, CalendarFeed.revoked_at.is_(None))
-    )
-    return stored is not None and hmac.compare_digest(stored, digest)
+    """With the session bound to the feed's user: their own live row is the feed the lookup named (the same user and
+    organisation) and still holds ``digest`` (constant time). None of the lookup's three values is trusted alone."""
+    row = (
+        await db.execute(
+            select(CalendarFeed.user_id, CalendarFeed.org_id, CalendarFeed.token_hash).where(
+                CalendarFeed.id == feed.feed_id, CalendarFeed.revoked_at.is_(None)
+            )
+        )
+    ).one_or_none()
+    if row is None or (row.user_id, row.org_id) != (feed.user_id, feed.org_id):
+        return False
+    return hmac.compare_digest(row.token_hash, digest)
 
 
 async def spend_fetch(db: AsyncSession, settings: Settings, feed: FeedRef) -> None:

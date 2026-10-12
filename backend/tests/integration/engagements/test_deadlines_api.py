@@ -16,13 +16,16 @@ from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy.ext.asyncio import AsyncEngine
+import pytest
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from bridge.config import get_settings
+from bridge.engagements import feeds
 from bridge.engagements.calendar import NAIROBI, add_business_days
 from bridge.engagements.policy import get_policy
 from bridge.events.calendar import public_host
 from bridge.models.enums import EngagementState
+from bridge.teams import limits
 from tests.integration.api import make_client
 from tests.integration.engagements import deadline_world as dw
 from tests.integration.engagements.api_world import (
@@ -300,6 +303,48 @@ async def test_a_feed_is_read_at_most_60_times_an_hour(owner_engine: AsyncEngine
         # a new URL is a new feed with its own count
         fresh = (await dev.post("/api/me/calendar-feed")).json()["url"]
         assert (await anon.get(fresh.removeprefix(settings.public_base_url.rstrip("/")))).status_code == 200
+
+
+async def test_a_feed_the_bound_read_does_not_confirm_is_404_and_spends_nothing(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bound re-read (``feeds.verify``) is the token's second check: when the lookup's answer is not the row the
+    feed's own user reads (another organisation or another user than the row's, or a feed revoked between the two
+    reads), the read answers the same 404, records no fetch in the ledger and stamps nothing."""
+    world = await build(owner_engine)
+    await open_engagement(app_engine, world)
+    settings = get_settings()
+    async with (
+        clients(app_engine, settings, world.developer) as (dev,),
+        make_client(app_engine, settings, ip="127.0.9.4") as anon,
+    ):
+        url = (await dev.post("/api/me/calendar-feed")).json()["url"]
+        path = url.removeprefix(settings.public_base_url.rstrip("/"))
+        live = "SELECT id FROM calendar_feeds WHERE user_id = :u AND revoked_at IS NULL"
+        feed_id = await dw.one(owner_engine, live, u=world.developer)
+
+        def answer(found: feeds.FeedRef) -> None:
+            async def lookup(db: AsyncSession, digest: bytes) -> feeds.FeedRef:
+                return found
+
+            monkeypatch.setattr(feeds, "lookup", lookup)
+
+        for forged in (
+            feeds.FeedRef(feed_id, world.developer, world.org),  # the developer's own feed bound to an organisation
+            feeds.FeedRef(feed_id, world.owner, None),  # another user's binding: their RLS hides the row
+        ):
+            answer(forged)
+            refused = await anon.get(path)
+            assert (refused.status_code, refused.json()["detail"]["code"]) == (404, "not_found"), forged
+            assert "set-cookie" not in refused.headers
+
+        assert (await dev.delete("/api/me/calendar-feed")).status_code == 204
+        answer(feeds.FeedRef(feed_id, world.developer, None))  # found live, revoked before the bound read
+        gone = await anon.get(path)
+        assert (gone.status_code, gone.json()["detail"]["code"]) == (404, "not_found")
+    ledger = limits.ledger_keys(settings.secret_key.get_secret_value(), feeds.FETCH_PURPOSE, feed_id).email
+    assert await dw.one(owner_engine, "SELECT count(*) FROM login_attempts WHERE email_digest = :d", d=ledger) == 0
+    assert await dw.one(owner_engine, "SELECT last_fetched_at FROM calendar_feeds WHERE id = :f", f=feed_id) is None
 
 
 async def test_feeds_are_audited_by_id_and_need_a_session(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
