@@ -250,6 +250,34 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+/**
+ * The hash of the person the session is for now, computed as the server computes the one it renders into the page
+ * (components/palette/PaletteSlot.tsx accountHash: SHA-256 of "wazo-recent|<user id>", hex, first 20): null when no
+ * one is signed in (401), undefined when that cannot be known (offline, a failed answer), then the page is trusted.
+ */
+async function liveHash() {
+  try {
+    const response = await fetch("/api/auth/me", {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.status === 401) return null;
+    const id = response.ok && response.type === "basic" ? (await response.json())?.user?.id : null;
+    if (typeof id !== "string") return undefined;
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`wazo-recent|${id}`));
+    return [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 20);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Pages that said they belong to someone the session is no longer for (a tab rendered before another sign-in). */
+const stale = new Set();
+
 /** The page language /offline was last fetched in for a person ({type: "user", lang}); this worker's lifetime only. */
 let offlineLang = null;
 
@@ -260,6 +288,17 @@ let offlineLang = null;
 async function answer(data, source, later) {
   if (!data || typeof data !== "object") return null;
   if (data.type === "user" && typeof data.hash === "string" && HASH.test(data.hash)) {
+    // A tab rendered for one person that wakes after someone else signed in (a background tab) must not take the
+    // cache over: its word is checked against the live session first. On a mismatch, or no session, nothing changes
+    // here, the page is told it is stale (status) and loads itself again; its visits are refused (never announced).
+    const live = await liveHash();
+    if (live !== undefined && live !== data.hash) {
+      if (source && source.id) {
+        stale.add(source.id);
+        announced.delete(source.id);
+      }
+      return { ok: false, stale: true };
+    }
     const name = `${PEOPLE}${data.hash}`;
     const created = !(await caches.has(name));
     const lang = typeof data.lang === "string" ? data.lang : "";
@@ -314,7 +353,7 @@ async function answer(data, source, later) {
     // Once per page load: a page later reached inside the same tab was fetched, not served from the cache.
     const id = source && source.id;
     const date = servedFromCache.get(id) || "";
-    return { cached: servedFromCache.delete(id), date };
+    return { cached: servedFromCache.delete(id), date, stale: stale.delete(id) };
   }
   return null;
 }

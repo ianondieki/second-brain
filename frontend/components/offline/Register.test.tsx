@@ -214,6 +214,34 @@ describe("the offline island", () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  it("loads itself again when the worker finds it stale (rendered for someone the session is no longer for)", async () => {
+    fakeWorker({ status: { cached: false, stale: true } });
+    const reload = vi.fn();
+    vi.stubGlobal("location", {
+      ...window.location,
+      reload,
+      href: window.location.href,
+      pathname: window.location.pathname,
+    });
+    renderWithIntl(page());
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(document.documentElement.hasAttribute("data-offline")).toBe(false);
+  });
+
+  it("does not reload a page the worker finds to be the signed-in person's", async () => {
+    const { told } = fakeWorker({ status: { cached: false, stale: false } });
+    const reload = vi.fn();
+    vi.stubGlobal("location", {
+      ...window.location,
+      reload,
+      href: window.location.href,
+      pathname: window.location.pathname,
+    });
+    renderWithIntl(page());
+    await waitFor(() => expect(told).toContainEqual(expect.objectContaining({ type: "visit" })));
+    expect(reload).not.toHaveBeenCalled();
+  });
+
   it("back online, loads a page the worker answered from its cache again instead of unlocking it stale", async () => {
     fakeWorker({ status: { cached: true } });
     const reload = vi.fn();

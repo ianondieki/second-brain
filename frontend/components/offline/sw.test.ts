@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { runInNewContext } from "node:vm";
@@ -13,8 +14,13 @@ const ORIGIN = "https://wazo.test";
 const SOURCE = readFileSync(join(process.cwd(), "public/sw.js"), "utf8");
 const ID = "0b8f4c1e-5a2d-4e7f-9c3b-1d2e3f4a5b6c";
 const ORG = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
-const ALICE = "a1b2c3d4e5f60718293a";
-const BRIAN = "b9c8d7e6f5a40312ab4c";
+/** A person's hash, as the server renders it (components/palette/PaletteSlot.tsx accountHash). */
+const hashOf = (id: string) => createHash("sha256").update(`wazo-recent|${id}`).digest("hex").slice(0, 20);
+const ALICE_ID = "0b8f4c1e-0000-4000-8000-00000000a11c";
+const BRIAN_ID = "0b8f4c1e-0000-4000-8000-0000000b41a2";
+const ALICE = hashOf(ALICE_ID);
+const BRIAN = hashOf(BRIAN_ID);
+const IDS: Record<string, string> = { [ALICE]: ALICE_ID, [BRIAN]: BRIAN_ID };
 const DAY = 24 * 60 * 60 * 1000;
 
 class FakeCache {
@@ -92,9 +98,28 @@ type Listener = (event: unknown) => void;
 function worker(version = "build-1") {
   const listeners = new Map<string, Listener>();
   const caches = new FakeStorage();
-  const network = { online: true, answers: new Map<string, Answer>(), hold: new Map<string, Promise<void>>() };
+  const network = {
+    online: true,
+    answers: new Map<string, Answer>(),
+    hold: new Map<string, Promise<void>>(),
+    /** The live session's user id for /api/auth/me: null signed out (401), undefined unknown (the request fails). */
+    session: undefined as string | null | undefined,
+    /** Each page's announcement signs its person in (true), or the session stays as set (a stale tab's test). */
+    followSession: true,
+  };
   const fetch = vi.fn(async (input: string | { url: string }) => {
     if (!network.online) throw new TypeError("Failed to fetch");
+    if (new URL(typeof input === "string" ? input : input.url, ORIGIN).pathname === "/api/auth/me") {
+      if (network.session === undefined) throw new TypeError("Failed to fetch");
+      const me =
+        network.session === null ? { detail: { code: "not_authenticated" } } : { user: { id: network.session } };
+      const response = new Response(JSON.stringify(me), {
+        status: network.session === null ? 401 : 200,
+        headers: { "content-type": "application/json" },
+      });
+      Object.defineProperty(response, "type", { value: "basic" });
+      return response;
+    }
     const hold = network.hold.get(new URL(typeof input === "string" ? input : input.url, ORIGIN).pathname);
     if (hold) await hold;
     const url = new URL(typeof input === "string" ? input : input.url, ORIGIN);
@@ -124,6 +149,8 @@ function worker(version = "build-1") {
     TypeError,
     Math,
     setTimeout,
+    crypto: globalThis.crypto,
+    TextEncoder,
   });
 
   async function fire(type: string, event: Record<string, unknown>) {
@@ -177,8 +204,10 @@ function worker(version = "build-1") {
     },
     async tell(data: unknown, source = { id: "client-1" }) {
       const said = data as { type?: string; hash?: unknown };
-      if (said?.type === "user" && typeof said.hash === "string" && /^[0-9a-f]{8,64}$/.test(said.hash))
+      if (said?.type === "user" && typeof said.hash === "string" && /^[0-9a-f]{8,64}$/.test(said.hash)) {
         state.person = said.hash;
+        if (network.followSession && IDS[said.hash]) network.session = IDS[said.hash];
+      }
       if (said?.type === "clear") state.person = null;
       let reply: unknown;
       await fire("message", { data, source, ports: [{ postMessage: (value: unknown) => (reply = value) }] });
@@ -194,6 +223,13 @@ function worker(version = "build-1") {
 }
 
 type Worker = ReturnType<typeof worker>;
+
+/** The paths the worker fetched, without its checks of the live session (/api/auth/me). */
+function fetched(w: Worker): string[] {
+  return w.fetch.mock.calls
+    .map(([input]) => new URL(typeof input === "string" ? input : input.url, ORIGIN).pathname)
+    .filter((path) => path !== "/api/auth/me");
+}
 
 async function signedIn(hash = ALICE, version?: string): Promise<Worker> {
   const w = worker(version);
@@ -219,9 +255,7 @@ describe("the service worker's install and versions", () => {
     const w = await signedIn();
     expect(await w.caches.named.get("offline-build-1")!.match("/offline")).toBeTruthy();
     // The page names two build files: neither is fetched for it (the pages' own requests keep them).
-    expect(
-      w.fetch.mock.calls.map(([input]) => new URL(typeof input === "string" ? input : input.url, ORIGIN).pathname),
-    ).toEqual([
+    expect(fetched(w)).toEqual([
       "/offline",
       "/offline", // fetched again when the shell says whose the cache is: the page in that person's language
     ]);
@@ -317,7 +351,7 @@ describe("what the service worker keeps", () => {
   ])("never intercepts %s (%o)", async (path, request) => {
     const w = await signedIn();
     expect(await w.request(path, request)).toBeUndefined();
-    expect(w.fetch).toHaveBeenCalledTimes(2); // the install's /offline and its refetch for the person only
+    expect(fetched(w)).toHaveLength(2); // the install's /offline and its refetch for the person only
   });
 
   it("never intercepts another origin", async () => {
@@ -341,9 +375,9 @@ describe("what the service worker keeps", () => {
     w.network.answers.set(`/dev/engagements/${ID}`, {
       body: '<html><h1>/_next/static/../../api/me/profile /_next/static/%2e%2e/%2e%2e/org/proposals/x/render</h1><script src="/_next/static/chunks/a.js"></script></html>',
     });
-    const before = w.fetch.mock.calls.length;
+    const before = fetched(w).length;
     await w.load(`/dev/engagements/${ID}`);
-    expect(w.fetch.mock.calls.length - before).toBe(1); // the page itself
+    expect(fetched(w).length - before).toBe(1); // the page itself
     expect(w.caches.named.get("static-build-1")?.entries.size ?? 0).toBe(0);
   });
 
@@ -569,10 +603,52 @@ describe("whose cache it is", () => {
     const w = await signedIn();
     let release!: () => void;
     w.network.hold.set("/offline", new Promise<void>((resolve) => (release = resolve)));
+    w.network.session = BRIAN_ID; // Brian has signed in
     expect(await w.reply({ type: "user", hash: BRIAN, lang: "sw" })).toEqual({ ok: true });
     expect(await w.reply({ type: "status" })).toMatchObject({ cached: false });
     expect(await w.reply({ type: "visit", url: `${ORIGIN}/dev/ideas` })).toEqual({ ok: false });
     release();
+  });
+
+  it("checks an announcement against the live session (the server's hash of the signed-in id)", async () => {
+    const w = await signedIn(ALICE); // accepted: the session is Alice's and her hash is computed as the server does
+    expect([...w.caches.named.keys()]).toContain(`trackers-${ALICE}`);
+    expect(
+      w.fetch.mock.calls.some(([input]) =>
+        String(typeof input === "string" ? input : input.url).endsWith("/api/auth/me"),
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores a stale tab: a page rendered for Alice that wakes after Brian signed in takes nothing over and reloads", async () => {
+    const w = await signedIn(BRIAN);
+    w.network.answers.set(`/dev/engagements/${ID}`, { body: "Brian's tracker" });
+    await w.load(`/dev/engagements/${ID}`);
+    expect(w.kept()).toEqual([`/dev/engagements/${ID}`]);
+    // The background tab, rendered for Alice before Brian signed in, now hydrates and speaks for Alice.
+    w.network.followSession = false;
+    expect(await w.tell({ type: "user", hash: ALICE }, { id: "old-tab" })).toEqual({ ok: false, stale: true });
+    expect([...w.caches.named.keys()].filter((name) => name.startsWith("trackers-"))).toEqual([`trackers-${BRIAN}`]);
+    expect(w.kept()).toEqual([`/dev/engagements/${ID}`]);
+    // Its status says stale (the island reloads it), once; its visits are refused (it never was announced).
+    expect(await w.tell({ type: "status" }, { id: "old-tab" })).toMatchObject({ stale: true });
+    expect(await w.tell({ type: "status" }, { id: "old-tab" })).toMatchObject({ stale: false });
+    const before = fetched(w).length;
+    expect(await w.tell({ type: "visit", url: `${ORIGIN}/dev/engagements/${ID}` }, { id: "old-tab" })).toEqual({
+      ok: false,
+    });
+    expect(fetched(w).length).toBe(before);
+  });
+
+  it("treats a page announced with no one signed in (401) as stale, and trusts it when the session cannot be read", async () => {
+    const w = await signedIn(ALICE);
+    w.network.followSession = false;
+    w.network.session = null;
+    expect(await w.tell({ type: "user", hash: BRIAN }, { id: "tab-2" })).toEqual({ ok: false, stale: true });
+    expect([...w.caches.named.keys()]).toContain(`trackers-${ALICE}`);
+    // Offline, or the API down: the page's own word is taken (a cached page of the person whose cache this is).
+    w.network.session = undefined;
+    expect(await w.tell({ type: "user", hash: ALICE }, { id: "tab-3" })).toEqual({ ok: true });
   });
 
   it("ignores a hash that is not one", async () => {
@@ -593,17 +669,17 @@ describe("a page reached inside the app ({type: visit})", () => {
 
   it("fetches nothing for any other page, and not again for a copy a minute old or less", async () => {
     const w = await signedIn();
-    const before = w.fetch.mock.calls.length;
+    const before = fetched(w).length;
     expect(await w.tell({ type: "visit", url: `${ORIGIN}/dev/engagements/${ID}/messages` })).toEqual({ ok: false });
     expect(await w.tell({ type: "visit", url: "https://elsewhere.test/dev/engagements" })).toEqual({ ok: false });
     expect(await w.tell({ type: "visit", url: `${ORIGIN}/dev/engagements?view=calendar` })).toEqual({ ok: false });
     expect(await w.tell({ type: "visit", url: `${ORIGIN}/org/engagements?view=board&org=${ORG}` })).toEqual({
       ok: false,
     });
-    expect(w.fetch.mock.calls.length).toBe(before);
+    expect(fetched(w).length).toBe(before);
     await w.load("/dev/engagements");
-    const after = w.fetch.mock.calls.length;
+    const after = fetched(w).length;
     await w.tell({ type: "visit", url: `${ORIGIN}/dev/engagements` });
-    expect(w.fetch.mock.calls.length).toBe(after);
+    expect(fetched(w).length).toBe(after);
   });
 });
