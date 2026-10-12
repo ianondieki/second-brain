@@ -15,6 +15,9 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 import { formatDay } from "@/lib/format";
 import type { Me } from "@/lib/auth/routing";
 
+import { ReceivedDeclaration } from "@/components/provenance/ReceivedDeclaration";
+import { DeclarationLine, TeamPanel } from "@/components/team/TeamPanel";
+
 import { Actions } from "./Actions";
 import { documentLinkClass } from "./document-link";
 import { LazyContactReveal } from "./lazy";
@@ -22,6 +25,7 @@ import { engagementDocument, engagementHistory, orgMembers } from "./data";
 import { Agreements, ContactPerson, Payments, Signatures } from "./Deal";
 import { Endorsements } from "./Endorsements";
 import { HistoryList } from "./HistoryList";
+import { IpNudge } from "./IpNudge";
 import {
   actionItems,
   DOCUMENT_KINDS,
@@ -90,14 +94,27 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
     side?.kind === "info" && side.question ? { body: side.question.body, date: formatDay(locale, side.question.at) } : null;
   const holdEnd = side?.kind === "hold" ? (side.hold?.resume_at ?? detail.due?.due_on ?? null) : null;
   const counterpart = detail.my_party === "developer" ? detail.org_name : detail.developer_name;
+  const org = detail.my_party === "org";
 
   return (
-    <ClientStrings strings={await clientStrings(["trackerActions"])}>
+    <ClientStrings
+      strings={await clientStrings(
+        // The organisation's sheets (team, declaration) read their own strings; the developer's tracker has neither.
+        org ? ["trackerActions", "teamSheet", "declarationSheet"] : ["trackerActions"],
+      )}
+    >
       <TrackerHeader detail={detail} basePath={basePath} query={query} />
 
       {/* The caller's buttons share the turn card with the next step. Actions stays mounted whatever is left to do (it
-          keeps its own "Done" status and focus after a refresh); its band hides while it is empty. */}
-      <TurnCard detail={detail} now={now}>
+          keeps its own "Done" status and focus after a refresh); its band hides while it is empty. The organisation's
+          team line sits under the banner and its declaration line under the buttons (P27; never on the developer's
+          tracker, D-68); the developer's IP note sits under theirs. */}
+      <TurnCard
+        detail={detail}
+        now={now}
+        strip={org ? <TeamPanel detail={detail} myUserId={me.user.id} /> : null}
+        footer={org ? <DeclarationLine detail={detail} /> : <IpNudge detail={detail} />}
+      >
         <Actions
           engagementId={detail.id}
           lockVersion={detail.lock_version}
@@ -127,6 +144,9 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
         />
         </div>
       ) : null}
+
+      {/* An organisation's prior-knowledge declaration on the developer's proposal, as the developer reads it. */}
+      {org ? null : <ReceivedDeclaration detail={detail} />}
 
       <TrackerSpine detail={detail} history={history} />
 
