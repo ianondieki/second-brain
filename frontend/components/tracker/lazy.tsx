@@ -60,8 +60,8 @@ export function LazyContactReveal(props: ComponentProps<typeof ContactRevealChun
 // The P27 parts behind a button (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04): the organisation's Team sheet and its
 // prior-knowledge declaration, and the developer's dismissal of the IP note. The server draws the line and the
 // button's words; the part's chunk is fetched when the pointer reaches the button or it takes focus, and drawn when it
-// is pressed (pressed again, drawn anew). Closing gives focus back to the button (or, once the change removed it, to
-// the element `after` names) and refreshes the tracker when something changed.
+// is pressed (pressed again, drawn anew). Closing gives focus back to the button and refreshes the tracker when
+// something changed (a part that removes its own button moves focus itself: provenance/focus-line.ts).
 const PARTS = {
   team: () => import("@/components/team/TeamSheet").then((m) => m.TeamSheet),
   declaration: () => import("@/components/provenance/DeclarationSheet").then((m) => m.DeclarationSheet),
@@ -77,14 +77,11 @@ export function PartButton<K extends PartName>({
   part,
   label,
   className,
-  after,
   props,
 }: {
   part: K;
   label: string;
   className?: string;
-  /** The id to focus when the change removed the button itself (the declaration's line). */
-  after?: string;
   props: PartProps<K>;
 }) {
   const [shown, show] = useState(0);
@@ -95,9 +92,7 @@ export function PartButton<K extends PartName>({
   function close(changed: boolean) {
     show(0);
     document.getElementById(id)?.focus();
-    if (!changed) return;
-    router.refresh();
-    if (after) setTimeout(() => document.getElementById(id) || document.getElementById(after)?.focus(), 1500);
+    if (changed) router.refresh();
   }
   return (
     <>
