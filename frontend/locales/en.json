@@ -2,6 +2,7 @@
   "_meta": {
     "reviewP26a": "[[COPY-REVIEW]] P26-A (REQ-TRACK-03, REQ-UX-02): countdown.clockDays, countdown.clockHours, countdown.clockMinutes (the live deadline clock, one message per largest unit, each figure and unit word tagged (f, u), so each language sets the order and spacing; a leading unit that is zero is not drawn, on the engagement cards of both lists, Home's Needs-you cards and the tracker's figure panel)",
     "reviewP27f": "[[COPY-REVIEW]] P27-F (REQ-UX-08; D-69): offline.banner (the banner over a page shown from this device's copy while offline; {time} is when that copy was made, in Nairobi time), shell.install (the account menu's entry where the browser offers installing), offline.* (the /offline page: one sentence and \"Try again\"; offline.kept shows only when this device keeps the portal's Engagements list), profileSettings.dataSaver, profileSettings.dataSaverExplain, notificationSettings.dataTitle (the data-saver switch)",
+    "reviewP27clock": "[[COPY-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"in 6 days 14 hours 23 minutes\"), not \"14 h 23 min\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP25c2": "[[COPY-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67): portal.* (the eyebrows saying where you are, the organisation portal's, the console's and the signed-out screens' new lines: portal.eyebrow.*, portal.settings.*, portal.proposal.means (the NDA step's second column heading; the step's own lead and the viewer-logging notice stay verbatim), portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry (\"Try again\" when the fresh-code form cannot be fetched), adminResearch.stepUp.loading, briefForm.preview.* (the live preview of how a Brief reads on Discover, mirroring discover.brief* and problem.label.org_brief)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
     "reviewP15f": "[[COPY-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.*; adminModeration.reason.* name the pre-screen's reason codes (bridge/proposals/prescreen.py, docs/spec/06 6.12); E0/E1/E2 follow docs/spec/03",
@@ -4095,14 +4096,10 @@
     "failed": "Could not remove them. Try again."
   },
   "countdown": {
-    "days": "{days, plural, one {# day} other {# days}} {hours} h {minutes} min",
-    "hours": "{hours} h {minutes} min",
-    "minutes": "{minutes} min",
     "clockDays": "<f>{days}</f><u> d</u> <f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
     "clockHours": "<f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
     "clockMinutes": "<f>{minutes}</f><u> min</u>",
     "in": "in {time}",
-    "dueIn": "Due {date} · in {time}",
     "closesIn": "Proposals close in {time}",
     "at": "{date}, {time} EAT"
   },

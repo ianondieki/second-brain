@@ -55,7 +55,9 @@ afterEach(() => {
 describe("Home's Next deadline tile", () => {
   it("says the time left as its meta line, the business days in its title", async () => {
     await home([mine()]);
-    expect(tile().textContent).toBe("Next deadline16 Octin 6 days 14 h 23 min");
+    // P27: the sentence clock on the page's ticker, its units the language's own words.
+    expect(tile().textContent).toBe("Next deadline16 Octin 6 days 14 hours 23 minutes");
+    expect(tile().querySelector("[data-clock]")?.getAttribute("data-clock")).toBe("open");
     expect(tile().getAttribute("title")).toBe("in 4 business days");
     expect(tile().querySelector("time")?.getAttribute("dateTime")).toBe("P6DT14H23M");
     expect(tile().querySelector("time")?.getAttribute("title")).toBe("16 Oct 2026, 23:59 EAT");

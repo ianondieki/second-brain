@@ -8,6 +8,7 @@ import { ProblemStart } from "@/components/problem/ProblemStart";
 import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
 import { BackLink } from "@/components/ui/BackLink";
+import { ClockTicker } from "@/components/ui/ClockTicker";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { appNow, requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
@@ -49,6 +50,8 @@ export default async function ProblemPage({ params }: PageProps<"/problems/[id]"
               developer ? <ProblemStart problem={problem} /> : undefined
             }
           />
+          {/* The Brief's closing time ticks from the page's one clock ticker (P27), after it. */}
+          <ClockTicker />
         </>
       ) : (
         <>

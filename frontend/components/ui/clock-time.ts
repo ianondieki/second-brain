@@ -1,6 +1,5 @@
-// The arithmetic the deadline clocks share (P23-3, P26): plain functions and constants, no directive, so the server
-// components (ClockFigures, DeadlineClock) and the client hook (useAppClock.ts) import the same values. The page's
-// ticker (ClockTicker.tsx) repeats it in its inline script.
+// The arithmetic the deadline clocks share (P23-3, P26): plain functions and constants for the server components
+// (ClockFigures, DeadlineClock). The page's ticker (ClockTicker.tsx) repeats it in its script.
 
 export const MINUTE = 60_000;
 export const DAY = 1_440 * MINUTE;

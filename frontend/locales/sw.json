@@ -2,6 +2,7 @@
   "_meta": {
     "reviewP26a": "[[COPY-REVIEW]] [[SW-REVIEW]] P26-A (REQ-TRACK-03, REQ-UX-02), rasimu ya Kiswahili: countdown.clockDays, countdown.clockHours, countdown.clockMinutes (saa ya mwisho: ujumbe mmoja kwa kila kipimo kikubwa; tarakimu na neno la kipimo zimewekewa lebo (f, u), hivyo kila lugha inaamua mpangilio na nafasi)",
     "reviewP27f": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-F (REQ-UX-08; D-69): shell.install, offline.*, profileSettings.dataSaver, profileSettings.dataSaverExplain, notificationSettings.dataTitle (rasimu ya Kiswahili)",
+    "reviewP27clock": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"baada ya siku 6 saa 14 dakika 23\"), not \"dak 23\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP25c2": "[[COPY-REVIEW]] [[SW-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: portal.* (vichwa vidogo vya mahali ulipo, mistari mipya ya lango la shirika, dashibodi ya wafanyakazi na kurasa za kuingia: portal.eyebrow.*, portal.settings.*, portal.proposal.means, portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry, adminResearch.stepUp.loading, briefForm.preview.* (onyesho la moja kwa moja la jinsi Brief inavyosomeka kwenye Gundua)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack) [[SW-REVIEW]] draft Swahili",
     "reviewP15f": "[[COPY-REVIEW]] [[SW-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.* (rasimu ya Kiswahili)",
@@ -4095,14 +4096,10 @@
     "failed": "Imeshindikana kumwondoa. Jaribu tena."
   },
   "countdown": {
-    "days": "siku {days} saa {hours} dak {minutes}",
-    "hours": "saa {hours} dak {minutes}",
-    "minutes": "dak {minutes}",
     "clockDays": "<u>siku </u><f>{days}</f> <u>saa </u><f>{hours}</f> <u>dak </u><f>{minutes}</f>",
     "clockHours": "<u>saa </u><f>{hours}</f> <u>dak </u><f>{minutes}</f>",
     "clockMinutes": "<u>dak </u><f>{minutes}</f>",
     "in": "baada ya {time}",
-    "dueIn": "Inatakiwa {date} · baada ya {time}",
     "closesIn": "Mapendekezo yatafungwa baada ya {time}",
     "at": "{date}, {time} EAT"
   },
