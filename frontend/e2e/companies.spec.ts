@@ -48,8 +48,8 @@ test.describe("a signed-in developer", () => {
       await expect(row.locator("[data-chip]")).toHaveCount(0);
       await expect(row.locator("img:not([alt=''])")).toHaveCount(0);
     }
-    // Each niche section says how many organisations it holds.
-    await expect(page.locator("main section[data-niche]").first()).toContainText(/\d+ organisations?/);
+    // The whole directory runs to more than one page: a section's count would be this page's only, so none is said.
+    await expect(page.locator("main section[data-niche]").first()).not.toContainText(/\d+ organisations?/);
     await checkScreen(page, { strict: true });
   });
 
@@ -74,6 +74,8 @@ test.describe("a signed-in developer", () => {
     await expect(page.getByText("Filters (1 chosen)")).toBeVisible();
     expect(await rows(page).count()).toBeGreaterThan(0);
     for (const row of await rows(page).all()) await expect(row.locator("p").first()).toContainText("Nairobi");
+    // One county's organisations fit one page: each niche section says how many it holds.
+    await expect(page.locator("main section[data-niche]").first()).toContainText(/\d+ organisations?/);
     await checkScreen(page, { strict: true });
 
     await page.getByRole("link", { name: "Clear filters" }).click();

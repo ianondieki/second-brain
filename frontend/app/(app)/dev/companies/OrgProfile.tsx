@@ -20,12 +20,12 @@ import { VerificationBadge } from "./VerificationBadge";
 const IDEAS_PATH = "/dev/ideas";
 
 /**
- * One organisation's page (P26): the HQ county's photograph as the page's band with the county named on it (the
- * niche's where the county has none, unless it shows a named organisation's premises; the lattice otherwise; decorative, never a logo; fetched at once, as the
- * page's LCP), the monogram on its edge, the name in Fraunces, type and county, the badge verbatim and, for an E0
- * listing, what a pitch to it means (the held-tag sentence's shape, said before any pitch); the screen's one primary
- * action (problems in its first niche on Discover) and a way to pitch an idea; the facts as tiles; its niches as links
- * to Discover. Server-rendered, no script.
+ * One organisation's page (P26): the HQ county's photograph as the page's band with the county named on it (the niche's
+ * where the county has none, unless it shows a named organisation's premises; the lattice otherwise; decorative, never
+ * a logo; fetched at once, as the page's LCP), the monogram on its edge, the name in Fraunces, type and county, the
+ * badge verbatim and, for an E0 listing, what a pitch to it means (the held-tag sentence's shape, said before any
+ * pitch); the screen's one primary action (problems in its first niche on Discover) and a way to pitch an idea; the
+ * facts as tiles; its niches as links to Discover. Server-rendered, no script.
  */
 export function OrgProfile({ org, back }: { org: OrgCard; back: string }) {
   const t = useTranslations("companies");

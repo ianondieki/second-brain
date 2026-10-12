@@ -23,11 +23,11 @@ export interface OrgTileProps {
 
 /**
  * One organisation in the directory as a card (P26): the photograph of its place (its HQ county's, else its niche's
- * unless that shows a named organisation's premises, else the lattice; decorative, the county is named in the meta line), its monogram on the band's edge (initials in the
- * display face, never a logo: docs/spec/04 principle 4), its name in Fraunces as the card's one link, the org type and
- * county, the verification badge verbatim as the card's one chip (docs/spec/07 item 2), and the response record when
- * the API sends one (E2 with enough history). A list item of four rows the grid shares (subgrid), so a row of cards
- * lines up its names, meta lines, badges and records.
+ * unless that shows a named organisation's premises, else the lattice; decorative, the county is named in the meta
+ * line), its monogram on the band's edge (initials in the display face, never a logo: docs/spec/04 principle 4), its
+ * name in Fraunces as the card's one link, the org type and county, the verification badge verbatim as the card's one
+ * chip (docs/spec/07 item 2), and the response record when the API sends one (E2 with enough history). A list item of
+ * four rows the grid shares (subgrid), so a row of cards lines up its names, meta lines, badges and records.
  */
 export function OrgTile({ org, filters = {}, groupNiche, band }: OrgTileProps) {
   const t = useTranslations("companies");

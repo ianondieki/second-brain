@@ -449,8 +449,9 @@ describe("DirectoryResults", () => {
       { photo: null, position: "center" },
       { photo: null, position: "bottom" },
     ]);
-    // The same for the other named premises: Education's campus, the public sector's city hall, health's dispensary.
-    for (const slug of ["higher-education", "county-government", "health"]) {
+    // The same for the other named premises: Education's campus, the public sector's city hall, health's dispensary,
+    // energy's wind farm.
+    for (const slug of ["higher-education", "county-government", "health", "energy"]) {
       expect(sectionBands([kajiado(slug)], slug)[0]!.photo).toBeNull();
     }
   });
