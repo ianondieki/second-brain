@@ -3,6 +3,7 @@ import {
   type APIRequestContext,
   type Browser,
   type BrowserContext,
+  type BrowserContextOptions,
   type Page,
   type TestInfo,
 } from "@playwright/test";
@@ -64,8 +65,14 @@ async function demoCode(email: string): Promise<string> {
 }
 
 /** Signs a seeded member in on a new browser context (the test's project's device), through the API. */
-export async function signInMember(browser: Browser, info: TestInfo, seat: Seat, orgName = TELCO_A): Promise<Member> {
-  const context: BrowserContext = await browser.newContext({ ...info.project.use });
+export async function signInMember(
+  browser: Browser,
+  info: TestInfo,
+  seat: Seat,
+  orgName = TELCO_A,
+  options: BrowserContextOptions = {},
+): Promise<Member> {
+  const context: BrowserContext = await browser.newContext({ ...info.project.use, ...options });
   const page = await context.newPage();
   const request = page.request;
   const login = await request.post("/api/auth/login", {
