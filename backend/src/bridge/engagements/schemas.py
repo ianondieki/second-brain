@@ -26,7 +26,9 @@ from bridge.models.enums import (
     GrantSource,
     IpTerms,
     MilestoneState,
+    OrgRole,
     PaymentMethod,
+    RecommendationStance,
     SignatureDocumentKind,
     StepUpMethod,
 )
@@ -308,6 +310,101 @@ class EngagementDetail(EngagementSummary):
         description="Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the"
         " side-state rules count from",
     )
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Team triage (REQ-ENG-15, D-68; docs/spec/03 ``reviewer``: "may Recommend internally without changing state"). The
+# organisation's own: on organisation-side responses only, never on a developer's.
+# ---------------------------------------------------------------------------------------------------------------------
+
+RAW_TEXT_MAX_CHARS = 1000  # a recommendation's note or an evidence title before trimming: longer is refused unread
+
+
+class TeamPerson(BaseModel):
+    """A member of the organisation as the team sheet names them ("Former member" once their name is not readable)."""
+
+    user_id: UUID
+    display_name: str
+
+
+class StanceCounts(BaseModel):
+    """How many of the organisation's members recommend each stance on the engagement (the header's tally)."""
+
+    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True, serialize_by_alias=True)
+
+    pursue: int = Field(ge=0)
+    pass_: int = Field(ge=0, alias="pass")
+    discuss: int = Field(ge=0)
+
+
+class MyRecommendationOut(BaseModel):
+    """The caller's own recommendation on the engagement."""
+
+    stance: RecommendationStance
+    note: str | None
+
+
+class TeamFacts(BaseModel):
+    """The organisation's triage of one engagement, as one of its members reads it (D-68: never a developer)."""
+
+    assignee: TeamPerson | None = Field(description="The member the engagement is assigned to; null when nobody")
+    recommendations: StanceCounts
+    mine: MyRecommendationOut | None = Field(description="The caller's own recommendation; null when they made none")
+
+
+class TeamMemberOut(TeamPerson):
+    role: OrgRole = Field(description="The member's first role of owner, admin, signatory and reviewer")
+
+
+class RecommendationOut(BaseModel):
+    """One member's internal recommendation: plain text, rendered as text; members of the organisation only."""
+
+    user_id: UUID
+    display_name: str
+    stance: RecommendationStance
+    note: str | None
+    updated_at: datetime
+
+
+class TeamOut(BaseModel):
+    """The team sheet of one engagement (members of its organisation only)."""
+
+    engagement_id: UUID
+    members: list[TeamMemberOut] = Field(
+        description="The members the engagement may be assigned to: active owners, admins, signatories and reviewers"
+    )
+    assignee: TeamPerson | None
+    recommendations: list[RecommendationOut] = Field(description="Every member's recommendation, newest first")
+
+
+class AssigneeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID | None = Field(
+        description="The member to assign (an owner, admin, reviewer or signatory of the organisation); null unassigns"
+    )
+
+
+class RecommendationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stance: RecommendationStance
+    note: str | None = Field(
+        default=None,
+        max_length=RAW_TEXT_MAX_CHARS,
+        description="One line of plain text, at most 200 characters once trimmed; empty or null for none. Members of"
+        " the organisation read it; the developer never does",
+    )
+
+
+class OrgEngagementSummary(EngagementSummary):
+    """An engagement in the organisation's list: the summary and the organisation's own triage."""
+
+    team: TeamFacts | None = Field(default=None, description="The organisation's triage (always sent to a member)")
+
+
+class OrgEngagementList(BaseModel):
+    items: list[OrgEngagementSummary]
 
 
 class HistoryEventOut(BaseModel):
