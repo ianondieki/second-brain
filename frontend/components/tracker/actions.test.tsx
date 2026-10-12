@@ -88,7 +88,9 @@ describe("the action buttons", () => {
     expect(runImpl).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Withdraw" }));
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Withdraw" })));
-    expect(runImpl).toHaveBeenCalledWith(expect.objectContaining({ path: "/api/engagements/{engagement_id}/withdraw" }));
+    expect(runImpl).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "/api/engagements/{engagement_id}/withdraw" }),
+    );
   });
 
   it("puts a milestone's number on its button and sends its id", async () => {
@@ -257,7 +259,13 @@ describe("forms for commands with a body", () => {
     expect(runImpl).toHaveBeenCalledWith({
       path: "/api/engagements/{engagement_id}/record-payment",
       params: { engagement_id: engagement.id },
-      body: { amount_kes_minor: 125_000_000, method: "mpesa", reference: "QK12ABC", paid_on: "2026-09-28", lock_version: 20 },
+      body: {
+        amount_kes_minor: 125_000_000,
+        method: "mpesa",
+        reference: "QK12ABC",
+        paid_on: "2026-09-28",
+        lock_version: 20,
+      },
     });
   });
 
@@ -279,7 +287,14 @@ describe("forms for commands with a body", () => {
       ip_terms: "revenue_share",
       deemed_acceptance_days: 0,
       exclusivity: null,
-      milestones: [{ deliverable: "Pilot at two co-ops", amount_kes_minor: 25_000_000, due_date: "2026-10-30", review_window_bd: null }],
+      milestones: [
+        {
+          deliverable: "Pilot at two co-ops",
+          amount_kes_minor: 25_000_000,
+          due_date: "2026-10-30",
+          review_window_bd: null,
+        },
+      ],
       lock_version: 8,
     });
   });
@@ -299,7 +314,13 @@ describe("forms for commands with a body", () => {
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Decline" })));
     expect(runImpl.mock.calls[0][0]).toMatchObject({
       path: "/api/engagements/{engagement_id}/decline",
-      body: { reason: "OTHER", other_text: "Too early for us.", internal_start_date: null, attested: false, lock_version: 4 },
+      body: {
+        reason: "OTHER",
+        other_text: "Too early for us.",
+        internal_start_date: null,
+        attested: false,
+        lock_version: 4,
+      },
     });
     expect(screen.getByRole("alert").textContent).toContain("Explain the reason in more detail.");
     expect(screen.getByLabelText("Explain the reason")).toBeTruthy();
@@ -318,7 +339,9 @@ describe("forms for commands with a body", () => {
     renderActions(orgReview());
     fireEvent.click(screen.getByRole("button", { name: "Decline" }));
     await screen.findByLabelText("Reason");
-    fireEvent.click(within(document.querySelector("[data-command-form]") as HTMLElement).getByRole("button", { name: "Decline" }));
+    fireEvent.click(
+      within(document.querySelector("[data-command-form]") as HTMLElement).getByRole("button", { name: "Decline" }),
+    );
     expect(screen.getByText("Fill in this field.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "BUDGET" } });
     expect(screen.queryByText("Fill in this field.")).toBeNull();
@@ -326,7 +349,11 @@ describe("forms for commands with a body", () => {
 
   it("starts the contact-by date on the platform's day the API sends, not the browser's", async () => {
     const engagement = detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["approve"], lock_version: 5 });
-    renderActions(engagement, { members: [{ user_id: "u-rita", display_name: "Rita Wanjiru" }], myUserId: "u-rita", today: "2031-03-04" });
+    renderActions(engagement, {
+      members: [{ user_id: "u-rita", display_name: "Rita Wanjiru" }],
+      myUserId: "u-rita",
+      today: "2031-03-04",
+    });
     fireEvent.click(screen.getByRole("button", { name: "Approve to proceed (non-binding)" }));
     const by = (await screen.findByLabelText("Contact by")) as HTMLInputElement;
     expect(by.value).toBe("2031-03-04");
@@ -334,7 +361,12 @@ describe("forms for commands with a body", () => {
   });
 
   it("approves naming a contact person from the organisation's members", async () => {
-    const engagement = detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["approve", "decline"], lock_version: 5 });
+    const engagement = detail({
+      my_party: "org",
+      state: "UNDER_REVIEW",
+      actions: ["approve", "decline"],
+      lock_version: 5,
+    });
     const { runImpl } = renderActions(engagement, {
       members: [
         { user_id: "u-rita", display_name: "Rita Wanjiru" },
@@ -360,14 +392,21 @@ describe("the calls", () => {
   it("send commands through the CSRF-aware typed client", async () => {
     const seen: Request[] = [];
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(new URL(String(input instanceof Request ? input.url : input), "http://web.test"), init);
+      const request = new Request(
+        new URL(String(input instanceof Request ? input.url : input), "http://web.test"),
+        init,
+      );
       seen.push(input instanceof Request ? input : request);
       if (request.url.endsWith("/api/auth/csrf")) return Response.json({ csrf_token: "tok" });
       return Response.json({}, { status: 200 });
     });
     const client = createApiClient({ baseUrl: "http://web.test", fetch: fetchImpl });
     const outcome = await runCommand(
-      { path: "/api/engagements/{engagement_id}/sign-nda", params: { engagement_id: "e 1" }, body: { lock_version: 3 } },
+      {
+        path: "/api/engagements/{engagement_id}/sign-nda",
+        params: { engagement_id: "e 1" },
+        body: { lock_version: 3 },
+      },
       client,
     );
     expect(outcome).toEqual({ ok: true });
@@ -379,7 +418,10 @@ describe("the calls", () => {
 
   it("settle a thrown fetch as a network refusal", async () => {
     const client = createApiClient({ fetch: async () => Promise.reject(new TypeError("offline")) });
-    const outcome = await runCommand({ path: "/api/engagements/{engagement_id}/deliver", params: { engagement_id: "e1" }, body: { lock_version: 1 } }, client);
+    const outcome = await runCommand(
+      { path: "/api/engagements/{engagement_id}/deliver", params: { engagement_id: "e1" }, body: { lock_version: 1 } },
+      client,
+    );
     expect(outcome).toEqual({ ok: false, refusal: "network", status: 0 });
   });
 });
@@ -392,9 +434,13 @@ describe("the contact reveal", () => {
     }));
     renderWithIntl(<ContactReveal engagementId="e1" revealImpl={revealImpl} />);
     expect(revealImpl).not.toHaveBeenCalled();
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Show the developer's contact details" })));
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Show the developer's contact details" })),
+    );
     expect(revealImpl).toHaveBeenCalledWith("e1");
-    expect(screen.getByRole("link", { name: "achieng@example.com" }).getAttribute("href")).toBe("mailto:achieng@example.com");
+    expect(screen.getByRole("link", { name: "achieng@example.com" }).getAttribute("href")).toBe(
+      "mailto:achieng@example.com",
+    );
   });
 
   it("moves focus to the details that replace the button (WCAG 2.4.3)", async () => {
@@ -403,7 +449,9 @@ describe("the contact reveal", () => {
       contact: { developer_name: "Achieng Otieno", email: "achieng@example.com", phone: null },
     }));
     renderWithIntl(<ContactReveal engagementId="e1" revealImpl={revealImpl} />);
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Show the developer's contact details" })));
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Show the developer's contact details" })),
+    );
     const details = document.querySelector("[data-contact-revealed]");
     expect(details).not.toBeNull();
     expect(document.activeElement).not.toBe(document.body);
@@ -575,7 +623,9 @@ describe("the side states' sheets", () => {
     const sentence =
       "Contact details stay out of the tracker until first contact is made; please remove the email, phone number or link.";
     expect(field.getAttribute("aria-invalid")).toBe("true");
-    const described = (field.getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent);
+    const described = (field.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent);
     expect(described).toContain(sentence);
     expect(document.activeElement).toBe(field);
     expect(within(dialog).queryByRole("alert")).toBeNull(); // said once, on the field
@@ -605,7 +655,10 @@ describe("the side states' sheets", () => {
   });
 
   it.each([
-    [{ ok: false, refusal: "network", status: 0 } as const, "We could not reach the server; nothing was sent. Try again."],
+    [
+      { ok: false, refusal: "network", status: 0 } as const,
+      "We could not reach the server; nothing was sent. Try again.",
+    ],
     [{ ok: false, refusal: "generic", status: 503 } as const, "Nothing was sent. Try again in a moment."],
   ])("keeps a sheet open with what was typed on a failed send (%j), to try again", async (outcome, words) => {
     const runImpl = vi.fn<Run>(async () => outcome);
@@ -653,7 +706,9 @@ describe("the side states' sheets", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
     const dialog = await sheet();
     expect(dialog.textContent).toContain("Nothing is due while it is on hold.");
-    expect(dialog.textContent).toContain("at most 60 days ahead. All the holds of one engagement together may last 60 days.");
+    expect(dialog.textContent).toContain(
+      "at most 60 days ahead. All the holds of one engagement together may last 60 days.",
+    );
     const reason = within(dialog).getByLabelText("Reason");
     expect(reason.tagName).toBe("INPUT"); // one line
     expect(reason.getAttribute("maxlength")).toBe("500");
@@ -691,12 +746,21 @@ describe("the side states' sheets", () => {
   });
 
   it("resumes early with a reason, saying when the hold was due to end", async () => {
-    const held = detail({ state: "ON_HOLD", paused_from: "NEGOTIATION", actions: ["resume", "withdraw"], awaiting: [], whose_turn: [], lock_version: 12 });
+    const held = detail({
+      state: "ON_HOLD",
+      paused_from: "NEGOTIATION",
+      actions: ["resume", "withdraw"],
+      awaiting: [],
+      whose_turn: [],
+      lock_version: 12,
+    });
     const { runImpl } = renderActions(held, { resumeOn: "21 Oct 2026" });
     fireEvent.click(screen.getByRole("button", { name: "Resume now" }));
     const dialog = await sheet();
     expect(dialog.textContent).toContain("It was due to resume on 21 Oct 2026.");
-    fireEvent.change(within(dialog).getByLabelText("Reason for resuming now"), { target: { value: "Budget approved early" } });
+    fireEvent.change(within(dialog).getByLabelText("Reason for resuming now"), {
+      target: { value: "Budget approved early" },
+    });
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Resume now" })));
     expect(runImpl.mock.calls[0][0]).toEqual({
       path: "/api/engagements/{engagement_id}/resume",
@@ -825,7 +889,10 @@ describe("the side states' sheets", () => {
 
   it("counts the hold's range from the API's today, a platform day moved ahead of the real one", async () => {
     // A test clock 30 days on: the API's today, not the browser's, bounds the date.
-    const { runImpl } = renderActions(orgReviewing(), { today: "2026-11-01", limits: { questions_left: 2, holds_left: 2, hold_days_left: 45 } });
+    const { runImpl } = renderActions(orgReviewing(), {
+      today: "2026-11-01",
+      limits: { questions_left: 2, holds_left: 2, hold_days_left: 45 },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
     const dialog = await sheet();
     const date = within(dialog).getByLabelText("Resumes on") as HTMLInputElement;
@@ -917,7 +984,10 @@ describe("Done waits for the refreshed tracker", () => {
   it("says Working… inside a sheet, the page behind it being inert", async () => {
     let settle: (outcome: CommandOutcome) => void = () => {};
     const runImpl = vi.fn<Run>(() => new Promise<CommandOutcome>((resolve) => (settle = resolve)));
-    renderActions(detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["pause"], lock_version: 3 }), { runImpl, today: "2026-10-02" });
+    renderActions(detail({ my_party: "org", state: "UNDER_REVIEW", actions: ["pause"], lock_version: 3 }), {
+      runImpl,
+      today: "2026-10-02",
+    });
     fireEvent.click(screen.getByRole("button", { name: "Pause this engagement" }));
     const dialog = (await screen.findByRole("dialog")) as HTMLDialogElement;
     const live = dialog.querySelector("[data-working]")!;
@@ -940,4 +1010,3 @@ describe("Done waits for the refreshed tracker", () => {
     expect(screen.getByRole("button", { name: "Start the review" }).hasAttribute("aria-disabled")).toBe(false);
   });
 });
-
