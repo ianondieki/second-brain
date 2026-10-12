@@ -403,7 +403,8 @@ function declScene(browser: Browser): Promise<{ declOrg: string; id: string }> {
     try {
       const org = await signUpOrg(orgContext.request, { orgName: "Maziwa Bora Dairies Limited" });
       const dev = await pitchFromDeveloper(devContext.request, org.orgId, { title: TEASER.title });
-      await viewFullProposal({ orgId: org.orgId, request: orgContext.request }, await proposalOf(devContext.request, dev.engagementId));
+      const proposalId = await proposalOf(devContext.request, dev.engagementId);
+      await viewFullProposal({ orgId: org.orgId, request: orgContext.request }, proposalId);
       const dir = join(__dirname, "..", "test-results", "design-shots");
       mkdirSync(dir, { recursive: true });
       const declOrg = join(dir, "state-declOrg.json");
@@ -1157,7 +1158,12 @@ for (const name of ["companies", "company", "home", "dev-engagements", "tracker"
 // nothing sent), into docs/demo/screenshots/p27/ (SHOT_SET=p27).
 SHOTS.push(
   {
-    name: "team-sheet", set: "p27", path: "/org/engagements", who: "org", viewportOnly: true, prepare: async (page) => {
+    name: "team-sheet",
+    set: "p27",
+    path: "/org/engagements",
+    who: "org",
+    viewportOnly: true,
+    prepare: async (page) => {
       const id = await submittedAtTelcoA(page);
       if (!id) return false;
       await page.goto(`/org/engagements/${id}`);
@@ -1166,7 +1172,12 @@ SHOTS.push(
     },
   },
   {
-    name: "declaration-sheet", set: "p27", path: "/org/engagements", who: "declOrg", viewportOnly: true, prepare: async (page, browser) => {
+    name: "declaration-sheet",
+    set: "p27",
+    path: "/org/engagements",
+    who: "declOrg",
+    viewportOnly: true,
+    prepare: async (page, browser) => {
       const { id } = await declScene(browser);
       await page.goto(`/org/engagements/${id}`);
       await page.getByRole("button", { name: "Declare prior knowledge" }).click();
