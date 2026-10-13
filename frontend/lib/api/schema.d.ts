@@ -3781,7 +3781,8 @@ export interface paths {
         put?: never;
         /**
          * Resend Invitation
-         * @description Email a new link (valid for 7 days); the previous link stops working at once.
+         * @description Replace the invitation with a new one (a new id) and email its link (valid for 7 days); the previous link stops
+         *     working at once.
          */
         post: operations["resend_invitation_api_orgs__org_id__invitations__invitation_id__resend_post"];
         delete?: never;
