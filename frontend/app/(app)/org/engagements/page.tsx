@@ -5,7 +5,7 @@ import { OrgNav } from "@/components/OrgNav";
 import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { orgEngagements } from "@/components/tracker/data";
-import { CsvExport } from "@/components/engagements/CsvExport";
+import { CsvExport, ExportRefusalNotice } from "@/components/engagements/CsvExport";
 import { EngagementCard } from "@/components/engagements/EngagementCard";
 import { AssigneeFilter, assignedToMe, assigneeLine, isAssignedTo } from "@/components/team/AssigneeFilter";
 import { awaitsMe, type OrgSummary } from "@/components/tracker/model";
@@ -21,6 +21,13 @@ import { ClockTicker } from "@/components/ui/ClockTicker";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
 import { ENGAGEMENTS_PATH, inboxHref, orgQuery, type Membership } from "../membership";
+import { exportRefusalParam } from "./export/outcome";
+
+/** The export route's ?retry= (seconds), when it is a plain number. */
+function retryParam(value: string | string[] | undefined): number | null {
+  const first = Array.isArray(value) ? value[0] : value;
+  return first && /^\d{1,6}$/.test(first) ? Number(first) : null;
+}
 import { OrgPicker } from "../OrgPicker";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -39,6 +46,8 @@ export default async function OrganisationEngagementsPage({ searchParams }: Page
   const { me, memberships, org, missing, query } = await orgContext(params.org);
   const mine = assignedToMe(params.assignee);
   const view = pickView(params.view, true);
+  // Why the last "Export CSV" did not download (the export route's ?export=), said once at the top of the list.
+  const exportRefusal = view === "list" ? exportRefusalParam(params.export) : null;
   // The organisation's id in the views' links only when the person has several (as `query`).
   const orgParam = org && memberships.length > 1 ? org.org_id : undefined;
   const [t, ti, tp] = await Promise.all([
@@ -81,7 +90,12 @@ export default async function OrganisationEngagementsPage({ searchParams }: Page
         ) : org && view === "board" ? (
           <BoardView orgId={org.org_id} orgParam={orgParam} query={query} mine={mine} userId={me.user.id} />
         ) : org ? (
-          <Body memberships={memberships} org={org} query={query} userId={me.user.id} mine={mine} />
+          <>
+            {exportRefusal ? (
+              <ExportRefusalNotice refusal={exportRefusal} retry={retryParam(params.retry)} orgId={org.org_id} />
+            ) : null}
+            <Body memberships={memberships} org={org} query={query} userId={me.user.id} mine={mine} />
+          </>
         ) : (
           <div>
             {missing === "notMember" ? (

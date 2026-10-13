@@ -2,12 +2,18 @@ import { unstable_rethrow } from "next/navigation";
 import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
+import type { ExportRefusal } from "@/app/(app)/org/engagements/export/outcome";
 import { standaloneLinkClass, textLinkClass } from "@/components/ui/Button";
+import { Callout } from "@/components/ui/Callout";
 import { cn } from "@/components/ui/cn";
 import { DownloadIcon } from "@/components/ui/icons";
 import { forwardHeaders, serverApi } from "@/lib/api/server";
 import type { components } from "@/lib/api/schema";
 import { billingHref } from "@/lib/billing/upgrade";
+import { retryWhen } from "@/lib/retry-after";
+import { loginHref } from "@/lib/return-path";
+
+const ENGAGEMENTS_LIST = "/org/engagements";
 
 // "Export CSV" on the organisation's Engagements list (REQ-ENG-17; docs/platform/tasks/P28.md track D; docs/spec/05
 // entitlements: `csv_export`). The plan is read the way Plan & billing reads it (GET /api/orgs/{org_id}/entitlements):
@@ -30,9 +36,12 @@ export function csvPlan(plans: readonly Pick<Plan, "name" | "purchasable" | "lim
   return (having.find((plan) => plan.purchasable) ?? having[0])?.name ?? null;
 }
 
-/** The address the link downloads (the API's export, through the same-origin /api rewrite). */
+/**
+ * The address the link downloads: the web app's own export route (app/(app)/org/engagements/export), which streams the
+ * API's file, or comes back to this list saying why not.
+ */
 export function csvHref(orgId: string): string {
-  return `/api/orgs/${encodeURIComponent(orgId)}/engagements.csv`;
+  return `/org/engagements/export?org=${encodeURIComponent(orgId)}`;
 }
 
 async function read<T>(call: () => Promise<{ data?: T }>): Promise<T | null> {
@@ -42,6 +51,48 @@ async function read<T>(call: () => Promise<{ data?: T }>): Promise<T | null> {
     unstable_rethrow(error);
     return null;
   }
+}
+
+/**
+ * Why the last "Export CSV" did not download (?export=<why> from the export route): one sentence at the top of the
+ * list, server-rendered. `retry`: the API's Retry-After in seconds, for "too many exports".
+ */
+export async function ExportRefusalNotice({
+  refusal,
+  retry,
+  orgId,
+}: {
+  refusal: ExportRefusal;
+  retry: number | null;
+  orgId: string;
+}) {
+  const t = await getTranslations("engagements");
+  const link = (href: string) =>
+    function ExportLink(chunks: ReactNode) {
+      return (
+        <a href={href} className={textLinkClass}>
+          {chunks}
+        </a>
+      );
+    };
+  let sentence: ReactNode;
+  if (refusal === "plan") sentence = t.rich("csvOffUnknown", { link: link(billingHref(orgId)) });
+  else if (refusal === "signedOut") sentence = t.rich("exportSignedOut", { link: link(loginHref(ENGAGEMENTS_LIST)) });
+  else if (refusal === "rateLimited") {
+    const when = retryWhen(retry);
+    const tr = await getTranslations("retryAfter");
+    sentence = (
+      <>
+        {t("exportRateLimited")} {when.count === undefined ? tr(when.key) : tr(when.key, { count: when.count })}
+      </>
+    );
+  } else if (refusal === "notFound") sentence = t("exportNotFound");
+  else sentence = t.rich("exportFailed", { link: link(csvHref(orgId)) });
+  return (
+    <Callout className="mb-6 max-w-[62ch]" data-export-refusal={refusal}>
+      <p>{sentence}</p>
+    </Callout>
+  );
 }
 
 /**
@@ -63,7 +114,6 @@ export async function CsvExport({ orgId, className }: { orgId: string; className
     return (
       <a
         href={csvHref(orgId)}
-        download
         className={cn(standaloneLinkClass, "gap-2 no-underline hover:underline", className)}
         data-csv-export=""
       >

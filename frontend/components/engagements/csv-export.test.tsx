@@ -22,7 +22,7 @@ vi.mock("next-intl/server", () => ({
 }));
 vi.mock("next/navigation", () => ({ unstable_rethrow: () => undefined }));
 
-const { CsvExport, csvPlan } = await import("./CsvExport");
+const { CsvExport, csvPlan, ExportRefusalNotice } = await import("./CsvExport");
 
 const PLANS = [
   { code: "org_claimed", name: "Claimed (Free)", purchasable: false, limits: { csv_export: false } },
@@ -49,12 +49,13 @@ beforeEach(() => mocks.get.mockReset());
 afterEach(cleanup);
 
 describe("Export CSV", () => {
-  it("is a plain download link to the API's export when the plan has csv_export", async () => {
+  it("is a plain link to the web app's export route when the plan has csv_export", async () => {
     api({ limits: { csv_export: true } });
     await renderExport();
     const link = screen.getByRole("link", { name: "Export CSV" });
-    expect(link.getAttribute("href")).toBe(`/api/orgs/${ORG_ID}/engagements.csv`);
-    expect(link.hasAttribute("download")).toBe(true);
+    expect(link.getAttribute("href")).toBe(`/org/engagements/export?org=${ORG_ID}`);
+    // No download attribute: a refusal comes back as the list page, which must open, not download.
+    expect(link.hasAttribute("download")).toBe(false);
     expect(link.hasAttribute("data-primary")).toBe(false);
     const [path, options] = mocks.get.mock.calls[0];
     expect(path).toBe("/api/orgs/{org_id}/entitlements");
@@ -96,5 +97,34 @@ describe("Export CSV", () => {
     expect(csvPlan(PLANS)).toBe("Growth");
     expect(csvPlan([PLANS[3]])).toBe("Enterprise / Government");
     expect(csvPlan(PLANS.slice(0, 2))).toBeNull();
+  });
+});
+
+describe("why an export did not download", () => {
+  async function notice(refusal: "plan" | "rateLimited" | "signedOut" | "notFound" | "failed", retry: number | null = null) {
+    render(<>{await resolveServerTree(<ExportRefusalNotice refusal={refusal} retry={retry} orgId={ORG_ID} />)}</>);
+    return document.querySelector<HTMLElement>(`[data-export-refusal="${refusal}"]`)!;
+  }
+
+  it("says the plan, with Plan & billing", async () => {
+    const line = await notice("plan");
+    expect(line.textContent).toBe("CSV export is not part of your plan. See plans");
+    expect(screen.getByRole("link", { name: "See plans" }).getAttribute("href")).toBe(`/billing?org=${ORG_ID}`);
+  });
+
+  it("says roughly when to try again after too many exports", async () => {
+    expect((await notice("rateLimited", 1800)).textContent).toBe("Too many exports just now. Try again in about 30 minutes.");
+    cleanup();
+    expect((await notice("rateLimited")).textContent).toBe("Too many exports just now. Try again later.");
+  });
+
+  it("asks to sign in again, and offers a retry when the file could not be made", async () => {
+    await notice("signedOut");
+    expect(screen.getByRole("link", { name: "Sign in again" }).getAttribute("href")).toBe("/login?next=%2Forg%2Fengagements");
+    cleanup();
+    await notice("failed");
+    expect(screen.getByRole("link", { name: "Try again" }).getAttribute("href")).toBe(`/org/engagements/export?org=${ORG_ID}`);
+    cleanup();
+    expect((await notice("notFound")).textContent).toBe(en.engagements.exportNotFound);
   });
 });
