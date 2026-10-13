@@ -5,6 +5,7 @@ import { OrgNav } from "@/components/OrgNav";
 import { OfflineSlot } from "@/components/offline/OfflineSlot";
 import { SignedInShell } from "@/components/SignedInShell";
 import { orgEngagements } from "@/components/tracker/data";
+import { CsvExport } from "@/components/engagements/CsvExport";
 import { EngagementCard } from "@/components/engagements/EngagementCard";
 import { AssigneeFilter, assignedToMe, assigneeLine, isAssignedTo } from "@/components/team/AssigneeFilter";
 import { awaitsMe, type OrgSummary } from "@/components/tracker/model";
@@ -159,14 +160,17 @@ async function Body({
   const te = await getTranslations("engagements");
   const read = await orgEngagements(org.org_id);
   const allHref = `${ENGAGEMENTS_PATH}${orgQuery(memberships, org.org_id)}`;
+  // The "Assigned to me" filter and, at the row's end, "Export CSV" or the plan that has it (REQ-ENG-17).
   const filter =
     read.ok && read.value.length > 0 ? (
-      <AssigneeFilter
-        mine={mine}
-        allHref={allHref}
-        mineHref={`${ENGAGEMENTS_PATH}${orgQuery(memberships, org.org_id, { assignee: "me" })}`}
-        className="mb-6"
-      />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3" data-list-tools="">
+        <AssigneeFilter
+          mine={mine}
+          allHref={allHref}
+          mineHref={`${ENGAGEMENTS_PATH}${orgQuery(memberships, org.org_id, { assignee: "me" })}`}
+        />
+        <CsvExport orgId={org.org_id} />
+      </div>
     ) : null;
   const shown =
     read.ok && mine ? read.value.filter((item) => isAssignedTo(item.team, userId)) : read.ok ? read.value : [];
