@@ -896,6 +896,16 @@ CREATE TRIGGER memberships_clear_team_seats
 """
 
 
+# An engagement in 3b, or in a side state it resumes to 3b from (the latest event that entered the side state names the
+# state it was entered from: revision 0003's chain resumes there). Revision 0014's code has no command that leaves 3b.
+IN_OR_PAUSED_FROM_3B = (
+    "SELECT EXISTS (SELECT 1 FROM engagements e WHERE e.state = 'PROCUREMENT_ROUTE'"
+    " OR (e.state IN ('ON_HOLD', 'INFO_REQUESTED', 'DISPUTED')"
+    " AND (SELECT ev.from_state FROM engagement_events ev WHERE ev.engagement_id = e.id AND ev.to_state = e.state"
+    " AND ev.from_state IS DISTINCT FROM ev.to_state ORDER BY ev.seq DESC LIMIT 1) = 'PROCUREMENT_ROUTE'))"
+)
+
+
 def _run_sql(script: str) -> None:
     """Run a SQL script verbatim on the migration's connection (same transaction); see revision 0001."""
     cursor = op.get_bind().connection.cursor()
@@ -938,11 +948,12 @@ def downgrade() -> None:
     the nudges ledger (after a downgrade and a new upgrade, the job would send again every nudge still due), the
     organisations' niche defaults and escalation contacts. Under the CLAUDE.md stop rule a downgrade of a database
     holding any of them is a destructive migration: back the database up and get the human's decision first. The
-    downgrade refuses while any engagement holds a decision or any of the three tables has a row, unless run with ``-x
-    allow_p28_loss=true`` (``alembic -x allow_p28_loss=true downgrade 0014``). It refuses in any case while an
-    engagement names a contact without a contact-by date (revision 0003's CHECK would refuse the row: give it its date,
-    or end the engagement, first). Invitations and memberships keep their rows (an accepted invitation stays accepted);
-    their grants and policies go back to revision 0001's."""
+    downgrade refuses while any engagement holds a decision, is in PROCUREMENT_ROUTE or in a side state it resumes to
+    PROCUREMENT_ROUTE from (revision 0014's code has no command that leaves 3b), or any of the three tables has a row,
+    unless run with ``-x allow_p28_loss=true`` (``alembic -x allow_p28_loss=true downgrade 0014``). It refuses in any
+    case while an engagement names a contact without a contact-by date (revision 0003's CHECK would refuse the row: give
+    it its date, or end the engagement, first). Invitations and memberships keep their rows (an accepted invitation
+    stays accepted); their grants and policies go back to revision 0001's."""
     allowed = context.get_x_argument(as_dictionary=True).get("allow_p28_loss") == "true"
     bind = op.get_bind()
     undated = bind.execute(
@@ -958,6 +969,8 @@ def downgrade() -> None:
     ]
     if bind.execute(sa.text("SELECT EXISTS (SELECT 1 FROM engagements WHERE procurement_route IS NOT NULL)")).scalar():
         holding.append("engagements (procurement decisions)")
+    if bind.execute(sa.text(IN_OR_PAUSED_FROM_3B)).scalar():
+        holding.append("engagements (in PROCUREMENT_ROUTE or paused from it)")
     if holding and not allowed:
         raise RuntimeError(
             f"revision 0015 downgrade: {', '.join(holding)} hold data this revision's downgrade drops; back the"
