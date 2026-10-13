@@ -21,7 +21,7 @@ from typing import Literal
 from uuid import UUID
 
 from cryptography.exceptions import InvalidTag
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,6 +61,8 @@ MAGIC_WINDOW = timedelta(minutes=15)
 EMAIL_ACCOUNT_LIMIT = 6  # emails to one address in a window from any IPs (bounds distributed mail bombing)
 EMAIL_DAILY_LIMIT = 20  # emails to one address a day, whatever the source
 EMAIL_IP_LIMIT = 300  # emails from one IP in a window: generous for shared NAT, bounds a mail-bombing script
+# P28 (REQ-TEN-02): an open invitation behind a sign-up's token (revision 0015's preview; any session may ask).
+_INVITATION_OPEN = text("SELECT org_name FROM app_invitation_preview(:hash)")
 REAUTH_WINDOW = timedelta(minutes=15)  # a session this new may change credentials without the current password
 REAUTH_IP_LIMIT = throttle.PER_IP_ANY_ACCOUNT  # current-password checks a minute from one client IP, any account
 PENDING_TOTP_TTL = timedelta(minutes=15)  # the magic-link lifetime: a setup left open longer must start again
@@ -197,7 +199,9 @@ def _validate_signup(settings: Settings, req: SignupRequest, email: str) -> None
         raise AuthError("invalid_email", 422)
     if not req.accept_terms:
         raise AuthError("terms_not_accepted", 422)
-    if req.side == "org" and req.org is None:
+    if req.invitation is not None and (req.side != "org" or req.org is not None):
+        raise AuthError("invitation_conflict", 422)  # an invitee joins an organisation: no profile, no new one
+    if req.side == "org" and req.org is None and req.invitation is None:
         raise AuthError("org_details_required", 422)
     refuse_session_only(req.consents)
     if req.consents and req.consents_version is None:
@@ -234,12 +238,23 @@ async def _existing_account(
     return SignupOutcome([PendingEmail(user.id, user.email, wording, "auth.account_exists", dedupe)])
 
 
+async def invitation_is_open(db: AsyncSession, token: str) -> bool:
+    """Whether ``token`` opens an open invitation (``app_invitation_preview``: any session; the hash is the
+    capability). Only what the public preview tells anyone holding the link."""
+    found = await db.scalar(_INVITATION_OPEN, {"hash": token_hash(token)})
+    return found is not None
+
+
 async def signup(db: AsyncSession, settings: Settings, req: SignupRequest, ip: str) -> SignupOutcome:
-    """Create an unverified account (developer, or organisation owner) and return the verification email to send."""
+    """Create an unverified account (developer, organisation owner, or an invitee of an organisation: P28) and return
+    the verification email to send."""
     email = normalise_email(req.email)
     _validate_signup(settings, req, email)
     if not await allow_email(db, settings, "signup", email, ip):
         return SignupOutcome()  # silent: same answer, no email (stops email bombing through signup)
+    if req.invitation is not None and not await invitation_is_open(db, req.invitation):
+        # Only while the link is open (the public preview says as much); the address is checked at acceptance.
+        raise AuthError("org_details_required", 422)
     password_hash = await passwords.hash_password_async(req.password)  # on every path: timing reveals nothing
 
     existing = await user_by_email(db, email)
@@ -254,6 +269,7 @@ async def signup(db: AsyncSession, settings: Settings, req: SignupRequest, ip: s
         org=req.org,
         consents=req.consents,
         method="password",
+        invited=req.invitation is not None,
     )
     user = await create_account(db, settings, account, password_hash=password_hash)
     if user is None:
@@ -276,6 +292,7 @@ class NewAccount:
     org: OrgSignup | None
     consents: Mapping[ConsentPurpose, bool]
     method: str  # "password" or the OAuth provider, for the audit event
+    invited: bool = False  # an invitee's organisation account (P28, D-72): no profile, organisation or subscription
 
 
 async def create_account(
@@ -287,7 +304,8 @@ async def create_account(
     verified_at: datetime | None = None,
 ) -> User | None:
     """Insert the user with a developer profile, or a new organisation it owns, plus the free plan, the consent
-    decisions and the ``auth.signup`` audit event. None when a concurrent signup took the address first."""
+    decisions and the ``auth.signup`` audit event; an invitee's account (``invited``, side org, no organisation) gets
+    none of the profile, organisation and plan. None when a concurrent signup took the address first."""
     user = User(
         id=uuid7(),
         email=account.email,
@@ -310,8 +328,9 @@ async def create_account(
     if account.side == "developer":
         await _add_developer_profile(db, user.id)
         await start_free_subscription(db, settings, side=PlanSide.DEVELOPER, user_id=user.id)
+    elif account.org is None:
+        assert account.invited  # an invitee: the organisation's membership comes with accepting the invitation
     else:
-        assert account.org is not None
         org_id = await create_organization(
             db, kind=account.org.kind, legal_name=account.org.legal_name, slug=_slug_from(account.org.legal_name)
         )
@@ -328,6 +347,7 @@ async def create_account(
         payload={
             "side": account.side,
             "method": account.method,
+            "invited": account.invited,
             "terms_version": terms_version(settings),
             "consents_version": consents_version(settings),
         },
