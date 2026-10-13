@@ -27,9 +27,11 @@ permissions:
   contents: read
   packages: write
 
+# A newer push supersedes an older push's build; a manual run (above all a long arm64 one) is never cancelled, and
+# pushes and manual runs never share a group.
 concurrency:
-  group: demo-image-${{ github.ref }}
-  cancel-in-progress: true
+  group: demo-image-${{ github.ref }}-${{ github.event_name }}-${{ inputs.arm64 == true }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   image:
