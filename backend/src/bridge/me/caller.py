@@ -1,8 +1,9 @@
 """Who is asking, as the palette and the calendar need it (REQ-UX-01, REQ-UX-05; P25-B): the side ``GET
 /api/auth/me`` reports and, for an organisation member, the organisations whose screens they may open.
 
-**Side.** The ``/me`` rule: staff when the account has a staff role, else a developer when it has a developer profile,
-else an organisation member when it has an active membership, else a developer (an account still signing up).
+**Side.** The ``/me`` rule (``side_of``, which ``/me`` itself uses): staff when the account has a staff role, else a
+developer when it has a developer profile, else an organisation account, with an active membership or none (P28, D-72:
+an invitee before accepting, a removed member; its organisation screens show the no-organisation state).
 
 **Organisations.** The organisation routes admit an active member (``bridge.tenancy.deps.org_member``) except where a
 role of theirs needs two-step sign-in and the account has none on, or this session has not given its second factor:
@@ -36,13 +37,13 @@ class Caller:
     several: bool = False  # a member of more than one organisation (links then name it: ?org=)
 
 
-def side_of(*, staff: bool, developer: bool, member: bool) -> Side:
-    """``GET /api/auth/me``'s side for a session past its second factor."""
+def side_of(*, staff: bool, developer: bool) -> Side:
+    """``GET /api/auth/me``'s side for a session past its second factor: staff, else a developer when the account has
+    a developer profile, else an organisation account, with memberships or none (an invitee before accepting, a
+    removed member: P28, D-72)."""
     if staff:
         return "staff"
-    if developer:
-        return "developer"
-    return "org" if member else "developer"
+    return "developer" if developer else "org"
 
 
 def open_orgs(memberships: Iterable[tuple[UUID, Iterable[OrgRole]]], *, second_factor: bool) -> tuple[UUID, ...]:
@@ -52,7 +53,7 @@ def open_orgs(memberships: Iterable[tuple[UUID, Iterable[OrgRole]]], *, second_f
 
 
 def caller_from(live: LiveSession, memberships: Sequence[MyMembership], *, developer: bool) -> Caller:
-    side = side_of(staff=bool(live.user.staff_role), developer=developer, member=bool(memberships))
+    side = side_of(staff=bool(live.user.staff_role), developer=developer)
     if side != "org":
         return Caller(live.user.id, side)
     second_factor = live.user.totp_enabled_at is not None and live.row.mfa_verified_at is not None

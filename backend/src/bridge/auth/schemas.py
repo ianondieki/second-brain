@@ -32,6 +32,9 @@ class SignupRequest(BaseModel):
     consents_version: str | None = None
     locale: Literal["en", "sw"] = "en"
     accept_terms: bool
+    # P28 (REQ-TEN-02, D-72): the token of an organisation's invitation link. With side "org" and no ``org``, the
+    # account is an invitee's: no developer profile, organisation or subscription; it joins by accepting the invitation.
+    invitation: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{43}$")
 
 
 class AcceptedResponse(BaseModel):

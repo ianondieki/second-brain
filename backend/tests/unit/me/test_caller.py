@@ -25,16 +25,16 @@ ORG_A, ORG_B = UUID(int=0xA), UUID(int=0xB)
 
 
 @pytest.mark.parametrize(
-    ("staff", "developer", "member", "side"),
+    ("staff", "developer", "side"),
     [
-        (True, True, True, "staff"),
-        (False, True, True, "developer"),
-        (False, False, True, "org"),
-        (False, False, False, "developer"),
+        (True, True, "staff"),
+        (True, False, "staff"),
+        (False, True, "developer"),
+        (False, False, "org"),  # P28 (D-72): with memberships or none (an invitee, a removed member)
     ],
 )
-def test_the_side_is_the_one_me_reports(staff: bool, developer: bool, member: bool, side: str) -> None:
-    assert caller.side_of(staff=staff, developer=developer, member=member) == side
+def test_the_side_is_the_one_me_reports(staff: bool, developer: bool, side: str) -> None:
+    assert caller.side_of(staff=staff, developer=developer) == side
 
 
 def test_an_organisation_needing_a_second_factor_is_open_only_with_one() -> None:

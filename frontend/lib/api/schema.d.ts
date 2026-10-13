@@ -748,6 +748,9 @@ export interface paths {
          * @description Create an account and email its link; 202 "check your email" whether or not the address has an account. 422
          *     invalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or
          *     consent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.
+         *     With ``invitation`` (an organisation's invitation link's token; P28, D-72) and side "org" without ``org``: an
+         *     invitee's account (no developer profile, organisation or plan), only while the link is open (else 422
+         *     org_details_required); ``invitation`` with side "developer" or with ``org`` is 422 invitation_conflict.
          */
         post: operations["signup_api_auth_signup_post"];
         delete?: never;
@@ -1959,7 +1962,8 @@ export interface paths {
         put?: never;
         /**
          * Accept Invitation
-         * @description Join the organisation with the invitation's roles (signed in with the address it was sent to).
+         * @description Join the organisation with the invitation's roles (signed in with the address it was sent to, from an
+         *     organisation account: a developer account is 409 developer_account).
          */
         post: operations["accept_invitation_api_invitations__token__accept_post"];
         delete?: never;
@@ -10773,6 +10777,8 @@ export interface components {
              * Format: email
              */
             email: string;
+            /** Invitation */
+            invitation?: string | null;
             /**
              * Locale
              * @default en

@@ -23,8 +23,9 @@
 - **Accept** (``accept``, signed in): ``app_accept_invitation`` checks that the invitation is open and that the user's
   verified address is the invitation's (case-insensitive), then inserts or reactivates the membership. Unknown, spent,
   revoked, resent-over or expired: 404; another address or an unverified one: 403 ``invitation_email_mismatch``;
-  already an active member: 409 ``already_member``; the plan's seats are re-checked with the new member counted (402
-  ``plan_limit``, nothing committed).
+  already an active member: 409 ``already_member``; the plan's seats are re-checked with the new member counted, under
+  the organisation's invitation lock (402 ``plan_limit``, nothing committed). An account with a developer profile is
+  409 ``developer_account`` before anything is asked of the database (one account, one side: D-72).
 
 Each step is audited on the organisation's chain by ids (the invitation, the membership) and roles: never the token
 and never the address.
@@ -44,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bridge.audit.service import record as audit
 from bridge.auth.crypto import new_token, token_hash
 from bridge.auth.models import User
+from bridge.auth.service import has_developer_profile
 from bridge.auth.sessions import LiveSession
 from bridge.billing import entitlements
 from bridge.config import Settings
@@ -77,6 +79,9 @@ MISMATCH: Final = "This invitation is for another email address. Sign in with th
 NO_INVITATION: Final = "This invitation link is not valid any more. Ask for a new one."
 INVALID_EMAIL: Final = "Enter one plain email address."
 NOT_VERIFIED: Final = "Verify your organisation (its email domain, E1) before inviting people."
+DEVELOPER_ACCOUNT: Final = (
+    "This is a developer account. Accept the invitation with an organisation account: sign up with another address."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,6 +336,8 @@ async def accept(db: AsyncSession, settings: Settings, live: LiveSession, token:
     digest = token_digest(token)
     if digest is None:
         raise not_found(NO_INVITATION)
+    if await has_developer_profile(db, live.user.id):  # one account, one side (D-72): nothing is created
+        raise ApiError(409, "developer_account", DEVELOPER_ACCOUNT)
     try:
         org_id: UUID = await db.scalar(_ACCEPT, {"hash": digest, "user": live.user.id})
     except DBAPIError as exc:
@@ -350,6 +357,9 @@ async def accept(db: AsyncSession, settings: Settings, live: LiveSession, token:
             .where(Membership.org_id == org_id, Membership.user_id == live.user.id)
         )
     ).one()
+    # The organisation's invitation lock (as invites take it) before the seat count, so concurrent accepts and invites
+    # count one after another (the invitee reads no invitation row, so the organisation is known only from here).
+    await _lock(db, org_id)
     plan = await entitlements.for_subject(db, settings, org_id=org_id)  # the joiner reads it now, as a member
     entitlements.check_count(settings, plan, SEATS, used=await _active_members(db, org_id) - 1)  # 402: not committed
     roles = sorted(OrgRole(r) for r in joined.roles)

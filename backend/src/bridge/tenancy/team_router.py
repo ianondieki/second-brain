@@ -19,7 +19,8 @@ role 403 (``bridge.tenancy.deps``).
   malformed, unknown, spent, revoked or expired link. At most ``PREVIEWS_PER_MINUTE`` reads a minute per visitor's
   global address, or ``SHARED_PREVIEWS_PER_MINUTE`` for all visitors behind a shared one (429 ``rate_limited``).
 - ``POST /api/invitations/{token}/accept`` (signed in): ``InvitationAccepted``. 404, 403
-  ``invitation_email_mismatch``, 409 ``already_member``, 402 ``plan_limit`` (``seats``, re-checked with the joiner).
+  ``invitation_email_mismatch``, 409 ``already_member``, 409 ``developer_account`` (an account with a developer profile:
+  one side per account, D-72), 402 ``plan_limit`` (``seats``, re-checked with the joiner).
 
 Public demo (REQ-FND-04): the membership changes are locked (``bridge.public_demo.LOCKED``: invite, resend, revoke,
 accept, remove); the niche defaults, the escalation contact and the reads stay open. The token is a path segment, so
@@ -214,7 +215,8 @@ async def get_invitation(
 async def accept_invitation(
     token: str, response: Response, db: Db, settings: SettingsDep, live: CurrentSession
 ) -> InvitationAccepted:
-    """Join the organisation with the invitation's roles (signed in with the address it was sent to)."""
+    """Join the organisation with the invitation's roles (signed in with the address it was sent to, from an
+    organisation account: a developer account is 409 developer_account)."""
     response.headers["Cache-Control"] = NO_STORE
     out = await invitations.accept(db, settings, live, token)
     await db.commit()
