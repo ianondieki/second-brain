@@ -252,9 +252,14 @@ async def signup(db: AsyncSession, settings: Settings, req: SignupRequest, ip: s
     _validate_signup(settings, req, email)
     if not await allow_email(db, settings, "signup", email, ip):
         return SignupOutcome()  # silent: same answer, no email (stops email bombing through signup)
-    if req.invitation is not None and not await invitation_is_open(db, req.invitation):
-        # Only while the link is open (the public preview says as much); the address is checked at acceptance.
-        raise AuthError("org_details_required", 422)
+    if req.invitation is not None:
+        # The attempt counts whatever the link's answer: committed before the link is looked at, so a refusal (which
+        # the router rolls back) leaves its ledger row and sign-up is no uncounted test of a token (the security
+        # re-check's MINOR; the public preview counts every probe too). Only while the link is open (as the preview
+        # says); the address is checked at acceptance.
+        await db.commit()
+        if not await invitation_is_open(db, req.invitation):
+            raise AuthError("org_details_required", 422)
     password_hash = await passwords.hash_password_async(req.password)  # on every path: timing reveals nothing
 
     existing = await user_by_email(db, email)
