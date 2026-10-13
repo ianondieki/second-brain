@@ -1684,21 +1684,25 @@ async def _add_membership(conn: AsyncConnection, org: UUID, user: UUID, roles: s
 
 
 async def _invite(conn: AsyncConnection, org: UUID, invited_by: UUID, roles: str, *, accepted: bool = False) -> UUID:
-    """A Phase 1 invitation to ``org`` (pending unless ``accepted``)."""
+    """A Phase 1 invitation to ``org`` (pending unless ``accepted``), inserted as bridge_app by ``invited_by``. Since
+    revision 0015 only ``app_accept_invitation`` accepts one (bridge_app holds no write of ``accepted_at``), so an
+    accepted fixture is marked accepted by the owner role."""
     invitation = uuid7()
     await run(
         conn,
-        "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at, accepted_at)"
-        " VALUES (:id, :org, :email, CAST(:roles AS org_role[]), :hash, :by, now() + interval '7 days',"
-        " CASE WHEN :accepted THEN now() END)",
+        "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at)"
+        " VALUES (:id, :org, :email, CAST(:roles AS org_role[]), :hash, :by, now() + interval '7 days')",
         id=invitation,
         org=org,
         email=_email("invitee"),
         roles=roles,
         hash=invitation.bytes,
         by=invited_by,
-        accepted=accepted,
     )
+    if accepted:
+        await conn.execute(text("SET LOCAL ROLE bridge_owner"))
+        await run(conn, "UPDATE invitations SET accepted_at = now() WHERE id = :id", id=invitation)
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
     return invitation
 
 

@@ -1,4 +1,5 @@
-"""Revision 0015 (P28-M; REQ-ENG-06, AC-TRACK-5): the database half of the procurement route (3b).
+"""Revision 0015 (P28-M; REQ-ENG-06, AC-TRACK-5; REQ-NOT-05; REQ-TEN-02): the database half of the procurement route
+(3b), the nudges ledger and the organisation's team.
 
 - Where 3b sits: a public entity's engagement enters ``PROCUREMENT_ROUTE`` from ``UNDER_REVIEW`` only and leaves it for
   ``INTEREST_CONFIRMED`` (never for ``CONTACT_MADE``; ``INTEREST_CONFIRMED`` never returns to it), with the side
@@ -14,17 +15,34 @@
 - The CHECKs: ``direct`` needs a justification of at least 20 characters once trimmed; a justification is not blank,
   at most 1,000 characters (line breaks allowed) and only with a route; a named contact may lack its date only while
   the route is undecided.
+- The nudges ledger: ``app_record_nudge`` records a nudge once per engagement, kind and key (true, then false), for a
+  session with no user bound only, never after the engagement ended, with the engagement's organisation and the shared
+  clock's time; the kind and key CHECKs keep free text out; the ledger is append-only for every role and read by the
+  organisation's members only (never the developer, another organisation, a forged context or staff);
+  ``app_nudge_candidates`` lists, to the job only, the engagements a nudge may be due for, each with a member to bind.
+- The team: niche defaults set by an owner or admin for a triage member only, read by members, cleared when the member
+  leaves or loses the roles; the escalation contact an active member, cleared when they leave or their account goes;
+  invitations listed, created (as the caller; an owner for a protected role), revoked and resent by the organisation's
+  admins only, one open per address, nothing else of them the app's, nothing of a closed one anybody's;
+  ``app_accept_invitation`` (open, expired on the shared clock, revoked, accepted, unknown, another or unverified
+  address, an active member, a removed one reactivated) and ``app_invitation_preview``; the last active owner is
+  neither removed nor demoted by the organisation's writes, in one row, many, or two concurrent transactions (that test
+  commits its own organisation and removes it), while staff's correction is not judged.
 
-Every test runs in one rolled-back transaction (``tracker.as_app``); the round trip and the grants are in
-``test_migrations.py``.
+Every other test runs in one rolled-back transaction (``tracker.as_app``); the round trip, the grants and the policies
+are in ``test_migrations.py``, the downgrade's refusals in ``test_migration_0015_downgrade.py``.
 """
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 from datetime import date
 from uuid import UUID
 
+import pytest
 import sqlalchemy as sa
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from bridge.ids import uuid7
@@ -540,3 +558,425 @@ async def test_the_job_lists_the_engagements_a_nudge_may_be_due_for(owner_engine
             row = listed[engagement]
             assert (row.org_id, row.developer_id, row.member_id) == (org, developer, member), engagement
         assert f.org not in {row.org_id for row in listed.values()}
+
+
+# --- the team (REQ-TEN-02) -------------------------------------------------------------------------------------------
+
+DEFAULT = (
+    "INSERT INTO org_niche_defaults (id, org_id, niche_id, user_id) VALUES (:id, :org, :niche, :user)"
+    " ON CONFLICT (org_id, niche_id) DO UPDATE SET user_id = EXCLUDED.user_id"
+)
+DEFAULTS = "SELECT count(*) FROM org_niche_defaults WHERE org_id = :org"
+NOT_TRIAGE = "the default reviewer is an active owner, admin, reviewer or signatory"
+ESCALATION = "UPDATE organizations SET escalation_contact_user_id = :user WHERE id = :org"
+NOT_A_MEMBER = "the escalation contact is an active member"
+INVITE = (
+    "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at)"
+    " VALUES (:id, :org, :email, CAST(:roles AS org_role[]), :hash, :by, app_clock_now() + interval '7 days')"
+)
+INVITATIONS = "SELECT count(*) FROM invitations WHERE org_id = :org"
+ACCEPT = "SELECT app_accept_invitation(:hash, :user)"
+PREVIEW = "SELECT org_name, CAST(roles AS text[]) AS roles FROM app_invitation_preview(:h)"
+NOT_OPEN = "no open invitation with that token"
+MISMATCH = "the invitation is for another email address"
+LAST_OWNER = "the organisation's last active owner is neither removed nor demoted"
+RLS = "row-level security"
+
+
+async def add_niche(conn: AsyncConnection) -> UUID:
+    """As the owner: a niche of its own."""
+    await t.as_owner(conn)
+    niche = uuid7()
+    await t.run(
+        conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :s, 'Team')", id=niche, s=f"team-{niche.hex}"
+    )
+    return niche
+
+
+async def add_user(conn: AsyncConnection, email: str | None = None, *, verified: bool = True) -> UUID:
+    """As the owner: a user (with a verified email unless told otherwise)."""
+    await t.as_owner(conn)
+    user = uuid7()
+    await t.run(
+        conn,
+        "INSERT INTO users (id, email, display_name, email_verified_at)"
+        " VALUES (:id, :email, 'Invitee', CASE WHEN :verified THEN now() END)",
+        id=user,
+        email=email or f"invitee-{user.hex}@example.test",
+        verified=verified,
+    )
+    return user
+
+
+def default(p: t.Parties, niche: UUID, user: UUID, org: UUID | None = None) -> dict[str, object]:
+    return {"id": uuid7(), "org": org or p.org, "niche": niche, "user": user}
+
+
+def invitation(org: UUID, email: str, by: UUID, roles: str = "{reviewer}") -> dict[str, object]:
+    token = uuid7().bytes
+    return {"id": uuid7(), "org": org, "email": email, "roles": roles, "hash": _sha256(token), "by": by}
+
+
+def _sha256(token: bytes) -> bytes:
+    return hashlib.sha256(token).digest()
+
+
+async def test_niche_defaults_are_set_by_admins_for_triage_members(owner_engine: AsyncEngine) -> None:
+    """An owner or admin sets the organisation's default reviewer per niche (one per niche, upserted; the times the
+    database's), to an active owner, admin, reviewer or signatory only (a viewer, a finance member, a removed member,
+    the developer and another organisation's member are refused); a reviewer writes none; the members read them and
+    nobody else does; a default's organisation and niche never change; a member who leaves or loses the triage roles
+    loses their defaults."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        niche, other_niche, third_niche = await add_niche(conn), await add_niche(conn), await add_niche(conn)
+        admin = await add_member(conn, p, "{admin}")
+        removed = await add_member(conn, p, "{reviewer}")
+        await t.run(conn, "UPDATE memberships SET status = 'removed' WHERE user_id = :u", u=removed)
+        await t.act(conn, p.owner, p.org)
+        await t.run(conn, DEFAULT, **default(p, niche, p.reviewer))
+        created = (
+            await conn.execute(
+                sa.text("SELECT created_at, updated_at FROM org_niche_defaults WHERE org_id = :org AND niche_id = :n"),
+                {"org": p.org, "n": niche},
+            )
+        ).one()
+        await t.act(conn, admin, p.org)
+        await t.run(conn, DEFAULT, **default(p, niche, p.signatory))  # the upsert: one per niche
+        await t.run(conn, DEFAULT, **default(p, other_niche, admin))
+        for refused in (p.viewer, p.finance, removed, p.developer, p.other_member):
+            await t.expect(conn, DEFAULT, NOT_TRIAGE, **default(p, other_niche, refused))
+        await t.expect(
+            conn,
+            "INSERT INTO org_niche_defaults (id, org_id, niche_id, user_id) VALUES (:id, :org, :niche, :user)",
+            "uq_org_niche_defaults_org_id_niche_id",
+            **default(p, niche, p.reviewer),
+        )
+        row = (
+            await conn.execute(
+                sa.text(
+                    "SELECT user_id, created_at, updated_at FROM org_niche_defaults"
+                    " WHERE org_id = :org AND niche_id = :n"
+                ),
+                {"org": p.org, "n": niche},
+            )
+        ).one()
+        assert (row.user_id, row.created_at) == (p.signatory, created.created_at)
+        assert row.updated_at >= created.updated_at
+        await t.act(conn, p.reviewer, p.org)
+        await t.expect(conn, DEFAULT, RLS, **default(p, third_niche, p.reviewer))
+        assert await t.rowcount(conn, "DELETE FROM org_niche_defaults WHERE org_id = :org", org=p.org) == 0
+        for reader, org, seen in (
+            (p.viewer, p.org, 2),
+            (p.reviewer, None, 2),
+            (p.developer, None, 0),
+            (p.other_member, p.other_org, 0),
+            (p.owner, p.other_org, 0),
+            (p.staff, None, 0),
+        ):
+            await t.act(conn, reader, org)
+            assert await t.run(conn, DEFAULTS, org=p.org) == seen, reader
+        await t.as_owner(conn)
+        await t.expect(
+            conn,
+            "UPDATE org_niche_defaults SET niche_id = :n WHERE org_id = :org AND niche_id = :old",
+            "never change",
+            n=await add_niche(conn),
+            org=p.org,
+            old=niche,
+        )
+        await t.act(conn, p.owner, p.org)
+        await t.run(
+            conn, "UPDATE memberships SET roles = '{finance}' WHERE org_id = :org AND user_id = :u", org=p.org, u=admin
+        )
+        await t.run(
+            conn,
+            "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u",
+            org=p.org,
+            u=p.signatory,
+        )
+        assert await t.run(conn, DEFAULTS, org=p.org) == 0  # the admin lost the triage roles, the signatory left
+        await t.run(conn, DEFAULT, **default(p, niche, p.reviewer))
+        assert await t.rowcount(conn, "DELETE FROM org_niche_defaults WHERE org_id = :org", org=p.org) == 1
+
+
+async def test_the_escalation_contact_is_an_active_member_and_leaves_with_them(owner_engine: AsyncEngine) -> None:
+    """An owner or admin names an active member of the organisation as its escalation contact (not another
+    organisation's member, the developer or a removed member); a reviewer cannot; the contact is cleared when they
+    leave the organisation, and when their account is deleted."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.act(conn, p.owner, p.org)
+        await t.run(conn, ESCALATION, user=p.reviewer, org=p.org)
+        for refused in (p.other_member, p.developer, uuid7()):
+            await t.expect(conn, ESCALATION, NOT_A_MEMBER, user=refused, org=p.org)
+        await t.act(conn, p.reviewer, p.org)
+        assert await t.rowcount(conn, ESCALATION, user=p.viewer, org=p.org) == 0  # not an owner or admin
+        contact = "SELECT escalation_contact_user_id FROM organizations WHERE id = :org"
+        assert await t.run(conn, contact, org=p.org) == p.reviewer
+        await t.act(conn, p.owner, p.org)
+        await t.run(
+            conn,
+            "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u",
+            org=p.org,
+            u=p.reviewer,
+        )
+        assert await t.run(conn, contact, org=p.org) is None
+        await t.run(conn, ESCALATION, user=p.viewer, org=p.org)
+        await t.as_owner(conn)
+        await t.run(conn, "DELETE FROM users WHERE id = :u", u=p.viewer)
+        assert await t.run(conn, contact, org=p.org) is None
+
+
+async def test_invitations_are_the_admins_own_across_two_organisations(owner_engine: AsyncEngine) -> None:
+    """An owner or admin invites as themselves (only an owner with a protected role), lists, revokes (the shared clock,
+    once) and resends (a new token, the old one dead) the organisation's invitations; a member who is not an admin,
+    another organisation's admin and a forged organisation context see and touch none; one open invitation per address
+    (case-insensitive) until it is revoked; nothing else of an invitation is the app's to change, and nothing of an
+    accepted or revoked one is anybody's."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        admin = await add_member(conn, p, "{admin}")
+        await t.act(conn, admin, p.org)
+        mine = invitation(p.org, "Newcomer@Example.test", admin)
+        await t.run(conn, INVITE, **mine)
+        await t.expect(conn, INVITE, RLS, **invitation(p.org, "someone@example.test", p.owner))  # not as themselves
+        await t.expect(conn, INVITE, RLS, **invitation(p.org, "signer@example.test", admin, "{signatory}"))
+        await t.expect(conn, INVITE, "uq_invitations_open", **invitation(p.org, "newcomer@example.TEST", admin))
+        await t.act(conn, p.owner, p.org)
+        await t.run(conn, INVITE, **invitation(p.org, "signer@example.test", p.owner, "{signatory}"))
+        for reader, org, seen in (
+            (admin, p.org, 2),
+            (p.owner, None, 2),
+            (p.reviewer, p.org, 0),
+            (p.signatory, p.org, 0),
+            (p.other_member, p.other_org, 0),
+            (p.owner, p.other_org, 0),
+            (p.developer, None, 0),
+        ):
+            await t.act(conn, reader, org)
+            assert await t.run(conn, INVITATIONS, org=p.org) == seen, reader
+        await t.act(conn, p.other_member, p.other_org)
+        revoke = "UPDATE invitations SET revoked_at = '2000-01-01' WHERE id = :id"
+        assert await t.rowcount(conn, revoke, id=mine["id"]) == 0
+        await t.expect(conn, INVITE, RLS, **invitation(p.org, "outsider@example.test", p.other_member))
+
+        await t.act(conn, admin, p.org)
+        for statement in (
+            "UPDATE invitations SET accepted_at = now() WHERE id = :id",
+            "UPDATE invitations SET email = 'other@example.test' WHERE id = :id",
+            "UPDATE invitations SET invited_by = invited_by WHERE id = :id",
+        ):
+            await t.expect(conn, statement, DENIED, id=mine["id"])
+        await t.expect(
+            conn,
+            "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at, revoked_at)"
+            " VALUES (:id, :org, :email, '{viewer}', :hash, :by, now(), now())",
+            DENIED,
+            **invitation(p.org, "late@example.test", admin),
+        )
+        resent = _sha256(b"a new token")
+        await t.run(
+            conn,
+            "UPDATE invitations SET token_hash = :h, expires_at = now() + interval '7 days' WHERE id = :id",
+            h=resent,
+            id=mine["id"],
+        )
+        assert await t.run(conn, "SELECT count(*) FROM app_invitation_preview(:h)", h=mine["hash"]) == 0
+        assert await t.run(conn, "SELECT count(*) FROM app_invitation_preview(:h)", h=resent) == 1
+        before = await t.run(conn, "SELECT app_clock_now()")
+        assert await t.rowcount(conn, revoke, id=mine["id"]) == 1
+        assert await t.run(conn, "SELECT revoked_at FROM invitations WHERE id = :id", id=mine["id"]) >= before
+        assert await t.rowcount(conn, revoke, id=mine["id"]) == 0  # open invitations only
+        await t.run(conn, INVITE, **invitation(p.org, "newcomer@example.test", admin))  # the address is free again
+        await t.as_owner(conn)
+        await t.expect(conn, revoke, "an accepted or revoked invitation never changes", id=mine["id"])
+        await t.expect(
+            conn,
+            "UPDATE invitations SET roles = '{viewer}' WHERE org_id = :org AND revoked_at IS NULL",
+            "never change",
+            org=p.org,
+        )
+        await t.expect(
+            conn,
+            "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at, revoked_at)"
+            " VALUES (:id, :org, :email, '{viewer}', :hash, :by, now(), now())",
+            "an invitation is created open",
+            **invitation(p.org, "late@example.test", admin),
+        )
+
+
+async def test_an_invitation_is_accepted_once_by_its_address_while_open(owner_engine: AsyncEngine) -> None:
+    """The invitee, signed in with a verified email equal to the invitation's (case-insensitive), accepts it: an active
+    membership with its roles, the invitation accepted (the shared clock) and its organisation returned, and the
+    preview gone. Refused: another user's id or no user bound; another address or an unverified one; an accepted,
+    revoked, resent-over, expired (on the shared clock) or unknown token; an active member. A removed membership is
+    reactivated with the invitation's roles. The preview answers the organisation's name and the roles of an open
+    invitation, to any session, and nothing else."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        invitee = await add_user(conn, "amina.invitee@example.test")
+        stranger = await add_user(conn)
+        unverified = await add_user(conn, "unverified.invitee@example.test", verified=False)
+        await t.act(conn, p.owner, p.org)
+        open_one = invitation(p.org, "AMINA.Invitee@example.test", p.owner, "{reviewer,finance}")
+        await t.run(conn, INVITE, **open_one)
+        await t.act(conn, None)
+        preview = (await conn.execute(sa.text(PREVIEW), {"h": open_one["hash"]})).one()
+        assert (preview.org_name, sorted(preview.roles)) == ("Tracker Ltd", ["finance", "reviewer"])
+
+        await t.act(conn, invitee)
+        await t.expect(conn, ACCEPT, "accepts for themselves only", hash=open_one["hash"], user=stranger)
+        await t.act(conn, None)
+        await t.expect(conn, ACCEPT, "accepts for themselves only", hash=open_one["hash"], user=invitee)
+        await t.act(conn, stranger)
+        await t.expect(conn, ACCEPT, MISMATCH, hash=open_one["hash"], user=stranger)
+        await t.act(conn, invitee)
+        await t.expect(conn, ACCEPT, NOT_OPEN, hash=_sha256(b"unknown"), user=invitee)
+        assert await t.run(conn, ACCEPT, hash=open_one["hash"], user=invitee) == p.org
+        await t.expect(conn, ACCEPT, NOT_OPEN, hash=open_one["hash"], user=invitee)  # accepted already
+        await t.act(conn, None)
+        assert await t.run(conn, "SELECT count(*) FROM app_invitation_preview(:h)", h=open_one["hash"]) == 0
+        await t.as_owner(conn)
+        joined = (
+            await conn.execute(
+                sa.text(
+                    "SELECT CAST(m.status AS text) AS status, CAST(m.roles AS text[]) AS roles, i.accepted_at"
+                    " FROM memberships m JOIN invitations i ON i.org_id = m.org_id AND i.id = :i"
+                    " WHERE m.org_id = :org AND m.user_id = :u"
+                ),
+                {"i": open_one["id"], "org": p.org, "u": invitee},
+            )
+        ).one()
+        assert (joined.status, sorted(joined.roles)) == ("active", ["finance", "reviewer"])
+        assert joined.accepted_at is not None
+
+        await t.act(conn, p.owner, p.org)
+        again = invitation(p.org, "amina.invitee@example.test", p.owner)
+        await t.run(conn, INVITE, **again)
+        await t.act(conn, invitee)
+        await t.expect(conn, ACCEPT, "already an active member", hash=again["hash"], user=invitee)
+
+        await t.act(conn, p.owner, p.org)
+        unverified_one = invitation(p.org, "unverified.invitee@example.test", p.owner)
+        revoked = invitation(p.org, "revoked.invitee@example.test", p.owner)
+        expiring = invitation(p.org, "later.invitee@example.test", p.owner)
+        for params in (unverified_one, revoked, expiring):
+            await t.run(conn, INVITE, **params)
+        await t.run(conn, "UPDATE invitations SET revoked_at = now() WHERE id = :id", id=revoked["id"])
+        await t.act(conn, unverified)
+        await t.expect(conn, ACCEPT, MISMATCH, hash=unverified_one["hash"], user=unverified)
+        revoked_user = await add_user(conn, "revoked.invitee@example.test")
+        await t.act(conn, revoked_user)
+        await t.expect(conn, ACCEPT, NOT_OPEN, hash=revoked["hash"], user=revoked_user)
+        later_user = await add_user(conn, "later.invitee@example.test")
+        await t.as_owner(conn)  # the shared clock moves past the seven days
+        await t.run(conn, "UPDATE test_clock SET enabled = true, clock_offset = interval '8 days'")
+        await t.act(conn, None)
+        assert await t.run(conn, "SELECT count(*) FROM app_invitation_preview(:h)", h=expiring["hash"]) == 0
+        await t.act(conn, later_user)
+        await t.expect(conn, ACCEPT, NOT_OPEN, hash=expiring["hash"], user=later_user)
+
+        await t.act(conn, p.owner, p.org)  # a removed member is invited back as a signatory
+        await t.run(conn, "UPDATE invitations SET revoked_at = now() WHERE id = :id", id=again["id"])
+        await t.run(
+            conn, "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u", org=p.org, u=invitee
+        )
+        back = invitation(p.org, "amina.invitee@example.test", p.owner, "{signatory}")
+        await t.run(conn, INVITE, **back)
+        await t.act(conn, invitee)
+        assert await t.run(conn, ACCEPT, hash=back["hash"], user=invitee) == p.org
+        await t.as_owner(conn)
+        rejoined = await t.run(
+            conn,
+            "SELECT CAST(roles AS text[]) FROM memberships WHERE org_id = :org AND user_id = :u AND status = 'active'",
+            org=p.org,
+            u=invitee,
+        )
+        assert rejoined == ["signatory"]
+
+
+async def test_the_last_active_owner_is_neither_removed_nor_demoted(owner_engine: AsyncEngine) -> None:
+    """The organisation's own writes never remove or demote its last active owner, in one row or many; with a second
+    owner either may go; staff's roster correction (a definer function) is not judged."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)  # the owner holds owner and admin, alone
+        await t.act(conn, p.owner, p.org)
+        mine = {"org": p.org, "u": p.owner}
+        demote = "UPDATE memberships SET roles = '{admin}' WHERE org_id = :org AND user_id = :u"
+        remove = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"
+        await t.expect(conn, demote, LAST_OWNER, **mine)
+        await t.expect(conn, remove, LAST_OWNER, **mine)
+        await t.run(conn, "UPDATE memberships SET roles = '{owner}' WHERE org_id = :org AND user_id = :u", **mine)
+        second = await add_member(conn, p, "{owner}")
+        await t.act(conn, p.owner, p.org)
+        await t.expect(
+            conn,
+            "UPDATE memberships SET roles = '{admin}' WHERE org_id = :org AND 'owner' = ANY (roles)",
+            LAST_OWNER,
+            org=p.org,
+        )
+        await t.run(conn, demote, **mine)  # the second owner stays
+        await t.act(conn, second, p.org)
+        await t.expect(conn, remove, LAST_OWNER, org=p.org, u=second)
+        await t.run(conn, "UPDATE memberships SET roles = '{owner,admin}' WHERE org_id = :org AND user_id = :u", **mine)
+        await t.run(conn, remove, org=p.org, u=second)  # now the first owner stays
+        await t.as_owner(conn)  # staff admin's correction (a definer) may leave an organisation without an owner
+        membership = await t.run(
+            conn, "SELECT id FROM memberships WHERE org_id = :org AND user_id = :u", org=p.org, u=p.owner
+        )
+        await t.act(conn, p.staff)
+        assert await t.run(conn, "SELECT app_staff_remove_membership(:m, 'upheld dispute')", m=membership) is True
+
+
+async def test_two_owners_removing_each_other_at_once_leave_one(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Given an organisation with two active owners (committed), When each removes the other in concurrent
+    transactions, Then the second waits for the first (the guard's advisory lock per organisation) and, once the first
+    commits, is refused: one owner stays."""
+    org, owners = uuid7(), (uuid7(), uuid7())
+    async with owner_engine.begin() as conn:
+        await t.run(
+            conn,
+            "INSERT INTO organizations (id, kind, legal_name, slug, source) VALUES (:id, 'sme', 'Two Owners Ltd', :s,"
+            " 'self_signup')",
+            id=org,
+            s=f"two-owners-{org.hex}",
+        )
+        for owner in owners:
+            await t.run(
+                conn,
+                "INSERT INTO users (id, email, display_name, email_verified_at) VALUES (:id, :e, 'Owner', now())",
+                id=owner,
+                e=f"owner-{owner.hex}@example.test",
+            )
+            await t.member(conn, org, owner, "{owner,admin}")
+    remove = "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u"
+    bind = "SELECT set_config('app.user_id', :u, true), set_config('app.org_id', :o, true)"
+    try:
+        async with app_engine.connect() as first, app_engine.connect() as second, owner_engine.connect() as observer:
+            await first.begin()
+            await first.execute(sa.text(bind), {"u": str(owners[0]), "o": str(org)})
+            await first.execute(sa.text(remove), {"org": org, "u": owners[1]})
+            await second.begin()
+            await second.execute(sa.text(bind), {"u": str(owners[1]), "o": str(org)})
+            pid = await t.backend_pid(second)
+            racing = asyncio.create_task(second.execute(sa.text(remove), {"org": org, "u": owners[0]}))
+            await t.wait_until_blocked(observer, pid, racing)
+            await first.commit()
+            with pytest.raises(DBAPIError, match=LAST_OWNER):
+                await racing
+            await second.rollback()
+        async with owner_engine.connect() as conn:
+            active = await t.run(
+                conn,
+                "SELECT array_agg(user_id) FROM memberships WHERE org_id = :org AND status = 'active'"
+                " AND 'owner' = ANY (roles)",
+                org=org,
+            )
+            assert active == [owners[0]]
+    finally:
+        async with owner_engine.begin() as conn:
+            await t.run(conn, "DELETE FROM organizations WHERE id = :id", id=org)
+            await t.run(conn, "DELETE FROM users WHERE id = ANY (:ids)", ids=list(owners))

@@ -12,9 +12,9 @@ fixture and a policy. Revision 0011's team tables are each tenant's with its pit
 thread with a message from each, the tenant's read marker and block of a third developer, and the pitcher credited on
 the tenant's published and draft proposals). Revision 0013's: the tenant's organisation's assignment, recommendation
 and prior-knowledge declaration on its engagement, and the tenant's personal and organisation calendar feeds.
-Revision 0015's: a nudge on the tenant organisation's engagement. For the PUBLISHED tables each tenant has rows every
-signed-in user may read (published, clear) and rows only its owner may read (drafts, held, hidden, candidate), so the
-tests prove both halves of the rule.
+Revision 0015's: a nudge on the tenant organisation's engagement and its default reviewer for the world's niche. For
+the PUBLISHED tables each tenant has rows every signed-in user may read (published, clear) and rows only its owner may
+read (drafts, held, hidden, candidate), so the tests prove both halves of the rule.
 """
 
 from __future__ import annotations
@@ -948,7 +948,17 @@ async def build(conn: AsyncConnection, tag: str) -> World:
         # --- Schema v11 (revision 0013): the engagement's triage and declaration, the tenant's calendar feeds ---
         if await has_table(conn, "engagement_assignments"):
             await add_triage_rows(conn, engagement_id, org_id, pitched, pitched_version, user_id)
-        # --- Schema v12 (revision 0015): a nudge the job sent on the engagement; absent at older revisions ---
+        # --- Schema v12 (revision 0015): a nudge the job sent on the engagement and the organisation's default
+        # reviewer for the world's niche (the tenant, its owner and admin); absent at older revisions ---
+        if await has_table(conn, "org_niche_defaults"):
+            await _insert(
+                conn,
+                "INSERT INTO org_niche_defaults (id, org_id, niche_id, user_id) VALUES (:id, :org, :niche, :user)",
+                id=uuid7(),
+                org=org_id,
+                niche=niche_id,
+                user=user_id,
+            )
         if await has_table(conn, "engagement_nudges"):
             await _insert(
                 conn,
@@ -1167,6 +1177,7 @@ TENANT_ROWS: dict[str, Rows] = {
     "calendar_feeds": _rows("calendar_feeds", "t.id::text", NO_ORG, "t.user_id"),
     # revision 0015: a nudge is its organisation's only (never the engagement's developer's, as the triage rows)
     "engagement_nudges": _rows("engagement_nudges", "t.id::text", "t.org_id", NO_USER),
+    "org_niche_defaults": _rows("org_niche_defaults", "t.id::text", "t.org_id", NO_USER),
 }
 
 # STAFF tables: (key expression, owner query returning the keys of the fixture rows).
