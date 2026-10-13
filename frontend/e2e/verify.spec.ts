@@ -118,7 +118,7 @@ test("a registered certificate shows its evidence, and no name or title", async 
   await expect(page.locator("[data-fingerprint]")).toHaveAttribute("data-fingerprint", /^[0-9a-f]{64}$/);
   for (const label of ["Timestamp", "Timestamp serial number", "Signing key ID", "Signature (Ed25519)"]) {
     await expect(
-      page.getByRole("term").filter({ hasText: new RegExp(`^${label.replace(/[()]/g, "\\$&")}$`) }),
+      page.getByRole("term").filter({ hasText: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) }),
     ).toHaveCount(1);
   }
   await expect(page.getByText("It is not a patent, copyright registration", { exact: false })).toBeVisible();
