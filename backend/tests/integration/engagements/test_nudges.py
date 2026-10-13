@@ -117,8 +117,18 @@ async def escalation_contact(owner_engine: AsyncEngine, world: World, user: UUID
         await run(conn, "UPDATE organizations SET escalation_contact_user_id = :u WHERE id = :o", u=user, o=world.org)
 
 
+async def mute_in_settings(client: Any, kind: str) -> None:
+    """The person turns the email of ``kind`` off on the notification settings page (REQ-NOT-06)."""
+    choice = {"kind": kind, "channel": "email", "enabled": False}
+    muted = await client.put("/api/me/notification-preferences", json=choice)
+    assert muted.status_code == 200, muted.text
+    [entry] = [item for item in muted.json()["items"] if item["kind"] == kind and item["channel"] == "email"]
+    assert entry["enabled"] is False
+
+
 async def mute(owner_engine: AsyncEngine, user: UUID, kind: str) -> None:
-    """The person turned the email of ``kind`` off (a row of their preferences)."""
+    """A row of the person's preferences turning the email of ``kind`` off, written as the owner role: for a 🔒 kind
+    the settings page never offers."""
     async with owner_engine.begin() as conn:
         await run(
             conn,
@@ -147,10 +157,10 @@ async def test_the_contact_escalation_is_sent_once_after_three_business_days(
     shows the escalation, the developer's never."""
     world = await build(owner_engine)
     await escalation_contact(owner_engine, world, world.reviewer)
-    await mute(owner_engine, world.reviewer, "engagement.n05")
     provider = FakeEmailProvider()
     off = await holidays_of(owner_engine)
     async with seats(app_engine, SETTINGS, world) as s, moved_clock(owner_engine) as advance:
+        await mute_in_settings(s.reviewer, "engagement.n05")  # mutable: offered on the settings page
         today = await db_today(owner_engine)
         t = await confirmed(app_engine, world, s, add_business_days(today, 5, off))
         entered = local_date(datetime.fromisoformat((await t.detail(s.owner))["stage_entered_at"]))
@@ -220,7 +230,7 @@ async def test_a_missed_contact_by_date_sends_em6_to_both_sides_and_flags_the_ad
         assert [(n.kind, n.key, n.org_recipients, n.developer) for n in report.sent] == [
             (K.CONTACT_OVERDUE, report.sent[0].key, 1, True)
         ]
-        assert report.sent[0].key.endswith(f":{today.isoformat()}")
+        assert report.sent[0].key.endswith(":overdue")
         assert (await nudge(app_engine, t)).sent == ()
         assert await tell(owner_engine, app_engine, t, provider) == 1
         addresses = await emails_of(owner_engine, world.owner, world.developer)
@@ -261,6 +271,9 @@ async def test_nda_reminders_reach_only_the_signers_who_have_not_signed(
     await mute(owner_engine, world.signatory, "engagement.n07")
     provider = FakeEmailProvider()
     async with seats(app_engine, SETTINGS, world) as s, moved_clock(owner_engine) as advance:
+        locked = {"kind": "engagement.n07", "channel": "email", "enabled": False}
+        refused = await s.signatory.put("/api/me/notification-preferences", json=locked)
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (422, "unknown_preference")  # 🔒
         today = await db_today(owner_engine)
         t = Tracker(await open_engagement(app_engine, world))
         await walk_to(t, s, world, today, "NDA_PENDING")
@@ -315,3 +328,123 @@ async def test_a_milestone_under_review_is_reminded_then_escalated(
         assert [addresses.get(m.to) for m in provider.outbox] == [world.owner]  # the reminder is in-app only
         org: dict[str, Any] = await t.detail(s.owner)
         assert org["escalated_at"] is not None
+
+
+async def ledger(owner_engine: AsyncEngine, t: Tracker, kind: NudgeKind) -> int:
+    async with owner_engine.connect() as conn:
+        found = await run(
+            conn,
+            "SELECT count(*) FROM engagement_nudges WHERE engagement_id = :e AND kind = :k",
+            e=t.engagement,
+            k=kind.value,
+        )
+        return int(found)
+
+
+async def test_em6_is_sent_once_whatever_a_later_hold_moves_the_date_to(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The reviewer's case: the contact-by date passed and EM6 went out; then a hold and an early resume moved the
+    deadline by one business day, to a date that has passed too. No second EM6, then or later (its key is the stage
+    entry's)."""
+    world = await build(owner_engine)
+    off = await holidays_of(owner_engine)
+    async with seats(app_engine, SETTINGS, world) as s, moved_clock(owner_engine) as advance:
+        today = await db_today(owner_engine)
+        t = await confirmed(app_engine, world, s, today)
+        day1 = await business_days_later(owner_engine, advance, 1)
+        assert [n.kind for n in (await nudge(app_engine, t)).sent] == [K.CONTACT_OVERDUE]
+        hold = {"reason": "Budget sign-off", "resume_at": str(add_business_days(day1, 9, off))}
+        await t.ok(s.owner, "pause", hold)
+        await business_days_later(owner_engine, advance, 1)
+        resumed = await t.ok(s.owner, "resume", {"reason": "Budget approved"})
+        assert resumed["state"] == "INTEREST_CONFIRMED"
+        assert resumed["due"]["overdue"] is True  # moved by the hold, and still past
+        assert (await nudge(app_engine, t)).sent == ()
+        await business_days_later(owner_engine, advance, 3)  # past +3 BD and the day paused: the escalation only
+        assert [n.kind for n in (await nudge(app_engine, t)).sent] == [K.CONTACT_ESCALATION]
+        assert await ledger(owner_engine, t, K.CONTACT_OVERDUE) == 1
+
+
+async def test_an_escalation_sent_before_a_hold_is_not_sent_again_after_its_resume(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The count is the stage's from its main-path entry, the days paused added back, never restarted by a resume:
+    the escalation sent at +4 BD is not sent again after a hold and its resume, even once three business days have
+    passed since the resume (only EM6 follows, the moved contact-by date having passed)."""
+    world = await build(owner_engine)
+    off = await holidays_of(owner_engine)
+    async with seats(app_engine, SETTINGS, world) as s, moved_clock(owner_engine) as advance:
+        today = await db_today(owner_engine)
+        t = await confirmed(app_engine, world, s, add_business_days(today, 5, off))
+        day4 = await business_days_later(owner_engine, advance, 4)
+        assert [n.kind for n in (await nudge(app_engine, t)).sent] == [K.CONTACT_ESCALATION]
+        await t.ok(s.owner, "pause", {"reason": "Budget sign-off", "resume_at": str(add_business_days(day4, 9, off))})
+        await business_days_later(owner_engine, advance, 1)
+        await t.ok(s.owner, "resume", {"reason": "Budget approved"})
+        assert (await nudge(app_engine, t)).sent == ()
+        await business_days_later(owner_engine, advance, 4)  # 4 BD after the resume
+        assert [n.kind for n in (await nudge(app_engine, t)).sent] == [K.CONTACT_OVERDUE]
+        assert await ledger(owner_engine, t, K.CONTACT_ESCALATION) == 1
+
+
+async def test_a_hold_after_the_first_day_moves_the_escalation_by_its_business_days_only(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Held from day 1 to day 3 (two business days paused), the escalation counts 3 from the entry plus 2: due once
+    day 5 has ended, sent on day 6. Counted from the resume instead (day 3), it would wait for the end of day 6."""
+    world = await build(owner_engine)
+    off = await holidays_of(owner_engine)
+    async with seats(app_engine, SETTINGS, world) as s, moved_clock(owner_engine) as advance:
+        today = await db_today(owner_engine)
+        t = await confirmed(app_engine, world, s, add_business_days(today, 5, off))
+        day1 = await business_days_later(owner_engine, advance, 1)
+        await t.ok(s.owner, "pause", {"reason": "Budget sign-off", "resume_at": str(add_business_days(day1, 9, off))})
+        await business_days_later(owner_engine, advance, 2)
+        await t.ok(s.owner, "resume", {"reason": "Budget approved"})
+        await business_days_later(owner_engine, advance, 2)  # day 5: 3 + 2 has not run out until its end
+        assert (await nudge(app_engine, t)).sent == ()
+        await business_days_later(owner_engine, advance, 1)  # day 6
+        assert [n.kind for n in (await nudge(app_engine, t)).sent] == [K.CONTACT_ESCALATION]
+
+
+async def test_the_procurement_escalation_reaches_the_admins_and_ends_with_the_route(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """3b end to end: a public entity's engagement waiting in PROCUREMENT_ROUTE past its fifth business day escalates
+    once to its admins (in-app and by email: how long it has waited and when the route is due); the developer is told
+    nothing; the organisation's tracker shows the escalation until the route is chosen, and stage 3's tracker does not
+    carry 3b's escalation."""
+    world = await build(owner_engine, public_entity=True)
+    provider = FakeEmailProvider()
+    off = await holidays_of(owner_engine)
+    async with seats(app_engine, SETTINGS, world) as s, moved_clock(owner_engine) as advance:
+        today = await db_today(owner_engine)
+        t = Tracker(await open_engagement(app_engine, world))
+        await t.ok(s.reviewer, "start-review")
+        detail = await t.ok(s.signatory, "approve", {"contact_user_id": str(world.owner), "contact_channel": "phone"})
+        assert detail["state"] == "PROCUREMENT_ROUTE"
+        await business_days_later(owner_engine, advance, 5)
+        assert (await nudge(app_engine, t)).sent == ()
+        day6 = await business_days_later(owner_engine, advance, 1)
+        report = await nudge(app_engine, t)
+        assert [(n.kind, n.org_recipients, n.developer) for n in report.sent] == [(K.PROCUREMENT_ESCALATION, 1, False)]
+        assert report.sent[0].key.endswith(":bd5")
+        assert (await nudge(app_engine, t)).sent == ()
+        assert await tell(owner_engine, app_engine, t, provider) == 1
+        assert await bell(owner_engine, t, "engagement.n05") == {world.owner: ["Procurement route waiting"]}
+        [email] = provider.outbox
+        addresses = await emails_of(owner_engine, world.owner)
+        assert addresses[email.to] == world.owner  # the developer gets nothing
+        assert email.subject == 'Escalation: choose the procurement route for "RLS proposal"'
+        due_on = add_business_days(today, 10, off)
+        assert "has waited 5 business days" in email.text
+        assert f"it is due by {due_on.day} {due_on:%b %Y}" in email.text
+        org = await t.detail(s.owner)
+        assert (org["state"], org["escalated_at"] is not None) == ("PROCUREMENT_ROUTE", True)
+        assert "escalated_at" not in await t.detail(s.dev)
+        path = f"/api/orgs/{world.org}/engagements/{t.engagement}/procurement-route"
+        chosen = await s.owner.post(path, json={"route": "rfq_tender", "contact_by": str(day6)})
+        assert chosen.status_code == 200, chosen.text
+        assert (chosen.json()["state"], chosen.json()["escalated_at"]) == ("INTEREST_CONFIRMED", None)
+        assert (await nudge(app_engine, t)).sent == ()
