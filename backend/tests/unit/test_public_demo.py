@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 import pytest
 from pydantic import ValidationError
+from structlog.testing import capture_logs
 
 from bridge import public_demo
 from bridge.config import BACKEND_DIR, Settings, get_settings
@@ -206,3 +207,44 @@ async def test_the_schema_and_docs_stay_where_the_mode_is_off() -> None:
     for path in ("/api/docs", "/api/openapi.json"):
         assert (await get(get_settings(), path)).status_code == 200, path
     assert "/api/openapi.json" not in {getattr(r, "path", None) for r in create_app(public()).routes}
+
+
+@pytest.mark.parametrize(
+    ("ip", "trusted", "expected"),
+    [
+        ("41.90.2.1", "127.0.0.1", True),  # a global address: per visitor
+        ("2001:4860:4860::8888", "127.0.0.1", True),
+        ("127.0.0.1", "127.0.0.1", False),  # loopback (Codespaces' forwarder, a bare docker run)
+        ("::1", "127.0.0.1", False),
+        ("10.0.0.7", "127.0.0.1", False),  # private
+        ("172.17.0.1", "127.0.0.1", False),  # Docker's bridge
+        ("192.168.1.20", "127.0.0.1", False),
+        ("169.254.10.1", "127.0.0.1", False),  # link-local
+        ("fe80::1", "127.0.0.1", False),
+        ("fd00::1", "127.0.0.1", False),  # unique local
+        ("unknown", "127.0.0.1", False),  # no client address at all
+        ("41.90.2.1", "127.0.0.1, 41.90.2.0/24", False),  # a trusted proxy's own address
+        ("41.90.2.1", "*", False),
+        ("41.90.2.1", "not-an-address, 10.0.0.0/8", True),  # an unreadable entry is skipped
+    ],
+)
+def test_only_a_global_untrusted_address_gets_its_own_sign_in_bucket(ip: str, trusted: str, expected: bool) -> None:
+    assert public_access.per_visitor(ip, public(trusted_proxies=trusted)) is expected
+
+
+def test_the_shared_bucket_warning_is_logged_once_a_minute(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(public_access._SHARED_WARNING, "last", None)
+    with capture_logs() as logs:
+        assert public_access.warn_shared_bucket(1000.0) is True
+        assert public_access.warn_shared_bucket(1030.0) is False
+        assert public_access.warn_shared_bucket(1059.9) is False
+        assert public_access.warn_shared_bucket(1060.0) is True
+    assert [(entry["event"], entry["log_level"]) for entry in logs] == [
+        ("auth.demo_persona_shared_bucket", "warning")
+    ] * 2
+
+
+def test_the_sign_in_limits() -> None:
+    limits = public_access.SIGN_INS_PER_MINUTE, public_access.SHARED_SIGN_INS_PER_MINUTE
+    assert limits == (30, 300)
+    assert public_access.MAX_SESSIONS_PER_PERSONA == 500

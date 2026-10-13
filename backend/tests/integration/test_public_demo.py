@@ -37,8 +37,11 @@ from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.auth import throttle
+from bridge.auth.crypto import token_hash
 from bridge.config import Settings, get_settings
 from bridge.crypto.envelope import LocalKeyWrapper
+from bridge.demo import public_access
 from bridge.integrations.sms import FakeSmsProvider
 from bridge.notifications.email import FakeEmailProvider
 from bridge.seed.demo import DemoReport, DemoRuntime, seed_demo
@@ -123,7 +126,7 @@ async def scalar(engine: AsyncEngine, sql: str, **params: object) -> Any:
 
 
 @asynccontextmanager
-async def visitor(app: AsyncEngine, settings: Settings | None = None, ip: str = "127.0.2.1") -> AsyncIterator[Any]:
+async def visitor(app: AsyncEngine, settings: Settings | None = None, ip: str = "41.90.2.1") -> AsyncIterator[Any]:
     async with make_client(app, settings or public(), ip=ip) as client:
         yield client
 
@@ -240,14 +243,14 @@ async def test_step_up_actions_work_for_personas_without_a_code(
         "channel": "video_call",
         "contact_by": str(today + timedelta(days=1)),
     }
-    async with visitor(app, ip="127.0.2.2") as peter, visitor(app, ip="127.0.2.3") as amina:
+    async with visitor(app, ip="41.90.2.2") as peter, visitor(app, ip="41.90.2.3") as amina:
         assert (await sign_in(peter, "peter")).status_code == 200
         created = await peter.post(f"/api/orgs/{report.orgs[TELCO_A.legal_name]}/interest", json=interest)
         assert created.status_code == 201, created.text
         assert (await sign_in(amina, "amina")).status_code == 200
         accepted = await Tracker(UUID(created.json()["id"])).ok(amina, "accept-interest")
         assert accepted["state"] == "INTEREST_CONFIRMED"
-    async with visitor(app, ip="127.0.2.4") as moderator:
+    async with visitor(app, ip="41.90.2.4") as moderator:
         assert (await sign_in(moderator, "moderator")).status_code == 200
         queue = await moderator.get("/api/admin/moderation/cases")
         assert queue.status_code == 200, queue.text
@@ -279,7 +282,7 @@ async def test_with_the_mode_off_there_is_no_persona_sign_in(fictional: Seeded, 
 
 
 async def test_unknown_personas_and_other_fields_sign_nobody_in(fictional: Seeded, app: AsyncEngine) -> None:
-    async with visitor(app, ip="127.0.2.5") as client:
+    async with visitor(app, ip="41.90.2.5") as client:
         for persona in ("nobody", "admin", "AMINA", " amina", "admin@staff.example"):
             response = await client.post(SIGN_IN, json={"persona": persona})
             assert response.status_code == 400, persona
@@ -307,7 +310,7 @@ async def test_an_allowlisted_address_that_is_not_an_active_demo_account_is_refu
     async with owner.begin() as conn:
         await conn.execute(text(change), {"e": hassan})
     try:
-        async with visitor(app, ip="127.0.2.6") as client:
+        async with visitor(app, ip="41.90.2.6") as client:
             response = await client.post(SIGN_IN, json={"persona": "hassan"})
             assert (response.status_code, response.json()["detail"]["code"]) == (400, "unknown_persona")
             assert get_settings().session_cookie_name not in client.cookies
@@ -316,18 +319,97 @@ async def test_an_allowlisted_address_that_is_not_an_active_demo_account_is_refu
             await conn.execute(
                 text("UPDATE users SET demo_account = true, status = 'active' WHERE email = :e"), {"e": hassan}
             )
-    async with visitor(app, ip="127.0.2.7") as client:
+    async with visitor(app, ip="41.90.2.7") as client:
         assert (await client.post(SIGN_IN, json={"persona": "hassan"})).status_code == 200
 
 
 async def test_sign_ins_are_throttled_per_ip(fictional: Seeded, app: AsyncEngine) -> None:
-    async with visitor(app, ip="127.0.2.8") as client:
+    async with visitor(app, ip="41.90.2.8") as client:
         for n in range(30):  # refused attempts count too
             assert (await client.post(SIGN_IN, json={"persona": "nobody"})).status_code == 400, n
         response = await client.post(SIGN_IN, json={"persona": "amina"})
         assert (response.status_code, response.json()["detail"]["code"]) == (429, "too_many_attempts")
-    async with visitor(app, ip="127.0.2.9") as other:  # another address is not held back
+    async with visitor(app, ip="41.90.2.9") as other:  # another address is not held back
         assert (await other.post(SIGN_IN, json={"persona": "amina"})).status_code == 200
+
+
+async def ledger(owner: AsyncEngine, purpose: str, ip: str) -> int:
+    """Sign-in attempts of the last minute in the bucket of ``purpose`` and ``ip`` (the throttle's own digests)."""
+    keys = throttle.ip_keys(get_settings().secret_key.get_secret_value(), purpose, ip)
+    sql = "SELECT count(*) FROM login_attempts WHERE ip_digest = :d AND created_at > now() - interval '1 minute'"
+    return int(await scalar(owner, sql, d=keys.ip))
+
+
+async def test_addresses_that_tell_no_visitor_apart_share_one_high_bucket(
+    fictional: Seeded, app: AsyncEngine, owner: AsyncEngine
+) -> None:
+    """Loopback, private and link-local clients (Codespaces' forwarder, a bare docker run) share one bucket of 300 a
+    minute, so 30 requests from one of them lock nobody out; past 300 every such client waits, a global address not."""
+    shared = public_access.SHARED_PURPOSE, "shared"
+    try:
+        async with visitor(app, ip="127.0.0.1") as local:
+            for n in range(30):
+                assert (await local.post(SIGN_IN, json={"persona": "nobody"})).status_code == 400, n
+            assert (await sign_in(local, "amina")).status_code == 200  # not locked at 30
+            assert await ledger(owner, *shared) == 31
+            assert await ledger(owner, public_access.THROTTLE_PURPOSE, "127.0.0.1") == 0  # no per-address bucket
+            for n in range(31, public_access.SHARED_SIGN_INS_PER_MINUTE):
+                assert (await local.post(SIGN_IN, json={"persona": "nobody"})).status_code == 400, n
+            refused = await local.post(SIGN_IN, json={"persona": "amina"})
+            assert (refused.status_code, refused.json()["detail"]["code"]) == (429, "too_many_attempts")
+        for ip in ("10.1.2.3", "169.254.1.1", "::1"):
+            async with visitor(app, ip=ip) as other:
+                assert (await other.post(SIGN_IN, json={"persona": "amina"})).status_code == 429, ip
+        async with visitor(app, ip="41.90.2.10") as global_visitor:
+            assert (await global_visitor.post(SIGN_IN, json={"persona": "amina"})).status_code == 200
+    finally:  # leave the shared bucket empty for the module's later sign-ins
+        keys = throttle.ip_keys(get_settings().secret_key.get_secret_value(), *shared)
+        async with owner.begin() as conn:
+            await conn.execute(text("DELETE FROM login_attempts WHERE ip_digest = :d"), {"d": keys.ip})
+
+
+async def test_a_trusted_proxys_own_address_uses_the_shared_bucket(
+    fictional: Seeded, app: AsyncEngine, owner: AsyncEngine
+) -> None:
+    proxy = "41.90.2.11"
+    before = await ledger(owner, public_access.SHARED_PURPOSE, "shared")
+    async with visitor(app, public(trusted_proxies=f"127.0.0.1,{proxy}"), ip=proxy) as client:
+        assert (await client.post(SIGN_IN, json={"persona": "amina"})).status_code == 200
+    assert await ledger(owner, public_access.SHARED_PURPOSE, "shared") == before + 1
+    assert await ledger(owner, public_access.THROTTLE_PURPOSE, proxy) == 0
+
+
+async def test_switching_persona_ends_the_session_the_browser_had(
+    fictional: Seeded, app: AsyncEngine, owner: AsyncEngine
+) -> None:
+    async with visitor(app, ip="41.90.2.12") as client:
+        assert (await sign_in(client, "amina")).status_code == 200
+        first = client.cookies[get_settings().session_cookie_name]
+        assert (await sign_in(client, "brian")).status_code == 200
+        second = client.cookies[get_settings().session_cookie_name]
+        assert (await client.get("/api/auth/me")).json()["user"]["email"] == "brian@developers.example"
+    revoked = "SELECT revoked_at IS NOT NULL FROM sessions WHERE token_hash = :h"
+    assert await scalar(owner, revoked, h=token_hash(first)) is True
+    assert await scalar(owner, revoked, h=token_hash(second)) is False
+
+
+async def test_a_persona_keeps_only_its_newest_sessions(
+    fictional: Seeded, app: AsyncEngine, owner: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cap (500 live sessions a persona, lowered to 2 here): the oldest beyond it are revoked."""
+    assert public_access.MAX_SESSIONS_PER_PERSONA == 500
+    monkeypatch.setattr(public_access, "MAX_SESSIONS_PER_PERSONA", 2)
+    tokens = []
+    for n in range(4):
+        async with visitor(app, ip=f"41.90.2.{20 + n}") as client:  # a fresh browser each time: no cookie to end
+            assert (await sign_in(client, "rita")).status_code == 200
+            tokens.append(client.cookies[get_settings().session_cookie_name])
+    live = await rows(
+        owner,
+        "SELECT token_hash FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.email = 'reviewer@telco-a.example'"
+        " AND s.revoked_at IS NULL AND s.expires_at > now()",
+    )
+    assert {bytes(row.token_hash) for row in live} == {token_hash(t) for t in tokens[-2:]}
 
 
 # ------------------------------------------------------------------------------------------------------------ AT-PD-4
@@ -347,7 +429,7 @@ async def test_a_persona_cannot_change_credentials_roles_files_or_the_clock(
     )
     telco = report.orgs[TELCO_A.legal_name]
     peter = report.users["signatory@telco-a.example"]
-    async with visitor(app, ip="127.0.3.1") as amina, visitor(app, ip="127.0.3.2") as grace:
+    async with visitor(app, ip="41.90.3.1") as amina, visitor(app, ip="41.90.3.2") as grace:
         assert (await sign_in(amina, "amina")).status_code == 200
         assert (await sign_in(grace, "grace")).status_code == 200
         attempts = [
@@ -386,7 +468,7 @@ async def test_a_persona_cannot_change_credentials_roles_files_or_the_clock(
 
 
 async def test_signing_up_is_switched_off(fictional: Seeded, app: AsyncEngine) -> None:
-    async with visitor(app, ip="127.0.3.3") as client:
+    async with visitor(app, ip="41.90.3.3") as client:
         response = await client.post("/api/auth/signup", json={"email": "someone@example.com"})
     assert (response.status_code, response.json()) == (403, {"detail": LOCKED})
 
@@ -394,7 +476,7 @@ async def test_signing_up_is_switched_off(fictional: Seeded, app: AsyncEngine) -
 async def test_the_persona_allowlist_is_the_only_way_in(fictional: Seeded, app: AsyncEngine) -> None:
     """The published demo password opens nothing: the password sign-in (here as the demo staff admin, who is no
     persona), its second step and spending a link are locked, and no session cookie is set."""
-    async with visitor(app, ip="127.0.3.4") as client:
+    async with visitor(app, ip="41.90.3.4") as client:
         attempts = [
             await client.post("/api/auth/login", json={"email": STAFF_ADMIN.email, "password": DEMO_PASSWORD}),
             await client.post("/api/auth/login", json={"email": AMINA.email, "password": DEMO_PASSWORD}),
@@ -412,14 +494,14 @@ async def test_the_admin_api_lists_and_runs_official_excerpts_only(fictional: Se
     excerpts there, and a niche with none cannot be run; with the mode off every saved excerpt is listed."""
     _, report = fictional
     admin = report.users[STAFF_ADMIN.email]
-    async with visitor(app, ip="127.0.3.5") as client:
+    async with visitor(app, ip="41.90.3.5") as client:
         await sign_in_as(client, app, admin, mfa_verified=True)
         sources = (await client.get("/api/admin/research/sources")).json()
         assert {excerpt["source_type"] for excerpt in sources["excerpts"]} == {"official"}
         assert len(sources["excerpts"]) == 6
         refused = await client.post("/api/admin/research/runs", json={"niche": "health", "country": "KE"})
         assert (refused.status_code, refused.json()["detail"]["code"]) == (422, "no_saved_excerpts")
-    async with visitor(app, get_settings(), ip="127.0.3.6") as client:
+    async with visitor(app, get_settings(), ip="41.90.3.6") as client:
         await sign_in_as(client, app, admin, mfa_verified=True)
         assert len((await client.get("/api/admin/research/sources")).json()["excerpts"]) == 19
 
