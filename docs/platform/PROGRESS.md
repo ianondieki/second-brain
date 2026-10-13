@@ -1292,7 +1292,7 @@ story, frontend, hygiene and both legacy suites green; scanners red on `npm audi
 legacy job red as before; the backend job stopped at its 35-minute limit (the runner question recorded at P26/P27;
 the backend suite passed locally: unit 3,845, and the integration sets each agent and reviewer ran). CodeQL run on
 `3746ff6`: the D-42 findings plus one new `js/incomplete-sanitization` in P27's `declaration.spec.ts`, fixed with
-D-42's `verify.spec.ts` one in `bf2b3db` (every regex metacharacter escaped); the re-run on `bf2b3db` is recorded below when it finishes.
+D-42's `verify.spec.ts` one in `bf2b3db` (every regex metacharacter escaped); CodeQL run 300 on `bf2b3db`: JavaScript clean; Python exactly D-42's seven (six test-code logging findings and the RFC 2634 SHA-1).
 
 **Deviations and residuals.**
 - 3b is named "Procurement route", not the spec's "Procurement route determined" (it read as decided while waiting):
