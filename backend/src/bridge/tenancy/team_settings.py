@@ -105,19 +105,25 @@ async def set_niche_defaults(db: AsyncSession, org: OrgContext, items: Sequence[
 # --------------------------------------------------------------------------------------------- escalation contact
 
 
+async def _member_name(db: AsyncSession, org_id: UUID, user_id: UUID) -> str | None:
+    """The display name of an active member of the organisation, else None."""
+    name: str | None = await db.scalar(
+        select(User.display_name)
+        .join(Membership, Membership.user_id == User.id)
+        .where(
+            Membership.org_id == org_id,
+            Membership.user_id == user_id,
+            Membership.status == MembershipStatus.ACTIVE,
+        )
+    )
+    return name
+
+
 async def set_escalation_contact(db: AsyncSession, org: OrgContext, user_id: UUID | None) -> EscalationContact | None:
     """Name the organisation's escalation contact (an active member) or nobody, in the caller's transaction."""
     name = None
     if user_id is not None:
-        name = await db.scalar(
-            select(User.display_name)
-            .join(Membership, Membership.user_id == User.id)
-            .where(
-                Membership.org_id == org.org_id,
-                Membership.user_id == user_id,
-                Membership.status == MembershipStatus.ACTIVE,
-            )
-        )
+        name = await _member_name(db, org.org_id, user_id)
         if name is None:
             raise ApiError(422, "invalid_member", INVALID_MEMBER)
     c = OrgEscalationContact

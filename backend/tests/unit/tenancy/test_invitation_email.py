@@ -8,12 +8,16 @@ date is the Nairobi date the link stops working.
 from __future__ import annotations
 
 from datetime import date
+from typing import cast
+from uuid import uuid4
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from bridge.auth.crypto import new_token
 from bridge.models.enums import OrgRole
-from bridge.tenancy.invitation_email import InvitationFacts, link, locale_of, render, roles_text
+from bridge.notifications.email import FakeEmailProvider
+from bridge.tenancy.invitation_email import InvitationFacts, deliver, link, locale_of, render, roles_text
 
 TOKEN = new_token()
 
@@ -91,3 +95,21 @@ def test_the_language_is_swahili_only_for_a_swahili_account() -> None:
 def test_the_link_is_the_web_app_s_page_on_the_public_origin() -> None:
     assert link("https://wazo.example", "abc") == "https://wazo.example/invitations/abc"
     assert link("https://wazo.example///", "abc") == "https://wazo.example/invitations/abc"
+
+
+async def test_a_failed_send_is_logged_and_never_raised() -> None:
+    """The invitation committed before the email: a failure to send leaves it for a resend, nothing is raised."""
+
+    def down() -> AsyncSession:
+        raise RuntimeError("the database is down")
+
+    factory = cast(async_sessionmaker[AsyncSession], down)
+    sent = await deliver(
+        factory,
+        FakeEmailProvider(),
+        org_id=uuid4(),
+        inviter_id=uuid4(),
+        address="a@example.com",
+        wording=render(facts(), "en"),
+    )
+    assert sent is False
