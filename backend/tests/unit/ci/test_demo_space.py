@@ -379,7 +379,7 @@ def booting(run: ModuleType, home: Path, monkeypatch: pytest.MonkeyPatch) -> tup
     monkeypatch.setattr(run.Supervisor, "start_storage", lambda self: events.append(("storage",)))
     monkeypatch.setattr(run.Supervisor, "step", step)
     monkeypatch.setattr(run.Supervisor, "spawn", spawn)
-    monkeypatch.setattr(run.Supervisor, "wait_for", lambda self, *args: None)
+    monkeypatch.setattr(run.Supervisor, "wait_for", lambda self, what, *args: events.append(("ready", what)))
     return run.Supervisor(7860, "fictional"), events
 
 
@@ -396,7 +396,9 @@ def test_the_frozen_instant_is_taken_after_the_seed_and_given_to_the_api_and_wor
     assert events[frozen_at + 1 :] == [
         ("spawn", "api", FROZEN[0]),
         ("spawn", "worker", FROZEN[0]),
+        ("ready", "api"),  # the web app, the public port, starts only once the API answers
         ("spawn", "web", ""),
+        ("ready", "web"),
     ]
 
 

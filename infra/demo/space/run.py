@@ -417,8 +417,10 @@ class Supervisor:
         api_env = {key: value for key, value in env.items() if key != "PROVENANCE_SIGNING_KEY"}  # the API never signs
         api = self.spawn(Child("api", API.split(), api_env, cwd=BACKEND))
         self.spawn(Child("worker", ["procrastinate", "--app=bridge.jobs.app.app", "worker"], env, cwd=BACKEND))
-        web = self.spawn(Child("web", ["node", "server.js"], self.web_env(), cwd=WEB))
         self.wait_for("api", lambda: http_status(f"http://127.0.0.1:{API_PORT}/healthz") == 200, 120, api)
+        # The public port opens only now: a web app started with the API it would serve pages whose /api calls fail
+        # (Next answers 500 while the API is still importing; about 20 s on a busy host).
+        web = self.spawn(Child("web", ["node", "server.js"], self.web_env(), cwd=WEB))
         self.wait_for("web", lambda: http_status(f"http://127.0.0.1:{self.port}/") == 200, 120, web)
 
     def boot_with_retries(self, attempts: int = 3) -> None:
