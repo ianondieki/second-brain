@@ -64,6 +64,7 @@ from bridge.proposals.schemas import (
     RemovedOut,
     TeaserCard,
 )
+from bridge.public_demo import LOCKED
 
 router = APIRouter(tags=["proposals"], responses=ERROR_RESPONSES)
 tier2_router = APIRouter(tags=["tier2"], responses=ERROR_RESPONSES, dependencies=[Depends(access.tier2_gate)])
@@ -144,6 +145,7 @@ async def _read_body(request: Request) -> bytes:
     "/api/me/proposals/{proposal_id}/attachments",
     status_code=201,
     responses={413: {"model": ApiErrorBody}, **UNAVAILABLE},
+    dependencies=[LOCKED],  # no uploads in the public demo (REQ-FND-04)
     openapi_extra={
         "requestBody": {
             "required": True,
