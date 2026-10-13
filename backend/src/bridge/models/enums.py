@@ -381,6 +381,18 @@ class ContactChannel(StrEnum):
     IN_PERSON = "in_person"
 
 
+class ProcurementRoute(StrEnum):
+    """How a public entity will buy (docs/spec/06 6.9 stage 3b, ``PROCUREMENT_ROUTE``; PPADA 2015, PPP Act 2021;
+    revision 0015, REQ-ENG-06). Chosen once by the organisation's owner or admin, together with the move to
+    ``INTEREST_CONFIRMED``; ``direct`` needs a written justification of at least 20 characters."""
+
+    DIRECT = "direct"  # direct procurement, with a written justification
+    RFQ_TENDER = "rfq_tender"  # request for quotation or tender
+    PPP_PIP = "ppp_pip"  # a privately-initiated PPP proposal
+    INNOVATION_CHALLENGE = "innovation_challenge"  # an innovation challenge or grant
+    PILOT_MOU = "pilot_mou"  # a pilot under a memorandum of understanding
+
+
 class IpTerms(StrEnum):
     """docs/spec/06 6.9 stage 8. The internal e-signature refuses ``assignment`` and ``exclusive_licence``."""
 

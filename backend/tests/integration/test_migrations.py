@@ -165,7 +165,8 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     },
     "directory_invitations": {"status", "reason", "approved_by", "sent_at", "updated_at"},
     # revision 0003: never state, end_reason, the stage times or lock_version (the chain's projection), nor the keys
-    "engagements": {"contact_user_id", "contact_channel", "contact_by", "updated_at"},
+    "engagements": {"contact_user_id", "contact_channel", "contact_by", "updated_at"}
+    | {"procurement_route", "procurement_justification"},  # revision 0015: never the decision's time or decider
     "agreements": {"ip_terms", "exclusivity", "deemed_acceptance_days", "status", "final_pdf_sha256", "updated_at"},
     "milestones": {"seq", "deliverable", "amount_kes_minor", "due_date", "review_window_bd", "state", "updated_at"},
     "payment_records": {"confirmed_by", "confirmed_amount_kes_minor"},  # the developer's one confirmation
@@ -609,6 +610,9 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "calendar_feeds_guard()": (False, set()),
     "memberships_revoke_calendar_feeds()": (True, set()),  # revokes another user's feeds
     "users_revoke_calendar_feeds()": (True, set()),  # likewise
+    # revision 0015: the procurement route (trigger functions: nobody)
+    "engagements_procurement_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer
+    "engagements_procurement_moved()": (True, set()),  # reads the engagement at commit
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -822,6 +826,56 @@ V13_TABLES = (
 )
 
 
+def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[str]]) -> None:
+    """Revision 0015 (P28-M): what it adds and the four things of earlier revisions it replaces (revision 0003's
+    predecessors and contact CHECK)."""
+    added = {kind: set(at_0015[kind]) - set(at_0014[kind]) for kind in SNAPSHOT}
+    removed = {kind: set(at_0014[kind]) - set(at_0015[kind]) for kind in SNAPSHOT}
+    assert {kind for kind in SNAPSHOT if added[kind] or removed[kind]} == {
+        "columns",
+        "constraints",
+        "enums",
+        "functions",
+        "triggers",
+        "column_acl",
+        "function_acl",
+    }
+    assert added["enums"] == {"procurement_route direct,rfq_tender,ppp_pip,innovation_challenge,pilot_mou"}
+    assert added["columns"] == {
+        "engagements.procurement_route procurement_route",
+        "engagements.procurement_justification text",
+        "engagements.procurement_decided_at timestamp with time zone",
+        "engagements.procurement_decided_by uuid",
+    }
+    assert {line.split(" ")[1] for line in removed["constraints"]} == {"ck_engagements_contact_complete"}
+    assert {line.split(" ")[1] for line in added["constraints"]} == {
+        "ck_engagements_contact_consistent",
+        "ck_engagements_procurement_decided",
+        "ck_engagements_procurement_justification_valid",
+        "ck_engagements_procurement_direct_justified",
+        "fk_engagements_procurement_decided_by_users",
+        "engagements_procurement_moved",  # the constraint trigger's own entry
+    }
+    (replaced,) = removed["functions"]
+    assert replaced.startswith("engagement_main_path_predecessors(engagement_state) false "), replaced
+    assert {line.split(" ")[0] for line in added["functions"]} == {
+        "engagement_main_path_predecessors(engagement_state)",  # replaced in place: only the body
+        "engagements_procurement_guard()",
+        "engagements_procurement_moved()",
+    }
+    assert {line.split(" ")[1] for line in added["triggers"]} == {
+        "engagements_procurement_guard",
+        "engagements_procurement_moved",
+    }
+    assert added["column_acl"] == {
+        "engagements.procurement_route bridge_app UPDATE",
+        "engagements.procurement_justification bridge_app UPDATE",
+    }
+    assert not removed["column_acl"]
+    assert {line.split(" ")[1] for line in added["function_acl"]} == {"bridge_owner"}  # trigger functions: nobody
+    assert not removed["function_acl"]
+
+
 def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     run_alembic(scratch_url, lambda config: command.upgrade(config, "0001"))
     at_0001 = schema_snapshot(scratch_url)
@@ -931,15 +985,22 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     } <= set(at_0013["column_acl"])
     for signature in ("app_prior_knowledge_window(uuid)", "app_calendar_feed_lookup(bytea)"):
         assert f"{signature} bridge_app EXECUTE" in at_0013["function_acl"]
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0014"))
+    at_0014 = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_0014[kind] != at_0013[kind]}
+    assert changed == {"functions"}, "0014 replaces one function's body; its owner, ACL and triggers stay"
+    (replaced,) = set(at_0013["functions"]) - set(at_0014["functions"])
+    (replacement,) = set(at_0014["functions"]) - set(at_0013["functions"])
+    assert replaced.startswith("evidence_time_guard() false "), replaced  # SECURITY INVOKER, as revision 0002's
+    assert replacement.rsplit(" ", 1)[0] == replaced.rsplit(" ", 1)[0]  # signature, definer, search_path: only the body
     run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
     run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
     at_head = schema_snapshot(scratch_url)
-    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0013[kind]}
-    assert changed == {"functions"}, "0014 replaces one function's body; its owner, ACL and triggers stay"
-    (replaced,) = set(at_0013["functions"]) - set(at_head["functions"])
-    (replacement,) = set(at_head["functions"]) - set(at_0013["functions"])
-    assert replaced.startswith("evidence_time_guard() false "), replaced  # SECURITY INVOKER, as revision 0002's
-    assert replacement.rsplit(" ", 1)[0] == replaced.rsplit(" ", 1)[0]  # signature, definer, search_path: only the body
+    assert_v15_changes(at_0014, at_head)
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0014"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0015 leaves every object of 0014 exactly as it found it (0003's predecessors and CHECK)
+        assert after[kind] == at_0014[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0013"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0014 leaves every object of 0013 exactly as it found it (revision 0002's body restored)
@@ -3376,6 +3437,15 @@ V13_TRIGGERS = {
     ("memberships", "memberships_revoke_calendar_feeds"): ("memberships_revoke_calendar_feeds", ROW | ON_UPDATE),
     ("users", "users_revoke_calendar_feeds"): ("users_revoke_calendar_feeds", ROW | ON_UPDATE),
 }
+# Revision 0015 (P28-M): the procurement route's guard and its commit-time check (a constraint trigger, AFTER UPDATE OF
+# procurement_route, deferred).
+V15_TRIGGERS = {
+    ("engagements", "engagements_procurement_guard"): (
+        "engagements_procurement_guard",
+        ROW | BEFORE | ON_INSERT | ON_UPDATE,
+    ),
+    ("engagements", "engagements_procurement_moved"): ("engagements_procurement_moved", ROW | ON_UPDATE),
+}
 
 
 async def test_a_published_briefs_text_changes_only_with_a_return_to_review(owner_engine: AsyncEngine) -> None:
@@ -3424,7 +3494,7 @@ async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine)
         " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
     )
     expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS | V8_TRIGGERS | V9_TRIGGERS
-    expected |= V10_TRIGGERS | V11_TRIGGERS | V12_TRIGGERS | V13_TRIGGERS
+    expected |= V10_TRIGGERS | V11_TRIGGERS | V12_TRIGGERS | V13_TRIGGERS | V15_TRIGGERS
     assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == expected
     assert {row.tgenabled for row in found} == {"O"}
 

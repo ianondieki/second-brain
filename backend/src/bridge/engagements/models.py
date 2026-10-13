@@ -81,6 +81,7 @@ from bridge.models.enums import (
     MilestoneState,
     OrgRole,
     PaymentMethod,
+    ProcurementRoute,
     RecommendationStance,
     SignatureDocumentKind,
     StepUpMethod,
@@ -108,6 +109,30 @@ def end_reason_matches(state_column: str) -> str:
 VIA_ENGAGEMENT = {"info": {"tenancy": Tenancy.ORG_OR_USER, "via": "engagements"}}
 SHA256_SIZE = "octet_length({column}) = 32"
 
+# Revision 0015 (REQ-ENG-06; docs/spec/06 6.9 stage 3b). The justification is plain text the organisation writes (line
+# breaks allowed, as a note or a message), at most 1,000 characters and not blank; ``direct`` needs at least 20
+# characters once the ends are trimmed (the API trims first, then checks 20 to 1,000).
+PROCUREMENT_JUSTIFICATION_MAX_CHARS = 1000
+PROCUREMENT_DIRECT_MIN_CHARS = 20
+CONTACT_CONSISTENT = (
+    "(contact_user_id IS NULL) = (contact_channel IS NULL)"
+    " AND (contact_by IS NULL OR contact_user_id IS NOT NULL)"
+    " AND (contact_by IS NOT NULL OR contact_user_id IS NULL OR procurement_route IS NULL)"
+)
+PROCUREMENT_DECIDED = (
+    "(procurement_route IS NULL) = (procurement_decided_at IS NULL)"
+    " AND (procurement_route IS NULL) = (procurement_decided_by IS NULL)"
+)
+PROCUREMENT_JUSTIFICATION_VALID = (
+    "procurement_justification IS NULL OR (procurement_route IS NOT NULL"
+    " AND procurement_justification ~ '[^[:space:]]'"
+    f" AND char_length(procurement_justification) <= {PROCUREMENT_JUSTIFICATION_MAX_CHARS})"
+)
+PROCUREMENT_DIRECT_JUSTIFIED = (
+    "procurement_route IS DISTINCT FROM 'direct'"
+    f" OR char_length(btrim(coalesce(procurement_justification, ''))) >= {PROCUREMENT_DIRECT_MIN_CHARS}"
+)
+
 
 class Engagement(IdMixin, TimestampsMixin, Base):
     """One proposal x one organisation (docs/spec/03). ``state`` is the projection of ``engagement_events``."""
@@ -124,12 +149,14 @@ class Engagement(IdMixin, TimestampsMixin, Base):
         CheckConstraint(f"coalesce({end_reason_matches('state')}, false)", name="end_reason_matches_state"),
         # Set by the database when the engagement enters a terminal state (and only then).
         CheckConstraint(f"(ended_at IS NOT NULL) = (state IN ({TERMINAL}))", name="ended_exactly_when_terminal"),
-        # The organisation's named contact (docs/spec/06 6.9 stage 3): person, channel and contact-by date together.
-        CheckConstraint(
-            "(contact_user_id IS NULL) = (contact_channel IS NULL)"
-            " AND (contact_channel IS NULL) = (contact_by IS NULL)",
-            name="contact_complete",
-        ),
+        # The organisation's named contact (docs/spec/06 6.9 stage 3; revision 0015): person and channel together, a
+        # contact-by date only with them; a public entity names the person and channel when it approves to proceed
+        # and the date with its procurement route (3b), so once the route is decided a named contact has its date.
+        CheckConstraint(CONTACT_CONSISTENT, name="contact_consistent"),
+        # The procurement route (3b, revision 0015): decided once, with its time and decider (the database's).
+        CheckConstraint(PROCUREMENT_DECIDED, name="procurement_decided"),
+        CheckConstraint(PROCUREMENT_JUSTIFICATION_VALID, name="procurement_justification_valid"),
+        CheckConstraint(PROCUREMENT_DIRECT_JUSTIFIED, name="procurement_direct_justified"),
         {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "developer_id"}},
     )
 
@@ -153,6 +180,15 @@ class Engagement(IdMixin, TimestampsMixin, Base):
     contact_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
     contact_channel: Mapped[ContactChannel | None] = mapped_column(pg_enum(ContactChannel, "contact_channel"))
     contact_by: Mapped[date | None] = mapped_column(Date)
+    # Revision 0015 (REQ-ENG-06, AC-TRACK-5): a public entity's procurement route, decided by its owner or admin while
+    # the engagement is in PROCUREMENT_ROUTE, in the transaction that moves it to INTEREST_CONFIRMED, and never changed
+    # afterwards. The app writes the route and the justification; the time and the decider are the database's.
+    procurement_route: Mapped[ProcurementRoute | None] = mapped_column(pg_enum(ProcurementRoute, "procurement_route"))
+    procurement_justification: Mapped[str | None] = mapped_column(Text)  # the organisation's words, shown to both
+    procurement_decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_onupdate=FetchedValue()
+    )
+    procurement_decided_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), server_onupdate=FetchedValue())
 
     __mapper_args__ = {"version_id_col": lock_version, "version_id_generator": False}  # noqa: RUF012
 
