@@ -104,7 +104,9 @@ describe("/login in the public demo", () => {
   it("offers every persona the API returned, in its order: the name as a heading, the role, the detail, one button", async () => {
     await renderLogin();
     expect(screen.getByRole("heading", { level: 1, name: "Try the demo as…" })).toBeTruthy();
-    const list = screen.getByRole("list", { name: "People you can sign in as" });
+    // The same noun as /signup's "Choose a persona" and the menu's "Switch persona" (ux review of P28-PD, MINOR 5).
+    expect(screen.getByText("Choose a persona. One press signs you in and opens their Home.")).toBeTruthy();
+    const list = screen.getByRole("list", { name: "Personas you can sign in as" });
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(7);
     expect(rows.map((row) => within(row).getByRole("heading", { level: 2 }).textContent)).toEqual(NAMES);
@@ -162,7 +164,7 @@ describe("/login in the public demo", () => {
   it("renders whatever count the API returns (no fixed number)", async () => {
     mocks.personas.mockResolvedValue(PERSONAS.slice(0, 2));
     await renderLogin();
-    expect(within(screen.getByRole("list", { name: "People you can sign in as" })).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(screen.getByRole("list", { name: "Personas you can sign in as" })).getAllByRole("listitem")).toHaveLength(2);
   });
 
   it("offers personas only: no email or password form, no emailed link, no sign-up (all switched off in the demo)", async () => {
@@ -236,7 +238,7 @@ describe("/login in the public demo", () => {
   it("says so in one line with \"Try again\" (the page itself), and no form, when no persona could be read", async () => {
     mocks.personas.mockResolvedValue(null);
     await renderLogin();
-    expect(screen.queryByRole("list", { name: "People you can sign in as" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Personas you can sign in as" })).toBeNull();
     const empty = document.querySelector<HTMLElement>("[data-personas-unavailable]")!;
     expect(empty.querySelector("p")!.textContent).toBe(en.publicDemo.unavailable);
     expect(within(empty).getByRole("link", { name: "Try again" }).getAttribute("href")).toBe("/login");
@@ -256,7 +258,7 @@ describe("/login with the mode off", () => {
     await renderLogin();
     expect(mocks.personas).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { level: 1, name: en.login.title })).toBeTruthy();
-    expect(screen.queryByRole("list", { name: "People you can sign in as" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Personas you can sign in as" })).toBeNull();
     expect(document.querySelector("details")).toBeNull();
     expect(screen.getByRole("button", { name: en.login.magicLink })).toBeTruthy();
     expect(document.querySelector('a[href="/signup"]')).not.toBeNull();

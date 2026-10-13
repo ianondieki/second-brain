@@ -26,7 +26,7 @@ const CHANGE_LOCKED = "Changing this is switched off in the public demo.";
 
 test.skip(process.env.E2E_PUBLIC_DEMO !== "1", "needs a stack started with PUBLIC_DEMO=true: set E2E_PUBLIC_DEMO=1");
 
-const personas = (page: Page) => page.getByRole("list", { name: "People you can sign in as" });
+const personas = (page: Page) => page.getByRole("list", { name: "Personas you can sign in as" });
 
 /** Signs in as a persona from /login's picker and waits for that persona's Home. */
 async function signInAs(page: Page, name: string, home: RegExp) {

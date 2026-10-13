@@ -172,9 +172,18 @@ describe("/signup", () => {
     await renderSignup();
     const empty = document.querySelector<HTMLElement>("[data-empty-state]")!;
     expect(empty.querySelector("p")!.textContent).toBe(en.publicDemo.signupLocked);
-    const action = within(empty).getByRole("link", { name: en.publicDemo.signupAction });
+    // One name for the action (ux review of P28-PD, MINOR 5): a persona, as on /login and in "Switch persona".
+    const action = within(empty).getByRole("link", { name: "Choose a persona" });
     expect(action.getAttribute("href")).toBe("/login");
     expect(document.querySelectorAll("form, input")).toHaveLength(0);
+  });
+
+  it("is the sign-up form with the mode off, with no persona action", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "false");
+    await renderSignup();
+    expect(document.querySelector("form")).not.toBeNull();
+    expect(screen.queryByRole("link", { name: "Choose a persona" })).toBeNull();
+    expect(document.querySelector("[data-demo-locked]")).toBeNull();
   });
 });
 
