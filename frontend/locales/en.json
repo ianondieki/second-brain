@@ -4684,7 +4684,8 @@
     },
     "upgradeTo": "Upgrade to {plan}",
     "seePlans": "See plans",
-    "verificationHelp": "How verification works"
+    "verificationHelp": "How verification works",
+    "loading": "Loading…"
   },
   "invitation": {
     "pageTitle": "Invitation",

@@ -1,15 +1,38 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
-import { StepUp } from "@/components/tracker/StepUp";
 import { Alert } from "@/components/ui/Alert";
-import { standaloneLinkClass } from "@/components/ui/Button";
+import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { billingHref, upgradeHref } from "@/lib/billing/upgrade";
 
 import type { TeamOutcome, TeamRefusal } from "./calls";
+
+// The fresh-code form (the tracker's StepUp, with its code field) is a chunk of its own, fetched only when the API asks
+// for it: the page's first load stays under the 150 KB budget (docs/spec/07 item 5).
+// Offline (or a newer deploy replaced the chunk): the refusal's "no connection" line and Cancel instead of an error page.
+const StepUp = lazy(() =>
+  import("@/components/tracker/StepUp").then(
+    (module) => ({ default: module.StepUp }),
+    () => ({ default: StepUpUnavailable }),
+  ),
+);
+
+function StepUpUnavailable({ onCancel }: { onCancel: () => void }) {
+  const t = useStrings("teamAdmin");
+  return (
+    <div className="flex flex-col items-start gap-3" data-step-up="unavailable">
+      <Alert className="w-full">
+        <p>{t("refusal.network")}</p>
+      </Alert>
+      <Button variant="secondary" onClick={onCancel}>
+        {t("cancel")}
+      </Button>
+    </div>
+  );
+}
 
 /** Refusals after which the page is out of date: it is read again under the sentence. */
 const STALE: ReadonlySet<TeamRefusal> = new Set(["invitation_closed", "notFound", "unknown_niche", "already_member"]);
@@ -125,15 +148,17 @@ export function useTeamWrite({
   ) : null;
 
   const stepUp = retry ? (
-    <StepUp
-      enrolled={enrolled}
-      primary={primary}
-      onConfirmed={retry}
-      onCancel={() => {
-        setRetry(null);
-        setBusy(false);
-      }}
-    />
+    <Suspense fallback={<p role="status" className="text-sm text-ink-soft">{t("loading")}</p>}>
+      <StepUp
+        enrolled={enrolled}
+        primary={primary}
+        onConfirmed={retry}
+        onCancel={() => {
+          setRetry(null);
+          setBusy(false);
+        }}
+      />
+    </Suspense>
   ) : null;
 
   return { busy, problem, stepUp, run, reset: () => setRefused(null) };

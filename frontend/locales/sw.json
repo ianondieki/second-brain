@@ -4684,7 +4684,8 @@
     },
     "upgradeTo": "Pandisha hadi {plan}",
     "seePlans": "Tazama mipango",
-    "verificationHelp": "Jinsi uthibitishaji unavyofanya kazi"
+    "verificationHelp": "Jinsi uthibitishaji unavyofanya kazi",
+    "loading": "Inapakia…"
   },
   "invitation": {
     "pageTitle": "Mwaliko",
