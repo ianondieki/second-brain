@@ -8,6 +8,7 @@ import {
   googleCalendarHref,
   gridSpan,
   keyParts,
+  monthInRange,
   monthWeeks,
   nairobiDay,
   pickMonth,
@@ -69,6 +70,10 @@ describe("the month shown", () => {
       expect(pickMonth("2036-12", "2026-10-12")).toBe("2036-12");
       expect(pickMonth("2015-12", "2026-10-12")).toBe("2026-10");
       expect(pickMonth("2037-01", "2026-10-12")).toBe("2026-10");
+      // The same bound decides which month links are drawn (MonthHeader).
+      for (const month of ["2016-01", "2016-10", "2026-10", "2036-12"])
+        expect(monthInRange(month, "2026-10-12")).toBe(true);
+      for (const month of ["2015-12", "2037-01"]) expect(monthInRange(month, "2026-10-12")).toBe(false);
     },
   );
 

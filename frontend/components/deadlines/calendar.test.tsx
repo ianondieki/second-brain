@@ -52,9 +52,9 @@ afterEach(cleanup);
 const href = ({ month, day }: { month: string; day?: string }) =>
   `/dev/engagements?view=calendar&month=${month}${day ? `&day=${day}#day-list` : ""}`;
 
-async function month(items: Deadline[], today = "2026-10-12") {
+async function month(items: Deadline[], today = "2026-10-12", shown = "2026-10") {
   return renderWithIntl(
-    <>{await resolveServerTree(<MonthCalendar month="2026-10" today={today} items={items} href={href} />)}</>,
+    <>{await resolveServerTree(<MonthCalendar month={shown} today={today} items={items} href={href} />)}</>,
   ).container;
 }
 
@@ -89,6 +89,24 @@ describe("the month", () => {
     );
   });
 
+  // P27 UX (WCAG 2.4.4): a month the view would not show (more than ten years from today's) would open as the current
+  // month under the other's name, so its link is not drawn; the other side's is.
+  it("draws no link to a month beyond ten years either side of today's", async () => {
+    let container = await month([], "2026-10-12", "2036-12");
+    expect(container.querySelector("[data-month-link='next']")).toBeNull();
+    expect(screen.queryByRole("link", { name: /January 2037/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Previous month, November 2036" }).getAttribute("href")).toBe(
+      "/dev/engagements?view=calendar&month=2036-11",
+    );
+    cleanup();
+    container = await month([], "2026-10-12", "2016-01");
+    expect(container.querySelector("[data-month-link='previous']")).toBeNull();
+    expect(screen.queryByRole("link", { name: /December 2015/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Next month, February 2016" }).getAttribute("href")).toBe(
+      "/dev/engagements?view=calendar&month=2016-02",
+    );
+  });
+
   it("shows at most two chips a day, then +n more linking to the day's list; the day itself is that link too", async () => {
     const day = "2026-10-16";
     const items = ["a", "b", "c", "d"].map((id) => deadline({ key: `stage:${id}`, title: `Idea ${id}`, due_on: day }));
@@ -102,7 +120,8 @@ describe("the month", () => {
     const dayLink = within(td).getByRole("link", { name: "16 October: 4 deadlines" });
     expect(dayLink.getAttribute("href")).toBe(more.getAttribute("href"));
     // A 44 px target at every width: the drawn number is 28 px from 640 px, the link around it stays 44 px.
-    expect(dayLink.className.split(" ")).toEqual(expect.arrayContaining(["size-11", "sm:-m-2"]));
+    // Stacked above the first chip its overhang lies over, below the phone's fixed tab bar (z-10).
+    expect(dayLink.className.split(" ")).toEqual(expect.arrayContaining(["size-11", "sm:-m-2", "relative", "z-[1]"]));
     expect(dayLink.className).not.toContain("sm:size-7");
     expect(dayLink.querySelector("span")?.className).toContain("sm:size-7");
     // Phones: dots, at most three, decorative.

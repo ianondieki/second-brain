@@ -5,7 +5,7 @@ import { cn } from "@/components/ui/cn";
 import { ChevronDownIcon } from "@/components/ui/icons";
 
 import { KindMark } from "./KindMark";
-import { byDay, isTurn, monthWeeks, shiftMonth, type Deadline } from "./month";
+import { byDay, isTurn, monthInRange, monthWeeks, shiftMonth, type Deadline } from "./month";
 
 /** How many chips a day's cell shows before "+n more". */
 export const CHIPS_PER_DAY = 2;
@@ -58,7 +58,7 @@ export async function MonthCalendar({ month, today, items, href, selected }: Mon
     );
   return (
     <section aria-labelledby="month-title" data-month={month}>
-      <MonthHeader month={month} href={href} />
+      <MonthHeader month={month} today={today} href={href} />
       <table aria-labelledby="month-title" className="w-full table-fixed border-collapse">
         <thead>
           <tr>
@@ -160,9 +160,11 @@ const MONTH_LINK =
 /**
  * The month's name as the view's heading and the links to the months either side (‹ October 2026, December 2026 ›; the
  * names hidden under 640 px, read out in full). Above the grid, and above an empty month's one sentence too, so a
- * month with nothing due is never a dead end: the deadline next month is one press away.
+ * month with nothing due is never a dead end: the deadline next month is one press away. A month the view would not
+ * show (more than ten years from `today`'s year, `YEARS_EITHER_SIDE`) has no link: it would open the current month
+ * under a name that promised another (WCAG 2.4.4).
  */
-export async function MonthHeader({ month, href }: Pick<MonthCalendarProps, "month" | "href">) {
+export async function MonthHeader({ month, today, href }: Pick<MonthCalendarProps, "month" | "today" | "href">) {
   const [t, locale] = await Promise.all([getTranslations("deadlines"), getLocale()]);
   const previous = shiftMonth(month, -1);
   const next = shiftMonth(month, 1);
@@ -172,24 +174,28 @@ export async function MonthHeader({ month, href }: Pick<MonthCalendarProps, "mon
         {monthName(locale, month)}
       </h2>
       <p className="flex items-center gap-1">
-        <Link
-          href={href({ month: previous })}
-          aria-label={t("previous", { month: monthName(locale, previous) })}
-          className={MONTH_LINK}
-          data-month-link="previous"
-        >
-          <ChevronDownIcon className="size-4 shrink-0 rotate-90" />
-          <span className="max-sm:sr-only">{monthName(locale, previous)}</span>
-        </Link>
-        <Link
-          href={href({ month: next })}
-          aria-label={t("next", { month: monthName(locale, next) })}
-          className={MONTH_LINK}
-          data-month-link="next"
-        >
-          <span className="max-sm:sr-only">{monthName(locale, next)}</span>
-          <ChevronDownIcon className="size-4 shrink-0 -rotate-90" />
-        </Link>
+        {monthInRange(previous, today) ? (
+          <Link
+            href={href({ month: previous })}
+            aria-label={t("previous", { month: monthName(locale, previous) })}
+            className={MONTH_LINK}
+            data-month-link="previous"
+          >
+            <ChevronDownIcon className="size-4 shrink-0 rotate-90" />
+            <span className="max-sm:sr-only">{monthName(locale, previous)}</span>
+          </Link>
+        ) : null}
+        {monthInRange(next, today) ? (
+          <Link
+            href={href({ month: next })}
+            aria-label={t("next", { month: monthName(locale, next) })}
+            className={MONTH_LINK}
+            data-month-link="next"
+          >
+            <span className="max-sm:sr-only">{monthName(locale, next)}</span>
+            <ChevronDownIcon className="size-4 shrink-0 -rotate-90" />
+          </Link>
+        ) : null}
       </p>
     </div>
   );
@@ -198,11 +204,13 @@ export async function MonthHeader({ month, href }: Pick<MonthCalendarProps, "mon
 /**
  * A day with deadlines is a 44 px target at every width (docs/spec/07 item 6): on a phone its number fills it; from
  * 640 px the number is drawn 28 px and the link keeps 44 px around it, its 8 px overhang taken back by a negative
- * margin so the cell's layout is the 28 px one (the overhang lies over the cell's padding and the first chip, which is
- * not a control). The focus ring hugs the drawn number.
+ * margin so the cell's layout is the 28 px one. The overhang lies over the cell's padding and the top of the first
+ * chip (not a control), so the link is positioned and stacked above them (`relative z-[1]`): the whole 44 px hits
+ * the link. Only 1: the phone's fixed tab bar (z-10) still covers it when the grid scrolls under it. The focus ring
+ * hugs the drawn number.
  */
 const DAY_LINK =
-  "group inline-flex size-11 shrink-0 items-center justify-center rounded-full no-underline sm:-m-2 sm:[--focus-offset:-6px]";
+  "group relative z-[1] inline-flex size-11 shrink-0 items-center justify-center rounded-full no-underline sm:-m-2 sm:[--focus-offset:-6px]";
 
 function dayNumberClass(today: boolean, inMonth: boolean, linked: boolean) {
   return cn(

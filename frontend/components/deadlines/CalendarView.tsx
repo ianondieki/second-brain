@@ -69,7 +69,7 @@ export async function CalendarView({
     // a deadline in another month is still one press away (never a dead end).
     return (
       <section aria-labelledby="month-title" data-month={month}>
-        <MonthHeader month={month} href={href} />
+        <MonthHeader month={month} today={today} href={href} />
         <EmptyState
           sentence={t(side === "developer" ? "emptyDev" : "emptyOrg", { month: monthName(locale, month) })}
           action={t(side === "developer" ? "emptyDevAction" : "emptyOrgAction")}
