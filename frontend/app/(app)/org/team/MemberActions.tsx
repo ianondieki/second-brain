@@ -193,7 +193,8 @@ export function MemberActions({
   return (
     <div
       ref={actions}
-      className="flex flex-col gap-2 sm:col-start-2 sm:row-start-1 sm:items-end"
+      // Under 640 px the actions sit under the person's words, past the initials (36 px + 14 px gap).
+      className="flex flex-col gap-2 pl-[3.125rem] sm:col-start-2 sm:row-start-1 sm:items-end sm:pl-0"
       data-member-actions={member.user_id}
     >
       <div className="flex gap-2">
