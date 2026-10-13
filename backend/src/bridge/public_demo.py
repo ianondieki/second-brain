@@ -14,10 +14,14 @@ the deployment a public demo that anyone may open:
   magic link), and on every route that would let one visitor lock the others out of a shared persona or put a file on
   the server: sign-up, magic-link and verification requests, password changes, two-step sign-in (enrol, cancel,
   confirm, recovery codes, disable), OAuth (start, callback, unlinking), organisation role changes, every upload that
-  keeps a file (proposal and message attachments) and the dev/test clock's move. A step-up and sign-out stay open,
-  and so does the certificate file check (``POST /api/verify``: it hashes the body and stores nothing).
-  ``tests/unit/test_public_demo_lock.py`` walks the app's routes and fails when a route that takes a file is neither
-  locked nor that named exception.
+  keeps a file (proposal and message attachments) and the dev/test clock's move; and on every route that would make
+  it a publishing surface: every staff write (the moderator persona reads the queues and decides nothing) and creating
+  a calendar feed (a URL anyone may open). A step-up and sign-out stay open, and so does the certificate file check
+  (``POST /api/verify``: it hashes the body and stores nothing). ``tests/unit/test_public_demo_lock.py`` walks the
+  app's routes and fails when a route that takes a file, or a staff write, is neither locked nor a named exception.
+- **Frozen public pages.** The signed-out reads under ``/api/public`` show only what existed at the freeze
+  (``frozen_at``: ``PUBLIC_DEMO_FROZEN_AT`` or the API process's start), so a visitor's text never reaches a page
+  anyone can open signed out.
 - **Not indexed, not described.** Every API answer carries ``X-Robots-Tag: noindex, nofollow`` (``ROBOTS_HEADERS``,
   ``bridge.main``), and the app serves neither its OpenAPI schema nor the interactive docs.
 - **Fictional content.** With ``PUBLIC_DEMO_CONTENT=fictional`` (the default) the seed loads only fictional

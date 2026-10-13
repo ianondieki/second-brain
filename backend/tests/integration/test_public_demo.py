@@ -495,9 +495,10 @@ async def test_the_persona_allowlist_is_the_only_way_in(fictional: Seeded, app: 
         assert (await client.get("/api/auth/me")).status_code == 401
 
 
-async def test_the_admin_api_lists_and_runs_official_excerpts_only(fictional: Seeded, app: AsyncEngine) -> None:
+async def test_the_admin_api_lists_official_excerpts_only(fictional: Seeded, app: AsyncEngine) -> None:
     """Even a staff admin (who cannot sign in to the public demo; signed in directly here) sees only the official
-    excerpts there, and a niche with none cannot be run; with the mode off every saved excerpt is listed."""
+    excerpts there, and starts no run (staff writes are locked; ``test_public_demo_content`` shows a niche without
+    official excerpts is refused); with the mode off every saved excerpt is listed."""
     _, report = fictional
     admin = report.users[STAFF_ADMIN.email]
     async with visitor(app, ip="41.90.3.5") as client:
@@ -505,8 +506,8 @@ async def test_the_admin_api_lists_and_runs_official_excerpts_only(fictional: Se
         sources = (await client.get("/api/admin/research/sources")).json()
         assert {excerpt["source_type"] for excerpt in sources["excerpts"]} == {"official"}
         assert len(sources["excerpts"]) == 6
-        refused = await client.post("/api/admin/research/runs", json={"niche": "health", "country": "KE"})
-        assert (refused.status_code, refused.json()["detail"]["code"]) == (422, "no_saved_excerpts")
+        locked = await client.post("/api/admin/research/runs", json={"niche": "health", "country": "KE"})
+        assert (locked.status_code, locked.json()) == (403, {"detail": LOCKED})  # staff start nothing here
     async with visitor(app, get_settings(), ip="41.90.3.6") as client:
         await sign_in_as(client, app, admin, mfa_verified=True)
         assert len((await client.get("/api/admin/research/sources")).json()["excerpts"]) == 19
@@ -533,7 +534,7 @@ async def test_a_visitors_text_never_reaches_the_signed_out_pages(
     fictional: Seeded, app: AsyncEngine, owner: AsyncEngine
 ) -> None:
     """Security review MAJOR 2 (a). After the freeze Grace posts a Brief (approved here by the owner role, as staff
-    would) and Amina publishes a new version of P1 with a new problem.
+    would: no staff decision is open in the public demo) and Amina publishes a new version of P1 with a new problem.
     Neither reaches /api/public/* (lists omit them, their pages are 404, P1 leaves the feed, since its event would show
     the new teaser title), the seeded problems still do, a reader with the mode off would see them, and signed-in
     pages are unchanged."""
@@ -602,6 +603,28 @@ async def test_a_visitors_text_never_reaches_the_signed_out_pages(
             assert (response.status_code, response.json()["detail"]["code"]) == (404, "not_found")
         seeded = next(iter(frozen_view["explore_ids"]))
         assert (await reader.get(f"/api/public/problems/{seeded}")).status_code == 200
+
+
+async def test_the_moderator_persona_reads_but_decides_nothing(fictional: Seeded, app: AsyncEngine) -> None:
+    """Security review MAJOR 2 (b): every staff decision answers 403 public_demo_locked; the queues stay readable."""
+    async with visitor(app, ip="41.90.4.6") as moderator:
+        assert (await sign_in(moderator, "moderator")).status_code == 200
+        queue = await moderator.get("/api/admin/moderation/cases")
+        assert queue.status_code == 200, queue.text
+        case = queue.json()["items"][0]["id"]
+        assert (await moderator.get(f"/api/admin/moderation/cases/{case}")).status_code == 200
+        events = await moderator.get("/api/admin/events")
+        assert events.status_code == 200, events.text
+        decisions = [
+            await moderator.post(f"/api/admin/moderation/cases/{case}/decision", json={"decision": "approve"}),
+            await moderator.post(f"/api/admin/events/{UUID(int=7)}/decision", json={"decision": "publish"}),
+            await moderator.post(f"/api/admin/events/{UUID(int=7)}/cancel"),
+            await moderator.post(
+                f"/api/admin/research/candidates/{UUID(int=7)}/decision", json={"decision": "approve"}
+            ),
+        ]
+        for response in decisions:
+            assert (response.status_code, response.json()) == (403, {"detail": LOCKED}), response.request.url
 
 
 # ------------------------------------------------------------------------------------------------- AT-PD-5 (full, last)

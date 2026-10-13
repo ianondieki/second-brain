@@ -55,6 +55,7 @@ from bridge.problems.research.policy import get_research_policy
 from bridge.problems.research.sources import Excerpt, Freshness, catalogue_for, freshness
 from bridge.problems.research.tasks import defer_run
 from bridge.problems.trends import store as trends
+from bridge.public_demo import LOCKED
 from bridge.trends.models import TrendCard, TrendCardSource
 
 router = APIRouter(prefix="/api/admin/research", tags=["admin"], responses=ERROR_RESPONSES)
@@ -229,7 +230,7 @@ async def _runs(db: AsyncSession, run_id: UUID | None = None) -> list[RunOut]:
     ]
 
 
-@router.post("/runs", status_code=202)
+@router.post("/runs", status_code=202, dependencies=[LOCKED])  # read-only staff in the public demo
 async def start_research_run(body: RunIn, staff: StaffAdmin, db: Db, settings: SettingsDep) -> RunOut:
     user_id = staff.live.user.id
     try:
@@ -297,7 +298,7 @@ async def research_candidates(
     )
 
 
-@router.post("/candidates/{problem_id}/decision")
+@router.post("/candidates/{problem_id}/decision", dependencies=[LOCKED])  # read-only staff in the public demo
 async def decide_research_candidate(
     problem_id: UUID, body: DecisionIn, staff: StaffAdmin, db: Db, settings: SettingsDep
 ) -> DecisionOut:
@@ -425,6 +426,7 @@ async def get_trend_card(card_id: UUID, staff: StaffAdmin, db: Db) -> TrendCardA
 
 @router.post(
     "/trends/{card_id}/decision",
+    dependencies=[LOCKED],  # staff are read-only in the public demo (REQ-FND-04)
     responses={409: {"model": ApiErrorBody, "description": "already_decided or unsourced_name"}},
 )
 async def decide_trend_card(card_id: UUID, body: TrendDecisionIn, staff: StaffAdmin, db: Db) -> TrendCardAdminDetailOut:
@@ -464,7 +466,7 @@ async def decide_trend_card(card_id: UUID, body: TrendDecisionIn, staff: StaffAd
     return decided
 
 
-@router.post("/trend-runs", status_code=202)
+@router.post("/trend-runs", status_code=202, dependencies=[LOCKED])  # read-only staff in the public demo
 async def start_trend_run(staff: StaffAdmin, db: Db) -> TrendRunOut:
     """Draft this week's trends now (the weekly task, run as the platform); nothing happens when a card that is not
     rejected is under 6 days old."""

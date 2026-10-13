@@ -11,13 +11,16 @@ import subprocess
 import sys
 from dataclasses import replace
 from datetime import date
-from typing import Any
+from typing import Any, cast
+from uuid import UUID
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.config import Settings, fictional_only, get_settings
 from bridge.db import create_engine, create_session_factory
 from bridge.problems.research import checks
+from bridge.problems.research.pipeline import RunRefused, start_run
 from bridge.problems.research.policy import get_research_policy
 from bridge.problems.research.runtime import ResearchRuntime
 from bridge.problems.research.sources import Catalogue, catalogue_for, get_catalogue, load_catalogue, official_only
@@ -146,3 +149,11 @@ def test_the_catalogue_loader_imports_no_web_framework() -> None:
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert result.stdout == ""
+
+
+async def test_a_niche_without_official_excerpts_cannot_be_run_in_the_fictional_demo() -> None:
+    """The research run refuses before it touches the database: health has news excerpts only."""
+    db = cast(AsyncSession, object())
+    with pytest.raises(RunRefused, match="no_saved_excerpts"):
+        await start_run(db, user_id=UUID(int=1), niche_slug="health", country="KE", catalogue=catalogue_for(public()))
+    assert "health" in catalogue_for(public(public_demo_content="full")).niches("KE")

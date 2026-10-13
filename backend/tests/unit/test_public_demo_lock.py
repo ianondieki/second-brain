@@ -59,6 +59,19 @@ LOCKED_ROUTES = frozenset(
         ("POST", "/api/test-clock/advance"),
         ("POST", "/api/me/calendar-feed"),  # a feed URL anyone may open would publish a visitor's text
         ("POST", "/api/orgs/{org_id}/calendar-feed"),
+        # Staff are read-only (the moderator persona): every staff write.
+        ("POST", "/api/admin/niches"),
+        ("POST", "/api/admin/moderation/cases/{case_id}/decision"),
+        ("POST", "/api/admin/research/runs"),
+        ("POST", "/api/admin/research/candidates/{problem_id}/decision"),
+        ("POST", "/api/admin/research/trends/{card_id}/decision"),
+        ("POST", "/api/admin/research/trend-runs"),
+        ("POST", "/api/admin/quiz/sets/{set_id}/decision"),
+        ("POST", "/api/admin/quiz/questions/{question_id}/pull"),
+        ("POST", "/api/admin/quiz/questions/{question_id}/restore"),
+        ("POST", "/api/admin/events"),
+        ("POST", "/api/admin/events/{event_id}/decision"),
+        ("POST", "/api/admin/events/{event_id}/cancel"),
     }
 )
 # Routes that take a file but keep nothing, so they stay open in the public demo, each with its reason. Add one only
@@ -151,6 +164,14 @@ def test_every_module_that_reads_a_raw_body_declares_its_upload(app: FastAPI) ->
     }
     assert readers, "the scan found nothing: the pattern no longer matches the upload code"
     assert readers <= declared, f"raw-body readers without a declared upload route: {sorted(readers - declared)}"
+
+
+def test_every_staff_write_is_locked_and_every_staff_read_open(app: FastAPI) -> None:
+    """The moderator persona reads the queues and decides nothing: a new staff write fails here until it is locked."""
+    staff = [(k, is_locked(route)) for route in contexts(app) for k in key(route) if k[1].startswith("/api/admin")]
+    assert [k for k, locked in staff if k[0] in WRITES and not locked] == []
+    assert [k for k, locked in staff if k[0] not in WRITES and locked] == []
+    assert sum(1 for k, _ in staff if k[0] == "GET") >= 10  # the walk sees the staff reads
 
 
 def test_the_locked_routes_are_exactly_the_register(app: FastAPI) -> None:
