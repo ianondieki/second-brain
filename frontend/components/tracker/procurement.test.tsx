@@ -99,8 +99,9 @@ describe("the stepper's stages from the API's steps (AC-TRACK-5)", () => {
   });
 
   it("draws the current group's stages with their status for screen readers", () => {
+    // Its name never contains the stepper's own ("Stages"), so a lookup of the stepper by name finds one list.
     renderWithIntl(<SubStageList stages={subStages(stepsOf(true), "PROCUREMENT_ROUTE")} group="contact_nda" />);
-    const list = screen.getByRole("list", { name: "Stages in Contact and NDA" });
+    const list = screen.getByRole("list", { name: "Within Contact and NDA" });
     const items = within(list).getAllByRole("listitem");
     expect(items).toHaveLength(5);
     expect(items[0].getAttribute("data-substage")).toBe("PROCUREMENT_ROUTE");

@@ -63,12 +63,16 @@ interface Scene {
   close: () => Promise<void>;
 }
 
-/** The seeded State Department D engagement while it still waits in 3b, else null. */
+const BRIAN = "brian@developers.example";
+
+/** The seeded State Department D engagement (Brian's P4) while it still waits in 3b, else null. */
 function seededInRoute(): string | null {
   const id = ownerSql(
     "SELECT e.id FROM engagements e JOIN organizations o ON o.id = e.org_id" +
-      " WHERE o.legal_name = :'org' AND o.public_entity AND e.state = 'PROCUREMENT_ROUTE' LIMIT 1;",
-    { org: STATE_D },
+      " JOIN proposals p ON p.id = e.proposal_id JOIN users u ON u.id = p.owner_id" +
+      " WHERE o.legal_name = :'org' AND o.public_entity AND u.email = :'dev' AND u.demo_account" +
+      " AND e.state = 'PROCUREMENT_ROUTE' LIMIT 1;",
+    { org: STATE_D, dev: BRIAN },
   );
   return id || null;
 }
@@ -80,10 +84,9 @@ async function scene(page: Page, browser: Browser, info: TestInfo): Promise<Scen
   const seeded = seededInRoute();
   if (seeded) {
     const halima = "owner@state-d.example";
-    const brian = "brian@developers.example";
     await signInThroughScreens(page, new DemoStaff(halima, "Halima Yusuf", demoTotpSecret(halima)), DEMO_PASSWORD);
     await expect(page).toHaveURL(/\/org$/, STEP);
-    await signInThroughScreens(devPage, new DemoStaff(brian, "Brian Otieno", demoTotpSecret(brian)), DEMO_PASSWORD);
+    await signInThroughScreens(devPage, new DemoStaff(BRIAN, "Brian Otieno", demoTotpSecret(BRIAN)), DEMO_PASSWORD);
     await expect(devPage).toHaveURL(/\/dev$/, STEP);
     return { engagementId: seeded, orgPage: page, devPage, close };
   }

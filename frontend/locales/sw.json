@@ -2359,7 +2359,7 @@
     "fromHandle": "Kutoka kwa {name}, jina la utambulisho la msanidi programu. Utaona jina lake mawasiliano yakikubaliwa.",
     "back": "Ushirikiano wote",
     "stepperLabel": "Hatua",
-    "subStages": "Hatua za {group}",
+    "subStages": "Ndani ya {group}",
     "subStage": "{stage}: {state}",
     "group": {
       "review": "Tathmini",

@@ -2359,7 +2359,7 @@
     "fromHandle": "From {name}, the developer's handle. You see their name once contact is agreed.",
     "back": "All engagements",
     "stepperLabel": "Stages",
-    "subStages": "Stages in {group}",
+    "subStages": "Within {group}",
     "subStage": "{stage}: {state}",
     "group": {
       "review": "Review",
