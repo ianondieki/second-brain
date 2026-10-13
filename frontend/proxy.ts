@@ -26,11 +26,17 @@ import { loginHref, SIGNED_IN_PREFIXES } from "@/lib/return-path";
 //    the mode off nothing changes: other pages pass through untouched, and /robots.txt goes on to the 404 it was.
 //    The proxy therefore runs on every page (the matcher below), not only the portals; build assets, the fonts and the
 //    API (which sends its own header) are left out.
+//    While it is on, /login is also served from the persona picker's own route (DEMO_LOGIN_PATH), the address unchanged:
+//    one page would put the picker's code into every visitor's download of /login, and the email form's into every
+//    demo visitor's (AC-UX-3). The route itself answers 404 while the mode is off.
 
 const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 
 /** A path no route matches (the app has no catch-all): Next answers it with its not-found page and a 404. */
 export const UNMATCHED_PATH = "/_bridge-unmatched";
+
+/** The public demo's /login (app/(public)/login/demo): the proxy serves /login from it while the mode is on. */
+export const DEMO_LOGIN_PATH = "/login/demo";
 
 /** Whether the API admits this request's session to the staff console. */
 export async function admitsStaff(cookie: string | undefined, fetchImpl: typeof fetch = fetch): Promise<boolean> {
@@ -69,6 +75,7 @@ async function route(request: NextRequest, demo: boolean): Promise<NextResponse>
     if (!demo) return NextResponse.next();
     return new NextResponse(DISALLOW_ALL_ROBOTS, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
+  if (demo && pathname === "/login") return NextResponse.rewrite(new URL(`${DEMO_LOGIN_PATH}${search}`, request.url));
   const signedIn = isSignedInPath(pathname);
   if (!signedIn && !isAdminPath(pathname)) return NextResponse.next();
   const cookie = sessionCookieHeader(

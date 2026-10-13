@@ -4,7 +4,16 @@ import { getRedirectUrl, getRewrittenUrl, unstable_doesMiddlewareMatch } from "n
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import nextConfig from "./next.config";
-import { admitsStaff, config, isAdminPath, isSignedInPath, proxy, SIGNED_IN_PREFIXES, UNMATCHED_PATH } from "./proxy";
+import {
+  admitsStaff,
+  config,
+  DEMO_LOGIN_PATH,
+  isAdminPath,
+  isSignedInPath,
+  proxy,
+  SIGNED_IN_PREFIXES,
+  UNMATCHED_PATH,
+} from "./proxy";
 
 const answer = (status: number, body: unknown = {}) =>
   vi.fn<typeof fetch>(async () => new Response(JSON.stringify(body), { status }));
@@ -194,6 +203,25 @@ describe("the public demo (REQ-FND-04, AT-PD-6)", () => {
     expect(response.headers.get("content-type")).toMatch(/^text\/plain/);
     expect(await response.text()).toBe("User-agent: *\nDisallow: /\n");
     expect(passesOn(response)).toBe(false);
+  });
+
+  // AC-UX-3: the picker is its own route, so neither /login's email form nor the picker is in the other's download.
+  it("serves /login from the persona picker's route while on, the query kept and the address unchanged", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    const response = await proxy(request("/login?next=%2Fdev%2Fideas"));
+    expect(getRewrittenUrl(response)).toBe(`http://localhost:3000${DEMO_LOGIN_PATH}?next=%2Fdev%2Fideas`);
+    expect(DEMO_LOGIN_PATH).toBe("/login/demo");
+    expect(getRedirectUrl(response)).toBeNull();
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    for (const path of ["/login/", "/Login", "/login/check", "/signup"]) {
+      expect(getRewrittenUrl(await proxy(request(path))), path).toBeNull();
+    }
+  });
+
+  it("leaves /login to its own page while off", async () => {
+    const response = await proxy(request("/login"));
+    expect(passesOn(response)).toBe(true);
+    expect(getRewrittenUrl(response)).toBeNull();
   });
 
   it("leaves /robots.txt to Next as before while off (today's 404)", async () => {

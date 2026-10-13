@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { createTranslator } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   forget: vi.fn(async () => undefined),
   personas: vi.fn(),
-  signedIn: vi.fn(async () => null),
+  signedIn: vi.fn<() => Promise<unknown>>(async () => null),
   fetch: vi.fn<(request: Request) => Promise<Response>>(),
   locale: { value: "en" as "en" | "sw" },
 }));
@@ -24,6 +27,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mocks.replace, push: mocks.push, refresh: vi.fn() }),
   redirect: (to: string) => {
     throw new Error(`redirect:${to}`);
+  },
+  notFound: () => {
+    throw new Error("notFound");
   },
 }));
 vi.mock("next-intl/server", () => ({
@@ -81,14 +87,19 @@ function api(signIn: () => Response) {
   );
 }
 
-async function renderLogin() {
-  const { default: LoginPage } = await import("./page");
-  const tree = await LoginPage({ searchParams: Promise.resolve({}) } as never);
+/**
+ * /login as a visitor gets it: in the demo the proxy serves it from ./demo, the persona picker's own route
+ * (proxy.test.ts checks the rewrite); with the mode off, from ./page.
+ */
+async function renderLogin(searchParams: Record<string, string> = {}) {
+  const { default: LoginPage } = process.env.PUBLIC_DEMO === "true" ? await import("./demo/page") : await import("./page");
+  const tree = await LoginPage({ searchParams: Promise.resolve(searchParams) } as never);
   return renderWithIntl(<>{await resolveServerTree(tree)}</>);
 }
 
 beforeEach(() => {
   for (const mock of [mocks.replace, mocks.push, mocks.forget, mocks.personas, mocks.fetch]) mock.mockReset();
+  mocks.signedIn.mockResolvedValue(null);
   mocks.personas.mockResolvedValue(PERSONAS);
   vi.stubEnv("PUBLIC_DEMO", "true");
   mocks.locale.value = "en";
@@ -262,5 +273,54 @@ describe("/login with the mode off", () => {
     expect(document.querySelector("details")).toBeNull();
     expect(screen.getByRole("button", { name: en.login.magicLink })).toBeTruthy();
     expect(document.querySelector('a[href="/signup"]')).not.toBeNull();
+  });
+});
+
+// AC-UX-3: Next puts the client components of one page into one chunk, so the picker has its own route. Inside /login's
+// page it was part of every visitor's download of /login (+0.6 KB gzipped), and the email form part of every demo
+// visitor's. The split holds only while nothing in /login's own page imports the picker or the demo route.
+describe("the picker's own route", () => {
+  it("is not there while the mode is off (a 404, as an unknown address)", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "false");
+    const { default: DemoLoginPage, generateMetadata } = await import("./demo/page");
+    await expect(DemoLoginPage({ searchParams: Promise.resolve({}) } as never)).rejects.toThrow("notFound");
+    await expect(generateMetadata()).rejects.toThrow("notFound"); // nor its title on the 404
+    expect(mocks.personas).not.toHaveBeenCalled();
+  });
+
+  it("sends a person already signed in on, as /login does", async () => {
+    mocks.signedIn.mockResolvedValue({ side: "developer", mfa: { enrolled: false, verified: false }, user: null });
+    await expect(renderLogin()).rejects.toThrow("redirect:/dev");
+    await expect(renderLogin({ next: "/dev/ideas" })).rejects.toThrow("redirect:/dev/ideas");
+    expect(mocks.personas).not.toHaveBeenCalled();
+  });
+
+  const root = join(__dirname, "..", "..", "..");
+  const SKIP = new Set(["node_modules", ".next", "e2e", "test-results", "playwright-report", "public"]);
+  function sources(dir: string, out: string[] = []): string[] {
+    for (const name of readdirSync(dir)) {
+      if (SKIP.has(name)) continue;
+      const path = join(dir, name);
+      if (statSync(path).isDirectory()) sources(path, out);
+      else if (/\.(ts|tsx|mts|js|mjs)$/.test(name) && !/\.test\.tsx?$/.test(name)) out.push(path);
+    }
+    return out;
+  }
+  /** The modules that import `target` (a path's last part), statically or dynamically; `import type` is erased. */
+  function importersOf(target: string): string[] {
+    const name = String.raw`["'](?:[^"']*/)?${target}["']`;
+    const statics = new RegExp(String.raw`(^|\n)\s*import\s+(?!type\s)[^;]*from\s+${name}`);
+    const dynamics = new RegExp(String.raw`import\(\s*${name}`);
+    return sources(root)
+      .filter((path) => {
+        const text = readFileSync(path, "utf8");
+        return statics.test(text) || dynamics.test(text);
+      })
+      .map((path) => relative(root, path));
+  }
+
+  it("is the only importer of the picker, and nothing imports the route", () => {
+    expect(importersOf("PersonaPicker")).toEqual([join("app", "(public)", "login", "demo", "page.tsx")]);
+    expect(importersOf("demo/page")).toEqual([]);
   });
 });
