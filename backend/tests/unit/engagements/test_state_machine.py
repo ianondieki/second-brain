@@ -730,7 +730,7 @@ def test_the_procurement_route_waits_for_the_organisation_and_has_its_side_branc
     assert S.PROCUREMENT_ROUTE not in sm.CONTACT_REVEALED  # the developer's details wait for stage 3
     assert S.PROCUREMENT_ROUTE not in sm.EXPIRY  # no auto-expiry (the spec gives none)
     assert (sm.STAGE_LABELS[S.PROCUREMENT_ROUTE], sm.STAGE_GROUPS[S.PROCUREMENT_ROUTE]) == (
-        "Procurement route determined",
+        "Procurement route",
         "contact_nda",
     )
 

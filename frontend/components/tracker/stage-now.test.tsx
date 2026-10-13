@@ -32,7 +32,7 @@ const step = (state: State, label: string, group: StageStep["group"]): StageStep
 const STEPS = [
   step("SUBMITTED", "Proposal submitted", "review"),
   step("UNDER_REVIEW", "Under review", "review"),
-  step("PROCUREMENT_ROUTE", "Procurement route determined", "contact_nda"),
+  step("PROCUREMENT_ROUTE", "Procurement route", "contact_nda"),
   step("INTEREST_CONFIRMED", "Approved to proceed (non-binding)", "contact_nda"),
 ];
 
@@ -50,7 +50,7 @@ const inRoute = (overrides: Partial<Detail> = {}) =>
   detail({
     my_party: "org",
     state: "PROCUREMENT_ROUTE",
-    stage_label: "Procurement route determined",
+    stage_label: "Procurement route",
     stage_group: "contact_nda",
     steps: STEPS,
     ...overrides,
@@ -63,14 +63,14 @@ const nowLine = (container: HTMLElement) =>
 describe("the current step's \"Now\" line", () => {
   it("names the stage from the locales in English", async () => {
     expect(nowLine(await spine(inRoute({ stage_label: "ignored by the page" } as Partial<Detail>)))).toBe(
-      "Now: Procurement route determined",
+      "Now: Procurement route",
     );
   });
 
   it("names it in Swahili for a Swahili reader, never the API's English label", async () => {
     const container = await spine(inRoute(), "sw");
     expect(nowLine(container)).toBe(`Sasa: ${sw.tracker.stage.PROCUREMENT_ROUTE}`);
-    expect(container.querySelector("[aria-current='step']")?.textContent).not.toContain("Procurement route determined");
+    expect(container.querySelector("[aria-current='step']")?.textContent).not.toContain("Procurement route");
   });
 
   it("names a side state from the locales too (a question waiting for its answer)", async () => {

@@ -44,7 +44,7 @@ function stepsOf(publicEntity: boolean): StageStep[] {
   return [
     step("SUBMITTED", "Proposal submitted", "review"),
     step("UNDER_REVIEW", "Under review", "review"),
-    ...(publicEntity ? [step("PROCUREMENT_ROUTE", "Procurement route determined", "contact_nda")] : []),
+    ...(publicEntity ? [step("PROCUREMENT_ROUTE", "Procurement route", "contact_nda")] : []),
     step("INTEREST_CONFIRMED", "Approved to proceed (non-binding)", "contact_nda"),
     step("CONTACT_MADE", "First contact", "contact_nda"),
     step("NDA_PENDING", "Mutual NDA: awaiting both signatures", "contact_nda"),
@@ -60,7 +60,7 @@ function inRoute(roles: Array<"owner" | "admin" | "signatory" | "reviewer">, ove
     my_party: "org",
     my_roles: roles,
     state: "PROCUREMENT_ROUTE",
-    stage_label: "Procurement route determined",
+    stage_label: "Procurement route",
     stage_group: "contact_nda",
     steps: stepsOf(true),
     whose_turn: ["org"],
@@ -149,7 +149,7 @@ describe("the stepper's stages from the API's steps (AC-TRACK-5)", () => {
     const items = within(list).getAllByRole("listitem");
     expect(items).toHaveLength(5);
     expect(items[0].getAttribute("data-substage")).toBe("PROCUREMENT_ROUTE");
-    expect(items[0].textContent).toContain("Procurement route determined: Current");
+    expect(items[0].textContent).toContain("Procurement route: Current");
     expect(items[1].textContent).toContain("Approved to proceed (non-binding): Pending");
   });
 });

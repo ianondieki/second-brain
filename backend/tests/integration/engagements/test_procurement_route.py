@@ -90,7 +90,7 @@ async def test_a_public_entitys_approval_enters_3b_and_a_private_ones_stage_3(
         detail = await approved(app_engine, public, s, contact_by=str(today))  # a date sent is not used
         t = detail["_tracker"]
         assert detail["state"] == "PROCUREMENT_ROUTE"
-        assert (detail["stage_label"], detail["stage_group"]) == ("Procurement route determined", "contact_nda")
+        assert (detail["stage_label"], detail["stage_group"]) == ("Procurement route", "contact_nda")
         assert detail["contact"] is None  # the contact-by date comes with the route
         assert detail["procurement"] is None
         assert detail["due"]["due_on"] == str(add_business_days(today, 10, await holidays_of(owner_engine)))
@@ -351,7 +351,7 @@ async def test_the_deadlines_and_the_board_carry_3b(owner_engine: AsyncEngine, a
         listed = (await s.owner.get(f"/api/orgs/{world.org}/deadlines")).json()["items"]
         [item] = [d for d in listed if d["engagement_id"] == str(t.engagement)]
         assert item["kind"] == "stage"
-        assert item["title"].startswith("Procurement route determined: ")
+        assert item["title"].startswith("Procurement route: ")
         assert item["due_on"] == str(add_business_days(today, 10, await holidays_of(owner_engine)))
         assert item["mine"] is True
         mine = (await s.dev.get("/api/me/deadlines")).json()["items"]

@@ -73,7 +73,7 @@ describe("the columns", () => {
     const value = pipeline(
       {
         contact_nda: [
-          pipelineItem({ id: ID(4), state: "PROCUREMENT_ROUTE", stage_label: "Procurement route determined", whose_turn: ["org"] }),
+          pipelineItem({ id: ID(4), state: "PROCUREMENT_ROUTE", stage_label: "Procurement route", whose_turn: ["org"] }),
         ],
       },
       { contact_nda: 1 },
