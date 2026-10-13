@@ -6,7 +6,8 @@ database repeats the rule (``research_runs`` and ``app_create_research_candidate
 readable by staff only).
 
 - ``GET /sources``: the saved excerpts (URL, publisher, type, dates, verbatim quote) with their freshness today and
-  the source allowlists. Nothing is fetched: the excerpts were fetched once at build time (D-38).
+  the source allowlists. Nothing is fetched: the excerpts were fetched once at build time (D-38). Every route here
+  reads ``catalogue_for(settings)``: the official excerpts only in the fictional public demo (REQ-FND-04).
 - ``POST /runs`` ``{niche, country}``: 202, a running run started by the caller and a queued ``research.run`` job
   (the transactional outbox: the job exists if and only if the run does). 422 ``no_saved_excerpts`` or
   ``unknown_niche``; 409 ``run_in_progress`` while a run of that niche is running.
@@ -43,7 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.admin.deps import StaffAdmin
 from bridge.audit.service import record as audit
-from bridge.auth.deps import Db
+from bridge.auth.deps import Db, SettingsDep
 from bridge.directory.models import Niche
 from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, not_found
 from bridge.models.enums import AuditActor, ModerationState, ProblemStatus, ResearchRunStatus
@@ -51,7 +52,7 @@ from bridge.problems.models import ResearchRun
 from bridge.problems.research import review
 from bridge.problems.research.pipeline import RunRefused, clock_now, nairobi_date, start_run
 from bridge.problems.research.policy import get_research_policy
-from bridge.problems.research.sources import Excerpt, Freshness, freshness, get_catalogue
+from bridge.problems.research.sources import Excerpt, Freshness, catalogue_for, freshness
 from bridge.problems.research.tasks import defer_run
 from bridge.problems.trends import store as trends
 from bridge.trends.models import TrendCard, TrendCardSource
@@ -186,8 +187,8 @@ def _excerpt_out(excerpt: Excerpt, as_of: date) -> ExcerptOut:
 
 
 @router.get("/sources")
-async def research_sources(staff: StaffAdmin, db: Db) -> SourcesOut:
-    catalogue = get_catalogue()
+async def research_sources(staff: StaffAdmin, db: Db, settings: SettingsDep) -> SourcesOut:
+    catalogue = catalogue_for(settings)
     as_of = nairobi_date(await clock_now(db))
     return SourcesOut(
         as_of=as_of,
@@ -229,11 +230,11 @@ async def _runs(db: AsyncSession, run_id: UUID | None = None) -> list[RunOut]:
 
 
 @router.post("/runs", status_code=202)
-async def start_research_run(body: RunIn, staff: StaffAdmin, db: Db) -> RunOut:
+async def start_research_run(body: RunIn, staff: StaffAdmin, db: Db, settings: SettingsDep) -> RunOut:
     user_id = staff.live.user.id
     try:
         run = await start_run(
-            db, user_id=user_id, niche_slug=body.niche, country=body.country, catalogue=get_catalogue()
+            db, user_id=user_id, niche_slug=body.niche, country=body.country, catalogue=catalogue_for(settings)
         )
     except RunRefused as refused:
         await db.rollback()
@@ -297,14 +298,16 @@ async def research_candidates(
 
 
 @router.post("/candidates/{problem_id}/decision")
-async def decide_research_candidate(problem_id: UUID, body: DecisionIn, staff: StaffAdmin, db: Db) -> DecisionOut:
+async def decide_research_candidate(
+    problem_id: UUID, body: DecisionIn, staff: StaffAdmin, db: Db, settings: SettingsDep
+) -> DecisionOut:
     result = await review.decide(
         db,
         staff_id=staff.live.user.id,
         problem_id=problem_id,
         decision=body.decision,
         checklist_confirmed=body.checklist_confirmed,
-        catalogue=get_catalogue(),
+        catalogue=catalogue_for(settings),
         policy=get_research_policy(),
     )
     return DecisionOut(id=result.id, status=result.status, moderation_state=result.moderation_state)

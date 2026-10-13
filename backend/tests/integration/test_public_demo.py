@@ -12,7 +12,8 @@
 - AT-PD-4: a persona's password change, second-factor change, role change, uploads that keep a file (proposal and
   message attachments) and the clock's move are 403 ``public_demo_locked`` and change nothing; the certificate file
   check, which stores nothing, stays open. The persona allowlist is the only way in: the password sign-in with the
-  published demo password, its second step and spending a link are locked too.
+  published demo password, its second step and spending a link are locked too. The admin research API lists and runs
+  official excerpts only.
 - AT-PD-5: ``fictional`` leaves out every ``ke_provisional`` organisation and every research card citing a news
   excerpt; ``full`` restores both.
 
@@ -46,7 +47,7 @@ from bridge.seed.directory import directory_loadable, load_directory, seed_direc
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
-from tests.integration.api import make_client, refresh_csrf
+from tests.integration.api import make_client, refresh_csrf, sign_in_as
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
 from tests.integration.engagements.api_world import Tracker, db_today
 
@@ -386,6 +387,23 @@ async def test_the_persona_allowlist_is_the_only_way_in(fictional: Seeded, app: 
             assert (response.status_code, response.json()) == (403, {"detail": LOCKED}), response.request.url
         assert get_settings().session_cookie_name not in client.cookies
         assert (await client.get("/api/auth/me")).status_code == 401
+
+
+async def test_the_admin_api_lists_and_runs_official_excerpts_only(fictional: Seeded, app: AsyncEngine) -> None:
+    """Even a staff admin (who cannot sign in to the public demo; signed in directly here) sees only the official
+    excerpts there, and a niche with none cannot be run; with the mode off every saved excerpt is listed."""
+    _, report = fictional
+    admin = report.users[STAFF_ADMIN.email]
+    async with visitor(app, ip="127.0.3.5") as client:
+        await sign_in_as(client, app, admin, mfa_verified=True)
+        sources = (await client.get("/api/admin/research/sources")).json()
+        assert {excerpt["source_type"] for excerpt in sources["excerpts"]} == {"official"}
+        assert len(sources["excerpts"]) == 6
+        refused = await client.post("/api/admin/research/runs", json={"niche": "health", "country": "KE"})
+        assert (refused.status_code, refused.json()["detail"]["code"]) == (422, "no_saved_excerpts")
+    async with visitor(app, get_settings(), ip="127.0.3.6") as client:
+        await sign_in_as(client, app, admin, mfa_verified=True)
+        assert len((await client.get("/api/admin/research/sources")).json()["excerpts"]) == 19
 
 
 # ------------------------------------------------------------------------------------------------- AT-PD-5 (full, last)

@@ -13,10 +13,12 @@ mistake never reaches a model or a card:
 - the dates are real ISO dates, retrieved on or after publication; the quote is whitespace-collapsed, non-empty,
   free of control characters and at most ``max_quote_words`` words; ids are unique and fit ``excerpt_ref``.
 
-Only ``Excerpt`` objects made here are sent to a model as public platform data (``InputField(public=True)``, see
-``bridge.problems.research.synthesis``). Freshness (docs/spec/06 6.5: stale at 12 months, auto-archive at 18, from
-``policy.yaml``) is judged per run on the shared clock's date: an archived excerpt is never sent and never counts
-(the saved fixtures ke-tel-005 and ke-agr-004 are archived on 2026-09-29).
+Every reader at run time takes its catalogue from ``catalogue_for(settings)``: in the fictional public demo
+(REQ-FND-04) that is the official excerpts only. Only ``Excerpt`` objects made here are sent to a model as public
+platform data (``InputField(public=True)``, see ``bridge.problems.research.synthesis``). Freshness (docs/spec/06
+6.5: stale at 12 months, auto-archive at 18, from ``policy.yaml``) is judged per run on the shared clock's date: an
+archived excerpt is never sent and never counts (the saved fixtures ke-tel-005 and ke-agr-004 are archived on
+2026-09-29).
 
 A second pair (REQ-DEV-02; D-60; P22 card B, "Trends") is loaded the same way with ``kind=CatalogueKind.TRENDS``: the
 technology publishers' allowlist ``sources/tech.yaml`` (``country: TECH``; every domain is the vendor's or the project's
@@ -43,9 +45,10 @@ from urllib.parse import urlsplit
 
 import yaml
 
-from bridge.config import BACKEND_DIR
+from bridge.config import BACKEND_DIR, Settings
 from bridge.problems.research.policy import SOURCE_TYPES, ResearchPolicy, get_research_policy
 from bridge.problems.research.text import collapse, has_control, word_count
+from bridge.public_demo import fictional_only
 
 EXCERPTS_FILE: Final = BACKEND_DIR / "seed" / "research_excerpts.yaml"
 TREND_EXCERPTS_FILE: Final = BACKEND_DIR / "seed" / "trend_excerpts.yaml"
@@ -437,3 +440,20 @@ def load_catalogue(
 def get_catalogue(kind: CatalogueKind = CatalogueKind.RESEARCH) -> Catalogue:
     """The process-wide catalogue of ``kind`` (read once; a bad file stops the first request, never silently)."""
     return load_catalogue(kind=kind)
+
+
+def official_only(catalogue: Catalogue) -> Catalogue:
+    """``catalogue`` with only its excerpts whose ``source_type`` is ``official``; the allowlists are kept."""
+    return Catalogue(tuple(e for e in catalogue.excerpts if e.source_type == "official"), catalogue.allowlists)
+
+
+@lru_cache(maxsize=2)
+def _official_catalogue(kind: CatalogueKind) -> Catalogue:
+    return official_only(get_catalogue(kind))
+
+
+def catalogue_for(settings: Settings, kind: CatalogueKind = CatalogueKind.RESEARCH) -> Catalogue:
+    """The catalogue a reader at run time uses (the admin API, the research job, the demo seed): ``get_catalogue``,
+    except in the public demo with ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04, ``fictional_only``), where only the
+    official excerpts exist (the news excerpts await D-38): they are never listed, sent to a model or cited there."""
+    return _official_catalogue(kind) if fictional_only(settings) else get_catalogue(kind)
