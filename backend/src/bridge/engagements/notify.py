@@ -56,6 +56,7 @@ from bridge.models.enums import (
     EngagementState,
     GrantStatus,
     NotificationChannel,
+    ProcurementRoute,
 )
 from bridge.notifications import em2, n17, status
 from bridge.notifications.deliveries import send_email
@@ -90,6 +91,9 @@ SENTENCES: Final[dict[tuple[sm.Command, EngagementParty], str]] = {
     (C.START_REVIEW, ORG): '{org} started reviewing "{title}".',
     (C.DECLINE, ORG): '{org} declined "{title}". Reason: {reason}.',
     (C.APPROVE, ORG): '{org} approved "{title}" to proceed (non-binding). They will contact you shortly.',
+    (C.CHOOSE_ROUTE, ORG): (
+        '{org} chose how it will buy "{title}": {route}. Its contact will reach you by {contact_by}.'
+    ),
     (C.WITHDRAW, DEV): 'The developer withdrew "{title}".',
     (C.MARK_CONTACTED, ORG): '{org} marked first contact on "{title}". Confirm it on your tracker.',
     (C.CONFIRM_CONTACT, DEV): 'The developer confirmed first contact on "{title}".',
@@ -137,6 +141,23 @@ EXPIRED_SENTENCES: Final = {
     DEV: 'Your engagement with {org} on "{title}" expired: {reason}.',
     ORG: 'The engagement on "{title}" expired: {reason}.',
 }
+# [[COPY-REVIEW]] a public entity's approval, and the developer's acceptance of its interest, enter its procurement
+# route (3b, REQ-ENG-06) rather than stage 3: what the other party reads then.
+TO_PROCUREMENT: Final[dict[sm.Command, str]] = {
+    C.APPROVE: (
+        '{org} approved "{title}" to proceed (non-binding). As a public body it first chooses how it will buy; then its'
+        " contact will reach you."
+    ),
+    C.ACCEPT_INTEREST: 'The developer accepted your interest in "{title}". Choose your procurement route next.',
+}
+# [[COPY-REVIEW]] how a public entity will buy (docs/spec/06 6.9 stage 3b), as the developer's notice names it.
+ROUTE_WORDS: Final = {
+    ProcurementRoute.DIRECT: "direct procurement",
+    ProcurementRoute.RFQ_TENDER: "a request for quotation or tender",
+    ProcurementRoute.PPP_PIP: "a privately-initiated PPP proposal",
+    ProcurementRoute.INNOVATION_CHALLENGE: "an innovation challenge or grant",
+    ProcurementRoute.PILOT_MOU: "a pilot under a memorandum of understanding",
+}
 RESUMED_SENTENCE: Final = '"{title}" is no longer on hold: it resumed on its date. Due dates moved by the time on hold.'
 # Party events that also go by email in the status layout (the system's always do).
 EMAILED: Final = frozenset({C.REQUEST_INFO, C.ANSWER_INFO, C.CANCEL_REQUEST, C.PAUSE, C.RESUME})
@@ -149,6 +170,7 @@ EVENT_TITLES: Final[dict[sm.Command, str]] = {
     C.ANSWER_INFO: "Question answered",
     C.CANCEL_REQUEST: "Question withdrawn",
     C.RESUME: "Resumed",
+    C.CHOOSE_ROUTE: "Procurement route chosen",
 }
 # [[COPY-REVIEW]] N31, the developer's notice of an organisation's prior-knowledge declaration (in-app and the status
 # email's sentence): the organisation and the idea's title only.
@@ -216,12 +238,19 @@ def compose(
         return None
     acted = DEV if event.actor_role is EngagementActorRole.DEVELOPER else ORG
     sentence = SENTENCES.get((command, acted))
+    if event.to_state is EngagementState.PROCUREMENT_ROUTE and event.from_state is not event.to_state:
+        sentence = TO_PROCUREMENT.get(command, sentence)
     if notice is None or sentence is None:
         return None
     reason = DECLINE_LABELS.get(event.end_reason, "") if event.end_reason else ""
     payload = dict(event.payload)
     body = sentence.format(
-        org=em2.one_line(company), title=em2.one_line(title), reason=reason, until=_until(payload.get("resume_at"))
+        org=em2.one_line(company),
+        title=em2.one_line(title),
+        reason=reason,
+        until=_until(payload.get("resume_at")),
+        route=_route(payload.get("procurement_route")),
+        contact_by=_until(payload.get("contact_by")),
     )
     if event.end_reason is EngagementEndReason.ALREADY_IN_PROGRESS_INTERNALLY and "internal_start_date" in payload:
         body += f" They attest the same work was already in progress internally since {payload['internal_start_date']}."
@@ -230,6 +259,14 @@ def compose(
     label = EVENT_TITLES.get(command) or sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
     told = sm.other(acted)
     return told, Notice(f"engagement.{notice.lower()}", label, body, engagement_path(told, event.engagement_id))
+
+
+def _route(value: object) -> str:
+    """The procurement route of a choice's event payload, in words."""
+    try:
+        return ROUTE_WORDS[ProcurementRoute(str(value))]
+    except ValueError:
+        return "its chosen route"
 
 
 def _until(resume_at: object) -> str:

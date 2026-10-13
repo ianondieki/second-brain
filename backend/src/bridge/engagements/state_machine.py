@@ -13,7 +13,11 @@ stage 0 ``ORG_INTEREST`` -> ``INTEREST_CONFIRMED`` | ``DECLINED``. P19 (REQ-ENG-
 ``INFO_REQUESTED`` (the organisation asks from stages 1-2, the developer answers) and ``ON_HOLD`` before the agreement
 (either party, with a reason and a resume date), each left for the state it was entered from with the deadline moved
 by the business days paused, and ``EXPIRED`` (``EXPIRY``: the system's, written by the expiry job, not a row of the
-table). ``DISPUTED``, ``TERMINATED``, ``PROCUREMENT_ROUTE`` and ``ON_HOLD`` after the agreement come later.
+table). P28 (REQ-ENG-06, AC-TRACK-5) adds stage 3b, ``PROCUREMENT_ROUTE``, for a public entity only
+(``Facts.public_entity``): its signatory's approval and the developer's acceptance of its interest enter 3b instead of
+``INTEREST_CONFIRMED`` (``Transition.public_target``), and its owner or admin chooses the procurement route there
+(``CHOOSE_ROUTE``), which enters ``INTEREST_CONFIRMED`` with the contact-by date; a private organisation's paths are
+unchanged. ``DISPUTED``, ``TERMINATED`` and ``ON_HOLD`` after the agreement come later.
 
 Refusals, in this order: the actor's party or role may not run the command (403 ``Forbidden``); the deals flag is off
 for a deal-stage command (403, AC-SEC-7); the engagement is not in a state the command starts from (409
@@ -41,6 +45,7 @@ from bridge.models.enums import (
     EngagementState,
     IpTerms,
     MilestoneState,
+    ProcurementRoute,
 )
 
 S = EngagementState
@@ -79,6 +84,7 @@ class Command(StrEnum):
     START_REVIEW = "start_review"
     DECLINE = "decline"
     APPROVE = "approve"
+    CHOOSE_ROUTE = "choose_route"  # stage 3b: a public entity's owner or admin chooses its procurement route
     WITHDRAW = "withdraw"
     MARK_CONTACTED = "mark_contacted"
     CONFIRM_CONTACT = "confirm_contact"
@@ -116,6 +122,7 @@ class Endorse(StrEnum):
 DECIDERS: Final = frozenset({R.OWNER, R.ADMIN, R.SIGNATORY, R.REVIEWER})
 EDITORS: Final = frozenset({R.OWNER, R.ADMIN, R.SIGNATORY})  # agreements and milestones are planned by these
 SIGNATORY: Final = frozenset({R.SIGNATORY})
+ROUTE_DECIDERS: Final = frozenset({R.OWNER, R.ADMIN})  # docs/spec/06 6.9 stage 3b: "Org admin selects"
 PAYERS: Final = frozenset({R.OWNER, R.ADMIN, R.SIGNATORY, R.FINANCE})
 DEVELOPER: Final = frozenset({R.DEVELOPER})
 # The role an organisation member acts in when they hold several the command allows.
@@ -126,6 +133,7 @@ BEFORE_AGREEMENT: Final = frozenset(
     {
         S.SUBMITTED,
         S.UNDER_REVIEW,
+        S.PROCUREMENT_ROUTE,
         S.INTEREST_CONFIRMED,
         S.CONTACT_MADE,
         S.NDA_PENDING,
@@ -178,13 +186,20 @@ RESUME_NOTICE: Final = "N20"  # the system's resume of a hold at its date tells 
 # The longest text a note carries (engagement_notes' body CHECK, revision 0006), and a reason's.
 QUESTION_MAX_CHARS: Final = 2000
 REASON_MAX_CHARS: Final = 500
+# The procurement route's written justification (revision 0015's CHECKs): plain text, line breaks allowed, at most
+# JUSTIFICATION_MAX_CHARS; direct procurement needs one of at least JUSTIFICATION_MIN_CHARS once trimmed.
+JUSTIFICATION_MIN_CHARS: Final = 20
+JUSTIFICATION_MAX_CHARS: Final = 1000
 # IP terms the internal simple e-signature refuses (docs/spec/06 6.9 Instruments; AC-TRACK-10).
 OUTSIDE_SIGNATURE_TERMS: Final = frozenset({IpTerms.ASSIGNMENT, IpTerms.EXCLUSIVE_LICENCE})
-# The main path in order (the stepper, and the reveal of contact details from INTEREST_CONFIRMED on).
+# The main path in order (the stepper, and the reveal of contact details from INTEREST_CONFIRMED on). A tagged
+# engagement starts at SUBMITTED, an organisation's interest at ORG_INTEREST; PROCUREMENT_ROUTE (3b) is a public
+# entity's only, between the approval and stage 3 (revision 0015; ``steps``).
 MAIN_PATH: Final = (
     S.ORG_INTEREST,
     S.SUBMITTED,
     S.UNDER_REVIEW,
+    S.PROCUREMENT_ROUTE,
     S.INTEREST_CONFIRMED,
     S.CONTACT_MADE,
     S.NDA_PENDING,
@@ -200,12 +215,13 @@ MAIN_PATH: Final = (
 CONTACT_REVEALED: Final = frozenset(MAIN_PATH[MAIN_PATH.index(S.INTEREST_CONFIRMED) :])
 # Until first contact is made only the named contact may learn the developer's details (AC-TRACK-9), so the text the
 # side states carry (read by every member) may hold no contact details in these stages (THREAT_MODEL I).
-BEFORE_CONTACT: Final = frozenset({*MAIN_PATH[: MAIN_PATH.index(S.CONTACT_MADE)], S.PROCUREMENT_ROUTE})
+BEFORE_CONTACT: Final = frozenset(MAIN_PATH[: MAIN_PATH.index(S.CONTACT_MADE)])  # 3b included
 # Stage labels (docs/spec/06 6.9 "Label"). [[COPY-REVIEW]]
 STAGE_LABELS: Final[Mapping[EngagementState, str]] = {
     S.ORG_INTEREST: "Organisation interested",
     S.SUBMITTED: "Proposal submitted",
     S.UNDER_REVIEW: "Under review",
+    S.PROCUREMENT_ROUTE: "Procurement route determined",
     S.INTEREST_CONFIRMED: "Approved to proceed (non-binding)",
     S.CONTACT_MADE: "First contact",
     S.NDA_PENDING: "Mutual NDA: awaiting both signatures",
@@ -228,6 +244,7 @@ STAGE_GROUPS: Final[Mapping[EngagementState, str]] = {
     S.ORG_INTEREST: "review",
     S.SUBMITTED: "review",
     S.UNDER_REVIEW: "review",
+    S.PROCUREMENT_ROUTE: "contact_nda",  # stage 3b, between the approval and first contact
     S.INTEREST_CONFIRMED: "contact_nda",
     S.CONTACT_MADE: "contact_nda",
     S.NDA_PENDING: "contact_nda",
@@ -259,6 +276,7 @@ class Transition:
     renews_deadline: bool = False  # a same-state event that sets a new stage deadline (a new terms version)
     notice: str | None = None  # the notification-matrix row the other party gets (REQUIREMENTS.md §5)
     resumes: bool = False  # leaves a side state for the state it was entered from (``Facts.paused_from``)
+    public_target: EngagementState | None = None  # a public entity's engagement enters this instead (3b)
 
 
 def _t(
@@ -275,6 +293,7 @@ def _t(
     renews_deadline: bool = False,
     notice: str | None = None,
     resumes: bool = False,
+    public_target: EngagementState | None = None,
 ) -> Transition:
     return Transition(
         command,
@@ -289,6 +308,7 @@ def _t(
         renews_deadline=renews_deadline,
         notice=notice,
         resumes=resumes,
+        public_target=public_target,
     )
 
 
@@ -296,7 +316,8 @@ _DEV = {DEV: DEVELOPER}
 TABLE: Final[Mapping[Command, Transition]] = {
     t.command: t
     for t in (
-        # Stage 0 (M2's scout creates ORG_INTEREST): the developer accepts (their endorsement; EM2) or declines.
+        # Stage 0 (M2's scout creates ORG_INTEREST): the developer accepts (their endorsement; EM2) or declines. A
+        # public entity's interest, once accepted, waits for its procurement route (3b).
         _t(
             Command.ACCEPT_INTEREST,
             _DEV,
@@ -305,6 +326,7 @@ TABLE: Final[Mapping[Command, Transition]] = {
             step_up=True,
             endorse=Endorse.BEFORE,
             notice="N17",
+            public_target=S.PROCUREMENT_ROUTE,
         ),
         _t(
             Command.DECLINE_INTEREST,
@@ -317,7 +339,24 @@ TABLE: Final[Mapping[Command, Transition]] = {
         # Stages 1-2.
         _t(Command.START_REVIEW, {ORG: DECIDERS}, {S.SUBMITTED}, target=S.UNDER_REVIEW, notice="N03"),
         _t(Command.DECLINE, {ORG: DECIDERS}, {S.SUBMITTED, S.UNDER_REVIEW}, target=S.DECLINED, notice="N03"),
-        _t(Command.APPROVE, {ORG: SIGNATORY}, {S.UNDER_REVIEW}, target=S.INTEREST_CONFIRMED, notice="N04"),
+        # Approve to proceed: a private organisation's signatory names the contact and the contact-by date (stage 3);
+        # a public entity's names the contact, and its owner or admin then chooses the procurement route with the
+        # contact-by date (3b, REQ-ENG-06), which enters stage 3 (EM2 then).
+        _t(
+            Command.APPROVE,
+            {ORG: SIGNATORY},
+            {S.UNDER_REVIEW},
+            target=S.INTEREST_CONFIRMED,
+            notice="N04",
+            public_target=S.PROCUREMENT_ROUTE,
+        ),
+        _t(
+            Command.CHOOSE_ROUTE,
+            {ORG: ROUTE_DECIDERS},
+            {S.PROCUREMENT_ROUTE},
+            target=S.INTEREST_CONFIRMED,
+            notice="N05",
+        ),
         _t(Command.WITHDRAW, _DEV, BEFORE_AGREEMENT | PAUSED, target=S.WITHDRAWN, notice="WITHDRAWN"),
         # Stages 3-4: the organisation marks first contact (its endorsement of stage 4); the developer confirms.
         _t(
@@ -484,7 +523,8 @@ class Facts:
     certificate); ``draft_by``/``draft_status``/``ip_terms``: the latest agreement version; ``milestones``: the
     states of the signed agreement's milestones; ``paused_from``: in a side state, the state it was entered from
     (where it returns); ``questions_left``, ``holds_left`` and ``hold_days_left``: what the policy's caps leave this
-    stage's questions and holds and the engagement's days on hold (None: these facts do not limit them)."""
+    stage's questions and holds and the engagement's days on hold (None: these facts do not limit them);
+    ``public_entity``: the organisation is a public entity, whose approval goes through the procurement route (3b)."""
 
     endorsed: frozenset[EngagementParty] = frozenset()
     signed: frozenset[EngagementParty] = frozenset()
@@ -500,6 +540,7 @@ class Facts:
     questions_left: int | None = None
     holds_left: int | None = None
     hold_days_left: int | None = None
+    public_entity: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,7 +621,8 @@ def decide(
     if command is Command.WITHDRAW and state in PAUSED and facts.paused_from not in BEFORE_AGREEMENT:
         raise Conflict("illegal_transition", "Withdrawing is possible only before the agreement is signed.")
     _guard(command, actor.party, facts, milestone)
-    to_state = transition.target or state
+    target = transition.public_target if facts.public_entity and transition.public_target else transition.target
+    to_state = target or state
     if transition.completes is not None and facts.signed | {actor.party} == BOTH:
         to_state = transition.completes
     if transition.resumes:
@@ -670,6 +712,8 @@ def pending(state: EngagementState, facts: Facts) -> tuple[Pending, ...]:
         found = [Pending(Command.START_REVIEW, ORG)]
     elif state is S.UNDER_REVIEW:
         found = [Pending(Command.APPROVE, ORG)]
+    elif state is S.PROCUREMENT_ROUTE:
+        found = [Pending(Command.CHOOSE_ROUTE, ORG)]
     elif state is S.INTEREST_CONFIRMED:
         found = [Pending(Command.MARK_CONTACTED, ORG)]
     elif state is S.CONTACT_MADE:
@@ -715,6 +759,16 @@ def _implementation(milestones: tuple[MilestoneState, ...]) -> list[Pending]:
         if any(m in sources for m in milestones):
             found.append(Pending(command, party))
     return found
+
+
+def steps(*, org_initiated: bool, public_entity: bool) -> tuple[EngagementState, ...]:
+    """The main-path stages one engagement goes through, in order (the stepper; AC-TRACK-5): an organisation's interest
+    starts at stage 0 and skips stages 1-2, a tagged proposal starts at stage 1; the procurement route (3b) is a public
+    entity's only."""
+    skipped = {S.SUBMITTED, S.UNDER_REVIEW} if org_initiated else {S.ORG_INTEREST}
+    if not public_entity:
+        skipped.add(S.PROCUREMENT_ROUTE)
+    return tuple(state for state in MAIN_PATH if state not in skipped)
 
 
 def whose_turn(state: EngagementState, facts: Facts) -> tuple[EngagementParty, ...]:
@@ -807,10 +861,23 @@ def expires_at(
     expire_bd = policy.stage(state).expire_bd
     if state not in EXPIRY or expire_bd is None:
         return None
-    paused = 0
-    if entered_due_on is not None and due_on is not None:
-        paused = max(0, business_days_between(entered_due_on, due_on, holidays))
-    return end_of_day(add_business_days(entered_on, expire_bd + paused, holidays))
+    return after_business_days(entered_on, expire_bd, paused_business_days(entered_due_on, due_on, holidays), holidays)
+
+
+def paused_business_days(entered_due_on: date | None, due_on: date | None, holidays: Collection[date]) -> int:
+    """The business days pauses (a request for information, a hold) have moved a stage's deadline by: from the date of
+    the deadline it entered the stage with (``entered_due_on``) to that of its deadline now (``due_on``); 0 when
+    either is unknown. The expiry job and the nudge job count a stage's days with it."""
+    if entered_due_on is None or due_on is None:
+        return 0
+    return max(0, business_days_between(entered_due_on, due_on, holidays))
+
+
+def after_business_days(entered_on: date, days: int, paused: int, holidays: Collection[date]) -> datetime:
+    """When a count of ``days`` business days from a stage entered on ``entered_on`` (the Nairobi date; the entry day
+    itself never counts) has run out, ``paused`` business days added back: the end of that business day. A stage's
+    expiry, escalation and reminders fall due once it has passed."""
+    return end_of_day(add_business_days(entered_on, days + paused, holidays))
 
 
 @dataclass(frozen=True, slots=True)
@@ -870,14 +937,36 @@ _KEPT_CONTROLS: Final = frozenset("\n\t")
 _DROPPED: Final = frozenset({"Cc", "Cf", "Cs", "Co"})
 
 
-def check_note(text: str | None, limit: int) -> str:
-    """The text a side-state command carries (a question, an answer, a reason) as stored, plain text as teasers are:
-    control and format characters dropped but line feeds and tabs (a right-to-left override or a zero-width space
-    never reaches the other party), then trimmed: 1 to ``limit`` characters."""
+def plain_text(text: str | None) -> str:
+    """``text`` as plain text: control and format characters dropped but line feeds and tabs (a right-to-left override
+    or a zero-width space never reaches the other party), then trimmed."""
     value = "".join(ch for ch in (text or "") if ch in _KEPT_CONTROLS or unicodedata.category(ch) not in _DROPPED)
-    value = value.strip()
+    return value.strip()
+
+
+def check_note(text: str | None, limit: int) -> str:
+    """The text a side-state command carries (a question, an answer, a reason) as stored, plain text as teasers are
+    (``plain_text``): 1 to ``limit`` characters."""
+    value = plain_text(text)
     if not 0 < len(value) <= limit:
         raise Invalid("invalid_note", f"Write 1 to {limit} characters.")
+    return value
+
+
+def check_justification(route: ProcurementRoute, text: str | None) -> str | None:
+    """The written justification of a procurement route as stored (``plain_text``; empty is none): required for direct
+    procurement, ``JUSTIFICATION_MIN_CHARS`` to ``JUSTIFICATION_MAX_CHARS`` characters (422
+    ``justification_required``), optional for the other routes and at most ``JUSTIFICATION_MAX_CHARS`` characters (422
+    ``invalid_justification``)."""
+    value = plain_text(text) or None
+    if route is ProcurementRoute.DIRECT and (value is None or len(value) < JUSTIFICATION_MIN_CHARS):
+        raise Invalid(
+            "justification_required",
+            f"Direct procurement needs a written justification of {JUSTIFICATION_MIN_CHARS} to"
+            f" {JUSTIFICATION_MAX_CHARS} characters.",
+        )
+    if value is not None and len(value) > JUSTIFICATION_MAX_CHARS:
+        raise Invalid("invalid_justification", f"Write at most {JUSTIFICATION_MAX_CHARS} characters.")
     return value
 
 
