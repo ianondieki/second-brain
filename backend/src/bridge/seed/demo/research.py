@@ -39,7 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from bridge import clock
 from bridge.auth import passwords
 from bridge.auth.models import User
-from bridge.config import Settings
+from bridge.config import Settings, fictional_only
 from bridge.db import bind_tenant
 from bridge.ids import uuid7
 from bridge.llm.client import BatchHandle, BatchItem, BatchPoll
@@ -51,7 +51,6 @@ from bridge.problems.research.pipeline import EXAMPLE_REF_PREFIX, CardOrigin, ex
 from bridge.problems.research.policy import get_research_policy
 from bridge.problems.research.sources import Catalogue, catalogue_for, get_catalogue
 from bridge.profiles.consents import record_decisions
-from bridge.public_demo import fictional_only
 from bridge.seed.demo.data import DEMO_PASSWORD, DemoStaff
 from bridge.seed.demo.runtime import SEED_METHOD, Actors, DemoReport, DemoSeedError, _execute, _one, _user_id_of
 
@@ -324,7 +323,7 @@ def seeded_niches() -> tuple[str, ...]:
 
 def answers_for(settings: Settings, catalogue: Catalogue | None = None) -> Mapping[str, Mapping[str, Any]]:
     """The fixed answers this run seeds, by niche: ``SEEDED_ANSWERS``, except in the public demo with
-    ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04, ``bridge.public_demo.fictional_only``), which leaves out every card
+    ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04, ``bridge.config.fictional_only``), which leaves out every card
     that cites an excerpt whose ``source_type`` is not ``official`` (the news excerpts await D-38; today each card
     cites one) and seeds ``OFFICIAL_ANSWERS`` in their place. ``full`` keeps today's seed exactly."""
     if not fictional_only(settings):

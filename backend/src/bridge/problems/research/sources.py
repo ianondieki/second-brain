@@ -45,10 +45,9 @@ from urllib.parse import urlsplit
 
 import yaml
 
-from bridge.config import BACKEND_DIR, Settings
+from bridge.config import BACKEND_DIR, Settings, fictional_only
 from bridge.problems.research.policy import SOURCE_TYPES, ResearchPolicy, get_research_policy
 from bridge.problems.research.text import collapse, has_control, word_count
-from bridge.public_demo import fictional_only
 
 EXCERPTS_FILE: Final = BACKEND_DIR / "seed" / "research_excerpts.yaml"
 TREND_EXCERPTS_FILE: Final = BACKEND_DIR / "seed" / "trend_excerpts.yaml"

@@ -7,14 +7,15 @@ official ones; ``full``, and the mode off, change nothing.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from dataclasses import replace
 from datetime import date
 from typing import Any
 
 import pytest
 
-from bridge import public_demo
-from bridge.config import Settings, get_settings
+from bridge.config import Settings, fictional_only, get_settings
 from bridge.db import create_engine, create_session_factory
 from bridge.problems.research import checks
 from bridge.problems.research.policy import get_research_policy
@@ -39,10 +40,10 @@ def public(**update: Any) -> Settings:
 
 
 def test_fictional_only_is_the_public_demo_with_fictional_content() -> None:
-    assert public_demo.fictional_only(public())
-    assert not public_demo.fictional_only(public(public_demo_content="full"))
-    assert not public_demo.fictional_only(get_settings())
-    assert not public_demo.fictional_only(get_settings().model_copy(update={"public_demo_content": "fictional"}))
+    assert fictional_only(public())
+    assert not fictional_only(public(public_demo_content="full"))
+    assert not fictional_only(get_settings())
+    assert not fictional_only(get_settings().model_copy(update={"public_demo_content": "fictional"}))
 
 
 def test_the_fictional_public_demo_skips_the_provisional_directory() -> None:
@@ -135,3 +136,13 @@ def test_the_research_job_reads_the_same_catalogue(content: str, count: int) -> 
     factory = create_session_factory(create_engine("postgresql+psycopg://probe@localhost:1/probe"))
     runtime = ResearchRuntime(public(public_demo_content=content), factory=factory, client=lambda db: NotImplemented)
     assert len(runtime.deps().catalogue.excerpts) == count
+
+
+def test_the_catalogue_loader_imports_no_web_framework() -> None:
+    """``fictional_only`` lives in ``bridge.config``: the catalogue loader and the directory seed import no FastAPI."""
+    code = (
+        "import sys, bridge.problems.research.sources, bridge.seed.directory;"
+        " sys.stdout.write(','.join(sorted(m for m in sys.modules if m.split('.')[0] in ('fastapi', 'starlette'))))"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert result.stdout == ""

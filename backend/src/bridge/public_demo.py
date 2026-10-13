@@ -21,7 +21,7 @@ the deployment a public demo that anyone may open:
 - **Not indexed, not described.** Every API answer carries ``X-Robots-Tag: noindex, nofollow`` (``ROBOTS_HEADERS``,
   ``bridge.main``), and the app serves neither its OpenAPI schema nor the interactive docs.
 - **Fictional content.** With ``PUBLIC_DEMO_CONTENT=fictional`` (the default) the seed loads only fictional
-  organisations and official-source research excerpts (``fictional_only``; ``bridge.seed.directory`` and
+  organisations and official-source research excerpts (``bridge.config.fictional_only``; ``bridge.seed.directory`` and
   ``bridge.seed.demo.research``).
 """
 
@@ -54,13 +54,6 @@ async def refuse_in_public_demo(settings: SettingsDep) -> None:
 
 
 LOCKED: Final = Depends(refuse_in_public_demo)
-
-
-def fictional_only(settings: Settings) -> bool:
-    """Whether the seed loads fictional content only: ``PUBLIC_DEMO`` on with ``PUBLIC_DEMO_CONTENT=fictional``. Then
-    the provisional directory of real organisations and the research cards that cite a non-official excerpt (news,
-    D-38) are left out; ``full``, or the mode off, changes nothing."""
-    return settings.public_demo and settings.public_demo_content == "fictional"
 
 
 def persona_module(settings: Settings) -> ModuleType | None:

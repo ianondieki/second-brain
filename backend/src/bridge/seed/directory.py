@@ -10,7 +10,7 @@ Two rules are enforced here, in code:
 - The seed loads only when ``APP_ENV`` is set explicitly (environment or ``backend/.env``, not the settings default)
   to ``dev`` or ``test`` (``ensure_loadable``); staging keeps its fixture organisations and gate G6 approves the
   production list. The public demo with ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04,
-  ``bridge.public_demo.fictional_only``) skips it too: its organisations are real and await G6's citations.
+  ``bridge.config.fictional_only``) skips it too: its organisations are real and await G6's citations.
 - Every row is E0 (``unclaimed``). A row may name a higher ``verification`` (fixture organisations) only when
   ``APP_ENV`` is ``test`` or ``staging``; anywhere else the loader refuses.
 
@@ -40,11 +40,10 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bridge import clock
-from bridge.config import BACKEND_DIR, Settings
+from bridge.config import BACKEND_DIR, Settings, fictional_only
 from bridge.directory.models import Niche, OrgNiche, Region
 from bridge.ids import uuid7
 from bridge.models.enums import OrgKind, OrgSource, OrgVerification, RegionKind
-from bridge.public_demo import fictional_only
 from bridge.tenancy.models import Organization
 
 DIRECTORY_FILE: Final = BACKEND_DIR / "seed" / "ke_provisional.yaml"

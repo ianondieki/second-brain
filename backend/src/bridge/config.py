@@ -448,6 +448,15 @@ class Settings(BaseSettings):
         return problems
 
 
+def fictional_only(settings: Settings) -> bool:
+    """Whether the seed and the research catalogue keep to fictional content: ``PUBLIC_DEMO`` on with
+    ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04). Then the provisional directory of real organisations, the research
+    cards citing a non-official excerpt and the non-official excerpts themselves (news, D-38) are left out; ``full``,
+    or the mode off, changes nothing. Here, not in ``bridge.public_demo``, so the catalogue loader and the seed need no
+    web framework import."""
+    return settings.public_demo and settings.public_demo_content == "fictional"
+
+
 def decoded_key(value: SecretStr) -> bytes | None:
     """The 32 raw bytes of a base64 key setting, or None when it is not base64 of exactly 32 bytes."""
     try:
