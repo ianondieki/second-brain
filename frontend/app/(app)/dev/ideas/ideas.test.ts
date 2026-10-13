@@ -7,6 +7,7 @@ import { draftBody } from "./draft";
 import { linksProblem, publishChecklist } from "./checklist";
 import {
   editHref,
+  fieldOf,
   wordCount,
   type EditorState,
   type Version,
@@ -394,5 +395,35 @@ describe("a publish refused by the public demo's daily limit", () => {
     expect(en.ideaEditor.problem.demoLimit).toBe(
       "The public demo publishes up to 20 versions a day for each account. Try again tomorrow.",
     );
+  });
+});
+
+// AC-UX-3: the editor derives the field a state key feeds (an edit clears the API's issue on it) instead of carrying a
+// table in its first download; the derivation must give exactly the table it replaced.
+describe("fieldOf", () => {
+  const FEEDS: Record<string, string> = {
+    title: "title",
+    nicheId: "niche_id",
+    countyCode: "county_code",
+    maturity: "maturity",
+    ask: "ask",
+    problemStatement: "problem_statement",
+    summary: "summary",
+    impactClaims: "impact_claims",
+    problems: "problems",
+    newProblemTitle: "new_problem.title",
+    newProblemStatement: "new_problem.statement",
+    links: "links",
+  };
+  const FIELD_NAMES = new Set(Object.values(FEEDS));
+
+  it("names the field each state key feeds, as the API does", () => {
+    for (const [key, field] of Object.entries(FEEDS)) expect(fieldOf(key), key).toBe(field);
+  });
+
+  it("gives every other state key a name no field has", () => {
+    const others = Object.keys(EMPTY_STATE).filter((key) => !(key in FEEDS));
+    expect(others.sort()).toEqual(["approach", "architecture", "notes", "pricing", "problemMode"]);
+    for (const key of others) expect(FIELD_NAMES.has(fieldOf(key)), key).toBe(false);
   });
 });

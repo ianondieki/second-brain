@@ -20,7 +20,6 @@ export interface DetailsStepProps {
   onAttachments: AttachmentsProps["onAttachments"];
   ensureDraft: AttachmentsProps["ensureDraft"];
   getCalls: () => Promise<Calls>;
-  uploadsLocked?: AttachmentsProps["uploadsLocked"];
 }
 
 const WRITTEN = ["approach", "architecture", "pricing", "notes"] as const;
@@ -34,6 +33,9 @@ export function DetailsStep({ state, update, ...files }: DetailsStepProps) {
   const f = useStrings("ideaFields");
   const issueMessage = useIssueMessage();
   const linkProblem = linksProblem(state.links);
+  // The public demo's sentence for switched-off uploads, which the page adds to the editor's strings only while the mode
+  // is on (EditorScreen editorStrings); without it, useStrings answers with the key's own name.
+  const uploadsLocked = t("uploadsLocked" as never);
   return (
     <Card as="section" variant="flat" aria-labelledby="details-notice" className="flex flex-col gap-6">
       {/* Who can read this step, as a static notice with a lock (no coloured left rule). */}
@@ -69,7 +71,7 @@ export function DetailsStep({ state, update, ...files }: DetailsStepProps) {
         error={linkProblem ? issueMessage({ field: "links", code: linkProblem }) : undefined}
         onChange={(e) => update({ links: e.target.value })}
       />
-      <Attachments {...files} />
+      <Attachments {...files} uploadsLocked={uploadsLocked === "ideaEditor.uploadsLocked" ? undefined : uploadsLocked} />
     </Card>
   );
 }
