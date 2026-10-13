@@ -4119,6 +4119,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Demo Status
+         * @description Whether this is the public demo (REQ-FND-04) and, when it is, the personas a visitor may sign in as with one
+         *     press (``POST /api/auth/demo/sign-in``) and the hour of the nightly reset. Off (every other deployment, and any
+         *     image without the demo module): ``enabled`` false, no personas, ``reset_hour_eat`` null. Read from memory, never
+         *     the database; the same for everyone, so cacheable for 60 seconds.
+         */
+        get: operations["public_demo_status_api_public_demo_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/public/explore": {
         parameters: {
             query?: never;
@@ -4268,46 +4291,6 @@ export interface paths {
         get: operations["readyz_readyz_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/public/demo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Public Demo
-         * @description Whether this deployment is the public demo, and its personas (REQ-FND-04).
-         */
-        get: operations["public_demo_api_public_demo_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/auth/demo/sign-in": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Demo Sign In
-         * @description Sign in as one of the public demo's personas (REQ-FND-04).
-         */
-        post: operations["demo_sign_in_api_auth_demo_sign_in_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5863,26 +5846,37 @@ export interface components {
             other_text?: string | null;
             reason: components["schemas"]["EngagementEndReason"];
         };
-        /** DemoPersona */
+        /**
+         * DemoPersona
+         * @description One persona of the public demo (REQ-FND-04): a fictional demo account a visitor signs in as with one press.
+         */
         DemoPersona: {
-            /** Key */
+            /**
+             * Detail
+             * @description One line of what it is, e.g. "Telco A (fixture): signatory"
+             */
+            detail: string;
+            /**
+             * Home
+             * @description The web path to land on after signing in: "/dev", "/org" or "/admin"
+             */
+            home: string;
+            /**
+             * Key
+             * @description What POST /api/auth/demo/sign-in takes as "persona", e.g. "amina"
+             */
             key: string;
-            /** Name */
+            /**
+             * Name
+             * @description The account's display name (fictional)
+             */
             name: string;
             /**
              * Role
+             * @description Which side and role it plays
              * @enum {string}
              */
             role: "developer" | "org_admin" | "org_signatory" | "org_reviewer" | "staff";
-            /** Detail */
-            detail: string;
-            /** Home */
-            home: string;
-        };
-        /** DemoSignInRequest */
-        DemoSignInRequest: {
-            /** Persona */
-            persona: string;
         };
         /**
          * DevVerification
@@ -9053,13 +9047,25 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** PublicDemo */
+        /**
+         * PublicDemo
+         * @description Whether this deployment is the public demo, and its personas. Off: ``enabled`` false, no personas, no reset.
+         */
         PublicDemo: {
-            /** Enabled */
+            /**
+             * Enabled
+             * @description True only where PUBLIC_DEMO is on and the image carries the demo module
+             */
             enabled: boolean;
-            /** Personas */
+            /**
+             * Personas
+             * @description The personas in the order to show them; empty when off
+             */
             personas: components["schemas"]["DemoPersona"][];
-            /** Reset Hour Eat */
+            /**
+             * Reset Hour Eat
+             * @description The hour (East Africa Time, 0-23) when the demo's data is wiped and seeded again; null when off
+             */
             reset_hour_eat: number | null;
         };
         /** PublicNiche */
@@ -34825,6 +34831,98 @@ export interface operations {
             };
         };
     };
+    public_demo_status_api_public_demo_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicDemo"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     public_explore_api_public_explore_get: {
         parameters: {
             query?: never;
@@ -35448,194 +35546,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    public_demo_api_public_demo_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicDemo"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Payment Required */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-        };
-    };
-    demo_sign_in_api_auth_demo_sign_in_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DemoSignInRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Payment Required */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
-            };
-            /** @description Too Many Requests */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorBody"];
-                };
             };
         };
     };

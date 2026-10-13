@@ -6,8 +6,7 @@ import { useState, type ReactNode } from "react";
 import { forgetOffline } from "@/components/offline/clear";
 import { Button } from "@/components/ui/Button";
 import { AlertIcon } from "@/components/ui/status-icons";
-import { settle } from "@/lib/api/call";
-import { api } from "@/lib/api/client";
+import { demoSignIn } from "@/lib/api/demo-sign-in";
 
 /** One persona as the page drew it: the server renders the words (and checked `home` is a path on this site). */
 export interface PersonaChoice {
@@ -28,8 +27,8 @@ export interface PersonaPickerProps {
 
 /**
  * The public demo's persona picker (REQ-FND-04; docs/platform/tasks/P28.md, track PD): one row per persona, its whole
- * row the button's target. A press POSTs /api/auth/demo/sign-in with the persona's key through the typed client (the
- * double-submit CSRF header, as the email form's sign-in), then goes to the persona's Home. A refusal is one line in
+ * row the button's target. A press POSTs /api/auth/demo/sign-in with the persona's key (lib/api/demo-sign-in.ts: the
+ * double-submit CSRF header, as every POST of the typed client), then goes to the persona's Home. A refusal is one line in
  * that row: 429 says to wait a minute, anything else a calm generic line. Small on purpose: /login is near its 150 KB.
  */
 export function PersonaPicker({ personas, label, strings }: PersonaPickerProps) {
@@ -41,7 +40,7 @@ export function PersonaPicker({ personas, label, strings }: PersonaPickerProps) 
     if (busy) return;
     setBusy(key);
     setRefused(null);
-    const outcome = await settle(api.POST("/api/auth/demo/sign-in", { body: { persona: key } }));
+    const outcome = await demoSignIn(key);
     if (outcome.ok) {
       // As every sign-in: no other person's offline copies stay on this device (P27, D-69), then the persona's Home.
       await forgetOffline();

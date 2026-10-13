@@ -36,10 +36,17 @@ vi.mock("@/components/IntlScope", () => ({ IntlScope: ({ children }: { children:
 vi.mock("@/components/offline/clear", () => ({ forgetOffline: () => mocks.forget() }));
 vi.mock("@/lib/public/demo-personas", () => ({ demoPersonas: () => mocks.personas() }));
 vi.mock("@/lib/api/server", () => ({ getSignedIn: () => mocks.signedIn() }));
-// The real typed client and its CSRF wrapper, over a fake network: the request is checked as the API would see it.
-vi.mock("@/lib/api/client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/api/client")>();
-  return { ...actual, api: actual.createApiClient({ baseUrl: "http://web.test", fetch: (input, init) => mocks.fetch(new Request(input, init)) }) };
+// The real sign-in helper and its CSRF wrapper (lib/api/csrf.ts withCsrf), over a fake network at an absolute origin
+// (Node's Request takes no relative URL): the request is checked as the API would see it.
+vi.mock("@/lib/api/demo-sign-in", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api/demo-sign-in")>();
+  const { withCsrf } = await import("@/lib/api/csrf");
+  const send = withCsrf((input, init) => mocks.fetch(new Request(input, init)), "http://web.test/api/auth/csrf");
+  return {
+    ...actual,
+    demoSignIn: (persona: string) =>
+      actual.demoSignIn(persona, (input, init) => send(new URL(String(input), "http://web.test"), init)),
+  };
 });
 
 const PERSONAS = [
