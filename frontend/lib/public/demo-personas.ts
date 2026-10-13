@@ -64,25 +64,38 @@ export async function demoPersonas(now: number = Date.now()): Promise<DemoPerson
   }
 }
 
+// The seed marks its fixtures in their names ("Staff Moderator (demo)", "Telco A (fixture)"): the banner on every page
+// already says every name here is fictional, so the picker drops the marker at the end of a name.
+const SEED_MARK = /\s*\((?:demo|fixture|example)\)\s*$/i;
+
+/** A persona's name as the picker draws it: "Staff Moderator (demo)" is "Staff Moderator" (the name itself when only a mark). */
+export function personaName(name: string): string {
+  const plain = name.replace(SEED_MARK, "").trim();
+  return plain || name.trim();
+}
+
 /**
- * The line under a persona's name. In English, the API's own line ("Telco A (fixture): owner and admin"). The API writes
- * it in English only, so in another language it is derived here (REQ-FND-04): an organisation persona shows its
- * organisation's name (a proper name, as written), a developer its verification level in a translated sentence, staff
- * nothing more than the role line above it.
+ * An organisation persona's organisation, read from the API's English detail "Telco A (fixture): owner and admin":
+ * the part before the first colon, without the seed's mark ("Telco A"). Null when the detail has no such part (no
+ * colon, nothing before it): the picker then draws no line rather than a wrong one.
  */
-export function personaDetail(
+export function personaOrg(detail: string): string | null {
+  const at = detail.indexOf(":");
+  if (at <= 0) return null;
+  return detail.slice(0, at).replace(SEED_MARK, "").trim() || null;
+}
+
+/**
+ * The line under a persona's name: what that persona does here, built on the web in every language (REQ-FND-04; ux
+ * review of P28-PD, MINOR 3) rather than the API's English detail, which repeats the role and carries the seed's words.
+ * `about` formats the role's sentence; an organisation persona's names its organisation, and has no line when the
+ * organisation cannot be read from the detail.
+ */
+export function personaLine(
   persona: Pick<DemoPersona, "role" | "detail">,
-  locale: string,
-  level: (value: string) => string,
+  about: (role: DemoRole, org: string) => string,
 ): string | null {
-  if (locale === "en") return persona.detail.trim() || null;
-  if (persona.role.startsWith("org_")) {
-    const at = persona.detail.indexOf(":");
-    return at > 0 ? persona.detail.slice(0, at).trim() : null;
-  }
-  if (persona.role === "developer") {
-    const found = /\bD[0-9]\b/.exec(persona.detail);
-    return found ? level(found[0]) : null;
-  }
-  return null;
+  if (!persona.role.startsWith("org_")) return about(persona.role, "");
+  const org = personaOrg(persona.detail);
+  return org ? about(persona.role, org) : null;
 }

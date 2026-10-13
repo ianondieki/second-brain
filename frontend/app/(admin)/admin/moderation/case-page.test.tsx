@@ -339,7 +339,7 @@ describe("the case page in the public demo", () => {
     vi.stubEnv("PUBLIC_DEMO", "true");
     await page();
     const decision = document.getElementById("decision")!.closest("section")!;
-    expect(within(decision).getByText(en.publicDemo.locked)).toBeTruthy();
+    expect(within(decision).getByText(en.publicDemo.decideLocked)).toBeTruthy();
     expect(within(decision).queryAllByRole("button")).toHaveLength(0);
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Clear loan-fee statements for SACCO members");
     cleanup();

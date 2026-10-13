@@ -16,16 +16,17 @@ const PERSONAS = [
   "Grace Mwangi",
   "Peter Kamau",
   "Rita Njeri",
-  "Hassan Abdi",
-  "Staff Moderator (demo)",
+  "Halima Yusuf",
+  "Staff Moderator", // the seed's "Staff Moderator (demo)", drawn without the mark
 ];
 const BANNER =
   "Public demo: every name and organisation here is fictional, and the data resets every night at 03:00 EAT. Please don't enter real personal information.";
-const LOCKED = "Switched off in the public demo.";
+// Under a setting whose state still holds (the persona's two-step sign-in is on), the line says changing it is off.
+const CHANGE_LOCKED = "Changing this is switched off in the public demo.";
 
 test.skip(process.env.E2E_PUBLIC_DEMO !== "1", "needs a stack started with PUBLIC_DEMO=true: set E2E_PUBLIC_DEMO=1");
 
-const personas = (page: Page) => page.getByRole("list", { name: "People you can sign in as" });
+const personas = (page: Page) => page.getByRole("list", { name: "Personas you can sign in as" });
 
 /** Signs in as a persona from /login's picker and waits for that persona's Home. */
 async function signInAs(page: Page, name: string, home: RegExp) {
@@ -71,9 +72,14 @@ test("the banner is on every page, never over the content, and stays dismissed f
   }
 
   const banner = page.getByRole("region", { name: "Public demo notice" });
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await banner.getByRole("button", { name: "Hide the demo notice" }).click();
   await expect(banner).toBeHidden();
   await expect(page.locator("#main")).toBeFocused();
+  // Focus moves without scrolling: at 360 px #main starts below the top bar, and a plain focus() scrolled the bar out
+  // of view (ux review of P28-PD, MAJOR 2). The page stays at the top with the bar in view, in every project.
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect((await page.locator("[data-top-bar]").first().boundingBox())!.y).toBe(0);
   await page.reload();
   await expect(banner).toBeHidden();
   await page.goto("/");
@@ -90,13 +96,13 @@ test("the banner is on every page, never over the content, and stays dismissed f
   }
 });
 
-test("Settings › Security shows the locked line in place of two-step sign-in and the password", async ({ page }) => {
+test("Settings › Security says changing each is off, in place of two-step sign-in and the password", async ({ page }) => {
   await signInAs(page, "Grace Mwangi", /\/org(\?.*)?$/);
   await page.goto("/settings/security");
   const locked = page.locator("[data-security-locked]");
   await expect(locked.getByRole("heading", { name: "Two-step sign-in" })).toBeVisible();
   await expect(locked.getByRole("heading", { name: "Password" })).toBeVisible();
-  await expect(locked.locator("[data-demo-locked]")).toHaveText([LOCKED, LOCKED]);
+  await expect(locked.locator("[data-demo-locked]")).toHaveText([CHANGE_LOCKED, CHANGE_LOCKED]);
   await expect(page.locator("main form")).toHaveCount(0);
   await checkScreen(page, { strict: true });
 });

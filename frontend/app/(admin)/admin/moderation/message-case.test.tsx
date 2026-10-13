@@ -203,7 +203,7 @@ describe("a message report in the public demo", () => {
     vi.stubEnv("PUBLIC_DEMO", "true");
     await page(report());
     expect(document.querySelector("[data-message-body]")).not.toBeNull();
-    expect(document.querySelector("[data-demo-locked]")!.textContent).toBe(en.publicDemo.locked);
+    expect(document.querySelector("[data-demo-locked]")!.textContent).toBe(en.publicDemo.decideLocked);
     expect(screen.queryByRole("button", { name: /dismiss|uphold/i })).toBeNull();
     cleanup();
     vi.stubEnv("PUBLIC_DEMO", "false");

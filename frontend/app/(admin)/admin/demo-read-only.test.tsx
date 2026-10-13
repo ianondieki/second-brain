@@ -18,7 +18,12 @@ import TrendReviewPage from "./research/trends/[id]/page";
 // REQ-FND-04 (docs/platform/tasks/P28.md, track PD): in the public demo staff are read-only (the API answers every staff
 // write with 403 public_demo_locked). Each screen region that would hold a decision or a create form shows the locked
 // line instead, once per region (never once per row); the queues and the detail views still read. With the mode off,
-// every control is where it was. The controls are stand-ins here: each draws a marker this test looks for.
+// every control is where it was. The controls are stand-ins here: each draws a marker this test looks for. A decision
+// region says "Deciding is switched off" (the card or case still reads); a run, a draft or a create form, where the whole
+// feature is off, keeps the generic line (ux review of P28-PD, MAJOR 1).
+
+const LOCKED = en.publicDemo.locked;
+const DECIDE = en.publicDemo.decideLocked;
 
 vi.mock("next-intl/server", () => ({
   getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
@@ -198,6 +203,7 @@ async function draw(render: () => Promise<ReactNode>, demo: boolean) {
   return {
     container,
     locked: container.querySelectorAll("[data-demo-locked]").length,
+    lines: [...container.querySelectorAll("[data-demo-locked]")].map((el) => el.textContent),
     controls: [...container.querySelectorAll("[data-control]")].map((el) => el.getAttribute("data-control")),
   };
 }
@@ -207,6 +213,7 @@ describe("the staff console in the public demo", () => {
     const on = await draw(() => ResearchPage(), true);
     expect(on.controls).toEqual([]);
     expect(on.locked).toBe(2); // the run panel and the trends section
+    expect(on.lines).toEqual([LOCKED, LOCKED]);
     expect(on.container.textContent).toContain(CANDIDATE.title);
     const off = await draw(() => ResearchPage(), false);
     expect(off.controls.sort()).toEqual(["draft-trends", "start-run"]);
@@ -216,7 +223,7 @@ describe("the staff console in the public demo", () => {
   it("a research candidate: the card reads, its decision is locked", async () => {
     const on = await draw(() => ReviewPage(params(CANDIDATE.id)), true);
     expect(on.controls).toEqual([]);
-    expect(on.locked).toBe(1);
+    expect(on.lines).toEqual([DECIDE]);
     expect(on.container.textContent).toContain(CANDIDATE.statement);
     expect((await draw(() => ReviewPage(params(CANDIDATE.id)), false)).controls).toEqual(["candidate-decision"]);
   });
@@ -224,7 +231,7 @@ describe("the staff console in the public demo", () => {
   it("a trend card: the card reads, its decision is locked", async () => {
     const on = await draw(() => TrendReviewPage(params(TREND.id)), true);
     expect(on.controls).toEqual([]);
-    expect(on.locked).toBe(1);
+    expect(on.lines).toEqual([DECIDE]);
     expect(on.container.textContent).toContain(TREND.summary);
     expect((await draw(() => TrendReviewPage(params(TREND.id)), false)).controls).toEqual(["trend-decision"]);
   });
@@ -232,7 +239,7 @@ describe("the staff console in the public demo", () => {
   it("a quiz set: one locked line for the questions (not one per question) and one for the decision", async () => {
     const on = await draw(() => QuizSetPage(params(SET.id)), true);
     expect(on.controls).toEqual([]);
-    expect(on.locked).toBe(2);
+    expect(on.lines).toEqual([LOCKED, DECIDE]); // Pull and Restore on the list; the set's decision
     expect(on.container.querySelectorAll("[data-admin-question]")).toHaveLength(3);
     const off = await draw(() => QuizSetPage(params(SET.id)), false);
     expect(off.controls.filter((c) => c === "question-actions")).toHaveLength(3);
@@ -244,12 +251,12 @@ describe("the staff console in the public demo", () => {
     data.event = EVENT("draft");
     const draft = await draw(() => AdminEventPage(params(EVENT("draft").id)), true);
     expect(draft.controls).toEqual([]);
-    expect(draft.locked).toBe(1);
+    expect(draft.lines).toEqual([DECIDE]);
     expect((await draw(() => AdminEventPage(params(EVENT("draft").id)), false)).controls).toEqual(["event-decision"]);
     data.event = EVENT("published");
     const published = await draw(() => AdminEventPage(params(EVENT("published").id)), true);
     expect(published.controls).toEqual([]);
-    expect(published.locked).toBe(1);
+    expect(published.lines).toEqual([LOCKED]); // cancelling: not a decision region
     expect((await draw(() => AdminEventPage(params(EVENT("published").id)), false)).controls).toEqual(["cancel-event"]);
   });
 
@@ -259,7 +266,7 @@ describe("the staff console in the public demo", () => {
     expect((await draw(() => AdminEventsPage(params("")), false)).container.querySelector('a[href="/admin/events/new"]')).not.toBeNull();
     const form = await draw(() => NewPlatformEventPage(), true);
     expect(form.controls).toEqual([]);
-    expect(form.locked).toBe(1);
+    expect(form.lines).toEqual([LOCKED]);
     expect((await draw(() => NewPlatformEventPage(), false)).controls).toEqual(["event-form"]);
   });
 });

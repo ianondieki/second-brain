@@ -112,7 +112,7 @@ export default async function AdminEventPage({ params }: PageProps<"/admin/event
         >
           {/* The public demo (REQ-FND-04): staff are read-only. */}
           {publicDemoOn() ? (
-            <DemoLocked />
+            <DemoLocked variant="decide" />
           ) : (
             <ClientStrings strings={strings}>
               <EventDecision eventId={event.id} seen={event.updated_at} />

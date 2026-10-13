@@ -91,7 +91,7 @@ export async function MessageCase({ item, nextId }: { item: Case; nextId: string
         >
           {/* The public demo (REQ-FND-04): staff are read-only; an undecided case shows the locked line. */}
           {publicDemoOn() && !result ? (
-            <DemoLocked />
+            <DemoLocked variant="decide" />
           ) : (
             <ClientStrings key="decision" strings={await caseStrings()}>
               <MessageDecision

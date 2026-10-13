@@ -104,9 +104,13 @@ export function Attachments({ attachments, onAttachments, ensureDraft, getCalls,
       <h3 id={`${id}-title`} className="font-medium text-ink">
         {f("files")}
       </h3>
-      <p id={hintId} className="-mt-2 text-sm text-ink-soft">
-        {t("filesHint", { max: MAX_ATTACHMENTS })}
-      </p>
+      {/* The hint is about adding files: none when uploads are switched off (the public demo), and with it the
+          input's aria-describedby (ux review of P28-PD, MINOR 4). */}
+      {uploadsLocked ? null : (
+        <p id={hintId} className="-mt-2 text-sm text-ink-soft">
+          {t("filesHint", { max: MAX_ATTACHMENTS })}
+        </p>
+      )}
 
       {attachments.length > 0 ? (
         <ul aria-label={t("filesLabel")} className="flex flex-col">
