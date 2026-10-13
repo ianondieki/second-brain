@@ -39,7 +39,8 @@
     "reviewP27cde": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.team.*, tracker.declaration.*, tracker.ipNudge.*, tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (\"alama ya kidijitali\" kwa fingerprint/SHA-256; \"ujuzi wa awali\" kwa prior knowledge), engagements.*, profileSettings.references.*, help.confidential.priorKnowledge",
     "reviewP27clock": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"baada ya siku 6 saa 14 dakika 23\"), not \"dak 23\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term. P27 UX fixes for the G5 review: calendarFeed.shownOnce now opens with the imperative \"Nakili sasa\" (was \"Kinakili sasa\"); pipeline.funnelTitle and pipeline.conversionMore agree with ushirikiano (u- class: \"ulioingia\", \"uliingia\"), not the people class (\"walioingia\", \"waliingia\"); pipeline.outcome says \"umefungwa\" and \"umekoma\" (u- class) for every count, no longer mixing \"umefungwa\"/\"imefungwa\"; pipeline.stalled reads \"siku {count}+ za kazi\" (the threshold as a floor); \"Briefs\" in calendarFeed.lead is left in English as the product term: confirm or translate.",
-    "reviewP27ux": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Tengeneza kiungo kipya\" and \"Ondoa mlisho\" first ask in place whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled now \"Hakuna hatua kwa siku {count}+ za kazi\". A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"{count}+\". deadlines.dayEmpty [[SW-REVIEW]]."
+    "reviewP27ux": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Tengeneza kiungo kipya\" and \"Ondoa mlisho\" first ask in place whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled now \"Hakuna hatua kwa siku {count}+ za kazi\". A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"{count}+\". deadlines.dayEmpty [[SW-REVIEW]].",
+    "reviewP28pd": "[[COPY-REVIEW]] [[SW-REVIEW]] P28-PD (REQ-FND-04; D-71), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: publicDemo.* (onyesho la umma: tangazo la kila ukurasa, kitufe cha kulificha; kichaguzi cha watu kwenye /login, majina ya majukumu, kitufe \"Endelea kama {name}\", mistari ya makosa; mistari ya vidhibiti vilivyozimwa; \"Jaribu onyesho\" kwenye ukurasa wa mwanzo; \"Badilisha mtu\" badala ya \"Toka\"), errors.public_demo_locked"
   },
   "app": {
     "name": "Wazo",
@@ -615,6 +616,7 @@
     "unauthenticated": "Kipindi chako kimeisha. Ingia tena.",
     "mfa_required": "Weka msimbo kutoka kwenye programu yako ya uthibitishaji ili kuendelea.",
     "step_up_required": "Thibitisha kwa msimbo wa sasa kutoka kwenye programu yako ya uthibitishaji ili kuendelea.",
+    "public_demo_locked": "Hili limezimwa katika onyesho la umma.",
     "validation": "Baadhi ya maelezo hayakukubaliwa. Angalia fomu, kisha ujaribu tena.",
     "generic": "Kuna tatizo. Jaribu tena baada ya muda mfupi.",
     "network": "Hatukuweza kufikia seva. Angalia muunganisho wako, kisha ujaribu tena."
@@ -4486,5 +4488,34 @@
     "removeCancel": "Baki na kiungo",
     "removed": "Mlisho umeondolewa. Kiungo chake hakifanyi kazi tena.",
     "failed": "Haikufanikiwa. Jaribu tena."
+  },
+  "publicDemo": {
+    "banner": "<b>Onyesho la umma:</b> kila jina na shirika hapa ni la kubuni, na data hurejeshwa upya kila usiku saa 03:00 EAT. Tafadhali usiweke taarifa halisi za kibinafsi.",
+    "bannerLabel": "Tangazo la onyesho la umma",
+    "bannerDismiss": "Ficha tangazo la onyesho",
+    "pickerTitle": "Jaribu onyesho kama…",
+    "pickerLead": "Chagua utakayekuwa. Bonyeza mara moja uingie na kufungua ukurasa wake wa Nyumbani.",
+    "personasLabel": "Watu unaoweza kuingia kama wao",
+    "continue": "Endelea <hidden>kama {name}</hidden>",
+    "signingIn": "Unaingia…",
+    "tooMany": "Majaribio mengi ya kuingia kutoka hapa kwa sasa. Jaribu tena baada ya dakika moja.",
+    "failed": "Kuingia huko hakukufaulu. Jaribu tena baada ya muda mfupi.",
+    "unavailable": "Watu wa onyesho hawakuweza kupakiwa sasa hivi. Pakia ukurasa upya baada ya muda mfupi, au ingia kwa akaunti.",
+    "withAccount": "Ingia kwa akaunti",
+    "role": {
+      "developer": "Msanidi programu",
+      "org_admin": "Msimamizi wa shirika",
+      "org_signatory": "Mtia sahihi wa shirika",
+      "org_reviewer": "Mkaguzi wa shirika",
+      "staff": "Wafanyakazi wa jukwaa"
+    },
+    "locked": "Imezimwa katika onyesho la umma.",
+    "attachLocked": "Kuambatisha faili kumezimwa katika onyesho la umma.",
+    "signupLocked": "Kufungua akaunti kumezimwa katika onyesho la umma.",
+    "signupAction": "Chagua mtu wa onyesho",
+    "tryDemo": "Jaribu onyesho",
+    "switchPersona": "Badilisha mtu",
+    "switchingPersona": "Unabadilisha…",
+    "switchRetry": "Jaribu kubadilisha tena"
   }
 }

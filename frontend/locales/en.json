@@ -39,7 +39,8 @@
     "reviewP27cde": "[[COPY-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68): tracker.team.* (the organisation's team line and recommendation tally on its tracker), tracker.declaration.* (the declaration line on the organisation's tracker; tracker.declaration.received.* the developer's panel), tracker.ipNudge.* (the one note before a developer first shares a full proposal; docs/spec/06 6.1 non-blocking nudge), tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (declarationSheet.window and refusal.windowClosed* carry docs/spec/06 6.4 pt 5's sentence; titleHint says the row is permanent), engagements.* (the \"Assigned to me\" filter and the assignee line; engagements.assignedToMe is shared with the Board), profileSettings.references.* (D3, docs/spec/06 6.4 pt 8), help.confidential.priorKnowledge",
     "reviewP27clock": "[[COPY-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"in 6 days 14 hours 23 minutes\"), not \"14 h 23 min\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private).",
-    "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\". deadlines.dayEmpty (\"Nothing falls due on {date}.\"): the picked day's empty state said \"in the next 30 days\" (ux re-check MINOR, spec 04 §4.2)."
+    "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\". deadlines.dayEmpty (\"Nothing falls due on {date}.\"): the picked day's empty state said \"in the next 30 days\" (ux re-check MINOR, spec 04 §4.2).",
+    "reviewP28pd": "[[COPY-REVIEW]] P28-PD (REQ-FND-04; D-71): publicDemo.* (the public demo: the banner on every page, its label and its dismiss button; /login's persona picker, its title, lead, role names, the button \"Continue as {name}\" whose \"as {name}\" part is read by screen readers only, its two error lines and the folded \"Sign in with an account\"; the calm lines where a switched-off control would be (publicDemo.locked, attachLocked under the message composer, signupLocked with its action on /signup); the landing's \"Try the demo\"; \"Switch persona\" for the user menu's sign-out while the mode is on), errors.public_demo_locked (the API's 403 for any switched-off route)"
   },
   "app": {
     "name": "Wazo",
@@ -615,6 +616,7 @@
     "unauthenticated": "Your session has ended. Log in again.",
     "mfa_required": "Enter the code from your authenticator app to continue.",
     "step_up_required": "Confirm with the current code from your authenticator app to continue.",
+    "public_demo_locked": "This is switched off in the public demo.",
     "validation": "Some of the details were not accepted. Check the form, then try again.",
     "generic": "Something went wrong. Try again in a moment.",
     "network": "We could not reach the server. Check your connection, then try again."
@@ -4486,5 +4488,34 @@
     "removeCancel": "Keep the link",
     "removed": "The feed is removed. Its link no longer works.",
     "failed": "That did not work. Try again."
+  },
+  "publicDemo": {
+    "banner": "<b>Public demo:</b> every name and organisation here is fictional, and the data resets every night at 03:00 EAT. Please don't enter real personal information.",
+    "bannerLabel": "Public demo notice",
+    "bannerDismiss": "Hide the demo notice",
+    "pickerTitle": "Try the demo as…",
+    "pickerLead": "Choose who to be. One press signs you in and opens their Home.",
+    "personasLabel": "People you can sign in as",
+    "continue": "Continue <hidden>as {name}</hidden>",
+    "signingIn": "Signing in…",
+    "tooMany": "Too many sign-ins from here just now. Try again in a minute.",
+    "failed": "That sign-in did not go through. Try again in a moment.",
+    "unavailable": "The demo people could not be loaded just now. Reload the page in a moment, or sign in with an account.",
+    "withAccount": "Sign in with an account",
+    "role": {
+      "developer": "Developer",
+      "org_admin": "Organisation admin",
+      "org_signatory": "Organisation signatory",
+      "org_reviewer": "Organisation reviewer",
+      "staff": "Platform staff"
+    },
+    "locked": "Switched off in the public demo.",
+    "attachLocked": "Attaching files is switched off in the public demo.",
+    "signupLocked": "Creating an account is switched off in the public demo.",
+    "signupAction": "Choose a demo person",
+    "tryDemo": "Try the demo",
+    "switchPersona": "Switch persona",
+    "switchingPersona": "Switching…",
+    "switchRetry": "Try switching again"
   }
 }
