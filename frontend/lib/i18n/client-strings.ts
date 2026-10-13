@@ -15,6 +15,7 @@ export const PLACEHOLDER_NAMES = [
   "count",
   "current",
   "date",
+  "email",
   "fields",
   "id",
   "limit",
@@ -72,6 +73,8 @@ export const CLIENT_STRING_NAMESPACES = [
   "teamSheet",
   "declarationSheet",
   "calendarFeed",
+  "teamAdmin",
+  "invitationAccept",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 

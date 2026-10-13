@@ -41,7 +41,8 @@
     "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private).",
     "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\". deadlines.dayEmpty (\"Nothing falls due on {date}.\"): the picked day's empty state said \"in the next 30 days\" (ux re-check MINOR, spec 04 §4.2).",
     "reviewP28tr": "[[COPY-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (the public /transparency page: what the daily signed fingerprints over the audit history are, in plain words; how to check a certificate, with a link to /verify; the latest fingerprint, earlier days, the signing keys with their status; the empty state before the first full day and the two \"did not load\" states), landing.footer.transparency (the footer's link) and verify.transparency (one quiet line under the /verify panel). No claim that anything cannot be altered: the wording is that a change makes the fingerprints disagree. Review round 1: the lead limits the claim to events recorded before a fingerprint was taken; howTo says /verify checks a certificate's own fingerprint, signature and timestamp, separate from the daily fingerprints; keysLead states the signed text exactly; signatureFor names each earlier day's signature control; verify.transparency reworded. transparency.emptyPublicDemo (the public demo's empty state, P28) [[COPY-REVIEW]]",
-    "reviewP28pd": "[[COPY-REVIEW]] P28-PD (REQ-FND-04; D-71): publicDemo.* (the public demo: the banner on every page, its label and its dismiss button; /login's persona picker, its title, lead, role names, the button \"Continue as {name}\" whose \"as {name}\" part is read by screen readers only, its two error lines, the line and \"Try again\" when no persona could be read (no email form: password sign-in is switched off in the demo); the line under each name is the API's English detail in English, and derived on the web in other languages (publicDemo.detailLevel for a developer, the organisation's name for an organisation persona, none for staff); the calm lines where a switched-off control would be (publicDemo.locked, attachLocked under the message composer, signupLocked with its action on /signup); the landing's \"Try the demo\"; \"Switch persona\" for the user menu's sign-out while the mode is on), errors.public_demo_locked (the API's 403 for any switched-off route), errors.public_demo_limit and ideaEditor.problem.demoLimit (the public demo's daily cap on published versions, 429 public_demo_limit; the backend's own wording)"
+    "reviewP28pd": "[[COPY-REVIEW]] P28-PD (REQ-FND-04; D-71): publicDemo.* (the public demo: the banner on every page, its label and its dismiss button; /login's persona picker, its title, lead, role names, the button \"Continue as {name}\" whose \"as {name}\" part is read by screen readers only, its two error lines, the line and \"Try again\" when no persona could be read (no email form: password sign-in is switched off in the demo); the line under each name is the API's English detail in English, and derived on the web in other languages (publicDemo.detailLevel for a developer, the organisation's name for an organisation persona, none for staff); the calm lines where a switched-off control would be (publicDemo.locked, attachLocked under the message composer, signupLocked with its action on /signup); the landing's \"Try the demo\"; \"Switch persona\" for the user menu's sign-out while the mode is on), errors.public_demo_locked (the API's 403 for any switched-off route), errors.public_demo_limit and ideaEditor.problem.demoLimit (the public demo's daily cap on published versions, 429 public_demo_limit; the backend's own wording)",
+    "reviewP28c": "[[COPY-REVIEW]] P28-C/D2 (REQ-TEN-02, REQ-ENG-17): orgTeam.* (Organisation › Team: the members with their role chips, at most two, the rest named after them as orgTeam.alsoRoles; the organisation's verification level; open invitations; the default reviewer per niche; the escalation contact), teamAdmin.* (the Team page's forms: invite with roles and their one-line hints, resend, revoke, change roles, remove with its in-place question, the niche defaults and escalation selects, and the API's refusals in words), shell.team (the account menu's link to the Team page on organisation screens, and the command palette's), portal.eyebrow.team, invitation.* (the /invitations/{token} page: the organisation's invitation, sign in or create an account, the dead and too-many-tries pages), invitationAccept.* (its Accept button and refusals; the email mismatch names nothing about the invited address), engagements.exportCsv, engagements.csvOff, engagements.csvOffUnknown (the Engagements list's CSV download, or the plan that has it)"
   },
   "app": {
     "name": "Wazo",
@@ -67,7 +68,8 @@
       "light": "Light",
       "dark": "Dark"
     },
-    "install": "Install {product}"
+    "install": "Install {product}",
+    "team": "Team"
   },
   "panel": {
     "title": "How it works",
@@ -642,7 +644,8 @@
       "help": "Help",
       "legal": "Legal",
       "verify": "Certificates",
-      "staff": "Staff console / {section}"
+      "staff": "Staff console / {section}",
+      "team": "Organisation / Team"
     },
     "inbox": {
       "matchesTitle": "What your scout found"
@@ -4418,7 +4421,10 @@
       "calendar": "Calendar",
       "board": "Board"
     },
-    "filterAll": "All"
+    "filterAll": "All",
+    "exportCsv": "Export CSV",
+    "csvOff": "CSV export comes with the {plan} plan. <link>See plans</link>",
+    "csvOffUnknown": "CSV export is not part of your plan. <link>See plans</link>"
   },
   "deadlines": {
     "previous": "Previous month, {month}",
@@ -4558,5 +4564,150 @@
     "switchPersona": "Switch persona",
     "switchingPersona": "Switching…",
     "switchRetry": "Try switching again"
+  },
+  "orgTeam": {
+    "pageTitle": "Team",
+    "title": "Team",
+    "lead": "Who works on {org} here, what each person can do, and who picks up new engagements.",
+    "verification": {
+      "unclaimed": "Not verified yet",
+      "pending": "Verification in progress",
+      "e1": "Domain verified (E1)",
+      "e2": "Registration documents verified (E2)",
+      "rejected": "Not verified"
+    },
+    "membersTitle": "Members",
+    "membersCount": "{count, plural, one {# person} other {# people}}",
+    "you": "You",
+    "joined": "Joined {date}",
+    "alsoRoles": "Also {roles}",
+    "readOnly": "Only owners and admins can change the team.",
+    "invitationsTitle": "Invitations",
+    "invitationsLead": "Each link works for 7 days. Up to {limit} can be open at once.",
+    "inviteTitle": "Invite someone",
+    "openTitle": "{count, plural, one {# open invitation} other {# open invitations}}",
+    "invitedBy": "Invited by {name} on {date}",
+    "expiresOn": "Link works until {date}",
+    "expiredOn": "Link expired on {date}. Resend it to send a new one.",
+    "expired": "Expired",
+    "capReached": "{limit} invitations are open, the most at once. Revoke one, or wait until one is accepted, to invite someone else.",
+    "defaultsTitle": "New engagements",
+    "defaultsLead": "Who first reviews a new engagement in each of your niches. Anyone can still be assigned on the engagement itself.",
+    "defaultsLabel": "Default reviewer per niche",
+    "notSet": "Nobody yet",
+    "noNiches": "Your organisation lists no niches yet, so there is no default to choose.",
+    "noNichesAction": "Open Help",
+    "escalationTitle": "Escalations",
+    "escalationLead": "Your admins hear when a first contact or a decision runs late. One more person can hear it with them.",
+    "escalationIs": "{name} hears of escalations with your admins.",
+    "escalationNone": "Only your admins hear of escalations.",
+    "demoLocked": "Changing the team is switched off in the public demo.",
+    "readFailed": "The team could not be read just now.",
+    "retry": "Try again",
+    "notMember": "You are not a member of that organisation.",
+    "openOwn": "Open your own team"
+  },
+  "teamAdmin": {
+    "role": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "signatory": "Signatory",
+      "reviewer": "Reviewer",
+      "finance": "Finance",
+      "viewer": "Viewer"
+    },
+    "roleHint": {
+      "owner": "Everything, including who else is an owner.",
+      "admin": "Manages the team, invitations and settings.",
+      "signatory": "Approves next steps and signs agreements.",
+      "reviewer": "Reviews proposals and recommends what to do.",
+      "finance": "Looks after the plan and payments.",
+      "viewer": "Reads, and changes nothing."
+    },
+    "email": "Email address",
+    "emailHint": "They join by accepting with this address within 7 days.",
+    "emailRequired": "Enter the email address to invite.",
+    "rolesLegend": "Roles",
+    "rolesOwnerOnly": "Only an owner can make someone an owner or a signatory.",
+    "rolesRequired": "Choose at least one role.",
+    "send": "Send invitation",
+    "sending": "Sending…",
+    "invited": "Invitation sent to {email}. The link works for 7 days.",
+    "resend": "Resend",
+    "resendLabel": "Resend the invitation to {email}",
+    "resending": "Resending…",
+    "resent": "A new link went to {email}. The earlier one no longer works.",
+    "revoke": "Revoke",
+    "revokeLabel": "Revoke the invitation to {email}",
+    "revoking": "Revoking…",
+    "changeRoles": "Change roles",
+    "changeRolesLabel": "Change roles of {name}",
+    "rolesFor": "Roles of {name}",
+    "saveRoles": "Save roles",
+    "rolesSaved": "Roles saved.",
+    "remove": "Remove",
+    "removeLabel": "Remove {name}",
+    "removeConfirm": "Remove {name} from {org}? They lose access at once, and engagements assigned to them become unassigned.",
+    "removeYes": "Remove {name}",
+    "removing": "Removing…",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "nobody": "Nobody",
+    "saveDefaults": "Save defaults",
+    "defaultsSaved": "Defaults saved. New engagements in these niches go to the people chosen.",
+    "escalationLabel": "Escalation contact",
+    "adminsOnly": "Nobody besides the admins",
+    "saveEscalation": "Save contact",
+    "escalationSaved": "Escalation contact saved.",
+    "refusal": {
+      "stepUp": "This step needs a fresh code from your authenticator app.",
+      "invalid_email": "Enter an email address like name@example.com.",
+      "already_member": "That person is already a member.",
+      "already_invited": "That address already has an open invitation. Resend it if the link was lost.",
+      "too_many_invitations": "{limit} invitations are open, the most at once. Revoke one, or wait until one is accepted.",
+      "protected_role": "Only an owner can make someone an owner or a signatory.",
+      "invitation_closed": "That invitation was already accepted or revoked. The list is up to date now.",
+      "protected_member": "Only an owner can remove an owner or a signatory.",
+      "last_owner": "Make someone else an owner first: an organisation always keeps one.",
+      "unknown_niche": "One of these niches changed meanwhile. The page is up to date now: choose again.",
+      "invalid_default_reviewer": "Choose a reviewer, signatory or admin for each niche.",
+      "invalid_member": "Choose someone who is still a member.",
+      "rate_limited": "Too many changes just now. Try again in a minute.",
+      "public_demo_locked": "Changing the team is switched off in the public demo.",
+      "notAllowed": "Only an owner or admin can change the team, and only an owner can change roles.",
+      "notFound": "That is no longer here. The page is up to date now.",
+      "network": "No connection. Try again.",
+      "generic": "Something went wrong. Try again."
+    }
+  },
+  "invitation": {
+    "pageTitle": "Invitation",
+    "title": "Join {org}",
+    "lead": "{org} invited you to join as {roles}.",
+    "signInLead": "Sign in with the email address this invitation was sent to.",
+    "signIn": "Sign in to accept",
+    "noAccount": "New here? Create an account with that address, then open this link again.",
+    "create": "Create an account",
+    "signedInAs": "You are signed in as {email}.",
+    "deadTitle": "This invitation link no longer works",
+    "dead": "It was used, revoked or replaced, or its 7 days are over. Ask the person who invited you for a new one.",
+    "home": "Go to the home page",
+    "rateLimitedTitle": "Too many tries",
+    "rateLimited": "Too many invitation links were opened from here just now. Wait a minute, then reload this page.",
+    "demoLocked": "Accepting invitations is switched off in the public demo."
+  },
+  "invitationAccept": {
+    "accept": "Accept and join",
+    "accepting": "Joining…",
+    "openOrg": "Open your organisation",
+    "refusal": {
+      "mismatch": "This invitation is for a different email address. Sign in with the address it was sent to, then open the link again.",
+      "gone": "This invitation link no longer works. Ask the person who invited you for a new one.",
+      "member": "You are already a member of this organisation.",
+      "locked": "Accepting invitations is switched off in the public demo.",
+      "signedOut": "Your session ended. Sign in again to accept.",
+      "network": "No connection. Try again.",
+      "generic": "Something went wrong. Try again."
+    }
   }
 }
