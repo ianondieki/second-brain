@@ -23,6 +23,15 @@ and never on a developer's. Neither changes the engagement's state; only the tra
   **Withdraw** (``DELETE …/recommendation``): any member removes their own.
 - Each assignment and recommendation change appends an ``audit_events`` row on the organisation's chain: ids and the
   stance only. A note is never in an audit row, an event payload, a log line, a notice or an email.
+- **Niche defaults** (REQ-TEN-02, P28 track C; ``assign_niche_default``): a new engagement in ``SUBMITTED`` or
+  ``ORG_INTEREST`` that has never been assigned goes to the organisation's default reviewer for its version's niche
+  (else the niche's parent's), through this module's insert, in a session bound to a triage member of the
+  organisation (``assigned_by``, the INSERT policy's writer). Never over an assignment (live or closed: someone chose),
+  never to the engagement's own developer, and never to a member who no longer holds a triage role. Audited as a
+  system event (the rule assigned it, ``reason: niche_default``); the assignee is told (N30) unless they are the
+  member whose action opened the engagement. Hooked where an organisation member opens an engagement
+  (``ORG_INTEREST``: ``bridge.engagements.interest_router``). A ``SUBMITTED`` engagement is opened in its developer's
+  session, which reads none of the organisation's rows: that path waits on a database function (the P28 report).
 """
 
 from __future__ import annotations
@@ -42,7 +51,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from bridge.audit.service import record as audit
 from bridge.auth.models import User
 from bridge.config import Settings
-from bridge.db import bind_tenant
+from bridge.db import bind_tenant, tenant_of
+from bridge.directory.models import Niche
 from bridge.engagements.models import (
     NOTE_REDACTED,
     RECOMMENDATION_NOTE_MAX_CHARS,
@@ -67,13 +77,20 @@ from bridge.engagements.schemas import (
 from bridge.errors import ApiError, forbidden, not_found
 from bridge.ids import uuid7
 from bridge.logging import get_logger
-from bridge.models.enums import EngagementParty, MembershipStatus, OrgRole, RecommendationStance
+from bridge.models.enums import (
+    AuditActor,
+    EngagementParty,
+    EngagementState,
+    MembershipStatus,
+    OrgRole,
+    RecommendationStance,
+)
 from bridge.notifications import em2
 from bridge.notifications.in_app import MAX_TITLE_CHARS, post_in_app
 from bridge.proposals.models import ProposalVersion
 from bridge.teams import limits
 from bridge.tenancy.deps import OrgContext
-from bridge.tenancy.models import Membership
+from bridge.tenancy.models import Membership, OrgNicheDefault
 from bridge.web_paths import engagement_path
 
 TRIAGE: Final = frozenset(TRIAGE_ROLES)
@@ -96,6 +113,10 @@ ASSIGNED_TITLE: Final = '{who} assigned you "{title}"'
 ASSIGNED_BODY: Final = "It is in your Assigned to me list. Open the tracker to pick it up."
 SOME_PROPOSAL: Final = "a proposal"
 TOO_MANY_ASSIGNMENTS: Final = "You have changed assignments many times this hour. Try again later."
+# [[COPY-REVIEW]] N30's lines for an assignment by the organisation's niche default (REQ-TEN-02).
+DEFAULT_TITLE: Final = 'Assigned to you as the niche\'s default reviewer: "{title}"'
+DEFAULT_BODY: Final = "A new engagement in a niche you cover. Open the tracker to pick it up."
+DEFAULT_STATES: Final = frozenset({EngagementState.SUBMITTED, EngagementState.ORG_INTEREST})
 
 log = get_logger(__name__)
 
@@ -416,6 +437,38 @@ def assigned_title(who: str, title: str) -> str:
     return ASSIGNED_TITLE.format(who=who, title=title[:room] + "…")[:MAX_TITLE_CHARS]
 
 
+async def _post_n30(
+    factory: async_sessionmaker[AsyncSession],
+    *,
+    user_id: UUID,
+    org_id: UUID,
+    engagement_id: UUID,
+    assignment_id: UUID,
+    title: str,
+    body: str,
+) -> bool:
+    """N30 (in-app) to ``user_id``, after the assignment committed, in a session bound to them; once per assignment
+    (dedupe ``n30:<assignment>``). Never raises: a notice never undoes what it tells."""
+    try:
+        async with factory() as db:
+            await bind_tenant(db, user_id=user_id, org_id=org_id)
+            wrote = await post_in_app(
+                db,
+                user_id=user_id,
+                org_id=org_id,
+                kind=N30,
+                title=title,
+                body=body,
+                link=engagement_path(EngagementParty.ORG, engagement_id),
+                dedupe_key=f"n30:{assignment_id}",
+            )
+            await db.commit()
+            return wrote
+    except Exception as exc:  # a notice never undoes what it tells
+        log.error("engagement.n30_failed", user_id=str(user_id), error_type=type(exc).__name__)
+        return False
+
+
 async def tell_assignee(
     factory: async_sessionmaker[AsyncSession],
     *,
@@ -424,25 +477,125 @@ async def tell_assignee(
     engagement_id: UUID,
     assigner_name: str,
 ) -> bool:
-    """N30 to the new assignee (in-app), after the assignment committed, in a session bound to them; once per
-    assignment (dedupe ``n30:<assignment>``). Never raises: a notice never undoes what it tells."""
+    """N30 to the new assignee (in-app), after the assignment committed (``_post_n30``)."""
     if assigned.assignee_id is None or assigned.assignment_id is None:
         return False
+    return await _post_n30(
+        factory,
+        user_id=assigned.assignee_id,
+        org_id=org_id,
+        engagement_id=engagement_id,
+        assignment_id=assigned.assignment_id,
+        title=assigned_title(assigner_name, assigned.title),
+        body=ASSIGNED_BODY,
+    )
+
+
+# ---------------------------------------------------------------------------------------- niche defaults (REQ-TEN-02)
+
+
+@dataclass(frozen=True, slots=True)
+class DefaultAssigned:
+    """An assignment made by the organisation's niche default: whom to tell after the commit (N30)."""
+
+    engagement_id: UUID
+    assignment_id: UUID
+    assignee_id: UUID
+    title: str
+    tell: bool  # False when the assignee is the member whose action opened the engagement
+
+
+def default_title(title: str) -> str:
+    """N30's title for a niche default's assignment, cut to the bell's 200 characters by shortening the title."""
+    title = em2.one_line(title)
+    full = DEFAULT_TITLE.format(title=title)
+    if len(full) <= MAX_TITLE_CHARS:
+        return full
+    room = max(MAX_TITLE_CHARS - len(DEFAULT_TITLE.format(title="")) - 1, 0)
+    return DEFAULT_TITLE.format(title=title[:room] + "…")[:MAX_TITLE_CHARS]
+
+
+async def _default_for(db: AsyncSession, org_id: UUID, niche_id: UUID | None) -> UUID | None:
+    """The organisation's default reviewer for ``niche_id``, else for its parent niche (read as a member)."""
+    if niche_id is None:
+        return None
+    parent = await db.scalar(select(Niche.parent_id).where(Niche.id == niche_id))
+    niches = [niche_id] if parent is None else [niche_id, parent]
+    rows = await db.execute(
+        select(OrgNicheDefault.niche_id, OrgNicheDefault.user_id).where(
+            OrgNicheDefault.org_id == org_id, OrgNicheDefault.niche_id.in_(niches)
+        )
+    )
+    found = dict(rows.tuples().all())
+    return found.get(niche_id) or (found.get(parent) if parent is not None else None)
+
+
+async def assign_niche_default(db: AsyncSession, org_id: UUID, engagement_id: UUID) -> DefaultAssigned | None:
+    """Assign a new engagement to its niche's default reviewer (see the module docstring), in the caller's transaction
+    (a savepoint: a refusal leaves it usable), bound to a triage member of ``org_id``; None when none was assigned."""
+    actor, _ = tenant_of(db)
+    engagement: Engagement | None = await db.scalar(
+        select(Engagement).where(Engagement.id == engagement_id, Engagement.org_id == org_id)
+    )
+    if actor is None or engagement is None or engagement.state not in DEFAULT_STATES:
+        return None
+    ever = await db.scalar(select(EngagementAssignment.id).where(EngagementAssignment.engagement_id == engagement.id))
+    if ever is not None:  # someone already assigned it (or unassigned it on purpose): never overwritten
+        return None
+    version = (
+        await db.execute(
+            select(ProposalVersion.niche_id, ProposalVersion.title).where(ProposalVersion.id == engagement.version_id)
+        )
+    ).one_or_none()
+    assignee = await _default_for(db, org_id, version.niche_id if version else None)
+    if assignee is None or assignee == engagement.developer_id or not await _is_triage_member(db, org_id, assignee):
+        return None
+    assignment_id = uuid7()
     try:
-        async with factory() as db:
-            await bind_tenant(db, user_id=assigned.assignee_id, org_id=org_id)
-            wrote = await post_in_app(
-                db,
-                user_id=assigned.assignee_id,
-                org_id=org_id,
-                kind=N30,
-                title=assigned_title(assigner_name, assigned.title),
-                body=ASSIGNED_BODY,
-                link=engagement_path(EngagementParty.ORG, engagement_id),
-                dedupe_key=f"n30:{assigned.assignment_id}",
+        async with db.begin_nested():
+            await db.execute(
+                insert(EngagementAssignment).values(
+                    id=assignment_id,
+                    engagement_id=engagement.id,
+                    org_id=org_id,
+                    assignee_user_id=assignee,
+                    assigned_by=actor,
+                )
             )
-            await db.commit()
-            return wrote
-    except Exception as exc:  # a notice never undoes what it tells
-        log.error("engagement.n30_failed", user_id=str(assigned.assignee_id), error_type=type(exc).__name__)
+    except DBAPIError as exc:  # a race (someone assigned it meanwhile) or the guard: the engagement stays as it is
+        log.warning("engagement.niche_default_skipped", sqlstate=getattr(exc.orig, "sqlstate", None))
+        return None
+    await audit(
+        db,
+        "engagement.assigned",
+        actor_user_id=None,
+        actor_kind=AuditActor.SYSTEM,
+        org_id=org_id,
+        subject_type="engagement",
+        subject_id=engagement.id,
+        payload={
+            "engagement_id": str(engagement.id),
+            "assignment_id": str(assignment_id),
+            "assignee_user_id": str(assignee),
+            "reason": "niche_default",
+        },
+    )
+    title = (version.title if version else None) or SOME_PROPOSAL
+    return DefaultAssigned(engagement.id, assignment_id, assignee, title, tell=assignee != actor)
+
+
+async def tell_default_assignee(
+    factory: async_sessionmaker[AsyncSession], org_id: UUID, assigned: DefaultAssigned | None
+) -> bool:
+    """N30 to the niche default's assignee, after the commit, unless they opened the engagement themselves."""
+    if assigned is None or not assigned.tell:
         return False
+    return await _post_n30(
+        factory,
+        user_id=assigned.assignee_id,
+        org_id=org_id,
+        engagement_id=assigned.engagement_id,
+        assignment_id=assigned.assignment_id,
+        title=default_title(assigned.title),
+        body=DEFAULT_BODY,
+    )
