@@ -83,6 +83,33 @@ describe("dismissal (the inline script)", () => {
     expect(document.activeElement).toBe(document.getElementById("main"));
   });
 
+  it("moves focus without scrolling (preventScroll), and puts back a scroll a browser made anyway", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const scrollTo = vi.fn();
+    vi.stubGlobal("scrollTo", scrollTo);
+    try {
+      run();
+      document.querySelector("[data-demo-dismiss]")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      // (Each run() in this file adds its listener to the same document: every one of them focuses the same way.)
+      expect(focus).toHaveBeenCalled();
+      expect(focus.mock.calls.every((args) => JSON.stringify(args) === JSON.stringify([{ preventScroll: true }]))).toBe(true);
+      expect(focus.mock.contexts.every((element) => element === document.getElementById("main"))).toBe(true);
+      expect(scrollTo).not.toHaveBeenCalled(); // nothing moved
+
+      // A browser that ignores preventScroll and scrolls #main into view: the page goes back where it was.
+      document.documentElement.removeAttribute(DEMO_BANNER_HIDDEN_ATTRIBUTE);
+      focus.mockImplementation(() => {
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 41 });
+      });
+      document.querySelector("[data-demo-dismiss]")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(scrollTo).toHaveBeenCalledWith(0, 0);
+    } finally {
+      focus.mockRestore();
+      vi.unstubAllGlobals();
+      Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    }
+  });
+
   it("ignores every other press", () => {
     run();
     document.querySelector("h1")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));

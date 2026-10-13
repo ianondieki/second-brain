@@ -72,9 +72,14 @@ test("the banner is on every page, never over the content, and stays dismissed f
   }
 
   const banner = page.getByRole("region", { name: "Public demo notice" });
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
   await banner.getByRole("button", { name: "Hide the demo notice" }).click();
   await expect(banner).toBeHidden();
   await expect(page.locator("#main")).toBeFocused();
+  // Focus moves without scrolling: at 360 px #main starts below the top bar, and a plain focus() scrolled the bar out
+  // of view (ux review of P28-PD, MAJOR 2). The page stays at the top with the bar in view, in every project.
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect((await page.locator("[data-top-bar]").first().boundingBox())!.y).toBe(0);
   await page.reload();
   await expect(banner).toBeHidden();
   await page.goto("/");
