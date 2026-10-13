@@ -19,7 +19,7 @@ import copy
 import json
 import os
 import subprocess
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -39,12 +39,36 @@ from bridge.seed.reference import seed_all
 from tests.hermetic import python_module
 from tests.integration import world as w
 from tests.integration.api import make_client, sign_in_as
+from tests.integration.conftest import own_database, role_engine
 
 BACKEND = Path(__file__).resolve().parents[3]
 TELECOM = "ICT › Networks & Telecommunications"
 E0_BADGE = "Listed from public information · not on the platform · not affiliated"
 E1_BADGE = "Domain verified (pending legal verification)"
 CARD_FIELDS = {"id", "slug", "name", "kind", "niches", "county", "badge", "responsiveness"}
+
+
+# The module's own database (REQ-FND-02): the directory seed counts every seed-source organisation, and other modules
+# add organisations of their own (marked seed, as fixtures) to the shared session database, so the counts here
+# depended on which modules ran first. These replace the session fixtures for this module only.
+@pytest.fixture(scope="module")
+def database_url(admin_url: URL) -> Iterator[URL]:
+    with own_database(admin_url, "bridge_directory") as url:
+        yield url
+
+
+@pytest.fixture(scope="module")
+async def owner_engine(database_url: URL) -> AsyncIterator[AsyncEngine]:
+    engine = role_engine(database_url, "bridge_owner")
+    yield engine
+    await engine.dispose()
+
+
+@pytest.fixture(scope="module")
+async def app_engine(database_url: URL) -> AsyncIterator[AsyncEngine]:
+    engine = role_engine(database_url, "bridge_app")
+    yield engine
+    await engine.dispose()
 
 
 @dataclass(frozen=True, slots=True)

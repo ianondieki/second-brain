@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -111,15 +112,24 @@ def run_alembic(url: URL, action: Callable[[Config], None]) -> None:
         engine.dispose()
 
 
-@pytest.fixture(scope="session")
-def database_url(admin_url: URL) -> Iterator[URL]:
-    name = f"bridge_test_{uuid4().hex[:12]}"
+@contextmanager
+def own_database(admin_url: URL, prefix: str) -> Iterator[URL]:
+    """A fresh database migrated to head for one module, dropped afterwards: for a module whose assertions count rows
+    that other modules add to the shared session database (``test_seed``'s 47 counties, say), so they never depend on
+    which modules ran first."""
+    name = f"{prefix}_{uuid4().hex[:12]}"
     url = create_database(admin_url, name)
     try:
         run_alembic(url, lambda config: command.upgrade(config, "head"))
         yield url
     finally:
         drop_database(admin_url, name)
+
+
+@pytest.fixture(scope="session")
+def database_url(admin_url: URL) -> Iterator[URL]:
+    with own_database(admin_url, "bridge_test") as url:
+        yield url
 
 
 def role_engine(url: URL, role: str, **kwargs: Any) -> AsyncEngine:

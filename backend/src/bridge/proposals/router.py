@@ -64,7 +64,7 @@ from bridge.proposals.schemas import (
     RemovedOut,
     TeaserCard,
 )
-from bridge.public_demo import LOCKED
+from bridge.public_demo import LOCKED, PUBLISH_CAP
 
 router = APIRouter(tags=["proposals"], responses=ERROR_RESPONSES)
 tier2_router = APIRouter(tags=["tier2"], responses=ERROR_RESPONSES, dependencies=[Depends(access.tier2_gate)])
@@ -96,7 +96,9 @@ async def save_draft(
     return await service.my_proposal(db, wrapper, live.user.id, proposal_id)
 
 
-@router.post("/api/me/proposals/{proposal_id}/publish", responses=UNAVAILABLE)
+@router.post(
+    "/api/me/proposals/{proposal_id}/publish", responses=UNAVAILABLE, dependencies=[PUBLISH_CAP]
+)  # the public demo caps publishing (REQ-FND-04)
 async def publish(
     proposal_id: UUID,
     body: PublishIn,

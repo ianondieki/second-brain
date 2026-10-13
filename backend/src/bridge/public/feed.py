@@ -121,12 +121,17 @@ def explore_summary(rows: Sequence[Any], *, demo: bool) -> Explore:
     )
 
 
-async def activity(factory: async_sessionmaker[AsyncSession], *, generated_at: datetime, demo: bool) -> ActivityFeed:
-    return activity_feed(activity_items(await read(factory, activity_statement()), demo=demo), generated_at)
+async def activity(
+    factory: async_sessionmaker[AsyncSession], *, generated_at: datetime, demo: bool, frozen_at: datetime | None = None
+) -> ActivityFeed:
+    rows = await read(factory, activity_statement(frozen_at))
+    return activity_feed(activity_items(rows, demo=demo), generated_at)
 
 
-async def explore(factory: async_sessionmaker[AsyncSession], *, demo: bool) -> Explore:
-    return explore_summary(await read(factory, explore_statement()), demo=demo)
+async def explore(
+    factory: async_sessionmaker[AsyncSession], *, demo: bool, frozen_at: datetime | None = None
+) -> Explore:
+    return explore_summary(await read(factory, explore_statement(frozen_at)), demo=demo)
 
 
 def problem_page(row: Any, *, demo: bool) -> PublicProblem:
@@ -152,6 +157,8 @@ def problem_page(row: Any, *, demo: bool) -> PublicProblem:
     )
 
 
-async def problem(factory: async_sessionmaker[AsyncSession], problem_id: UUID, *, demo: bool) -> PublicProblem | None:
-    rows = await read(factory, problem_statement(problem_id))
+async def problem(
+    factory: async_sessionmaker[AsyncSession], problem_id: UUID, *, demo: bool, frozen_at: datetime | None = None
+) -> PublicProblem | None:
+    rows = await read(factory, problem_statement(problem_id, frozen_at))
     return problem_page(rows[0], demo=demo) if rows else None

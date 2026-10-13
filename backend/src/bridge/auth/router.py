@@ -167,7 +167,7 @@ async def resend_verification(
     return await magic_link(body, request, tasks, db, settings, email)
 
 
-@router.post("/magic-link/consume")
+@router.post("/magic-link/consume", dependencies=[LOCKED])
 async def consume(
     body: TokenRequest, request: Request, response: Response, db: Db, settings: SettingsDep
 ) -> SessionResponse:
@@ -187,7 +187,7 @@ async def consume(
     return SessionResponse(user=user_out(outcome.session.user), mfa_required=outcome.mfa_required)
 
 
-@router.post("/login", response_model=SessionResponse)
+@router.post("/login", response_model=SessionResponse, dependencies=[LOCKED])
 async def login(
     body: LoginRequest,
     request: Request,
@@ -219,7 +219,7 @@ async def login(
     return SessionResponse(user=user_out(outcome.session.user), mfa_required=outcome.mfa_required)
 
 
-@router.post("/mfa/verify")
+@router.post("/mfa/verify", dependencies=[LOCKED])
 async def mfa_verify(
     body: CodeRequest, request: Request, response: Response, live: PendingSession, db: Db, settings: SettingsDep
 ) -> SessionResponse:

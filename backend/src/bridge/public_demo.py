@@ -10,17 +10,22 @@ the deployment a public demo that anyone may open:
   image has no persona code at all, a production process refuses ``PUBLIC_DEMO``, and an image without the module
   answers ``enabled: false`` and 404 for the sign-in.
 - **The lock.** ``refuse_in_public_demo`` (``LOCKED``, applied by route) answers 403 ``public_demo_locked`` on every
-  route that would let one visitor lock the others out of a shared persona or put a file on the server: sign-up,
-  magic-link and verification requests (no link could be read; spending one stays open), password changes, two-step
-  sign-in (enrol, cancel, confirm, recovery codes, disable), OAuth (start, callback, unlinking), organisation role
-  changes, every upload that keeps a file (proposal and message attachments) and the dev/test clock's move. The
-  password sign-in, the second step and sign-out stay open, and so does the certificate file check (``POST
-  /api/verify``: it hashes the body and stores nothing). ``tests/unit/test_public_demo_lock.py`` walks the app's routes
-  and fails when a route that takes a file is neither locked nor that named exception.
+  other way in, so the persona allowlist is the only one (the password sign-in, its second step and spending a
+  magic link), and on every route that would let one visitor lock the others out of a shared persona or put a file on
+  the server: sign-up, magic-link and verification requests, password changes, two-step sign-in (enrol, cancel,
+  confirm, recovery codes, disable), OAuth (start, callback, unlinking), organisation role changes, every upload that
+  keeps a file (proposal and message attachments) and the dev/test clock's move; and on every route that would make
+  it a publishing surface: every staff write (the moderator persona reads the queues and decides nothing) and creating
+  a calendar feed (a URL anyone may open). A step-up and sign-out stay open, and so does the certificate file check
+  (``POST /api/verify``: it hashes the body and stores nothing). ``tests/unit/test_public_demo_lock.py`` walks the
+  app's routes and fails when a route that takes a file, or a staff write, is neither locked nor a named exception.
+- **Frozen public pages.** The signed-out reads under ``/api/public`` show only what existed at the freeze
+  (``frozen_at``: ``PUBLIC_DEMO_FROZEN_AT`` or the API process's start), so a visitor's text never reaches a page
+  anyone can open signed out.
 - **Not indexed, not described.** Every API answer carries ``X-Robots-Tag: noindex, nofollow`` (``ROBOTS_HEADERS``,
   ``bridge.main``), and the app serves neither its OpenAPI schema nor the interactive docs.
 - **Fictional content.** With ``PUBLIC_DEMO_CONTENT=fictional`` (the default) the seed loads only fictional
-  organisations and official-source research excerpts (``fictional_only``; ``bridge.seed.directory`` and
+  organisations and official-source research excerpts (``bridge.config.fictional_only``; ``bridge.seed.directory`` and
   ``bridge.seed.demo.research``).
 """
 
@@ -28,12 +33,14 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+from datetime import datetime
 from types import ModuleType
 from typing import Final
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy import text
 
-from bridge.auth.deps import SettingsDep
+from bridge.auth.deps import CurrentSession, Db, SettingsDep
 from bridge.config import DEMO_ENVS, Settings
 from bridge.errors import ApiError
 from bridge.public.schemas import DemoPersona, PublicDemo
@@ -54,12 +61,39 @@ async def refuse_in_public_demo(settings: SettingsDep) -> None:
 
 LOCKED: Final = Depends(refuse_in_public_demo)
 
+# Publishing registers a version, and its timestamp step calls the TSA (DigiCert, FreeTSA): in the public demo each
+# account publishes at most PUBLISHES_PER_DAY versions per Nairobi day, so visitors cannot drive the TSA at will.
+PUBLISHES_PER_DAY: Final = 20
+PUBLISH_LIMIT_CODE: Final = "public_demo_limit"
+PUBLISH_LIMIT_MESSAGE: Final = (  # [[COPY-REVIEW]]
+    "The public demo publishes up to 20 versions a day for each account. Try again tomorrow."
+)
+_PUBLISHED_TODAY: Final = text(
+    "SELECT count(*) FROM proposal_versions v JOIN proposals p ON p.id = v.proposal_id WHERE p.owner_id = :user"
+    " AND v.registered_at >= (date_trunc('day', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi')"
+)
 
-def fictional_only(settings: Settings) -> bool:
-    """Whether the seed loads fictional content only: ``PUBLIC_DEMO`` on with ``PUBLIC_DEMO_CONTENT=fictional``. Then
-    the provisional directory of real organisations and the research cards that cite a non-official excerpt (news,
-    D-38) are left out; ``full``, or the mode off, changes nothing."""
-    return settings.public_demo and settings.public_demo_content == "fictional"
+
+async def cap_publishing_in_public_demo(live: CurrentSession, db: Db, settings: SettingsDep) -> None:
+    """429 ``public_demo_limit`` once the signed-in account registered ``PUBLISHES_PER_DAY`` versions this Nairobi day
+    (the TSA's egress), while ``PUBLIC_DEMO`` is on; nothing otherwise. A route dependency of the publish route."""
+    if not settings.public_demo:
+        return
+    published = int((await db.execute(_PUBLISHED_TODAY, {"user": live.user.id})).scalar_one())
+    if published >= PUBLISHES_PER_DAY:
+        raise ApiError(429, PUBLISH_LIMIT_CODE, PUBLISH_LIMIT_MESSAGE)
+
+
+PUBLISH_CAP: Final = Depends(cap_publishing_in_public_demo)
+
+
+def frozen_at(request: Request) -> datetime | None:
+    """The public demo's freeze instant (``app.state.public_frozen_at``, recorded by ``bridge.main.create_app`` at
+    start-up, or ``PUBLIC_DEMO_FROZEN_AT``): the signed-out public reads (``bridge.public``) show only rows created and
+    last changed at or before it, so a visitor's text never reaches a page anyone can open signed out. None outside
+    the public demo."""
+    frozen: datetime | None = getattr(request.app.state, "public_frozen_at", None)
+    return frozen
 
 
 def persona_module(settings: Settings) -> ModuleType | None:
