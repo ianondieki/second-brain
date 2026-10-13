@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import { DemoLocked } from "@/components/DemoLocked";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { standaloneLinkClass } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -27,6 +29,7 @@ import {
   sortRoles,
   splitRoles,
   type OpenInvitation,
+  type OrgVerification,
   type Paywall,
   type OrgRole,
   type OrgTeam,
@@ -43,6 +46,8 @@ export interface TeamViewProps {
   niches: readonly { slug: string; label: string }[];
   /** The seats paywall's links (team.ts Paywall). */
   paywall?: Paywall;
+  /** The organisation's verification level, or null when it could not be read. */
+  verification?: OrgVerification | null;
   /**
    * The public demo is on: invitations, removals and role changes are switched off (the API refuses them), so those
    * controls are one calm line instead; the niche defaults and the escalation contact stay open.
@@ -56,13 +61,26 @@ export interface TeamViewProps {
  * member reads all of it; only owners and admins get the controls (role changes are an owner's alone), each a small
  * client island of its own. In the public demo every control is the calm "switched off" line instead.
  */
-export async function TeamView({ team, orgId, orgName, me, niches, paywall, demo }: TeamViewProps) {
+export async function TeamView({
+  team,
+  orgId,
+  orgName,
+  me,
+  niches,
+  paywall,
+  verification = null,
+  demo,
+}: TeamViewProps) {
   const [t, ta, locale] = await Promise.all([getTranslations("orgTeam"), getTranslations("teamAdmin"), getLocale()]);
   const manager = manages(me.roles);
   // Membership changes (invite, remove, roles) are switched off in the public demo; the settings below them are not.
   const admin = manager && !demo;
   const label = (role: OrgRole) => ta(`role.${role}`);
-  const locked = <DemoLocked sentence={t("demoLocked")} className="mt-4" />;
+  const locked = <DemoLocked variant="change" className="mt-4" />;
+  // Invitations open once the organisation is verified (E1 or E2; the API answers 403 org_not_verified before): an
+  // unknown level (unread) leaves the form, and the API's answer says the same if it comes to that.
+  const unverified = verification !== null && verification !== "e1" && verification !== "e2";
+  const grantable = grantableRoles(me.roles);
   const names = new Map(team.members.map((m) => [m.user_id, m.name]));
   const rows = nicheRows(niches, team.niche_defaults);
   const choices = reviewerChoices(team.members).map(({ user_id, name }) => ({ user_id, name }));
@@ -116,6 +134,13 @@ export async function TeamView({ team, orgId, orgName, me, niches, paywall, demo
         >
           {!admin ? (
             locked
+          ) : unverified ? (
+            <Callout data-invite-unverified="">
+              <p>{ta("refusal.org_not_verified")}</p>
+              <Link href="/help" className={standaloneLinkClass}>
+                {ta("verificationHelp")}
+              </Link>
+            </Callout>
           ) : openCount(team.invitations) >= MAX_OPEN_INVITATIONS ? (
             <Callout data-invite-cap="">
               <p>{t("capReached", { limit: MAX_OPEN_INVITATIONS })}</p>
@@ -125,7 +150,7 @@ export async function TeamView({ team, orgId, orgName, me, niches, paywall, demo
               <h3 className="mb-4 text-lg text-ink">{t("inviteTitle")}</h3>
               <InviteForm
                 orgId={orgId}
-                roles={grantableRoles(me.roles)}
+                roles={grantable}
                 enrolled={me.enrolled}
                 paywall={paywall}
               />
@@ -144,7 +169,9 @@ export async function TeamView({ team, orgId, orgName, me, niches, paywall, demo
                       roles={roleWords(invitation.roles, label, locale)}
                       locale={locale}
                       actions={
-                        admin ? (
+                        // Only an invitation this person could have sent: an admin does not resend or revoke an
+                        // owner's or a signatory's (the API refuses it; the controls are not offered).
+                        admin && invitation.roles.every((role) => grantable.includes(role)) ? (
                           <InvitationActions
                             orgId={orgId}
                             invitationId={invitation.id}

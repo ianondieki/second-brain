@@ -111,6 +111,7 @@ export default async function OrganisationTeamPage({ searchParams }: PageProps<"
             me={{ userId: me.user.id, roles: org.roles, enrolled: me.mfa.enrolled }}
             niches={niches}
             paywall={paywall}
+            verification={level}
             demo={publicDemoOn()}
           />
         </ClientStrings>

@@ -10,6 +10,7 @@ export type TeamMember = Schemas["OrgTeamMember"];
 export type OpenInvitation = Schemas["OrgInvitation"];
 export type NicheDefault = Schemas["NicheDefault"];
 export type OrgRole = Schemas["OrgRole"];
+export type OrgVerification = Schemas["OrgVerification"];
 
 /** Every role, most powerful first: the order chips, checkboxes and lists use. */
 export const ROLES = [
