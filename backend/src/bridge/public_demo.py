@@ -38,8 +38,9 @@ from types import ModuleType
 from typing import Final
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import text
 
-from bridge.auth.deps import SettingsDep
+from bridge.auth.deps import CurrentSession, Db, SettingsDep
 from bridge.config import DEMO_ENVS, Settings
 from bridge.errors import ApiError
 from bridge.public.schemas import DemoPersona, PublicDemo
@@ -59,6 +60,31 @@ async def refuse_in_public_demo(settings: SettingsDep) -> None:
 
 
 LOCKED: Final = Depends(refuse_in_public_demo)
+
+# Publishing registers a version, and its timestamp step calls the TSA (DigiCert, FreeTSA): in the public demo each
+# account publishes at most PUBLISHES_PER_DAY versions per Nairobi day, so visitors cannot drive the TSA at will.
+PUBLISHES_PER_DAY: Final = 20
+PUBLISH_LIMIT_CODE: Final = "public_demo_limit"
+PUBLISH_LIMIT_MESSAGE: Final = (  # [[COPY-REVIEW]]
+    "The public demo publishes up to 20 versions a day for each account. Try again tomorrow."
+)
+_PUBLISHED_TODAY: Final = text(
+    "SELECT count(*) FROM proposal_versions v JOIN proposals p ON p.id = v.proposal_id WHERE p.owner_id = :user"
+    " AND v.registered_at >= (date_trunc('day', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi')"
+)
+
+
+async def cap_publishing_in_public_demo(live: CurrentSession, db: Db, settings: SettingsDep) -> None:
+    """429 ``public_demo_limit`` once the signed-in account registered ``PUBLISHES_PER_DAY`` versions this Nairobi day
+    (the TSA's egress), while ``PUBLIC_DEMO`` is on; nothing otherwise. A route dependency of the publish route."""
+    if not settings.public_demo:
+        return
+    published = int((await db.execute(_PUBLISHED_TODAY, {"user": live.user.id})).scalar_one())
+    if published >= PUBLISHES_PER_DAY:
+        raise ApiError(429, PUBLISH_LIMIT_CODE, PUBLISH_LIMIT_MESSAGE)
+
+
+PUBLISH_CAP: Final = Depends(cap_publishing_in_public_demo)
 
 
 def frozen_at(request: Request) -> datetime | None:

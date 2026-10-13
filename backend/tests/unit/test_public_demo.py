@@ -16,7 +16,7 @@ from __future__ import annotations
 import importlib.util
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import httpx
@@ -277,3 +277,9 @@ async def test_the_public_reads_get_the_freeze_in_the_public_demo_only(monkeypat
 def test_the_freeze_instant_needs_a_zone() -> None:
     with pytest.raises(ValidationError, match="PUBLIC_DEMO_FROZEN_AT must carry a zone"):
         Settings(**{**dict(get_settings()), "public_demo_frozen_at": "2026-10-13T03:20:00"}, _env_file=None)
+
+
+async def test_publishing_is_not_capped_outside_the_public_demo() -> None:
+    """The cap reads nothing at all with the mode off (no database here)."""
+    live = cast(Any, object())
+    await public_demo.cap_publishing_in_public_demo(live, cast(Any, object()), get_settings())

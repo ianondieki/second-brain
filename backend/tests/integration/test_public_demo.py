@@ -38,6 +38,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge import public_demo
 from bridge.auth import throttle
 from bridge.auth.crypto import token_hash
 from bridge.config import Settings, get_settings
@@ -603,6 +604,37 @@ async def test_a_visitors_text_never_reaches_the_signed_out_pages(
             assert (response.status_code, response.json()["detail"]["code"]) == (404, "not_found")
         seeded = next(iter(frozen_view["explore_ids"]))
         assert (await reader.get(f"/api/public/problems/{seeded}")).status_code == 200
+
+
+async def test_publishing_is_capped_per_account_and_nairobi_day(
+    fictional: Seeded, app: AsyncEngine, owner: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Security review MINOR (TSA egress): an account's next publish past the day's cap is 429 public_demo_limit
+    (the cap, 20, lowered here to what Amina has registered today) and registers nothing."""
+    _, report = fictional
+    assert public_demo.PUBLISHES_PER_DAY == 20
+    today = (
+        "SELECT count(*) FROM proposal_versions v JOIN proposals p ON p.id = v.proposal_id WHERE p.owner_id = :u"
+        " AND v.registered_at >= (date_trunc('day', now() AT TIME ZONE 'Africa/Nairobi') AT TIME ZONE 'Africa/Nairobi')"
+    )
+    registered = int(await scalar(owner, today, u=report.users[AMINA.email]))
+    monkeypatch.setattr(public_demo, "PUBLISHES_PER_DAY", registered)
+    async with visitor(app, ip="41.90.4.7") as amina:
+        assert (await sign_in(amina, "amina")).status_code == 200
+        terms = (await amina.get("/api/proposals/attestations")).json()
+        statements = ("created_it", "not_owned_by_employer_or_client", "no_third_party_confidential")
+        refused = await amina.post(
+            f"/api/me/proposals/{report.proposals[P2.key]}/publish",
+            json={"attestations": dict.fromkeys(statements, True), "attestation_text_version": terms["version"]},
+        )
+    assert refused.status_code == 429, refused.text
+    assert refused.json() == {
+        "detail": {
+            "code": "public_demo_limit",
+            "message": "The public demo publishes up to 20 versions a day for each account. Try again tomorrow.",
+        }
+    }
+    assert int(await scalar(owner, today, u=report.users[AMINA.email])) == registered
 
 
 async def test_the_moderator_persona_reads_but_decides_nothing(fictional: Seeded, app: AsyncEngine) -> None:
