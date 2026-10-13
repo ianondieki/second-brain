@@ -1,0 +1,12 @@
+{#- P28's tracker notices, plain text (REQ-NOT-05: EM5 Signature needed, EM6 Contact overdue, the escalations, the
+    procurement route chosen; bridge.notifications.nudge_copy). [[COPY-REVIEW]] Autoescape off: plain text; names and
+    titles arrive unlinkable. The only link is the platform's tracker. -#}
+{% for paragraph in paragraphs %}
+{{ paragraph }}
+
+{% endfor %}
+{{ button_label }}: {{ button_url }}
+
+--
+{{ product }} · {{ ref_label }} {{ engagement_ref }}
+{{ manage_label }}: {{ settings_url }} · {{ help_label }}: {{ help_url }} · {{ place }}
