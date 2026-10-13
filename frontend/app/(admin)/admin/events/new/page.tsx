@@ -13,6 +13,8 @@ import { clientStrings } from "@/lib/i18n/client-strings";
 import { AdminShell } from "../../AdminShell";
 import { staffContext } from "../../staff";
 import { ADMIN_EVENTS_PATH } from "../events";
+import { DemoLocked } from "@/components/DemoLocked";
+import { publicDemoOn } from "@/lib/public-demo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminEvents");
@@ -36,6 +38,8 @@ export default async function NewPlatformEventPage() {
     </AdminShell>
   );
   if (role !== "admin") return shell(<EmptyState sentence={t("notAdmin")} action={t("notAdminAction")} href={ADMIN_EVENTS_PATH} />);
+  // The public demo (REQ-FND-04): staff are read-only; the locked line stands where the form would be.
+  if (publicDemoOn()) return shell(<DemoLocked />);
   const counties = await getCounties();
   return shell(
     <ClientStrings strings={await clientStrings(["eventForm"])}>

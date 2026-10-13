@@ -20,6 +20,8 @@ import { CandidateRow, RunRow, SavedExcerpts } from "./Sections";
 import { StartRun } from "./StartRun";
 import { DraftTrends } from "./trends/DraftTrends";
 import { TrendRow } from "./trends/TrendRow";
+import { DemoLocked } from "@/components/DemoLocked";
+import { publicDemoOn } from "@/lib/public-demo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminResearch");
@@ -81,7 +83,10 @@ export default async function ResearchPage() {
             {t("start.heading")}
           </h2>
           <div className="mt-4">
-            {options.length > 0 ? (
+            {/* The public demo (REQ-FND-04): staff are read-only; no run can be started. */}
+            {publicDemoOn() ? (
+              <DemoLocked />
+            ) : options.length > 0 ? (
               <ClientStrings strings={strings}>
                 <StartRun options={options} active={active} />
               </ClientStrings>
@@ -128,9 +133,13 @@ export default async function ResearchPage() {
                   {t("trends.empty")}
                 </p>
               )}
-              <ClientStrings strings={strings}>
-                <DraftTrends />
-              </ClientStrings>
+              {publicDemoOn() ? (
+                <DemoLocked className="mt-4" />
+              ) : (
+                <ClientStrings strings={strings}>
+                  <DraftTrends />
+                </ClientStrings>
+              )}
             </div>
           </Section>
         ) : null}
