@@ -8,6 +8,7 @@ official ones; ``full``, and the mode off, change nothing.
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import date
 from typing import Any
 
 import pytest
@@ -15,10 +16,22 @@ import pytest
 from bridge import public_demo
 from bridge.config import Settings, get_settings
 from bridge.db import create_engine, create_session_factory
+from bridge.problems.research import checks
+from bridge.problems.research.policy import get_research_policy
 from bridge.problems.research.runtime import ResearchRuntime
 from bridge.problems.research.sources import Catalogue, catalogue_for, get_catalogue, load_catalogue, official_only
-from bridge.seed.demo.research import SEEDED_ANSWERS, niches_to_seed, seeded_niches
+from bridge.seed.demo.research import (
+    OFFICIAL_ANSWERS,
+    SEEDED_ANSWERS,
+    answers_for,
+    left_out,
+    niches_to_seed,
+    seeded_answer,
+    seeded_niches,
+)
 from bridge.seed.directory import DirectorySeedRefused, directory_refusal, ensure_loadable
+
+AS_OF = date(2026, 10, 13)  # the card's day: the SACCO excerpts are fresh, ke-agr-004 and ke-tel-005 archived
 
 
 def public(**update: Any) -> Settings:
@@ -47,21 +60,55 @@ def test_the_fictional_public_demo_leaves_out_every_card_citing_a_news_excerpt()
     for niche in seeded_niches():  # today each seeded card cites at least one non-official excerpt
         cited = [catalogue.get(i) for i, _ in SEEDED_ANSWERS[niche]["citations"]]
         assert any(e is not None and e.source_type != "official" for e in cited), niche
-    assert niches_to_seed(public(), catalogue) == ()
-    assert niches_to_seed(public(public_demo_content="full"), catalogue) == seeded_niches()
-    assert niches_to_seed(get_settings(), catalogue) == seeded_niches()
+    assert answers_for(public(), catalogue) == OFFICIAL_ANSWERS  # the public demo's own cards in their place
+    assert niches_to_seed(public(), catalogue) == ("microfinance-saccos",)
+    assert left_out(public()) == seeded_niches()
+    for settings in (public(public_demo_content="full"), get_settings()):  # today's seed, exactly
+        assert answers_for(settings, catalogue) is SEEDED_ANSWERS
+        assert niches_to_seed(settings, catalogue) == seeded_niches()
+        assert left_out(settings) == ()
 
 
-def test_a_card_citing_official_excerpts_only_is_kept() -> None:
+def test_a_seeded_card_citing_official_excerpts_only_is_kept() -> None:
     catalogue = load_catalogue()
     official = Catalogue(tuple(replace(e, source_type="official") for e in catalogue.excerpts), catalogue.allowlists)
-    assert niches_to_seed(public(), official) == seeded_niches()
+    answers = answers_for(public(), official)
+    assert tuple(answers) == seeded_niches()
+    assert answers["microfinance-saccos"] is OFFICIAL_ANSWERS["microfinance-saccos"]  # the official card wins
+    assert all(answers[n] is SEEDED_ANSWERS[n] for n in seeded_niches() if n not in OFFICIAL_ANSWERS)
     one_news = Catalogue(
-        tuple(replace(e, source_type="news") if e.id == "ke-sac-004" else e for e in official.excerpts),
+        tuple(replace(e, source_type="news") if e.id == "ke-tel-001" else e for e in official.excerpts),
         catalogue.allowlists,
     )
-    assert "microfinance-saccos" not in niches_to_seed(public(), one_news)
-    assert len(niches_to_seed(public(), one_news)) == len(seeded_niches()) - 1
+    assert "networks-telecommunications" not in niches_to_seed(public(), one_news)
+
+
+@pytest.mark.parametrize("niche", sorted(OFFICIAL_ANSWERS))
+def test_every_official_card_passes_the_checks_on_official_excerpts_alone(niche: str) -> None:
+    """Each public demo card cites official excerpts only, passes every check in code on what a fictional run sends
+    (the official excerpts that are not archived), and names no organisation."""
+    catalogue, policy = official_only(load_catalogue()), get_research_policy()
+    sent = {e.id: e for e in catalogue.usable(niche, "KE", AS_OF, policy)}
+    assert len(sent) >= policy.min_excerpts  # a run of the niche is not stopped for not_enough_excerpts
+    [draft] = seeded_answer(niche, OFFICIAL_ANSWERS).problems
+    assert {c.excerpt_id for c in draft.citations} <= set(sent)
+    verdict = checks.check_draft(draft.draft(), sent, catalogue.allowlists["KE"], policy, AS_OF)
+    assert isinstance(verdict, checks.Accepted), verdict
+    assert verdict.agreement == 1
+    assert verdict.text.named_orgs == ()
+    assert verdict.confidence >= policy.discard_below
+    assert draft.county_code is None
+
+
+def test_the_official_cards_are_every_niche_the_official_excerpts_support() -> None:
+    """A niche gets a public demo card exactly when its official excerpts let a run start: at least ``min_excerpts``
+    that are not archived. Agriculture has one (its second is archived), the telecoms one is archived and health has
+    none, so only microfinance-saccos qualifies today."""
+    catalogue, policy = official_only(load_catalogue()), get_research_policy()
+    supported = {
+        n for n in catalogue.niches("KE") if len(catalogue.usable(n, "KE", AS_OF, policy)) >= policy.min_excerpts
+    }
+    assert supported == set(OFFICIAL_ANSWERS) == {"microfinance-saccos"}
 
 
 def test_runtime_readers_see_only_official_excerpts_in_the_fictional_public_demo() -> None:

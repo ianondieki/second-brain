@@ -82,7 +82,14 @@ from bridge.seed.demo.follow_ups import ensure_saved_search, ensure_shortlisted,
 from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
 from bridge.seed.demo.queues import seed_queues
 from bridge.seed.demo.quiz import PLAYS, ensure_play, ensure_sets, has_profile
-from bridge.seed.demo.research import ensure_staff, niches_to_seed, seed_research_card, seeded_niches
+from bridge.seed.demo.research import (
+    OFFICIAL_ANSWERS,
+    ensure_staff,
+    left_out,
+    niches_to_seed,
+    seed_research_card,
+    seeded_niches,
+)
 from bridge.seed.demo.runtime import (
     Actors,
     DemoKeysChanged,
@@ -164,14 +171,14 @@ async def seed_demo(
         for plan in ENGAGEMENTS:
             await step(f"{plan.proposal} with {plan.org}", drive(owner_engine, actors, settings, plan, report))
         if STAFF_ADMIN.email in report.users:
-            cards = niches_to_seed(settings)  # REQ-FND-04: the fictional public demo leaves out cards citing news
-            for niche in cards:
+            for niche in niches_to_seed(settings):  # REQ-FND-04: in the fictional public demo, official sources only
                 card = seed_research_card(owner_engine, factory, actors, settings, STAFF_ADMIN, niche, report)
                 await step(f"research card {niche}", card)
-            if withheld := len(seeded_niches()) - len(cards):
+            if withheld := left_out(settings):
                 report.notes.append(
-                    f"research cards: {withheld} left out of the public demo (they cite news excerpts;"
-                    " PUBLIC_DEMO_CONTENT=full restores them)"
+                    f"research cards: {len(withheld)} citing news excerpts left out of the public demo, with"
+                    f" {len(OFFICIAL_ANSWERS)} citing official excerpts only in their place (PUBLIC_DEMO_CONTENT=full"
+                    " seeds the others)"
                 )
         await step("trending and liked niches", seed_trending(owner_engine, actors, niches, report))
         await step("free plans", _free_plans(owner_engine, settings))

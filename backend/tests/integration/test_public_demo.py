@@ -15,7 +15,8 @@
   published demo password, its second step and spending a link are locked too. The admin research API lists and runs
   official excerpts only.
 - AT-PD-5: ``fictional`` leaves out every ``ke_provisional`` organisation and every research card citing a news
-  excerpt; ``full`` restores both.
+  excerpt, and has the public demo's own card cited to official excerpts only; ``full`` restores the directory and
+  the news-citing cards.
 
 The database is the module's own: the demo seed's rows would disturb other tests' counts in the shared one.
 """
@@ -42,7 +43,7 @@ from bridge.integrations.sms import FakeSmsProvider
 from bridge.notifications.email import FakeEmailProvider
 from bridge.seed.demo import DemoReport, DemoRuntime, seed_demo
 from bridge.seed.demo.data import AMINA, DEMO_PASSWORD, ORGS, P1, STAFF_ADMIN, TELCO_A
-from bridge.seed.demo.research import SEEDED_ANSWERS
+from bridge.seed.demo.research import OFFICIAL_ANSWERS, SEEDED_ANSWERS
 from bridge.seed.directory import directory_loadable, load_directory, seed_directory
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
@@ -144,12 +145,29 @@ async def test_the_fictional_public_seed_has_no_real_organisation_and_no_news_ex
     assert await scalar(owner, "SELECT count(*) FROM organizations WHERE slug = ANY(:s)", s=PROVISIONAL) == 0
     names = {row.legal_name for row in await rows(owner, "SELECT legal_name FROM organizations")}
     assert names == {org.legal_name for org in ORGS}  # the four fixtures, nothing else
-    assert await scalar(owner, "SELECT count(*) FROM research_runs") == 0
     unofficial = "SELECT count(*) FROM problem_sources WHERE source_type IS DISTINCT FROM 'official'"
     assert await scalar(owner, unofficial) == 0
+    cards = await rows(
+        owner,
+        "SELECT n.slug::text AS niche, p.status::text AS status, p.title, p.county_code,"
+        " (SELECT array_agg(s.excerpt_ref ORDER BY s.excerpt_ref) FROM problem_sources s WHERE s.problem_id = p.id)"
+        " AS refs FROM problems p JOIN research_runs r ON r.id = p.research_run_id JOIN niches n ON n.id = r.niche_id",
+    )
+    official = OFFICIAL_ANSWERS["microfinance-saccos"]
+    assert [tuple(card) for card in cards] == [  # the public demo's own card, cited to official excerpts only
+        (
+            "microfinance-saccos",
+            "published",
+            official["title"],
+            None,
+            [f"example:{i}" for i, _ in sorted(official["citations"])],
+        )
+    ]
+    assert await scalar(owner, "SELECT count(*) FROM research_runs") == 1
     assert (
-        f"research cards: {len(SEEDED_ANSWERS)} left out of the public demo (they cite news excerpts;"
-        " PUBLIC_DEMO_CONTENT=full restores them)"
+        f"research cards: {len(SEEDED_ANSWERS)} citing news excerpts left out of the public demo, with"
+        f" {len(OFFICIAL_ANSWERS)} citing official excerpts only in their place (PUBLIC_DEMO_CONTENT=full seeds the"
+        " others)"
     ) in report.notes
     personas = await rows(
         owner,
@@ -419,6 +437,11 @@ async def test_full_content_restores_the_directory_and_the_research_cards(
     assert await scalar(owner, "SELECT count(*) FROM organizations WHERE slug = ANY(:s)", s=PROVISIONAL) == len(
         PROVISIONAL
     )
-    assert await scalar(owner, "SELECT count(*) FROM research_runs") == len(SEEDED_ANSWERS)
+    niches = await rows(
+        owner, "SELECT n.slug::text FROM research_runs r JOIN niches n ON n.id = r.niche_id ORDER BY n.slug"
+    )
+    # Every niche has its card; microfinance keeps the official one written first (the seed never adds a second card
+    # to a niche, and the image wipes its data every night, so a real full start seeds SEEDED_ANSWERS' own).
+    assert [row[0] for row in niches] == sorted(SEEDED_ANSWERS)
     assert await scalar(owner, "SELECT count(*) FROM problem_sources WHERE source_type = 'news'") > 0
     assert not [note for note in report.notes if note.startswith("research cards:")]

@@ -18,8 +18,10 @@ checks, then ``app_moderate_problem``). The cards' sources carry ``excerpt_ref``
 API's label; ``seeded_example: true`` in the admin and public responses): a seeded card is never presented as a live
 AI result.
 
-In the public demo with ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04) a card is written only when every excerpt it
-cites is an official source (``niches_to_seed``): none today.
+In the public demo with ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04) the run reads the official excerpts only
+(``catalogue_for``), a card of ``SEEDED_ANSWERS`` is written only when every excerpt it cites is an official source
+(none today), and the public demo's own cards (``OFFICIAL_ANSWERS``, cited to official excerpts alone) are written in
+their place (``answers_for``). ``full``, and the mode off, seed ``SEEDED_ANSWERS`` exactly as before.
 
 Idempotent and safe on a used demo (P9's rules): a niche that already has a seeded card of the demo staff admin (any
 status: an admin may have rejected it in the app) gets nothing new; a seeded card still awaiting review is approved.
@@ -47,7 +49,7 @@ from bridge.models.enums import ConsentPurpose
 from bridge.problems.research import synthesis
 from bridge.problems.research.pipeline import EXAMPLE_REF_PREFIX, CardOrigin, execute_run, start_run
 from bridge.problems.research.policy import get_research_policy
-from bridge.problems.research.sources import Catalogue, get_catalogue
+from bridge.problems.research.sources import Catalogue, catalogue_for, get_catalogue
 from bridge.profiles.consents import record_decisions
 from bridge.public_demo import fictional_only
 from bridge.seed.demo.data import DEMO_PASSWORD, DemoStaff
@@ -131,8 +133,35 @@ SEEDED_ANSWERS: Final[Mapping[str, Mapping[str, Any]]] = {
 }
 
 
-def seeded_answer(niche: str) -> synthesis.ResearchSynthesis:
-    card = SEEDED_ANSWERS[niche]
+# The public demo's own cards (REQ-FND-04; PUBLIC_DEMO_CONTENT=fictional only), written by hand from the official
+# excerpts alone (source_type official), one per niche whose official excerpts a run may use: at least min_excerpts
+# that are not archived. Today that is microfinance-saccos only (agriculture has one usable official excerpt, the
+# telecoms one is archived, health has none). Neutral and factual: each sentence restates what a cited quote says;
+# no county, no figure and no organisation's name. [[COPY-REVIEW]]
+OFFICIAL_ANSWERS: Final[Mapping[str, Mapping[str, Any]]] = {
+    "microfinance-saccos": {
+        "title": "Cybersecurity and regulatory reporting in focus for deposit-taking SACCOs",
+        "statement": (
+            "A roundtable the regulator held with deposit-taking SACCOs focused on governance, the quality of"
+            " regulatory data, financial reporting, audit concerns and cybersecurity. The regulator says it supports"
+            " secure digital transformation and the protection of members' funds as the sector relies more on"
+            " technology, and it has been asked to prepare for a proposed expansion of its regulatory mandate. For"
+            " deposit-taking SACCOs this puts cybersecurity and the quality of their regulatory data and reporting in"
+            " focus."
+        ),
+        "affected_group": "Deposit-taking SACCOs and their members",
+        "county_code": None,
+        "citations": (
+            ("ke-sac-004", "quality of regulatory data, financial reporting, audit concerns, cybersecurity"),
+            ("ke-sac-003", "supporting secure digital transformation and protecting SACCO members\u2019 funds"),
+            ("ke-sac-005", "prepare for the proposed expansion of its regulatory mandate"),
+        ),
+    },
+}
+
+
+def seeded_answer(niche: str, answers: Mapping[str, Mapping[str, Any]] = SEEDED_ANSWERS) -> synthesis.ResearchSynthesis:
+    card = answers[niche]
     draft = synthesis.ProblemDraft(
         title=card["title"],
         statement=card["statement"],
@@ -244,14 +273,14 @@ _SEEDED_CARD: Final = (
 async def _create_card(
     factory: async_sessionmaker[AsyncSession], settings: Settings, admin_id: UUID, niche: str
 ) -> UUID:
-    catalogue, policy = get_catalogue(), get_research_policy()
+    catalogue, policy = catalogue_for(settings), get_research_policy()  # official only in the fictional public demo
     async with factory() as db:
         await bind_tenant(db, user_id=admin_id)
         run = await start_run(db, user_id=admin_id, niche_slug=niche, country="KE", catalogue=catalogue)
         outcome = await execute_run(
             db,
             run.id,
-            client=SeededExampleClient(seeded_answer(niche)),
+            client=SeededExampleClient(seeded_answer(niche, answers_for(settings))),
             settings=settings,
             catalogue=catalogue,
             policy=policy,
@@ -293,26 +322,41 @@ def seeded_niches() -> tuple[str, ...]:
     return tuple(SEEDED_ANSWERS)
 
 
-def niches_to_seed(settings: Settings, catalogue: Catalogue | None = None) -> tuple[str, ...]:
-    """The niches whose seeded card this run writes: every one, except in the public demo with
+def answers_for(settings: Settings, catalogue: Catalogue | None = None) -> Mapping[str, Mapping[str, Any]]:
+    """The fixed answers this run seeds, by niche: ``SEEDED_ANSWERS``, except in the public demo with
     ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04, ``bridge.public_demo.fictional_only``), which leaves out every card
-    that cites an excerpt whose ``source_type`` is not ``official`` (the news excerpts await D-38). Today each card
-    cites at least one news excerpt, so the fictional public demo has none; ``full`` restores them all."""
+    that cites an excerpt whose ``source_type`` is not ``official`` (the news excerpts await D-38; today each card
+    cites one) and seeds ``OFFICIAL_ANSWERS`` in their place. ``full`` keeps today's seed exactly."""
     if not fictional_only(settings):
-        return seeded_niches()
+        return SEEDED_ANSWERS
     found = catalogue or get_catalogue()
 
     def official(excerpt_id: str) -> bool:
         excerpt = found.get(excerpt_id)
         return excerpt is not None and excerpt.source_type == "official"
 
-    return tuple(n for n in seeded_niches() if all(official(i) for i, _ in SEEDED_ANSWERS[n]["citations"]))
+    kept = {n: card for n, card in SEEDED_ANSWERS.items() if all(official(i) for i, _ in card["citations"])}
+    return {**kept, **OFFICIAL_ANSWERS}
+
+
+def niches_to_seed(settings: Settings, catalogue: Catalogue | None = None) -> tuple[str, ...]:
+    """The niches whose seeded card this run writes (``answers_for``)."""
+    return tuple(answers_for(settings, catalogue))
+
+
+def left_out(settings: Settings) -> tuple[str, ...]:
+    """The niches of ``SEEDED_ANSWERS`` whose card this run does not write (the fictional public demo's news cards)."""
+    answers = answers_for(settings)
+    return tuple(n for n, card in SEEDED_ANSWERS.items() if answers.get(n) is not card)
 
 
 __all__ = [
+    "OFFICIAL_ANSWERS",
     "SEEDED_ANSWERS",
     "SeededExampleClient",
+    "answers_for",
     "ensure_staff",
+    "left_out",
     "niches_to_seed",
     "seed_research_card",
     "seeded_niches",
