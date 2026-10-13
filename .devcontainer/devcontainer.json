@@ -1,0 +1,47 @@
+// The public demo in a GitHub Codespace (P28 track PD; REQ-FND-04; docs/runbooks/public-demo.md part A).
+// The codespace runs the all-in-one demo image (infra/demo/space/Dockerfile): on every start, start-demo.sh launches
+// its supervisor (run.py) in the background, which seeds the whole product and serves it on port 7860 (about a minute;
+// log: ~/demo.log); on every attach, public-url.sh makes port 7860 public and prints the address to share. The link
+// works only while the codespace runs: it stops when idle (raise the idle timeout to 240 minutes in GitHub settings).
+// Demo only: fictional data, fake providers, throwaway secrets made at each boot, a reset every night at 03:00 EAT.
+{
+  "name": "Bridge public demo",
+  // Built from this checkout, so it needs nothing published first (the first build takes about 10-15 minutes).
+  // Switch to the prebuilt image once demo-image.yml has pushed it and its GHCR package is public (the runbook's
+  // go-live checklist): replace "build" with
+  //   "image": "ghcr.io/ianondieki/bridge-demo:latest",
+  // and the codespace starts in a minute or two instead.
+  "build": {
+    "dockerfile": "../infra/demo/space/Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  // tini as PID 1: the supervisor is not PID 1 here (it starts from postStartCommand), so orphans are reaped.
+  "init": true,
+  "remoteUser": "demo",
+  "containerUser": "demo",
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "4gb"
+  },
+  "forwardPorts": [7860],
+  "portsAttributes": {
+    "7860": {
+      "label": "Demo",
+      "onAutoForward": "notify"
+    }
+  },
+  // Postgres, SeaweedFS, Mailpit and the API listen on 127.0.0.1 inside the container only: never forward them.
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
+  "postStartCommand": "bash .devcontainer/start-demo.sh",
+  "postAttachCommand": "bash .devcontainer/public-url.sh",
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["docs/runbooks/public-demo.md"]
+    }
+  }
+}
