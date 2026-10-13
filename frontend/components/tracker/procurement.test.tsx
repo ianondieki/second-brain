@@ -514,7 +514,7 @@ describe("the route, once chosen, for both parties", () => {
     });
     renderWithIntl(<HistoryList history={{ ...base, events: [...base.events, approval("PROCUREMENT_ROUTE")] }} />);
     const entry = document.querySelector("[data-event='approve']")!;
-    expect(entry.querySelector("h3")?.textContent).toBe("Approved; the procurement route comes next");
+    expect(entry.querySelector("h3")?.textContent).toBe("Approved (non-binding); the procurement route comes next");
     expect(entry.textContent).not.toContain("Approved to proceed");
     cleanup();
     renderWithIntl(<HistoryList history={{ ...base, events: [...base.events, approval("INTEREST_CONFIRMED")] }} />);
