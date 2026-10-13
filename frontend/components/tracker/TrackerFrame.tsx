@@ -18,6 +18,7 @@ import {
   stepperSteps,
   subStages,
   turnOf,
+  waitsOnAdmin,
   withQuery,
   type Detail,
   type History,
@@ -102,7 +103,8 @@ export function TurnCard({
   footer?: ReactNode;
 }) {
   const turn = turnOf(detail, detail.my_party);
-  const yours = turn.kind === "you" || turn.kind === "both";
+  // A member waiting on an admin's procurement route (REQ-ENG-06) reads a flat card: the step is not theirs.
+  const yours = !waitsOnAdmin(detail) && (turn.kind === "you" || turn.kind === "both");
   return (
     <div
       data-turn-card={yours ? "yours" : "theirs"}

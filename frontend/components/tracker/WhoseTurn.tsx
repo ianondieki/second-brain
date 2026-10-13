@@ -8,7 +8,16 @@ import { cn } from "@/components/ui/cn";
 import { ChipMark } from "./Chip";
 import { formatDay } from "@/lib/format";
 
-import { formatDate, myNextSteps, sideBanner, theirNextSteps, turnOf, type Detail, type SideBanner } from "./model";
+import {
+  formatDate,
+  myNextSteps,
+  sideBanner,
+  theirNextSteps,
+  turnOf,
+  waitsOnAdmin,
+  type Detail,
+  type SideBanner,
+} from "./model";
 import { DeadlineClock, DeadlineLine } from "@/components/ui/DeadlineClock";
 
 import { DueText } from "./When";
@@ -28,8 +37,10 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
   const mine = myNextSteps(detail);
   const theirs = theirNextSteps(detail);
 
-  const headline =
-    turn.kind === "you"
+  const admins = waitsOnAdmin(detail);
+  const headline = admins
+    ? t("turn.admins")
+    : turn.kind === "you"
       ? t("turn.you")
       : turn.kind === "other"
         ? t("turn.other", { name: other })
@@ -41,7 +52,7 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
               ? t("turn.closed")
               : t("turn.ended");
 
-  const yours = turn.kind === "you" || turn.kind === "both";
+  const yours = !admins && (turn.kind === "you" || turn.kind === "both");
   const awaited = new Set(detail.whose_turn);
   const ended = turn.kind === "ended";
   const side = sideBanner(detail);
@@ -123,20 +134,19 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
             <p className="text-lg font-semibold text-ink">{t("nextBoth", { name: other, step: steps(`command.${mine[0]}`) })}</p>
           ) : (
             <>
+              {/* A public entity's procurement route is its owner's or admin's to choose: another member (a
+                  signatory, a reviewer) reads who acts, not a step they have no button for (REQ-ENG-06). */}
+              {admins ? (
+                <p data-waiting-admin="" className="text-lg text-ink">
+                  {t("waitingAdmin")}
+                </p>
+              ) : null}
               {yours
-                ? mine.map((command) =>
-                    // A public entity's procurement route is its owner's or admin's to choose: another member (a
-                    // signatory, a reviewer) reads who acts, not a step they have no button for (REQ-ENG-06).
-                    command === "choose_route" && detail.my_party === "org" && !detail.actions.includes(command) ? (
-                      <p key={command} data-waiting-admin="" className="text-lg text-ink">
-                        {t("waitingAdmin")}
-                      </p>
-                    ) : (
-                      <p key={command} className="text-lg font-semibold text-ink">
-                        {t("nextYou", { step: steps(`command.${command}`) })}
-                      </p>
-                    ),
-                  )
+                ? mine.map((command) => (
+                    <p key={command} className="text-lg font-semibold text-ink">
+                      {t("nextYou", { step: steps(`command.${command}`) })}
+                    </p>
+                  ))
                 : null}
               {turn.kind === "other" || turn.kind === "both"
                 ? theirs.map((command) => (

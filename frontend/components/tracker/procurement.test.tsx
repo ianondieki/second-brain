@@ -154,7 +154,7 @@ describe("the procurement route's sheet (REQ-ENG-06)", () => {
       "innovation_challenge",
       "pilot_mou",
     ]);
-    expect(document.activeElement).toBe(radios[0]);
+    await waitFor(() => expect(document.activeElement).toBe(radios[0]));
     for (const radio of radios) expect(radio.getAttribute("aria-describedby")).toBeTruthy();
     expect(within(dialog).getByLabelText(/Direct procurement/).closest("label")?.textContent).toContain(
       "without a competition",
@@ -275,6 +275,7 @@ describe("who chooses, in the whose-turn banner", () => {
   it("names the step for an owner or admin, who has the button", () => {
     renderWithIntl(<WhoseTurn detail={inRoute(["owner", "admin"])} />);
     expect(screen.getByText("Your next step: Choose the procurement route")).toBeTruthy();
+    expect(screen.getByText("Your turn")).toBeTruthy();
     expect(document.querySelector("[data-waiting-admin]")).toBeNull();
   });
 
@@ -283,6 +284,9 @@ describe("who chooses, in the whose-turn banner", () => {
       renderWithIntl(<WhoseTurn detail={inRoute([...roles])} />);
       expect(screen.getByText("Waiting for an admin to choose the procurement route.")).toBeTruthy();
       expect(screen.queryByText("Your next step: Choose the procurement route")).toBeNull();
+      // The organisation's turn, not this member's: no "Your turn" badge, the admins named as who is awaited.
+      expect(screen.getByRole("heading", { name: "Awaiting: your admins" })).toBeTruthy();
+      expect(screen.queryByText("Your turn")).toBeNull();
       cleanup();
     }
   });

@@ -199,6 +199,17 @@ export function myNextSteps(detail: Pick<Detail, "awaiting" | "my_party">): Comm
   return [...new Set(detail.awaiting.filter((p) => p.party === detail.my_party).map((p) => p.command))];
 }
 
+/**
+ * The organisation's step is its owner's or admin's (the procurement route, REQ-ENG-06) and this member has no button
+ * for it: the turn is the organisation's, not this member's own.
+ */
+export function waitsOnAdmin(detail: Pick<Detail, "awaiting" | "my_party" | "actions">): boolean {
+  const mine = myNextSteps(detail);
+  return (
+    detail.my_party === "org" && mine.length > 0 && mine.every((c) => c === "choose_route" && !detail.actions.includes(c))
+  );
+}
+
 /** The steps the other party owes. */
 export function theirNextSteps(detail: Pick<Detail, "awaiting" | "my_party">): Command[] {
   return [...new Set(detail.awaiting.filter((p) => p.party !== detail.my_party).map((p) => p.command))];
