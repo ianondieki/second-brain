@@ -116,15 +116,19 @@ describe("the side states (REQ-ENG-10 part)", () => {
     expect(sw.procurement.sheet.justificationHintDirect).toContain(`herufi ${JUSTIFICATION_MIN} hadi 1,000`);
   });
 
-  it("name the main path's stages as STAGE_LABELS does, in both languages (the stepper's sub-stages)", () => {
+  it("name the stages as STAGE_LABELS does, in both languages (the sub-stages and the \"Now\" line)", () => {
     const labels = Object.fromEntries(
       [...block("STAGE_LABELS", "{").matchAll(/^ {4}S\.(\w+): "([^"]+)",$/gm)].map((m) => [m[1], m[2]]),
     );
     const main = [...block("MAIN_PATH", "(").matchAll(/S\.(\w+)/g)].map((m) => m[1]);
     expect(main.length).toBeGreaterThanOrEqual(14);
-    expect(Object.keys(en.tracker.stage).sort()).toEqual([...main].sort());
-    for (const state of main) expect(en.tracker.stage[state as keyof typeof en.tracker.stage], state).toBe(labels[state]);
-    expect(Object.keys(sw.tracker.stage).sort()).toEqual([...main].sort());
+    // Every stage the API labels, the main path's (each sub-stage) among them.
+    for (const state of main) expect(Object.keys(labels), state).toContain(state);
+    expect(Object.keys(en.tracker.stage).sort()).toEqual(Object.keys(labels).sort());
+    for (const [state, label] of Object.entries(labels)) {
+      expect(en.tracker.stage[state as keyof typeof en.tracker.stage], state).toBe(label);
+    }
+    expect(Object.keys(sw.tracker.stage).sort()).toEqual(Object.keys(labels).sort());
   });
 
   it("offer every procurement route the API takes (models/enums.py ProcurementRoute), each with words", () => {

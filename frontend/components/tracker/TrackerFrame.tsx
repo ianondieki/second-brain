@@ -23,7 +23,7 @@ import {
   type Detail,
   type History,
 } from "./model";
-import { Stepper, SubStageList } from "./Stepper";
+import { stageName, Stepper, SubStageList } from "./Stepper";
 import { WhoseTurn } from "./WhoseTurn";
 
 // The parts of one engagement's page that every tab shares (docs/spec/06 6.9, docs/spec/07 item 1): the title, the
@@ -155,7 +155,7 @@ export async function TrackerSpine({ detail, history }: { detail: Detail; histor
           <>
             {/* On hold the chip already says it: no "Now: On hold" under "On hold". */}
             {detail.state === "ON_HOLD" ? null : (
-              <span className="block font-semibold">{t("stageNow", { stage: detail.stage_label })}</span>
+              <span className="block font-semibold">{t("stageNow", { stage: stageName(t, detail.state, detail.stage_label) })}</span>
             )}
             {!isFinished(detail.state) ? (
               <span className="block text-ink-soft">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>

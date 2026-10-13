@@ -104,6 +104,19 @@ const STEP_TONE: Record<ChipKind, string> = { ...CHIP_TONE, completed: "text-acc
 /** The status words: done recedes to ink-soft beside its bloom mark; the current word is bloom. */
 const WORD_TONE: Record<ChipKind, string> = { ...CHIP_TONE, completed: "text-ink-soft" };
 
+type StageKey = `stage.${keyof (typeof en)["tracker"]["stage"]}`;
+/** The `tracker` namespace's translator, on the server (getTranslations) or in a server render (useTranslations). */
+type StageNames = ((key: StageKey) => string) & { has: (key: StageKey) => boolean };
+
+/**
+ * A stage's name in the reader's language (`tracker.stage.<STATE>`, the API's STAGE_LABELS translated), or the API's
+ * own label (English) for a stage the locales do not name. Server-side only: the names never join the client bundle.
+ */
+export function stageName(t: StageNames, state: string, label: string): string {
+  const key = `stage.${state}` as StageKey;
+  return t.has(key) ? t(key) : label;
+}
+
 /**
  * The current group's own stages under its name (docs/spec/06 6.9: "sub-stages collapsed except the current group"),
  * from the API's `steps`: so a public entity's Contact and NDA lists its procurement route (3b) and a private
@@ -124,11 +137,7 @@ export function SubStageList({
 }) {
   const t = useTranslations("tracker");
   if (stages.length === 0) return null;
-  // Main-path stages only (steps never lists a side state); a stage the locales do not name keeps the API's label.
-  const name = (stage: SubStage) => {
-    const key = `stage.${stage.state}` as `stage.${keyof (typeof en)["tracker"]["stage"]}`;
-    return t.has(key) ? t(key) : stage.label;
-  };
+  const name = (stage: SubStage) => stageName(t, stage.state, stage.label);
   return (
     <ol
       aria-label={t("subStages", { group: t(`group.${group}`) })}
