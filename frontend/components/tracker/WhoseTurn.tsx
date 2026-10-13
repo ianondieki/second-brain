@@ -124,11 +124,19 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
           ) : (
             <>
               {yours
-                ? mine.map((command) => (
-                    <p key={command} className="text-lg font-semibold text-ink">
-                      {t("nextYou", { step: steps(`command.${command}`) })}
-                    </p>
-                  ))
+                ? mine.map((command) =>
+                    // A public entity's procurement route is its owner's or admin's to choose: another member (a
+                    // signatory, a reviewer) reads who acts, not a step they have no button for (REQ-ENG-06).
+                    command === "choose_route" && detail.my_party === "org" && !detail.actions.includes(command) ? (
+                      <p key={command} data-waiting-admin="" className="text-lg text-ink">
+                        {t("waitingAdmin")}
+                      </p>
+                    ) : (
+                      <p key={command} className="text-lg font-semibold text-ink">
+                        {t("nextYou", { step: steps(`command.${command}`) })}
+                      </p>
+                    ),
+                  )
                 : null}
               {turn.kind === "other" || turn.kind === "both"
                 ? theirs.map((command) => (
@@ -139,6 +147,13 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
                 : null}
             </>
           )}
+          {/* The nudge job's latest escalation of this stage (REQ-NOT-05): the organisation's own fact, one quiet line;
+              the developer's tracker never carries it. */}
+          {detail.my_party === "org" && detail.escalated_at && !ended ? (
+            <p data-escalated="" className="text-sm text-ink-soft">
+              {t.rich("escalated", { date: formatDay(locale, detail.escalated_at), nowrap })}
+            </p>
+          ) : null}
           {side?.kind === "info" && detail.due && !detail.due.overdue ? (
             <p data-info-clock="" className="text-sm text-ink-soft">
               {t.rich(detail.my_party === "developer" ? "side.infoClockYou" : "side.infoClockThem", {
