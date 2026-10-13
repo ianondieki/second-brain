@@ -10,7 +10,7 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { confirmStepUp, runCommand, type Refusal } from "./calls";
 import type { Member } from "./CommandForm";
-import { LazyStepUp } from "./lazy";
+import { LazyRouteSheet, LazyStepUp } from "./lazy";
 import {
   commandRequest,
   isEndingCommand,
@@ -59,6 +59,10 @@ export interface ActionsProps {
   today?: string | null;
   /** What the policy's caps leave this stage (the API's `side_limits`). */
   limits?: SideLimits | null;
+  /** The engagement's organisation: choose_route is sent under its path. */
+  orgId?: string;
+  /** approve: a public entity names the contact-by date with its procurement route (3b), not here. */
+  publicEntity?: boolean;
   runImpl?: typeof runCommand;
   confirmImpl?: typeof confirmStepUp;
 }
@@ -66,7 +70,8 @@ export interface ActionsProps {
 type Mode =
   | { kind: "list" }
   | { kind: "form"; item: ActionItem & { command: FormCommand } }
-  | { kind: "sheet"; item: ActionItem & { command: SheetCommand } }
+  // choose_route's sheet (RouteSheet) is drawn as the side states' are, over the list.
+  | { kind: "sheet"; item: ActionItem & { command: SheetCommand | "choose_route" } }
   | { kind: "confirm"; item: ActionItem }
   | { kind: "stepUp"; item: ActionItem; request: CommandRequest };
 
@@ -138,7 +143,11 @@ export function Actions(props: ActionsProps) {
   }
 
   function requestFor(item: ActionItem, input?: FormInput): CommandRequest {
-    return commandRequest(item.command, props.engagementId, props.lockVersion, { milestoneId: item.milestone?.id, input });
+    return commandRequest(item.command, props.engagementId, props.lockVersion, {
+      milestoneId: item.milestone?.id,
+      input,
+      orgId: props.orgId,
+    });
   }
 
   async function run(item: ActionItem, request: CommandRequest, retried = false) {
@@ -176,7 +185,8 @@ export function Actions(props: ActionsProps) {
     setPressed(keyOf(item));
     opener.current = keyOf(item);
     if (isFormCommand(item.command)) setMode({ kind: "form", item: item as ActionItem & { command: FormCommand } });
-    else if (isSheetCommand(item.command)) setMode({ kind: "sheet", item: item as ActionItem & { command: SheetCommand } });
+    else if (isSheetCommand(item.command) || item.command === "choose_route")
+      setMode({ kind: "sheet", item: item as ActionItem & { command: SheetCommand } });
     else if (isEndingCommand(item.command)) setMode({ kind: "confirm", item });
     else void run(item, requestFor(item));
   }
@@ -270,12 +280,24 @@ export function Actions(props: ActionsProps) {
         </Suspense>
       ) : null}
 
-      {mode.kind === "sheet" ? (
+      {mode.kind === "sheet" && mode.item.command === "choose_route" ? (
+        <Suspense fallback={null}>
+          <LazyRouteSheet
+            busy={busy}
+            problem={message}
+            notice={notice}
+            locale={props.locale}
+            today={props.today}
+            onClose={cancel}
+            onSubmit={(input) => void run(mode.item, requestFor(mode.item, input))}
+          />
+        </Suspense>
+      ) : mode.kind === "sheet" ? (
         <Suspense fallback={null}>
           {/* counterpart, question, resumeOn, locale, today and limits come from the props of the same names. */}
           <SideSheet
             {...props}
-            command={mode.item.command}
+            command={mode.item.command as SheetCommand}
             busy={busy}
             problem={message}
             notice={notice}

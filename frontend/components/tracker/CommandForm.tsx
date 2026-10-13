@@ -47,6 +47,11 @@ export interface CommandFormProps {
   recorded?: string | null;
   /** Today on the platform's clock (the API's `today`); absent or null: the browser's day. */
   today?: string | null;
+  /**
+   * approve: the organisation is a public entity (its stepper has 3b, PROCUREMENT_ROUTE): the contact-by date is named
+   * with its procurement route, so this form does not ask for it (REQ-ENG-06).
+   */
+  publicEntity?: boolean;
 }
 
 type Errors = Record<string, string | undefined>;
@@ -156,16 +161,25 @@ function ApproveFields(props: CommandFormProps & { today: string }) {
   const [errors, setErrors] = useState<Errors>({});
   const ids = { person: `${id}-person`, by: `${id}-by` };
 
+  const later = props.publicEntity === true;
+
   function submit() {
-    const next: Errors = { person: person ? undefined : t("form.required"), by: by ? undefined : t("form.date") };
+    const next: Errors = {
+      person: person ? undefined : t("form.required"),
+      by: by || later ? undefined : t("form.date"),
+    };
     setErrors(next);
     if (next.person || next.by) return focusFirst(next, ids);
-    props.onSubmit({ contact_user_id: person, contact_channel: channel, contact_by: by } satisfies ApproveInput);
+    props.onSubmit(
+      (later
+        ? { contact_user_id: person, contact_channel: channel }
+        : { contact_user_id: person, contact_channel: channel, contact_by: by }) satisfies ApproveInput,
+    );
   }
 
   return (
     <Shell props={props} onSubmit={submit}>
-      <p className="max-w-[60ch] text-ink">{t("approve.lead")}</p>
+      <p className="max-w-[60ch] text-ink">{t(later ? "approve.leadPublic" : "approve.lead")}</p>
       <SelectField id={ids.person} label={t("approve.person")} value={person} error={errors.person} onChange={(e) => {
           setPerson(e.target.value);
           clearing(setErrors, "person");
@@ -188,6 +202,7 @@ function ApproveFields(props: CommandFormProps & { today: string }) {
           </option>
         ))}
       </SelectField>
+      {later ? null : (
       <TextField
         id={ids.by}
         type="date"
@@ -202,6 +217,7 @@ function ApproveFields(props: CommandFormProps & { today: string }) {
         }}
         className="max-w-[14rem]"
       />
+      )}
     </Shell>
   );
 }

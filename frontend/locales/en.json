@@ -41,7 +41,8 @@
     "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private).",
     "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\". deadlines.dayEmpty (\"Nothing falls due on {date}.\"): the picked day's empty state said \"in the next 30 days\" (ux re-check MINOR, spec 04 §4.2).",
     "reviewP28tr": "[[COPY-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (the public /transparency page: what the daily signed fingerprints over the audit history are, in plain words; how to check a certificate, with a link to /verify; the latest fingerprint, earlier days, the signing keys with their status; the empty state before the first full day and the two \"did not load\" states), landing.footer.transparency (the footer's link) and verify.transparency (one quiet line under the /verify panel). No claim that anything cannot be altered: the wording is that a change makes the fingerprints disagree. Review round 1: the lead limits the claim to events recorded before a fingerprint was taken; howTo says /verify checks a certificate's own fingerprint, signature and timestamp, separate from the daily fingerprints; keysLead states the signed text exactly; signatureFor names each earlier day's signature control; verify.transparency reworded.",
-    "reviewP28pd": "[[COPY-REVIEW]] P28-PD (REQ-FND-04; D-71): publicDemo.* (the public demo: the banner on every page, its label and its dismiss button; /login's persona picker, its title, lead, role names, the button \"Continue as {name}\" whose \"as {name}\" part is read by screen readers only, its two error lines, the line and \"Try again\" when no persona could be read (no email form: password sign-in is switched off in the demo); the line under each name is the API's English detail in English, and derived on the web in other languages (publicDemo.detailLevel for a developer, the organisation's name for an organisation persona, none for staff); the calm lines where a switched-off control would be (publicDemo.locked, attachLocked under the message composer, signupLocked with its action on /signup); the landing's \"Try the demo\"; \"Switch persona\" for the user menu's sign-out while the mode is on), errors.public_demo_locked (the API's 403 for any switched-off route), errors.public_demo_limit and ideaEditor.problem.demoLimit (the public demo's daily cap on published versions, 429 public_demo_limit; the backend's own wording)"
+    "reviewP28pd": "[[COPY-REVIEW]] P28-PD (REQ-FND-04; D-71): publicDemo.* (the public demo: the banner on every page, its label and its dismiss button; /login's persona picker, its title, lead, role names, the button \"Continue as {name}\" whose \"as {name}\" part is read by screen readers only, its two error lines, the line and \"Try again\" when no persona could be read (no email form: password sign-in is switched off in the demo); the line under each name is the API's English detail in English, and derived on the web in other languages (publicDemo.detailLevel for a developer, the organisation's name for an organisation persona, none for staff); the calm lines where a switched-off control would be (publicDemo.locked, attachLocked under the message composer, signupLocked with its action on /signup); the landing's \"Try the demo\"; \"Switch persona\" for the user menu's sign-out while the mode is on), errors.public_demo_locked (the API's 403 for any switched-off route), errors.public_demo_limit and ideaEditor.problem.demoLimit (the public demo's daily cap on published versions, 429 public_demo_limit; the backend's own wording)",
+    "reviewP28a": "[[COPY-REVIEW]] P28 tracks A and B (REQ-ENG-06, REQ-NOT-05): procurement.* (a public entity's procurement route: the five route names and the one plain sentence under each, no statute cited; the tracker's block title and its labels; the sheet's lead, legend, justification label, hints and counter, the contact-by label and hint, Confirm, its two inline errors), trackerActions.command.choose_route, trackerActions.refusal.justificationRequired and invalidJustification (the API's 422s), trackerActions.approve.leadPublic (a public entity's approve form, which no longer asks for the contact-by date), tracker.event.choose_route and tracker.history.route (History), tracker.waitingAdmin (a signatory's or reviewer's whose-turn line in 3b), tracker.escalated (the organisation's quiet line after an escalation), tracker.subStages and tracker.subStage (the current group's own stages under the stepper, for screen readers)"
   },
   "app": {
     "name": "Wazo",
@@ -2358,6 +2359,8 @@
     "fromHandle": "From {name}, the developer's handle. You see their name once contact is agreed.",
     "back": "All engagements",
     "stepperLabel": "Stages",
+    "subStages": "Stages in {group}",
+    "subStage": "{stage}: {state}",
     "group": {
       "review": "Review",
       "contact_nda": "Contact and NDA",
@@ -2396,6 +2399,8 @@
     "endedBecause": "Reason: {reason}",
     "nextYou": "Your next step: {step}",
     "nextThem": "Next step for {name}: {step}",
+    "waitingAdmin": "Waiting for an admin to choose the procurement route.",
+    "escalated": "Escalated to your admins on <nowrap>{date}</nowrap>.",
     "endReason": {
       "NOT_PRIORITY": "Not a current priority",
       "ALREADY_IN_PROGRESS_INTERNALLY": "Already in progress internally",
@@ -2556,6 +2561,7 @@
         "resume": "Reason for resuming early"
       },
       "message": "Message from {name}",
+      "route": "Route: {route}",
       "messageSide": {
         "developer": "Developer",
         "org": "Organisation"
@@ -2792,6 +2798,8 @@
       "paymentMismatch": "That amount does not match what the organisation recorded. Nothing was confirmed: talk to the organisation about the difference.",
       "invalid": "Some details were not accepted. Check the form and try again.",
       "invalidContactBy": "Choose a contact-by date from today, no more than five business days ahead.",
+      "justificationRequired": "Direct procurement needs a written justification of at least 20 characters.",
+      "invalidJustification": "That justification was not accepted. Write it in plain words, in no more than 1,000 characters.",
       "attestation": "Give the date the internal work started and confirm the statement.",
       "reasonText": "Explain the reason in more detail.",
       "containsContact": "Contact details stay out of the tracker until first contact is made; please remove the email, phone number or link.",
@@ -2822,6 +2830,7 @@
     },
     "approve": {
       "lead": "Name who will contact the developer, how, and by when. The developer's contact details are shared with that person.",
+      "leadPublic": "Name who will contact the developer, and how. An owner or admin then chooses the procurement route and sets the contact-by date; the developer's contact details are shared with your contact person once the route is chosen.",
       "person": "Contact person",
       "channel": "How they will make contact",
       "by": "Contact by",
@@ -4559,5 +4568,44 @@
     "switchPersona": "Switch persona",
     "switchingPersona": "Switching…",
     "switchRetry": "Try switching again"
+  },
+  "procurement": {
+    "title": "Procurement route",
+    "route": {
+      "rfq_tender": "Request for quotation or tender",
+      "direct": "Direct procurement",
+      "ppp_pip": "Privately-initiated PPP proposal",
+      "innovation_challenge": "Innovation challenge or grant",
+      "pilot_mou": "Pilot under a memorandum of understanding"
+    },
+    "hint": {
+      "rfq_tender": "You ask for quotations or open a tender, and this developer can bid alongside others.",
+      "direct": "You buy from this developer alone, without a competition, and say why in writing.",
+      "ppp_pip": "The developer's idea goes forward as a public-private partnership they proposed.",
+      "innovation_challenge": "You fund or reward the work through an innovation challenge or a grant.",
+      "pilot_mou": "You try the idea in a pilot under a memorandum of understanding before buying anything."
+    },
+    "block": {
+      "route": "Route",
+      "justification": "Justification",
+      "decidedBy": "Chosen by",
+      "decidedAt": "Chosen on"
+    },
+    "sheet": {
+      "lead": "Choose how your organisation will buy this. The developer sees the route and what you write here, and your contact person reaches them by the date you set.",
+      "legend": "How will you buy it?",
+      "justificationRequired": "Justification",
+      "justificationOptional": "Justification (optional)",
+      "justificationHintDirect": "Direct procurement needs a written reason of 20 to 1,000 characters. The developer reads it, so keep contact details and links out.",
+      "justificationHint": "Up to 1,000 characters. The developer reads it, so keep contact details and links out.",
+      "count": "{count} of {max} characters",
+      "by": "Contact by",
+      "byHint": "From today, no more than five business days ahead.",
+      "submit": "Confirm the route",
+      "error": {
+        "route": "Choose a procurement route.",
+        "justificationLong": "Keep the justification to 1,000 characters or fewer."
+      }
+    }
   }
 }

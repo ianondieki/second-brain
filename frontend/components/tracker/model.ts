@@ -33,6 +33,9 @@ export type DocumentKind = Schemas["SignatureDocumentKind"];
 export type Due = Schemas["DueOut"];
 export type Note = Schemas["NoteOut"];
 export type SideLimits = Schemas["SideLimitsOut"];
+/** One main-path stage of the engagement's stepper, as the API lists it (`steps`). */
+export type StageStep = Schemas["StepOut"];
+export type ProcurementOut = Schemas["ProcurementOut"];
 
 /** The 5-group stepper, in order (Review · Contact and NDA · Agreement · Implementation · Close). */
 export const GROUPS = ["review", "contact_nda", "agreement", "implementation", "close"] as const;
@@ -94,6 +97,35 @@ export function stageLeft(state: State, events: readonly HistoryEvent[] | null |
     return PAUSED_STATES.has(from) ? (stageLeft(from, events.slice(0, i)) ?? from) : from;
   }
   return null;
+}
+
+/** A public entity's engagement: its stepper carries 3b, PROCUREMENT_ROUTE (AC-TRACK-5; the API's `steps`). */
+export function isPublicEntity(detail: Pick<Detail, "steps">): boolean {
+  return (detail.steps ?? []).some((step) => step.state === "PROCUREMENT_ROUTE");
+}
+
+/** One stage of the current group, as the stepper lists it under the group's name. */
+export interface SubStage {
+  state: State;
+  label: string;
+  mark: "completed" | "current" | "pending";
+}
+
+/**
+ * The current group's stages from the API's `steps` (docs/spec/06 6.9: "sub-stages collapsed except the current
+ * group"), each completed, current or pending; `at` is the stage the engagement stands at (its state on the main
+ * path, else the stage it paused or ended in). Empty when the group has one stage or `at` is not among the steps.
+ */
+export function subStages(steps: readonly StageStep[] | undefined, at: State | null): SubStage[] {
+  const all = steps ?? [];
+  const index = all.findIndex((step) => step.state === at);
+  if (index < 0) return [];
+  const group = all.filter((step) => step.group === all[index].group);
+  if (group.length < 2) return [];
+  return group.map((step) => {
+    const i = all.indexOf(step);
+    return { state: step.state, label: step.label, mark: i < index ? "completed" : i === index ? "current" : "pending" };
+  });
 }
 
 export interface Step {

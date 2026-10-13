@@ -19,6 +19,8 @@ export type Refusal =
   | "paymentMismatch"
   | "invalid"
   | "invalidContactBy"
+  | "justificationRequired"
+  | "invalidJustification"
   | "attestation"
   | "reasonText"
   | "containsContact"
@@ -45,6 +47,9 @@ const BY_CODE: Record<string, Refusal> = {
   sign_outside_platform: "signOutside",
   payment_amount_mismatch: "paymentMismatch",
   invalid_contact_by: "invalidContactBy",
+  // A public entity's procurement route (REQ-ENG-06): direct procurement's justification, any route's text.
+  justification_required: "justificationRequired",
+  invalid_justification: "invalidJustification",
   attestation_required: "attestation",
   reason_text_required: "reasonText",
   // The side states (REQ-ENG-10 part): a text with contact details before first contact, a blank or refused text, a

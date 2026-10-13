@@ -41,7 +41,8 @@
     "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term. P27 UX fixes for the G5 review: calendarFeed.shownOnce now opens with the imperative \"Nakili sasa\" (was \"Kinakili sasa\"); pipeline.funnelTitle and pipeline.conversionMore agree with ushirikiano (u- class: \"ulioingia\", \"uliingia\"), not the people class (\"walioingia\", \"waliingia\"); pipeline.outcome says \"umefungwa\" and \"umekoma\" (u- class) for every count, no longer mixing \"umefungwa\"/\"imefungwa\"; pipeline.stalled reads \"siku {count}+ za kazi\" (the threshold as a floor); \"Briefs\" in calendarFeed.lead is left in English as the product term: confirm or translate.",
     "reviewP27ux": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Tengeneza kiungo kipya\" and \"Ondoa mlisho\" first ask in place whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled now \"Hakuna hatua kwa siku {count}+ za kazi\". A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"{count}+\". deadlines.dayEmpty [[SW-REVIEW]].",
     "reviewP28tr": "[[COPY-REVIEW]] [[SW-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (ukurasa wa umma /transparency: alama za kila siku zilizotiwa sahihi juu ya historia ya ukaguzi kwa maneno rahisi; jinsi ya kukagua cheti, na kiungo cha /verify; alama ya karibuni, siku zilizopita, funguo za sahihi na hali yake; hali tupu kabla ya siku ya kwanza kamili na hali mbili za \"hazikupakia\"), landing.footer.transparency (kiungo cha sehemu ya chini) na verify.transparency (mstari mmoja chini ya paneli ya /verify). Hakuna dai kwamba kitu hakiwezi kubadilishwa: maneno ni kwamba badiliko hufanya alama zisikubaliane. Mzunguko wa 1 wa ukaguzi: lead inahusu tu matukio yaliyorekodiwa kabla alama haijachukuliwa; howTo inasema /verify inakagua alama, sahihi na muhuri wa muda wa cheti chenyewe; keysLead inataja maandishi yaliyotiwa sahihi kamili; signatureFor inataja siku; verify.transparency imeandikwa upya.",
-    "reviewP28pd": "[[COPY-REVIEW]] [[SW-REVIEW]] P28-PD (REQ-FND-04; D-71), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: publicDemo.* (onyesho la umma: tangazo la kila ukurasa, kitufe cha kulificha; kichaguzi cha watu kwenye /login, majina ya majukumu, kitufe \"Endelea kama {name}\", mistari ya makosa, mstari na \"Jaribu tena\" watu wasipopakiwa; mstari chini ya kila jina unatokana na jukumu kwenye wavuti kwa Kiswahili (publicDemo.detailLevel kwa msanidi programu, jina la shirika kwa mtu wa shirika), si maelezo ya Kiingereza ya API; mistari ya vidhibiti vilivyozimwa; \"Jaribu onyesho\" kwenye ukurasa wa mwanzo; \"Badilisha mtu\" badala ya \"Toka\"), errors.public_demo_locked, errors.public_demo_limit na ideaEditor.problem.demoLimit (kikomo cha kila siku cha matoleo yaliyochapishwa katika onyesho la umma)"
+    "reviewP28pd": "[[COPY-REVIEW]] [[SW-REVIEW]] P28-PD (REQ-FND-04; D-71), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: publicDemo.* (onyesho la umma: tangazo la kila ukurasa, kitufe cha kulificha; kichaguzi cha watu kwenye /login, majina ya majukumu, kitufe \"Endelea kama {name}\", mistari ya makosa, mstari na \"Jaribu tena\" watu wasipopakiwa; mstari chini ya kila jina unatokana na jukumu kwenye wavuti kwa Kiswahili (publicDemo.detailLevel kwa msanidi programu, jina la shirika kwa mtu wa shirika), si maelezo ya Kiingereza ya API; mistari ya vidhibiti vilivyozimwa; \"Jaribu onyesho\" kwenye ukurasa wa mwanzo; \"Badilisha mtu\" badala ya \"Toka\"), errors.public_demo_locked, errors.public_demo_limit na ideaEditor.problem.demoLimit (kikomo cha kila siku cha matoleo yaliyochapishwa katika onyesho la umma)",
+    "reviewP28a": "[[COPY-REVIEW]] [[SW-REVIEW]] P28 tracks A and B (REQ-ENG-06, REQ-NOT-05): procurement.* (njia ya ununuzi ya taasisi ya umma: majina ya njia tano na sentensi moja chini ya kila moja, bila kutaja sheria; kichwa na lebo za kipande cha kifuatiliaji; maneno ya karatasi ya kuchagua njia, kaunta, tarehe ya mawasiliano, Thibitisha, makosa mawili), trackerActions.command.choose_route, trackerActions.refusal.justificationRequired na invalidJustification, trackerActions.approve.leadPublic, tracker.event.choose_route na tracker.history.route, tracker.waitingAdmin, tracker.escalated, tracker.subStages na tracker.subStage. Translated by the build agent; a Swahili speaker should review the procurement terms (ununuzi, zabuni, ombi la bei, mkataba wa maelewano) against the wording county governments use."
   },
   "app": {
     "name": "Wazo",
@@ -2358,6 +2359,8 @@
     "fromHandle": "Kutoka kwa {name}, jina la utambulisho la msanidi programu. Utaona jina lake mawasiliano yakikubaliwa.",
     "back": "Ushirikiano wote",
     "stepperLabel": "Hatua",
+    "subStages": "Hatua za {group}",
+    "subStage": "{stage}: {state}",
     "group": {
       "review": "Tathmini",
       "contact_nda": "Mawasiliano na NDA",
@@ -2396,6 +2399,8 @@
     "endedBecause": "Sababu: {reason}",
     "nextYou": "Hatua yako inayofuata: {step}",
     "nextThem": "Hatua inayofuata ya {name}: {step}",
+    "waitingAdmin": "Inasubiri msimamizi achague njia ya ununuzi.",
+    "escalated": "Imepelekwa kwa wasimamizi wenu tarehe <nowrap>{date}</nowrap>.",
     "endReason": {
       "NOT_PRIORITY": "Si kipaumbele kwa sasa",
       "ALREADY_IN_PROGRESS_INTERNALLY": "Tayari inafanyika ndani",
@@ -2556,6 +2561,7 @@
         "resume": "Sababu ya kuendelea mapema"
       },
       "message": "Ujumbe kutoka kwa {name}",
+      "route": "Njia: {route}",
       "messageSide": {
         "developer": "Msanidi programu",
         "org": "Shirika"
@@ -2792,6 +2798,8 @@
       "paymentMismatch": "Kiasi hicho hakilingani na kile shirika lilichorekodi. Hakuna kilichothibitishwa: zungumza na shirika kuhusu tofauti hiyo.",
       "invalid": "Baadhi ya maelezo hayakukubaliwa. Kagua fomu kisha ujaribu tena.",
       "invalidContactBy": "Chagua tarehe ya mawasiliano kuanzia leo, isiyozidi siku tano za kazi mbele.",
+      "justificationRequired": "Ununuzi wa moja kwa moja unahitaji sababu iliyoandikwa ya angalau herufi 20.",
+      "invalidJustification": "Sababu hiyo haikukubaliwa. Iandike kwa maneno ya kawaida, isizidi herufi 1,000.",
       "attestation": "Toa tarehe kazi ya ndani ilipoanza na uthibitishe kauli.",
       "reasonText": "Eleza sababu kwa undani zaidi.",
       "containsContact": "Maelezo ya mawasiliano hayawekwi kwenye ufuatiliaji hadi mawasiliano ya kwanza yafanyike; tafadhali ondoa barua pepe, nambari ya simu au kiungo.",
@@ -2822,6 +2830,7 @@
     },
     "approve": {
       "lead": "Taja nani atawasiliana na msanidi programu, kwa njia gani na lini. Maelezo ya mawasiliano ya msanidi programu yatatolewa kwa mtu huyo.",
+      "leadPublic": "Taja nani atawasiliana na msanidi programu, na kwa njia gani. Kisha mmiliki au msimamizi atachagua njia ya ununuzi na kuweka tarehe ya mawasiliano; maelezo ya mawasiliano ya msanidi programu yatatolewa kwa mtu wako wa mawasiliano njia ikishachaguliwa.",
       "person": "Mtu wa mawasiliano",
       "channel": "Njia ya mawasiliano",
       "by": "Wasiliana kabla ya",
@@ -4559,5 +4568,44 @@
     "switchPersona": "Badilisha mtu",
     "switchingPersona": "Unabadilisha…",
     "switchRetry": "Jaribu kubadilisha tena"
+  },
+  "procurement": {
+    "title": "Njia ya ununuzi",
+    "route": {
+      "rfq_tender": "Ombi la bei au zabuni",
+      "direct": "Ununuzi wa moja kwa moja",
+      "ppp_pip": "Pendekezo la PPP lililoanzishwa na sekta binafsi",
+      "innovation_challenge": "Shindano la ubunifu au ruzuku",
+      "pilot_mou": "Majaribio chini ya mkataba wa maelewano (MoU)"
+    },
+    "hint": {
+      "rfq_tender": "Mnaomba bei au mnatangaza zabuni, na msanidi programu huyu anaweza kushindana pamoja na wengine.",
+      "direct": "Mnanunua kutoka kwa msanidi programu huyu pekee, bila ushindani, na mnaeleza sababu kwa maandishi.",
+      "ppp_pip": "Wazo la msanidi programu linaendelea kama ushirikiano wa umma na sekta binafsi alioupendekeza yeye.",
+      "innovation_challenge": "Mnafadhili au kutuza kazi hii kupitia shindano la ubunifu au ruzuku.",
+      "pilot_mou": "Mnajaribu wazo hili kwa majaribio chini ya mkataba wa maelewano kabla ya kununua chochote."
+    },
+    "block": {
+      "route": "Njia",
+      "justification": "Sababu",
+      "decidedBy": "Imechaguliwa na",
+      "decidedAt": "Imechaguliwa tarehe"
+    },
+    "sheet": {
+      "lead": "Chagua jinsi shirika lako litakavyonunua hili. Msanidi programu ataona njia hiyo na unachoandika hapa, na mtu wako wa mawasiliano atawasiliana naye kufikia tarehe utakayoweka.",
+      "legend": "Mtanunua vipi?",
+      "justificationRequired": "Sababu",
+      "justificationOptional": "Sababu (si lazima)",
+      "justificationHintDirect": "Ununuzi wa moja kwa moja unahitaji sababu iliyoandikwa ya herufi 20 hadi 1,000. Msanidi programu ataisoma, kwa hiyo usiweke maelezo ya mawasiliano wala viungo.",
+      "justificationHint": "Hadi herufi 1,000. Msanidi programu ataisoma, kwa hiyo usiweke maelezo ya mawasiliano wala viungo.",
+      "count": "Herufi {count} kati ya {max}",
+      "by": "Wasiliana kabla ya",
+      "byHint": "Kuanzia leo, isizidi siku tano za kazi mbele.",
+      "submit": "Thibitisha njia",
+      "error": {
+        "route": "Chagua njia ya ununuzi.",
+        "justificationLong": "Sababu isizidi herufi 1,000."
+      }
+    }
   }
 }
