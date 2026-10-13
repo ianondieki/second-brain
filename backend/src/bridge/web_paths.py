@@ -45,6 +45,12 @@ def team_thread_path(thread_id: UUID) -> str:
     return f"/dev/teams/{thread_id}"
 
 
+def invitation_path(token: str) -> str:
+    """An organisation's invitation link (REQ-TEN-02, P28 track C): the token is the capability, shown to nobody but
+    the invitee's mailbox."""
+    return f"/invitations/{token}"
+
+
 def org_engagements_path(org_id: UUID) -> str:
     """The organisation's engagements list, for that organisation."""
     return f"{ORG_ENGAGEMENTS}?org={org_id}"

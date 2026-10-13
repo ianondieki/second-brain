@@ -34,6 +34,7 @@ from bridge.db import API_IDLE_IN_TRANSACTION_MS, create_engine, create_session_
 from bridge.directory.responsiveness import NoResponsivenessData
 from bridge.directory.router import router as directory_router
 from bridge.engagements.deadlines_router import router as deadlines_router
+from bridge.engagements.export import router as engagements_export_router
 from bridge.engagements.interest_router import router as interest_router
 from bridge.engagements.messages_router import router as messages_router
 from bridge.engagements.pipeline_router import router as pipeline_router
@@ -71,6 +72,7 @@ from bridge.teams.peers import router as peers_router
 from bridge.teams.router import blocks_router
 from bridge.teams.router import router as teams_router
 from bridge.tenancy.router import router as orgs_router
+from bridge.tenancy.team_router import router as org_team_router
 
 API_PREFIX = "/api"
 TEST_CLOCK_MODULE = "bridge.testclock"
@@ -227,6 +229,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth_router)
     app.include_router(orgs_router)
+    app.include_router(org_team_router)
     app.include_router(me_router)
     app.include_router(identities_router)
     app.include_router(consents_router)
@@ -248,6 +251,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(briefs_router)
     app.include_router(engagements_router)
     app.include_router(engagement_team_router)
+    app.include_router(engagements_export_router)
     app.include_router(messages_router)
     app.include_router(deadlines_router)
     app.include_router(pipeline_router)

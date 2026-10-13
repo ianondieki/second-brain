@@ -32,6 +32,7 @@ from bridge import clock
 from bridge.auth.deps import CurrentSession, Db, EmailDep, SettingsDep
 from bridge.directory import service as directory
 from bridge.directory.router import ResponsivenessDep
+from bridge.engagements import team
 from bridge.errors import ERROR_RESPONSES, ApiError
 from bridge.models.enums import OrgKind, ProposalAsk, ProposalMaturity
 from bridge.notifications import em1
@@ -158,6 +159,10 @@ async def pitch(
     )
     if pitched.email is not None:
         background.add_task(em1.deliver, request.app.state.session_factory, provider, pitched.email)
+    if pitched.opened:  # after the commit: the organisations' niche defaults (REQ-TEN-02; never blocks the Pitch)
+        background.add_task(
+            team.apply_niche_defaults, request.app.state.session_factory, profile.user_id, pitched.opened
+        )
     return pitched.result
 
 
