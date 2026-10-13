@@ -50,7 +50,6 @@ from bridge.models.enums import (
     SignatureDocumentKind,
 )
 from bridge.profiles.models import DeveloperProfile
-from bridge.tenancy.models import Organization
 from bridge.tenancy.service import membership_of
 
 R = EngagementActorRole
@@ -63,6 +62,7 @@ ACTOR_ROLES: Final = {
 }  # a viewer acts in no tracker role
 HOLIDAY_WINDOW: Final = timedelta(days=400)  # covers the longest deadline (30 BD) and a year of test clock
 _NOW = text("SELECT app_clock_now()")
+_PUBLIC_ENTITIES = text("SELECT id, app_org_is_public_entity(id) FROM unnest(CAST(:ids AS uuid[])) AS id")
 _D2_OR_ABOVE = (DevVerification.D2, DevVerification.D3)
 
 
@@ -323,11 +323,9 @@ async def load_many(
         )
         for eid, kind, ref, party in found_signatures.tuples():
             signatures[(eid, kind, ref)].add(party)
-    public = await db.execute(
-        select(Organization.id, Organization.public_entity).where(
-            Organization.id.in_(list({e.org_id for e in engagements}))
-        )
-    )
+    # Whether each organisation is a public entity: public information, read through revision 0015's definer for
+    # whatever the caller may read (a developer reads no delisted organisation's row).
+    public = await db.execute(_PUBLIC_ENTITIES, {"ids": sorted({e.org_id for e in engagements})})
     public_entities = {org_id for org_id, flag in public.tuples() if flag}
     levels: dict[UUID, DevVerification | None] = {}
     if developer_caller:
