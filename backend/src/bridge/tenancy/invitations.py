@@ -78,6 +78,7 @@ CLOSED: Final = "This invitation was already accepted or revoked."
 MISMATCH: Final = "This invitation is for another email address. Sign in with the address it was sent to."
 NO_INVITATION: Final = "This invitation link is not valid any more. Ask for a new one."
 INVALID_EMAIL: Final = "Enter one plain email address."
+CONFLICT: Final = "This invitation changed at the same moment. Reload and try again."
 NOT_VERIFIED: Final = "Verify your organisation (its email domain, E1) before inviting people."
 DEVELOPER_ACCOUNT: Final = (
     "This is a developer account. Accept the invitation with an organisation account: sign up with another address."
@@ -263,23 +264,42 @@ async def _open_invitation(db: AsyncSession, org: OrgContext, invitation_id: UUI
     return found
 
 
+async def _locked_open(db: AsyncSession, org: OrgContext, invitation_id: UUID) -> Invitation:
+    """The invitation's row, locked (FOR UPDATE) and still open, else 409 ``invitation_closed`` (the UPDATE policy
+    reaches open rows only, so a closed one reads as none here)."""
+    found: Invitation | None = await db.scalar(
+        select(Invitation)
+        .where(Invitation.id == invitation_id, Invitation.org_id == org.org_id, *_open())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if found is None:
+        raise ApiError(409, "invitation_closed", CLOSED)
+    return found
+
+
 async def resend(db: AsyncSession, settings: Settings, org: OrgContext, invitation_id: UUID, ip: str) -> Issued:
     """Replace an open invitation with a new one (a new id, token, creation and expiry: revision 0015's 30-day CHECK
-    counts from the creation), in the caller's transaction (the router commits): the old link dies with it."""
+    counts from the creation), in the caller's transaction (the router commits): the old link dies with it. Locks in
+    accept's order, the invitation's row and then the organisation's lock (the security re-check's MINOR: the other
+    order deadlocks with an accept of the same invitation); a deadlock all the same is 409 ``conflict``."""
     found = await _open_invitation(db, org, invitation_id)
     await _check_verified(db, org.org_id)
     await _spend(db, settings, org, str(found.email), ip)
-    await _lock(db, org.org_id)
-    found = await _open_invitation(db, org, invitation_id)  # again, under the lock
-    if await _is_member(db, org.org_id, str(found.email)):
-        raise ApiError(409, "already_member", ALREADY_MEMBER)
-    expired = bool(await db.scalar(select(func.app_clock_now() >= found.expires_at)))
-    if expired and await _open_unexpired(db, org.org_id) >= MAX_OPEN:
-        raise ApiError(409, "too_many_invitations", TOO_MANY, limit=MAX_OPEN)
-    if not await _close(db, found.id):  # accepted or revoked meanwhile
-        raise ApiError(409, "invitation_closed", CLOSED)
-    await _check_seats(db, settings, org.org_id)
-    new_id, token = await _insert(db, org, str(found.email), {OrgRole(r) for r in found.roles})
+    try:
+        found = await _locked_open(db, org, invitation_id)
+        await _lock(db, org.org_id)
+        if await _is_member(db, org.org_id, str(found.email)):
+            raise ApiError(409, "already_member", ALREADY_MEMBER)
+        expired = bool(await db.scalar(select(func.app_clock_now() >= found.expires_at)))
+        if expired and await _open_unexpired(db, org.org_id) >= MAX_OPEN:
+            raise ApiError(409, "too_many_invitations", TOO_MANY, limit=MAX_OPEN)
+        if not await _close(db, found.id):  # accepted or revoked meanwhile
+            raise ApiError(409, "invitation_closed", CLOSED)
+        await _check_seats(db, settings, org.org_id)
+        new_id, token = await _insert(db, org, str(found.email), {OrgRole(r) for r in found.roles})
+    except DBAPIError as exc:
+        raise await _deadlock(db, exc) from exc
     await audit(
         db,
         "org.invitation_resent",
@@ -290,6 +310,15 @@ async def resend(db: AsyncSession, settings: Settings, org: OrgContext, invitati
         payload={"invitation_id": str(new_id), "replaces": str(found.id)},
     )
     return Issued(await _one(db, org.org_id, new_id), token)
+
+
+async def _deadlock(db: AsyncSession, exc: DBAPIError) -> ApiError:
+    """A deadlock (40P01; a backstop: resend and accept lock in one order) as 409 ``conflict``, the transaction rolled
+    back; any other database error is re-raised."""
+    if _sqlstate(exc) != "40P01":
+        raise exc
+    await db.rollback()
+    return ApiError(409, "conflict", CONFLICT)
 
 
 async def _close(db: AsyncSession, invitation_id: UUID) -> bool:
@@ -349,6 +378,8 @@ async def accept(db: AsyncSession, settings: Settings, live: LiveSession, token:
             raise forbidden("invitation_email_mismatch", MISMATCH) from exc
         if state == "23505":  # unique_violation: already an active member
             raise ApiError(409, "already_member", ALREADY_MEMBER) from exc
+        if state == "40P01":  # a deadlock (a backstop: resend locks in this order too)
+            raise ApiError(409, "conflict", CONFLICT) from exc
         raise
     joined = (
         await db.execute(
@@ -359,9 +390,13 @@ async def accept(db: AsyncSession, settings: Settings, live: LiveSession, token:
     ).one()
     # The organisation's invitation lock (as invites take it) before the seat count, so concurrent accepts and invites
     # count one after another (the invitee reads no invitation row, so the organisation is known only from here).
-    await _lock(db, org_id)
-    plan = await entitlements.for_subject(db, settings, org_id=org_id)  # the joiner reads it now, as a member
-    entitlements.check_count(settings, plan, SEATS, used=await _active_members(db, org_id) - 1)  # 402: not committed
+    try:
+        await _lock(db, org_id)
+        plan = await entitlements.for_subject(db, settings, org_id=org_id)  # the joiner reads it now, as a member
+        used = await _active_members(db, org_id) - 1
+    except DBAPIError as exc:
+        raise await _deadlock(db, exc) from exc
+    entitlements.check_count(settings, plan, SEATS, used=used)  # 402: not committed
     roles = sorted(OrgRole(r) for r in joined.roles)
     await audit(
         db,
