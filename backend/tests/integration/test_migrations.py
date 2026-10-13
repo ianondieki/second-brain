@@ -1,18 +1,19 @@
-"""Revisions 0001 to 0014 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
+"""Revisions 0001 to 0015 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
 REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08, REQ-ENG-10, REQ-NOT-03, REQ-PROP-03, REQ-ENG-11,
 REQ-REPO-02, REQ-PERS-03, REQ-DEV-01, REQ-DEV-02, REQ-DEV-03, REQ-PERS-02, REQ-EMB-01, REQ-ENG-13, REQ-ENG-15,
-REQ-PROV-06, REQ-DEV-04; docs/spec/08 Migrations and Tenancy; AC-IP-2).
+REQ-PROV-06, REQ-DEV-04, REQ-ENG-06, REQ-NOT-05, REQ-TEN-02; docs/spec/08 Migrations and Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0014, 0013, 0012, 0011, 0010, 0009, 0008, 0007, 0006, 0005, 0004, 0003 and 0002
-leaves the revision before it exactly as it found it), table classification, RLS coverage generated from the ORM
+Migration round trip and drift (each of 0015, 0014, 0013, 0012, 0011, 0010, 0009, 0008, 0007, 0006, 0005, 0004, 0003 and
+0002 leaves the revision before it exactly as it found it), table classification, RLS coverage generated from the ORM
 metadata, the grant matrix of every role, role attributes, the helper and SECURITY DEFINER functions, the append-only
 hash-chained audit log, the evidence triggers of schema v2 (on the clocks revision 0014 gives them), the tracker
 triggers of schema v3, the schema v4 triggers and column grants, the schema v5 notes triggers, policies and in-app
 column grant, the tags policies revision 0007 leaves as they were, the schema v6 (revision 0008), v7 (revision 0009), v8
 (revision 0010) and v9 (revision 0011) policies, triggers and column grants, schema v10's (revision 0012) embedding
 columns, indexes, functions and narrowed problems grants, schema v11's (revision 0013) triage, declaration and calendar
-feed tables with their policies, triggers and grants and the profile's D3 columns, the listed-organisations policy and
-the Procrastinate schema.
+feed tables with their policies, triggers and grants and the profile's D3 columns, schema v12's (revision 0015)
+procurement columns, nudges ledger, niche defaults and invitation policies with their triggers and narrowed grants, the
+listed-organisations policy and the Procrastinate schema.
 The tracker's behaviour (chain, projection, parties, payments, clock) is tested in ``integration/engagements/``;
 schema v4's in ``integration/matching/``, ``integration/problems/`` and ``integration/billing/``; schema v5's (the
 notes' writers and readers, marking read) in ``test_rls.py``; revision 0007's ``app_close_tag(tag, status)`` in
@@ -28,7 +29,10 @@ schema v10's (the embedding readers, writers and clearer, the consent and liked-
 ``integration/embeddings/test_embeddings_schema.py``; schema v11's (assignments, recommendations, the declaration's
 window and append-only rule, the feeds' lookup, touch and rotation, the D3 CHECKs, the downgrade's refusal) in
 ``integration/test_migration_0013.py``; revision 0014's evidence clock (a view on the moved shared clock opens a window
-the organisation declares in) in ``integration/test_migration_0014.py``.
+the organisation declares in) in ``integration/test_migration_0014.py``; schema v12's (the procurement route, the
+nudges ledger and its job's functions, niche defaults, the escalation contact, invitations, their acceptance and
+preview, the last owner) in ``integration/test_migration_0015.py`` and its downgrade's refusals in
+``integration/test_migration_0015_downgrade.py``.
 """
 
 from __future__ import annotations
@@ -94,7 +98,13 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "country",
         "updated_at",
         "county_code",  # revision 0002
+        "escalation_contact_user_id",  # revision 0015
     },
+    # revision 0015: a membership's roles and status change (never its organisation or user); an open invitation is
+    # resent (token and expiry) or revoked (never its organisation, address, roles, inviter, or acceptance)
+    "memberships": {"roles", "status", "updated_at"},
+    "invitations": {"token_hash", "expires_at", "revoked_at"},
+    "org_niche_defaults": {"user_id"},
     # 0011: the switch; 0013: the D3 references and the nudge's dismissal
     "developer_profiles": {"headline", "bio", "county_code", "updated_at", "peers_visible"}
     | {"github_login", "kecobo_number", "kipi_number", "ip_nudge_dismissed_at"},
@@ -346,6 +356,8 @@ APP_GRANTS: dict[str, set[str]] = {
     "calendar_feeds": {S, I, U},
     # revision 0015: the nudges ledger is read by the organisation's members, written only by app_record_nudge
     "engagement_nudges": {S},
+    # revision 0015: an organisation's default reviewer per niche, set and removed by its admins
+    "org_niche_defaults": {S, I, U, D},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -617,6 +629,13 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "engagements_procurement_moved()": (True, set()),  # reads the engagement at commit
     "app_nudge_candidates()": (True, {"bridge_app"}),  # the nudge job, no user bound (ids only)
     "app_record_nudge(uuid, text, text)": (True, {"bridge_app"}),  # the nudge job, no user bound
+    "app_accept_invitation(bytea, uuid)": (True, {"bridge_app"}),  # the signed-in invitee, for themselves
+    "app_invitation_preview(bytea)": (True, {"bridge_app"}),  # the public preview: the hash is the capability
+    "organizations_escalation_contact_guard()": (False, set()),  # SECURITY INVOKER: the writer's RLS reads the roster
+    "org_niche_defaults_guard()": (False, set()),  # likewise
+    "invitations_guard()": (False, set()),
+    "memberships_last_owner_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer
+    "memberships_clear_team_seats()": (True, set()),  # clears another user's seats
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -822,7 +841,7 @@ def schema_snapshot(url: URL) -> dict[str, list[str]]:
 
 
 # Revision 0015's tables (REQ-NOT-05).
-V15_TABLES = ("engagement_nudges",)
+V15_TABLES = ("engagement_nudges", "org_niche_defaults")
 # Revision 0013's tables (REQ-ENG-15, REQ-PROV-06, REQ-ENG-13).
 V13_TABLES = (
     "engagement_assignments",
@@ -833,26 +852,39 @@ V13_TABLES = (
 
 
 def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[str]]) -> None:
-    """Revision 0015 (P28-M): what it adds and the things of earlier revisions it replaces (revision 0003's
-    predecessors and contact CHECK)."""
+    """Revision 0015 (P28-M): what it adds and what of earlier revisions it replaces: revision 0003's predecessors and
+    contact CHECK, revision 0001's invitation INSERT and UPDATE policies and bridge_app's table-wide INSERT and UPDATE
+    of invitations and UPDATE of memberships (now column-scoped)."""
     added = {kind: set(at_0015[kind]) - set(at_0014[kind]) for kind in SNAPSHOT}
     removed = {kind: set(at_0014[kind]) - set(at_0015[kind]) for kind in SNAPSHOT}
     assert {kind for kind in SNAPSHOT if added[kind] or removed[kind]} == set(SNAPSHOT)
-    for kind in set(SNAPSHOT) - {"constraints", "functions"}:  # additive but for the two replacements
+    for kind in set(SNAPSHOT) - {"constraints", "functions", "policies", "table_acl"}:  # the replacements only
         assert not removed[kind], (kind, removed[kind])
     assert added["enums"] == {"procurement_route direct,rfq_tender,ppp_pip,innovation_challenge,pilot_mou"}
-    engagement_columns = {
+    earlier_columns = {
         "engagements.procurement_route procurement_route",
         "engagements.procurement_justification text",
         "engagements.procurement_decided_at timestamp with time zone",
         "engagements.procurement_decided_by uuid",
+        "organizations.escalation_contact_user_id uuid",
+        "uq_invitations_open.org_id uuid",  # the partial unique index's own columns
+        "uq_invitations_open.email citext",
     }
-    assert engagement_columns <= added["columns"]
-    relations = {column.split(".")[0] for column in added["columns"] - engagement_columns}
+    assert earlier_columns <= added["columns"]
+    relations = {column.split(".")[0] for column in added["columns"] - earlier_columns}
     assert set(V15_TABLES) <= relations
     assert all(name in V15_TABLES or name.startswith(("pk_", "uq_", "ix_")) for name in relations), relations
     assert added["rls"] == {f"{table} true false" for table in V15_TABLES}
-    assert {line.split(" ")[0] for line in added["policies"]} == set(V15_TABLES)
+    assert {tuple(line.split(" ")[:3]) for line in removed["policies"]} == {
+        ("invitations", "bridge_app_insert", "INSERT"),
+        ("invitations", "bridge_app_update", "UPDATE"),
+    }
+    assert {line.split(" ")[0] for line in added["policies"]} == {*V15_TABLES, "invitations"}
+    assert removed["table_acl"] == {
+        "memberships bridge_app UPDATE",
+        "invitations bridge_app INSERT",
+        "invitations bridge_app UPDATE",
+    }
     assert {line.split(" ")[1] for line in removed["constraints"]} == {"ck_engagements_contact_complete"}
     assert {
         "ck_engagements_contact_consistent",
@@ -863,7 +895,13 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
         "engagements_procurement_moved",  # the constraint trigger's own entry
         "ck_engagement_nudges_kind_known",
         "ck_engagement_nudges_key_valid",
+        "ck_invitations_accepted_or_revoked",
+        "fk_organizations_escalation_contact_user_id_users",
     } <= {line.split(" ")[1] for line in added["constraints"]}
+    assert (
+        "CREATE UNIQUE INDEX uq_invitations_open ON public.invitations USING btree (org_id, email) WHERE"
+        in " ".join(added["indexes"])
+    )
     (replaced,) = removed["functions"]
     assert replaced.startswith("engagement_main_path_predecessors(engagement_state) false "), replaced
     assert {line.split(" ")[0] for line in added["functions"]} == {
@@ -872,20 +910,38 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
         "engagements_procurement_moved()",
         "app_nudge_candidates()",
         "app_record_nudge(uuid,text,text)",
+        "app_accept_invitation(bytea,uuid)",
+        "app_invitation_preview(bytea)",
+        "organizations_escalation_contact_guard()",
+        "org_niche_defaults_guard()",
+        "invitations_guard()",
+        "memberships_last_owner_guard()",
+        "memberships_clear_team_seats()",
     }
-    assert {(line.split(" ")[0], line.split(" ")[1]) for line in added["triggers"]} == {
-        ("engagements", "engagements_procurement_guard"),
-        ("engagements", "engagements_procurement_moved"),
-        ("engagement_nudges", "engagement_nudges_no_update_delete"),
-        ("engagement_nudges", "engagement_nudges_no_truncate"),
-    }
+    assert {(line.split(" ")[0], line.split(" ")[1]) for line in added["triggers"]} == set(V15_TRIGGERS)
     assert {
         "engagements.procurement_route bridge_app UPDATE",
         "engagements.procurement_justification bridge_app UPDATE",
+        "organizations.escalation_contact_user_id bridge_app UPDATE",
+        "memberships.roles bridge_app UPDATE",
+        "memberships.status bridge_app UPDATE",
+        "memberships.updated_at bridge_app UPDATE",
+        "invitations.token_hash bridge_app INSERT",
+        "invitations.token_hash bridge_app UPDATE",
+        "invitations.revoked_at bridge_app UPDATE",
     } <= added["column_acl"]
-    assert "engagement_nudges bridge_app SELECT" in added["table_acl"]
-    for signature in ("app_nudge_candidates()", "app_record_nudge(uuid,text,text)"):
+    assert "invitations.accepted_at bridge_app UPDATE" not in added["column_acl"]
+    assert {"engagement_nudges bridge_app SELECT", "org_niche_defaults bridge_app SELECT"} <= added["table_acl"]
+    for signature in FUNCTION_GRANTS_V15:
         assert f"{signature} bridge_app EXECUTE" in added["function_acl"]
+
+
+FUNCTION_GRANTS_V15 = (
+    "app_nudge_candidates()",
+    "app_record_nudge(uuid,text,text)",
+    "app_accept_invitation(bytea,uuid)",
+    "app_invitation_preview(bytea)",
+)
 
 
 def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
@@ -1807,6 +1863,48 @@ async def test_schema_v11_policies_are_exactly_the_planned_ones(owner_engine: As
     assert {(row.tablename, row.cmd): (row.qual, row.with_check) for row in found} == V13_POLICIES
 
 
+_V15_ADMIN = f"(app_is_member(org_id, '{{owner,admin}}'::org_role[]) AND {_V13_IN_ORG})"
+_V15_UNPROTECTED = (
+    "app_is_member(org_id, '{owner,admin}'::org_role[]) AND ((NOT (roles && '{owner,signatory}'::org_role[]))"
+    " OR app_is_member(org_id, '{owner}'::org_role[]))"
+)
+# Revision 0015's policies, whole (USING, WITH CHECK) per (table, command), and the invitations' (its INSERT and UPDATE
+# replaced, its SELECT revision 0001's).
+V15_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
+    ("engagement_nudges", "SELECT"): (f"({_V13_MEMBER} AND {_v13_not_its_developer('engagement_nudges')})", None),
+    ("org_niche_defaults", "SELECT"): (f"({_V13_MEMBER})", None),
+    ("org_niche_defaults", "INSERT"): (None, _V15_ADMIN),
+    ("org_niche_defaults", "UPDATE"): (_V15_ADMIN, _V15_ADMIN),
+    ("org_niche_defaults", "DELETE"): (_V15_ADMIN, None),
+    ("invitations", "SELECT"): (_V15_ADMIN, None),
+    ("invitations", "INSERT"): (None, f"((invited_by = app_user_id()) AND {_V15_UNPROTECTED} AND {_V13_IN_ORG})"),
+    ("invitations", "UPDATE"): (
+        "((accepted_at IS NULL) AND (revoked_at IS NULL) AND app_is_member(org_id, '{owner,admin}'::org_role[]) AND"
+        f" {_V13_IN_ORG})",
+        f"({_V15_UNPROTECTED} AND {_V13_IN_ORG})",
+    ),
+}
+
+
+async def test_schema_v12_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
+    """Revision 0015: the nudges ledger has one policy, SELECT, for the organisation's members (narrowed by app.org_id)
+    and never the engagement's own developer (nobody writes it but app_record_nudge); a niche default is read by the
+    members and written by an owner or admin; an invitation is read by an owner or admin (revision 0001's), inserted by
+    one as themselves (an owner for a protected role) and updated while open, both narrowed by app.org_id. Every policy
+    is bridge_app's."""
+    found = await rows(
+        owner_engine,
+        "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, qual, with_check FROM pg_policies"
+        " WHERE schemaname = 'public' AND tablename = ANY (:tables)",
+        tables=[*V15_TABLES, "invitations"],
+    )
+    assert {(row.tablename, row.policyname, row.cmd) for row in found} == {
+        (table, f"bridge_app_{cmd.lower()}", cmd) for table, cmd in V15_POLICIES
+    }
+    assert {role for row in found for role in row.roles} == {"bridge_app"}
+    assert {(row.tablename, row.cmd): (row.qual, row.with_check) for row in found} == V15_POLICIES
+
+
 # Revision 0013's one-line text columns (the security review's MINOR 5): (table, column, constraint).
 V13_TEXT_CHECKS = (
     ("engagement_recommendations", "note", "ck_engagement_recommendations_note_valid"),
@@ -2222,10 +2320,10 @@ async def test_admins_cannot_grant_or_touch_protected_roles(app_engine: AsyncEng
             await expect_error(conn, own_roles, rls, {"roles": protected, "org": org_id, "user": member})
             await expect_error(conn, ADD_MEMBER, rls, member_params(org_id, newcomer, protected))
             await expect_error(conn, INVITE, rls, invite_params(org_id, protected))
-            await expect_error(
+            await expect_error(  # revision 0015: an invitation's roles never change (no column grant)
                 conn,
                 "UPDATE invitations SET roles = CAST(:roles AS org_role[]) WHERE id = :id",
-                rls,
+                "permission denied",
                 {"roles": protected, "id": invitation["id"]},
             )
         # The owner's membership is invisible to the admin's UPDATE: no demotion, no removal.
@@ -2697,6 +2795,15 @@ V11_INSERTABLE: dict[str, set[str]] = {
 
 # Revision 0013: the columns bridge_app inserts (an assignment's time and close, a recommendation's times, a
 # declaration's window and time, a feed's times are the database's or the definers').
+# Revision 0015: the columns bridge_app inserts (a nudge only through app_record_nudge; an invitation's acceptance,
+# revocation and creation time, a default's times are the database's or the definers').
+V15_INSERTABLE: dict[str, set[str]] = {
+    "engagement_nudges": set(),
+    "invitations": {"id", "org_id", "email", "roles", "token_hash", "invited_by", "expires_at"},
+    "org_niche_defaults": {"id", "org_id", "niche_id", "user_id"},
+}
+
+
 V13_INSERTABLE: dict[str, set[str]] = {
     "engagement_assignments": {"id", "engagement_id", "org_id", "assignee_user_id", "assigned_by"},
     "engagement_recommendations": {"id", "engagement_id", "org_id", "member_user_id", "stance", "note"},
@@ -2707,7 +2814,8 @@ V13_INSERTABLE: dict[str, set[str]] = {
 
 
 @pytest.mark.parametrize(
-    ("table", "insertable"), sorted({**V10_INSERTABLE, **V11_INSERTABLE, **V13_INSERTABLE}.items())
+    ("table", "insertable"),
+    sorted({**V10_INSERTABLE, **V11_INSERTABLE, **V13_INSERTABLE, **V15_INSERTABLE}.items()),
 )
 async def test_schema_v8_insert_columns_are_exactly_the_apps(
     owner_engine: AsyncEngine, table: str, insertable: set[str]
@@ -3468,6 +3576,18 @@ V15_TRIGGERS = {
         ROW | BEFORE | ON_UPDATE | ON_DELETE,
     ),
     ("engagement_nudges", "engagement_nudges_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE),
+    # the team: a default's guard, the escalation contact's, the invitations' guard, the last owner and a leaver's seats
+    ("org_niche_defaults", "org_niche_defaults_guard"): (
+        "org_niche_defaults_guard",
+        ROW | BEFORE | ON_INSERT | ON_UPDATE,
+    ),
+    ("organizations", "organizations_escalation_contact_guard"): (
+        "organizations_escalation_contact_guard",
+        ROW | BEFORE | ON_INSERT | ON_UPDATE,
+    ),
+    ("invitations", "invitations_guard"): ("invitations_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),
+    ("memberships", "memberships_last_owner_guard"): ("memberships_last_owner_guard", ROW | BEFORE | ON_UPDATE),
+    ("memberships", "memberships_clear_team_seats"): ("memberships_clear_team_seats", ROW | ON_UPDATE),
 }
 
 

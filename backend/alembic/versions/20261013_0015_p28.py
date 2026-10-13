@@ -1,12 +1,16 @@
-"""Schema v12 (P28-M): the procurement route (3b) and the nudges ledger.
+"""Schema v12 (P28-M): the procurement route (3b), the nudges ledger and the organisation's team.
 
-REQ-ENG-06 (AC-TRACK-5) and REQ-NOT-05 (with REQ-NOT-03 and REQ-ENG-05; AC-MAIL-2). Design:
-``docs/platform/tasks/P28.md``, "Feature tracks", the contract's A and B. Additive but for one looser CHECK and two
-narrower main-path predecessors (both restored on downgrade): one enum type (``procurement_route``), four columns of
-``engagements`` with three CHECKs and bridge_app's UPDATE of two of them, two new triggers on ``engagements`` and their
-functions, revision 0003's ``engagement_main_path_predecessors`` replaced in place, and one new table
-(``engagement_nudges``) with its policy, triggers, grant and two functions. Nothing else of revisions 0001 to 0014 is
-changed or dropped. Times written here are the shared clock's (``app_clock_now()``).
+REQ-ENG-06 (AC-TRACK-5), REQ-NOT-05 (with REQ-NOT-03 and REQ-ENG-05; AC-MAIL-2) and REQ-TEN-02. Design:
+``docs/platform/tasks/P28.md``, "Feature tracks", the contract's A, B and C. Additive but for what is stricter or looser
+in place, each restored on downgrade: revision 0003's main-path predecessors (two narrower) and contact CHECK (looser),
+and revision 0001's invitation policies (INSERT and UPDATE, stricter) and bridge_app's table-wide INSERT and UPDATE of
+``invitations`` and UPDATE of ``memberships`` (now column-scoped). New: one enum type (``procurement_route``); four
+columns of ``engagements`` with three CHECKs and bridge_app's UPDATE of two of them;
+``organizations.escalation_contact_user_id`` and bridge_app's UPDATE of it; two tables (``engagement_nudges``,
+``org_niche_defaults``) with their policies, triggers and grants; on ``invitations`` a CHECK, a partial unique index
+and a guard; on ``memberships`` the last-owner guard and the clearing of a leaver's team seats; four functions
+bridge_app executes and seven trigger functions. Nothing else of revisions 0001 to 0014 is changed or dropped. Times
+written here are the shared clock's (``app_clock_now()``).
 
 The procurement route (docs/spec/06 6.9 stage 3b; ``PROCUREMENT_ROUTE`` has been a value of ``engagement_state``
 since revision 0002, so no enum value is added and nothing needs an autocommit block):
@@ -71,6 +75,45 @@ The nudges ledger (REQ-NOT-05; the contract's B):
   records a nudge for a session with no user bound only. bridge_app holds no INSERT on the ledger: no request can
   record (and so suppress) a nudge.
 
+The team (REQ-TEN-02; the contract's C). "An admin" is an active owner or admin of the row's organisation, narrowed by
+``app.org_id`` when one is set (revision 0001's rule); "a triage member" an active owner, admin, reviewer or signatory
+(revision 0013's).
+
+- ``organizations.escalation_contact_user_id`` (uuid, NULL; FK ``users`` ON DELETE SET NULL): who, besides the admins,
+  hears of escalations. bridge_app gains UPDATE of it (the organisation's UPDATE policy of revision 0001: an owner or
+  admin). ``organizations_escalation_contact_guard`` (BEFORE INSERT OR UPDATE OF the column, every role, SECURITY
+  INVOKER): NULL or an active member of the organisation, read under the writer's RLS (check_violation).
+- ``org_niche_defaults`` (ORG; bridge_app: SELECT, INSERT of ``id``, ``org_id``, ``niche_id``, ``user_id``, UPDATE of
+  ``user_id``, DELETE): one default reviewer per organisation and niche (``uq_org_niche_defaults_org_id_niche_id``; FK
+  ``organizations`` and ``users`` ON DELETE CASCADE, ``niches``). Members read; an admin inserts, updates and deletes
+  (role checks in SQL, as revision 0001's ``org_niches``). ``org_niche_defaults_guard`` (BEFORE INSERT OR UPDATE, every
+  role, SECURITY INVOKER: the roster under the writer's RLS): the user is a triage member of the organisation
+  (check_violation; the API narrows it to reviewer, signatory or admin); the organisation, niche and creation time
+  never change (check_violation); ``updated_at`` is the shared clock on every update.
+- ``memberships``: bridge_app's UPDATE becomes ``roles``, ``status`` and ``updated_at`` (revision 0001 granted the
+  table; a membership's organisation and user never move, members leave by ``status = 'removed'``); its policies are
+  revision 0001's (an admin removes or changes a member who holds neither owner nor signatory, an owner anyone).
+  ``memberships_last_owner_guard`` (BEFORE UPDATE, SECURITY INVOKER) refuses removing or demoting the organisation's
+  last active owner (object_not_in_prerequisite_state, the API's 409 ``last_owner``); concurrent removals of two owners
+  are serialised on a transaction advisory lock per organisation, so one of them sees the other. It judges the
+  organisation's own writes only: the table's owner (the definer functions, a claim's transfer and staff's roster
+  correction of revision 0002 which may leave an organisation without an owner by design; the seed) is not judged.
+  ``memberships_clear_team_seats`` (AFTER UPDATE OF status, roles, when an active membership leaves ``active`` or keeps
+  none of the triage roles; SECURITY DEFINER, as revision 0013's feed revocation): a leaver's niche defaults go and the
+  escalation contact is cleared if it is them; a member who loses the triage roles loses their niche defaults.
+- ``invitations`` (revision 0001; tenancy ORG): bridge_app's table-wide INSERT and UPDATE become INSERT of ``id``,
+  ``org_id``, ``email``, ``roles``, ``token_hash``, ``invited_by``, ``expires_at`` and UPDATE of ``token_hash``,
+  ``expires_at`` (a resend: the old token dies) and ``revoked_at``. The SELECT policy stays revision 0001's (an admin
+  lists the organisation's; a member who is not an admin, another organisation, the invitee read none); the INSERT
+  policy adds ``invited_by = app_user_id()`` and the ``app.org_id`` narrowing to revision 0001's rule (an admin; only
+  an owner invites an owner or a signatory); the UPDATE policy reaches open invitations only (neither accepted nor
+  revoked) with the same narrowing. ``invitations_guard`` (BEFORE INSERT OR UPDATE, every role, SECURITY INVOKER): an
+  invitation is created open; its organisation, address, roles, inviter and creation time never change
+  (check_violation); an accepted or revoked invitation never changes (object_not_in_prerequisite_state);
+  ``revoked_at`` and ``accepted_at`` are the shared clock whatever is sent. CHECK ``accepted_or_revoked`` (never
+  both). ``uq_invitations_open`` (org_id, email) WHERE neither accepted nor revoked: an address has one open invitation
+  per organisation (citext: case-insensitive); an expired one stays open until it is revoked or resent.
+
 Functions (pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_app where listed in ``FUNCTION_GRANTS``):
 
 - ``app_nudge_candidates()`` -> (engagement_id, org_id, developer_id, member_id), SECURITY DEFINER, STABLE: the job
@@ -89,10 +132,23 @@ Functions (pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_ap
   append in flight is waited for and its outcome read, as the thread's gate), then records the nudge with the
   engagement's organisation and the shared clock's time: true when this call recorded it (send it), false when it was
   already recorded or the engagement has ended (send nothing).
-- Trigger and internal functions (no EXECUTE for any role): ``engagements_procurement_guard()`` (SECURITY INVOKER:
-  ``current_user`` is the writer; the organisation's ``public_entity`` is read as the projection's owner on a state
-  change), ``engagements_procurement_moved()`` (SECURITY DEFINER: reads the engagement whatever the committing
-  session's RLS) and the replaced ``engagement_main_path_predecessors(engagement_state)``.
+- ``app_accept_invitation(token_hash bytea, user_id uuid)`` -> uuid (the organisation), SECURITY DEFINER: for the
+  signed-in user only (``user_id`` is ``app.user_id``; insufficient_privilege otherwise). The invitation with that
+  hash, locked FOR UPDATE, is open: neither accepted nor revoked and ``expires_at`` after ``app_clock_now()``
+  (no_data_found otherwise, one refusal for an unknown, spent, revoked, resent-over or expired token: the API's 404);
+  the user is active with a verified email equal to the invitation's, case-insensitive (insufficient_privilege: the
+  API's 403 ``invitation_email_mismatch``); an active membership already there is unique_violation (the API's 409).
+  Then the membership is inserted with the invitation's roles, or a removed one reactivated with them, and the
+  invitation marked accepted (the shared clock).
+- ``app_invitation_preview(token_hash bytea)`` -> (org_name text, roles org_role[]), SECURITY DEFINER, STABLE: one row
+  for an open invitation (as above), the organisation's legal name and the roles, nothing else; no row otherwise.
+  Answers any session: the hash is the capability.
+- Trigger and internal functions (no EXECUTE for any role): ``engagements_procurement_guard()``,
+  ``org_niche_defaults_guard()``, ``invitations_guard()``, ``organizations_escalation_contact_guard()`` and
+  ``memberships_last_owner_guard()`` (SECURITY INVOKER: ``current_user`` is the writer, the roster read under its RLS;
+  the procurement guard reads the organisation's ``public_entity`` as the projection's owner on a state change);
+  ``engagements_procurement_moved()`` and ``memberships_clear_team_seats()`` (SECURITY DEFINER); the replaced
+  ``engagement_main_path_predecessors(engagement_state)``.
 
 Operating rules for the code that uses this schema:
 
@@ -111,6 +167,22 @@ Operating rules for the code that uses this schema:
   it returns true. Keys are the job's: the stage entry's event id or seq with the business-day count, the milestone id,
   the contact-by date; never a name, address or free text. Org-side reads of the ledger (``escalated_at``) bind a
   member; a developer-side response never reads it.
+- Invite (an admin; check the role first, 403, and the 20-open cap and an existing member's address, 409): INSERT the
+  invitation with ``invited_by`` the caller, ``expires_at`` seven days on the shared clock and the SHA-256 of the
+  token; ``uq_invitations_open`` is the race of two invitations to one address (409). Revoke: ``UPDATE invitations SET
+  revoked_at = now() WHERE id = :id`` (no row: it was not open, 404 or 409). Resend: ``UPDATE invitations SET
+  token_hash = :new, expires_at = :at WHERE id = :id``. An expired invitation blocks a new one to the same address
+  until it is revoked or resent.
+- The public preview: ``SELECT * FROM app_invitation_preview(:hash)`` (no row: 404). Accept (signed in):
+  ``SELECT app_accept_invitation(:hash, :me)``; map no_data_found to 404, insufficient_privilege to 403
+  ``invitation_email_mismatch``, unique_violation to 409; audit it.
+- Remove a member: ``UPDATE memberships SET status = 'removed'`` (an admin for an unprotected member, an owner for
+  anyone); change roles with ``UPDATE memberships SET roles``; SQLSTATE 55000 from ``memberships_last_owner_guard`` is
+  the 409 ``last_owner`` (check it first, as today). Clear the removed member's open assignments in the same
+  transaction (the database clears their niche defaults and escalation-contact seat).
+- Niche defaults: an admin upserts ``INSERT ... ON CONFLICT (org_id, niche_id) DO UPDATE SET user_id =
+  EXCLUDED.user_id`` and deletes; check_violation from the guard is the 422 (not a triage member). Escalation contact:
+  ``UPDATE organizations SET escalation_contact_user_id = :user`` (check_violation: not an active member, 422).
 
 Revision ID: 0015
 Revises: 0014
@@ -131,7 +203,7 @@ down_revision: str | Sequence[str] | None = "0014"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-NEW_TABLES = ("engagement_nudges",)
+NEW_TABLES = ("engagement_nudges", "org_niche_defaults")
 RLS_TABLES = NEW_TABLES
 PROCUREMENT_ROUTES = ("direct", "rfq_tender", "ppp_pip", "innovation_challenge", "pilot_mou")
 NUDGE_KINDS = (
@@ -152,10 +224,24 @@ PROCUREMENT_COLUMNS = (
 # written only by app_record_nudge.
 APP_GRANTS: dict[str, str] = {
     "engagement_nudges": "SELECT",
+    "org_niche_defaults": "SELECT, INSERT (id, org_id, niche_id, user_id), UPDATE (user_id), DELETE",
 }
-# bridge_app writes the route and its justification; the time and the decider are the guard's.
-ENGAGEMENT_GRANT = "GRANT UPDATE (procurement_route, procurement_justification) ON TABLE engagements TO bridge_app;"
-APPEND_ONLY_TABLES = ("engagement_nudges",)
+# New column grants of bridge_app on earlier tables (dropped with their columns on downgrade): the route and its
+# justification (the time and the decider are the guard's); the escalation contact.
+COLUMN_GRANTS = (
+    "GRANT UPDATE (procurement_route, procurement_justification) ON TABLE engagements TO bridge_app;",
+    "GRANT UPDATE (escalation_contact_user_id) ON TABLE organizations TO bridge_app;",
+)
+# Revision 0001's table-wide grants of bridge_app made column-scoped here: table -> (the privileges revoked, the
+# column-scoped grant). The downgrade restores the table-wide grant (a table-level REVOKE also revokes the columns').
+NARROWED_GRANTS: dict[str, tuple[str, str]] = {
+    "memberships": ("UPDATE", "UPDATE (roles, status, updated_at)"),
+    "invitations": (
+        "INSERT, UPDATE",
+        "INSERT (id, org_id, email, roles, token_hash, invited_by, expires_at),"
+        " UPDATE (token_hash, expires_at, revoked_at)",
+    ),
+}
 
 # CHECK expressions, verbatim from bridge.engagements.models (alembic check compares no CHECK).
 CONTACT_CONSISTENT = (
@@ -187,6 +273,8 @@ CONTACT_COMPLETE_0003 = (
 )
 NUDGE_KIND_KNOWN = f"kind IN ({', '.join(repr(kind) for kind in NUDGE_KINDS)})"
 NUDGE_KEY_VALID = "key ~ '^[A-Za-z0-9_.:+-]{1,120}$'"
+INVITATION_ACCEPTED_OR_REVOKED = "accepted_at IS NULL OR revoked_at IS NULL"
+OPEN_INVITATION = "accepted_at IS NULL AND revoked_at IS NULL"
 
 
 class Policy(NamedTuple):
@@ -220,6 +308,12 @@ class Policy(NamedTuple):
 # own developer reads none of the organisation's rows about it, even as a member).
 _IN_ORG = "(app_org_id() IS NULL OR org_id = app_org_id())"
 _MEMBER = f"app_is_member(org_id) AND {_IN_ORG}"
+_ADMIN = f"app_is_member(org_id, '{{owner,admin}}') AND {_IN_ORG}"
+# Revision 0001's invitation rule, verbatim: an admin, and only an owner for the protected roles (owner, signatory).
+_ORG_ADMIN_0001 = "app_is_member(org_id, '{owner,admin}')"
+_ORG_ADMIN_UNPROTECTED_0001 = (
+    f"{_ORG_ADMIN_0001} AND (NOT (roles && '{{owner,signatory}}'::org_role[]) OR app_is_member(org_id, '{{owner}}'))"
+)
 
 
 def _not_its_developer(table: str) -> str:
@@ -232,6 +326,28 @@ def _not_its_developer(table: str) -> str:
 POLICIES: tuple[Policy, ...] = (
     # --- engagement_nudges: the organisation's members read (never the engagement's developer); nobody writes ---
     Policy("engagement_nudges", "SELECT", f"{_MEMBER} AND " + _not_its_developer("engagement_nudges")),
+    # --- org_niche_defaults: members read; an admin writes (the guard: the user is a triage member) ---
+    Policy("org_niche_defaults", "SELECT", _MEMBER),
+    Policy("org_niche_defaults", "INSERT", check=_ADMIN),
+    Policy("org_niche_defaults", "UPDATE", _ADMIN, _ADMIN),
+    Policy("org_niche_defaults", "DELETE", _ADMIN),
+)
+# Revision 0001's invitation policies replaced here (dropped by name, created again on downgrade), and their
+# replacements: the inviter is the caller; open invitations only are updated; both narrowed by app.org_id.
+INVITATION_POLICIES_0001: tuple[Policy, ...] = (
+    Policy("invitations", "INSERT", check=_ORG_ADMIN_UNPROTECTED_0001),
+    Policy("invitations", "UPDATE", _ORG_ADMIN_0001, _ORG_ADMIN_UNPROTECTED_0001),
+)
+INVITATION_POLICIES: tuple[Policy, ...] = (
+    Policy(
+        "invitations", "INSERT", check=f"invited_by = app_user_id() AND {_ORG_ADMIN_UNPROTECTED_0001} AND {_IN_ORG}"
+    ),
+    Policy(
+        "invitations",
+        "UPDATE",
+        f"{OPEN_INVITATION} AND {_ORG_ADMIN_0001} AND {_IN_ORG}",
+        f"{_ORG_ADMIN_UNPROTECTED_0001} AND {_IN_ORG}",
+    ),
 )
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -453,6 +569,201 @@ BEGIN
 END;
 $$;
 
+-- Accepts an invitation for the signed-in user (REQ-TEN-02; POST /api/invitations/{token}/accept): p_user is
+-- app.user_id (insufficient_privilege otherwise). The invitation with that hash, locked FOR UPDATE, is open: neither
+-- accepted nor revoked, and expiring after the shared clock's now (no_data_found otherwise: one refusal for an unknown,
+-- spent, revoked, resent-over or expired token). The user is active with a verified email equal to the invitation's,
+-- case-insensitive (insufficient_privilege otherwise); an active membership already there is unique_violation. Then
+-- the membership is inserted with the invitation's roles, or a removed one reactivated with them, the invitation is
+-- marked accepted (its guard stamps the shared clock) and the organisation returned. SECURITY DEFINER: the invitee is
+-- not a member yet, so neither the invitation nor the roster is theirs to read or write.
+CREATE FUNCTION app_accept_invitation(p_token_hash bytea, p_user uuid) RETURNS uuid
+    LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_invitation public.invitations%ROWTYPE;
+    v_status public.membership_status;
+BEGIN
+    IF p_user IS NULL OR public.app_user_id() IS DISTINCT FROM p_user THEN
+        RAISE EXCEPTION 'app_accept_invitation: the signed-in user accepts for themselves only'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    SELECT * INTO v_invitation FROM public.invitations i WHERE i.token_hash = p_token_hash FOR UPDATE;
+    IF NOT FOUND OR v_invitation.accepted_at IS NOT NULL OR v_invitation.revoked_at IS NOT NULL
+       OR v_invitation.expires_at <= public.app_clock_now() THEN
+        RAISE EXCEPTION 'app_accept_invitation: no open invitation with that token' USING ERRCODE = 'no_data_found';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM public.users u
+         WHERE u.id = p_user AND u.status = 'active' AND u.email_verified_at IS NOT NULL
+           AND lower(u.email::text) = lower(v_invitation.email::text)) THEN
+        RAISE EXCEPTION 'app_accept_invitation: the invitation is for another email address, or yours is not verified'
+            USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    SELECT m.status INTO v_status FROM public.memberships m
+     WHERE m.org_id = v_invitation.org_id AND m.user_id = p_user FOR UPDATE;
+    IF v_status = 'active' THEN
+        RAISE EXCEPTION 'app_accept_invitation: already an active member of the organisation'
+            USING ERRCODE = 'unique_violation';
+    ELSIF v_status IS NOT NULL THEN
+        UPDATE public.memberships m SET status = 'active', roles = v_invitation.roles, updated_at = now()
+         WHERE m.org_id = v_invitation.org_id AND m.user_id = p_user;
+    ELSE
+        INSERT INTO public.memberships (id, org_id, user_id, roles, status)
+        VALUES (public.uuid7(), v_invitation.org_id, p_user, v_invitation.roles, 'active');
+    END IF;
+    UPDATE public.invitations i SET accepted_at = public.app_clock_now() WHERE i.id = v_invitation.id;
+    RETURN v_invitation.org_id;
+END;
+$$;
+
+-- The public preview of an invitation (GET /api/invitations/{token}): the organisation's legal name and the roles of
+-- the open invitation with that hash (neither accepted nor revoked, expiring after the shared clock's now), nothing
+-- else; no row otherwise. Answers any session: the hash is the capability.
+CREATE FUNCTION app_invitation_preview(p_token_hash bytea)
+    RETURNS TABLE (org_name text, roles public.org_role[])
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT CAST(o.legal_name AS text), i.roles
+      FROM public.invitations i
+      JOIN public.organizations o ON o.id = i.org_id
+     WHERE i.token_hash = p_token_hash AND i.accepted_at IS NULL AND i.revoked_at IS NULL
+       AND i.expires_at > public.app_clock_now()
+$$;
+
+-- organizations, BEFORE INSERT OR UPDATE OF escalation_contact_user_id, every role (REQ-TEN-02): the escalation contact
+-- is NULL or an active member of the organisation (check_violation). SECURITY INVOKER: the roster is read under the
+-- writer's RLS (an admin reads their organisation's; the owner everything), so a refusal tells a writer who is not a
+-- member nothing about who is.
+CREATE FUNCTION organizations_escalation_contact_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF NEW.escalation_contact_user_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM public.memberships m
+         WHERE m.org_id = NEW.id AND m.user_id = NEW.escalation_contact_user_id AND m.status = 'active') THEN
+        RAISE EXCEPTION 'organizations: the escalation contact is an active member of the organisation'
+            USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- org_niche_defaults, BEFORE INSERT OR UPDATE, every role (REQ-TEN-02): the default reviewer is an active owner,
+-- admin, reviewer or signatory of the organisation (check_violation: the assignments' rule of revision 0013, which a
+-- default feeds); a default's organisation, niche and creation time never change (check_violation); updated_at is the
+-- shared clock on every update. SECURITY INVOKER: the roster is read under the writer's RLS.
+CREATE FUNCTION org_niche_defaults_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        IF (NEW.id, NEW.org_id, NEW.niche_id, NEW.created_at) IS DISTINCT FROM
+           (OLD.id, OLD.org_id, OLD.niche_id, OLD.created_at) THEN
+            RAISE EXCEPTION 'org_niche_defaults: a default''s organisation, niche and creation time never change'
+                USING ERRCODE = 'check_violation';
+        END IF;
+        NEW.updated_at := public.app_clock_now();
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM public.memberships m
+         WHERE m.org_id = NEW.org_id AND m.user_id = NEW.user_id AND m.status = 'active'
+           AND m.roles && CAST('{owner,admin,reviewer,signatory}' AS public.org_role[])) THEN
+        RAISE EXCEPTION 'org_niche_defaults: the default reviewer is an active owner, admin, reviewer or signatory of'
+            ' the organisation' USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- invitations, BEFORE INSERT OR UPDATE, every role (REQ-TEN-02): an invitation is created open (check_violation); its
+-- organisation, address, roles, inviter and creation time never change (check_violation); an accepted or revoked
+-- invitation never changes (object_not_in_prerequisite_state); revoked_at and accepted_at are the shared clock
+-- whatever is sent. A resend changes token_hash and expires_at of an open invitation.
+CREATE FUNCTION invitations_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.accepted_at IS NOT NULL OR NEW.revoked_at IS NOT NULL THEN
+            RAISE EXCEPTION 'invitations: an invitation is created open' USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF (NEW.id, NEW.org_id, NEW.email, NEW.roles, NEW.invited_by, NEW.created_at)
+       IS DISTINCT FROM (OLD.id, OLD.org_id, OLD.email, OLD.roles, OLD.invited_by, OLD.created_at) THEN
+        RAISE EXCEPTION 'invitations: an invitation''s organisation, address, roles, inviter and creation time never'
+            ' change' USING ERRCODE = 'check_violation';
+    END IF;
+    IF OLD.accepted_at IS NOT NULL OR OLD.revoked_at IS NOT NULL THEN
+        RAISE EXCEPTION 'invitations: an accepted or revoked invitation never changes'
+            USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+    IF NEW.revoked_at IS NOT NULL THEN
+        NEW.revoked_at := public.app_clock_now();
+    END IF;
+    IF NEW.accepted_at IS NOT NULL THEN
+        NEW.accepted_at := public.app_clock_now();
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- memberships, BEFORE UPDATE (REQ-TEN-02): the organisation's own writes never remove or demote its last active owner
+-- (object_not_in_prerequisite_state). Concurrent removals are serialised on a transaction advisory lock per
+-- organisation, so the second sees the first (each statement of this function takes a new snapshot at READ COMMITTED).
+-- The table's owner is not judged: the definer functions (a claim's transfer and staff's roster correction, revision
+-- 0002, may leave an organisation without an owner by design), the seed, a migration. SECURITY INVOKER: current_user is
+-- the writer, and the roster is read under its RLS (only an owner changes a membership holding owner, revision 0001,
+-- and reads the roster; a forged app.org_id hides it, and the refusal fails safe).
+CREATE FUNCTION memberships_last_owner_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    IF current_user = (SELECT pg_catalog.pg_get_userbyid(c.relowner) FROM pg_catalog.pg_class c WHERE c.oid = TG_RELID)
+    THEN
+        RETURN NEW;
+    END IF;
+    IF OLD.status = 'active' AND 'owner' = ANY (OLD.roles)
+       AND NOT (NEW.status = 'active' AND 'owner' = ANY (NEW.roles) AND NEW.org_id = OLD.org_id) THEN
+        PERFORM pg_catalog.pg_advisory_xact_lock(
+            pg_catalog.hashtextextended('memberships.owners:' || OLD.org_id::text, 0));
+        IF NOT EXISTS (
+            SELECT 1 FROM public.memberships m
+             WHERE m.org_id = OLD.org_id AND m.id <> OLD.id AND m.status = 'active' AND 'owner' = ANY (m.roles)) THEN
+            RAISE EXCEPTION 'memberships: the organisation''s last active owner is neither removed nor demoted'
+                USING ERRCODE = 'object_not_in_prerequisite_state';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- memberships, AFTER UPDATE OF status, roles WHEN an active membership leaves active or keeps none of owner, admin,
+-- reviewer and signatory (REQ-TEN-02): a leaver's niche defaults go and the organisation's escalation contact is
+-- cleared if it is them; a member who loses those roles loses their niche defaults (the default feeds an assignment,
+-- whose assignee is a triage member). SECURITY DEFINER: whoever removes or demotes the member (an admin, staff, a
+-- claim's transfer, the owner) holds no write of these rows for them.
+CREATE FUNCTION memberships_clear_team_seats() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+BEGIN
+    DELETE FROM public.org_niche_defaults d WHERE d.org_id = OLD.org_id AND d.user_id = OLD.user_id;
+    IF NEW.status IS DISTINCT FROM 'active' THEN
+        UPDATE public.organizations o SET escalation_contact_user_id = NULL
+         WHERE o.id = OLD.org_id AND o.escalation_contact_user_id = OLD.user_id;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
 -- engagements, a constraint trigger DEFERRABLE INITIALLY DEFERRED (AFTER UPDATE OF procurement_route, when it is set),
 -- every role: at commit, an engagement whose procurement route was decided is no longer in PROCUREMENT_ROUTE, so the
 -- decision and the move to INTEREST_CONFIRMED are made in one transaction (the guard refuses the move without it).
@@ -475,12 +786,26 @@ $$;
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_nudge_candidates()": ("bridge_app",),  # the nudge job, no user bound
     "app_record_nudge(uuid, text, text)": ("bridge_app",),  # the nudge job, no user bound
+    "app_accept_invitation(bytea, uuid)": ("bridge_app",),  # the signed-in invitee
+    "app_invitation_preview(bytea)": ("bridge_app",),  # the public preview (the hash is the capability)
 }
-TRIGGER_FUNCTIONS = ("engagements_procurement_guard()", "engagements_procurement_moved()")
+TRIGGER_FUNCTIONS = (
+    "engagements_procurement_guard()",
+    "engagements_procurement_moved()",
+    "organizations_escalation_contact_guard()",
+    "org_niche_defaults_guard()",
+    "invitations_guard()",
+    "memberships_last_owner_guard()",
+    "memberships_clear_team_seats()",
+)
 # Triggers this revision puts on earlier revisions' tables (dropped by name on downgrade; the tables stay).
 EXISTING_TABLE_TRIGGERS = (
     ("engagements_procurement_guard", "engagements"),
     ("engagements_procurement_moved", "engagements"),
+    ("organizations_escalation_contact_guard", "organizations"),
+    ("invitations_guard", "invitations"),
+    ("memberships_last_owner_guard", "memberships"),
+    ("memberships_clear_team_seats", "memberships"),
 )
 
 TRIGGERS_SQL = r"""
@@ -498,6 +823,23 @@ CREATE TRIGGER engagement_nudges_no_update_delete
 CREATE TRIGGER engagement_nudges_no_truncate
     BEFORE TRUNCATE ON engagement_nudges
     FOR EACH STATEMENT EXECUTE FUNCTION block_mutation();
+CREATE TRIGGER org_niche_defaults_guard
+    BEFORE INSERT OR UPDATE ON org_niche_defaults
+    FOR EACH ROW EXECUTE FUNCTION org_niche_defaults_guard();
+CREATE TRIGGER organizations_escalation_contact_guard
+    BEFORE INSERT OR UPDATE OF escalation_contact_user_id ON organizations
+    FOR EACH ROW EXECUTE FUNCTION organizations_escalation_contact_guard();
+CREATE TRIGGER invitations_guard
+    BEFORE INSERT OR UPDATE ON invitations
+    FOR EACH ROW EXECUTE FUNCTION invitations_guard();
+CREATE TRIGGER memberships_last_owner_guard
+    BEFORE UPDATE ON memberships
+    FOR EACH ROW EXECUTE FUNCTION memberships_last_owner_guard();
+CREATE TRIGGER memberships_clear_team_seats
+    AFTER UPDATE OF status, roles ON memberships
+    FOR EACH ROW WHEN (OLD.status = 'active' AND (NEW.status IS DISTINCT FROM 'active'
+                       OR NOT (NEW.roles && CAST('{owner,admin,reviewer,signatory}' AS org_role[]))))
+    EXECUTE FUNCTION memberships_clear_team_seats();
 """
 
 
@@ -512,7 +854,10 @@ def _run_sql(script: str) -> None:
 
 def _grant_sql() -> str:
     grants = [f"GRANT {privileges} ON TABLE {table} TO bridge_app;" for table, privileges in APP_GRANTS.items()]
-    grants.append(ENGAGEMENT_GRANT)
+    grants += COLUMN_GRANTS
+    for table, (revoked, scoped) in NARROWED_GRANTS.items():
+        grants.append(f"REVOKE {revoked} ON TABLE {table} FROM bridge_app;")
+        grants.append(f"GRANT {scoped} ON TABLE {table} TO bridge_app;")
     grants += [f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC;" for signature in TRIGGER_FUNCTIONS]
     for signature, roles in FUNCTION_GRANTS.items():
         grants.append(f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC;")
@@ -523,23 +868,28 @@ def _grant_sql() -> str:
 def upgrade() -> None:
     postgresql.ENUM(*PROCUREMENT_ROUTES, name="procurement_route").create(op.get_bind(), checkfirst=False)
     _alter_engagements()
+    _alter_team_tables()
     _create_tables()
     _run_sql(PREDECESSORS_SQL)
-    _run_sql(FUNCTIONS_SQL)  # after the tables
+    _run_sql(FUNCTIONS_SQL)  # after the tables: app_invitation_preview's body reads invitations
     _run_sql("\n".join(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;" for table in RLS_TABLES))
     _run_sql("\n".join(policy.create_sql() for policy in POLICIES))
+    _run_sql("\n".join(f"DROP POLICY {policy.name} ON {policy.table};" for policy in INVITATION_POLICIES_0001))
+    _run_sql("\n".join(policy.create_sql() for policy in INVITATION_POLICIES))
     _run_sql(TRIGGERS_SQL)
     _run_sql(_grant_sql())
 
 
 def downgrade() -> None:
     """Destructive: drops every procurement decision (a public entity's route and justification, shown to both
-    parties) and the nudges ledger (after a downgrade and a new upgrade, the job would send again every nudge still
-    due). Under the CLAUDE.md stop rule a downgrade of a database holding any of them is a destructive migration: back
-    the database up and get the human's decision first. The downgrade refuses while any engagement holds a decision or
-    the ledger has a row, unless run with ``-x allow_p28_loss=true`` (``alembic -x allow_p28_loss=true downgrade
+    parties), the nudges ledger (after a downgrade and a new upgrade, the job would send again every nudge still due),
+    the organisations' niche defaults and escalation contacts. Under the CLAUDE.md stop rule a downgrade of a database
+    holding any of them is a destructive migration: back the database up and get the human's decision first. The
+    downgrade refuses while any engagement holds a decision, either table has a row or an organisation names an
+    escalation contact, unless run with ``-x allow_p28_loss=true`` (``alembic -x allow_p28_loss=true downgrade
     0014``). It refuses in any case while an engagement names a contact without a contact-by date (revision 0003's
-    CHECK would refuse the row: give it its date, or end the engagement, first)."""
+    CHECK would refuse the row: give it its date, or end the engagement, first). Invitations and memberships keep their
+    rows (an accepted invitation stays accepted); their grants and policies go back to revision 0001's."""
     allowed = context.get_x_argument(as_dictionary=True).get("allow_p28_loss") == "true"
     bind = op.get_bind()
     undated = bind.execute(
@@ -555,6 +905,9 @@ def downgrade() -> None:
     ]
     if bind.execute(sa.text("SELECT EXISTS (SELECT 1 FROM engagements WHERE procurement_route IS NOT NULL)")).scalar():
         holding.append("engagements (procurement decisions)")
+    escalation = "SELECT EXISTS (SELECT 1 FROM organizations WHERE escalation_contact_user_id IS NOT NULL)"
+    if bind.execute(sa.text(escalation)).scalar():
+        holding.append("organizations (escalation contacts)")
     if holding and not allowed:
         raise RuntimeError(
             f"revision 0015 downgrade: {', '.join(holding)} hold data this revision's downgrade drops; back the"
@@ -567,6 +920,18 @@ def downgrade() -> None:
     for table in reversed(NEW_TABLES):
         op.drop_table(table)
     _run_sql("\n".join(f"DROP FUNCTION {signature};" for signature in (*TRIGGER_FUNCTIONS, *FUNCTION_GRANTS)))
+    _run_sql("\n".join(f"DROP POLICY {policy.name} ON {policy.table};" for policy in INVITATION_POLICIES))
+    _run_sql("\n".join(policy.create_sql() for policy in INVITATION_POLICIES_0001))
+    _run_sql(
+        "\n".join(
+            f"REVOKE {revoked} ON TABLE {table} FROM bridge_app; GRANT {revoked} ON TABLE {table} TO bridge_app;"
+            for table, (revoked, _scoped) in NARROWED_GRANTS.items()
+        )
+    )
+    op.drop_index("uq_invitations_open", table_name="invitations")
+    op.drop_constraint(op.f("ck_invitations_accepted_or_revoked"), "invitations", type_="check")
+    op.drop_constraint(op.f("fk_organizations_escalation_contact_user_id_users"), "organizations", type_="foreignkey")
+    op.drop_column("organizations", "escalation_contact_user_id")
     _run_sql(PREDECESSORS_0003)
     for name, _expression in reversed(ENGAGEMENT_CHECKS):
         op.drop_constraint(op.f(f"ck_engagements_{name}"), "engagements", type_="check")
@@ -612,4 +977,49 @@ def _create_tables() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_engagement_nudges")),
         sa.UniqueConstraint("engagement_id", "kind", "key", name=op.f("uq_engagement_nudges_engagement_id_kind_key")),
+    )
+    op.create_table(
+        "org_niche_defaults",
+        sa.Column("org_id", sa.Uuid(), nullable=False),
+        sa.Column("niche_id", sa.Uuid(), nullable=False),
+        sa.Column("user_id", sa.Uuid(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("app_clock_now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("app_clock_now()"), nullable=False),
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.ForeignKeyConstraint(["niche_id"], ["niches.id"], name=op.f("fk_org_niche_defaults_niche_id_niches")),
+        sa.ForeignKeyConstraint(
+            ["org_id"],
+            ["organizations.id"],
+            name=op.f("fk_org_niche_defaults_org_id_organizations"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["user_id"], ["users.id"], name=op.f("fk_org_niche_defaults_user_id_users"), ondelete="CASCADE"
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_org_niche_defaults")),
+        sa.UniqueConstraint("org_id", "niche_id", name=op.f("uq_org_niche_defaults_org_id_niche_id")),
+    )
+
+
+def _alter_team_tables() -> None:
+    op.add_column("organizations", sa.Column("escalation_contact_user_id", sa.Uuid(), nullable=True))
+    op.create_foreign_key(
+        op.f("fk_organizations_escalation_contact_user_id_users"),
+        "organizations",
+        "users",
+        ["escalation_contact_user_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+    # Validated: no invitation of any database was both accepted and revoked, nor two open for one address (the app
+    # wrote none before P28; the claim transfer revokes open ones only).
+    op.create_check_constraint(
+        op.f("ck_invitations_accepted_or_revoked"), "invitations", INVITATION_ACCEPTED_OR_REVOKED
+    )
+    op.create_index(
+        "uq_invitations_open",
+        "invitations",
+        ["org_id", "email"],
+        unique=True,
+        postgresql_where=sa.text(OPEN_INVITATION),
     )
