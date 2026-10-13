@@ -54,6 +54,19 @@ async function shot(page: Page, info: TestInfo, name: string) {
   await page.setViewportSize(size);
 }
 
+/**
+ * The current group's stage as the viewer sees it: under the current step on phones, in the row under the spine from
+ * 1024 px (the other copy is display:none at each width). Checks that only the width's own list is visible.
+ */
+async function subStage(page: Page, info: TestInfo, state: string) {
+  const desktop = !info.project.name.startsWith("mobile");
+  const row = page.locator("[data-substages-row]");
+  const column = page.locator("[data-stepper] [aria-current='step'] [data-substages='column']");
+  await expect(desktop ? row : column).toBeVisible();
+  await expect(desktop ? column : row).toBeHidden();
+  return (desktop ? row.locator("[data-substages='row']") : column).locator(`[data-substage='${state}']`);
+}
+
 interface Scene {
   engagementId: string;
   /** The organisation's page (its owner and admin, signed in). */
@@ -119,7 +132,7 @@ test("a public entity's owner chooses the procurement route; the developer reads
     await actionsReady(orgPage);
     const current = orgPage.locator("[data-stepper] [aria-current='step']");
     await expect(current).toHaveAttribute("data-group", "contact_nda");
-    await expect(current.locator("[data-substage='PROCUREMENT_ROUTE']")).toHaveAttribute("data-state", "current");
+    await expect(await subStage(orgPage, info, "PROCUREMENT_ROUTE")).toHaveAttribute("data-state", "current");
     await expect(orgPage.locator("[data-whose-turn]")).toContainText("Your next step: Choose the procurement route");
     const choose = orgPage.locator("[data-actions]").getByRole("button", { name: "Choose the procurement route" });
     await expect(choose).toHaveAttribute("data-primary", "");
@@ -143,7 +156,7 @@ test("a public entity's owner chooses the procurement route; the developer reads
     await expect(sheet).toHaveCount(0);
 
     // Stage 3 now, and the route for the organisation.
-    await expect(orgPage.locator("[data-stepper] [data-substage='PROCUREMENT_ROUTE']")).toHaveAttribute("data-state", "completed");
+    await expect(await subStage(orgPage, info, "PROCUREMENT_ROUTE")).toHaveAttribute("data-state", "completed");
     const block = orgPage.getByRole("region", { name: "Procurement route" });
     await expect(block.locator("[data-route]")).toHaveText("Direct procurement");
     await expect(block.locator("[data-justification]")).toHaveText(JUSTIFICATION);
@@ -163,7 +176,7 @@ test("a public entity's owner chooses the procurement route; the developer reads
     await expect(theirs.locator("[data-route]")).toHaveText("Direct procurement", STEP);
     await expect(theirs.locator("[data-justification]")).toHaveText(JUSTIFICATION);
     await expect(devPage.locator("[data-escalated]")).toHaveCount(0);
-    await expect(devPage.locator("[data-stepper] [data-substage='PROCUREMENT_ROUTE']")).toHaveCount(1);
+    await expect(await subStage(devPage, info, "PROCUREMENT_ROUTE")).toBeVisible();
     await checkScreen(devPage, { strict: true });
     await shot(devPage, info, "p28a-dev-chosen");
   } finally {
