@@ -21,9 +21,11 @@
   organisation's members only (never the developer, another organisation, a forged context or staff);
   ``app_nudge_candidates`` lists, to the job only, the engagements a nudge may be due for, each with a member to bind.
 - The team: niche defaults set by an owner or admin for a triage member only, read by members, cleared when the member
-  leaves or loses the roles; the escalation contact an active member, cleared when they leave or their account goes;
-  invitations listed, created (as the caller; an owner for a protected role), revoked and resent by the organisation's
-  admins only, one open per address, nothing else of them the app's, nothing of a closed one anybody's;
+  leaves or loses the roles; the escalation contact (a table of its own) an active member, read by the organisation's
+  members only (never a developer of its engagement), cleared when they leave or their account goes; invitations
+  listed, created (as the caller; an owner for a protected role), revoked and resent by the organisation's admins only,
+  one open per address, at least one role, expiring within 30 days of their creation (the shared clock's), nothing else
+  of them the app's, nothing of a closed one anybody's;
   ``app_accept_invitation`` (open, expired on the shared clock, revoked, accepted, unknown, another or unverified
   address, an active member, a removed one reactivated) and ``app_invitation_preview``; the last active owner is
   neither removed nor demoted by the organisation's writes, in one row, many, or two concurrent transactions (that test
@@ -318,6 +320,26 @@ async def test_3b_has_the_side_branches_of_stage_3(owner_engine: AsyncEngine) ->
         assert await t.state_of(conn, expired) == "EXPIRED"
 
 
+async def test_whether_an_organisation_is_a_public_entity_is_anyones_to_ask(owner_engine: AsyncEngine) -> None:
+    """``app_org_is_public_entity`` answers ``organizations.public_entity`` (public information) for any organisation,
+    whatever the caller reads: a developer bound session, which reads no delisted organisation's row, gets true for a
+    delisted public entity and false for a private one; an unknown organisation is NULL. The state machine asks it which
+    state an approve or an accept of interest enters (the reviews of P28-BE1)."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.run(
+            conn, "UPDATE organizations SET public_entity = true, delisted_at = now() WHERE id = :org", org=p.org
+        )
+        await t.act(conn, p.developer)
+        assert await t.run(conn, "SELECT count(*) FROM organizations WHERE id = :org", org=p.org) == 0  # unreadable
+        ask = "SELECT app_org_is_public_entity(:org)"
+        assert await t.run(conn, ask, org=p.org) is True
+        assert await t.run(conn, ask, org=p.other_org) is False
+        assert await t.run(conn, ask, org=uuid7()) is None
+        await t.act(conn, None)  # no user bound: the same answer
+        assert await t.run(conn, ask, org=p.org) is True
+
+
 # --- the decision ----------------------------------------------------------------------------------------------------
 
 
@@ -475,7 +497,7 @@ async def test_the_direct_route_needs_twenty_characters_of_justification(owner_e
 
 # --- the nudges ledger (REQ-NOT-05) ----------------------------------------------------------------------------------
 
-RECORD = "SELECT app_record_nudge(:e, :kind, :key)"
+RECORD = "SELECT app_record_nudge(:e, :kind, :key, CAST(:state AS engagement_state))"
 CANDIDATES = "SELECT engagement_id, org_id, developer_id, member_id FROM app_nudge_candidates()"
 NUDGES = "SELECT count(*) FROM engagement_nudges WHERE engagement_id = :e"
 JOB_ONLY = "the nudge job only, with no user bound"
@@ -496,10 +518,12 @@ async def test_a_nudge_is_recorded_once_and_only_by_the_job(owner_engine: AsyncE
     first call returns true and stores the engagement's organisation and the shared clock's time; the same kind and key
     return false and store nothing; another key or kind is a new nudge; a session bound to a user (a member, the
     developer) is refused; NULL arguments, an unknown kind, a key that is not a code and an unknown engagement are
-    refused; once the engagement has ended nothing is recorded (false)."""
+    refused; nothing is recorded (false) once the engagement has ended or when it is no longer in the state the job
+    decided the nudge in (a party's command committed between the job's read and the record)."""
     async with t.as_app(owner_engine) as conn:
         p, engagement = await private_scene(conn, "INTEREST_CONFIRMED")
-        nudge = {"e": engagement, "kind": "contact_escalation", "key": "bd:3"}
+        here = "INTEREST_CONFIRMED"
+        nudge = {"e": engagement, "kind": "contact_escalation", "key": "bd:3", "state": here}
         for user, org in ((p.owner, p.org), (p.developer, None)):
             await t.act(conn, user, org)
             await t.expect(conn, RECORD, JOB_ONLY, **nudge)
@@ -508,11 +532,14 @@ async def test_a_nudge_is_recorded_once_and_only_by_the_job(owner_engine: AsyncE
         assert await t.run(conn, RECORD, **nudge) is True
         after = await t.run(conn, "SELECT app_clock_now()")
         assert await t.run(conn, RECORD, **nudge) is False
-        assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:6") is True
-        assert await t.run(conn, RECORD, e=engagement, kind="contact_overdue", key="2026-12-01") is True
+        assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:6", state=here) is True
+        assert await t.run(conn, RECORD, e=engagement, kind="contact_overdue", key="2026-12-01", state=here) is True
+        for stale in ("NDA_PENDING", "CONTACT_MADE", "UNDER_REVIEW"):  # the job read another state: nothing recorded
+            assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:7", state=stale) is False
         for bad, refusal in (
-            ({"kind": None}, "name the engagement, the kind and the key"),
-            ({"key": None}, "name the engagement, the kind and the key"),
+            ({"kind": None}, "name the engagement, the kind, the key and the expected state"),
+            ({"key": None}, "name the engagement, the kind, the key and the expected state"),
+            ({"state": None}, "name the engagement, the kind, the key and the expected state"),
             ({"kind": "pester"}, "ck_engagement_nudges_kind_known"),
             ({"key": "Dear Amina"}, "ck_engagement_nudges_key_valid"),
             ({"key": "amina@example.test"}, "ck_engagement_nudges_key_valid"),
@@ -536,8 +563,16 @@ async def test_a_nudge_is_recorded_once_and_only_by_the_job(owner_engine: AsyncE
         await t.act(conn, q.owner, q.org)
         await t.append(conn, ended, q.owner, "owner", "decline", "UNDER_REVIEW", "DECLINED", reason="BUDGET")
         await t.act(conn, None)
-        assert await t.run(conn, RECORD, e=ended, kind="contact_escalation", key="bd:3") is False
+        for state in ("UNDER_REVIEW", "DECLINED"):  # ended: nothing, whatever state the job names
+            assert await t.run(conn, RECORD, e=ended, kind="contact_escalation", key="bd:3", state=state) is False
         assert await t.run(conn, NUDGES, e=ended) == 0
+
+        await t.as_owner(conn)  # the race: the job decided in INTEREST_CONFIRMED, first contact committed meanwhile
+        r, raced = await private_scene(conn, "INTEREST_CONFIRMED")
+        await t.walk(conn, r, raced, "CONTACT_MADE")
+        await t.act(conn, None)
+        assert await t.run(conn, RECORD, e=raced, kind="contact_escalation", key="bd:3", state=here) is False
+        assert await t.run(conn, NUDGES, e=raced) == 0
 
 
 async def test_the_ledger_is_append_only_and_the_organisations_alone(owner_engine: AsyncEngine) -> None:
@@ -548,7 +583,10 @@ async def test_the_ledger_is_append_only_and_the_organisations_alone(owner_engin
     async with t.as_app(owner_engine) as conn:
         p, engagement = await private_scene(conn, "INTEREST_CONFIRMED")
         await t.act(conn, None)
-        assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:3") is True
+        recorded = await t.run(
+            conn, RECORD, e=engagement, kind="contact_escalation", key="bd:3", state="INTEREST_CONFIRMED"
+        )
+        assert recorded is True
         for reader, org in ((p.reviewer, p.org), (p.viewer, p.org), (p.owner, None)):
             await t.act(conn, reader, org)
             assert await t.run(conn, NUDGES, e=engagement) == 1, reader
@@ -636,7 +674,11 @@ DEFAULT = (
 )
 DEFAULTS = "SELECT count(*) FROM org_niche_defaults WHERE org_id = :org"
 NOT_TRIAGE = "the default reviewer is an active owner, admin, reviewer or signatory"
-ESCALATION = "UPDATE organizations SET escalation_contact_user_id = :user WHERE id = :org"
+ESCALATION = (
+    "INSERT INTO org_escalation_contacts (org_id, user_id) VALUES (:org, :user)"
+    " ON CONFLICT (org_id) DO UPDATE SET user_id = EXCLUDED.user_id"
+)
+CONTACT = "SELECT user_id FROM org_escalation_contacts WHERE org_id = :org"
 NOT_A_MEMBER = "the escalation contact is an active member"
 INVITE = (
     "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at)"
@@ -768,32 +810,72 @@ async def test_niche_defaults_are_set_by_admins_for_triage_members(owner_engine:
         assert await t.rowcount(conn, "DELETE FROM org_niche_defaults WHERE org_id = :org", org=p.org) == 1
 
 
-async def test_the_escalation_contact_is_an_active_member_and_leaves_with_them(owner_engine: AsyncEngine) -> None:
-    """An owner or admin names an active member of the organisation as its escalation contact (not another
-    organisation's member, the developer or a removed member); a reviewer cannot; the contact is cleared when they
-    leave the organisation, and when their account is deleted."""
+async def test_the_escalation_contact_is_the_members_own_and_leaves_with_them(owner_engine: AsyncEngine) -> None:
+    """The security review's MINOR (P28-M): the escalation contact is a row of ``org_escalation_contacts``, not a column
+    of ``organizations`` (whose listed rows every signed-in user reads). An owner or admin names an active member, one
+    per organisation (an upsert; ``updated_at`` the database's), never another organisation's member, the developer, a
+    removed member or an unknown user; a reviewer writes none; the organisation's members read it (a viewer too) and
+    nobody else does: not another organisation's member, not the developer of an engagement with the organisation, not
+    a member under another organisation's context, not staff admin. The organisation never changes; the contact goes
+    when they leave the organisation and when their account is deleted."""
     async with t.as_app(owner_engine) as conn:
         p = await t.parties(conn)
-        await t.act(conn, p.owner, p.org)
-        await t.run(conn, ESCALATION, user=p.reviewer, org=p.org)
-        for refused in (p.other_member, p.developer, uuid7()):
-            await t.expect(conn, ESCALATION, NOT_A_MEMBER, user=refused, org=p.org)
+        assert (
+            await t.run(
+                conn,
+                "SELECT count(*) FROM information_schema.columns WHERE table_name = 'organizations'"
+                " AND column_name LIKE '%escalation%'",
+            )
+            == 0
+        )
+        removed = await add_member(conn, p, "{reviewer}")
+        await t.run(conn, "UPDATE memberships SET status = 'removed' WHERE user_id = :u", u=removed)
+        admin = await add_member(conn, p, "{admin}")
+        await t.act(conn, p.developer)
+        await t.engage(conn, p)  # the developer has an engagement with the organisation
+        await t.act(conn, admin, p.org)
+        before = await t.run(conn, "SELECT app_clock_now()")
+        await t.run(conn, ESCALATION, org=p.org, user=p.reviewer)
+        await t.run(conn, ESCALATION, org=p.org, user=p.signatory)  # one per organisation: the upsert replaces it
+        for refused in (p.other_member, p.developer, removed, uuid7()):
+            await t.expect(conn, ESCALATION, NOT_A_MEMBER, org=p.org, user=refused)
         await t.act(conn, p.reviewer, p.org)
-        assert await t.rowcount(conn, ESCALATION, user=p.viewer, org=p.org) == 0  # not an owner or admin
-        contact = "SELECT escalation_contact_user_id FROM organizations WHERE id = :org"
-        assert await t.run(conn, contact, org=p.org) == p.reviewer
+        await t.expect(conn, ESCALATION, RLS, org=p.org, user=p.viewer)
+        assert await t.rowcount(conn, "DELETE FROM org_escalation_contacts WHERE org_id = :org", org=p.org) == 0
+        for reader, org, seen in (
+            (p.viewer, p.org, p.signatory),
+            (p.reviewer, None, p.signatory),
+            (p.developer, None, None),
+            (p.developer, p.org, None),
+            (p.other_member, p.other_org, None),
+            (p.owner, p.other_org, None),
+            (p.staff, None, None),
+        ):
+            await t.act(conn, reader, org)
+            assert await t.run(conn, CONTACT, org=p.org) == seen, reader
+        await t.as_owner(conn)
+        assert (
+            await t.run(conn, "SELECT updated_at FROM org_escalation_contacts WHERE org_id = :org", org=p.org) >= before
+        )
+        await t.expect(
+            conn,
+            "UPDATE org_escalation_contacts SET org_id = :other WHERE org_id = :org",
+            "the organisation never changes",
+            other=p.other_org,
+            org=p.org,
+        )
         await t.act(conn, p.owner, p.org)
         await t.run(
             conn,
             "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u",
             org=p.org,
-            u=p.reviewer,
+            u=p.signatory,
         )
-        assert await t.run(conn, contact, org=p.org) is None
-        await t.run(conn, ESCALATION, user=p.viewer, org=p.org)
+        assert await t.run(conn, CONTACT, org=p.org) is None  # the leaver's seat went
+        await t.run(conn, ESCALATION, org=p.org, user=p.viewer)
         await t.as_owner(conn)
         await t.run(conn, "DELETE FROM users WHERE id = :u", u=p.viewer)
-        assert await t.run(conn, contact, org=p.org) is None
+        assert await t.run(conn, CONTACT, org=p.org) is None  # and a deleted account's
 
 
 async def test_invitations_are_the_admins_own_across_two_organisations(owner_engine: AsyncEngine) -> None:
@@ -857,6 +939,23 @@ async def test_invitations_are_the_admins_own_across_two_organisations(owner_eng
         assert await t.run(conn, "SELECT revoked_at FROM invitations WHERE id = :id", id=mine["id"]) >= before
         assert await t.rowcount(conn, revoke, id=mine["id"]) == 0  # open invitations only
         await t.run(conn, INVITE, **invitation(p.org, "newcomer@example.test", admin))  # the address is free again
+        await t.expect(
+            conn, INVITE, "ck_invitations_roles_not_empty", **invitation(p.org, "x@example.test", admin, "{}")
+        )
+        long_link = INVITE.replace("interval '7 days'", "interval '31 days'")
+        await t.expect(
+            conn, long_link, "ck_invitations_expires_within_30_days", **invitation(p.org, "y@example.test", admin)
+        )
+        await t.run(
+            conn, INVITE.replace("interval '7 days'", "interval '30 days'"), **invitation(p.org, "z@x.test", admin)
+        )
+        await t.expect(
+            conn,
+            "UPDATE invitations SET expires_at = created_at + interval '31 days'"
+            " WHERE org_id = :org AND email = 'z@x.test'",
+            "ck_invitations_expires_within_30_days",
+            org=p.org,
+        )
         await t.as_owner(conn)
         await t.expect(conn, revoke, "an accepted or revoked invitation never changes", id=mine["id"])
         await t.expect(
@@ -872,6 +971,15 @@ async def test_invitations_are_the_admins_own_across_two_organisations(owner_eng
             "an invitation is created open",
             **invitation(p.org, "late@example.test", admin),
         )
+        backdated = invitation(p.org, "backdated@example.test", admin)
+        await t.run(  # the creation time is the shared clock's, whatever is sent (the owner's own insert too)
+            conn,
+            "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at, created_at)"
+            " VALUES (:id, :org, :email, '{viewer}', :hash, :by, now() + interval '1 day', '2000-01-01')",
+            **backdated,
+        )
+        created = await t.run(conn, "SELECT created_at FROM invitations WHERE id = :id", id=backdated["id"])
+        assert created >= before
 
 
 async def test_an_invitation_is_accepted_once_by_its_address_while_open(owner_engine: AsyncEngine) -> None:
