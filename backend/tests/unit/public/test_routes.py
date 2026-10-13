@@ -58,21 +58,26 @@ class Scene:
     def __init__(self, monkeypatch: pytest.MonkeyPatch, *, allowed: bool = True) -> None:
         self.loads: list[tuple[str, dict[str, Any]]] = []
         self.throttled: list[dict[str, Any]] = []
+        self.frozen: list[datetime | None] = []  # the public demo's freeze each load was given (REQ-FND-04)
         self.allowed = allowed
 
         async def allow(_db: Any, _settings: Settings, **kwargs: Any) -> bool:
             self.throttled.append(kwargs)
             return self.allowed
 
-        async def activity(factory: Any, *, generated_at: datetime, demo: bool) -> ActivityFeed:
+        async def activity(
+            factory: Any, *, generated_at: datetime, demo: bool, frozen_at: datetime | None = None
+        ) -> ActivityFeed:
             self.loads.append(("activity", {"factory": factory, "generated_at": generated_at, "demo": demo}))
+            self.frozen.append(frozen_at)
             item = ActivityItem(
                 id="abc", kind="problem_posted", at=AT, county=None, niche=None, title="T", stage=None, seeded=demo
             )
             return feed.activity_feed([item], generated_at)
 
-        async def explore(factory: Any, *, demo: bool) -> Explore:
+        async def explore(factory: Any, *, demo: bool, frozen_at: datetime | None = None) -> Explore:
             self.loads.append(("explore", {"factory": factory, "demo": demo}))
+            self.frozen.append(frozen_at)
             return EXPLORE
 
         monkeypatch.setattr(verify, "allow", allow)

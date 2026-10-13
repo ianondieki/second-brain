@@ -41,6 +41,7 @@ from bridge.directory.models import Niche
 from bridge.directory.service import niche_label
 from bridge.errors import ERROR_RESPONSES, ApiError, not_found
 from bridge.models.enums import AuditActor, StaffRole
+from bridge.public_demo import LOCKED
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], responses=ERROR_RESPONSES)
 
@@ -126,7 +127,7 @@ def niche_refusal(exc: DBAPIError) -> ApiError | None:
     return None if refusal is None else ApiError(*refusal)
 
 
-@router.post("/niches", status_code=201)
+@router.post("/niches", status_code=201, dependencies=[LOCKED])  # read-only staff in the public demo
 async def admin_add_niche(body: NicheCreate, staff: StaffAdmin, db: Db) -> AdminNicheOut:
     try:
         niche_id: UUID = (await db.execute(_ADD_NICHE, body.model_dump())).scalar_one()
@@ -166,7 +167,7 @@ async def moderation_case(case_id: UUID, staff: StaffModerator, db: Db) -> moder
     return found
 
 
-@router.post("/moderation/cases/{case_id}/decision")
+@router.post("/moderation/cases/{case_id}/decision", dependencies=[LOCKED])  # read-only staff in the public demo
 async def decide_case(
     case_id: UUID, body: moderation.DecisionIn, staff: StaffModerator, db: Db
 ) -> moderation.DecisionOut:
