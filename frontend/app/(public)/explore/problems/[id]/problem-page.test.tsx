@@ -121,3 +121,19 @@ describe("the public problem page in the public demo", () => {
     expect(off.container.querySelector('a[href^="/login?"]')).not.toBeNull();
   });
 });
+
+// REQ-FND-04: signed-out public pages are frozen at the seed in the public demo, so a problem a visitor posted later
+// answers 404 to signed-out readers. The page needs nothing of its own for it: the normal not-found screen.
+describe("a problem posted after the seed, in the public demo", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is the normal not-found, as with the mode off", async () => {
+    for (const mode of ["true", "false"]) {
+      vi.stubEnv("PUBLIC_DEMO", mode);
+      notFound.mockClear();
+      read.mockResolvedValue({ kind: "notFound" });
+      await expect(PublicProblemPage(params())).rejects.toThrow("NEXT_NOT_FOUND");
+      expect(notFound).toHaveBeenCalledTimes(1);
+    }
+  });
+});
