@@ -213,3 +213,26 @@ async def test_the_escalation_contact_is_an_active_member_or_nobody(
     assert await rows(owner_engine, "SELECT 1 FROM org_escalation_contacts WHERE org_id = :o", o=world.org) == []
     payloads = [e.payload for e in await audit_actions(owner_engine, world.org, "org.escalation_contact_set")]
     assert payloads == [{"user_id": str(world.finance)}, {"user_id": None}]
+
+
+async def test_a_retired_niche_s_default_is_neither_shown_nor_kept(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The review's MINOR: a niche staff retire leaves the team read; it cannot be chosen (422 unknown_niche) and the
+    next PUT of the set drops its row."""
+    world = await build(owner_engine)
+    niche, slug = await niche_of(owner_engine, world)
+    path = f"/api/orgs/{world.org}/niche-defaults"
+    async with clients(app_engine, SETTINGS, world.owner) as (owner,):
+        body = {"items": [{"niche_slug": slug, "user_id": str(world.reviewer)}]}
+        assert (await owner.put(path, json=body)).status_code == 200
+        async with owner_engine.begin() as conn:
+            await conn.execute(text("UPDATE niches SET active = false WHERE id = :n"), {"n": niche})
+        try:
+            assert (await owner.get(f"/api/orgs/{world.org}/team")).json()["niche_defaults"] == []
+            assert code(await owner.put(path, json=body)) == (422, "unknown_niche")
+            assert (await owner.put(path, json={"items": []})).json() == []
+        finally:
+            async with owner_engine.begin() as conn:
+                await conn.execute(text("UPDATE niches SET active = true WHERE id = :n"), {"n": niche})
+    assert await rows(owner_engine, "SELECT 1 FROM org_niche_defaults WHERE org_id = :o", o=world.org) == []
