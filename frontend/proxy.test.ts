@@ -224,6 +224,15 @@ describe("the public demo (REQ-FND-04, AT-PD-6)", () => {
     expect(getRewrittenUrl(response)).toBeNull();
   });
 
+  it("answers the picker's own address as an unknown one while off, and lets it through while on", async () => {
+    const off = await proxy(request(`${DEMO_LOGIN_PATH}?next=%2Fdev`));
+    expect(getRewrittenUrl(off)).toBe(`http://localhost:3000${UNMATCHED_PATH}`);
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    const on = await proxy(request(DEMO_LOGIN_PATH));
+    expect(passesOn(on)).toBe(true);
+    expect(getRewrittenUrl(on)).toBeNull();
+  });
+
   it("leaves /robots.txt to Next as before while off (today's 404)", async () => {
     const response = await proxy(request("/robots.txt"));
     expect(passesOn(response)).toBe(true);

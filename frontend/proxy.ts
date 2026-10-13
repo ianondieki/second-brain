@@ -28,7 +28,7 @@ import { loginHref, SIGNED_IN_PREFIXES } from "@/lib/return-path";
 //    API (which sends its own header) are left out.
 //    While it is on, /login is also served from the persona picker's own route (DEMO_LOGIN_PATH), the address unchanged:
 //    one page would put the picker's code into every visitor's download of /login, and the email form's into every
-//    demo visitor's (AC-UX-3). The route itself answers 404 while the mode is off.
+//    demo visitor's (AC-UX-3). While the mode is off, that route is rewritten to the unmatched address (job 2's 404).
 
 const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 
@@ -75,7 +75,9 @@ async function route(request: NextRequest, demo: boolean): Promise<NextResponse>
     if (!demo) return NextResponse.next();
     return new NextResponse(DISALLOW_ALL_ROBOTS, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
-  if (demo && pathname === "/login") return NextResponse.rewrite(new URL(`${DEMO_LOGIN_PATH}${search}`, request.url));
+  if (pathname === "/login" && demo) return NextResponse.rewrite(new URL(`${DEMO_LOGIN_PATH}${search}`, request.url));
+  // With the mode off the picker's route is not there: the very 404 an unknown address gets (as the console's gate).
+  if (pathname === DEMO_LOGIN_PATH && !demo) return NextResponse.rewrite(new URL(UNMATCHED_PATH, request.url));
   const signedIn = isSignedInPath(pathname);
   if (!signedIn && !isAdminPath(pathname)) return NextResponse.next();
   const cookie = sessionCookieHeader(
