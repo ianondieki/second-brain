@@ -9,8 +9,9 @@
 - AT-PD-3: an unknown persona, an account that is no longer a demo account or no longer active, and a key outside the
   allowlist are 400 ``unknown_persona``; a body naming an email is refused (422) and signs nobody in; 30 attempts a
   minute per IP, then 429.
-- AT-PD-4: a persona's password change, second-factor change, role change, uploads (proposal attachment, message
-  attachment, the file check) and the clock's move are 403 ``public_demo_locked`` and change nothing.
+- AT-PD-4: a persona's password change, second-factor change, role change, uploads that keep a file (proposal and
+  message attachments) and the clock's move are 403 ``public_demo_locked`` and change nothing; the certificate file
+  check, which stores nothing, stays open.
 - AT-PD-5: ``fictional`` leaves out every ``ke_provisional`` organisation and every research card citing a news
   excerpt; ``full`` restores both.
 
@@ -347,7 +348,6 @@ async def test_a_persona_cannot_change_credentials_roles_files_or_the_clock(
                 content=b"%PDF-1.4 demo",
                 headers={"Content-Type": "application/pdf", "X-File-Name": "a.pdf"},
             ),
-            await amina.post("/api/verify", content=b"any file", headers={"Content-Type": "application/octet-stream"}),
             await amina.post("/api/test-clock/advance", json={"days": 30}),
             await grace.put(f"/api/orgs/{telco}/members/{peter}/roles", json={"roles": ["viewer"]}),
         ]
@@ -356,6 +356,10 @@ async def test_a_persona_cannot_change_credentials_roles_files_or_the_clock(
             assert response.json() == {"detail": LOCKED}
             assert response.headers["x-robots-tag"] == "noindex, nofollow"
         assert (await amina.get("/api/test-clock")).status_code == 200  # reading the clock stays open
+        binary = {"Content-Type": "application/octet-stream"}
+        checked = await amina.post("/api/verify", content=b"any file", headers=binary)
+        assert checked.status_code == 200, checked.text  # the file check hashes the body and keeps nothing: open
+        assert checked.json()["match"] is False
     assert await rows(owner, "SELECT id, password_hash, totp_enabled_at FROM users ORDER BY id") == before
     assert await rows(owner, "SELECT id, roles FROM memberships ORDER BY id") == roles_before
     assert await scalar(owner, "SELECT clock_offset FROM test_clock") == clock_before

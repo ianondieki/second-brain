@@ -13,9 +13,10 @@ the deployment a public demo that anyone may open:
   route that would let one visitor lock the others out of a shared persona or put a file on the server: sign-up,
   magic-link and verification requests (no link could be read; spending one stays open), password changes, two-step
   sign-in (enrol, cancel, confirm, recovery codes, disable), OAuth (start, callback, unlinking), organisation role
-  changes, every upload (proposal and message attachments, the file check of ``/api/verify``) and the dev/test clock's
-  move. The password sign-in, the second step and sign-out stay open. ``tests/unit/test_public_demo_lock.py`` walks
-  the app's routes and fails when a route that takes a file is not locked.
+  changes, every upload that keeps a file (proposal and message attachments) and the dev/test clock's move. The
+  password sign-in, the second step and sign-out stay open, and so does the certificate file check (``POST
+  /api/verify``: it hashes the body and stores nothing). ``tests/unit/test_public_demo_lock.py`` walks the app's routes
+  and fails when a route that takes a file is neither locked nor that named exception.
 - **Not indexed.** Every API answer carries ``X-Robots-Tag: noindex, nofollow`` (``ROBOTS_HEADERS``, ``bridge.main``).
 - **Fictional content.** With ``PUBLIC_DEMO_CONTENT=fictional`` (the default) the seed loads only fictional
   organisations and official-source research excerpts (``fictional_only``; ``bridge.seed.directory`` and

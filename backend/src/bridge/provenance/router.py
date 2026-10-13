@@ -41,7 +41,6 @@ from bridge.models.enums import ProvenanceStatus
 from bridge.provenance import verify
 from bridge.provenance.certificate import load_certificate, render_pdf
 from bridge.provenance.service import status_label
-from bridge.public_demo import LOCKED
 
 router = APIRouter(tags=["provenance"], responses=ERROR_RESPONSES)
 
@@ -169,7 +168,6 @@ async def timestamp_token(cert_id: CertId, request: Request, db: Db, settings: S
 @router.post(
     "/api/verify",
     responses={413: {"model": ApiErrorBody, "description": "Larger than 10 MB"}},
-    dependencies=[LOCKED],  # no uploads in the public demo (REQ-FND-04); the lookup by certificate id stays
     openapi_extra={
         "requestBody": {
             "required": True,

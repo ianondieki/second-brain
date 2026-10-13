@@ -1,10 +1,13 @@
 """REQ-FND-04 (P28 track PD, AT-PD-4): the public demo's lock, walked over the app's own routes.
 
-Every route that takes a file (a multipart form, ``UploadFile``, ``File``/``Form`` parameters, or a raw body declared as
-binary in its OpenAPI request body) carries ``refuse_in_public_demo``, so a future upload route cannot ship unlocked;
-a module that reads a raw request body must expose that route as a declared upload, or the walk would miss it. The
-locked routes are exactly the register below (the card's list: credentials, sign-in methods, role changes, uploads,
-the clock), and each answers 403 ``public_demo_locked`` while the mode is on, before any session, body or database.
+The rule: every route that takes a file (a multipart form, ``UploadFile``, ``File``/``Form`` parameters, or a raw body
+declared as binary in its OpenAPI request body) keeps it, and so carries ``refuse_in_public_demo``, unless it is one
+of the named exceptions in ``STORES_NOTHING`` (today only the certificate file check, ``POST /api/verify``, which
+hashes the body and stores nothing; the orchestrator's decision). A future upload route cannot ship unlocked, and a
+module that reads a raw request body must expose that route as a declared upload, or the walk would miss it. The
+locked routes are exactly the register below (the card's list: credentials, sign-in methods, role changes, uploads
+that keep a file, the clock), and each answers 403 ``public_demo_locked`` while the mode is on, before any session,
+body or database.
 A new state-changing account or membership route (sign-in methods, an address, a password, a second factor, members,
 an export or a deletion) fails the walk until it is locked or reviewed as open.
 """
@@ -48,10 +51,14 @@ LOCKED_ROUTES = frozenset(
         ("PUT", "/api/orgs/{org_id}/members/{user_id}/roles"),
         ("POST", "/api/me/proposals/{proposal_id}/attachments"),
         ("POST", "/api/engagements/{engagement_id}/messages/attachments"),
-        ("POST", "/api/verify"),
         ("POST", "/api/test-clock/advance"),
     }
 )
+# Routes that take a file but keep nothing, so they stay open in the public demo, each with its reason. Add one only
+# when the route provably stores no part of the body (no object store, no row, no log of its content).
+STORES_NOTHING = {
+    ("POST", "/api/verify"): "the certificate file check hashes the body in memory and stores nothing",
+}
 UPLOADS = frozenset(
     {
         ("POST", "/api/me/proposals/{proposal_id}/attachments"),
@@ -112,11 +119,13 @@ def app() -> FastAPI:
     return create_app(public_settings())
 
 
-def test_every_route_that_takes_a_file_is_locked(app: FastAPI) -> None:
+def test_every_route_that_takes_a_file_is_locked_unless_it_stores_nothing(app: FastAPI) -> None:
     uploads = {k for route in contexts(app) if takes_a_file(route) for k in key(route)}
     assert uploads == UPLOADS  # the walk finds the known uploads (and would find a new one)
-    unlocked = sorted(k for route in contexts(app) if takes_a_file(route) and not is_locked(route) for k in key(route))
-    assert not unlocked, f"upload routes without bridge.public_demo.LOCKED: {unlocked}"
+    unlocked = {k for route in contexts(app) if takes_a_file(route) and not is_locked(route) for k in key(route)}
+    stray = sorted(unlocked - set(STORES_NOTHING))
+    assert not stray, f"upload routes without bridge.public_demo.LOCKED: {stray}"
+    assert unlocked == set(STORES_NOTHING)  # each named exception is a real, open upload route
 
 
 def test_every_module_that_reads_a_raw_body_declares_its_upload(app: FastAPI) -> None:
