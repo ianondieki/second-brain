@@ -99,3 +99,25 @@ describe("the public problem page", () => {
     expect(await generateMetadata(params())).toEqual({});
   });
 });
+
+// REQ-FND-04: in the public demo the one action goes to /login's persona picker, and the log-in line (the same place)
+// is left out; sign-up is switched off there.
+describe("the public problem page in the public demo", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("calls \"Try the demo\" to /login with no sign-up or second log-in link; as before with the mode off", async () => {
+    read.mockResolvedValue({ kind: "found", problem: PROBLEM });
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    const { container } = await page();
+    const primary = container.querySelector<HTMLAnchorElement>("a[data-primary]")!;
+    expect(primary.getAttribute("href")).toBe("/login");
+    expect(primary.textContent).toBe(en.publicDemo.tryDemo);
+    expect(container.querySelector('a[href="/signup"]')).toBeNull();
+    expect(container.querySelector('a[href^="/login?"]')).toBeNull();
+    cleanup();
+    vi.stubEnv("PUBLIC_DEMO", "false");
+    const off = await page();
+    expect(off.container.querySelector("a[data-primary]")!.getAttribute("href")).toBe("/signup");
+    expect(off.container.querySelector('a[href^="/login?"]')).not.toBeNull();
+  });
+});
