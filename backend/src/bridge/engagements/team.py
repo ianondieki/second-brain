@@ -589,6 +589,18 @@ async def assign_niche_default(
     return DefaultAssigned(engagement.id, assignment_id, assignee, title, tell=assignee != (opener or actor))
 
 
+async def assign_niche_default_safely(db: AsyncSession, org_id: UUID, engagement_id: UUID) -> DefaultAssigned | None:
+    """``assign_niche_default`` in a savepoint that any error rolls back, logged: the rule never undoes the action that
+    opened the engagement (a signatory's interest, committed by the caller afterwards)."""
+    try:
+        async with db.begin_nested():
+            return await assign_niche_default(db, org_id, engagement_id)
+    except Exception as exc:
+        failed = type(exc).__name__
+        log.error("engagement.niche_default_failed", engagement_id=str(engagement_id), error_type=failed)
+        return None
+
+
 async def tell_default_assignee(
     factory: async_sessionmaker[AsyncSession], org_id: UUID, assigned: DefaultAssigned | None
 ) -> bool:
