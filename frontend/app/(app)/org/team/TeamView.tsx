@@ -27,6 +27,7 @@ import {
   sortRoles,
   splitRoles,
   type OpenInvitation,
+  type Paywall,
   type OrgRole,
   type OrgTeam,
   type TeamMember,
@@ -40,8 +41,8 @@ export interface TeamViewProps {
   me: { userId: string; roles: readonly string[]; enrolled: boolean };
   /** The organisation's niches, as its directory card lists them. */
   niches: readonly { slug: string; label: string }[];
-  /** The organisation plans' names by code (the seats paywall's "Upgrade to {plan}"); empty when unread. */
-  planNames?: Readonly<Record<string, string>>;
+  /** The seats paywall's links (team.ts Paywall). */
+  paywall?: Paywall;
   /**
    * The public demo is on: invitations, removals and role changes are switched off (the API refuses them), so those
    * controls are one calm line instead; the niche defaults and the escalation contact stay open.
@@ -55,7 +56,7 @@ export interface TeamViewProps {
  * member reads all of it; only owners and admins get the controls (role changes are an owner's alone), each a small
  * client island of its own. In the public demo every control is the calm "switched off" line instead.
  */
-export async function TeamView({ team, orgId, orgName, me, niches, planNames = {}, demo }: TeamViewProps) {
+export async function TeamView({ team, orgId, orgName, me, niches, paywall, demo }: TeamViewProps) {
   const [t, ta, locale] = await Promise.all([getTranslations("orgTeam"), getTranslations("teamAdmin"), getLocale()]);
   const manager = manages(me.roles);
   // Membership changes (invite, remove, roles) are switched off in the public demo; the settings below them are not.
@@ -126,7 +127,7 @@ export async function TeamView({ team, orgId, orgName, me, niches, planNames = {
                 orgId={orgId}
                 roles={grantableRoles(me.roles)}
                 enrolled={me.enrolled}
-                planNames={planNames}
+                paywall={paywall}
               />
             </div>
           )}
@@ -149,7 +150,7 @@ export async function TeamView({ team, orgId, orgName, me, niches, planNames = {
                             invitationId={invitation.id}
                             email={invitation.email}
                             enrolled={me.enrolled}
-                            planNames={planNames}
+                            paywall={paywall}
                           />
                         ) : null
                       }

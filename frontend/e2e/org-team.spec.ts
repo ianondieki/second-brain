@@ -142,10 +142,18 @@ test("an invitation link joins the invited address, says nothing of it to anyone
       await expect(anonPage.getByText("Telco A (fixture) invited you to join as reviewer.")).toBeVisible();
       await expect(anonPage.getByRole("link", { name: "Sign in to accept" })).toHaveAttribute(
         "href",
-        `/login?next=${encodeURIComponent(link!)}`,
+        `/login?next=${encodeURIComponent(`/org/join/${link!.slice("/invitations/".length)}`)}`,
       );
       await checkScreen(anonPage, { strict: true });
       await shot(anonPage, info, "invitation-signed-out");
+      // Signing in from here comes back to the invitation (through /org/join), where Accept now is.
+      await anonPage.getByRole("link", { name: "Sign in to accept" }).click();
+      await anonPage.locator('form[data-hydrated="true"]').first().waitFor(STEP);
+      await anonPage.getByLabel("Email address").fill(address);
+      await anonPage.getByLabel("Password", { exact: true }).fill("accent season in nairobi");
+      await anonPage.getByRole("button", { name: "Log in", exact: true }).click();
+      await expect(anonPage).toHaveURL(new RegExp(`${link!}$`), STEP);
+      await expect(anonPage.getByRole("button", { name: "Accept and join" })).toBeVisible();
     } finally {
       await anon.close();
     }

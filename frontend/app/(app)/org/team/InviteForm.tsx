@@ -10,7 +10,7 @@ import { Form, SubmitButton } from "@/components/ui/Form";
 import { TextField } from "@/components/ui/TextField";
 
 import { teamCalls, type TeamCalls } from "./calls";
-import type { OrgRole } from "./team";
+import type { OrgRole, Paywall } from "./team";
 import { useTeamWrite } from "./useTeamWrite";
 
 /** Light checks only (the API is the judge): something before and after one "@", no spaces. */
@@ -28,21 +28,21 @@ export function InviteForm({
   orgId,
   roles,
   enrolled,
-  planNames = {},
+  paywall,
   calls,
 }: {
   orgId: string;
   /** The roles this person may give, most powerful first (team.ts grantableRoles). */
   roles: readonly OrgRole[];
   enrolled: boolean;
-  /** The organisation plans' names by code, for the seats paywall's "Upgrade to {plan}" (402 plan_limit). */
-  planNames?: Readonly<Record<string, string>>;
+  /** The seats paywall's links (402 plan_limit), built on the server. */
+  paywall?: Paywall;
   calls?: TeamCalls;
 }) {
   const t = useStrings("teamAdmin");
   const id = useId();
   const api = calls ?? teamCalls(orgId);
-  const write = useTeamWrite({ enrolled, primary: true, paywall: { orgId, names: planNames } });
+  const write = useTeamWrite({ enrolled, primary: true, paywall });
   const [email, setEmail] = useState("");
   const [chosen, setChosen] = useState<ReadonlySet<OrgRole>>(new Set());
   const [errors, setErrors] = useState<{ email?: string; roles?: string }>({});

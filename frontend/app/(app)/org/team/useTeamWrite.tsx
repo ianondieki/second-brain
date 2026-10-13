@@ -6,9 +6,9 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "rea
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
-import { billingHref, upgradeHref } from "@/lib/billing/upgrade";
 
 import type { TeamOutcome, TeamRefusal } from "./calls";
+import type { Paywall } from "./team";
 
 // The fresh-code form (the tracker's StepUp, with its code field) is a chunk of its own, fetched only when the API asks
 // for it: the page's first load stays under the 150 KB budget (docs/spec/07 item 5).
@@ -65,11 +65,8 @@ export function useTeamWrite({
 }: {
   enrolled: boolean;
   primary?: boolean;
-  /**
-   * Where a 402 plan_limit (the plan's seats) leads: the organisation's checkout for the plan the API names, called by
-   * its name from the plan ladder (`names`, code → name), or Plan & billing when the name is not known.
-   */
-  paywall?: { orgId: string; names: Readonly<Record<string, string>> };
+  /** Where a 402 plan_limit (the plan's seats) leads (team.ts Paywall, built on the server). */
+  paywall?: Paywall;
 }): TeamWrite {
   const t = useStrings("teamAdmin");
   const router = useRouter();
@@ -118,7 +115,8 @@ export function useTeamWrite({
     if (STALE.has(outcome.refusal)) router.refresh();
   }
 
-  const plan = refused?.upgrade ? paywall?.names[refused.upgrade] : undefined;
+  const offer = refused?.upgrade ? paywall?.plans[refused.upgrade] : undefined;
+  const plan = offer?.name;
   const problem = refused ? (
     <Alert ref={notice} className="w-full">
       <p data-refusal={refused.refusal}>
@@ -127,13 +125,9 @@ export function useTeamWrite({
           : t(`refusal.${refused.refusal}`, { limit: refused.limit ?? 20 })}
       </p>
       {refused.refusal === "plan_limit" && paywall ? (
-        // The link is built from the plan's code alone (lib/billing/upgrade.ts), never from a URL in the answer.
+        // The page's own links (built on the server from the plan codes), never a URL from the answer.
         <a
-          href={
-            refused.upgrade
-              ? upgradeHref(refused.upgrade, { org: paywall.orgId, next: `/org/team?org=${paywall.orgId}` })
-              : billingHref(paywall.orgId)
-          }
+          href={offer?.href ?? paywall.billing}
           className={standaloneLinkClass}
           data-upgrade={refused.upgrade ?? ""}
         >

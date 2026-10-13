@@ -7,6 +7,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 
 import { teamCalls, type TeamCalls } from "./calls";
+import type { Paywall } from "./team";
 import { useTeamWrite } from "./useTeamWrite";
 
 /**
@@ -19,7 +20,7 @@ export function InvitationActions({
   invitationId,
   email,
   enrolled,
-  planNames = {},
+  paywall,
   calls,
 }: {
   orgId: string;
@@ -27,12 +28,12 @@ export function InvitationActions({
   email: string;
   enrolled: boolean;
   /** As InviteForm's: a resend refused for the plan's seats names the plan with more. */
-  planNames?: Readonly<Record<string, string>>;
+  paywall?: Paywall;
   calls?: TeamCalls;
 }) {
   const t = useStrings("teamAdmin");
   const api = calls ?? teamCalls(orgId);
-  const write = useTeamWrite({ enrolled, paywall: { orgId, names: planNames } });
+  const write = useTeamWrite({ enrolled, paywall });
   const [doing, setDoing] = useState<"resend" | "revoke" | null>(null);
   const [resent, setResent] = useState(false);
   const done = useRef<HTMLDivElement>(null);

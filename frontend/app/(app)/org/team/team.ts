@@ -114,5 +114,15 @@ export function nicheDefaultsBody(choices: Readonly<Record<string, string>>): {
   };
 }
 
+/**
+ * Where the seats paywall (402 plan_limit) leads, built on the server so the page's script carries no checkout code:
+ * each organisation plan's name and checkout link by its code (lib/billing/upgrade.ts upgradeHref), and Plan & billing
+ * for a plan not in the table.
+ */
+export interface Paywall {
+  plans: Readonly<Record<string, { name: string; href: string }>>;
+  billing: string;
+}
+
 /** The organisation pages' "?org=" links for the Team page. */
 export const TEAM_PATH = "/org/team";

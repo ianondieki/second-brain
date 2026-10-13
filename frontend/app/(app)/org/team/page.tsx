@@ -10,13 +10,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { clientStrings, pickedStrings } from "@/lib/i18n/client-strings";
+import { billingHref, upgradeHref } from "@/lib/billing/upgrade";
 import { publicDemoOn } from "@/lib/public-demo";
 
 import { orgContext } from "../data";
 import { OrgRefusal } from "../OrgRefusal";
 import { OrgPicker } from "../OrgPicker";
 import { getVerification, readOrgPlans } from "../scout-data";
-import { TEAM_PATH } from "./team";
+import { TEAM_PATH, type Paywall } from "./team";
 import { getOrgNiches, getTeam } from "./team-data";
 import { TeamView } from "./TeamView";
 
@@ -35,14 +36,24 @@ async function verificationOf(orgId: string) {
   }
 }
 
-/** The organisation plans' names by code (the seats paywall names the plan with more), or {} when unread. */
-async function planNames(): Promise<Record<string, string>> {
+/**
+ * The seats paywall's links (402 plan_limit): each organisation plan's name and checkout, coming back to this page, and
+ * Plan & billing for anything else (or when the plans cannot be read).
+ */
+async function paywallFor(orgId: string): Promise<Paywall> {
+  const back = `${TEAM_PATH}?org=${orgId}`;
+  let plans: { code: string; name: string }[] = [];
   try {
-    return Object.fromEntries(((await readOrgPlans()) ?? []).map((plan) => [plan.code, plan.name]));
+    plans = (await readOrgPlans()) ?? [];
   } catch (error) {
     unstable_rethrow(error);
-    return {};
   }
+  return {
+    plans: Object.fromEntries(
+      plans.map((plan) => [plan.code, { name: plan.name, href: upgradeHref(plan.code, { org: orgId, next: back }) }]),
+    ),
+    billing: billingHref(orgId),
+  };
 }
 
 /**
@@ -70,11 +81,11 @@ export default async function OrganisationTeamPage({ searchParams }: PageProps<"
         />
       );
   } else {
-    const [read, niches, level, names] = await Promise.all([
+    const [read, niches, level, paywall] = await Promise.all([
       getTeam(org.org_id),
       getOrgNiches(org.org_id),
       verificationOf(org.org_id),
-      planNames(),
+      paywallFor(org.org_id),
     ]);
     verification = level;
     if (read.kind === "refused") {
@@ -99,7 +110,7 @@ export default async function OrganisationTeamPage({ searchParams }: PageProps<"
             orgName={org.org_name}
             me={{ userId: me.user.id, roles: org.roles, enrolled: me.mfa.enrolled }}
             niches={niches}
-            planNames={names}
+            paywall={paywall}
             demo={publicDemoOn()}
           />
         </ClientStrings>

@@ -1,6 +1,5 @@
 import { api, type ApiClient } from "@/lib/api/client";
-import { apiErrorCode, detailOf } from "@/lib/api/error-code";
-import { upgradePlanOf } from "@/lib/billing/upgrade";
+import { apiErrorCode, detailOf, isRecord } from "@/lib/api/error-code";
 
 import type { OrgRole } from "./team";
 
@@ -82,7 +81,9 @@ async function settle<T>(
     const { data, error, response } = await call;
     if (response.ok) return { ok: true, value: data ?? null };
     const limit = detailOf(error)?.limit;
-    const upgrade = response.status === 402 ? upgradePlanOf(error) : null;
+    // The plan the API names, as a key only: the page links to it from its own table of plans, never from the answer.
+    const named = response.status === 402 ? detailOf(error)?.upgrade : undefined;
+    const upgrade = isRecord(named) && typeof named.plan === "string" ? named.plan : null;
     return {
       ok: false,
       refusal: teamRefusal(response.status, error),
