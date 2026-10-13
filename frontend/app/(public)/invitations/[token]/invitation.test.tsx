@@ -22,7 +22,17 @@ const mocks = vi.hoisted(() => ({
   demo: false,
   push: vi.fn(),
   accept: vi.fn(),
+  logout: vi.fn(),
+  forgetOffline: vi.fn(),
+  forgetEmail: vi.fn(),
+  forgetRecent: vi.fn(),
 }));
+
+// The app's one sign-out (lib/auth/sign-out): its parts, to see what it clears and in which case.
+vi.mock("@/lib/api/csrf", () => ({ withCsrf: () => mocks.logout }));
+vi.mock("@/components/offline/clear", () => ({ forgetOffline: mocks.forgetOffline }));
+vi.mock("@/lib/auth/remembered-email", () => ({ forgetEmail: mocks.forgetEmail }));
+vi.mock("@/components/palette/remember", () => ({ forgetRecent: mocks.forgetRecent }));
 
 // The Accept island's own client (the page renders it with the app's `api`).
 vi.mock("@/lib/api/client", () => ({ api: { POST: mocks.accept } }));
@@ -233,15 +243,41 @@ describe("Accept and join", () => {
     expect(post).toHaveBeenCalledWith("/api/invitations/{token}/accept", { params: { path: { token: TOKEN } } });
   });
 
-  it("offers to sign out and use another address after a mismatch, coming back to the invitation", async () => {
-    const { api, post } = client({ status: 403, error: { detail: { code: "invitation_email_mismatch", message: "x" } } });
+  it("signs out the app's way after a mismatch (offline copies first) and comes back to the invitation", async () => {
+    const order: string[] = [];
+    mocks.forgetOffline.mockImplementation(async () => void order.push("offline"));
+    mocks.logout.mockImplementation(async () => {
+      order.push("logout");
+      return new Response(null, { status: 204 });
+    });
+    const { api } = client({ status: 403, error: { detail: { code: "invitation_email_mismatch", message: "x" } } });
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });
     renderAccept(api);
     fireEvent.click(screen.getByRole("button", { name: "Accept and join" }));
     fireEvent.click(await screen.findByRole("button", { name: "Sign out and use another address" }));
     await waitFor(() => expect(assign).toHaveBeenCalledWith(`/invitations/${TOKEN}`));
-    expect(post).toHaveBeenLastCalledWith("/api/auth/logout");
+    expect(order).toEqual(["offline", "logout"]);
+    expect(mocks.logout).toHaveBeenCalledWith("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+    expect(mocks.forgetEmail).toHaveBeenCalled();
+    expect(mocks.forgetRecent).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("stays on the page with the may-still-be-signed-in line when sign-out is refused", async () => {
+    mocks.forgetOffline.mockResolvedValue(undefined);
+    mocks.forgetEmail.mockReset();
+    mocks.logout.mockResolvedValue(new Response(null, { status: 403 }));
+    const { api } = client({ status: 403, error: { detail: { code: "invitation_email_mismatch", message: "x" } } });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    renderAccept(api);
+    fireEvent.click(screen.getByRole("button", { name: "Accept and join" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out and use another address" }));
+    expect(await screen.findByText(en.invitationAccept.signOutFailed)).toBeTruthy();
+    expect(mocks.forgetOffline).toHaveBeenCalled(); // this device's copies go whatever the API answers
+    expect(mocks.forgetEmail).not.toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 

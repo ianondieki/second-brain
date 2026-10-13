@@ -8,6 +8,7 @@ import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode } from "@/lib/api/error-code";
+import { endSession } from "@/lib/auth/sign-out";
 import { retryAfterSeconds, retryWhen } from "@/lib/retry-after";
 
 
@@ -75,6 +76,7 @@ export function AcceptInvitation({
   const tr = useStrings("retryAfter");
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [retryAfter, setRetryAfter] = useState<number | null>(null);
+  const [switchFailed, setSwitchFailed] = useState(false);
   const notice = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -104,14 +106,17 @@ export function AcceptInvitation({
   async function switchAccount() {
     if (busy) return;
     setBusy(true);
-    try {
-      await client.POST("/api/auth/logout");
-    } catch {
-      // Signed out or not, the page read again shows where things stand.
+    setSwitchFailed(false);
+    // The app's one sign-out (offline copies, the session, the remembered address and recent pages).
+    if (await endSession()) {
+      // A full load after signing out, as the account menu's fallback sign-out does: nothing of the old session stays.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign(`/invitations/${token}`);
+      return;
     }
-    // A full load after signing out, as the account menu's sign-out does: nothing of the old session stays rendered.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign(`/invitations/${token}`);
+    // Not signed out (refused or offline): stay here and say so.
+    setBusy(false);
+    setSwitchFailed(true);
   }
 
   return (
@@ -131,9 +136,19 @@ export function AcceptInvitation({
           ) : refusal === "mismatch" ? (
             // Another address than the invitation's: sign out, then this page again (signed out, its sign-in and
             // sign-up offers), so the right account can accept.
-            <Button variant="link" busy={busy} onClick={() => void switchAccount()} data-switch-account="">
-              {busy ? t("signingOut") : t("switchAccount")}
-            </Button>
+            <>
+              {/* Left-aligned like the alert's other links (a block-level box as wide as its words). */}
+              <Button
+                variant="link"
+                busy={busy}
+                onClick={() => void switchAccount()}
+                className="flex w-fit justify-start text-left"
+                data-switch-account=""
+              >
+                {busy ? t("signingOut") : t("switchAccount")}
+              </Button>
+              {switchFailed ? <p data-sign-out-failed="">{t("signOutFailed")}</p> : null}
+            </>
           ) : refusal === "signedOut" ? (
             <a href={signInHref} className={standaloneLinkClass}>
               {t("signIn")}

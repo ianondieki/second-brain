@@ -4781,7 +4781,8 @@
     },
     "reload": "Reload",
     "switchAccount": "Sign out and use another address",
-    "signingOut": "Signing out…"
+    "signingOut": "Signing out…",
+    "signOutFailed": "Sign-out did not finish, so you may still be signed in."
   },
   "retryAfter": {
     "minute": "Try again in about a minute.",

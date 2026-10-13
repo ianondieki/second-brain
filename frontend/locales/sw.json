@@ -4781,7 +4781,8 @@
     },
     "reload": "Pakia upya",
     "switchAccount": "Toka na utumie anwani nyingine",
-    "signingOut": "Inatoka…"
+    "signingOut": "Inatoka…",
+    "signOutFailed": "Kutoka hakukukamilika, kwa hivyo huenda bado umeingia."
   },
   "retryAfter": {
     "minute": "Jaribu tena baada ya dakika moja hivi.",
