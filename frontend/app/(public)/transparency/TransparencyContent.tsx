@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { cn } from "@/components/ui/cn";
 import { Description, DescriptionList } from "@/components/ui/DescriptionList";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ClosedIcon } from "@/components/ui/icons";
+import { ChevronDownIcon, ClosedIcon } from "@/components/ui/icons";
 import { Lattice } from "@/components/ui/Lattice";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { formatCalendarDate, formatDay, formatMoment } from "@/lib/format";
@@ -32,6 +32,8 @@ const hashClass = "font-mono text-sm leading-6 text-ink [overflow-wrap:anywhere]
 export async function TransparencyContent({ roots, keys }: TransparencyRead) {
   const [t, locale] = await Promise.all([getTranslations("transparency"), getLocale()]);
   const [latest, ...earlier] = roots ?? [];
+  // A root's key id links to its entry below only when that entry is on the page (the keys loaded and list it).
+  const listed = new Set((keys ?? []).map((key) => key.kid));
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pt-10 pb-20 sm:px-6 lg:pt-16 lg:pb-28">
@@ -54,7 +56,7 @@ export async function TransparencyContent({ roots, keys }: TransparencyRead) {
           <EmptyState sentence={t("empty")} action={t("emptyAction")} href="/verify" />
         ) : (
           <>
-            <LatestRoot root={latest} t={t} locale={locale} />
+            <LatestRoot root={latest} t={t} locale={locale} listed={listed} />
             {earlier.length > 0 ? (
               <section aria-labelledby="earlier-days" className="mt-12">
                 <h2 id="earlier-days" className="text-xl text-ink">
@@ -62,7 +64,7 @@ export async function TransparencyContent({ roots, keys }: TransparencyRead) {
                 </h2>
                 <ol className="mt-4 flex flex-col divide-y divide-line border-y border-line" data-transparency="earlier">
                   {earlier.map((root) => (
-                    <EarlierRoot key={root.day} root={root} t={t} locale={locale} />
+                    <EarlierRoot key={root.day} root={root} t={t} locale={locale} listed={listed} />
                   ))}
                 </ol>
               </section>
@@ -110,7 +112,7 @@ export async function TransparencyContent({ roots, keys }: TransparencyRead) {
 }
 
 /** The latest root as a signed sheet: its day in the heading, the time it covers, the root, its key and signature. */
-function LatestRoot({ root, t, locale }: { root: TransparencyRoot; t: T; locale: string }) {
+function LatestRoot({ root, t, locale, listed }: { root: TransparencyRoot; t: T; locale: string; listed: ReadonlySet<string> }) {
   return (
     <Card as="section" padding="none" aria-labelledby="latest-root" className="overflow-hidden" data-root={root.day}>
       <Lattice />
@@ -127,7 +129,7 @@ function LatestRoot({ root, t, locale }: { root: TransparencyRoot; t: T; locale:
         </div>
         <DescriptionList className="mt-6">
           <Description label={t("key")}>
-            <KeyLink kid={root.key_id} />
+            <KeyLink kid={root.key_id} linked={listed.has(root.key_id)} />
           </Description>
           <Description label={t("signature")}>
             <Code className="text-sm text-ink-soft">{root.signature}</Code>
@@ -140,13 +142,18 @@ function LatestRoot({ root, t, locale }: { root: TransparencyRoot; t: T; locale:
 }
 
 /** An earlier day: its date, the root, when the snapshot was taken and by which key it was signed; the signature folded. */
-function EarlierRoot({ root, t, locale }: { root: TransparencyRoot; t: T; locale: string }) {
-  const key = (chunks: ReactNode) => <KeyLink kid={root.key_id}>{chunks}</KeyLink>;
+function EarlierRoot({ root, t, locale, listed }: { root: TransparencyRoot; t: T; locale: string; listed: ReadonlySet<string> }) {
+  const key = (chunks: ReactNode) => (
+    <KeyLink kid={root.key_id} linked={listed.has(root.key_id)}>
+      {chunks}
+    </KeyLink>
+  );
+  const day = formatCalendarDate(locale, root.day);
   return (
     <li className="grid grid-cols-1 gap-x-6 pt-4 pb-1 sm:grid-cols-[7.5rem_minmax(0,1fr)]" data-root={root.day}>
       {/* From 640 px the date has its own column beside the root, so a month of days reads as a ledger. */}
       <h3 className="font-sans text-base leading-6 font-semibold text-ink">
-        <time dateTime={root.day}>{formatCalendarDate(locale, root.day)}</time>
+        <time dateTime={root.day}>{day}</time>
       </h3>
       <div className="min-w-0">
         <p className={cn(hashClass, "mt-1 sm:mt-0")} data-merkle-root={root.merkle_root}>
@@ -158,9 +165,14 @@ function EarlierRoot({ root, t, locale }: { root: TransparencyRoot; t: T; locale
             : t.rich("earlierLineUnknown", { keyId: root.key_id, key })}
         </p>
         {/* Native disclosure: no script, and the signature (88 characters) stays out of the way until asked for. */}
-        <details>
-          <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-ink underline decoration-1 underline-offset-2 hover:decoration-2">
-            {t("showSignature")}
+        {/* The chevron turns with [open]; the name carries the day, so a list of "Signature" controls stays apart. */}
+        <details className="group">
+          <summary
+            aria-label={t("signatureFor", { day })}
+            className="inline-flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden"
+          >
+            <span className="underline decoration-1 underline-offset-2 group-hover:decoration-2">{t("showSignature")}</span>
+            <ChevronDownIcon className="size-4 shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
           </summary>
           <Code className="pb-3 text-sm text-ink-soft">{root.signature}</Code>
         </details>
@@ -200,8 +212,9 @@ function KeyRow({ signingKey, t, locale }: { signingKey: ProvenanceKey; t: T; lo
   );
 }
 
-/** A key id as a link to its entry in the keys list below. */
-function KeyLink({ kid, children }: { kid: string; children?: ReactNode }) {
+/** A key id as a link to its entry in the keys list below; plain text when that entry is not on the page. */
+function KeyLink({ kid, linked, children }: { kid: string; linked: boolean; children?: ReactNode }) {
+  if (!linked) return <span className="font-mono text-ink [overflow-wrap:anywhere]">{children ?? kid}</span>;
   return (
     <a href={`#${keyAnchor(kid)}`} className="font-mono text-ink underline decoration-1 underline-offset-2 [overflow-wrap:anywhere] hover:decoration-2">
       {children ?? kid}

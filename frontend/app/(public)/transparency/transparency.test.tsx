@@ -118,6 +118,9 @@ describe("/transparency", () => {
     await openPage();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Daily audit fingerprints");
     expect(screen.getByText(en.transparency.lead)).toBeTruthy();
+    // Honest about scope: the fingerprints vouch for the history up to when each was taken, not for one certificate.
+    expect(en.transparency.lead).toContain("recorded before a fingerprint was taken");
+    expect(part("how-to").textContent).toContain("it checks that certificate’s own fingerprint, signature and timestamp");
     expect(within(part("how-to")).getByRole("link", { name: "Check a certificate" }).getAttribute("href")).toBe("/verify");
     expect(document.querySelector("[data-primary]")).toBeNull();
     const metadata = await generateMetadata();
@@ -144,7 +147,11 @@ describe("/transparency", () => {
     expect(rows[0].textContent).toContain(`Signed with ${OLD_KID}.`);
     expect(within(rows[0]).getByRole("link", { name: OLD_KID }).getAttribute("href")).toBe(`#${keyAnchor(OLD_KID)}`);
     expect(rows[1].textContent).toContain(`Taken 11 Oct 2026, 00:30 Nairobi time, signed with ${KID}.`);
-    expect(rows[1].querySelector("details summary")!.textContent).toBe("Signature");
+    // The disclosure: "Signature" on screen, named with its day, and a chevron that turns when it opens.
+    const summary = rows[1].querySelector("details summary")!;
+    expect(summary.textContent).toBe("Signature");
+    expect(summary.getAttribute("aria-label")).toBe("Signature for 10 Oct 2026");
+    expect(summary.querySelector("svg")!.getAttribute("class")).toContain("group-open:rotate-180");
     expect(rows[1].querySelector("details")!.textContent).toContain(SIGNATURE);
 
     expect(within(part("roots")).getByRole("link", { name: "These fingerprints as JSON" }).getAttribute("href")).toBe(
@@ -152,12 +159,37 @@ describe("/transparency", () => {
     );
   });
 
+  it("the latest root with no snapshot time says it covers the history as it stood after its day ended", async () => {
+    api({ roots: [root("2026-10-12", { snapshot_at: null })], keys: [ACTIVE] });
+    await openPage();
+    const sheet = screen.getByRole("region", { name: "The fingerprint for 12 Oct 2026" });
+    expect(sheet.textContent).toContain(en.transparency.coversUnknown);
+    expect(sheet.textContent).not.toContain("Nairobi time");
+    expect(sheet.querySelector("[data-fingerprint]")!.getAttribute("data-fingerprint")).toBe("2".repeat(64));
+  });
+
+  it("a key id is plain text when the keys did not load or do not list it", async () => {
+    api({ roots: [root("2026-10-12"), root("2026-10-11", { key_id: OLD_KID })], keys: new Error("refused") });
+    await openPage();
+    expect(document.querySelectorAll("a[href^='#key-']")).toHaveLength(0);
+    expect(screen.getByRole("region", { name: "The fingerprint for 12 Oct 2026" }).textContent).toContain(KID);
+
+    cleanup();
+    api({ roots: [root("2026-10-12"), root("2026-10-11", { key_id: OLD_KID })], keys: [ACTIVE] });
+    await openPage();
+    expect([...document.querySelectorAll("a[href^='#key-']")].map((a) => a.getAttribute("href"))).toEqual([`#${keyAnchor(KID)}`]);
+    expect(part("earlier").textContent).toContain(`signed with ${OLD_KID}.`);
+  });
+
   it("lists the signing keys with their algorithm, public key and status in words", async () => {
     api({ roots: [root("2026-10-12")], keys: [RETIRED, ACTIVE] });
     await openPage();
     const keys = part("keys");
     expect(within(keys).getByRole("heading", { level: 2 }).textContent).toBe("Signing keys");
-    expect(keys.textContent).toContain("bridge-transparency-root-v1:<day>:<root>");
+    // The exact signed text, its parts and the signature's encoding.
+    expect(keys.querySelector("code")!.textContent).toBe("bridge-transparency-root-v1:<day>:<root>");
+    expect(keys.textContent).toContain("where day is the Nairobi date as YYYY-MM-DD and root is the fingerprint in lowercase hex");
+    expect(keys.textContent).toContain("Each signature is Ed25519, in base64, made with the listed key");
     const rows = [...keys.querySelectorAll<HTMLElement>("[data-key]")];
     expect(rows.map((row) => row.id)).toEqual([keyAnchor(KID), keyAnchor(OLD_KID)]);
     expect(within(rows[0]).getByRole("heading", { level: 3 }).textContent).toBe(KID);
@@ -209,7 +241,7 @@ describe("/transparency", () => {
     render(<>{await resolveServerTree(<VerifyShell>{null}</VerifyShell>)}</>);
     const aside = screen.getByRole("complementary");
     expect(aside.querySelector("[data-verify='transparency']")!.textContent).toBe(
-      "Every day’s audit fingerprint is public on the transparency page.",
+      "The daily audit fingerprints are public on the transparency page.",
     );
     expect(within(aside).getByRole("link", { name: "transparency page" }).getAttribute("href")).toBe("/transparency");
   });
