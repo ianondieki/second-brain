@@ -1,0 +1,92 @@
+# The public demo on a Hugging Face Docker Space (P28 track PD; REQ-FND-04; D-71 (a); docs/runbooks/public-demo.md B).
+# Manual only. Pushes a two-file Space to the Space named by the repository variable HF_SPACE (owner/space-name) with
+# the repository secret HF_TOKEN: a Dockerfile that is just `FROM ghcr.io/<owner>/bridge-demo:latest` (built by
+# demo-image.yml; the GHCR package must be public) and a README.md whose front matter tells Hugging Face to run it as
+# a Docker Space on port 7860. When either setting is missing the job writes a notice and succeeds without uploading.
+# The upload is Hugging Face's official huggingface/hub-sync action (it runs `hf repos create` and `hf upload`),
+# pinned by commit with the hf CLI version pinned too. Docker Spaces need a paid Hugging Face plan (D-71 (a)).
+name: demo-space
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  space:
+    name: push the Space
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check the Space settings
+        id: settings
+        env:
+          HAS_TOKEN: ${{ secrets.HF_TOKEN != '' }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ] || [ -z "$HF_SPACE" ]; then
+            {
+              echo "### Hugging Face Space: skipped"
+              echo ""
+              echo "Nothing was uploaded: set the repository secret \`HF_TOKEN\` (a Hugging Face write token) and the"
+              echo "repository variable \`HF_SPACE\` (\`owner/space-name\` of an existing Docker Space), then run this"
+              echo "workflow again. Steps: docs/runbooks/public-demo.md, part B (after D-71 (a))."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=demo-space skipped::HF_TOKEN or HF_SPACE is not set; see docs/runbooks/public-demo.md (B)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      # [[COPY-REVIEW]] the Space's title, short description and text below are public copy (the product name is still
+      # the working name, Bridge).
+      - name: Write the two-file Space
+        if: steps.settings.outputs.ready == 'true'
+        run: |
+          mkdir space
+          printf 'FROM ghcr.io/%s/bridge-demo:latest\n' "${GITHUB_REPOSITORY_OWNER,,}" > space/Dockerfile
+          cat > space/README.md <<'EOF'
+          ---
+          title: Bridge demo
+          emoji: 🤝
+          colorFrom: green
+          colorTo: blue
+          sdk: docker
+          app_port: 7860
+          pinned: false
+          short_description: Public demo of Bridge; fictional data, resets nightly
+          ---
+
+          # Bridge: public demo
+
+          A public demonstration of Bridge, the developer and enterprise platform. Pick a persona on the sign-in page
+          and you are signed in with one press. Every name and organisation here is fictional, nothing is sent to
+          anyone (email, SMS and payments are simulated), and the data resets every night at 03:00 EAT. Please do not
+          enter real personal information.
+
+          The image is built from the project's repository on GitHub (`infra/demo/space/`); this Space only runs it.
+          EOF
+          cat space/Dockerfile space/README.md
+      - name: Upload it to the Space
+        if: steps.settings.outputs.ready == 'true'
+        uses: huggingface/hub-sync@fdffea8e04104d0bd4e3181c5feb3025f0433ff5  # v0.3.0
+        with:
+          github_repo_id: ${{ github.repository }}
+          subdirectory: space
+          huggingface_repo_id: ${{ vars.HF_SPACE }}
+          hf_token: ${{ secrets.HF_TOKEN }}
+          repo_type: space
+          space_sdk: docker
+          delete_removed: "false"
+          hf_version: "1.33.0"
+      - name: Summary
+        if: steps.settings.outputs.ready == 'true'
+        env:
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          {
+            echo "### Hugging Face Space updated"
+            echo ""
+            echo "- Space: https://huggingface.co/spaces/${HF_SPACE} (it rebuilds from the image now; the first boot takes a few minutes)"
+            echo "- Share the direct address \`https://<owner>-<space-name>.hf.space\` (first-party cookies; the huggingface.co page frames it)."
+          } >> "$GITHUB_STEP_SUMMARY"
