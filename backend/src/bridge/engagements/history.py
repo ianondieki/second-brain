@@ -404,7 +404,15 @@ async def detail(
     if hidden is not None:
         names[hidden] = base.developer_name
     contact = None
-    if engagement.contact_user_id is not None and engagement.contact_channel and engagement.contact_by:
+    # During 3b no contact-by date is shown, on either path into it: a public entity names it with its route (an
+    # accepted interest keeps the date the interest named on the row, which the route's decision replaces).
+    in_procurement = (loaded.facts.paused_from or engagement.state) is EngagementState.PROCUREMENT_ROUTE
+    if (
+        engagement.contact_user_id is not None
+        and engagement.contact_channel
+        and engagement.contact_by
+        and not in_procurement
+    ):
         role = await db.scalar(
             select(EngagementEvent.payload["contact_role"].astext)
             .where(EngagementEvent.engagement_id == engagement.id, EngagementEvent.payload.has_key("contact_role"))

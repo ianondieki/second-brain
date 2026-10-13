@@ -485,7 +485,9 @@ async def _accept_interest(step: Step) -> None:
     """The contact the organisation named when it expressed interest, recorded like an approval's. The developer
     cannot read the organisation's roster: the role is the one an earlier event recorded, else ``member`` (the
     database holds the contact to be an active member). A public entity's accepted interest enters its procurement
-    route (3b): its deadline is the stage's, and the contact-by date comes with the route."""
+    route (3b): its deadline is the stage's, and the contact-by date comes with the route. The row keeps the date the
+    interest named (the developer may not write the organisation's contact: revision 0003's UPDATE policy) until the
+    route's decision replaces it; the tracker shows no contact-by date during 3b (``history.detail``)."""
     engagement = step.engagement
     if engagement.contact_user_id is None or engagement.contact_channel is None or engagement.contact_by is None:
         raise sm.Conflict("contact_not_named", "The organisation has not named its contact person yet.")

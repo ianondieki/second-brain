@@ -92,6 +92,7 @@ async def test_a_public_entitys_approval_enters_3b_and_a_private_ones_stage_3(
         assert detail["state"] == "PROCUREMENT_ROUTE"
         assert (detail["stage_label"], detail["stage_group"]) == ("Procurement route determined", "contact_nda")
         assert detail["contact"] is None  # the contact-by date comes with the route
+        assert (await t.detail(s.dev))["contact"] is None
         assert detail["procurement"] is None
         assert detail["due"]["due_on"] == str(add_business_days(today, 10, await holidays_of(owner_engine)))
         assert detail["whose_turn"] == ["org"]
@@ -331,6 +332,9 @@ async def test_a_public_entitys_accepted_interest_waits_for_its_route(
         t = Tracker(UUID(created.json()["id"]))
         detail = await t.ok(s.dev, "accept-interest")
         assert detail["state"] == "PROCUREMENT_ROUTE"
+        # No contact-by date during 3b on this path either (the interest's own date waits for the route's).
+        assert detail["contact"] is None
+        assert (await t.detail(s.owner))["contact"] is None
         assert states(detail)[:3] == ["ORG_INTEREST", "PROCUREMENT_ROUTE", "INTEREST_CONFIRMED"]
         assert detail["due"]["due_on"] == str(add_business_days(today, 10, await holidays_of(owner_engine)))
         chosen = await s.owner.post(
