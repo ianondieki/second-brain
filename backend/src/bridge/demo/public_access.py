@@ -16,9 +16,12 @@ Security reasoning (for the security review):
   also be ``ACTIVE`` and flagged ``users.demo_account``, which only the owner role (the demo seed) can set; anything
   else, like an unknown key, is 400 ``unknown_persona`` with the same words, so the answer tells nothing about an
   account.
+- **The only way in.** The password sign-in, its second step and spending a magic link are locked in the public demo,
+  so the published demo password cannot open an account outside the allowlist (the demo staff admin, say).
 - **No second factor to waive for a real person.** The session's second factor counts as done (``mfa_pending``
   false, ``mfa_verified_at`` now) because the persona's TOTP secret is a public demo value anyway; the helper refuses
-  any account that is not an active demo account.
+  any account that is not an active demo account. A persona's step-ups (an endorsement, a signature) are therefore
+  recorded with the method ``totp`` in the demo's fictional data, though no code was typed.
 - **Visitors cannot take a persona away from each other.** Every route that changes a credential, a sign-in method or
   an organisation role, every upload that keeps a file and the clock answer 403 ``public_demo_locked``
   (``bridge.public_demo.LOCKED``), and the nightly reset wipes everything else a visitor did.

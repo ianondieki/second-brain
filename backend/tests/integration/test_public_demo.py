@@ -11,7 +11,8 @@
   minute per IP, then 429.
 - AT-PD-4: a persona's password change, second-factor change, role change, uploads that keep a file (proposal and
   message attachments) and the clock's move are 403 ``public_demo_locked`` and change nothing; the certificate file
-  check, which stores nothing, stays open.
+  check, which stores nothing, stays open. The persona allowlist is the only way in: the password sign-in with the
+  published demo password, its second step and spending a link are locked too.
 - AT-PD-5: ``fictional`` leaves out every ``ke_provisional`` organisation and every research card citing a news
   excerpt; ``full`` restores both.
 
@@ -39,7 +40,7 @@ from bridge.crypto.envelope import LocalKeyWrapper
 from bridge.integrations.sms import FakeSmsProvider
 from bridge.notifications.email import FakeEmailProvider
 from bridge.seed.demo import DemoReport, DemoRuntime, seed_demo
-from bridge.seed.demo.data import AMINA, ORGS, P1, TELCO_A
+from bridge.seed.demo.data import AMINA, DEMO_PASSWORD, ORGS, P1, STAFF_ADMIN, TELCO_A
 from bridge.seed.demo.research import SEEDED_ANSWERS
 from bridge.seed.directory import directory_loadable, load_directory, seed_directory
 from bridge.seed.reference import seed_all
@@ -369,6 +370,22 @@ async def test_signing_up_is_switched_off(fictional: Seeded, app: AsyncEngine) -
     async with visitor(app, ip="127.0.3.3") as client:
         response = await client.post("/api/auth/signup", json={"email": "someone@example.com"})
     assert (response.status_code, response.json()) == (403, {"detail": LOCKED})
+
+
+async def test_the_persona_allowlist_is_the_only_way_in(fictional: Seeded, app: AsyncEngine) -> None:
+    """The published demo password opens nothing: the password sign-in (here as the demo staff admin, who is no
+    persona), its second step and spending a link are locked, and no session cookie is set."""
+    async with visitor(app, ip="127.0.3.4") as client:
+        attempts = [
+            await client.post("/api/auth/login", json={"email": STAFF_ADMIN.email, "password": DEMO_PASSWORD}),
+            await client.post("/api/auth/login", json={"email": AMINA.email, "password": DEMO_PASSWORD}),
+            await client.post("/api/auth/mfa/verify", json={"code": "123456"}),
+            await client.post("/api/auth/magic-link/consume", json={"token": "x" * 43}),
+        ]
+        for response in attempts:
+            assert (response.status_code, response.json()) == (403, {"detail": LOCKED}), response.request.url
+        assert get_settings().session_cookie_name not in client.cookies
+        assert (await client.get("/api/auth/me")).status_code == 401
 
 
 # ------------------------------------------------------------------------------------------------- AT-PD-5 (full, last)

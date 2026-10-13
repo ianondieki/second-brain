@@ -5,9 +5,10 @@ declared as binary in its OpenAPI request body) keeps it, and so carries ``refus
 of the named exceptions in ``STORES_NOTHING`` (today only the certificate file check, ``POST /api/verify``, which
 hashes the body and stores nothing; the orchestrator's decision). A future upload route cannot ship unlocked, and a
 module that reads a raw request body must expose that route as a declared upload, or the walk would miss it. The
-locked routes are exactly the register below (the card's list: credentials, sign-in methods, role changes, uploads
-that keep a file, the clock), and each answers 403 ``public_demo_locked`` while the mode is on, before any session,
-body or database.
+locked routes are exactly the register below (the password sign-in, its second step and link sign-in, since the
+persona allowlist is the only way in; then the card's list: credentials, sign-in methods, role changes, uploads that
+keep a file, the clock), and each answers 403 ``public_demo_locked`` while the mode is on, before any session, body
+or database.
 A new state-changing account or membership route (sign-in methods, an address, a password, a second factor, members,
 an export or a deletion) fails the walk until it is locked or reviewed as open.
 """
@@ -33,11 +34,15 @@ from bridge.db import create_engine, create_session_factory
 from bridge.main import create_app
 from bridge.public_demo import refuse_in_public_demo
 
-# The locked routes (method, path), in the order of the card's list. Add a route here when you lock it.
+# The locked routes (method, path): the password sign-in and its second step (the persona allowlist is the only way
+# in), then the card's list. Add a route here when you lock it.
 LOCKED_ROUTES = frozenset(
     {
+        ("POST", "/api/auth/login"),
+        ("POST", "/api/auth/mfa/verify"),
         ("POST", "/api/auth/signup"),
         ("POST", "/api/auth/magic-link"),
+        ("POST", "/api/auth/magic-link/consume"),
         ("POST", "/api/auth/verify-email/resend"),
         ("POST", "/api/auth/password"),
         ("POST", "/api/auth/totp/enrol"),
@@ -152,12 +157,11 @@ def test_the_locked_routes_are_exactly_the_register(app: FastAPI) -> None:
 
 
 def test_the_persona_sign_in_and_reads_stay_open(app: FastAPI) -> None:
-    """What a visitor needs is never locked: the persona sign-in, the password login, the second step, sign-out."""
+    """What a visitor needs is never locked: the persona sign-in (the only way in), a step-up, sign-out."""
     open_routes = {k for route in contexts(app) if not is_locked(route) for k in key(route)}
     for needed in (
         ("POST", "/api/auth/demo/sign-in"),
-        ("POST", "/api/auth/login"),
-        ("POST", "/api/auth/mfa/verify"),
+        ("POST", "/api/auth/step-up"),
         ("POST", "/api/auth/logout"),
         ("GET", "/api/auth/me"),
         ("GET", "/api/test-clock"),
@@ -166,16 +170,13 @@ def test_the_persona_sign_in_and_reads_stay_open(app: FastAPI) -> None:
         assert needed in open_routes, needed
 
 
-# The account routes that stay open in the public demo, each reviewed: signing in and out (the persona sign-in, the
-# password sign-in, its second step, a step-up), and spending a link (none can be issued: every request is locked).
+# The account routes that stay open in the public demo, each reviewed: the persona sign-in (the only way in), a
+# step-up (a persona session's second factor already counts; a code would still be checked) and sign-out.
 OPEN_ACCOUNT_ROUTES = frozenset(
     {
         ("POST", "/api/auth/demo/sign-in"),
-        ("POST", "/api/auth/login"),
-        ("POST", "/api/auth/mfa/verify"),
         ("POST", "/api/auth/step-up"),
         ("POST", "/api/auth/logout"),
-        ("POST", "/api/auth/magic-link/consume"),
     }
 )
 ACCOUNT_PATHS = re.compile(r"^/api/auth/|^/api/me/identities|/members(/|$)|/email|/password|/totp|/export|/delete")
