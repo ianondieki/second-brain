@@ -3,6 +3,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
 import { DEMO_BANNER_NOSCRIPT_CSS, DEMO_BANNER_SCRIPT, PublicDemoBanner } from "@/components/PublicDemoBanner";
+import { SkipLink } from "@/components/TopBarBase";
 import { RouteFocus } from "@/components/RouteFocus";
 import { CELEBRATION_INIT_SCRIPT } from "@/components/tracker/celebration-store";
 import { CLOCK_BOOT_SCRIPT } from "@/components/ui/ClockTicker";
@@ -92,7 +93,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {demo ? <noscript dangerouslySetInnerHTML={{ __html: `<style>${DEMO_BANNER_NOSCRIPT_CSS}</style>` }} /> : null}
       </head>
       <body className="flex min-h-full flex-col bg-paper text-ink">
-        {/* First on every page while the public demo is on: a notice, in the flow (it never covers content). */}
+        {/* First on every page while the public demo is on: a notice, in the flow (it never covers content), after the
+            page's one skip link (the top bar leaves its own out then), so the keyboard's first stop stays "Skip to
+            content". */}
+        {demo ? <SkipLink /> : null}
         {demo ? <PublicDemoBanner /> : null}
         {/* Sign out and the error screen read server-formatted strings: no next-intl runtime in the browser. */}
         <ClientStrings strings={await shellStrings(demo)}>{children}</ClientStrings>

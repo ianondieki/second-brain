@@ -1,6 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
+import { publicDemoOn } from "@/lib/public-demo";
+
 import type { AnchorComponent } from "./anchor";
 import { Wordmark } from "./brand/Logo";
 
@@ -27,6 +29,22 @@ export interface TopBarBaseProps {
  */
 export const BLEED_FRAME = "lg:pr-6 lg:pl-[max(1.5rem,calc((100%_-_72rem)/2_+_1.5rem))]";
 
+/** "Skip to content": the first stop of the keyboard on every page, visible when focused. */
+export async function SkipLink() {
+  const t = await getTranslations("shell");
+  return (
+    <a
+      href="#main"
+      className={
+        "sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-4 focus:z-30 focus:rounded-control focus:shadow-overlay " +
+        "focus:bg-field focus:px-4 focus:py-2.5 focus:min-h-11 focus:font-semibold focus:text-accent"
+      }
+    >
+      {t("skipToContent")}
+    </a>
+  );
+}
+
 /**
  * Skip link plus the top bar: a quiet white band with a hairline under it, the wordmark (a link home) on the left and
  * at most one control on the right. No badge and no lattice (D-65: the honesty label lives with the demo data, the
@@ -44,15 +62,9 @@ export async function TopBarBase({
   const t = await getTranslations("shell");
   return (
     <>
-      <a
-        href="#main"
-        className={
-          "sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-4 focus:z-30 focus:rounded-control focus:shadow-overlay " +
-          "focus:bg-field focus:px-4 focus:py-2.5 focus:min-h-11 focus:font-semibold focus:text-accent"
-        }
-      >
-        {t("skipToContent")}
-      </a>
+      {/* In the public demo (REQ-FND-04) the root layout draws the skip link before the demo banner, so it stays the
+          first stop; one skip link per page either way. */}
+      {publicDemoOn() ? null : <SkipLink />}
       <header
         data-top-bar=""
         data-sticky={sticky ? "" : undefined}

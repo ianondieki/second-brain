@@ -127,6 +127,21 @@ describe("the root layout", () => {
     expect(html).toContain(DEMO_BANNER_NOSCRIPT_CSS);
   });
 
+  it("keeps \"Skip to content\" the first stop, then the banner's dismiss button, with one skip link on the page", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    const { default: RootLayout } = await import("@/app/layout");
+    const { TopBar } = await import("@/components/TopBar");
+    const tree = await resolveServerTree(
+      await RootLayout({ children: <><TopBar /><SignOutLabels /></>, params: Promise.resolve({}) } as never),
+    );
+    const doc = new DOMParser().parseFromString(renderToStaticMarkup(<>{tree}</>), "text/html");
+    const stops = [...doc.body.querySelectorAll("a[href], button")];
+    expect(stops[0].textContent).toBe("Skip to content");
+    expect(stops[0].getAttribute("href")).toBe("#main");
+    expect(stops[1].hasAttribute("data-demo-dismiss")).toBe(true);
+    expect([...doc.body.querySelectorAll("a")].filter((a) => a.textContent === "Skip to content")).toHaveLength(1);
+  });
+
   it("draws none of it while the mode is off", async () => {
     vi.stubEnv("PUBLIC_DEMO", "false");
     const html = await layoutMarkup();
