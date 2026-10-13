@@ -177,17 +177,16 @@ async def put_escalation_contact(body: EscalationContactIn, db: Db, org: OrgAdmi
 async def get_invitation(
     token: str, request: Request, response: Response, db: Db, settings: SettingsDep
 ) -> InvitationPreview:
-    """What an invitation link offers before sign-in: the organisation's name and the roles."""
+    """What an invitation link offers before sign-in: the organisation's name and the roles. Every request counts
+    against its client address first (a malformed token included); then one 404 for any link that opens nothing."""
     response.headers["Cache-Control"] = NO_STORE
-    if invitations.token_digest(token) is None:
-        raise not_found(invitations.NO_INVITATION)
     allowed = await verify.allow(
         db, settings, purpose=PREVIEW_PURPOSE, ip=client_ip(request), per_minute=PREVIEWS_PER_MINUTE
     )
     await db.commit()
     if not allowed:
         raise ApiError(429, "rate_limited", "Too many requests from this address. Wait a minute and try again.")
-    found = await invitations.preview(db, token)
+    found = await invitations.preview(db, token)  # None for a malformed, unknown, spent, revoked or expired token
     if found is None:
         raise not_found(invitations.NO_INVITATION)
     return found

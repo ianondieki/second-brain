@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from bridge.config import get_settings
 from bridge.ids import uuid7
 from bridge.tenancy.invitations import MAX_OPEN
+from bridge.tenancy.team_router import PREVIEWS_PER_MINUTE
 from tests.integration.api import make_client
 from tests.integration.engagements.api_world import build, clients
 from tests.integration.tenancy.team_helpers import (
@@ -271,3 +272,32 @@ async def test_the_public_demo_locks_accepting_but_not_the_preview(
         assert code(await newcomer.post(f"/api/invitations/{token}/accept")) == (403, "public_demo_locked")
         assert code(await invite(owner, world.org, address())) == (403, "public_demo_locked")
         assert (await owner.get(f"/api/orgs/{world.org}/team")).status_code == 200
+
+
+async def test_the_preview_is_one_404_for_every_dead_link_and_is_throttled_per_address(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The reviewer's notes: one uniform 404 (malformed, unknown, revoked, expired), only the name and the roles of a
+    live link, every read counted against the client address (30 a minute, then 429); roles are never empty (422)."""
+    world = await build(owner_engine)
+    async with clients(app_engine, SETTINGS, world.owner) as (owner,):
+        empty = await owner.post(f"/api/orgs/{world.org}/invitations", json={"email": address(), "roles": []})
+        assert empty.status_code == 422
+        revoked_to, expired_to, live_to = address(), address(), address()
+        revoked = (await invite(owner, world.org, revoked_to)).json()
+        expired = (await invite(owner, world.org, expired_to)).json()
+        assert (await invite(owner, world.org, live_to)).status_code == 201
+        tokens = {to: token_in(mail_to(owner, to)[0]) for to in (revoked_to, expired_to, live_to)}
+        assert (await owner.delete(f"/api/orgs/{world.org}/invitations/{revoked['id']}")).status_code == 204
+        await expire(owner_engine, expired["id"])
+    ip = f"10.{uuid7().int % 250}.{uuid7().int % 250}.{uuid7().int % 250 + 1}"
+    async with make_client(app_engine, SETTINGS, ip=ip) as visitor:
+        dead = ["x" * 10, "A" * 43, tokens[revoked_to], tokens[expired_to]]
+        answers = [await visitor.get(f"/api/invitations/{token}") for token in dead]
+        assert {(a.status_code, a.text) for a in answers} == {(404, answers[0].text)}
+        live = await visitor.get(f"/api/invitations/{tokens[live_to]}")
+        assert set(live.json()) == {"org_name", "roles"}
+        for _ in range(PREVIEWS_PER_MINUTE - len(dead) - 1):
+            assert (await visitor.get(f"/api/invitations/{tokens[live_to]}")).status_code == 200
+        assert code(await visitor.get(f"/api/invitations/{tokens[live_to]}")) == (429, "rate_limited")
+        assert code(await visitor.get("/api/invitations/short")) == (429, "rate_limited")
