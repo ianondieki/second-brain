@@ -283,7 +283,7 @@ def test_a_public_entitys_3b_events_tell_the_other_party_what_comes_next() -> No
     composed = notify.compose(approved, "County Government of C (fixture)", "Market fees")
     assert composed is not None
     party, notice = composed
-    assert (party, notice.kind, notice.title) == (DEV, "engagement.n04", "Procurement route determined")
+    assert (party, notice.kind, notice.title) == (DEV, "engagement.n04", "Procurement route")
     assert "(non-binding)" in notice.body
     assert "first chooses how it will buy" in notice.body
     accepted = side("accept_interest", R.DEVELOPER, S.ORG_INTEREST, S.PROCUREMENT_ROUTE)

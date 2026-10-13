@@ -310,3 +310,33 @@ export function ContactPerson({ detail }: { detail: Pick<Detail, "contact" | "my
     </Section>
   );
 }
+
+/**
+ * A public entity's procurement route (3b; REQ-ENG-06), once chosen: how it will buy, the justification in its own
+ * words (plain text, as written), who chose it and when. Both parties read it (R46: full transparency).
+ */
+export function Procurement({ detail }: { detail: Pick<Detail, "procurement"> }) {
+  const t = useTranslations("procurement");
+  const choice = detail.procurement;
+  if (!choice) return null;
+  return (
+    <Section title={t("title")} headingId="procurement-heading">
+      <DescriptionList>
+        <Description label={t("block.route")}>
+          <span data-route={choice.route}>{t(`route.${choice.route}`)}</span>
+        </Description>
+        {choice.justification ? (
+          <Description label={t("block.justification")}>
+            <span data-justification="" className="whitespace-pre-line [overflow-wrap:anywhere]">
+              {choice.justification}
+            </span>
+          </Description>
+        ) : null}
+        <Description label={t("block.decidedBy")}>{choice.decided_by_name}</Description>
+        <Description label={t("block.decidedAt")}>
+          <Eat iso={choice.decided_at} />
+        </Description>
+      </DescriptionList>
+    </Section>
+  );
+}

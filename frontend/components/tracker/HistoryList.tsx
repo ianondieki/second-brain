@@ -12,7 +12,15 @@ import { AlertIcon, CheckIcon, ClockIcon, LockIcon } from "@/components/ui/statu
 
 import { MessageIcon } from "./icons";
 
-import { formatDate, notesByEvent, type Command, type History, type HistoryEvent, type Note } from "./model";
+import {
+  formatDate,
+  notesByEvent,
+  type Command,
+  type History,
+  type HistoryEvent,
+  type Note,
+} from "./model";
+import { isRoute } from "./procurement";
 import { Eat } from "./When";
 
 /** The event names the History tab words: every command, plus the genesis ("create") and the system's expiry. */
@@ -23,6 +31,7 @@ const EVENT_KEYS = new Set<string>([
   "start_review",
   "decline",
   "approve",
+  "choose_route",
   "withdraw",
   "mark_contacted",
   "confirm_contact",
@@ -131,11 +140,14 @@ export function HistoryList({
               {mark}
               <div className="min-w-0 flex-1">
                 <h3 className="font-semibold text-ink">
-                  {EVENT_KEYS.has(event.command)
-                    ? t(`event.${event.command as Command | "create" | "expire"}`)
-                    : event.command === "prior_knowledge_declared"
-                      ? t("history.priorKnowledgeDeclared")
-                      : t("event.other")}
+                  {/* A public entity's approval leads to its procurement route (3b), not yet to stage 3. */}
+                  {event.command === "approve" && event.to_state === "PROCUREMENT_ROUTE"
+                    ? t("event.approveToRoute")
+                    : EVENT_KEYS.has(event.command)
+                      ? t(`event.${event.command as Command | "create" | "expire"}`)
+                      : event.command === "prior_knowledge_declared"
+                        ? t("history.priorKnowledgeDeclared")
+                        : t("event.other")}
                 </h3>
                 <p className="mt-0.5 flex flex-wrap gap-x-3 text-sm text-ink-soft">
                   <span className="text-ink">
@@ -146,6 +158,7 @@ export function HistoryList({
                   </span>
                   <Eat iso={event.created_at} />
                 </p>
+                <RouteText event={event} />
                 <NoteText note={noteOf.get(event.id)} locale={locale} />
               </div>
             </li>
@@ -153,6 +166,19 @@ export function HistoryList({
         })}
       </ol>
     </Section>
+  );
+}
+
+/** The procurement route chosen at 3b (REQ-ENG-06), from the event's payload; an unknown value says nothing. */
+function RouteText({ event }: { event: HistoryEvent }) {
+  const t = useTranslations("tracker");
+  const names = useTranslations("procurement");
+  const route = event.command === "choose_route" ? event.payload.procurement_route : undefined;
+  if (!isRoute(route)) return null;
+  return (
+    <p data-event-route={route} className="mt-1 text-sm text-ink">
+      {t("history.route", { route: names(`route.${route}`) })}
+    </p>
   );
 }
 

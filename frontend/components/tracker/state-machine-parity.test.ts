@@ -16,6 +16,7 @@ import {
   MILESTONE_STEPS,
   PAUSED_STATES,
 } from "./model";
+import { JUSTIFICATION_MAX, JUSTIFICATION_MIN, ROUTE_PATH, ROUTES } from "./procurement";
 import { HOLD_MAX_DAYS, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
 
 // docs/spec/06 6.9: the state machine (backend/src/bridge/engagements/state_machine.py) is the only definition of the
@@ -102,7 +103,50 @@ describe("the side states (REQ-ENG-10 part)", () => {
     const body = source.slice(start, source.indexOf("\n\n\n", start));
     const commands = [...body.matchAll(/^ {4}\w+ = "(\w+)"$/gm)].map((m) => m[1]).sort();
     expect(commands.length).toBeGreaterThanOrEqual(28);
-    expect([...Object.keys(COMMAND_SEGMENT), ...Object.keys(MILESTONE_SEGMENT)].sort()).toEqual(commands);
+    // choose_route is sent under the organisation's path, built by its sheet (procurement.ts ROUTE_PATH).
+    expect(ROUTE_PATH.endsWith("/procurement-route")).toBe(true);
+    expect([...Object.keys(COMMAND_SEGMENT), ...Object.keys(MILESTONE_SEGMENT), "choose_route"].sort()).toEqual(commands);
+  });
+
+  it("limit a procurement route's justification as JUSTIFICATION_MIN_CHARS and JUSTIFICATION_MAX_CHARS do (REQ-ENG-06)", () => {
+    expect(Number(/^JUSTIFICATION_MIN_CHARS: Final = (\d+)$/m.exec(source)?.[1])).toBe(JUSTIFICATION_MIN);
+    expect(Number(/^JUSTIFICATION_MAX_CHARS: Final = (\d+)$/m.exec(source)?.[1])).toBe(JUSTIFICATION_MAX);
+    expect(en.procurement.sheet.justificationHintDirect).toContain(`${JUSTIFICATION_MIN} to 1,000 characters`);
+    expect(en.trackerActions.refusal.justificationRequired).toContain(`at least ${JUSTIFICATION_MIN} characters`);
+    expect(sw.procurement.sheet.justificationHintDirect).toContain(`herufi ${JUSTIFICATION_MIN} hadi 1,000`);
+  });
+
+  it("name the stages as STAGE_LABELS does, in both languages (the sub-stages and the \"Now\" line)", () => {
+    const labels = Object.fromEntries(
+      [...block("STAGE_LABELS", "{").matchAll(/^ {4}S\.(\w+): "([^"]+)",$/gm)].map((m) => [m[1], m[2]]),
+    );
+    const main = [...block("MAIN_PATH", "(").matchAll(/S\.(\w+)/g)].map((m) => m[1]);
+    expect(main.length).toBeGreaterThanOrEqual(14);
+    // Every stage the API labels, the main path's (each sub-stage) among them.
+    for (const state of main) expect(Object.keys(labels), state).toContain(state);
+    expect(Object.keys(en.tracker.stage).sort()).toEqual(Object.keys(labels).sort());
+    for (const [state, label] of Object.entries(labels)) {
+      expect(en.tracker.stage[state as keyof typeof en.tracker.stage], state).toBe(label);
+    }
+    expect(Object.keys(sw.tracker.stage).sort()).toEqual(Object.keys(labels).sort());
+  });
+
+  it("offer every procurement route the API takes (models/enums.py ProcurementRoute), each with words", () => {
+    const enums = readFileSync(repo("backend/src/bridge/models/enums.py"), "utf-8");
+    const start = enums.indexOf("class ProcurementRoute(StrEnum):");
+    const body = enums.slice(start, enums.indexOf("\n\n\n", start));
+    const routes = [...body.matchAll(/^ {4}\w+ = "(\w+)"/gm)].map((m) => m[1]).sort();
+    expect([...ROUTES].sort()).toEqual(routes);
+    // One list for the sheet and History (and none of it in the tracker's first load: code-split.test.ts).
+    for (const file of ["RouteSheet.tsx", "HistoryList.tsx"]) {
+      const text = readFileSync(repo(`frontend/components/tracker/${file}`), "utf-8");
+      expect(text, file).toMatch(/from "\.\/procurement"/);
+      expect(text, file).not.toMatch(/"rfq_tender"/);
+    }
+    for (const route of routes) {
+      expect(Object.keys(en.procurement.route)).toContain(route);
+      expect(Object.keys(en.procurement.hint)).toContain(route);
+    }
   });
 
   it("limit questions, answers and reasons as QUESTION_MAX_CHARS and REASON_MAX_CHARS do", () => {
@@ -123,6 +167,9 @@ describe("policy the copy states in words", () => {
     expect(en.trackerActions.refusal.invalidContactBy).toContain(`${EN[days]} business days`);
     expect(sw.trackerActions.approve.byHint).toContain(`siku ${SW[days]} za kazi`);
     expect(sw.trackerActions.refusal.invalidContactBy).toContain(`siku ${SW[days]} za kazi`);
+    // The procurement route's sheet names the same window (REQ-ENG-06).
+    expect(en.procurement.sheet.byHint).toContain(`${EN[days]} business days`);
+    expect(sw.procurement.sheet.byHint).toContain(`siku ${SW[days]} za kazi`);
   });
 
   /** A number under a policy.yaml section ("on_hold" → "max_days"). */

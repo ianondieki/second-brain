@@ -8,7 +8,16 @@ import { cn } from "@/components/ui/cn";
 import { ChipMark } from "./Chip";
 import { formatDay } from "@/lib/format";
 
-import { formatDate, myNextSteps, sideBanner, theirNextSteps, turnOf, type Detail, type SideBanner } from "./model";
+import {
+  formatDate,
+  myNextSteps,
+  sideBanner,
+  theirNextSteps,
+  turnOf,
+  waitsOnAdmin,
+  type Detail,
+  type SideBanner,
+} from "./model";
 import { DeadlineClock, DeadlineLine } from "@/components/ui/DeadlineClock";
 
 import { DueText } from "./When";
@@ -28,8 +37,10 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
   const mine = myNextSteps(detail);
   const theirs = theirNextSteps(detail);
 
-  const headline =
-    turn.kind === "you"
+  const admins = waitsOnAdmin(detail);
+  const headline = admins
+    ? t("turn.admins")
+    : turn.kind === "you"
       ? t("turn.you")
       : turn.kind === "other"
         ? t("turn.other", { name: other })
@@ -41,7 +52,7 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
               ? t("turn.closed")
               : t("turn.ended");
 
-  const yours = turn.kind === "you" || turn.kind === "both";
+  const yours = !admins && (turn.kind === "you" || turn.kind === "both");
   const awaited = new Set(detail.whose_turn);
   const ended = turn.kind === "ended";
   const side = sideBanner(detail);
@@ -123,6 +134,13 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
             <p className="text-lg font-semibold text-ink">{t("nextBoth", { name: other, step: steps(`command.${mine[0]}`) })}</p>
           ) : (
             <>
+              {/* A public entity's procurement route is its owner's or admin's to choose: another member (a
+                  signatory, a reviewer) reads who acts, not a step they have no button for (REQ-ENG-06). */}
+              {admins ? (
+                <p data-waiting-admin="" className="text-lg text-ink">
+                  {t("waitingAdmin")}
+                </p>
+              ) : null}
               {yours
                 ? mine.map((command) => (
                     <p key={command} className="text-lg font-semibold text-ink">
@@ -139,6 +157,13 @@ export function WhoseTurn({ detail, now }: { detail: Detail; now?: string }) {
                 : null}
             </>
           )}
+          {/* The nudge job's latest escalation of this stage (REQ-NOT-05): the organisation's own fact, one quiet line;
+              the developer's tracker never carries it. */}
+          {detail.my_party === "org" && detail.escalated_at && !ended ? (
+            <p data-escalated="" className="text-sm text-ink-soft">
+              {t.rich("escalated", { date: formatDay(locale, detail.escalated_at), nowrap })}
+            </p>
+          ) : null}
           {side?.kind === "info" && detail.due && !detail.due.overdue ? (
             <p data-info-clock="" className="text-sm text-ink-soft">
               {t.rich(detail.my_party === "developer" ? "side.infoClockYou" : "side.infoClockThem", {

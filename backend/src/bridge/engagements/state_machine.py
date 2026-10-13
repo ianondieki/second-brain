@@ -222,7 +222,8 @@ STAGE_LABELS: Final[Mapping[EngagementState, str]] = {
     S.ORG_INTEREST: "Organisation interested",
     S.SUBMITTED: "Proposal submitted",
     S.UNDER_REVIEW: "Under review",
-    S.PROCUREMENT_ROUTE: "Procurement route determined",
+    # Neutral while the route is still to be chosen (the spec's "determined" read as already decided; [[COPY-REVIEW]]).
+    S.PROCUREMENT_ROUTE: "Procurement route",
     S.INTEREST_CONFIRMED: "Approved to proceed (non-binding)",
     S.CONTACT_MADE: "First contact",
     S.NDA_PENDING: "Mutual NDA: awaiting both signatures",
