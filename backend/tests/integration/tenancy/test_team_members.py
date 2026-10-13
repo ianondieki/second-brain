@@ -210,7 +210,6 @@ async def test_the_escalation_contact_is_an_active_member_or_nobody(
         assert team["escalation_contact"] == named.json()
         cleared = await owner.put(path, json={"user_id": None})
         assert (cleared.status_code, cleared.json()) == (200, None)
-    [row] = await rows(owner_engine, "SELECT escalation_contact_user_id FROM organizations WHERE id = :o", o=world.org)
-    assert row.escalation_contact_user_id is None
+    assert await rows(owner_engine, "SELECT 1 FROM org_escalation_contacts WHERE org_id = :o", o=world.org) == []
     payloads = [e.payload for e in await audit_actions(owner_engine, world.org, "org.escalation_contact_set")]
     assert payloads == [{"user_id": str(world.finance)}, {"user_id": None}]

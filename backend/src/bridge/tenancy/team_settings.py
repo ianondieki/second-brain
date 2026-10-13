@@ -7,7 +7,9 @@ guards are the backstop); each write appends an audit event on the organisation'
   ``reviewer``, ``signatory`` or ``admin`` (422 ``invalid_default_reviewer``; the database also admits an owner who
   holds none of them, the API on purpose does not). A new engagement in that niche is assigned to them
   (``bridge.engagements.team.assign_niche_default``).
-- **Escalation contact** (``set_escalation_contact``): an active member or nobody (422 ``invalid_member``).
+- **Escalation contact** (``set_escalation_contact``): an active member or nobody (422 ``invalid_member``), kept in
+  ``org_escalation_contacts`` (revision 0015: members read it, never another organisation): an upsert on ``org_id``, or
+  a DELETE for nobody.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from collections.abc import Sequence
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +30,7 @@ from bridge.errors import ApiError
 from bridge.ids import uuid7
 from bridge.models.enums import MembershipStatus, OrgRole
 from bridge.tenancy.deps import OrgContext
-from bridge.tenancy.models import Membership, Organization, OrgNicheDefault
+from bridge.tenancy.models import Membership, OrgEscalationContact, OrgNicheDefault
 from bridge.tenancy.team import sqlstate, team_view
 from bridge.tenancy.team_schemas import EscalationContact, NicheDefault, NicheDefaultIn
 
@@ -118,13 +120,15 @@ async def set_escalation_contact(db: AsyncSession, org: OrgContext, user_id: UUI
         )
         if name is None:
             raise ApiError(422, "invalid_member", INVALID_MEMBER)
+    c = OrgEscalationContact
     try:
-        await db.execute(
-            update(Organization)
-            .where(Organization.id == org.org_id)
-            .values(escalation_contact_user_id=user_id)
-            .execution_options(synchronize_session=False)
-        )
+        if user_id is None:
+            await db.execute(delete(c).where(c.org_id == org.org_id))
+        else:
+            statement = pg_insert(c).values(org_id=org.org_id, user_id=user_id)
+            await db.execute(
+                statement.on_conflict_do_update(index_elements=[c.org_id], set_={"user_id": statement.excluded.user_id})
+            )
     except DBAPIError as exc:
         if sqlstate(exc) == "23514":  # the guard: they left meanwhile
             raise ApiError(422, "invalid_member", INVALID_MEMBER) from exc

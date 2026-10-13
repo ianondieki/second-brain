@@ -35,7 +35,7 @@ from bridge.engagements.models import EngagementAssignment
 from bridge.errors import ApiError, forbidden, not_found
 from bridge.models.enums import MembershipStatus, OrgRole
 from bridge.tenancy.deps import OrgContext
-from bridge.tenancy.models import Invitation, Membership, Organization, OrgNicheDefault
+from bridge.tenancy.models import Invitation, Membership, Organization, OrgEscalationContact, OrgNicheDefault
 from bridge.tenancy.team_schemas import EscalationContact, NicheDefault, OrgInvitation, OrgTeam, OrgTeamMember
 
 MANAGERS: Final = frozenset({OrgRole.OWNER, OrgRole.ADMIN})
@@ -89,13 +89,13 @@ async def team_view(db: AsyncSession, org: OrgContext) -> OrgTeam:
     )
     escalation = (
         await db.execute(
-            select(Organization.escalation_contact_user_id, User.display_name)
-            .outerjoin(User, User.id == Organization.escalation_contact_user_id)
-            .where(Organization.id == org.org_id)
+            select(OrgEscalationContact.user_id, User.display_name)
+            .outerjoin(User, User.id == OrgEscalationContact.user_id)
+            .where(OrgEscalationContact.org_id == org.org_id)
         )
     ).one_or_none()
     contact = None
-    if escalation is not None and escalation[0] is not None:
+    if escalation is not None:  # the organisation's members' read only (revision 0015's own table)
         contact = EscalationContact(user_id=escalation[0], name=escalation[1] or FORMER_MEMBER)
     return OrgTeam(
         members=members,
