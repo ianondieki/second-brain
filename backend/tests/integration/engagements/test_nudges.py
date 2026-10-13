@@ -113,8 +113,9 @@ async def emails_of(owner_engine: AsyncEngine, *users: UUID) -> dict[str, UUID]:
 
 
 async def escalation_contact(owner_engine: AsyncEngine, world: World, user: UUID) -> None:
+    """The organisation's escalation contact (revision 0015's ``org_escalation_contacts``), as an admin sets it."""
     async with owner_engine.begin() as conn:
-        await run(conn, "UPDATE organizations SET escalation_contact_user_id = :u WHERE id = :o", u=user, o=world.org)
+        await run(conn, "INSERT INTO org_escalation_contacts (org_id, user_id) VALUES (:o, :u)", u=user, o=world.org)
 
 
 async def mute_in_settings(client: Any, kind: str) -> None:

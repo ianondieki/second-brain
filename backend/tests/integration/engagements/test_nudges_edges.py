@@ -201,3 +201,34 @@ async def test_the_job_tells_nobody_when_the_organisation_has_no_member_to_read_
             e=str(t.engagement),
         )
     assert queued == 1  # EM6 for the developer only
+
+
+async def test_a_command_committed_while_the_job_decides_records_and_sends_nothing(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The job records a nudge only in the state it decided it in (``app_record_nudge``'s expected state): the
+    organisation marks first contact between the job's read of an overdue stage 3 and its record, so EM6 is neither
+    recorded nor queued."""
+    world, t = await overdue(owner_engine, app_engine)
+    factory = create_session_factory(app_engine)
+    real = nudges.roster_of
+    async with seats(app_engine, SETTINGS, world) as s, moved_clock(owner_engine) as advance:
+        await business_days_later(owner_engine, advance, 1)
+
+        async def meanwhile(db: Any, engagement: Any) -> nudges.Roster:
+            await t.ok(s.owner, "mark-contacted")  # its own request and transaction, committed
+            return await real(db, engagement)
+
+        monkeypatch.setattr(nudges, "roster_of", meanwhile)
+        report = await nudges.run_nudges(factory, engagement_ids={t.engagement})
+        assert (report.sent, report.failed) == ((), ())
+        assert (await t.detail(s.owner))["state"] == "CONTACT_MADE"
+    async with owner_engine.connect() as conn:
+        assert await run(conn, "SELECT count(*) FROM engagement_nudges WHERE engagement_id = :e", e=t.engagement) == 0
+        queued = await run(
+            conn,
+            "SELECT count(*) FROM procrastinate_jobs WHERE task_name = :t AND args->>'engagement_id' = :e",
+            t=nudges.TASK,
+            e=str(t.engagement),
+        )
+    assert queued == 0

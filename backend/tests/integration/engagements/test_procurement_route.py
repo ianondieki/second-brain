@@ -377,3 +377,38 @@ async def test_the_route_is_not_chosen_through_the_tracker_path(
         client: httpx.AsyncClient = s.dev if client_kind == "developer" else s.signatory
         missing = await t.post(client, "choose-route", {"route": "rfq_tender"})
         assert missing.status_code in (404, 405)
+
+
+async def test_a_delisted_public_entitys_accepted_interest_still_goes_through_3b(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """Whether an organisation is a public entity is read through ``app_org_is_public_entity`` (revision 0015), not
+    the caller's view of ``organizations``: a developer reads no delisted organisation's row, yet accepting a public
+    entity's interest after it was delisted still enters PROCUREMENT_ROUTE (the database refuses stage 3 for it), and
+    the developer's steps show 3b."""
+    world = await build(owner_engine, public_entity=True)
+    async with seats(app_engine, SETTINGS, world) as s:
+        today = await db_today(owner_engine)
+        async with owner_engine.begin() as conn:
+            niche = await run(conn, "SELECT niche_id FROM proposal_versions WHERE id = :v", v=world.version)
+            problem = await run(
+                conn, "SELECT problem_id FROM proposal_problems WHERE proposal_version_id = :v", v=world.version
+            )
+            proposal, _ = await w.add_proposal(conn, world.developer, niche, problem)
+        interest = {
+            "proposal_id": str(proposal),
+            "origin": "org_browse",
+            "match_id": None,
+            "contact_user_id": str(world.owner),
+            "channel": "email",
+            "contact_by": str(today),
+        }
+        created = await s.signatory.post(f"/api/orgs/{world.org}/interest", json=interest)
+        assert created.status_code == 201, created.text
+        t = Tracker(UUID(created.json()["id"]))
+        async with owner_engine.begin() as conn:
+            await run(conn, "UPDATE organizations SET delisted_at = now() WHERE id = :o", o=world.org)
+        detail = await t.ok(s.dev, "accept-interest")
+        assert detail["state"] == "PROCUREMENT_ROUTE"
+        assert "PROCUREMENT_ROUTE" in states(detail)
+        assert (await t.detail(s.dev))["org_name"] == "Organisation"  # the row itself is not the developer's to read
