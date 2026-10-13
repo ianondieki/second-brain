@@ -83,7 +83,7 @@ export default async function InvitationPage({ params }: PageProps<"/invitations
     body = (
       <div className="flex flex-col gap-5" data-invitation="signedIn">
         <p className="[overflow-wrap:anywhere] text-ink-soft">{t("signedInAs", { email: me.user.email })}</p>
-        <ClientStrings strings={await clientStrings(["invitationAccept"])}>
+        <ClientStrings strings={await clientStrings(["invitationAccept", "retryAfter"])}>
           <AcceptInvitation token={token} orgName={org} signInHref={loginHref(joinPath(token))} />
         </ClientStrings>
       </div>

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
-import { renderWithIntl } from "@/test/intl";
+import { renderWithPageStrings } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
 import type { Membership } from "../membership";
@@ -47,7 +47,11 @@ vi.mock("next-intl/server", () => ({
 vi.mock("@/lib/i18n/client-strings", () => ({
   clientStrings: async (namespaces: string[]) =>
     Object.fromEntries(namespaces.map((ns) => [ns, (en as unknown as Record<string, unknown>)[ns]])),
-  pickedStrings: async (namespace: string) => ({ [namespace]: (en as unknown as Record<string, unknown>)[namespace] }),
+  // As the real one: only the chosen keys of the namespace.
+  pickedStrings: async (namespace: string, keys: string[]) => {
+    const all = (en as unknown as Record<string, Record<string, unknown>>)[namespace];
+    return { [namespace]: Object.fromEntries(keys.map((key) => [key, all[key]])) };
+  },
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push, replace: vi.fn(), refresh: mocks.refresh }),
@@ -173,7 +177,8 @@ afterEach(cleanup);
 
 async function renderPage() {
   const node = await TeamPage({ searchParams: Promise.resolve({}) } as never);
-  return renderWithIntl(<>{await resolveServerTree(node)}</>);
+  // Only the strings the page sends: a namespace it forgets shows as raw keys and fails here.
+  return renderWithPageStrings(<>{await resolveServerTree(node)}</>);
 }
 
 const memberRow = (userId: string) => document.querySelector<HTMLElement>(`[data-member="${userId}"]`)!;

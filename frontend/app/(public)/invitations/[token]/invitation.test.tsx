@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ApiClient } from "@/lib/api/client";
 import en from "@/locales/en.json";
-import { renderWithIntl } from "@/test/intl";
+import { renderWithIntl, renderWithPageStrings } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
 // REQ-TEN-02 (P28 track C, AT-C-1 on the web): an invitation link's page. The preview is read with no session and the
@@ -21,7 +21,11 @@ const mocks = vi.hoisted(() => ({
   me: null as null | { user: { email: string }; side?: string },
   demo: false,
   push: vi.fn(),
+  accept: vi.fn(),
 }));
+
+// The Accept island's own client (the page renders it with the app's `api`).
+vi.mock("@/lib/api/client", () => ({ api: { POST: mocks.accept } }));
 
 vi.mock("@/lib/api/server", () => ({
   serverApi: () => ({ GET: mocks.get }),
@@ -66,7 +70,8 @@ afterEach(cleanup);
 
 async function renderPage(token = TOKEN) {
   const node = await InvitationPage({ params: Promise.resolve({ token }) } as never);
-  return renderWithIntl(<>{await resolveServerTree(node)}</>);
+  // Only the strings the page sends: a namespace it forgets shows as raw keys and fails here.
+  return renderWithPageStrings(<>{await resolveServerTree(node)}</>);
 }
 
 describe("the preview read", () => {
@@ -131,6 +136,21 @@ describe("the invitation page", () => {
     expect(screen.getByRole("button", { name: "Accept and join" }).hasAttribute("data-primary")).toBe(true);
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
     expect(screen.queryByRole("link", { name: "Sign in to accept" })).toBeNull();
+  });
+
+  it("signed in: a 429 on Accept says roughly when, from the strings the page sends", async () => {
+    mocks.me = { user: { email: "wanjiru@telco-a.example" } };
+    mocks.accept.mockResolvedValue({
+      error: { detail: { code: "rate_limited", message: "x" } },
+      response: new Response(null, { status: 429, headers: { "Retry-After": "120" } }),
+    });
+    await renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Accept and join" }));
+    const alert = await screen.findByRole("alert");
+    expect([...alert.querySelectorAll("p")].map((p) => p.textContent)).toEqual([
+      en.invitationAccept.refusal.rateLimited,
+      "Try again in about 2 minutes.",
+    ]);
   });
 
   it("a developer account is told it cannot join, with no Accept (one account, one side: D-72)", async () => {

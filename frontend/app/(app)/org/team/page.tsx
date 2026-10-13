@@ -99,7 +99,8 @@ export default async function OrganisationTeamPage({ searchParams }: PageProps<"
       // The forms' words (teamAdmin) and the fresh-code step's (the tracker's StepUp, picked): the client islands get
       // plain strings formatted here, no message runtime (lib/i18n/client-strings.ts).
       const strings = {
-        ...(await clientStrings(["teamAdmin"])),
+        // retryAfter: the islands' "Try again in about …" under a 429 (useTeamWrite).
+        ...(await clientStrings(["teamAdmin", "retryAfter"])),
         ...(await pickedStrings("trackerActions", ["stepUp", "cancel", "refusal"])),
       };
       body = (
