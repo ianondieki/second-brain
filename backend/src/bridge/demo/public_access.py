@@ -20,8 +20,8 @@ Security reasoning (for the security review):
   false, ``mfa_verified_at`` now) because the persona's TOTP secret is a public demo value anyway; the helper refuses
   any account that is not an active demo account.
 - **Visitors cannot take a persona away from each other.** Every route that changes a credential, a sign-in method or
-  an organisation role, every upload and the clock answer 403 ``public_demo_locked`` (``bridge.public_demo.LOCKED``),
-  and the nightly reset wipes everything else a visitor did.
+  an organisation role, every upload that keeps a file and the clock answer 403 ``public_demo_locked``
+  (``bridge.public_demo.LOCKED``), and the nightly reset wipes everything else a visitor did.
 - **CSRF and throttling as every auth POST.** The CSRF middleware of ``bridge.main`` covers this route like every
   state-changing ``/api`` request (the visitor first reads ``GET /api/auth/csrf``). Each attempt, refused ones
   included, is counted per client IP on the ``login_attempts`` ledger (HMAC digests only, ``bridge.auth.throttle``):
