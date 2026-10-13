@@ -285,6 +285,68 @@ async def test_a_public_entity_enters_stage_3_only_through_3b_and_a_private_one_
         assert await t.state_of(conn, private_interest) == "INTEREST_CONFIRMED"
 
 
+ENGAGEMENT_CONTACT = (
+    "SELECT contact_user_id, CAST(contact_channel AS text) AS channel, contact_by FROM engagements WHERE id = :e"
+)
+NAME_CONTACT = "UPDATE engagements SET contact_user_id = :c, contact_channel = 'email', contact_by = :by WHERE id = :e"
+
+
+async def contact_of(conn: AsyncConnection, engagement: UUID) -> tuple[object, ...]:
+    return tuple((await conn.execute(sa.text(ENGAGEMENT_CONTACT), {"e": engagement})).one())
+
+
+async def test_entering_3b_clears_the_contact_by_date_on_both_paths(owner_engine: AsyncEngine) -> None:
+    """No contact-by date during 3b, whichever way the engagement enters it: the signatory's approve (the person and
+    channel named, a date sent too) and the developer's accept of a public entity's interest (whose contact the
+    organisation named with a date, and which the developer may not change) both leave the person and channel and
+    clear the date; so does a resume into 3b after the date was set during a hold, and the owner's insert in 3b. The
+    contact CHECK holds throughout, and the route decision sets the date as it moves the engagement to stage 3."""
+    async with t.as_app(owner_engine) as conn:
+        p, approved = await public_scene(conn)
+        await t.act(conn, p.signatory, p.org)
+        await t.run(conn, NAME_CONTACT, c=p.owner, by=CONTACT_BY, e=approved)
+        await t.append(conn, approved, p.signatory, "signatory", "approve", "UNDER_REVIEW", "PROCUREMENT_ROUTE")
+        assert await contact_of(conn, approved) == (p.owner, "email", None)
+        await decide_and_move(conn, p, approved)
+        assert await contact_of(conn, approved) == (p.owner, "email", CONTACT_BY)  # the decision's date
+
+        await t.as_owner(conn)
+        q = await t.parties(conn)
+        await t.run(conn, "UPDATE organizations SET public_entity = true WHERE id = :org", org=q.org)
+        await t.act(conn, q.signatory, q.org)
+        interest = await t.engage(conn, q, origin="org_browse", state="ORG_INTEREST")
+        await t.run(conn, NAME_CONTACT, c=q.signatory, by=CONTACT_BY, e=interest)
+        await t.act(conn, q.developer)
+        await t.expect(conn, NAME_CONTACT, RLS, c=q.signatory, by=None, e=interest)  # not the developer's to write
+        await t.append(conn, interest, q.developer, "developer", "accept_interest", "ORG_INTEREST", "PROCUREMENT_ROUTE")
+        assert await contact_of(conn, interest) == (q.signatory, "email", None)
+        await t.append(conn, interest, q.developer, "developer", "pause", "PROCUREMENT_ROUTE", "ON_HOLD")
+        await t.act(conn, q.signatory, q.org)
+        await t.run(conn, "UPDATE engagements SET contact_by = :by WHERE id = :e", by=CONTACT_BY, e=interest)
+        await t.act(conn, q.developer)
+        await t.append(conn, interest, q.developer, "developer", "resume", "ON_HOLD", "PROCUREMENT_ROUTE")
+        assert await contact_of(conn, interest) == (q.signatory, "email", None)
+
+        await t.as_owner(conn)
+        r = await t.parties(conn)
+        await t.run(conn, "UPDATE organizations SET public_entity = true WHERE id = :org", org=r.org)
+        inserted = uuid7()
+        await t.run(
+            conn,
+            "INSERT INTO engagements (id, proposal_id, org_id, developer_id, version_id, origin, state,"
+            " contact_user_id, contact_channel, contact_by) VALUES (:id, :p, :org, :dev, :v, 'org_browse',"
+            " 'PROCUREMENT_ROUTE', :c, 'email', :by)",
+            id=inserted,
+            p=r.proposal,
+            org=r.org,
+            dev=r.developer,
+            v=r.version,
+            c=r.owner,
+            by=CONTACT_BY,
+        )
+        assert await contact_of(conn, inserted) == (r.owner, "email", None)
+
+
 async def test_3b_has_the_side_branches_of_stage_3(owner_engine: AsyncEngine) -> None:
     """From PROCUREMENT_ROUTE: a hold and a request for information resume to it; the organisation declines; the
     developer withdraws; the system expires it (each, undecided)."""

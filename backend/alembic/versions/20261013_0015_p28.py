@@ -62,7 +62,11 @@ since revision 0002, so no enum value is added and nothing needs an autocommit b
   ``PROCUREMENT_ROUTE``. So the decision and the move are made in one transaction, decision first.
 - The contact. Revision 0003's ``contact_complete`` (person, channel and contact-by date all or none) is replaced by
   ``contact_consistent``: person and channel together; a contact-by date only with them; once the route is decided, a
-  named contact has its date. Restored on downgrade.
+  named contact has its date. Restored on downgrade. The guard clears ``contact_by`` (NULL, whatever is sent) on every
+  move into ``PROCUREMENT_ROUTE`` and on an insert in it: neither entry path leaves a contact-by date during 3b (the
+  signatory's approve, which names the person and channel; the developer's accept of a public entity's interest, whose
+  contact the organisation named with a date when it showed interest, and which the developer may not write under
+  revision 0003's policy); the route decision sets the date, the contact-by clock starting there.
 
 The nudges ledger (REQ-NOT-05; the contract's B):
 
@@ -177,11 +181,12 @@ Operating rules for the code that uses this schema:
 
 - Whether an organisation is a public entity: ``SELECT app_org_is_public_entity(:org)``, never ``organizations`` under
   the caller's RLS (a developer reads no delisted organisation).
-- Approve (``UNDER_REVIEW``) for a public entity: name the contact person and channel and leave ``contact_by`` NULL,
-  then append the event to ``PROCUREMENT_ROUTE`` (refused for a private organisation: check_violation, the API's 409;
-  a private organisation's approve goes to ``INTEREST_CONFIRMED`` as before, a public entity's never does). The
-  developer's accept of a public entity's interest (``ORG_INTEREST``) likewise appends ``PROCUREMENT_ROUTE``, not
-  ``INTEREST_CONFIRMED`` (refused: check_violation).
+- Approve (``UNDER_REVIEW``) for a public entity: name the contact person and channel (a ``contact_by`` sent is cleared
+  on entering 3b), then append the event to ``PROCUREMENT_ROUTE`` (refused for a private organisation: check_violation,
+  the API's 409; a private organisation's approve goes to ``INTEREST_CONFIRMED`` as before, a public entity's never
+  does). The developer's accept of a public entity's interest (``ORG_INTEREST``) likewise appends ``PROCUREMENT_ROUTE``,
+  not ``INTEREST_CONFIRMED`` (refused: check_violation). Either way the engagement enters 3b with no contact-by date;
+  the route decision sets it.
 - Choose the route (an owner or admin; check the role first, 403): in one transaction, ``UPDATE engagements SET
   procurement_route = :route, procurement_justification = :text, contact_by = :by`` (one statement: the CHECKs see
   them together; trim the justification first; leave ``procurement_decided_at`` and ``procurement_decided_by`` out
@@ -466,7 +471,8 @@ FUNCTIONS_SQL = r"""
 -- out of PROCUREMENT_ROUTE (the projection's) goes to INTEREST_CONFIRMED only with the route decided and the contact
 -- named with its contact-by date; a decided route leaves 3b for INTEREST_CONFIRMED only. A public entity's forward move
 -- into INTEREST_CONFIRMED (from UNDER_REVIEW or ORG_INTEREST) is refused: it goes through 3b (a resume, and the return
--- of a disputed first contact from CONTACT_MADE, are not judged). SECURITY INVOKER: current_user
+-- of a disputed first contact from CONTACT_MADE, are not judged). Entering PROCUREMENT_ROUTE (a move or a resume into
+-- it, an insert in it) clears contact_by, whatever is sent: the route decision sets it. SECURITY INVOKER: current_user
 -- is the writer (the projection's state change runs as the owner, which reads the organisation; a member's decision
 -- runs as bridge_app, judged by app_is_member).
 CREATE FUNCTION engagements_procurement_guard() RETURNS trigger
@@ -484,6 +490,9 @@ BEGIN
            AND NOT coalesce((SELECT o.public_entity FROM public.organizations o WHERE o.id = NEW.org_id), false) THEN
             RAISE EXCEPTION 'engagements: PROCUREMENT_ROUTE is for a public entity only'
                 USING ERRCODE = 'check_violation';
+        END IF;
+        IF NEW.state = 'PROCUREMENT_ROUTE' THEN
+            NEW.contact_by := NULL;
         END IF;
         RETURN NEW;
     END IF;
@@ -518,6 +527,9 @@ BEGIN
            AND NOT coalesce((SELECT o.public_entity FROM public.organizations o WHERE o.id = NEW.org_id), false) THEN
             RAISE EXCEPTION 'engagements: PROCUREMENT_ROUTE is for a public entity only'
                 USING ERRCODE = 'check_violation';
+        END IF;
+        IF NEW.state = 'PROCUREMENT_ROUTE' THEN
+            NEW.contact_by := NULL;  -- no contact-by date during 3b: the route decision sets it
         END IF;
         IF NEW.state = 'INTEREST_CONFIRMED' AND OLD.state IN ('UNDER_REVIEW', 'ORG_INTEREST')
            AND coalesce((SELECT o.public_entity FROM public.organizations o WHERE o.id = NEW.org_id), false) THEN
