@@ -125,6 +125,15 @@ describe("/signup?invitation=", () => {
     expect(mocks.get).not.toHaveBeenCalled();
   });
 
+  it("says when to try again, not a dead link, after too many previews", async () => {
+    mocks.get.mockResolvedValue({ response: new Response(null, { status: 429, headers: { "Retry-After": "3600" } }) });
+    await page({ invitation: TOKEN });
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(en.invitation.rateLimitedTitle);
+    const empty = document.querySelector<HTMLElement>('[data-signup="rateLimited"]')!;
+    expect(empty.querySelector("p")?.textContent).toBe("Try again in about an hour.");
+    expect(screen.getByRole("link", { name: "Try again" }).getAttribute("href")).toBe(`/signup?invitation=${TOKEN}`);
+  });
+
   it("sends no referrer and is not indexed with an invitation, and is as before without", async () => {
     expect(await generateMetadata({ searchParams: Promise.resolve({ invitation: TOKEN }) } as never)).toMatchObject({
       referrer: "no-referrer",

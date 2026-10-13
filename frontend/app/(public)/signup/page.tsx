@@ -11,6 +11,7 @@ import { getSignedIn, getSignupConsents } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { publicDemoOn } from "@/lib/public-demo";
+import { retryWhen } from "@/lib/retry-after";
 
 import { isInvitationToken, readInvitation } from "../invitations/[token]/invitation";
 import { SignupForm } from "./SignupForm";
@@ -39,6 +40,23 @@ export default async function SignupPage({ searchParams }: PageProps<"/signup">)
   const token = typeof requested === "string" && isInvitationToken(requested) ? requested : null;
   const invited = token ? await readInvitation(token) : null;
   const [t, consents] = await Promise.all([getTranslations("signup"), getSignupConsents()]);
+  if (token && invited?.kind === "rateLimited") {
+    // Too many invitation previews from here: when to try again (the API's Retry-After), not a dead link.
+    const [ti, tr] = await Promise.all([getTranslations("invitation"), getTranslations("retryAfter")]);
+    const when = retryWhen(invited.retryAfter);
+    return (
+      <AuthShell photo="signUp">
+        <PageHeader title={ti("rateLimitedTitle")} lead={ti("rateLimited")} />
+        <EmptyState
+          className="mt-6"
+          sentence={when.count === undefined ? tr(when.key) : tr(when.key, { count: when.count })}
+          action={(await getTranslations("orgTeam"))("retry")}
+          href={`/signup?invitation=${token}`}
+          data-signup="rateLimited"
+        />
+      </AuthShell>
+    );
+  }
   if (requested !== undefined && invited?.kind !== "ok") {
     const ti = await getTranslations("invitation");
     return (
