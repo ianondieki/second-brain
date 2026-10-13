@@ -64,7 +64,7 @@ def test_contact_escalation_falls_due_past_the_third_business_day_and_em6_past_t
     assert due(S.INTEREST_CONFIRMED, at(date(2026, 10, 8), 23, 59), stage) == []
     assert kinds(due(S.INTEREST_CONFIRMED, at(friday, 0, 1), stage)) == [(K.CONTACT_ESCALATION, "e4:bd3")]
     late = due(S.INTEREST_CONFIRMED, at(date(2026, 10, 10)), stage)
-    assert kinds(late) == [(K.CONTACT_ESCALATION, "e4:bd3"), (K.CONTACT_OVERDUE, "e4:2026-10-09")]
+    assert kinds(late) == [(K.CONTACT_ESCALATION, "e4:bd3"), (K.CONTACT_OVERDUE, "e4:overdue")]
     escalation, overdue = late
     assert (escalation.days, escalation.on) == (3, friday)
     assert (overdue.on, overdue.expires) == (friday, date(2026, 10, 19))  # Mon + 10 BD
@@ -79,7 +79,7 @@ def test_a_hold_delays_each_count_by_the_business_days_paused() -> None:
     assert due(S.INTEREST_CONFIRMED, at(date(2026, 10, 12), 23), stage) == []
     assert kinds(due(S.INTEREST_CONFIRMED, at(date(2026, 10, 13), 9), stage)) == [(K.CONTACT_ESCALATION, "e4:bd3")]
     late = due(S.INTEREST_CONFIRMED, at(date(2026, 10, 14), 9), stage)
-    assert late[1].key == "e4:2026-10-13"
+    assert (late[1].key, late[1].on) == ("e4:overdue", date(2026, 10, 13))
     assert late[1].expires == date(2026, 10, 21)  # 10 BD + 2 paused
 
 
@@ -225,3 +225,13 @@ def test_the_matrix_rules_follow_requirements_section_5() -> None:
         K.MILESTONE_ESCALATION: ("engagement.n12", True, True),
     }
     assert rules[K.NDA_REMINDER].tag == "em5"
+
+
+def test_em6_is_keyed_on_the_stage_entry_so_a_moved_date_never_sends_it_twice() -> None:
+    """The reviewer's case: the contact-by date passed (EM6 sent), then a hold and a resume moved the deadline to a date
+    that has passed too: the key is the same, so the ledger refuses a second EM6."""
+    before = due(S.INTEREST_CONFIRMED, at(date(2026, 10, 12)), clock(date(2026, 10, 9)))
+    after = due(S.INTEREST_CONFIRMED, at(date(2026, 10, 20)), clock(date(2026, 10, 9), now_due=date(2026, 10, 13)))
+    overdue = [d for d in (*before, *after) if d.kind is K.CONTACT_OVERDUE]
+    assert [d.key for d in overdue] == ["e4:overdue", "e4:overdue"]
+    assert [d.on for d in overdue] == [date(2026, 10, 9), date(2026, 10, 13)]  # the notice names the date missed

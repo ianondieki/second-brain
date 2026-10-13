@@ -9,8 +9,10 @@ with no user bound) decides what is due now (``due_nudges``, pure):
 - ``contact_escalation``: in ``INTEREST_CONFIRMED``, ``escalate_bd`` (3) business days after the stage was entered
   from the main path: the organisation's admins (active owners and admins) and its escalation contact.
 - ``contact_overdue``: in ``INTEREST_CONFIRMED``, once the contact-by date (the stage's deadline, moved by holds) has
-  passed: EM6, the organisation's version to the named contact and the admins, the developer's to the developer; the
-  organisation's tracker then shows the escalation (``escalated_at``). The +10 BD expiry stays the expiry job's.
+  passed, once per entry into the stage (a hold placed after the date, resumed to a deadline still past, sends no
+  second EM6): EM6, the organisation's version to the named contact and the admins, the developer's to the
+  developer; the organisation's tracker then shows the escalation (``escalated_at``). The +10 BD expiry stays the
+  expiry job's.
 - ``nda_reminder``: in ``NDA_PENDING``, at each of ``remind_bd`` (2, 4): EM5 to each signer who has not signed (the
   developer; the organisation's signatories). Only the latest reminder due is sent (a run after a long gap sends one).
 - ``procurement_escalation``: in ``PROCUREMENT_ROUTE`` (a public entity's 3b), ``escalate_bd`` (5) business days in:
@@ -31,9 +33,9 @@ signatures, its milestones), then to ``member_id`` with the organisation (its ro
 assignment: the organisation's own, never read as the developer, D-68), then with no user bound each due nudge is
 recorded (``app_record_nudge(engagement, kind, key)``) and its notification queued in the same transaction only when
 that call recorded it (``engagements.nudge_notify``, ``deliver``): a nudge fires once, whatever the runs and retries.
-Keys are the job's codes: the stage entry's event seq and the business-day count, the missed date, the milestone and
-its submission's seq; never a name, an address or free text. One engagement's failure is logged and never stops the
-run (the next run retries it).
+Keys are the job's codes: the stage entry's event seq with the business-day count (``overdue`` for EM6), the
+milestone and its submission's seq; never a name, an address or free text. One engagement's failure is logged and
+never stops the run (the next run retries it).
 
 ``deliver`` tells each recipient in the bell, always, and by email in their own language (``nudge_copy``): EM5 is 🔒
 (a signature is needed: ``REQUIREMENTS.md`` N07), the escalations and EM6 follow the person's email preference for the
@@ -103,6 +105,13 @@ COUNTED: Final = frozenset({S.INTEREST_CONFIRMED, S.NDA_PENDING, S.PROCUREMENT_R
 ESCALATIONS: Final = frozenset(
     {K.CONTACT_ESCALATION, K.CONTACT_OVERDUE, K.PROCUREMENT_ESCALATION, K.MILESTONE_ESCALATION}
 )
+# The escalations of each stage: ``escalated_at`` reads the current stage's own (3b's procurement escalation is not
+# stage 3's once the route is chosen).
+STAGE_ESCALATIONS: Final[dict[EngagementState, frozenset[NudgeKind]]] = {
+    S.INTEREST_CONFIRMED: frozenset({K.CONTACT_ESCALATION, K.CONTACT_OVERDUE}),
+    S.PROCUREMENT_ROUTE: frozenset({K.PROCUREMENT_ESCALATION}),
+    S.IN_IMPLEMENTATION: frozenset({K.MILESTONE_ESCALATION}),
+}
 ADMINS: Final = frozenset({OrgRole.OWNER, OrgRole.ADMIN})
 # Who accepts a milestone (state_machine.DECIDERS): the organisation's reviewers of an engagement among its members.
 MILESTONE_REVIEWERS: Final = frozenset({OrgRole.OWNER, OrgRole.ADMIN, OrgRole.SIGNATORY, OrgRole.REVIEWER})
@@ -199,7 +208,7 @@ def due_nudges(
                 found.append(
                     Due(
                         K.CONTACT_OVERDUE,
-                        f"{entry}:{due_on.isoformat()}",
+                        f"{entry}:overdue",  # once per stage entry, whatever a hold moves the date to
                         on=due_on,
                         expires=local_date(expires) if expires is not None else None,
                     )
@@ -582,14 +591,15 @@ async def deliver(
 
 async def escalated_at(db: AsyncSession, engagement: Engagement, stage: EngagementState | None) -> datetime | None:
     """The latest escalation sent about the engagement's current stage (``stage``: the state, or the stage a side
-    state returns to), read by a member of its organisation (the ledger is never the developer's): since the stage was
-    entered from the main path; None without one."""
-    if stage is None:
+    state returns to), read by a member of its organisation (the ledger is never the developer's): one of that stage's
+    own kinds (``STAGE_ESCALATIONS``), sent since the stage was entered from the main path; None without one."""
+    if stage is None or stage not in STAGE_ESCALATIONS:
         return None
+    kinds = STAGE_ESCALATIONS[stage]
     entered = await entering_event(db, engagement.id, stage, from_main_path=True)
     query = select(func.max(EngagementNudge.sent_at)).where(
         EngagementNudge.engagement_id == engagement.id,
-        EngagementNudge.kind.in_([kind.value for kind in ESCALATIONS]),
+        EngagementNudge.kind.in_(sorted(kind.value for kind in kinds)),
     )
     if entered is not None:
         query = query.where(EngagementNudge.sent_at >= entered.created_at)
