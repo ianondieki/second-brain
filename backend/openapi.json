@@ -14822,6 +14822,18 @@
             "title": "Email",
             "type": "string"
           },
+          "invitation": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{43}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitation"
+          },
           "locale": {
             "default": "en",
             "enum": [
@@ -22491,7 +22503,7 @@
     },
     "/api/auth/signup": {
       "post": {
-        "description": "Create an account and email its link; 202 \"check your email\" whether or not the address has an account. 422\ninvalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or\nconsent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.",
+        "description": "Create an account and email its link; 202 \"check your email\" whether or not the address has an account. 422\ninvalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or\nconsent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.\nWith ``invitation`` (an organisation's invitation link's token; P28, D-72) and side \"org\" without ``org``: an\ninvitee's account (no developer profile, organisation or plan), only while the link is open (else 422\norg_details_required); ``invitation`` with side \"developer\" or with ``org`` is 422 invitation_conflict.",
         "operationId": "signup_api_auth_signup_post",
         "requestBody": {
           "content": {
@@ -30975,7 +30987,7 @@
     },
     "/api/invitations/{token}/accept": {
       "post": {
-        "description": "Join the organisation with the invitation's roles (signed in with the address it was sent to).",
+        "description": "Join the organisation with the invitation's roles (signed in with the address it was sent to, from an\norganisation account: a developer account is 409 developer_account).",
         "operationId": "accept_invitation_api_invitations__token__accept_post",
         "parameters": [
           {
