@@ -8,7 +8,7 @@ Standard library only: the image's command (infra/demo/space/Dockerfile), run as
 2. initialises PostgreSQL 16 (scram-sha-256 on the socket and on 127.0.0.1, its only address) and applies
    infra/postgres/roles.sql, the owner's and app's logins, the ``bridge`` database and prepare_db.sql, as
    infra/postgres/init/00-bridge.sh does;
-3. starts SeaweedFS (S3) and Mailpit on 127.0.0.1 only;
+3. starts SeaweedFS (S3, its telemetry off) and Mailpit on 127.0.0.1 only;
 4. runs infra/docker-compose.demo.yml's migrate step (migrations, buckets, the provenance key, the demo seed) with the
    demo compose's environment plus ``PUBLIC_DEMO=true``;
 5. starts the API (127.0.0.1:8000), the job worker and the web app on ``PORT`` (default 7860, every interface): the
@@ -16,7 +16,8 @@ Standard library only: the image's command (infra/demo/space/Dockerfile), run as
 
 A child that crashes is restarted with back-off. At 03:00 Africa/Nairobi (00:00 UTC; Kenya keeps no daylight saving),
 or on SIGUSR1, the nightly reset stops the children, wipes the data and boots again with new secrets. SIGTERM and
-SIGINT stop the children in order (the web, worker and API, then S3 and Mailpit, then Postgres) and exit.
+SIGINT stop the children in order (the web, worker and API, then S3 and Mailpit, then Postgres) and exit. One
+supervisor per home: it refuses to start while ``~/run.pid`` names a live run.py, and ``reset`` signals only that.
 
     python3 run.py          boot and supervise (the image's CMD)
     python3 run.py reset    ask the running supervisor for a reset now (sends it SIGUSR1)
@@ -24,7 +25,10 @@ SIGINT stop the children in order (the web, worker and API, then S3 and Mailpit,
 Environment: PORT (default 7860); PUBLIC_BASE_URL, else https://$SPACE_HOST (Hugging Face sets it), else the
 codespace's forwarded address ($CODESPACE_NAME, $GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN), else
 http://localhost:$PORT; COOKIE_SECURE (default true); PUBLIC_DEMO_CONTENT (fictional, the default, or full). Nothing
-else reaches the app: every provider is a fake and LLM calls answer with the deterministic fallback. Demo only.
+else reaches the app. Email stays in the internal Mailpit, SMS and payments are simulated, LLM calls answer with the
+deterministic fallback, scanning and embeddings are the fakes. The one connection that leaves the container is the
+worker's: a registered proposal's certificate gets a real RFC 3161 timestamp from a public timestamp service (DigiCert,
+FreeTSA as the fallback; the app's defaults, as in ``make demo``), which sees only a hash. Demo only.
 """
 
 # ruff: noqa: T201  (a command-line script: its usage and the reset command's answer are printed)
@@ -96,11 +100,12 @@ ALTER ROLE bridge_app LOGIN PASSWORD :'app_pw';
 CREATE DATABASE bridge OWNER bridge_owner;
 """
 # The demo compose's flags (64 volume slots of 128 MB: the default sizes them from the free disk), on loopback only;
-# no Iceberg or Lance endpoints, and no 10 s pause before the volume server stops.
+# no usage statistics sent to SeaweedFS (on by default), no Iceberg or Lance endpoints, no 10 s pause at stop.
 WEED = (
     "-logtostderr=true server -s3 -ip=127.0.0.1 -ip.bind=127.0.0.1 -master.volumeSizeLimitMB=128 -volume.max=64 "
-    "-volume.preStopSeconds=0 -s3.port.iceberg=0 -s3.port.lance=0"
+    "-master.telemetry=false -volume.preStopSeconds=0 -s3.port.iceberg=0 -s3.port.lance=0"
 )
+SEAWEED_SOCKETS = Path("/tmp")  # noqa: S108 - where SeaweedFS always puts its gRPC sockets (no flag moves them)
 MIGRATE = (  # infra/docker-compose.demo.yml's migrate command, one step at a time
     "alembic upgrade head",
     "python -m bridge.storage ensure-buckets",
@@ -185,8 +190,21 @@ def wipe() -> None:
             entry.unlink()
     for name in ("s3", "mail", "run"):
         (DATA / name).mkdir(mode=0o700)
-    for stale in Path("/tmp").glob("seaweedfs-*.sock"):  # noqa: S108 - SeaweedFS's gRPC sockets, always in /tmp
+    for stale in SEAWEED_SOCKETS.glob("seaweedfs-*.sock"):  # a killed SeaweedFS leaves them behind
         stale.unlink(missing_ok=True)
+
+
+def supervisor_pid() -> int | None:
+    """The pid ``run.pid`` names when that process is alive, is not this one, and runs run.py (start-demo.sh's check);
+    None when the file is missing or stale, or its pid now belongs to another program."""
+    try:
+        pid = int(PIDFILE.read_text(encoding="utf-8").strip())
+        argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+    except (OSError, ValueError):
+        return None
+    if pid == os.getpid() or not any(Path(os.fsdecode(arg)).name == "run.py" for arg in argv):
+        return None
+    return pid
 
 
 class Child:
@@ -470,12 +488,11 @@ class Supervisor:
 
 
 def request_reset() -> int:
-    try:
-        pid = int(PIDFILE.read_text(encoding="utf-8").strip())
-        os.kill(pid, signal.SIGUSR1)
-    except (OSError, ValueError) as exc:
-        print(f"run.py: no running supervisor to reset ({PIDFILE}: {exc})", file=sys.stderr)
+    pid = supervisor_pid()
+    if pid is None:
+        print(f"run.py: no running supervisor to reset ({PIDFILE} names none)", file=sys.stderr)
         return 1
+    os.kill(pid, signal.SIGUSR1)
     print(f"run.py: reset requested (supervisor pid {pid}); its log shows the progress")
     return 0
 
@@ -494,6 +511,9 @@ def main(argv: list[str]) -> int:
     if content not in {"fictional", "full"}:
         print(f"run.py: PUBLIC_DEMO_CONTENT={content} must be fictional or full", file=sys.stderr)
         return 2
+    if (other := supervisor_pid()) is not None:
+        print(f"run.py: a supervisor is already running (pid {other}); `run.py reset` restarts it", file=sys.stderr)
+        return 1
     return Supervisor(int(port_text), content).run()
 
 
