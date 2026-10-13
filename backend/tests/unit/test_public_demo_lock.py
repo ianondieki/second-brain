@@ -3,32 +3,33 @@
 The rule: every route that takes a file (a multipart form, ``UploadFile``, ``File``/``Form`` parameters, or a raw body
 declared as binary in its OpenAPI request body) keeps it, and so carries ``refuse_in_public_demo``, unless it is one
 of the named exceptions in ``STORES_NOTHING`` (today only the certificate file check, ``POST /api/verify``, which
-hashes the body and stores nothing; the orchestrator's decision). A future upload route cannot ship unlocked, and a
-module that reads a raw request body must expose that route as a declared upload, or the walk would miss it. The
+hashes the body and stores nothing; the orchestrator's decision). Whether a route takes a file is decided per route,
+from its parameters, its declared request body and its endpoint's own code (``reads_raw_body`` follows the calls it
+makes into ``bridge``), so a future upload route cannot ship unlocked even when it declares nothing. The
 locked routes are exactly the register below (the password sign-in, its second step and link sign-in, since the
 persona allowlist is the only way in; then the card's list: credentials, sign-in methods, role changes, uploads that
 keep a file, the clock), and each answers 403 ``public_demo_locked`` while the mode is on, before any session, body
 or database.
 A new state-changing account or membership route (sign-in methods, an address, a password, a second factor, members,
-an export or a deletion) fails the walk until it is locked or reviewed as open.
+an export, a deletion, invitations or claims) fails the walk until it is locked or reviewed as open.
 """
 
 from __future__ import annotations
 
+import ast
 import inspect
 import re
-from collections.abc import Iterator
-from pathlib import Path
+import textwrap
+from collections.abc import Callable, Iterator
 from typing import Any
 from uuid import UUID
 
 import httpx
 import pytest
-from fastapi import FastAPI, params
+from fastapi import FastAPI, Request, params
 from fastapi.dependencies.models import Dependant
 from fastapi.routing import RouteContext, iter_route_contexts
 
-import bridge
 from bridge.config import Settings, get_settings
 from bridge.db import create_engine, create_session_factory
 from bridge.main import create_app
@@ -86,7 +87,7 @@ UPLOADS = frozenset(
         ("POST", "/api/verify"),
     }
 )
-RAW_BODY = re.compile(r"\brequest\.(?:stream|form|body)\(|\bUploadFile\b|\bFile\(|\bForm\(")
+RAW_READS = frozenset({"stream", "body", "form"})  # a Request's methods that read the body
 FILE_TYPES = ("multipart/", "application/octet-stream")
 
 
@@ -110,23 +111,77 @@ def is_locked(route: RouteContext) -> bool:
     return refuse_in_public_demo in set(calls(route.dependant))
 
 
-def takes_a_file(route: RouteContext) -> bool:
-    """A multipart or form parameter anywhere in its dependencies, or a request body declared as a file."""
+def form_fields(dependant: Dependant) -> Iterator[bool]:
+    for param in dependant.body_params:
+        yield isinstance(param.field_info, params.File | params.Form)
+    for sub in dependant.dependencies:
+        yield from form_fields(sub)
 
-    def form_fields(dependant: Dependant) -> Iterator[bool]:
-        for param in dependant.body_params:
-            yield isinstance(param.field_info, params.File | params.Form)
-        for sub in dependant.dependencies:
-            yield from form_fields(sub)
 
-    if any(form_fields(route.dependant)):
-        return True
+def declares_a_file(route: RouteContext) -> bool:
+    """A request body declared as a file in its OpenAPI request body (a multipart form, an octet stream, binary)."""
     body = (route.openapi_extra or {}).get("requestBody", {})
     for content_type, media in body.get("content", {}).items():
         schema = media.get("schema", {})
         if content_type.startswith(FILE_TYPES) or schema.get("format") == "binary":
             return True
     return False
+
+
+def _resolve(node: ast.expr, scope: dict[str, Any]) -> Any:
+    """What a call's target names in ``scope``: a module-level name, or a function of an imported module."""
+    if isinstance(node, ast.Name):
+        return scope.get(node.id)
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+        owner = scope.get(node.value.id)
+        return getattr(owner, node.attr, None) if inspect.ismodule(owner) else None
+    return None
+
+
+def reads_raw_body(func: Callable[..., Any], depth: int = 4, seen: set[Any] | None = None) -> bool:
+    """Whether ``func``, or a function of ours it calls (``depth`` calls deep), reads the request body itself:
+    ``.stream()``, ``.body()`` or ``.form()`` on a parameter annotated ``Request``. Read from the code, per route, so a
+    route that reads its body without declaring it is still found."""
+    func = inspect.unwrap(func)
+    seen = set() if seen is None else seen
+    if func in seen or depth < 0:
+        return False
+    seen.add(func)
+    try:
+        tree = ast.parse(textwrap.dedent(inspect.getsource(func)))
+    except (OSError, TypeError):
+        return False
+    requests = {name for name, p in inspect.signature(func).parameters.items() if "Request" in str(p.annotation)}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        target = node.func
+        if (
+            isinstance(target, ast.Attribute)
+            and target.attr in RAW_READS
+            and isinstance(target.value, ast.Name)
+            and target.value.id in requests
+        ):
+            return True
+        called = _resolve(target, func.__globals__)
+        ours = inspect.isfunction(called) and called.__module__.split(".")[0] in {
+            "bridge",
+            func.__module__.split(".")[0],
+        }
+        if ours and reads_raw_body(called, depth - 1, seen):
+            return True
+    return False
+
+
+def takes_a_file(route: RouteContext) -> bool:
+    """A multipart or form parameter anywhere in its dependencies, a request body declared as a file, or an endpoint
+    that reads the raw body itself (``reads_raw_body``), each decided for this route alone."""
+    endpoint = route.endpoint
+    return (
+        any(form_fields(route.dependant))
+        or declares_a_file(route)
+        or (endpoint is not None and reads_raw_body(endpoint))
+    )
 
 
 def key(route: RouteContext) -> list[tuple[str, str]]:
@@ -148,22 +203,35 @@ def test_every_route_that_takes_a_file_is_locked_unless_it_stores_nothing(app: F
     assert unlocked == set(STORES_NOTHING)  # each named exception is a real, open upload route
 
 
-def test_every_module_that_reads_a_raw_body_declares_its_upload(app: FastAPI) -> None:
-    """A route that reads the request body itself is found only through its declared request body: every module that
-    does so must be one whose upload the walk found (a new raw-body route must declare it, and then it is checked)."""
-    package = Path(bridge.__file__).parent
-    readers = {
-        path.relative_to(package).as_posix()
-        for path in package.rglob("*.py")
-        if RAW_BODY.search(path.read_text(encoding="utf-8"))
-    }
-    declared = {
-        Path(inspect.getfile(route.endpoint)).relative_to(package).as_posix()
-        for route in contexts(app)
-        if takes_a_file(route) and route.endpoint is not None
-    }
-    assert readers, "the scan found nothing: the pattern no longer matches the upload code"
-    assert readers <= declared, f"raw-body readers without a declared upload route: {sorted(readers - declared)}"
+def test_every_route_that_reads_a_raw_body_declares_it(app: FastAPI) -> None:
+    """Per route: an endpoint that reads its body itself also declares it as a file in its OpenAPI request body (so
+    API clients and the walk above agree), and the call-graph reading finds every declared upload."""
+    readers = {k for route in contexts(app) if route.endpoint and reads_raw_body(route.endpoint) for k in key(route)}
+    declared = {k for route in contexts(app) if declares_a_file(route) for k in key(route)}
+    assert readers == declared == UPLOADS
+
+
+async def _read_helper(request: Request) -> bytes:
+    return b"".join([chunk async for chunk in request.stream()])
+
+
+def test_the_reader_follows_helpers_and_ignores_json_routes() -> None:
+    """The scratch mutation of the review: a new route reading its body through a helper, declared nowhere, is found;
+    a JSON route is not."""
+
+    async def scratch(proposal_id: UUID, request: Request) -> dict[str, int]:
+        return {"size": len(await _read_helper(request))}
+
+    async def json_only(proposal_id: UUID, request: Request) -> dict[str, str]:
+        return {"path": request.url.path}
+
+    assert reads_raw_body(scratch)
+    assert not reads_raw_body(json_only)
+    probe = FastAPI()
+    probe.post("/api/me/proposals/{proposal_id}/scratch")(scratch)
+    [route] = [r for r in contexts(probe) if str(r.path).endswith("/scratch")]
+    assert takes_a_file(route)
+    assert not is_locked(route)  # so the rule above would name it
 
 
 def test_every_staff_write_is_locked_and_every_staff_read_open(app: FastAPI) -> None:
@@ -202,23 +270,37 @@ OPEN_ACCOUNT_ROUTES = frozenset(
         ("POST", "/api/auth/logout"),
     }
 )
-ACCOUNT_PATHS = re.compile(r"^/api/auth/|^/api/me/identities|/members(/|$)|/email|/password|/totp|/export|/delete")
+# A developer's team-up invitations (REQ-DEV-03) stay open, reviewed: an invitation is a note from one demo developer
+# to another about a problem, never a credential, a sign-in method or an organisation's membership; it locks nobody
+# out of a persona, and the nightly reset wipes it.
+OPEN_TEAM_INVITATIONS = frozenset(
+    {
+        ("POST", "/api/me/teams/invitations"),
+        ("POST", "/api/me/teams/invitations/{invitation_id}/accept"),
+        ("POST", "/api/me/teams/invitations/{invitation_id}/decline"),
+        ("POST", "/api/me/teams/invitations/{invitation_id}/withdraw"),
+    }
+)
+ACCOUNT_PATHS = re.compile(
+    r"^/api/auth/|^/api/me/identities|/members(/|$)|/email|/password|/totp|/export|/delete|invitations|claims"
+)
 WRITES = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 def test_every_account_and_membership_change_is_classified(app: FastAPI) -> None:
     """A new state-changing route under ``/api/auth`` or ``/api/me/identities``, or one about members, an address, a
-    password, a second factor, an export or a deletion, fails here until it is locked or reviewed as open (an email
-    change or a DSR route must not reach the public demo unlocked by accident)."""
+    password, a second factor, an export, a deletion, invitations or claims, fails here until it is locked or
+    reviewed as open (an email change, a DSR route, a member invitation or a claim decision must not reach the public
+    demo unlocked by accident)."""
     found = {
         k
         for route in contexts(app)
         for k in key(route)
         if k[0] in WRITES and ACCOUNT_PATHS.search(k[1]) and k not in UPLOADS
     }
-    unclassified = sorted(found - LOCKED_ROUTES - OPEN_ACCOUNT_ROUTES)
+    unclassified = sorted(found - LOCKED_ROUTES - OPEN_ACCOUNT_ROUTES - OPEN_TEAM_INVITATIONS)
     assert not unclassified, f"lock these (bridge.public_demo.LOCKED) or review them as open: {unclassified}"
-    assert found >= OPEN_ACCOUNT_ROUTES
+    assert found >= OPEN_ACCOUNT_ROUTES | OPEN_TEAM_INVITATIONS
 
 
 CLOCK_MOVE = ("POST", "/api/test-clock/advance")  # behind the clock router's sign-in guard: 401 first when signed out
