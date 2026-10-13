@@ -10,6 +10,7 @@ import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { homeFor } from "@/lib/auth/routing";
+import { publicDemoOn } from "@/lib/public-demo";
 
 import { chipsOf, overlapKey } from "../checks";
 import { editorOptions, lastOverlap, linkableProblem, myIdea } from "../data";
@@ -99,6 +100,8 @@ export async function EditorScreen({ id, step, problemId = null }: { id: string 
             attestations={options.attestations}
             problems={options.problems}
             lastOverlap={lastCheck || undefined}
+            // The public demo (REQ-FND-04): file uploads are switched off; the Files part says so in place of "Add a file".
+            uploadsLocked={publicDemoOn() ? (await getTranslations("publicDemo"))("locked") : undefined}
           />
         </ClientStrings>
       </div>

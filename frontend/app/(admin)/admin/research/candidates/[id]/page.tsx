@@ -22,6 +22,8 @@ import { getReview } from "../../data";
 import { Decision } from "../../Decision";
 import { PageStepUp } from "../../PageStepUp";
 import { nicheLabel, RESEARCH_PATH } from "../../research";
+import { DemoLocked } from "@/components/DemoLocked";
+import { publicDemoOn } from "@/lib/public-demo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminResearch");
@@ -143,15 +145,20 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
         description={t("review.decisionLead")}
         className="decision-panel rounded-panel border bg-field p-5 sm:p-6"
       >
-        <ClientStrings strings={strings}>
-          <Decision
-            problemId={candidate.id}
-            needsChecklist={named}
-            checklist={candidate.checklist}
-            publicHref={problemHref(candidate.id)}
-            researchHref={RESEARCH_PATH}
-          />
-        </ClientStrings>
+        {/* The public demo (REQ-FND-04): staff are read-only. */}
+        {publicDemoOn() ? (
+          <DemoLocked />
+        ) : (
+          <ClientStrings strings={strings}>
+            <Decision
+              problemId={candidate.id}
+              needsChecklist={named}
+              checklist={candidate.checklist}
+              publicHref={problemHref(candidate.id)}
+              researchHref={RESEARCH_PATH}
+            />
+          </ClientStrings>
+        )}
       </Section>
     </article>,
   );

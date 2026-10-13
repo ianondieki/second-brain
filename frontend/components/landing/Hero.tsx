@@ -4,6 +4,7 @@ import { preload } from "react-dom";
 
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { Lattice } from "@/components/ui/Lattice";
+import { publicDemoOn } from "@/lib/public-demo";
 
 import { HeroComposition } from "./HeroComposition";
 import { Stats } from "./Stats";
@@ -17,6 +18,9 @@ import { Stats } from "./Stats";
  */
 export async function Hero() {
   const t = await getTranslations("landing");
+  // The public demo (REQ-FND-04): the main call goes to /login's persona picker, and there is no sign-up to offer.
+  const demo = publicDemoOn();
+  const tDemo = await getTranslations("publicDemo");
   // The italic sets the accent phrase only (9 KB): preloaded here, with the upright and the text face (app/layout.tsx).
   preload("/fonts/fraunces-italic-v1.woff2", { as: "font", type: "font/woff2", crossOrigin: "anonymous", fetchPriority: "high" });
   return (
@@ -32,22 +36,24 @@ export async function Hero() {
           </h1>
           <p className="mt-7 max-w-[50ch] text-lg text-ink-soft">{t("lead")}</p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <ButtonLink href="/signup" variant="primary">
-              {t("signUp")}
+            <ButtonLink href={demo ? "/login" : "/signup"} variant="primary">
+              {demo ? tDemo("tryDemo") : t("signUp")}
             </ButtonLink>
             <ButtonLink href="/verify" variant="secondary">
               {t("hero.check")}
             </ButtonLink>
           </div>
-          <p className="mt-6 text-ink-soft">
-            {t.rich("haveAccount", {
-              login: (chunks) => (
-                <Link href="/login" className="py-3 font-semibold text-ink underline decoration-1 hover:decoration-2">
-                  {chunks}
-                </Link>
-              ),
-            })}
-          </p>
+          {demo ? null : (
+            <p className="mt-6 text-ink-soft">
+              {t.rich("haveAccount", {
+                login: (chunks) => (
+                  <Link href="/login" className="py-3 font-semibold text-ink underline decoration-1 hover:decoration-2">
+                    {chunks}
+                  </Link>
+                ),
+              })}
+            </p>
+          )}
         </div>
         <HeroComposition />
       </div>

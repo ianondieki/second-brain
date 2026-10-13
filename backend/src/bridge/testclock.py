@@ -27,6 +27,7 @@ from bridge.auth.deps import Db, current_session
 from bridge.config import Settings
 from bridge.errors import ERROR_RESPONSES, ApiError
 from bridge.models.enums import StaffRole
+from bridge.public_demo import LOCKED
 
 MAX_OFFSET = timedelta(days=366)
 _READ = text("SELECT enabled, clock_offset, app_clock_now() AS now FROM test_clock WHERE singleton")
@@ -65,7 +66,7 @@ def build_router(settings: Settings) -> APIRouter:
     async def read_clock(db: Db) -> ClockOut:
         return await _read(db)
 
-    @router.post("/advance")
+    @router.post("/advance", dependencies=[LOCKED])  # the shared clock stays put in the public demo (REQ-FND-04)
     async def advance_clock(body: AdvanceBody, db: Db) -> ClockOut:
         current = await _read(db)
         offset = timedelta(seconds=current.offset_seconds) + timedelta(days=body.days, hours=body.hours)

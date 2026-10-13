@@ -107,3 +107,26 @@ class PublicProblem(BaseModel):
         description="A Brief's organisation's level while it is listed in the directory; null for every other problem"
     )
     seeded: bool = Field(description=SEEDED_DOC)
+
+
+PersonaRole = Literal["developer", "org_admin", "org_signatory", "org_reviewer", "staff"]
+
+
+class DemoPersona(BaseModel):
+    """One persona of the public demo (REQ-FND-04): a fictional demo account a visitor signs in as with one press."""
+
+    key: str = Field(description='What POST /api/auth/demo/sign-in takes as "persona", e.g. "amina"')
+    name: str = Field(description="The account's display name (fictional)")
+    role: PersonaRole = Field(description="Which side and role it plays")
+    detail: str = Field(description='One line of what it is, e.g. "Telco A (fixture): signatory"')
+    home: str = Field(description='The web path to land on after signing in: "/dev", "/org" or "/admin"')
+
+
+class PublicDemo(BaseModel):
+    """Whether this deployment is the public demo, and its personas. Off: ``enabled`` false, no personas, no reset."""
+
+    enabled: bool = Field(description="True only where PUBLIC_DEMO is on and the image carries the demo module")
+    personas: list[DemoPersona] = Field(description="The personas in the order to show them; empty when off")
+    reset_hour_eat: int | None = Field(
+        description="The hour (East Africa Time, 0-23) when the demo's data is wiped and seeded again; null when off"
+    )

@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
@@ -55,6 +56,7 @@ OPTIONAL_SETTINGS = (
     "s3_secret_access_key",
     "audit_reader_database_url",
     "payment_provider",  # PAYMENT_PROVIDER= is the fake in dev and test, none elsewhere
+    "public_demo_frozen_at",  # PUBLIC_DEMO_FROZEN_AT= is the API process's start
     "llm_provider",  # LLM_PROVIDER= picks free when a complete slot is set (dev), else fake
     "llm_prototype_total_cap_usd",  # LLM_PROTOTYPE_TOTAL_CAP_USD= is USD 5 in dev and test, none elsewhere
     *(f"llm_free_{n}_{part}" for n in LLM_FREE_SLOTS for part in (*FREE_SLOT_PARTS, "response_format")),
@@ -149,6 +151,17 @@ class Settings(BaseSettings):
     # Feature flags (docs/spec/10: default false until the legal gate).
     feature_tier2_enabled: bool = False
     feature_deals_enabled: bool = False
+
+    # The public demo (REQ-FND-04; tasks/P28.md track PD; D-71): one-press persona sign-in, the lock on credential,
+    # membership, upload and clock routes (bridge.public_demo), X-Robots-Tag noindex. Refused at start-up unless
+    # APP_ENV is set explicitly to dev or test (DEMO_ENVS), so staging and production never run it. Its content:
+    # fictional (the default) seeds only the fixture organisations and official-source research excerpts; full adds the
+    # provisional directory of real organisations and the news excerpts (after D-38 and G6's citations).
+    public_demo: bool = False
+    public_demo_content: Literal["fictional", "full"] = "fictional"
+    # Nothing created or changed after this instant reaches the signed-out public pages in the public demo (with a
+    # zone; empty: the API process's start). The image's supervisor sets it once its seed has finished.
+    public_demo_frozen_at: datetime | None = None
 
     # Tier-2 envelope encryption (bridge.crypto.envelope; ADR-007): each proposal's data key is wrapped by a key
     # encryption key. Dev/test: TIER2_LOCAL_KEK (base64 of 32 bytes). Production: KMS only (TIER2_KMS_KEY_ID). Code
@@ -392,6 +405,14 @@ class Settings(BaseSettings):
                 "PAYMENT_PROVIDER=fake is for dev and test only: staging and production take no simulated payments"
                 " (D-36)"
             )
+        frozen = self.public_demo_frozen_at
+        if frozen is not None and (frozen.tzinfo is None or frozen.utcoffset() is None):
+            problems.append("PUBLIC_DEMO_FROZEN_AT must carry a zone (for example 2026-10-13T03:20:00+03:00)")
+        if self.public_demo and (self.app_env not in DEMO_ENVS or "app_env" not in self.model_fields_set):
+            problems.append(
+                "PUBLIC_DEMO=true runs only with APP_ENV set explicitly to dev or test (the public demo's personas sign"
+                " in without a password or second factor; staging and production never run it)"
+            )
         problems.extend(self._key_problems())
         problems.extend(self._llm_problems())
         if self.app_env == "production":
@@ -433,6 +454,15 @@ class Settings(BaseSettings):
         if self.object_store == "memory" and self.app_env in ("staging", "production"):
             problems.append("OBJECT_STORE=memory is for tests; staging and production use s3")
         return problems
+
+
+def fictional_only(settings: Settings) -> bool:
+    """Whether the seed and the research catalogue keep to fictional content: ``PUBLIC_DEMO`` on with
+    ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04). Then the provisional directory of real organisations, the research
+    cards citing a non-official excerpt and the non-official excerpts themselves (news, D-38) are left out; ``full``,
+    or the mode off, changes nothing. Here, not in ``bridge.public_demo``, so the catalogue loader and the seed need no
+    web framework import."""
+    return settings.public_demo and settings.public_demo_content == "fictional"
 
 
 def decoded_key(value: SecretStr) -> bytes | None:

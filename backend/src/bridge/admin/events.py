@@ -34,6 +34,7 @@ from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, not_found
 from bridge.events import service
 from bridge.events.schemas import EventDecisionIn, EventIn, EventList, EventOut, EventStatus
 from bridge.models.enums import AuditActor
+from bridge.public_demo import LOCKED
 
 router = APIRouter(prefix="/api/admin/events", tags=["admin"], responses=ERROR_RESPONSES)
 
@@ -52,7 +53,7 @@ _DECISION_CONFLICTS: Final[Mapping[str, tuple[str, str]]] = {
 DECISION_409: Final = "already_decided, changed_since_review, event_over or organisation_unavailable"
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[LOCKED])  # read-only staff in the public demo
 async def post_platform_event(body: EventIn, staff: StaffAdmin, db: Db) -> EventOut:
     """A platform event ("Platform" as the organiser), waiting on the queue like any other."""
     return await service.create(db, body, actor_id=staff.live.user.id, org_id=None, staff=True)
@@ -87,6 +88,7 @@ def _conflict(exc: DBAPIError) -> ApiError | None:
 
 @router.post(
     "/{event_id}/decision",
+    dependencies=[LOCKED],  # staff are read-only in the public demo (REQ-FND-04)
     responses={409: {"model": ApiErrorBody, "description": DECISION_409}},
 )
 async def decide_event(event_id: UUID, body: EventDecisionIn, staff: StaffModerator, db: Db) -> EventOut:
@@ -124,7 +126,7 @@ async def decide_event(event_id: UUID, body: EventDecisionIn, staff: StaffModera
     return await service.get_one(db, event_id)
 
 
-@router.post("/{event_id}/cancel")
+@router.post("/{event_id}/cancel", dependencies=[LOCKED])  # read-only staff in the public demo
 async def cancel_admin_event(event_id: UUID, staff: StaffModerator, db: Db) -> EventOut:
     """Cancel a draft or published event (an organisation's or the platform's)."""
     return await service.cancel(db, actor_id=staff.live.user.id, event_id=event_id, staff=True)

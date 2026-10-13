@@ -16,6 +16,9 @@ already public (a problem's or Brief's, a proposal's current teaser title), coun
 tables, and whether a problem is a seeded example card. Never a person, a handle, an organisation, a statement or any
 other text, and no engagement (stage events are deferred: they need a definer function from db-migrations).
 
+**The public demo's freeze** (REQ-FND-04, ``unchanged_since``): with ``frozen_at`` given, every statement keeps only
+problems created and last changed at or before it, and the feed only a proposal's current version created before it.
+
 **One problem** (``problem_statement``): the same predicate on one id, with the problem's own published text
 (statement, affected group) and, for a Brief, its organisation's level only through a join that matches a
 listed organisation (unclaimed, E1 or E2, not delisted); never its name, nor a person or handle.
@@ -24,6 +27,7 @@ listed organisation (unclaimed, E1 or E2, not delisted); never its name, nor a p
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import Any, Final
 from uuid import UUID
 
@@ -41,6 +45,7 @@ from sqlalchemy import (
     or_,
     select,
     text,
+    true,
     union_all,
 )
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -97,6 +102,15 @@ def readable_problem() -> ColumnElement[bool]:
     )
 
 
+def unchanged_since(frozen_at: datetime | None) -> ColumnElement[bool]:
+    """The public demo's freeze on ``problems`` (REQ-FND-04): created and last changed at or before ``frozen_at``
+    (``bridge.public_demo.frozen_at``), so a visitor's problem, Brief or edit never reaches a signed-out page; true
+    when there is no freeze."""
+    if frozen_at is None:
+        return true()
+    return and_(Problem.created_at <= frozen_at, Problem.updated_at <= frozen_at)
+
+
 def example_card() -> ColumnElement[bool]:
     """Every cited source of the problem is a saved demo excerpt (and it has one): the seed's research cards."""
     cited = select(ProblemCitation.id).where(ProblemCitation.problem_id == Problem.id)
@@ -107,8 +121,15 @@ def example_card() -> ColumnElement[bool]:
     return and_(exists(cited), not_(exists(cited.where(not_example))))
 
 
-def activity_statement() -> Select[Any]:
-    """The 20 newest public events: published problems and Briefs, and published proposals' registered versions."""
+def activity_statement(frozen_at: datetime | None = None) -> Select[Any]:
+    """The 20 newest public events: published problems and Briefs, and published proposals' registered versions.
+    Under the public demo's freeze, only problems unchanged since it and only a proposal's current version created
+    before it (a later version changes the teaser title the event shows, so the proposal leaves the feed)."""
+    frozen_versions: ColumnElement[bool] = (
+        true()
+        if frozen_at is None
+        else and_(ProposalVersion.created_at <= frozen_at, Proposal.current_version_id == ProposalVersion.id)
+    )
     problems = (
         select(
             Problem.id.label("row_id"),
@@ -123,7 +144,7 @@ def activity_statement() -> Select[Any]:
         .outerjoin(Region, Region.code == Problem.county_code)
         .outerjoin(Niche, Niche.id == Problem.niche_id)
         .outerjoin(_Parent, _Parent.id == Niche.parent_id)
-        .where(readable_problem(), Problem.published_at.is_not(None))
+        .where(readable_problem(), Problem.published_at.is_not(None), unchanged_since(frozen_at))
         .order_by(Problem.published_at.desc(), Problem.id.desc())
         .limit(FEED_SIZE)
     )
@@ -147,6 +168,7 @@ def activity_statement() -> Select[Any]:
             ProposalVersion.registered_at.is_not(None),
             Proposal.status == ProposalStatus.PUBLISHED,
             Proposal.moderation_state == ModerationState.CLEAR,
+            frozen_versions,
         )
         .order_by(ProposalVersion.registered_at.desc(), ProposalVersion.id.desc())
         .limit(FEED_SIZE)
@@ -155,7 +177,7 @@ def activity_statement() -> Select[Any]:
     return select(merged).order_by(merged.c.at.desc(), merged.c.row_id.desc()).limit(FEED_SIZE)
 
 
-def problem_statement(problem_id: UUID) -> Select[Any]:
+def problem_statement(problem_id: UUID, frozen_at: datetime | None = None) -> Select[Any]:
     """One readable problem: its public fields, place, niche (with its parent) and, for a Brief, its listed
     organisation's level (never its name: the directory is signed-in today; none for anything else)."""
     listed = and_(_Listed.id == Problem.org_id, _Listed.verification.in_(LISTED_LEVELS), _Listed.delisted_at.is_(None))
@@ -180,11 +202,11 @@ def problem_statement(problem_id: UUID) -> Select[Any]:
         .outerjoin(Niche, Niche.id == Problem.niche_id)
         .outerjoin(_Parent, _Parent.id == Niche.parent_id)
         .outerjoin(_Listed, and_(listed, Problem.source == ProblemSource.ORG_BRIEF))
-        .where(Problem.id == problem_id, readable_problem())
+        .where(Problem.id == problem_id, readable_problem(), unchanged_since(frozen_at))
     )
 
 
-def explore_statement() -> Select[Any]:
+def explore_statement(frozen_at: datetime | None = None) -> Select[Any]:
     """Every readable problem's rank and group size by county and by top-level niche, keeping each group's newest
     three (newest first), with the total and how many are not seeded example cards."""
     readable = (
@@ -203,7 +225,7 @@ def explore_statement() -> Select[Any]:
         .outerjoin(Region, Region.code == Problem.county_code)
         .outerjoin(Niche, Niche.id == Problem.niche_id)
         .outerjoin(_Parent, _Parent.id == Niche.parent_id)
-        .where(readable_problem())
+        .where(readable_problem(), unchanged_since(frozen_at))
     ).subquery("readable")
     newest = (readable.c.posted_at.desc().nulls_last(), readable.c.id.desc())
     ranked = select(
