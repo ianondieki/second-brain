@@ -223,7 +223,21 @@ NGO_D = DemoOrg(
     county="KE-30",
     owner=None,
 )
-ORGS: Final = (TELCO_A, SACCO_B, COUNTY_C, NGO_D)
+# P28 (REQ-ENG-06): a public entity verified E2, so the tracker shows the procurement route (3b): its signatory has
+# approved Brian's P4 to proceed and its owner, the named contact, chooses how it will buy.
+STATE_D = DemoOrg(
+    legal_name="State Department D (fixture)",
+    slug="state-department-d-fixture",
+    kind=OrgKind.NATIONAL_GOVT,
+    verification=OrgVerification.E2,
+    domain="state-d.example",
+    niche="national-government",
+    county="KE-30",
+    owner=_seat("state-d.example", "owner", "Halima Yusuf", OrgRole.OWNER, OrgRole.ADMIN),
+    seats=(_seat("state-d.example", "signatory", "Otieno Mwita", OrgRole.SIGNATORY),),
+    public_entity=True,
+)
+ORGS: Final = (TELCO_A, SACCO_B, COUNTY_C, NGO_D, STATE_D)
 
 # The staff admin who starts research runs and approves research cards (P11) and reads the claims queue (P15), and
 # the staff moderator who decides the moderation queue (P15; bridge.seed.demo.queues seeds an item in each queue).
@@ -352,16 +366,19 @@ P4 = DemoProposal(
     architecture="USSD gateway callbacks to one small service with a read-only copy of the loan schedule.",
     pricing="KES 60,000 setup; USSD session costs passed through at the gateway's rate.",
     links_problem_of="P1",
-    pitch_to=(SACCO_B.legal_name,),
+    pitch_to=(SACCO_B.legal_name, STATE_D.legal_name),
 )
 PROPOSALS: Final = (P1, P2, P3, P4)
 
 # The tracker at a few stages (P5): P3 with Telco A stays SUBMITTED from its Pitch (the live walk-through), P4 with
 # SACCO B is INTEREST_CONFIRMED (EM2 to Brian), P1 with SACCO B is in NEGOTIATION on the organisation's draft, and P2
 # with Telco A has run the whole main path to CLOSED (D2 signs the agreement; the payment is recorded, never moved).
+# P28: P4 with State Department D, a public entity, waits in PROCUREMENT_ROUTE (3b): its owner reviewed it (D has no
+# reviewer seat), its signatory approved it to proceed naming the owner as the contact, and the owner chooses the route.
 ENGAGEMENTS: Final = (
     DemoEngagement(proposal=P3.key, org=TELCO_A.legal_name, target=EngagementState.SUBMITTED),
     DemoEngagement(proposal=P4.key, org=SACCO_B.legal_name, target=EngagementState.INTEREST_CONFIRMED),
+    DemoEngagement(proposal=P4.key, org=STATE_D.legal_name, target=EngagementState.PROCUREMENT_ROUTE),
     DemoEngagement(
         proposal=P1.key,
         org=SACCO_B.legal_name,
