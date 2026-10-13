@@ -264,6 +264,31 @@ describe("Accept and join", () => {
     vi.unstubAllGlobals();
   });
 
+  it("stays on the page with the may-still-be-signed-in line when the sign-out code cannot be fetched", async () => {
+    // The helper is imported on the press: a chunk that fails to load (offline, a newer deploy) is "not signed out".
+    vi.doMock("@/lib/auth/sign-out", () => {
+      throw new Error("Failed to fetch dynamically imported module");
+    });
+    mocks.forgetOffline.mockReset();
+    mocks.logout.mockReset();
+    const { api } = client({ status: 403, error: { detail: { code: "invitation_email_mismatch", message: "x" } } });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    try {
+      renderAccept(api);
+      fireEvent.click(screen.getByRole("button", { name: "Accept and join" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Sign out and use another address" }));
+      expect(await screen.findByText(en.invitationAccept.signOutFailed)).toBeTruthy();
+      expect(assign).not.toHaveBeenCalled();
+      expect(mocks.logout).not.toHaveBeenCalled();
+      // The button is back, to try again.
+      expect(screen.getByRole("button", { name: "Sign out and use another address" }).getAttribute("aria-disabled")).toBeNull();
+    } finally {
+      vi.doUnmock("@/lib/auth/sign-out");
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("stays on the page with the may-still-be-signed-in line when sign-out is refused", async () => {
     mocks.forgetOffline.mockResolvedValue(undefined);
     mocks.forgetEmail.mockReset();
