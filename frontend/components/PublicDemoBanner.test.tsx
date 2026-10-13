@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useStrings } from "@/components/ClientStrings";
 import en from "@/locales/en.json";
+import sw from "@/locales/sw.json";
 import { resolveServerTree } from "@/test/server-tree";
 
 import {
@@ -47,6 +48,16 @@ describe("the banner", () => {
     const dismiss = within(region).getByRole("button", { name: "Hide the demo notice" });
     expect(dismiss.className).toMatch(/\bsize-11\b/); // a 44 px target
     expect(region.className).not.toMatch(/\b(fixed|sticky|absolute)\b/); // in the flow: it never covers content
+  });
+
+  // The hour is written into the copy, not fetched (ux review of P28-PD, MINOR 7): this keeps it equal to the image's.
+  it("names the image's reset hour in both languages (infra/demo/space/run.py RESET_HOUR_EAT)", () => {
+    const supervisor = readFileSync(join(process.cwd(), "../infra/demo/space/run.py"), "utf8");
+    const hour = /^RESET_HOUR_EAT = (\d{1,2})$/m.exec(supervisor)?.[1];
+    expect(hour).toBeDefined();
+    const time = `${hour!.padStart(2, "0")}:00 EAT`;
+    expect(en.publicDemo.banner).toContain(time);
+    expect(sw.publicDemo.banner).toContain(time);
   });
 
   it("is hidden by a rule outside any layer once <html> carries the dismissed mark", () => {

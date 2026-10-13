@@ -10,6 +10,10 @@ import { Icon, type IconProps } from "./ui/status-icons";
 // Dismissal costs no JavaScript bundle: DEMO_BANNER_SCRIPT (inline in <head>, as the theme's) hides it before the first
 // paint when this browser session has dismissed it, so nothing shifts on hydrate, and handles the button's press by
 // delegation. Without script the button is not drawn (the layout's <noscript> style), so it never sits there inert.
+//
+// The banner's "03:00 EAT" (publicDemo.banner, en and sw) is written into the copy, not fetched: it and the image's
+// reset hour (RESET_HOUR_EAT in infra/demo/space/run.py) change together (docs/runbooks/public-demo.md; the locales'
+// _meta.reviewP28pd says so too).
 
 /** sessionStorage: the banner was dismissed in this browser session. */
 export const DEMO_BANNER_STORAGE_KEY = "wazo-demo-banner";
