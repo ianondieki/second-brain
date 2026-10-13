@@ -1,6 +1,6 @@
 "use client";
 
-import { cloneElement, Component, Suspense, use, useEffect, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from "react";
+import { Component, Suspense, use, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 
@@ -21,6 +21,7 @@ import type { ChecksCalls } from "../checks";
 import {
   ASKS,
   editHref,
+  fieldOf,
   LIMITS,
   MATURITIES,
   MATURITY_KEY,
@@ -147,21 +148,6 @@ const loadCalls = (): Promise<Calls> => import("../calls");
 // The first save needs only the save path (a smaller chunk than all the calls).
 const loadSave = (): Promise<Pick<Calls, "saveState">> => import("../save");
 
-/** Which fields each state key feeds, so an edit clears the API's issue on that field. */
-const FIELD_OF: Partial<Record<keyof EditorState, FieldName>> = {
-  title: "title",
-  nicheId: "niche_id",
-  countyCode: "county_code",
-  maturity: "maturity",
-  ask: "ask",
-  problemStatement: "problem_statement",
-  summary: "summary",
-  impactClaims: "impact_claims",
-  problems: "problems",
-  newProblemTitle: "new_problem.title",
-  newProblemStatement: "new_problem.statement",
-  links: "links",
-};
 
 /**
  * The idea editor (REQ-PROP-01; docs/spec/06 6.1, 6.3): 1 Problem and teaser (Tier 1, public once published), 2 Full
@@ -279,7 +265,7 @@ export function Editor(props: EditorProps) {
     const next = { ...latest.current, ...patch };
     latest.current = next;
     setState(next);
-    const touched = new Set(Object.keys(patch).map((key) => FIELD_OF[key as keyof EditorState]));
+    const touched = new Set(Object.keys(patch).map(fieldOf));
     setIssues((current) => current.filter((issue) => !touched.has(issue.field)));
     setSave({ kind: "dirty" });
     schedule(AUTOSAVE_MS);
@@ -496,7 +482,7 @@ export function Editor(props: EditorProps) {
           </Card>
 
           <Card as="section" variant="flat" aria-labelledby="teaser-title" className="flex flex-col gap-6">
-            <CardHead id="teaser-title" icon={<EyeIcon />} title={f("teaserTitle")} hint={t("teaserHint")} />
+            <CardHead id="teaser-title" icon={<EyeIcon className={HEAD_ICON} />} title={f("teaserTitle")} hint={t("teaserHint")} />
             <TextAreaField
               id="idea-problem-statement"
               label={f("problemStatement")}
@@ -577,7 +563,7 @@ export function Editor(props: EditorProps) {
 
           <Card as="section" variant="flat" aria-labelledby="checks-title" className="flex flex-col gap-4">
             {/* A magnifier, not a tick: before any check has run nothing has "passed". */}
-            <CardHead id="checks-title" icon={<LookIcon data-icon="look" />} title={checksT("title")} hint={checksT("hint")} />
+            <CardHead id="checks-title" icon={<LookIcon data-icon="look" className={HEAD_ICON} />} title={checksT("title")} hint={checksT("hint")} />
             {checksPressed ? (
               <PanelBoundary
                 onError={() => {
@@ -607,7 +593,7 @@ export function Editor(props: EditorProps) {
           </Card>
 
           <Card as="section" variant="flat" aria-labelledby="assistant-title" className="flex flex-col gap-4">
-            <CardHead id="assistant-title" icon={<SparkIcon />} title={t("assistantTitle")} hint={t("assistantHint")} />
+            <CardHead id="assistant-title" icon={<SparkIcon className={HEAD_ICON} />} title={t("assistantTitle")} hint={t("assistantHint")} />
             {assistantOpen ? (
               <PanelBoundary
                 onError={() => {
@@ -702,12 +688,15 @@ export function Editor(props: EditorProps) {
   );
 }
 
-/** A step-one card's heading: its icon, the title and a one-line hint. */
-function CardHead({ id, icon, title, hint }: { id: string; icon: ReactElement<{ className?: string }>; title: string; hint: string }) {
+/** A step-one card heading's icon (CardHead). */
+const HEAD_ICON = "size-5 shrink-0 text-accent";
+
+/** A step-one card's heading: its icon (sized with HEAD_ICON), the title and a one-line hint. */
+function CardHead({ id, icon, title, hint }: { id: string; icon: ReactNode; title: string; hint: string }) {
   return (
     <div>
       <h3 id={id} className="flex items-center gap-2 font-semibold text-ink">
-        {cloneElement(icon, { className: "size-5 shrink-0 text-accent" })}
+        {icon}
         {title}
       </h3>
       <p className="mt-1 max-w-[62ch] text-sm text-ink-soft">{hint}</p>

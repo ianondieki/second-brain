@@ -111,6 +111,15 @@ export type FieldName =
   | "new_problem.statement"
   | "links";
 
+/**
+ * The field a state key feeds, as the API names it ("nicheId" feeds "niche_id", "newProblemTitle" "new_problem.title"),
+ * so an edit clears the API's issue on that field. A key that feeds no field (problemMode, the Tier-2 texts) gives a
+ * name no FieldName has (ideas.test.ts checks every key).
+ */
+export function fieldOf(key: string): string {
+  return key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`).replace("new_problem_", "new_problem.");
+}
+
 /** Words as a reader counts them (runs of non-space characters). */
 export function wordCount(text: string): number {
   const trimmed = text.trim();
