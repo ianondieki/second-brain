@@ -297,6 +297,20 @@ describe("the procurement route's sheet (REQ-ENG-06)", () => {
     expect(screen.getByRole("status").textContent).toContain("Done. The tracker is up to date.");
   });
 
+  it("counts characters as the API does (code points), so 12 emoji are 12, not 24", async () => {
+    const { dialog, runImpl } = await openSheet();
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Direct procurement/ }));
+    const field = within(dialog).getByLabelText("Justification");
+    fireEvent.change(field, { target: { value: "🐄".repeat(12) } });
+    expect(within(dialog).getByText("12 of 1,000 characters")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm the route" }));
+    expect(runImpl).not.toHaveBeenCalled();
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    fireEvent.change(field, { target: { value: "🐄".repeat(20) } });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Confirm the route" })));
+    expect(runImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("drops the control characters the API refuses, keeping line feeds and tabs (REQ-ENG-06)", async () => {
     const { dialog, runImpl } = await openSheet();
     fireEvent.click(within(dialog).getByRole("radio", { name: /Direct procurement/ }));

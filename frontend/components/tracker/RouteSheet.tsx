@@ -93,12 +93,14 @@ export function RouteSheet(props: RouteSheetProps) {
     event.preventDefault();
     if (props.busy) return;
     const value = plainJustification(text);
+    // Characters as the API counts them (code points: an emoji is one, not two UTF-16 units).
+    const length = [...value].length;
     const next: Partial<Record<FieldName, string>> = {
       route: route ? undefined : t("sheet.error.route"),
       justification:
-        value.length > JUSTIFICATION_MAX
+        length > JUSTIFICATION_MAX
           ? t("sheet.error.justificationLong")
-          : direct && value.length < JUSTIFICATION_MIN
+          : direct && length < JUSTIFICATION_MIN
             ? ta("refusal.justificationRequired")
             : undefined,
       date: /^\d{4}-\d{2}-\d{2}$/.test(by) ? undefined : ta("form.date"),
@@ -168,7 +170,7 @@ export function RouteSheet(props: RouteSheetProps) {
           id={ids.justification}
           label={direct ? t("sheet.justificationRequired") : t("sheet.justificationOptional")}
           hint={direct ? t("sheet.justificationHintDirect") : t("sheet.justificationHint")}
-          meter={t("sheet.count", { count: count.format(text.length), max: count.format(JUSTIFICATION_MAX) })}
+          meter={t("sheet.count", { count: count.format([...text].length), max: count.format(JUSTIFICATION_MAX) })}
           maxLength={JUSTIFICATION_MAX}
           rows={4}
           value={text}
