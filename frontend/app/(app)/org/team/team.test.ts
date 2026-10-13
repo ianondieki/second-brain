@@ -190,6 +190,7 @@ describe("the writes", () => {
     [402, "plan_limit", "plan_limit"],
     [404, "not_found", "notFound"],
     [403, "role_not_permitted", "notAllowed"],
+    [401, "unauthenticated", "signedOut"],
     [500, undefined, "generic"],
   ])("name a %i %s as %s", (status, code, refusal) => {
     expect(teamRefusal(status, code ? { detail: { code, message: "server words" } } : undefined)).toBe(refusal);
@@ -218,6 +219,21 @@ describe("the writes", () => {
       limit: 3,
       upgrade: "org_growth",
     });
+  });
+
+  it("carry the API's Retry-After on a 429 (seconds or a date)", async () => {
+    const answer = (retry: string | null) => {
+      const headers = new Headers(retry ? { "Retry-After": retry } : {});
+      const api = {
+        POST: vi.fn(async () => ({
+          error: { detail: { code: "rate_limited", message: "m" } },
+          response: new Response(null, { status: 429, headers }),
+        })),
+      } as unknown as ApiClient;
+      return teamCalls(ORG, api).invite("a@b.example", ["viewer"]);
+    };
+    expect(await answer("300")).toEqual({ ok: false, refusal: "rate_limited", retryAfter: 300 });
+    expect(await answer(null)).toEqual({ ok: false, refusal: "rate_limited" });
   });
 
   it("say no connection when the request never reached the API", async () => {

@@ -267,6 +267,27 @@ describe("an owner's Team page", () => {
   });
 });
 
+describe("before the organisation is verified", () => {
+  it.each(["unclaimed", "pending", "rejected"])("offers no invitation form at %s, and says why with Help", async (level) => {
+    state.verification = level;
+    await renderPage();
+    const line = document.querySelector<HTMLElement>("[data-invite-unverified]")!;
+    expect(line.textContent).toContain(en.teamAdmin.refusal.org_not_verified);
+    expect(within(line).getByRole("link", { name: "How verification works" }).getAttribute("href")).toBe("/help");
+    expect(document.querySelector("[data-invite-form]")).toBeNull();
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
+  });
+
+  it("keeps the form at E1, and when the level could not be read (the API still answers)", async () => {
+    for (const level of ["e1", null]) {
+      cleanup();
+      state.verification = level;
+      await renderPage();
+      expect(document.querySelector("[data-invite-form]")).not.toBeNull();
+    }
+  });
+});
+
 describe("an admin who is not an owner", () => {
   it("cannot change roles, remove an owner or a signatory, or invite one", async () => {
     state.membership = adminOnly;
@@ -277,6 +298,17 @@ describe("an admin who is not an owner", () => {
     const roles = within(screen.getByRole("group", { name: "Roles" })).getAllByRole("checkbox");
     expect(roles.map((r) => (r as HTMLInputElement).value)).toEqual(["admin", "reviewer", "finance", "viewer"]);
     expect(screen.getByText(en.teamAdmin.rolesOwnerOnly)).toBeTruthy();
+  });
+
+  it("resends and revokes only the invitations an admin could have sent", async () => {
+    state.membership = adminOnly;
+    const signatoryInvite = { ...team().invitations![0], id: "inv-3", email: "sig@telco-a.example", roles: ["signatory" as const] };
+    state.team = { kind: "ok", team: team({ invitations: [...team().invitations!, signatoryInvite] }) };
+    await renderPage();
+    const sig = document.querySelector<HTMLElement>('[data-invitation="sig@telco-a.example"]')!;
+    expect(within(sig).queryByRole("button")).toBeNull();
+    const own = document.querySelector<HTMLElement>('[data-invitation="wanjiru@telco-a.example"]')!;
+    expect(within(own).getByRole("button", { name: /^Resend/ })).toBeTruthy();
   });
 });
 
@@ -307,7 +339,8 @@ describe("in the public demo", () => {
     state.demo = true;
     await renderPage();
     const locked = [...document.querySelectorAll("[data-demo-locked]")].map((p) => p.textContent);
-    expect(locked).toEqual([en.orgTeam.demoLocked, en.orgTeam.demoLocked]);
+    expect(locked).toEqual([en.publicDemo.changeLocked, en.publicDemo.changeLocked]);
+    expect(document.querySelector('[data-demo-locked="change"]')).not.toBeNull();
     expect(document.querySelector("[data-invite-form]")).toBeNull();
     expect(document.querySelector("[data-member-actions]")).toBeNull();
     expect(document.querySelector("[data-invitation-actions]")).toBeNull();
@@ -373,7 +406,9 @@ describe("the writes on the page", () => {
     [{ refusal: "too_many_invitations", limit: 20 }, "20 invitations are open, the most at once. Revoke one, or wait until one is accepted."],
     [{ refusal: "protected_role" }, en.teamAdmin.refusal.protected_role],
     [{ refusal: "invalid_email" }, en.teamAdmin.refusal.invalid_email],
-    [{ refusal: "rate_limited" }, en.teamAdmin.refusal.rate_limited],
+    [{ refusal: "rate_limited" }, `${en.teamAdmin.refusal.rate_limited}${en.retryAfter.later}`],
+    [{ refusal: "rate_limited", retryAfter: 240 }, `${en.teamAdmin.refusal.rate_limited}Try again in about 4 minutes.`],
+    [{ refusal: "rate_limited", retryAfter: 7200 }, `${en.teamAdmin.refusal.rate_limited}Try again in about 2 hours.`],
     [{ refusal: "public_demo_locked" }, en.teamAdmin.refusal.public_demo_locked],
     [{ refusal: "network" }, en.teamAdmin.refusal.network],
   ])("says %o in the page's words", async (refusal, sentence) => {
@@ -396,6 +431,17 @@ describe("the writes on the page", () => {
     const link = within(alert).getByRole("link", { name: "Upgrade to Growth" });
     expect(link.getAttribute("href")).toBe(
       `/billing/upgrade?plan=org_growth&org=${ORG_ID}&next=%2Forg%2Fteam%3Forg%3D${ORG_ID}`,
+    );
+  });
+
+  it("asks to sign in again when the session ended", async () => {
+    vi.mocked(mocks.calls.setEscalationContact).mockResolvedValueOnce({ ok: false, refusal: "signedOut" });
+    await renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Save contact" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.querySelector("p")?.textContent).toBe(en.teamAdmin.refusal.signedOut);
+    expect(within(alert).getByRole("link", { name: "Sign in again" }).getAttribute("href")).toBe(
+      "/login?next=%2Forg%2Fteam",
     );
   });
 

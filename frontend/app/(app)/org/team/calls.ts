@@ -1,5 +1,6 @@
 import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode, detailOf, isRecord } from "@/lib/api/error-code";
+import { retryAfterSeconds } from "@/lib/retry-after";
 
 import type { OrgRole } from "./team";
 
@@ -26,6 +27,7 @@ export type TeamRefusal =
   | "invalid_member"
   | "rate_limited"
   | "public_demo_locked"
+  | "signedOut"
   | "notAllowed"
   | "notFound"
   | "network"
@@ -56,6 +58,7 @@ const BY_CODE: Record<string, TeamRefusal> = {
 export function teamRefusal(status: number, error: unknown): TeamRefusal {
   const code = apiErrorCode(error);
   if (code && code in BY_CODE) return BY_CODE[code];
+  if (status === 401) return "signedOut";
   if (status === 402) return "plan_limit";
   if (status === 404) return "notFound";
   if (status === 403) return "notAllowed";
@@ -72,6 +75,8 @@ export type TeamOutcome<T = null> =
       limit?: number;
       /** plan_limit (the plan's seats, 402): the next plan up that has more, as the API names it. */
       upgrade?: string;
+      /** rate_limited (429): seconds until the API takes another (its Retry-After), when it said. */
+      retryAfter?: number;
     };
 
 async function settle<T>(
@@ -84,11 +89,13 @@ async function settle<T>(
     // The plan the API names, as a key only: the page links to it from its own table of plans, never from the answer.
     const named = response.status === 402 ? detailOf(error)?.upgrade : undefined;
     const upgrade = isRecord(named) && typeof named.plan === "string" ? named.plan : null;
+    const retryAfter = response.status === 429 ? retryAfterSeconds(response.headers.get("Retry-After")) : null;
     return {
       ok: false,
       refusal: teamRefusal(response.status, error),
       ...(typeof limit === "number" ? { limit } : {}),
       ...(upgrade ? { upgrade } : {}),
+      ...(retryAfter !== null ? { retryAfter } : {}),
     };
   } catch {
     return { ok: false, refusal: "network" };

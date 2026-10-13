@@ -7,6 +7,9 @@ import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 
+import { loginHref } from "@/lib/return-path";
+import { retryWhen } from "@/lib/retry-after";
+
 import type { TeamOutcome, TeamRefusal } from "./calls";
 import type { Paywall } from "./team";
 
@@ -32,6 +35,15 @@ function StepUpUnavailable({ onCancel }: { onCancel: () => void }) {
       </Button>
     </div>
   );
+}
+
+/** "Try again in about 5 minutes." from the API's Retry-After, or "Try again later." when it gave none. */
+export function retryLine(
+  tr: (key: "minute" | "minutes" | "hour" | "hours" | "later", values?: Record<string, number>) => string,
+  seconds: number | undefined,
+): string {
+  const when = retryWhen(seconds);
+  return tr(when.key, when.count === undefined ? undefined : { count: when.count });
 }
 
 /** Refusals after which the page is out of date: it is read again under the sentence. */
@@ -71,7 +83,13 @@ export function useTeamWrite({
   const t = useStrings("teamAdmin");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [refused, setRefused] = useState<{ refusal: TeamRefusal; limit?: number; upgrade?: string } | null>(null);
+  const tr = useStrings("retryAfter");
+  const [refused, setRefused] = useState<{
+    refusal: TeamRefusal;
+    limit?: number;
+    upgrade?: string;
+    retryAfter?: number;
+  } | null>(null);
   const [retry, setRetry] = useState<(() => Promise<void>) | null>(null);
   const notice = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
@@ -111,6 +129,7 @@ export function useTeamWrite({
       refusal: outcome.refusal === "stepUp" ? "generic" : outcome.refusal,
       limit: outcome.limit,
       upgrade: outcome.upgrade,
+      retryAfter: outcome.retryAfter,
     });
     if (STALE.has(outcome.refusal)) router.refresh();
   }
@@ -124,6 +143,7 @@ export function useTeamWrite({
           ? t("refusal.plan_limitUpgrade", { plan })
           : t(`refusal.${refused.refusal}`, { limit: refused.limit ?? 20 })}
       </p>
+      {refused.refusal === "rate_limited" ? <p>{retryLine(tr, refused.retryAfter)}</p> : null}
       {refused.refusal === "plan_limit" && paywall ? (
         // The page's own links (built on the server from the plan codes), never a URL from the answer.
         <a
@@ -132,6 +152,10 @@ export function useTeamWrite({
           data-upgrade={refused.upgrade ?? ""}
         >
           {plan ? t("upgradeTo", { plan }) : t("seePlans")}
+        </a>
+      ) : refused.refusal === "signedOut" ? (
+        <a href={loginHref("/org/team")} className={standaloneLinkClass}>
+          {t("signIn")}
         </a>
       ) : refused.refusal === "org_not_verified" ? (
         <a href="/help" className={standaloneLinkClass}>
