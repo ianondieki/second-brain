@@ -12,7 +12,15 @@ import { AlertIcon, CheckIcon, ClockIcon, LockIcon } from "@/components/ui/statu
 
 import { MessageIcon } from "./icons";
 
-import { formatDate, notesByEvent, type Command, type History, type HistoryEvent, type Note } from "./model";
+import {
+  formatDate,
+  notesByEvent,
+  type Command,
+  type History,
+  type HistoryEvent,
+  type Note,
+  type ProcurementRoute,
+} from "./model";
 import { Eat } from "./When";
 
 /** The event names the History tab words: every command, plus the genesis ("create") and the system's expiry. */
@@ -23,6 +31,7 @@ const EVENT_KEYS = new Set<string>([
   "start_review",
   "decline",
   "approve",
+  "choose_route",
   "withdraw",
   "mark_contacted",
   "confirm_contact",
@@ -146,6 +155,7 @@ export function HistoryList({
                   </span>
                   <Eat iso={event.created_at} />
                 </p>
+                <RouteText event={event} />
                 <NoteText note={noteOf.get(event.id)} locale={locale} />
               </div>
             </li>
@@ -155,6 +165,22 @@ export function HistoryList({
     </Section>
   );
 }
+
+/** The procurement route chosen at 3b (REQ-ENG-06), from the event's payload; an unknown value says nothing. */
+function RouteText({ event }: { event: HistoryEvent }) {
+  const t = useTranslations("tracker");
+  const names = useTranslations("procurement");
+  const route = event.command === "choose_route" ? event.payload.procurement_route : undefined;
+  if (typeof route !== "string" || !(ROUTES as readonly string[]).includes(route)) return null;
+  return (
+    <p data-event-route={route} className="mt-1 text-sm text-ink">
+      {t("history.route", { route: names(`route.${route as ProcurementRoute}`) })}
+    </p>
+  );
+}
+
+/** The five routes (backend models/enums.py ProcurementRoute), for reading a payload. */
+const ROUTES = ["direct", "rfq_tender", "ppp_pip", "innovation_challenge", "pilot_mou"] as const satisfies readonly ProcurementRoute[];
 
 /** An event's text: its kind as a small label (a hold's with the resume date), then the words as written. */
 function NoteText({ note, locale }: { note: Note | undefined; locale: string }) {

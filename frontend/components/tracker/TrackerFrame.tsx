@@ -10,8 +10,19 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { TabNav } from "@/components/ui/TabNav";
 import { formatDay } from "@/lib/format";
 
-import { counterpartLine, isFinished, stageLeft, stepperSteps, turnOf, withQuery, type Detail, type History } from "./model";
-import { Stepper } from "./Stepper";
+import {
+  counterpartLine,
+  isFinished,
+  MAIN_PATH_GROUP,
+  stageLeft,
+  stepperSteps,
+  subStages,
+  turnOf,
+  withQuery,
+  type Detail,
+  type History,
+} from "./model";
+import { Stepper, SubStageList } from "./Stepper";
 import { WhoseTurn } from "./WhoseTurn";
 
 // The parts of one engagement's page that every tab shares (docs/spec/06 6.9, docs/spec/07 item 1): the title, the
@@ -117,7 +128,12 @@ export function needsHistory(detail: Detail): boolean {
 export async function TrackerSpine({ detail, history }: { detail: Detail; history: History | null }) {
   const t = await getTranslations("tracker");
   const locale = await getLocale();
-  const steps = stepperSteps({ ...detail, left: stageLeft(detail.state, history?.events) });
+  const left = stageLeft(detail.state, history?.events);
+  const steps = stepperSteps({ ...detail, left });
+  // The stage the engagement stands at on the main path (where a paused or ended one stopped), for the current
+  // group's own stages (the API's `steps`: 3b only for a public entity).
+  const at = MAIN_PATH_GROUP[detail.state] ? detail.state : (detail.paused_from ?? left);
+  const current = steps.find((s) => s.chip !== "completed" && s.chip !== "pending");
   // The party who acts now: the developer, the organisation, or both (the timeline shows them at the step).
   const awaited = new Set(detail.whose_turn);
   const actors = isFinished(detail.state) ? null : (
@@ -140,6 +156,7 @@ export async function TrackerSpine({ detail, history }: { detail: Detail; histor
             {!isFinished(detail.state) ? (
               <span className="block text-ink-soft">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>
             ) : null}
+            {current && detail.state !== "CLOSED" ? <SubStageList stages={subStages(detail.steps, at)} group={current.group} /> : null}
           </>
         }
       />

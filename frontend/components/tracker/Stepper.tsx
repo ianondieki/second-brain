@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/components/ui/cn";
 
 import { CHIP_TONE, ChipMark } from "./Chip";
-import type { ChipKind, Step } from "./model";
+import type { ChipKind, Step, SubStage } from "./model";
 
 /**
  * The 5-group stepper (docs/spec/06 6.9 Rendering; docs/spec/07 item 6): an ordered list whose current group carries
@@ -76,3 +76,38 @@ const STEP_TONE: Record<ChipKind, string> = { ...CHIP_TONE, completed: "text-acc
 
 /** The status words: done recedes to ink-soft beside its bloom mark; the current word is bloom. */
 const WORD_TONE: Record<ChipKind, string> = { ...CHIP_TONE, completed: "text-ink-soft" };
+
+/**
+ * The current group's own stages under its name (docs/spec/06 6.9: "sub-stages collapsed except the current group"),
+ * from the API's `steps`: so a public entity's Contact and NDA lists its procurement route (3b) and a private
+ * organisation's never does (AC-TRACK-5). Each stage's mark goes with its status word for screen readers; the
+ * labels are the API's.
+ */
+export function SubStageList({ stages, group }: { stages: SubStage[]; group: Step["group"] }) {
+  const t = useTranslations("tracker");
+  if (stages.length === 0) return null;
+  return (
+    <ol aria-label={t("subStages", { group: t(`group.${group}`) })} data-substages="" className="mt-3 flex flex-col gap-1.5">
+      {stages.map((stage) => (
+        <li
+          key={stage.state}
+          data-substage={stage.state}
+          data-state={stage.mark}
+          className={cn(
+            "flex items-start gap-2 text-sm",
+            stage.mark === "current" ? "font-semibold text-ink" : "text-ink-soft",
+          )}
+        >
+          <ChipMark
+            kind={stage.mark}
+            className={cn("mt-0.5 size-3.5", stage.mark === "pending" ? "text-ink-soft" : "text-accent")}
+          />
+          <span aria-hidden="true" className="min-w-0">
+            {stage.label}
+          </span>
+          <span className="sr-only">{t("subStage", { stage: stage.label, state: t(`chip.${stage.mark}`) })}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
