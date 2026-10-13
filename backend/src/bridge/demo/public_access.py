@@ -31,7 +31,9 @@ Security reasoning (for the security review):
   ``too_many_attempts``: ``SIGN_INS_PER_MINUTE`` a minute per client address when the address is global and not a
   trusted proxy's; otherwise (behind Codespaces' forwarder, a bare ``docker run -p``, or a client that sends its own
   X-Forwarded-For to an untrusted hop, every visitor may share or fake one address) one bucket for all such attempts
-  with ``SHARED_SIGN_INS_PER_MINUTE``, so a client cannot lock the others out, and one warning a minute in the log.
+  with ``SHARED_SIGN_INS_PER_MINUTE``, which raises the cost of locking the others out (one client still can, at
+  about five requests a second; per-visitor throttling needs an edge that sets X-Forwarded-For and is listed in
+  ``TRUSTED_PROXIES``), and one warning a minute in the log.
 - **Sessions stay bounded.** Signing in with a session cookie ends that session first (switching persona), and a
   persona keeps at most ``MAX_SESSIONS_PER_PERSONA`` live sessions: the oldest beyond are revoked.
 - **Nothing secret in the logs.** The session token goes only into the cookie; the audit event (``auth.login``,
