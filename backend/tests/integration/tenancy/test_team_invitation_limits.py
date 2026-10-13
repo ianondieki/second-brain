@@ -24,7 +24,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.ids import uuid7
-from bridge.tenancy import invitation_limits
+from bridge.tenancy import invitation_limits, team_router
+from tests.integration.api import make_client
 from tests.integration.engagements.api_world import World, clients
 from tests.integration.tenancy.team_helpers import (
     SETTINGS,
@@ -232,3 +233,40 @@ async def test_a_link_lasts_seven_days_on_the_shared_clock(
         )
         assert abs(row.lasts - timedelta(days=7)) < timedelta(seconds=1)
         assert abs(row.ahead - moved_clock) < timedelta(minutes=1)  # created on the moved clock, not the wall's
+
+
+async def test_sends_the_database_refuses_still_count(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The count is committed before the invitation is checked: SENDS_PER_HOUR invites refused with 409
+    already_member still use the hour, so the next one is 429 (a refused send is not free)."""
+    monkeypatch.setattr(invitation_limits, "SENDS_PER_HOUR", 3)
+    world = await team_world(owner_engine)
+    member, email = await person(owner_engine)
+    await join(owner_engine, world.org, member)
+    async with clients(app_engine, SETTINGS, world.owner) as (owner,):
+        for _ in range(3):
+            assert code(await invite(owner, world.org, email)) == (409, "already_member")
+        retry_after(await invite(owner, world.org, address()))
+    assert await invitations_of(owner_engine, world.org) == []
+
+
+async def test_visitors_behind_a_shared_address_share_one_capped_bucket(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The preview's shared bucket (non-global or trusted-proxy addresses) has its own cap: past it, 429."""
+    monkeypatch.setattr(team_router, "SHARED_PREVIEWS_PER_MINUTE", 2)
+    monkeypatch.setattr(team_router, "SHARED_PREVIEW_PURPOSE", f"preview-shared-{uuid7().hex}")  # a fresh bucket
+    world = await team_world(owner_engine)
+    email = address()
+    async with clients(app_engine, SETTINGS, world.owner) as (owner,):
+        assert (await invite(owner, world.org, email)).status_code == 201
+        token = token_in(mail_to(owner, email)[0])
+    async with (
+        make_client(app_engine, SETTINGS, ip="192.168.7.20") as first,
+        make_client(app_engine, SETTINGS, ip="10.1.2.3") as second,
+    ):
+        assert (await first.get(f"/api/invitations/{token}")).status_code == 200
+        assert (await second.get(f"/api/invitations/{token}")).status_code == 200
+        assert code(await first.get(f"/api/invitations/{token}")) == (429, "rate_limited")  # one bucket for both
+        assert code(await second.get(f"/api/invitations/{token}")) == (429, "rate_limited")
