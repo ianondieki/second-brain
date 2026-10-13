@@ -27,6 +27,11 @@ Rules the database enforces (revision 0003; the state machine in ``engagements/s
   staff's); a message is posted once the chain has entered ``INTEREST_CONFIRMED`` or a later main-path stage
   (``CONTACT_MADE`` on a public entity's procurement route) and until it ends, and is append-only like a note (D-54's
   redaction aside).
+- The procurement route (revision 0015, REQ-ENG-06): only a public entity's engagement enters ``PROCUREMENT_ROUTE``
+  (3b, after ``UNDER_REVIEW``); its owner or admin decides the route there, once, in the transaction that moves it to
+  ``INTEREST_CONFIRMED`` (the decision's time and decider are the database's); a decision never changes.
+- The nudges ledger (revision 0015, REQ-NOT-05): each escalation or reminder the job sends is recorded once per
+  engagement, kind and key through ``app_record_nudge``; the organisation's members read it, the developer never.
 - Times (event, note and message ``created_at``, ``stage_entered_at``, ``ended_at``, ``endorsed_at``, ``signed_at``,
   ``recorded_at``, ``confirmed_at``) are the database's, on the shared clock ``app_clock_now()`` (the test clock's
   offset applies only where the owner enabled it: dev, test and staging databases).
