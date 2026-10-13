@@ -78,9 +78,9 @@ The nudges ledger (REQ-NOT-05; the contract's B):
   (``engagement_nudges_no_update_delete`` and ``_no_truncate``: ``block_mutation()`` of revision 0002).
 - How the job gets there, as the expiry job (revision 0007): no application role reads every tenant's engagements, so
   ``app_nudge_candidates()`` lists, to a session with no user bound only, the open engagements a nudge may be due for
-  (ids only) with a member of the organisation to bind for its side, and ``app_record_nudge(engagement, kind, key)``
-  records a nudge for a session with no user bound only. bridge_app holds no INSERT on the ledger: no request can
-  record (and so suppress) a nudge.
+  (ids only) with a member of the organisation to bind for its side, and ``app_record_nudge(engagement, kind, key,
+  expected_state)`` records a nudge for a session with no user bound only. bridge_app holds no INSERT on the ledger: no
+  request can record (and so suppress) a nudge.
 
 The team (REQ-TEN-02; the contract's C). "An admin" is an active owner or admin of the row's organisation, narrowed by
 ``app.org_id`` when one is set (revision 0001's rule); "a triage member" an active owner, admin, reviewer or signatory
@@ -143,12 +143,14 @@ Functions (pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_ap
   its escalation contact, the assignments): the named contact while an active member, else the earliest active owner
   or admin, else the earliest active member; never the engagement's developer; NULL when it has none. Ordered by
   organisation, creation and id.
-- ``app_record_nudge(engagement uuid, kind text, key text)`` -> boolean, SECURITY DEFINER: the job only, with no user
-  bound (insufficient_privilege otherwise); NULL arguments are refused (invalid_parameter_value), an unknown engagement
-  too (no_data_found), a kind or key the CHECKs refuse is check_violation. Locks the engagement FOR KEY SHARE (an
-  append in flight is waited for and its outcome read, as the thread's gate), then records the nudge with the
-  engagement's organisation and the shared clock's time: true when this call recorded it (send it), false when it was
-  already recorded or the engagement has ended (send nothing).
+- ``app_record_nudge(engagement uuid, kind text, key text, expected_state engagement_state)`` -> boolean, SECURITY
+  DEFINER: the job only, with no user bound (insufficient_privilege otherwise); NULL arguments are refused
+  (invalid_parameter_value), an unknown engagement too (no_data_found), a kind or key the CHECKs refuse is
+  check_violation. Locks the engagement FOR KEY SHARE (an append in flight is waited for and its outcome read, as the
+  thread's gate), then records the nudge with the engagement's organisation and the shared clock's time: true when
+  this call recorded it (send it); false, recording nothing, when it was already recorded, the engagement has ended or
+  it is no longer in ``expected_state``, the state the job decided the nudge in (send nothing: a party's command
+  committed between the job's read and the record; the reviews of P28-BE1).
 - ``app_accept_invitation(token_hash bytea, user_id uuid)`` -> uuid (the organisation), SECURITY DEFINER: for the
   signed-in user only (``user_id`` is ``app.user_id``; insufficient_privilege otherwise). The invitation with that
   hash, locked FOR UPDATE, is open: neither accepted nor revoked and ``expires_at`` after ``app_clock_now()``
@@ -182,10 +184,10 @@ Operating rules for the code that uses this schema:
 - The nudge job (every 15 minutes, on the shared clock): ``SELECT * FROM app_nudge_candidates()`` with no user bound;
   for each, decide in a session bound to the developer (the engagement, its chain, holds, milestones) and to
   ``member_id`` (the organisation's roster, escalation contact and assignments) what is due; then, with no user bound,
-  ``SELECT app_record_nudge(:engagement, :kind, :key)`` and queue the notifications in the same transaction only when
-  it returns true. Keys are the job's: the stage entry's event id or seq with the business-day count, the milestone id,
-  the contact-by date; never a name, address or free text. Org-side reads of the ledger (``escalated_at``) bind a
-  member; a developer-side response never reads it.
+  ``SELECT app_record_nudge(:engagement, :kind, :key, :state)`` (``state`` the one the nudge was decided in) and queue
+  the notifications in the same transaction only when it returns true. Keys are the job's: the stage entry's event id or
+  seq with the business-day count, the milestone id, the contact-by date; never a name, address or free text. Org-side
+  reads of the ledger (``escalated_at``) bind a member; a developer-side response never reads it.
 - Invite (an admin; check the role first, 403, and the 20-open cap and an existing member's address, 409): INSERT the
   invitation with ``invited_by`` the caller, ``expires_at`` seven days on the shared clock and the SHA-256 of the
   token; ``uq_invitations_open`` is the race of two invitations to one address (409). Revoke: ``UPDATE invitations SET
@@ -578,30 +580,35 @@ $$;
 
 -- Records one nudge before it is sent (REQ-NOT-05): the job only, with no user bound (bridge_app holds no INSERT on
 -- the ledger, so no request records, and so suppresses, a nudge). Locks the engagement FOR KEY SHARE first (an append
--- in flight is waited for and its outcome read). Returns true when this call recorded it (send it), false when it was
--- already recorded or the engagement has ended (send nothing). The organisation is the engagement's; the time the
--- shared clock's. The kind and key CHECKs refuse what is not a nudge's (check_violation).
-CREATE FUNCTION app_record_nudge(p_engagement uuid, p_kind text, p_key text) RETURNS boolean
+-- in flight is waited for and its outcome read). Returns true when this call recorded it (send it); false, recording
+-- nothing, when it was already recorded, the engagement has ended or is no longer in p_expected_state, the state the
+-- job decided the nudge in (a party's command committed between the job's read and this record: send nothing). The
+-- organisation is the engagement's; the time the shared clock's. The kind and key CHECKs refuse what is not a nudge's
+-- (check_violation).
+CREATE FUNCTION app_record_nudge(p_engagement uuid, p_kind text, p_key text, p_expected_state engagement_state)
+    RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
     v_org uuid;
     v_ended timestamptz;
+    v_state public.engagement_state;
 BEGIN
     IF public.app_user_id() IS NOT NULL THEN
         RAISE EXCEPTION 'app_record_nudge: the nudge job only, with no user bound'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
-    IF p_engagement IS NULL OR p_kind IS NULL OR p_key IS NULL THEN
-        RAISE EXCEPTION 'app_record_nudge: name the engagement, the kind and the key'
+    IF p_engagement IS NULL OR p_kind IS NULL OR p_key IS NULL OR p_expected_state IS NULL THEN
+        RAISE EXCEPTION 'app_record_nudge: name the engagement, the kind, the key and the expected state'
             USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    SELECT e.org_id, e.ended_at INTO v_org, v_ended FROM public.engagements e WHERE e.id = p_engagement FOR KEY SHARE;
+    SELECT e.org_id, e.ended_at, e.state INTO v_org, v_ended, v_state
+      FROM public.engagements e WHERE e.id = p_engagement FOR KEY SHARE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'app_record_nudge: no engagement %', p_engagement USING ERRCODE = 'no_data_found';
     END IF;
-    IF v_ended IS NOT NULL THEN
+    IF v_ended IS NOT NULL OR v_state IS DISTINCT FROM p_expected_state THEN
         RETURN false;
     END IF;
     INSERT INTO public.engagement_nudges (id, engagement_id, org_id, kind, key, sent_at)
@@ -832,7 +839,7 @@ $$;
 # EXECUTE grants (EXECUTE revoked from PUBLIC first).
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_nudge_candidates()": ("bridge_app",),  # the nudge job, no user bound
-    "app_record_nudge(uuid, text, text)": ("bridge_app",),  # the nudge job, no user bound
+    "app_record_nudge(uuid, text, text, engagement_state)": ("bridge_app",),  # the nudge job, no user bound
     "app_accept_invitation(bytea, uuid)": ("bridge_app",),  # the signed-in invitee
     "app_invitation_preview(bytea)": ("bridge_app",),  # the public preview (the hash is the capability)
 }

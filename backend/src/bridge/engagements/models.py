@@ -786,8 +786,9 @@ class EngagementNudge(IdMixin, Base):
     """One nudge the job sent (REQ-NOT-05; P28 track B): an escalation to the organisation's admins and escalation
     contact, a contact-overdue notice (EM6), an NDA or milestone reminder. Recorded before sending, once per
     engagement, kind and key (``uq_engagement_nudges_engagement_id_kind_key``), so a nudge fires once whatever the job's
-    retries. Written only by ``app_record_nudge(engagement, kind, key)`` (the job, no user bound: true when this call
-    recorded it, false when it was already recorded or the engagement has ended); ``org_id`` is the engagement's and
+    retries. Written only by ``app_record_nudge(engagement, kind, key, expected_state)`` (the job, no user bound: true
+    when this call recorded it, false when it was already recorded, the engagement has ended or left the state the nudge
+    was decided in); ``org_id`` is the engagement's and
     ``sent_at`` the shared clock's. Append-only for every role. Read by the organisation's members only (the latest
     escalation is the tracker's "Escalated to your admins on ..."), never by the engagement's developer, a member or
     not, nor by staff."""
