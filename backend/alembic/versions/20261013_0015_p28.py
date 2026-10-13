@@ -8,7 +8,7 @@ and revision 0001's invitation policies (INSERT and UPDATE, stricter) and bridge
 columns of ``engagements`` with three CHECKs and bridge_app's UPDATE of two of them; three tables
 (``engagement_nudges``, ``org_niche_defaults``, ``org_escalation_contacts``) with their policies, triggers and grants;
 on ``invitations`` three CHECKs, a partial unique index and a guard; on ``memberships`` the last-owner guard and the
-clearing of a leaver's team seats; five functions bridge_app executes and seven trigger functions. Nothing else of
+clearing of a leaver's team seats; six functions bridge_app executes and seven trigger functions. Nothing else of
 revisions 0001 to 0014 is changed or dropped. Times written here are the shared clock's (``app_clock_now()``).
 
 The procurement route (docs/spec/06 6.9 stage 3b; ``PROCUREMENT_ROUTE`` has been a value of ``engagement_state``
@@ -170,6 +170,16 @@ Functions (pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_ap
 - ``app_invitation_preview(token_hash bytea)`` -> (org_name text, roles org_role[]), SECURITY DEFINER, STABLE: one row
   for an open invitation (as above), the organisation's legal name and the roles, nothing else; no row otherwise.
   Answers any session: the hash is the capability.
+- ``app_niche_default_assignee(engagement uuid)`` -> uuid, SECURITY DEFINER, STABLE: the member a new engagement is
+  assigned to by its organisation's niche default (track C), for the engagement's developer (a Pitch opens
+  ``SUBMITTED`` in the developer's session, which reads neither ``org_niche_defaults`` nor the roster), an active
+  member of its organisation, or a session with no user bound; any other bound user is refused
+  (insufficient_privilege, also for an unknown engagement). The organisation's default for the niche of the
+  engagement's version, else for that niche's parent; returned only while the engagement is in ``SUBMITTED`` or
+  ``ORG_INTEREST``, has never had an assignment (live or closed), and the default is an active owner, admin, reviewer or
+  signatory of the organisation (the assignment guard's set, revision 0013) who is not the engagement's developer;
+  NULL otherwise (a default that fails these is not replaced by the parent's). It reveals a user id only, which the
+  app binds as the organisation's side to write the assignment through revision 0013's path.
 - Trigger and internal functions (no EXECUTE for any role): ``engagements_procurement_guard()``,
   ``org_niche_defaults_guard()``, ``invitations_guard()``, ``org_escalation_contacts_guard()`` and
   ``memberships_last_owner_guard()`` (SECURITY INVOKER: ``current_user`` is the writer, the roster read under its RLS;
@@ -222,6 +232,10 @@ Operating rules for the code that uses this schema:
   ``INSERT INTO org_escalation_contacts (org_id, user_id) VALUES (:org, :user) ON CONFLICT (org_id) DO UPDATE SET
   user_id = EXCLUDED.user_id``, or ``DELETE`` for none (check_violation: not an active member, 422); read it bound to
   a member, never on a developer-side response.
+- A new engagement's niche default (on ``SUBMITTED`` or ``ORG_INTEREST``): ``SELECT app_niche_default_assignee(:e)``
+  in the session that opened it (or with no user bound); when it names a member, bind that member (and the
+  organisation) and insert the assignment with ``assigned_by`` the member, as revision 0013's path (its guard and the
+  live-assignment index still decide; a unique violation means someone assigned it first: leave theirs).
 
 Revision ID: 0015
 Revises: 0014
@@ -647,6 +661,58 @@ AS $$
     SELECT o.public_entity FROM public.organizations o WHERE o.id = p_org
 $$;
 
+-- The member a new engagement is assigned to by its organisation's niche default (REQ-TEN-02, track C): the default
+-- for the niche of the engagement's version, else for that niche's parent; only while the engagement is in SUBMITTED or
+-- ORG_INTEREST, has never had an assignment (live or closed), and the default is an active owner, admin, reviewer or
+-- signatory of the organisation (revision 0013's assignment guard's set) who is not the engagement's developer; NULL
+-- otherwise (a default that fails these is not replaced by the parent's). Callable by the engagement's developer (the
+-- Pitch opens SUBMITTED in their session, which reads neither the defaults nor the roster), an active member of its
+-- organisation, or a session with no user bound; any other bound user is refused (insufficient_privilege, an unknown
+-- engagement too, so the refusal says nothing). It reveals a user id only, which the app binds as the organisation's
+-- side to assign through revision 0013's path. SECURITY DEFINER: reads the defaults, the roster and the assignments.
+CREATE FUNCTION app_niche_default_assignee(p_engagement uuid) RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+DECLARE
+    v_user uuid := public.app_user_id();
+    v_engagement public.engagements%ROWTYPE;
+    v_niche uuid;
+    v_parent uuid;
+    v_default uuid;
+BEGIN
+    SELECT * INTO v_engagement FROM public.engagements e WHERE e.id = p_engagement;
+    IF v_user IS NOT NULL AND NOT (FOUND AND (v_engagement.developer_id = v_user
+                                              OR public.app_is_member(v_engagement.org_id))) THEN
+        RAISE EXCEPTION 'app_niche_default_assignee: the engagement''s developer, a member of its organisation or the'
+            ' job with no user bound only' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+    IF v_engagement.id IS NULL OR v_engagement.state NOT IN ('SUBMITTED', 'ORG_INTEREST')
+       OR EXISTS (SELECT 1 FROM public.engagement_assignments a WHERE a.engagement_id = v_engagement.id) THEN
+        RETURN NULL;
+    END IF;
+    SELECT v.niche_id, n.parent_id INTO v_niche, v_parent
+      FROM public.proposal_versions v LEFT JOIN public.niches n ON n.id = v.niche_id
+     WHERE v.id = v_engagement.version_id;
+    IF v_niche IS NULL THEN
+        RETURN NULL;
+    END IF;
+    SELECT d.user_id INTO v_default FROM public.org_niche_defaults d
+     WHERE d.org_id = v_engagement.org_id AND d.niche_id = v_niche;
+    IF NOT FOUND AND v_parent IS NOT NULL THEN
+        SELECT d.user_id INTO v_default FROM public.org_niche_defaults d
+         WHERE d.org_id = v_engagement.org_id AND d.niche_id = v_parent;
+    END IF;
+    IF v_default IS NULL OR v_default = v_engagement.developer_id OR NOT EXISTS (
+        SELECT 1 FROM public.memberships m
+         WHERE m.org_id = v_engagement.org_id AND m.user_id = v_default AND m.status = 'active'
+           AND m.roles && CAST('{owner,admin,reviewer,signatory}' AS public.org_role[])) THEN
+        RETURN NULL;
+    END IF;
+    RETURN v_default;
+END;
+$$;
+
 -- Accepts an invitation for the signed-in user (REQ-TEN-02; POST /api/invitations/{token}/accept): p_user is
 -- app.user_id (insufficient_privilege otherwise). The invitation with that hash, locked FOR UPDATE, is open: neither
 -- accepted nor revoked, and expiring after the shared clock's now (no_data_found otherwise: one refusal for an unknown,
@@ -872,6 +938,7 @@ FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_org_is_public_entity(uuid)": ("bridge_app",),  # the state machine's facts (public information)
     "app_accept_invitation(bytea, uuid)": ("bridge_app",),  # the signed-in invitee
     "app_invitation_preview(bytea)": ("bridge_app",),  # the public preview (the hash is the capability)
+    "app_niche_default_assignee(uuid)": ("bridge_app",),  # the Pitch's developer, a member or the job
 }
 TRIGGER_FUNCTIONS = (
     "engagements_procurement_guard()",
