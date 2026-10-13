@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 
 import { AuthShell } from "@/components/AuthShell";
 import { ClientStrings } from "@/components/ClientStrings";
@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { getSignedIn } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
-import { demoPersonas, personaDetail, type DemoPersona } from "@/lib/public/demo-personas";
+import { demoPersonas, personaLine, personaName, type DemoPersona } from "@/lib/public/demo-personas";
 import { publicDemoOn } from "@/lib/public-demo";
 import { returnPathParam } from "@/lib/return-path";
 
@@ -54,27 +54,29 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
  * demo. When no persona could be read, one calm line and "Try again" (the page itself).
  */
 async function DemoLogin() {
-  const [t, locale, personas] = await Promise.all([getTranslations("publicDemo"), getLocale(), demoPersonas()]);
+  const [t, personas] = await Promise.all([getTranslations("publicDemo"), demoPersonas()]);
   const offered = personas && personas.length > 0 ? personas : null;
+  // All of it is drawn here, on the server: the client island (PersonaPicker) gets finished nodes, nothing to format.
   const choice = (persona: DemoPersona): PersonaChoice => {
-    const detail = personaDetail(persona, locale, (level) => t("detailLevel", { level }));
+    const name = personaName(persona.name);
+    const line = personaLine(persona, (role, org) => t(`about.${role}`, { org }));
     return {
       key: persona.key,
       home: persona.home,
       body: (
         <>
-          <Avatar name={persona.name} size="lg" />
+          <Avatar name={name} size="lg" />
           <div className="min-w-0">
             <h2 className="font-display text-xl leading-tight tracking-[-0.01em] text-ink [overflow-wrap:anywhere]">
-              {persona.name}
+              {name}
             </h2>
             <p className="mt-1 text-sm font-semibold text-ink">{t(`role.${persona.role}`)}</p>
-            {detail ? <p className="text-sm text-ink-soft [overflow-wrap:anywhere]">{detail}</p> : null}
+            {line ? <p className="text-sm text-ink-soft [overflow-wrap:anywhere]">{line}</p> : null}
           </div>
         </>
       ),
       label: t.rich("continue", {
-        name: persona.name,
+        name,
         hidden: (chunks) => <span className="sr-only">{chunks}</span>,
       }),
     };
