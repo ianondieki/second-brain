@@ -18,7 +18,7 @@ const ORG_ID = "0199c000-0000-7000-8000-0000000000a1";
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   forward: vi.fn(),
-  me: null as null | { user: { email: string } },
+  me: null as null | { user: { email: string }; side?: string },
   demo: false,
   push: vi.fn(),
 }));
@@ -46,8 +46,11 @@ const { isInvitationToken, readInvitation } = await import("./invitation");
 const { default: InvitationPage, generateMetadata } = await import("./page");
 const { AcceptInvitation, acceptRefusal } = await import("./AcceptInvitation");
 
-function preview(answer: { status: number; data?: unknown }) {
-  mocks.get.mockResolvedValue({ data: answer.data, response: new Response(null, { status: answer.status }) });
+function preview(answer: { status: number; data?: unknown; headers?: Record<string, string> }) {
+  mocks.get.mockResolvedValue({
+    data: answer.data,
+    response: new Response(null, { status: answer.status, headers: answer.headers }),
+  });
 }
 
 beforeEach(() => {
@@ -93,7 +96,9 @@ describe("the preview read", () => {
     preview({ status: 404 });
     expect(await readInvitation(TOKEN)).toEqual({ kind: "gone" });
     preview({ status: 429 });
-    expect(await readInvitation(TOKEN)).toEqual({ kind: "rateLimited" });
+    expect(await readInvitation(TOKEN)).toEqual({ kind: "rateLimited", retryAfter: null });
+    preview({ status: 429, headers: { "Retry-After": "600" } });
+    expect(await readInvitation(TOKEN)).toEqual({ kind: "rateLimited", retryAfter: 600 });
     preview({ status: 503 });
     await expect(readInvitation(TOKEN)).rejects.toThrow("GET /api/invitations/{token} answered 503");
   });
@@ -128,6 +133,14 @@ describe("the invitation page", () => {
     expect(screen.queryByRole("link", { name: "Sign in to accept" })).toBeNull();
   });
 
+  it("a developer account is told it cannot join, with no Accept (one account, one side: D-72)", async () => {
+    mocks.me = { user: { email: "dev@example.com" }, side: "developer" };
+    await renderPage();
+    expect(document.querySelector('[data-invitation="developerAccount"]')?.textContent).toBe(en.invitation.developerAccount);
+    expect(screen.queryByRole("button", { name: "Accept and join" })).toBeNull();
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
+  });
+
   it("a dead link is one calm sentence and the home page", async () => {
     preview({ status: 404 });
     await renderPage();
@@ -139,10 +152,11 @@ describe("the invitation page", () => {
   });
 
   it("too many tries is one sentence and Try again", async () => {
-    preview({ status: 429 });
+    preview({ status: 429, headers: { "Retry-After": "600" } });
     await renderPage();
+    expect(screen.getByText(en.invitation.rateLimited)).toBeTruthy();
     const empty = document.querySelector<HTMLElement>('[data-invitation="rateLimited"]')!;
-    expect(empty.textContent).toContain(en.invitation.rateLimited);
+    expect(within(empty).getAllByRole("paragraph").map((p) => p.textContent)).toEqual(["Try again in about 10 minutes."]);
     expect(within(empty).getByRole("link", { name: "Try again" }).getAttribute("href")).toBe(`/invitations/${TOKEN}`);
   });
 
@@ -209,6 +223,7 @@ describe("Accept and join", () => {
     [409, "already_member", en.invitationAccept.refusal.member, false],
     [402, "plan_limit", "Telco A (fixture) has no free seat on its plan just now. Ask the person who invited you.", false],
     [403, "public_demo_locked", en.invitationAccept.refusal.locked, false],
+    [409, "developer_account", en.invitationAccept.refusal.developer, false],
     [429, "rate_limited", en.invitationAccept.refusal.rateLimited, true],
     [500, undefined, en.invitationAccept.refusal.generic, true],
   ])("answers %i %s in words", async (status, code, sentence, again) => {

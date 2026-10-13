@@ -14,6 +14,7 @@ import { getSignedIn } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { publicDemoOn } from "@/lib/public-demo";
 import { loginHref } from "@/lib/return-path";
+import { retryWhen } from "@/lib/retry-after";
 
 import { AcceptInvitation } from "./AcceptInvitation";
 import { invitationPath, joinPath, readInvitation } from "./invitation";
@@ -37,17 +38,27 @@ export default async function InvitationPage({ params }: PageProps<"/invitations
   const [t, read] = await Promise.all([getTranslations("invitation"), readInvitation(token)]);
   const here = invitationPath(token);
 
-  if (read.kind !== "ok") {
-    const gone = read.kind === "gone";
+  if (read.kind === "gone") {
     return (
       <AuthShell>
-        <PageHeader title={gone ? t("deadTitle") : t("rateLimitedTitle")} />
+        <PageHeader title={t("deadTitle")} />
+        <EmptyState className="mt-6" sentence={t("dead")} action={t("home")} href="/" data-invitation="gone" />
+      </AuthShell>
+    );
+  }
+  if (read.kind === "rateLimited") {
+    // When to try again, roughly, from the API's Retry-After (never a promise it did not make).
+    const when = retryWhen(read.retryAfter);
+    const tr = await getTranslations("retryAfter");
+    return (
+      <AuthShell>
+        <PageHeader title={t("rateLimitedTitle")} lead={t("rateLimited")} />
         <EmptyState
           className="mt-6"
-          sentence={gone ? t("dead") : t("rateLimited")}
-          action={gone ? t("home") : (await getTranslations("orgTeam"))("retry")}
-          href={gone ? "/" : here}
-          data-invitation={read.kind}
+          sentence={when.count === undefined ? tr(when.key) : tr(when.key, { count: when.count })}
+          action={(await getTranslations("orgTeam"))("retry")}
+          href={here}
+          data-invitation="rateLimited"
         />
       </AuthShell>
     );
@@ -60,6 +71,14 @@ export default async function InvitationPage({ params }: PageProps<"/invitations
   let body;
   if (publicDemoOn()) {
     body = <DemoLocked sentence={t("demoLocked")} />;
+  } else if (me && me.side === "developer") {
+    // One account, one side (D-72): a developer account cannot join an organisation; the API refuses it too (409
+    // developer_account), so no Accept is offered.
+    body = (
+      <p className="text-ink" data-invitation="developerAccount">
+        {t("developerAccount")}
+      </p>
+    );
   } else if (me) {
     body = (
       <div className="flex flex-col gap-5" data-invitation="signedIn">

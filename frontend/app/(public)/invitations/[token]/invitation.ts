@@ -1,6 +1,8 @@
 import { forwardHeaders, serverApi } from "@/lib/api/server";
 import type { components } from "@/lib/api/schema";
 
+import { retryAfterSeconds } from "@/lib/retry-after";
+
 import { isInvitationToken } from "./paths";
 
 export { invitationPath, isInvitationToken, joinPath } from "./paths";
@@ -16,8 +18,8 @@ export type InvitationRead =
   | { kind: "ok"; preview: InvitationPreview }
   /** Unknown, spent, revoked, resent-over or expired: one answer for all (the API's uniform 404). */
   | { kind: "gone" }
-  /** Too many previews from this address in the last minute (429). */
-  | { kind: "rateLimited" };
+  /** Too many previews from this address (429), with the API's Retry-After in seconds when it gave one. */
+  | { kind: "rateLimited"; retryAfter: number | null };
 
 /**
  * The preview, read on the server with no session cookie (the token is the capability) and the visitor's forwarded
@@ -33,7 +35,9 @@ export async function readInvitation(token: string): Promise<InvitationRead> {
     cache: "no-store",
   });
   if (data) return { kind: "ok", preview: data };
-  if (response.status === 429) return { kind: "rateLimited" };
+  if (response.status === 429) {
+    return { kind: "rateLimited", retryAfter: retryAfterSeconds(response.headers.get("Retry-After")) };
+  }
   if (response.status === 404 || response.status === 422) return { kind: "gone" };
   throw new Error(`GET /api/invitations/{token} answered ${response.status}`);
 }

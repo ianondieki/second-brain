@@ -9,19 +9,39 @@ import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode } from "@/lib/api/error-code";
 import { loginHref } from "@/lib/return-path";
+import { retryAfterSeconds, retryWhen } from "@/lib/retry-after";
 
 import { joinPath } from "./paths";
 
-type Refusal = "mismatch" | "gone" | "member" | "seats" | "locked" | "signedOut" | "rateLimited" | "network" | "generic";
+type Refusal =
+  | "mismatch"
+  | "gone"
+  | "member"
+  | "developer"
+  | "seats"
+  | "locked"
+  | "signedOut"
+  | "rateLimited"
+  | "network"
+  | "generic";
+
+function retryLine(
+  tr: (key: "minute" | "minutes" | "hour" | "hours" | "later", values?: Record<string, number>) => string,
+  seconds: number | null,
+): string {
+  const when = retryWhen(seconds);
+  return tr(when.key, when.count === undefined ? undefined : { count: when.count });
+}
 
 /** Refusals that another press cannot change: the button goes. */
-const FINAL: ReadonlySet<Refusal> = new Set(["mismatch", "gone", "member", "seats", "locked"]);
+const FINAL: ReadonlySet<Refusal> = new Set(["mismatch", "gone", "member", "developer", "seats", "locked"]);
 
 /** Why accepting did not happen, from the answer's status and code (never the server's words). */
 export function acceptRefusal(status: number, error: unknown): Refusal {
   const code = apiErrorCode(error);
   if (code === "invitation_email_mismatch") return "mismatch";
   if (code === "already_member") return "member";
+  if (code === "developer_account") return "developer";
   if (code === "public_demo_locked") return "locked";
   if (code === "plan_limit" || status === 402) return "seats";
   if (status === 429) return "rateLimited";
@@ -49,7 +69,9 @@ export function AcceptInvitation({
   const t = useStrings("invitationAccept");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const tr = useStrings("retryAfter");
   const [refusal, setRefusal] = useState<Refusal | null>(null);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
   const notice = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,6 +90,7 @@ export function AcceptInvitation({
         router.push(`/org?org=${encodeURIComponent(data.org_id)}`);
         return;
       }
+      setRetryAfter(retryAfterSeconds(response.headers.get("Retry-After")));
       setRefusal(acceptRefusal(response.status, error));
     } catch {
       setRefusal("network");
@@ -80,6 +103,7 @@ export function AcceptInvitation({
       {refusal ? (
         <Alert ref={notice} className="w-full">
           <p data-refusal={refusal}>{t(`refusal.${refusal}`, { org: orgName })}</p>
+          {refusal === "rateLimited" ? <p>{retryLine(tr, retryAfter)}</p> : null}
           {refusal === "member" ? (
             <a href="/org" className={standaloneLinkClass}>
               {t("openOrg")}
