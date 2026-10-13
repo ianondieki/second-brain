@@ -7,18 +7,14 @@
 /** The signed-in portals: a signed-out visit below one of them goes to /login with its return path. */
 export const SIGNED_IN_PREFIXES = ["/dev", "/org", "/billing", "/settings", "/problems", "/notifications"] as const;
 
+// `invitations`: an organisation's invitation link (REQ-TEN-02) is public, but accepting needs a session, so signing
+// in comes back to it (its page checks the token's shape itself). One word in the alternation, not a pattern of its
+// own: the sign-in screens carry this module, and /login's script must not grow (docs/spec/07 item 5).
 const RETURN_PATH =
-  /^\/(dev|org|billing|settings|problems|notifications)(\/[A-Za-z0-9._~\-/]*)?(\?[A-Za-z0-9._~\-=&%]*)?$/;
-
-/**
- * An organisation's invitation link (REQ-TEN-02): public, but accepting needs a session, so signing in comes back to
- * it. Its token exactly as the API issues it (43 URL-safe base64 characters), nothing after it.
- */
-const INVITATION_PATH = /^\/invitations\/[A-Za-z0-9_-]{43}$/;
+  /^\/(dev|org|billing|settings|problems|notifications|invitations)(\/[A-Za-z0-9._~\-/]*)?(\?[A-Za-z0-9._~\-=&%]*)?$/;
 
 /** The return path when `value` is one of this site's signed-in pages (or an invitation link) written plainly. */
 export function safeReturnPath(value: unknown): string | undefined {
-  if (typeof value === "string" && INVITATION_PATH.test(value)) return value;
   if (typeof value !== "string" || value.length > 300 || !RETURN_PATH.test(value)) return undefined;
   if (value.includes("//") || value.split(/[/?]/).some((segment) => segment === "." || segment === "..")) {
     return undefined;
