@@ -199,10 +199,12 @@ def test_the_feed_path_is_the_path_the_rule_redacts() -> None:
     """The route's path (``feeds.FEED_PATH``) and the log rule's prefix cannot drift apart."""
     token, _ = feeds.new_token()
     path = feeds.FEED_PATH.format(token=token)
-    assert [rule.match(path) is not None for rule in SECRET_SEGMENTS] == [True]
+    assert [rule.match(path) is not None for rule in SECRET_SEGMENTS] == [True, False]  # the feed's rule, not P28's
     assert redact_secret_segments(path) == "/api/calendar/[redacted]"
     assert feeds.FEED_PATH.startswith("/api/calendar/")
-    assert all(rule.match("/api/calendar/x") and rule.match("/api//calendar//x") for rule in SECRET_SEGMENTS)
+    feed_rule = SECRET_SEGMENTS[0]
+    assert feed_rule.match("/api/calendar/x")
+    assert feed_rule.match("/api//calendar//x")
 
 
 @pytest.mark.parametrize("http", ["h11", "httptools"])

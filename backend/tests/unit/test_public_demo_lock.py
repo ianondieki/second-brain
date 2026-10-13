@@ -55,6 +55,14 @@ LOCKED_ROUTES = frozenset(
         ("GET", "/api/auth/oauth/{provider}/callback"),
         ("DELETE", "/api/auth/identities/{identity_id}"),
         ("PUT", "/api/orgs/{org_id}/members/{user_id}/roles"),
+        # The Team page's changes (REQ-TEN-02, P28 track C): membership and team changes are switched off.
+        ("POST", "/api/orgs/{org_id}/invitations"),
+        ("POST", "/api/orgs/{org_id}/invitations/{invitation_id}/resend"),
+        ("DELETE", "/api/orgs/{org_id}/invitations/{invitation_id}"),
+        ("POST", "/api/invitations/{token}/accept"),
+        ("DELETE", "/api/orgs/{org_id}/members/{user_id}"),
+        ("PUT", "/api/orgs/{org_id}/niche-defaults"),
+        ("PUT", "/api/orgs/{org_id}/escalation-contact"),
         ("POST", "/api/me/proposals/{proposal_id}/attachments"),
         ("POST", "/api/engagements/{engagement_id}/messages/attachments"),
         ("POST", "/api/test-clock/advance"),
@@ -257,6 +265,8 @@ def test_the_persona_sign_in_and_reads_stay_open(app: FastAPI) -> None:
         ("GET", "/api/auth/me"),
         ("GET", "/api/test-clock"),
         ("GET", "/api/public/demo"),
+        ("GET", "/api/invitations/{token}"),  # the invitation link's preview reads only
+        ("GET", "/api/orgs/{org_id}/team"),  # the page still shows the team
     ):
         assert needed in open_routes, needed
 

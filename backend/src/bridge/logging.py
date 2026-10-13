@@ -65,7 +65,12 @@ _QUERY_PAIR = re.compile(r"(^|&)([^&=]*)=([^&]*)")
 # slash's redirect). Matched against the path without its query string.
 # Repeated slashes and letter case are matched too (``/api//calendar/…``, ``/API/calendar/…`` answer 404 but would
 # otherwise log a live token in full; security re-check MINOR).
-SECRET_SEGMENTS: Final = (re.compile(r"^(/api/+calendar/+).+$", re.IGNORECASE),)
+# An organisation's invitation link carries its token the same way (``/api/invitations/{token}`` and ``…/accept``;
+# REQ-TEN-02).
+SECRET_SEGMENTS: Final = (
+    re.compile(r"^(/api/+calendar/+).+$", re.IGNORECASE),
+    re.compile(r"^(/api/+invitations/+).+$", re.IGNORECASE),
+)
 
 
 def redact_secret_segments(path: str) -> str:

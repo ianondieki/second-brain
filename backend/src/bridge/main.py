@@ -71,6 +71,7 @@ from bridge.teams.peers import router as peers_router
 from bridge.teams.router import blocks_router
 from bridge.teams.router import router as teams_router
 from bridge.tenancy.router import router as orgs_router
+from bridge.tenancy.team_router import router as org_team_router
 
 API_PREFIX = "/api"
 TEST_CLOCK_MODULE = "bridge.testclock"
@@ -227,6 +228,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth_router)
     app.include_router(orgs_router)
+    app.include_router(org_team_router)
     app.include_router(me_router)
     app.include_router(identities_router)
     app.include_router(consents_router)
