@@ -12,10 +12,27 @@ import type { ChipKind, Step, SubStage } from "./model";
  * status word; the current group also shows the stage's own label and what is due (`detail`). The done part of the line
  * draws once and the current mark breathes three times (P25), both still under reduced motion.
  */
-export function Stepper({ steps, detail, actor }: { steps: Step[]; detail?: ReactNode; /** Who acts now (an Avatar), shown with the current step. */ actor?: ReactNode }) {
+export function Stepper({
+  steps,
+  detail,
+  actor,
+  stages,
+}: {
+  steps: Step[];
+  detail?: ReactNode;
+  /** Who acts now (an Avatar), shown with the current step. */
+  actor?: ReactNode;
+  /**
+   * The current group's own stages (SubStageList): under the current step on phones; from 1024 px a row under the
+   * spine starting at the current column (the spec's detail panel), so the narrow column keeps its short lines.
+   */
+  stages?: (layout: "column" | "row") => ReactNode;
+}) {
   const t = useTranslations("tracker");
   const currentIndex = steps.findIndex((s) => s.chip !== "completed" && s.chip !== "pending");
+  const row = stages && currentIndex >= 0 ? stages("row") : null;
   return (
+    <>
     <ol aria-label={t("stepperLabel")} data-stepper="" className="flex flex-col lg:grid lg:grid-cols-5 lg:gap-0">
       {steps.map((step, i) => {
         const current = i === currentIndex;
@@ -63,11 +80,20 @@ export function Stepper({ steps, detail, actor }: { steps: Step[]; detail?: Reac
                   {detail ? <div className="min-w-0">{detail}</div> : null}
                 </div>
               ) : null}
+              {current && stages ? <div className="lg:hidden">{stages("column")}</div> : null}
             </div>
           </li>
         );
       })}
     </ol>
+    {row ? (
+      <div data-substages-row="" className="mt-5 hidden lg:grid lg:grid-cols-5">
+        <div style={{ gridColumn: `${currentIndex + 1} / -1` }} className="border-t border-line pt-4 pr-4">
+          {row}
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }
 
@@ -83,11 +109,24 @@ const WORD_TONE: Record<ChipKind, string> = { ...CHIP_TONE, completed: "text-ink
  * organisation's never does (AC-TRACK-5). Each stage's mark goes with its status word for screen readers; the
  * labels are the API's.
  */
-export function SubStageList({ stages, group }: { stages: SubStage[]; group: Step["group"] }) {
+export function SubStageList({
+  stages,
+  group,
+  layout = "column",
+}: {
+  stages: SubStage[];
+  group: Step["group"];
+  /** A column under the current step (phones), or a wrapping row (the desktop panel). */
+  layout?: "column" | "row";
+}) {
   const t = useTranslations("tracker");
   if (stages.length === 0) return null;
   return (
-    <ol aria-label={t("subStages", { group: t(`group.${group}`) })} data-substages="" className="mt-3 flex flex-col gap-1.5">
+    <ol
+      aria-label={t("subStages", { group: t(`group.${group}`) })}
+      data-substages={layout}
+      className={layout === "row" ? "flex flex-wrap gap-x-6 gap-y-2" : "mt-3 ml-0.5 flex flex-col gap-1.5"}
+    >
       {stages.map((stage) => (
         <li
           key={stage.state}
@@ -95,6 +134,7 @@ export function SubStageList({ stages, group }: { stages: SubStage[]; group: Ste
           data-state={stage.mark}
           className={cn(
             "flex items-start gap-2 text-sm",
+            layout === "row" && "whitespace-nowrap",
             stage.mark === "current" ? "font-semibold text-ink" : "text-ink-soft",
           )}
         >
