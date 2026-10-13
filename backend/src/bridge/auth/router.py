@@ -60,6 +60,7 @@ from bridge.auth.schemas import (
 from bridge.errors import ERROR_RESPONSES, ApiError, not_found
 from bridge.notifications.email import EmailProvider
 from bridge.profiles.consents import SESSION_ONLY_MESSAGE
+from bridge.public_demo import LOCKED
 from bridge.tenancy.service import my_memberships
 
 router = APIRouter(prefix="/api/auth", tags=["auth"], responses=ERROR_RESPONSES)
@@ -91,6 +92,7 @@ MESSAGES = {
     "step_up_required": "Confirm with your authenticator code to continue.",
     "last_sign_in_method": "Set a password or link another account before removing this one.",
     "not_found": "Not found.",
+    "unknown_persona": "Choose one of the demo personas.",  # [[COPY-REVIEW]] the public demo (REQ-FND-04)
 }
 
 
@@ -122,7 +124,7 @@ async def csrf_token(request: Request, response: Response, settings: SettingsDep
     return CsrfResponse(csrf_token=set_csrf(response, settings, request.cookies.get(settings.session_cookie_name)))
 
 
-@router.post("/signup", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/signup", status_code=status.HTTP_202_ACCEPTED, dependencies=[LOCKED])
 async def signup(
     body: SignupRequest,
     request: Request,
@@ -146,7 +148,7 @@ async def signup(
     return AcceptedResponse()
 
 
-@router.post("/magic-link", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/magic-link", status_code=status.HTTP_202_ACCEPTED, dependencies=[LOCKED])
 async def magic_link(
     body: EmailRequest, request: Request, tasks: BackgroundTasks, db: Db, settings: SettingsDep, email: EmailDep
 ) -> AcceptedResponse:
@@ -157,7 +159,7 @@ async def magic_link(
     return AcceptedResponse()
 
 
-@router.post("/verify-email/resend", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/verify-email/resend", status_code=status.HTTP_202_ACCEPTED, dependencies=[LOCKED])
 async def resend_verification(
     body: EmailRequest, request: Request, tasks: BackgroundTasks, db: Db, settings: SettingsDep, email: EmailDep
 ) -> AcceptedResponse:
@@ -281,7 +283,7 @@ async def me(live: PendingSession, db: Db) -> MeResponse:
     )
 
 
-@router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/password", status_code=status.HTTP_204_NO_CONTENT, dependencies=[LOCKED])
 async def set_password(
     body: SetPasswordRequest,
     request: Request,
@@ -304,7 +306,7 @@ async def set_password(
     _send_later(tasks, request, email, pending)
 
 
-@router.post("/totp/enrol")
+@router.post("/totp/enrol", dependencies=[LOCKED])
 async def totp_enrol(
     body: TotpEnrolRequest, request: Request, live: CurrentSession, db: Db, settings: SettingsDep
 ) -> TotpEnrolResponse:
@@ -317,7 +319,7 @@ async def totp_enrol(
     return TotpEnrolResponse(secret=secret, otpauth_uri=uri)
 
 
-@router.delete("/totp/enrol", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/totp/enrol", status_code=status.HTTP_204_NO_CONTENT, dependencies=[LOCKED])
 async def totp_enrol_cancel(live: CurrentSession, db: Db) -> None:
     """Cancel setup: clear the pending secret. It waits for a confirmation still in progress; 409
     totp_already_enabled when two-step sign-in is on (a confirmation committed first and its answer, with the recovery
@@ -329,7 +331,7 @@ async def totp_enrol_cancel(live: CurrentSession, db: Db) -> None:
     await db.commit()
 
 
-@router.post("/totp/confirm")
+@router.post("/totp/confirm", dependencies=[LOCKED])
 async def totp_confirm(
     body: CodeRequest,
     request: Request,
@@ -352,7 +354,7 @@ async def totp_confirm(
     return RecoveryCodesResponse(recovery_codes=codes)
 
 
-@router.post("/totp/recovery-codes")
+@router.post("/totp/recovery-codes", dependencies=[LOCKED])
 async def totp_recovery_codes(
     request: Request,
     tasks: BackgroundTasks,
@@ -377,7 +379,7 @@ async def totp_recovery_codes(
     return RecoveryCodesResponse(recovery_codes=codes)
 
 
-@router.post("/totp/disable", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/totp/disable", status_code=status.HTTP_204_NO_CONTENT, dependencies=[LOCKED])
 async def totp_disable(
     request: Request, tasks: BackgroundTasks, live: StepUpSession, db: Db, settings: SettingsDep, email: EmailDep
 ) -> None:
@@ -398,7 +400,7 @@ async def oauth_providers(settings: SettingsDep) -> OAuthProvidersResponse:
     return OAuthProvidersResponse(providers=oauth.enabled(settings))
 
 
-@router.post("/oauth/{provider}/start")
+@router.post("/oauth/{provider}/start", dependencies=[LOCKED])
 async def oauth_start(
     provider: str,
     body: OAuthStartRequest,
@@ -438,6 +440,7 @@ def _state_matches(presented: str | None, flow: oauth.Flow) -> bool:
     "/oauth/{provider}/callback",
     response_class=RedirectResponse,
     status_code=status.HTTP_302_FOUND,
+    dependencies=[LOCKED],
     responses={302: {"description": "To a fixed page of the web app; errors as ?oauth_error=CODE&provider=NAME"}},
 )
 async def oauth_callback(
@@ -513,7 +516,7 @@ async def oauth_callback(
     return response
 
 
-@router.delete("/identities/{identity_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/identities/{identity_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[LOCKED])
 async def unlink_identity(
     identity_id: UUID,
     request: Request,

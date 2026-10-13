@@ -3729,6 +3729,52 @@
         "title": "DeclineBody",
         "type": "object"
       },
+      "DemoPersona": {
+        "description": "One persona of the public demo (REQ-FND-04): a fictional demo account a visitor signs in as with one press.",
+        "properties": {
+          "detail": {
+            "description": "One line of what it is, e.g. \"Telco A (fixture): signatory\"",
+            "title": "Detail",
+            "type": "string"
+          },
+          "home": {
+            "description": "The web path to land on after signing in: \"/dev\", \"/org\" or \"/admin\"",
+            "title": "Home",
+            "type": "string"
+          },
+          "key": {
+            "description": "What POST /api/auth/demo/sign-in takes as \"persona\", e.g. \"amina\"",
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "description": "The account's display name (fictional)",
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "description": "Which side and role it plays",
+            "enum": [
+              "developer",
+              "org_admin",
+              "org_signatory",
+              "org_reviewer",
+              "staff"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "role",
+          "detail",
+          "home"
+        ],
+        "title": "DemoPersona",
+        "type": "object"
+      },
       "DevVerification": {
         "enum": [
           "d0",
@@ -11345,6 +11391,43 @@
           "name"
         ],
         "title": "PublicCounty",
+        "type": "object"
+      },
+      "PublicDemo": {
+        "description": "Whether this deployment is the public demo, and its personas. Off: ``enabled`` false, no personas, no reset.",
+        "properties": {
+          "enabled": {
+            "description": "True only where PUBLIC_DEMO is on and the image carries the demo module",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "personas": {
+            "description": "The personas in the order to show them; empty when off",
+            "items": {
+              "$ref": "#/components/schemas/DemoPersona"
+            },
+            "title": "Personas",
+            "type": "array"
+          },
+          "reset_hour_eat": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The hour (East Africa Time, 0-23) when the demo's data is wiped and seeded again; null when off",
+            "title": "Reset Hour Eat"
+          }
+        },
+        "required": [
+          "enabled",
+          "personas",
+          "reset_hour_eat"
+        ],
+        "title": "PublicDemo",
         "type": "object"
       },
       "PublicNiche": {
@@ -46902,6 +46985,108 @@
           }
         },
         "summary": "Public Activity",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/api/public/demo": {
+      "get": {
+        "description": "Whether this is the public demo (REQ-FND-04) and, when it is, the personas a visitor may sign in as with one\npress (``POST /api/auth/demo/sign-in``) and the hour of the nightly reset. Off (every other deployment, and any\nimage without the demo module): ``enabled`` false, no personas, ``reset_hour_eat`` null. Read from memory, never\nthe database; the same for everyone, so cacheable for 60 seconds.",
+        "operationId": "public_demo_status_api_public_demo_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDemo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Public Demo Status",
         "tags": [
           "public"
         ]

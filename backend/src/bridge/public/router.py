@@ -7,6 +7,8 @@ REQ-DIR-01, REQ-REPO-02; P24-B). No session needed.
   three newest of each.
 - ``GET /api/public/problems/{problem_id}``: one of those problems (Explore's links): its published text, place and
   niche, and a Brief's organisation while it is listed; 404 (``no-store``) for any other id, never saying why.
+- ``GET /api/public/demo``: whether this deployment is the public demo and its personas (REQ-FND-04,
+  ``bridge.public_demo``); built in memory, so it has no cache, no rate limit and no database read.
 
 Each is the same for everyone, so each API worker keeps one copy for 60 seconds (one database read per minute per
 worker; per problem, for at most ``PROBLEM_CACHE_CAP`` problems, the least recently read leaving first) and says
@@ -28,13 +30,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
 
-from bridge import clock
+from bridge import clock, public_demo
 from bridge.auth.deps import Db, SettingsDep, client_ip
 from bridge.errors import ERROR_RESPONSES, ApiError, not_found
 from bridge.provenance import verify
 from bridge.public import feed
 from bridge.public.cache import Cached, Keyed
-from bridge.public.schemas import ActivityFeed, Explore, PublicProblem
+from bridge.public.schemas import ActivityFeed, Explore, PublicDemo, PublicProblem
 
 router = APIRouter(prefix="/api/public", tags=["public"], responses=ERROR_RESPONSES)
 
@@ -144,3 +146,13 @@ async def public_problem(
         raise
     response.headers["Cache-Control"] = PUBLIC_CACHE
     return result
+
+
+@router.get("/demo")
+async def public_demo_status(response: Response, settings: SettingsDep) -> PublicDemo:
+    """Whether this is the public demo (REQ-FND-04) and, when it is, the personas a visitor may sign in as with one
+    press (``POST /api/auth/demo/sign-in``) and the hour of the nightly reset. Off (every other deployment, and any
+    image without the demo module): ``enabled`` false, no personas, ``reset_hour_eat`` null. Read from memory, never
+    the database; the same for everyone, so cacheable for 60 seconds."""
+    response.headers["Cache-Control"] = PUBLIC_CACHE
+    return public_demo.status(settings)

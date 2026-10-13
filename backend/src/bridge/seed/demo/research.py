@@ -18,6 +18,9 @@ checks, then ``app_moderate_problem``). The cards' sources carry ``excerpt_ref``
 API's label; ``seeded_example: true`` in the admin and public responses): a seeded card is never presented as a live
 AI result.
 
+In the public demo with ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04) a card is written only when every excerpt it
+cites is an official source (``niches_to_seed``): none today.
+
 Idempotent and safe on a used demo (P9's rules): a niche that already has a seeded card of the demo staff admin (any
 status: an admin may have rejected it in the app) gets nothing new; a seeded card still awaiting review is approved.
 """
@@ -44,8 +47,9 @@ from bridge.models.enums import ConsentPurpose
 from bridge.problems.research import synthesis
 from bridge.problems.research.pipeline import EXAMPLE_REF_PREFIX, CardOrigin, execute_run, start_run
 from bridge.problems.research.policy import get_research_policy
-from bridge.problems.research.sources import get_catalogue
+from bridge.problems.research.sources import Catalogue, get_catalogue
 from bridge.profiles.consents import record_decisions
+from bridge.public_demo import fictional_only
 from bridge.seed.demo.data import DEMO_PASSWORD, DemoStaff
 from bridge.seed.demo.runtime import SEED_METHOD, Actors, DemoReport, DemoSeedError, _execute, _one, _user_id_of
 
@@ -289,4 +293,27 @@ def seeded_niches() -> tuple[str, ...]:
     return tuple(SEEDED_ANSWERS)
 
 
-__all__ = ["SEEDED_ANSWERS", "SeededExampleClient", "ensure_staff", "seed_research_card", "seeded_niches"]
+def niches_to_seed(settings: Settings, catalogue: Catalogue | None = None) -> tuple[str, ...]:
+    """The niches whose seeded card this run writes: every one, except in the public demo with
+    ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04, ``bridge.public_demo.fictional_only``), which leaves out every card
+    that cites an excerpt whose ``source_type`` is not ``official`` (the news excerpts await D-38). Today each card
+    cites at least one news excerpt, so the fictional public demo has none; ``full`` restores them all."""
+    if not fictional_only(settings):
+        return seeded_niches()
+    found = catalogue or get_catalogue()
+
+    def official(excerpt_id: str) -> bool:
+        excerpt = found.get(excerpt_id)
+        return excerpt is not None and excerpt.source_type == "official"
+
+    return tuple(n for n in seeded_niches() if all(official(i) for i, _ in SEEDED_ANSWERS[n]["citations"]))
+
+
+__all__ = [
+    "SEEDED_ANSWERS",
+    "SeededExampleClient",
+    "ensure_staff",
+    "niches_to_seed",
+    "seed_research_card",
+    "seeded_niches",
+]
