@@ -1,27 +1,72 @@
-"""REQ-FND-04 (P28 track PD): the public demo's status route, module fence and robots header, without a database.
+"""REQ-FND-04 (P28 track PD): the public demo's persona allowlist, status route, module fence and robots header,
+without a database.
 
 - AT-PD-2: with the mode off, or without the ``bridge.demo`` module (a production image), ``GET /api/public/demo``
-  says ``enabled: false`` and the sign-in route is 404.
+  says ``enabled: false`` and the sign-in route is 404; the backend image deletes ``bridge/demo`` unless built with dev
+  tools, and staging and production never get the persona module even from settings that skipped validation.
+- The allowlist is fixed in code: seven personas in the card's order (Hassan added by the orchestrator), each a demo
+  seed account at a reserved ``.example`` domain, with its name and role from the seed's data; the sign-in body takes
+  the key only.
 - Every API answer says ``X-Robots-Tag: noindex, nofollow`` while the mode is on, and none says it otherwise.
-- The lock dependency refuses with 403 ``public_demo_locked`` only while the mode is on.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import re
 from typing import Any
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from bridge import public_demo
-from bridge.config import Settings, get_settings
+from bridge.config import BACKEND_DIR, Settings, get_settings
+from bridge.demo import public_access
 from bridge.errors import ApiError
 from bridge.main import create_app
+from bridge.seed.demo.data import all_accounts
+
+KEYS = ["amina", "brian", "grace", "peter", "rita", "hassan", "moderator"]
+REMOVAL = re.compile(r'^RUN if \[ "\$WITH_DEV_TOOLS" != "true" \]; then rm -rf (\S+(?: \S+)*); fi$', re.MULTILINE)
 
 
 def public(**update: Any) -> Settings:
     return get_settings().model_copy(update={"public_demo": True, **update})
+
+
+# ----------------------------------------------------------------------------------------------------- allowlist
+
+
+def test_the_allowlist_is_seven_seeded_demo_accounts_in_order() -> None:
+    accounts = {email: (name, what) for email, name, what in all_accounts()}
+    assert [p.key for p in public_access.PERSONAS] == KEYS
+    assert len({p.email for p in public_access.PERSONAS}) == len(KEYS)
+    for persona in public_access.PERSONAS:
+        assert persona.email in accounts, persona.email
+        assert persona.email.endswith(".example")
+    assert public_access.BY_KEY["peter"].email == "signatory@telco-a.example"
+    assert public_access.BY_KEY["hassan"].email == "owner@county-c.example"
+
+
+def test_the_personas_carry_the_seeds_names_roles_and_homes() -> None:
+    listed = [(p.key, p.name, p.role, p.detail, p.home) for p in public_access.personas()]
+    assert listed == [
+        ("amina", "Amina Wanjiru", "developer", "Developer, D2", "/dev"),
+        ("brian", "Brian Otieno", "developer", "Developer, D1", "/dev"),
+        ("grace", "Grace Mwangi", "org_admin", "Telco A (fixture): owner and admin", "/org"),
+        ("peter", "Peter Kamau", "org_signatory", "Telco A (fixture): signatory", "/org"),
+        ("rita", "Rita Njeri", "org_reviewer", "Telco A (fixture): reviewer", "/org"),
+        ("hassan", "Hassan Abdi", "org_admin", "County Government of C (fixture): owner and admin", "/org"),
+        ("moderator", "Staff Moderator (demo)", "staff", "Platform staff: moderator", "/admin"),
+    ]
+
+
+def test_the_sign_in_body_takes_the_key_only() -> None:
+    assert public_access.PersonaSignIn(persona="amina").persona == "amina"
+    for body in ({"persona": "amina", "email": "admin@staff.example"}, {"email": "amina@developers.example"}, {}):
+        with pytest.raises(ValidationError):
+            public_access.PersonaSignIn.model_validate(body)
 
 
 # ---------------------------------------------------------------------------------------------- the module fence
@@ -29,6 +74,24 @@ def public(**update: Any) -> Settings:
 
 def test_the_status_off_is_empty() -> None:
     assert public_demo.status(get_settings()).model_dump() == {"enabled": False, "personas": [], "reset_hour_eat": None}
+
+
+def test_the_status_on_lists_the_personas_and_the_reset_hour() -> None:
+    status = public_demo.status(public())
+    assert (status.enabled, status.reset_hour_eat) == (True, 3)
+    assert [p.key for p in status.personas] == KEYS
+
+
+def test_production_never_has_the_persona_module() -> None:
+    """Even with settings that skipped validation (``model_copy``), production and staging get nothing."""
+    for app_env in ("staging", "production"):
+        assert public_demo.persona_module(public(app_env=app_env)) is None
+        assert public_demo.persona_router(public(app_env=app_env)) is None
+        assert public_demo.status(public(app_env=app_env)) == public_demo.OFF
+        with pytest.raises(RuntimeError):
+            public_access.build_router(public(app_env=app_env))
+    with pytest.raises(RuntimeError):
+        public_access.build_router(get_settings())  # the mode off
 
 
 @pytest.mark.parametrize("missing", ["bridge.demo.public_access", "bridge.demo"])
@@ -44,6 +107,17 @@ def test_an_image_without_the_module_has_no_public_demo(monkeypatch: pytest.Monk
     assert public_demo.persona_module(public()) is None
     assert public_demo.persona_router(public()) is None
     assert public_demo.status(public()) == public_demo.OFF
+
+
+def test_the_backend_image_deletes_the_demo_package_unless_built_with_dev_tools() -> None:
+    dockerfile = (BACKEND_DIR / "Dockerfile").read_text(encoding="utf-8")
+    removal = REMOVAL.search(dockerfile)
+    assert removal is not None
+    module = BACKEND_DIR / "src" / "bridge" / "demo" / "public_access.py"
+    assert module.is_file()
+    assert public_access.__file__ is not None
+    assert module.samefile(public_access.__file__)  # the persona code is in the package the image deletes
+    assert "src/bridge/demo" in removal.group(1).split()
 
 
 async def test_the_lock_dependency_refuses_only_in_the_public_demo() -> None:
@@ -70,6 +144,23 @@ async def test_get_public_demo_when_off() -> None:
     assert response.json() == {"enabled": False, "personas": [], "reset_hour_eat": None}
     assert response.headers["cache-control"] == "public, max-age=60"
     assert "x-robots-tag" not in response.headers
+
+
+async def test_get_public_demo_when_on() -> None:
+    response = await get(public(), "/api/public/demo")
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["enabled"], body["reset_hour_eat"]) == (True, 3)
+    assert body["personas"][3] == {
+        "key": "peter",
+        "name": "Peter Kamau",
+        "role": "org_signatory",
+        "detail": "Telco A (fixture): signatory",
+        "home": "/org",
+    }
+    assert [p["key"] for p in body["personas"]] == KEYS
+    assert response.headers["cache-control"] == "public, max-age=60"
+    assert response.headers["x-robots-tag"] == "noindex, nofollow"
 
 
 @pytest.mark.parametrize("path", ["/healthz", "/api/public/demo", "/api/no-such-route", "/api/auth/csrf"])

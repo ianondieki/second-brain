@@ -91,6 +91,7 @@ MESSAGES = {
     "step_up_required": "Confirm with your authenticator code to continue.",
     "last_sign_in_method": "Set a password or link another account before removing this one.",
     "not_found": "Not found.",
+    "unknown_persona": "Choose one of the demo personas.",  # [[COPY-REVIEW]] the public demo (REQ-FND-04)
 }
 
 
