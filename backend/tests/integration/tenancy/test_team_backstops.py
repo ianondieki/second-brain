@@ -21,14 +21,14 @@ from bridge.auth.crypto import new_token, token_hash
 from bridge.ids import uuid7
 from bridge.models.enums import OrgRole
 from bridge.tenancy import invitations, team, team_settings
-from tests.integration.engagements.api_world import build, clients
-from tests.integration.tenancy.team_helpers import SETTINGS, address, code, invite, person, rows
+from tests.integration.engagements.api_world import clients
+from tests.integration.tenancy.team_helpers import SETTINGS, address, code, invite, person, rows, team_world
 
 
 async def test_the_niche_default_guard_answers_as_the_api_does(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     [niche] = await rows(owner_engine, "SELECT niche_id FROM proposal_versions WHERE id = :v", v=world.version)
     [found] = await rows(owner_engine, "SELECT slug FROM niches WHERE id = :n", n=niche.niche_id)
 
@@ -46,7 +46,7 @@ async def test_the_niche_default_guard_answers_as_the_api_does(
 async def test_the_escalation_contact_guard_answers_as_the_api_does(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
 
     async def anyone_is_a_member(db: AsyncSession, org_id: UUID, user_id: UUID) -> str:
         return "Someone"
@@ -60,7 +60,7 @@ async def test_the_escalation_contact_guard_answers_as_the_api_does(
 async def test_the_last_owner_guard_answers_as_the_api_does(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
 
     async def someone_else_owns(db: AsyncSession, org_id: UUID, user_id: UUID) -> bool:
         return True
@@ -81,7 +81,7 @@ async def test_the_last_owner_guard_answers_as_the_api_does(
 async def test_an_invitation_closed_meanwhile_is_409(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     async with clients(app_engine, SETTINGS, world.owner) as (owner,):
         made = (await invite(owner, world.org, address())).json()
 
@@ -97,7 +97,7 @@ async def test_an_invitation_closed_meanwhile_is_409(
 async def test_an_address_that_is_not_one_plain_mailbox_is_422(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     async with clients(app_engine, SETTINGS, world.owner) as (owner,):
         assert code(await invite(owner, world.org, "jörg@example.com")) == (422, "invalid_email")
 
@@ -105,7 +105,7 @@ async def test_an_address_that_is_not_one_plain_mailbox_is_422(
 async def test_a_malformed_link_is_404_and_a_member_accepting_is_409(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     member, email = await person(owner_engine)
     token = new_token()
     async with owner_engine.begin() as conn:
@@ -142,7 +142,7 @@ async def test_a_malformed_link_is_404_and_a_member_accepting_is_409(
 async def test_two_invitations_to_one_address_at_once_meet_the_unique_index(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     to = address()
     async with clients(app_engine, SETTINGS, world.owner) as (owner,):
         assert (await invite(owner, world.org, to)).status_code == 201

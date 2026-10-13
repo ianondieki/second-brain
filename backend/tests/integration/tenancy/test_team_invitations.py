@@ -17,15 +17,17 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
 from bridge.ids import uuid7
+from bridge.tenancy import invitation_limits
 from bridge.tenancy.invitations import MAX_OPEN
 from bridge.tenancy.team_router import PREVIEWS_PER_MINUTE
 from tests.integration.api import make_client
-from tests.integration.engagements.api_world import build, clients
+from tests.integration.engagements.api_world import clients
 from tests.integration.tenancy.team_helpers import (
     SETTINGS,
     address,
@@ -35,6 +37,7 @@ from tests.integration.tenancy.team_helpers import (
     mail_to,
     person,
     rows,
+    team_world,
     token_in,
 )
 
@@ -50,7 +53,7 @@ async def expire(owner_engine: AsyncEngine, invitation: str) -> None:
 async def test_an_invitation_is_emailed_previewed_and_accepted_by_its_address(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     invitee, email = await person(owner_engine)
     async with clients(app_engine, SETTINGS, world.owner, invitee) as (owner, newcomer):
         created = await invite(owner, world.org, email.upper(), ["reviewer", "finance"])
@@ -61,7 +64,8 @@ async def test_an_invitation_is_emailed_previewed_and_accepted_by_its_address(
         assert "token" not in body
         [message] = mail_to(owner, email)
         token = token_in(message)
-        assert message.subject.endswith(f"invited you to join {world.org_name} on {get_settings().product_name}")
+        assert message.subject == f"{get_settings().product_name}: you have an invitation to join a team"
+        assert f"invited you to join the {world.org_name} team" in message.text
         assert "as reviewer and finance" in message.text
 
         team = (await owner.get(f"/api/orgs/{world.org}/team")).json()
@@ -114,7 +118,7 @@ async def test_an_invitation_is_emailed_previewed_and_accepted_by_its_address(
 async def test_another_address_is_403_a_member_409_and_a_second_invitation_409(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     other, _ = await person(owner_engine)
     unverified, email = await person(owner_engine, verified=False)
     member, member_email = await person(owner_engine)
@@ -140,7 +144,7 @@ async def test_another_address_is_403_a_member_409_and_a_second_invitation_409(
 
 
 async def test_revoked_resent_and_expired_links_are_404(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     revoked_to, resent_to, expired_to = address(), address(), address()
     async with clients(app_engine, SETTINGS, world.owner) as (owner,):
         revoked = (await invite(owner, world.org, revoked_to)).json()
@@ -184,7 +188,7 @@ async def test_revoked_resent_and_expired_links_are_404(owner_engine: AsyncEngin
 
 
 async def test_an_expired_link_is_404_when_accepted(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     invitee, email = await person(owner_engine)
     async with clients(app_engine, SETTINGS, world.owner, invitee) as (owner, newcomer):
         made = (await invite(owner, world.org, email)).json()
@@ -197,8 +201,12 @@ async def test_an_expired_link_is_404_when_accepted(owner_engine: AsyncEngine, a
         assert (await newcomer.post(f"/api/invitations/{fresh}/accept")).status_code == 200
 
 
-async def test_the_21st_open_invitation_is_409(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
-    world = await build(owner_engine)
+async def test_the_21st_open_invitation_is_409(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(invitation_limits, "SENDS_PER_HOUR", 100)  # the cap here, not the send limits
+    monkeypatch.setattr(invitation_limits, "ORG_SENDS_PER_DAY", 100)
+    world = await team_world(owner_engine)
     async with clients(app_engine, SETTINGS, world.owner) as (owner,):
         made = []
         for _ in range(MAX_OPEN):
@@ -219,8 +227,8 @@ async def test_the_21st_open_invitation_is_409(owner_engine: AsyncEngine, app_en
 
 
 async def test_who_may_invite_what_and_whose(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:
-    world = await build(owner_engine)
-    other = await build(owner_engine)
+    world = await team_world(owner_engine)
+    other = await team_world(owner_engine)
     admin, _ = await person(owner_engine)
     async with owner_engine.begin() as conn:
         await conn.execute(
@@ -264,7 +272,7 @@ async def test_who_may_invite_what_and_whose(owner_engine: AsyncEngine, app_engi
 async def test_the_public_demo_locks_accepting_but_not_the_preview(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    world = await build(owner_engine)
+    world = await team_world(owner_engine)
     invitee, email = await person(owner_engine)
     async with clients(app_engine, SETTINGS, world.owner) as (owner,):
         assert (await invite(owner, world.org, email)).status_code == 201
@@ -281,8 +289,9 @@ async def test_the_preview_is_one_404_for_every_dead_link_and_is_throttled_per_a
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
     """The reviewer's notes: one uniform 404 (malformed, unknown, revoked, expired), only the name and the roles of a
-    live link, every read counted against the client address (30 a minute, then 429); roles are never empty (422)."""
-    world = await build(owner_engine)
+    live link, every read counted against the visitor's global address (30 a minute, then 429), while visitors behind
+    a private or trusted-proxy address share one larger bucket; roles are never empty (422)."""
+    world = await team_world(owner_engine)
     async with clients(app_engine, SETTINGS, world.owner) as (owner,):
         empty = await owner.post(f"/api/orgs/{world.org}/invitations", json={"email": address(), "roles": []})
         assert empty.status_code == 422
@@ -293,7 +302,7 @@ async def test_the_preview_is_one_404_for_every_dead_link_and_is_throttled_per_a
         tokens = {to: token_in(mail_to(owner, to)[0]) for to in (revoked_to, expired_to, live_to)}
         assert (await owner.delete(f"/api/orgs/{world.org}/invitations/{revoked['id']}")).status_code == 204
         await expire(owner_engine, expired["id"])
-    ip = f"10.{uuid7().int % 250}.{uuid7().int % 250}.{uuid7().int % 250 + 1}"
+    ip = f"41.{uuid7().int % 250}.{uuid7().int % 250}.{uuid7().int % 250 + 1}"  # a global address: one visitor
     async with make_client(app_engine, SETTINGS, ip=ip) as visitor:
         dead = ["x" * 10, "A" * 43, tokens[revoked_to], tokens[expired_to]]
         answers = [await visitor.get(f"/api/invitations/{token}") for token in dead]
@@ -304,3 +313,6 @@ async def test_the_preview_is_one_404_for_every_dead_link_and_is_throttled_per_a
             assert (await visitor.get(f"/api/invitations/{tokens[live_to]}")).status_code == 200
         assert code(await visitor.get(f"/api/invitations/{tokens[live_to]}")) == (429, "rate_limited")
         assert code(await visitor.get("/api/invitations/short")) == (429, "rate_limited")
+    async with make_client(app_engine, SETTINGS, ip="10.20.30.40") as shared:  # a private address: the shared bucket
+        for _ in range(PREVIEWS_PER_MINUTE + 1):
+            assert (await shared.get(f"/api/invitations/{tokens[live_to]}")).status_code == 200

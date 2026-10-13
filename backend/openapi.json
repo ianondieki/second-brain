@@ -42292,7 +42292,18 @@
             "content": {
               "text/csv": {}
             },
-            "description": "One row per engagement (UTF-8 with a byte-order mark, CRLF)"
+            "description": "One row per engagement (UTF-8 with a byte-order mark, CRLF), newest first",
+            "headers": {
+              "X-Export-Truncated": {
+                "description": "true when the file stops at 10000 rows; absent otherwise",
+                "schema": {
+                  "enum": [
+                    "true"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {

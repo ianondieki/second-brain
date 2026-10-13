@@ -31403,9 +31403,11 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description One row per engagement (UTF-8 with a byte-order mark, CRLF) */
+            /** @description One row per engagement (UTF-8 with a byte-order mark, CRLF), newest first */
             200: {
                 headers: {
+                    /** @description true when the file stops at 10000 rows; absent otherwise */
+                    "X-Export-Truncated"?: "true";
                     [name: string]: unknown;
                 };
                 content: {

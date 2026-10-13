@@ -55,14 +55,13 @@ LOCKED_ROUTES = frozenset(
         ("GET", "/api/auth/oauth/{provider}/callback"),
         ("DELETE", "/api/auth/identities/{identity_id}"),
         ("PUT", "/api/orgs/{org_id}/members/{user_id}/roles"),
-        # The Team page's changes (REQ-TEN-02, P28 track C): membership and team changes are switched off.
+        # The Team page's membership changes (REQ-TEN-02, P28 track C; the niche defaults and the escalation contact
+        # are not membership changes and stay open).
         ("POST", "/api/orgs/{org_id}/invitations"),
         ("POST", "/api/orgs/{org_id}/invitations/{invitation_id}/resend"),
         ("DELETE", "/api/orgs/{org_id}/invitations/{invitation_id}"),
         ("POST", "/api/invitations/{token}/accept"),
         ("DELETE", "/api/orgs/{org_id}/members/{user_id}"),
-        ("PUT", "/api/orgs/{org_id}/niche-defaults"),
-        ("PUT", "/api/orgs/{org_id}/escalation-contact"),
         ("POST", "/api/me/proposals/{proposal_id}/attachments"),
         ("POST", "/api/engagements/{engagement_id}/messages/attachments"),
         ("POST", "/api/test-clock/advance"),
@@ -267,6 +266,8 @@ def test_the_persona_sign_in_and_reads_stay_open(app: FastAPI) -> None:
         ("GET", "/api/public/demo"),
         ("GET", "/api/invitations/{token}"),  # the invitation link's preview reads only
         ("GET", "/api/orgs/{org_id}/team"),  # the page still shows the team
+        ("PUT", "/api/orgs/{org_id}/niche-defaults"),  # a team setting, not a membership change
+        ("PUT", "/api/orgs/{org_id}/escalation-contact"),
     ):
         assert needed in open_routes, needed
 

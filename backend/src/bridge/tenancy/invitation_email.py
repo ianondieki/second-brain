@@ -1,9 +1,10 @@
 """The invitation email (REQ-TEN-02): a fixed template in English and Swahili, rendered by code from facts only.
 
-The organisation's name and the inviter's name are the only words a person chose; each is collapsed to one line and
-cut to its column's length, and the HTML part is autoescaped (``bridge.notifications.brand.simple_html``). The link is
-the web app's ``/invitations/{token}`` on ``PUBLIC_BASE_URL``: the token is in the email and nowhere else (the
-database keeps its SHA-256). The language is the invitee's account's when the address already has one, else the
+The subject is fixed (the product's name only: no caller-authored text in a subject line, the security review's note).
+The organisation's name and the inviter's name, the only words a person chose, are in the body only, each collapsed to
+one line and cut to its column's length, and the HTML part is autoescaped (``bridge.notifications.brand.simple_html``).
+The link is the web app's ``/invitations/{token}`` on ``PUBLIC_BASE_URL``: the token is in the email and nowhere else
+(the database keeps its SHA-256). The language is the invitee's account's when the address already has one, else the
 inviter's. All wording is ordinary product copy, ``[[COPY-REVIEW]]`` (Swahili included).
 """
 
@@ -119,7 +120,7 @@ def render(facts: InvitationFacts, locale: Locale) -> Wording:
     url = link(facts.base_url, facts.token)
     product = one_line(facts.product)
     if locale == "sw":
-        subject = f"{inviter} amekualika ujiunge na {org} kwenye {product}"
+        subject = f"{product}: una mwaliko wa kujiunga na timu"
         paragraphs = [
             f"{inviter} amekualika ujiunge na timu ya {org} kwenye {product} kama {roles}.",
             "Fungua kiungo ili ukubali. Utaombwa kuingia, au kufungua akaunti, kwa anwani hii ya barua pepe.",
@@ -128,7 +129,7 @@ def render(facts: InvitationFacts, locale: Locale) -> Wording:
         ]
         button = "Kubali mwaliko"
     else:
-        subject = f"{inviter} invited you to join {org} on {product}"
+        subject = f"{product}: you have an invitation to join a team"
         paragraphs = [
             f"{inviter} invited you to join the {org} team on {product} as {roles}.",
             "Open the link to accept. You will be asked to sign in, or to create an account, with this email address.",
@@ -138,7 +139,7 @@ def render(facts: InvitationFacts, locale: Locale) -> Wording:
         button = "Accept the invitation"
     text = f"{paragraphs[0]}\n\n{paragraphs[1]}\n{url}\n\n{paragraphs[2]}"
     html = simple_html(product=product, subject=subject, paragraphs=paragraphs, button=(button, url))
-    return Wording(subject[:300], text, html)
+    return Wording(subject, text, html)
 
 
 async def deliver(

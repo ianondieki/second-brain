@@ -40,7 +40,7 @@ async def post_interest(
     engagement goes to the organisation's default reviewer for its niche, if it has one (N30)."""
     await throttle_interest(db, settings, org, client_ip(request))
     engagement_id = await express_interest(db, settings, org, body)
-    assigned = await team.assign_niche_default(db, org.org_id, engagement_id)  # REQ-TEN-02: the niche's default
+    assigned = await team.assign_niche_default_safely(db, org.org_id, engagement_id)  # REQ-TEN-02, never blocks
     await db.commit()
     await team.tell_default_assignee(request.app.state.session_factory, org.org_id, assigned)
     party = await resolve_party(db, org.live, engagement_id)

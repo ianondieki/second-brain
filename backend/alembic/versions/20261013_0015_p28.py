@@ -118,7 +118,11 @@ The team (REQ-TEN-02; the contract's C). "An admin" is an active owner or admin 
   ``memberships_clear_team_seats`` (AFTER UPDATE OF status, roles, when an active membership leaves ``active`` or keeps
   none of the triage roles; SECURITY DEFINER, as revision 0013's feed revocation): a leaver's niche defaults go and so
   does the organisation's escalation contact if it is them; a member who loses the triage roles loses their niche
-  defaults.
+  defaults; either way their live engagement assignments in the organisation are closed, as revision 0013 closes one
+  (``unassigned_at``, which its guard stamps with the shared clock), so no removal (an admin's, an owner's who is the
+  engagement's developer and cannot see its assignments under D-68, staff's roster correction, a claim's transfer)
+  leaves a non-member or a non-triage member a live assignee. No audit row or engagement event is written for these
+  (an assignment changes no state; the removal's or demotion's own audit row covers them, as for the feeds).
 - ``invitations`` (revision 0001; tenancy ORG): bridge_app's table-wide INSERT and UPDATE become INSERT of ``id``,
   ``org_id``, ``email``, ``roles``, ``token_hash``, ``invited_by``, ``expires_at`` and UPDATE of ``token_hash``,
   ``expires_at`` (a resend: the old token dies) and ``revoked_at``. The SELECT policy stays revision 0001's (an admin
@@ -225,8 +229,9 @@ Operating rules for the code that uses this schema:
   ``invitation_email_mismatch``, unique_violation to 409; audit it.
 - Remove a member: ``UPDATE memberships SET status = 'removed'`` (an admin for an unprotected member, an owner for
   anyone); change roles with ``UPDATE memberships SET roles``; SQLSTATE 55000 from ``memberships_last_owner_guard`` is
-  the 409 ``last_owner`` (check it first, as today). Clear the removed member's open assignments in the same
-  transaction (the database clears their niche defaults and escalation-contact seat).
+  the 409 ``last_owner`` (check it first, as today). The database closes the removed or demoted member's live
+  assignments in the organisation and clears their niche defaults and escalation-contact seat in the same statement;
+  the removal's audit row covers them.
 - Niche defaults: an admin upserts ``INSERT ... ON CONFLICT (org_id, niche_id) DO UPDATE SET user_id =
   EXCLUDED.user_id`` and deletes; check_violation from the guard is the 422 (not a triage member). Escalation contact:
   ``INSERT INTO org_escalation_contacts (org_id, user_id) VALUES (:org, :user) ON CONFLICT (org_id) DO UPDATE SET
@@ -897,15 +902,20 @@ $$;
 
 -- memberships, AFTER UPDATE OF status, roles WHEN an active membership leaves active or keeps none of owner, admin,
 -- reviewer and signatory (REQ-TEN-02): a leaver's niche defaults go and so does the organisation's escalation contact
--- if it is them; a member who loses those roles loses their niche defaults (the default feeds an assignment,
--- whose assignee is a triage member). SECURITY DEFINER: whoever removes or demotes the member (an admin, staff, a
--- claim's transfer, the owner) holds no write of these rows for them.
+-- if it is them; a member who loses those roles loses their niche defaults (the default feeds an assignment, whose
+-- assignee is a triage member); either way their live assignments in the organisation are closed as revision 0013
+-- closes one (unassigned_at; engagement_assignments_guard stamps the shared clock), so no removal leaves a non-member
+-- or a non-triage member a live assignee. No audit row or event: the removal's own audit row covers them. SECURITY
+-- DEFINER: whoever removes or demotes the member (an admin, staff, a claim's transfer, an owner who is an engagement's
+-- developer and reads none of its assignments under D-68) holds no write of these rows for them.
 CREATE FUNCTION memberships_clear_team_seats() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
     DELETE FROM public.org_niche_defaults d WHERE d.org_id = OLD.org_id AND d.user_id = OLD.user_id;
+    UPDATE public.engagement_assignments a SET unassigned_at = public.app_clock_now()
+     WHERE a.org_id = OLD.org_id AND a.assignee_user_id = OLD.user_id AND a.unassigned_at IS NULL;
     IF NEW.status IS DISTINCT FROM 'active' THEN
         DELETE FROM public.org_escalation_contacts c WHERE c.org_id = OLD.org_id AND c.user_id = OLD.user_id;
     END IF;

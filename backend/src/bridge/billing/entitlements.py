@@ -4,8 +4,9 @@ A gated action asks for the subject's ``Entitlements`` and calls ``check_count``
 plan limit the API answers **402** with the next plan up (``upgrade``; null at the top of the ladder) and the action
 creates nothing. Proposals, tags and unlocks (Phase 2) call these helpers; a batch of tags calls ``check_room``.
 
-A read the plan does not include (the engagements export, ``csv_export``: REQ-ENG-17) calls ``require_entitlement``:
-**403** ``entitlement_required`` naming the plan that has it (``upgrade``, with its name), so the page can say which.
+A feature the plan lacks (``require_feature``: the engagements export's ``csv_export``, REQ-ENG-17) is the same 402
+``plan_limit``, whose ``upgrade`` names the first plan up the ladder that has the feature (else the side's cheapest
+with it: ``Catalog.first_with``), not merely the next plan, which may lack it too.
 """
 
 from __future__ import annotations
@@ -46,16 +47,26 @@ class Entitlements:
         return self.limits.get(key) is True
 
 
-def _upgrade_body(settings: Settings, ent: Entitlements) -> dict[str, str] | None:
-    target = plans.load(settings.plans_file).upgrade_for(ent.plan_code)
+def _upgrade_body(settings: Settings, ent: Entitlements, feature: str | None = None) -> dict[str, str] | None:
+    catalog = plans.load(settings.plans_file)
+    target = catalog.first_with(ent.plan_code, feature) if feature else catalog.upgrade_for(ent.plan_code)
     if target is None:
         return None
     return {"plan": target.code, "url": f"/billing/upgrade?plan={target.code}"}
 
 
 class PlanLimitExceeded(ApiError):
-    def __init__(self, settings: Settings, ent: Entitlements, key: str, *, limit: int | None, used: int | None) -> None:
-        upgrade = _upgrade_body(settings, ent)
+    def __init__(
+        self,
+        settings: Settings,
+        ent: Entitlements,
+        key: str,
+        *,
+        limit: int | None,
+        used: int | None,
+        feature: bool = False,
+    ) -> None:
+        upgrade = _upgrade_body(settings, ent, key if feature else None)
         super().__init__(
             402,
             "plan_limit",
@@ -109,25 +120,7 @@ def check_room(settings: Settings, ent: Entitlements, key: str, *, used: int, ad
 
 
 def require_feature(settings: Settings, ent: Entitlements, key: str) -> None:
+    """Raise 402 ``plan_limit`` unless the plan has the feature ``key`` (an explicit ``true``); ``upgrade`` names the
+    plan that has it."""
     if not ent.allows(key):
-        raise PlanLimitExceeded(settings, ent, key, limit=None, used=None)
-
-
-class EntitlementRequired(ApiError):
-    """403 ``entitlement_required``: the subject's plan lacks the feature ``key``; ``upgrade`` names the plan that has
-    it (``plan``, ``name`` and the upgrade page's ``url``), null when no plan of the side has it."""
-
-    def __init__(self, settings: Settings, ent: Entitlements, key: str) -> None:
-        target = plans.load(settings.plans_file).first_with(ent.plan_code, key)
-        upgrade = None
-        if target is not None:
-            upgrade = {"plan": target.code, "name": target.name, "url": f"/billing/upgrade?plan={target.code}"}
-        # [[COPY-REVIEW]]
-        message = f"This needs the {target.name} plan." if target else "This is not part of your plan."
-        super().__init__(403, "entitlement_required", message, limit_key=key, plan=ent.plan_code, upgrade=upgrade)
-
-
-def require_entitlement(settings: Settings, ent: Entitlements, key: str) -> None:
-    """Raise 403 ``entitlement_required`` unless the plan has the feature ``key`` (an explicit ``true``)."""
-    if not ent.allows(key):
-        raise EntitlementRequired(settings, ent, key)
+        raise PlanLimitExceeded(settings, ent, key, limit=None, used=None, feature=True)

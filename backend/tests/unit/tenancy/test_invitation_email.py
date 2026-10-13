@@ -38,8 +38,9 @@ def facts(**changes: object) -> InvitationFacts:
 
 def test_the_english_email_names_the_inviter_the_organisation_the_roles_and_the_date() -> None:
     wording = render(facts(), "en")
-    assert wording.subject == "Grace Mwangi invited you to join Telco A (fixture) on Wazo"
-    assert "join the Telco A (fixture) team on Wazo as reviewer and finance." in wording.text
+    assert wording.subject == "Wazo: you have an invitation to join a team"
+    first = "Grace Mwangi invited you to join the Telco A (fixture) team on Wazo as reviewer and finance."
+    assert first in wording.text
     assert f"https://wazo.example/invitations/{TOKEN}" in wording.text
     assert "The link works until 20 October 2026 (7 days)." in wording.text
     assert wording.html is not None
@@ -48,7 +49,8 @@ def test_the_english_email_names_the_inviter_the_organisation_the_roles_and_the_
 
 def test_the_swahili_email_is_the_same_facts_in_swahili() -> None:
     wording = render(facts(), "sw")
-    assert wording.subject == "Grace Mwangi amekualika ujiunge na Telco A (fixture) kwenye Wazo"
+    assert wording.subject == "Wazo: una mwaliko wa kujiunga na timu"
+    assert "Grace Mwangi amekualika ujiunge na timu ya Telco A (fixture) kwenye Wazo" in wording.text
     assert "kama mkaguzi na afisa wa fedha." in wording.text
     assert "Kiungo kinafanya kazi hadi 20 Oktoba 2026 (siku 7)." in wording.text
     assert f"https://wazo.example/invitations/{TOKEN}" in wording.text
@@ -58,17 +60,17 @@ def test_the_swahili_email_is_the_same_facts_in_swahili() -> None:
 
 def test_chosen_names_are_one_line_and_escaped() -> None:
     wording = render(facts(inviter="Eve\r\nBcc: x@evil.test", org_name='<script>alert("x")</script>\nCo'), "en")
-    assert "\n" not in wording.subject
-    assert "\r" not in wording.subject
-    assert wording.subject.startswith("Eve Bcc: x@evil.test invited you")
+    assert wording.subject == "Wazo: you have an invitation to join a team"  # nothing a caller wrote
+    assert "Eve Bcc: x@evil.test invited you" in wording.text  # one line, in the body only
+    assert "Eve\r\n" not in wording.text
     assert wording.html is not None
     assert "<script>" not in wording.html
     assert "&lt;script&gt;" in wording.html
 
 
 def test_a_blank_inviter_name_reads_someone() -> None:
-    assert render(facts(inviter="  "), "en").subject.startswith("Someone invited you")
-    assert render(facts(inviter=""), "sw").subject.startswith("Mtu amekualika")
+    assert render(facts(inviter="  "), "en").text.startswith("Someone invited you")
+    assert render(facts(inviter=""), "sw").text.startswith("Mtu amekualika")
 
 
 @pytest.mark.parametrize(

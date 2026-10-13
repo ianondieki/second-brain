@@ -160,9 +160,10 @@ async def test_a_default_never_overwrites_an_assignment(owner_engine: AsyncEngin
 async def test_the_rule_on_a_submitted_engagement_and_its_refusals(
     owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The rule itself, bound to a member: a SUBMITTED engagement takes the default too (its Pitch-time hook waits on
-    a database function, see the module docstring); not in an opening state, or with no member bound, nothing; and
-    the assignment guard is the backstop when the member checks are bypassed (nothing assigned, no error)."""
+    """The rule itself, bound to a member: a SUBMITTED engagement takes the default too (a Pitch's hook binds the
+    member ``app_niche_default_assignee`` names: test_niche_default_on_pitch.py); not in an opening state, or with no
+    member bound, nothing; and the assignment guard is the backstop when the member checks are bypassed (nothing
+    assigned, no error)."""
     world = await api_world.build(owner_engine)
     engagement = await api_world.open_engagement(app_engine, world)
     [version] = await rows(owner_engine, "SELECT niche_id FROM proposal_versions WHERE id = :v", v=world.version)
@@ -203,3 +204,23 @@ async def test_the_rule_on_a_submitted_engagement_and_its_refusals(
     async with api_world.clients(app_engine, SETTINGS, world.reviewer) as (reviewer,):
         assert (await api_world.Tracker(engagement).post(reviewer, "start-review")).status_code == 200
     assert await apply(world.signatory) is None  # under review, and someone chose: nothing
+
+
+async def test_a_failure_in_the_rule_never_undoes_the_interest(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The review's MINOR: the ORG_INTEREST rule runs in a savepoint; an error is logged and the interest stands."""
+    world = await build(owner_engine)
+    today = await db_today(owner_engine)
+    proposal = (await publish(owner_engine, world, "broken"))[0]
+
+    async def broken(db: Any, org_id: UUID, niche_id: UUID | None) -> UUID:
+        raise RuntimeError("the defaults could not be read")
+
+    monkeypatch.setattr(team, "_default_for", broken)
+    async with clients(app_engine, SETTINGS, world.org.owner, world.org.signatory) as (owner, signatory):
+        await set_defaults(owner, world, niche=world.org.reviewer)
+        engagement = await express(signatory, world, proposal, today)
+    assert await live_assignee(owner_engine, engagement) == []
+    [row] = await rows(owner_engine, "SELECT state::text AS state FROM engagements WHERE id = :e", e=engagement)
+    assert row.state == "ORG_INTEREST"

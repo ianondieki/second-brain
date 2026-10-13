@@ -2,7 +2,8 @@
 
 Reads (``team_view``, any active member): the active members by name with their roles and the day they joined (the
 membership's creation), each one's address only for an owner or admin reading; the open invitations (owners and
-admins only, else null: the table's own policy shows them no others); the default reviewer per niche; the escalation
+admins only, else null: the table's own policy shows them no others); the default reviewer per niche (active niches
+only: a retired niche can be neither chosen nor shown, and the next PUT of the set drops its row); the escalation
 contact.
 
 Writes (an owner or admin; the routes check the role first, the policies of revisions 0001 and 0015 are the backstop):
@@ -11,10 +12,10 @@ Writes (an owner or admin; the routes check the role first, the policies of revi
   owner removes an owner or a signatory (403 ``protected_member``, as revision 0001's policy); the organisation's last
   active owner is never removed (409 ``last_owner``: checked first under a row lock on the organisation, as the role
   change does, with ``memberships_last_owner_guard``'s SQLSTATE 55000 as the backstop). In the same transaction the
-  member's open assignments of the organisation's engagements are closed (P27's ``engagement_assignments``: the
-  database stamps ``unassigned_at``), each audited as an unassignment; the database clears their niche defaults and
-  their escalation-contact seat (``memberships_clear_team_seats``). Audited on the organisation's chain with ids
-  only.
+  member's open assignments the caller can see are closed (P27's ``engagement_assignments``: the database stamps
+  ``unassigned_at``), each audited as an unassignment; ``memberships_clear_team_seats`` (revision 0015) then closes
+  any the caller cannot see (an engagement of the caller's own as its developer, D-68) and clears the member's niche
+  defaults and escalation-contact seat. Audited on the organisation's chain with ids only.
 
 The niche defaults and the escalation contact are written by ``bridge.tenancy.team_settings``.
 """
@@ -84,7 +85,7 @@ async def team_view(db: AsyncSession, org: OrgContext) -> OrgTeam:
         select(Niche.slug, Niche.name_en, d.user_id, User.display_name)
         .join(Niche, Niche.id == d.niche_id)
         .join(User, User.id == d.user_id)
-        .where(d.org_id == org.org_id)
+        .where(d.org_id == org.org_id, Niche.active.is_(True))  # a retired niche's default is not shown (nor set)
         .order_by(Niche.name_en, Niche.slug)
     )
     escalation = (

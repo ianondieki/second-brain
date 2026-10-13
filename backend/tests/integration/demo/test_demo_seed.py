@@ -95,6 +95,7 @@ from bridge.seed.demo.trending import LIKED
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
+from tests.integration.billing.checkout_helpers import live_plans
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
 from tests.openssl_tsa import LocalTsa
 
@@ -657,6 +658,53 @@ async def test_state_department_d_waits_in_the_procurement_route(
             "INTEREST_CONFIRMED",
         ]
     assert "escalated_at" not in developer_side
+
+
+async def test_state_department_d_shows_team_and_csv_on_growth_and_the_others_the_paywall(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P28 (REQ-TEN-02, REQ-ENG-17): State Department D is on Growth (a seeded subscription, no payment), so Halima
+    invites within its seats and exports its engagements as CSV; Telco A, SACCO B and County C stay on the free plan,
+    so Grace's export and invitation are the paywall's 402 (csv_export, then seats: four members already)."""
+    report = seeded[0]
+    state_d, telco = report.orgs[STATE_D.legal_name], report.orgs[TELCO_A.legal_name]
+    for org in (TELCO_A, SACCO_B, COUNTY_C, STATE_D):
+        expected = ["org_growth"] if org is STATE_D else ["org_claimed"]
+        assert await live_plans(owner, org=report.orgs[org.legal_name]) == expected, org.legal_name
+    paid = await rows(
+        owner,
+        "SELECT count(*) FROM payments p JOIN subscriptions s ON s.id = p.subscription_id WHERE s.org_id = :o",
+        o=state_d,
+    )
+    assert paid[0][0] == 0
+    assert STATE_D.owner is not None
+    assert TELCO_A.owner is not None
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, STATE_D.owner.email) as halima,
+        signed_in(demo_app, owner, TELCO_A.owner.email) as grace,
+    ):
+        limits = (await halima.call("GET", f"/api/orgs/{state_d}/entitlements")).json()
+        assert (limits["plan"], limits["limits"]["csv_export"], limits["limits"]["seats"]) == ("org_growth", True, 20)
+        exported = await halima.call("GET", f"/api/orgs/{state_d}/engagements.csv")
+        assert exported.headers["content-type"] == "text/csv; charset=utf-8"
+        assert exported.text.count("\r\n") == 2  # the header and P4's engagement
+        invited = await halima.call(
+            "POST",
+            f"/api/orgs/{state_d}/invitations",
+            json={"email": "colleague@example.com", "roles": ["reviewer"]},
+            expect=(201,),
+        )
+        assert invited.json()["roles"] == ["reviewer"]
+        refused = await grace.call("GET", f"/api/orgs/{telco}/engagements.csv", expect=(402,))
+        assert refused.json()["detail"]["limit_key"] == "csv_export"
+        seats = await grace.call(
+            "POST",
+            f"/api/orgs/{telco}/invitations",
+            json={"email": "colleague@example.com", "roles": ["viewer"]},
+            expect=(402,),
+        )
+        assert (seats.json()["detail"]["limit_key"], seats.json()["detail"]["used"]) == ("seats", 4)
 
 
 async def test_a_fixture_reviewer_has_opened_p1_so_who_has_seen_it_is_not_empty(
