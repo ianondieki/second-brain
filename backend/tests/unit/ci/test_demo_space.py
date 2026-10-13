@@ -193,6 +193,7 @@ def test_an_unknown_command_prints_the_usage(run: ModuleType, started: list[tupl
 class FakeProc:
     def __init__(self, name: str, log: list[tuple[str, str]], *, stuck: bool = False) -> None:
         self.name, self.log, self.stuck, self.done = name, log, stuck, False
+        self.pid = 4242
 
     def poll(self) -> int | None:
         return 0 if self.done else None
@@ -336,3 +337,99 @@ def test_a_restarted_container_whose_pid_file_names_this_very_supervisor_still_s
     )
     found = subprocess.run([sys.executable, "-c", code, "run.py"], capture_output=True, text=True, check=True)
     assert found.stdout.strip() == "None"
+
+
+# ---------------------------------------------------------------- PUBLIC_DEMO_FROZEN_AT, once per boot
+
+
+def test_the_frozen_instant_is_iso_8601_utc_to_the_second(run: ModuleType) -> None:
+    value = run.frozen_instant()
+    parsed = datetime.fromisoformat(value)
+    assert parsed.utcoffset() == timedelta(0)
+    assert value.endswith("+00:00")
+    assert parsed.microsecond == 0
+    assert abs(datetime.now(UTC) - parsed) < timedelta(seconds=5)
+
+
+FROZEN = ("2026-10-13T12:00:00+00:00", "2026-10-14T00:01:00+00:00")
+
+
+@pytest.fixture
+def booting(run: ModuleType, home: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Any, list[tuple[str, ...]]]:
+    """A supervisor whose boot runs for real (secrets, wipe, migrate order, start_app) except the processes: steps,
+    spawns and readiness waits are recorded, with the PUBLIC_DEMO_FROZEN_AT each one was given."""
+    events: list[tuple[str, ...]] = []
+    instants = iter(FROZEN)
+
+    def frozen() -> str:
+        value = next(instants)
+        events.append(("frozen", value))
+        return value
+
+    def step(self: Any, name: str, argv: list[str], env: dict[str, str], stdin: str | None = None) -> None:
+        events.append(("step", " ".join(argv), env.get("PUBLIC_DEMO_FROZEN_AT", "")))
+
+    def spawn(self: Any, child: Any) -> Any:
+        self.children[child.name] = child
+        events.append(("spawn", child.name, child.env.get("PUBLIC_DEMO_FROZEN_AT", "")))
+        return child
+
+    monkeypatch.setattr(run, "frozen_instant", frozen)
+    monkeypatch.setattr(run.Supervisor, "start_postgres", lambda self: events.append(("postgres",)))
+    monkeypatch.setattr(run.Supervisor, "start_storage", lambda self: events.append(("storage",)))
+    monkeypatch.setattr(run.Supervisor, "step", step)
+    monkeypatch.setattr(run.Supervisor, "spawn", spawn)
+    monkeypatch.setattr(run.Supervisor, "wait_for", lambda self, *args: None)
+    return run.Supervisor(7860, "fictional"), events
+
+
+def test_the_frozen_instant_is_taken_after_the_seed_and_given_to_the_api_and_worker(
+    run: ModuleType, booting: tuple[Any, list[tuple[str, ...]]]
+) -> None:
+    supervisor, events = booting
+    supervisor.boot()
+    steps = [event for event in events if event[0] == "step"]
+    assert [event[1] for event in steps] == list(run.MIGRATE)
+    assert all(event[2] == "" for event in steps)  # the migrate step and the seed run before the instant exists
+    frozen_at = events.index(("frozen", FROZEN[0]))
+    assert frozen_at == events.index(steps[-1]) + 1  # right after the seed
+    assert events[frozen_at + 1 :] == [
+        ("spawn", "api", FROZEN[0]),
+        ("spawn", "worker", FROZEN[0]),
+        ("spawn", "web", ""),
+    ]
+
+
+def test_a_crash_restarted_child_keeps_the_boots_frozen_instant(
+    run: ModuleType, booting: tuple[Any, list[tuple[str, ...]]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    supervisor, _ = booting
+    supervisor.boot()
+    restarted: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        run.Child, "start", lambda self, stdin=None: restarted.append((self.name, self.env["PUBLIC_DEMO_FROZEN_AT"]))
+    )
+    for name in ("api", "worker"):
+        child = supervisor.children[name]
+        child.proc = FakeProc(name, [])
+        child.proc.done = True  # it crashed
+        child.restart_at = 0.0  # and its back-off is over
+    supervisor.restart_crashed()
+    assert restarted == [("api", FROZEN[0]), ("worker", FROZEN[0])]
+
+
+def test_the_reset_takes_a_new_frozen_instant_after_its_own_seed(
+    run: ModuleType, booting: tuple[Any, list[tuple[str, ...]]]
+) -> None:
+    supervisor, events = booting
+    supervisor.boot()
+    events.clear()
+    supervisor.reset("test")
+    steps = [event for event in events if event[0] == "step"]
+    assert all(event[2] == "" for event in steps)  # the old instant is not handed to the new seed
+    assert events.index(("frozen", FROZEN[1])) == events.index(steps[-1]) + 1
+    assert [event for event in events if event[0] == "spawn"] == [
+        ("spawn", "api", FROZEN[1]),
+        ("spawn", "worker", FROZEN[1]),
+        ("spawn", "web", ""),
+    ]
