@@ -17,7 +17,8 @@ the deployment a public demo that anyone may open:
   password sign-in, the second step and sign-out stay open, and so does the certificate file check (``POST
   /api/verify``: it hashes the body and stores nothing). ``tests/unit/test_public_demo_lock.py`` walks the app's routes
   and fails when a route that takes a file is neither locked nor that named exception.
-- **Not indexed.** Every API answer carries ``X-Robots-Tag: noindex, nofollow`` (``ROBOTS_HEADERS``, ``bridge.main``).
+- **Not indexed, not described.** Every API answer carries ``X-Robots-Tag: noindex, nofollow`` (``ROBOTS_HEADERS``,
+  ``bridge.main``), and the app serves neither its OpenAPI schema nor the interactive docs.
 - **Fictional content.** With ``PUBLIC_DEMO_CONTENT=fictional`` (the default) the seed loads only fictional
   organisations and official-source research excerpts (``fictional_only``; ``bridge.seed.directory`` and
   ``bridge.seed.demo.research``).

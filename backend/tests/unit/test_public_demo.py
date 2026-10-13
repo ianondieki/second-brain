@@ -7,7 +7,8 @@ without a database.
 - The allowlist is fixed in code: seven personas in the card's order (Hassan added by the orchestrator), each a demo
   seed account at a reserved ``.example`` domain, with its name and role from the seed's data; the sign-in body takes
   the key only.
-- Every API answer says ``X-Robots-Tag: noindex, nofollow`` while the mode is on, and none says it otherwise.
+- Every API answer says ``X-Robots-Tag: noindex, nofollow`` while the mode is on, and none says it otherwise; the
+  OpenAPI schema and the interactive docs are not served in the mode (the committed document is unchanged).
 """
 
 from __future__ import annotations
@@ -193,3 +194,15 @@ def test_the_openapi_document_leaves_the_sign_in_out() -> None:
     paths = create_app(public()).openapi()["paths"]
     assert "/api/public/demo" in paths
     assert "/api/auth/demo/sign-in" not in paths
+
+
+@pytest.mark.parametrize("path", ["/api/docs", "/api/docs/oauth2-redirect", "/api/openapi.json", "/api/redoc"])
+async def test_the_public_demo_serves_no_schema_and_no_docs(path: str) -> None:
+    response = await get(public(), path)
+    assert (response.status_code, response.json()["detail"]["code"]) == (404, "not_found")
+
+
+async def test_the_schema_and_docs_stay_where_the_mode_is_off() -> None:
+    for path in ("/api/docs", "/api/openapi.json"):
+        assert (await get(get_settings(), path)).status_code == 200, path
+    assert "/api/openapi.json" not in {getattr(r, "path", None) for r in create_app(public()).routes}

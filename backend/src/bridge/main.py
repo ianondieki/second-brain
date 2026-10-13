@@ -167,8 +167,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=f"{settings.product_name} API",
         version=__version__,
         lifespan=lifespan,
-        openapi_url=f"{API_PREFIX}/openapi.json",
-        docs_url=f"{API_PREFIX}/docs" if settings.app_env != "production" else None,
+        # The interactive docs are off in production; the public demo (REQ-FND-04) serves neither them nor the schema.
+        # The committed backend/openapi.json comes from app.openapi() (bridge.openapi), which needs neither route.
+        openapi_url=None if settings.public_demo else f"{API_PREFIX}/openapi.json",
+        docs_url=f"{API_PREFIX}/docs" if settings.app_env != "production" and not settings.public_demo else None,
         redoc_url=None,
     )
     app.state.settings = settings
