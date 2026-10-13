@@ -40,7 +40,8 @@ describe("the landing's calls to action", () => {
     expect(primary.getAttribute("href")).toBe("/login");
     expect(primary.textContent).toBe("Try the demo");
     expect(container.querySelectorAll("[data-primary]")).toHaveLength(1);
-    expect(screen.getAllByRole("link", { name: "Try the demo" }).map((a) => a.getAttribute("href"))).toEqual(["/login", "/login"]);
+    // The hero, the closing call and the footer's /login link (it says "Try the demo" too: ux review of P28-PD, MINOR 6).
+    expect(screen.getAllByRole("link", { name: "Try the demo" }).map((a) => a.getAttribute("href"))).toEqual(["/login", "/login", "/login"]);
     expect(container.querySelector('a[href="/signup"]')).toBeNull();
   });
 
