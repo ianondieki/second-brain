@@ -86,7 +86,8 @@ export default async function SecurityPage() {
 
 /**
  * The public demo (REQ-FND-04): two-step sign-in (enrol, turn off, recovery codes) and the password are switched off
- * for the shared personas, so each card keeps its heading and says so in one line, with no form and no script.
+ * for the shared personas, so each card keeps its heading and says so in one line, with no form and no script. The
+ * line says that changing it is off (the persona's two-step sign-in is on), never that the feature is.
  */
 async function DemoLockedSecurity() {
   const [t, tPassword] = await Promise.all([getTranslations("security"), getTranslations("password")]);
@@ -94,12 +95,12 @@ async function DemoLockedSecurity() {
     <div className="flex flex-col gap-6" data-security-locked="">
       <Card variant="flat" className="p-5 sm:p-6">
         <Section title={t("title")} headingId="two-step-heading" headingStyle="card">
-          <DemoLocked />
+          <DemoLocked variant="change" />
         </Section>
       </Card>
       <Card variant="flat" className="p-5 sm:p-6">
         <Section title={tPassword("title")} headingId="password-heading" headingStyle="card">
-          <DemoLocked />
+          <DemoLocked variant="change" />
         </Section>
       </Card>
     </div>

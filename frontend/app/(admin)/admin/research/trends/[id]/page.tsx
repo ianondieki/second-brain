@@ -161,7 +161,7 @@ export default async function TrendReviewPage({ params }: PageProps<"/admin/rese
         >
           {/* The public demo (REQ-FND-04): staff are read-only. */}
           {publicDemoOn() ? (
-            <DemoLocked />
+            <DemoLocked variant="decide" />
           ) : (
             <ClientStrings strings={strings}>
               <TrendDecision cardId={card.id} />

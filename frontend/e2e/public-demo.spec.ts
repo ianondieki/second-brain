@@ -21,7 +21,8 @@ const PERSONAS = [
 ];
 const BANNER =
   "Public demo: every name and organisation here is fictional, and the data resets every night at 03:00 EAT. Please don't enter real personal information.";
-const LOCKED = "Switched off in the public demo.";
+// Under a setting whose state still holds (the persona's two-step sign-in is on), the line says changing it is off.
+const CHANGE_LOCKED = "Changing this is switched off in the public demo.";
 
 test.skip(process.env.E2E_PUBLIC_DEMO !== "1", "needs a stack started with PUBLIC_DEMO=true: set E2E_PUBLIC_DEMO=1");
 
@@ -90,13 +91,13 @@ test("the banner is on every page, never over the content, and stays dismissed f
   }
 });
 
-test("Settings › Security shows the locked line in place of two-step sign-in and the password", async ({ page }) => {
+test("Settings › Security says changing each is off, in place of two-step sign-in and the password", async ({ page }) => {
   await signInAs(page, "Grace Mwangi", /\/org(\?.*)?$/);
   await page.goto("/settings/security");
   const locked = page.locator("[data-security-locked]");
   await expect(locked.getByRole("heading", { name: "Two-step sign-in" })).toBeVisible();
   await expect(locked.getByRole("heading", { name: "Password" })).toBeVisible();
-  await expect(locked.locator("[data-demo-locked]")).toHaveText([LOCKED, LOCKED]);
+  await expect(locked.locator("[data-demo-locked]")).toHaveText([CHANGE_LOCKED, CHANGE_LOCKED]);
   await expect(page.locator("main form")).toHaveCount(0);
   await checkScreen(page, { strict: true });
 });

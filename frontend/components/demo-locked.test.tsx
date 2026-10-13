@@ -68,6 +68,19 @@ describe("DemoLocked", () => {
     expect([...lines].map((line) => line.textContent)).toEqual([LOCKED, en.publicDemo.attachLocked]);
     for (const line of lines) expect(line.querySelectorAll("button, input, a")).toHaveLength(0);
   });
+
+  // ux review of P28-PD (MAJOR 1): under a feature's heading the generic line read as the feature's state ("two-step
+  // sign-in: switched off") while the persona's two-step sign-in is on. Each variant names what is switched off.
+  it("says that changing or deciding is off with the change and decide variants", async () => {
+    renderWithIntl(<>{await resolveServerTree(<DemoLocked variant="change" />)}</>);
+    renderWithIntl(<>{await resolveServerTree(<DemoLocked variant="decide" />)}</>);
+    const lines = [...document.querySelectorAll("[data-demo-locked]")];
+    expect(lines.map((line) => line.textContent)).toEqual([
+      "Changing this is switched off in the public demo.",
+      "Deciding is switched off in the public demo.",
+    ]);
+    expect(lines.map((line) => line.getAttribute("data-demo-locked"))).toEqual(["change", "decide"]);
+  });
 });
 
 describe("Settings › Security", () => {
@@ -76,13 +89,16 @@ describe("Settings › Security", () => {
     return renderWithIntl(<>{await resolveServerTree(await SecurityPage())}</>);
   }
 
-  it("keeps both headings and shows the locked line in place of two-step sign-in and the password", async () => {
+  it("keeps both headings and says changing each is off, in place of two-step sign-in and the password", async () => {
     vi.stubEnv("PUBLIC_DEMO", "true");
     await renderSecurity();
     const locked = document.querySelector("[data-security-locked]")!;
     expect(within(locked as HTMLElement).getByRole("heading", { name: en.security.title })).toBeTruthy();
     expect(within(locked as HTMLElement).getByRole("heading", { name: en.password.title })).toBeTruthy();
-    expect([...locked.querySelectorAll("[data-demo-locked]")].map((line) => line.textContent)).toEqual([LOCKED, LOCKED]);
+    // Not the generic line: under "Two-step sign-in" it would read as the persona's state (it is on).
+    const lines = [...locked.querySelectorAll("[data-demo-locked]")].map((line) => line.textContent);
+    expect(lines).toEqual([en.publicDemo.changeLocked, en.publicDemo.changeLocked]);
+    expect(lines).not.toContain(LOCKED);
     // No form, field or button of either: enrol, turn off, recovery codes and the password are all gone.
     expect(document.querySelectorAll("form, input, button")).toHaveLength(0);
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);

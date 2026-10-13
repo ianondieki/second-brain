@@ -147,7 +147,7 @@ export default async function ReviewPage({ params }: PageProps<"/admin/research/
       >
         {/* The public demo (REQ-FND-04): staff are read-only. */}
         {publicDemoOn() ? (
-          <DemoLocked />
+          <DemoLocked variant="decide" />
         ) : (
           <ClientStrings strings={strings}>
             <Decision
