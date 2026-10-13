@@ -8,7 +8,7 @@ and revision 0001's invitation policies (INSERT and UPDATE, stricter) and bridge
 columns of ``engagements`` with three CHECKs and bridge_app's UPDATE of two of them; three tables
 (``engagement_nudges``, ``org_niche_defaults``, ``org_escalation_contacts``) with their policies, triggers and grants;
 on ``invitations`` three CHECKs, a partial unique index and a guard; on ``memberships`` the last-owner guard and the
-clearing of a leaver's team seats; four functions bridge_app executes and seven trigger functions. Nothing else of
+clearing of a leaver's team seats; five functions bridge_app executes and seven trigger functions. Nothing else of
 revisions 0001 to 0014 is changed or dropped. Times written here are the shared clock's (``app_clock_now()``).
 
 The procurement route (docs/spec/06 6.9 stage 3b; ``PROCUREMENT_ROUTE`` has been a value of ``engagement_state``
@@ -151,6 +151,10 @@ Functions (pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_ap
   this call recorded it (send it); false, recording nothing, when it was already recorded, the engagement has ended or
   it is no longer in ``expected_state``, the state the job decided the nudge in (send nothing: a party's command
   committed between the job's read and the record; the reviews of P28-BE1).
+- ``app_org_is_public_entity(org uuid)`` -> boolean, SECURITY DEFINER, STABLE: the organisation's ``public_entity``
+  (public information: the directory and the tracker's 3b show it), for any organisation whatever the caller reads
+  (a developer reads no delisted organisation's row); NULL for an unknown one. The state machine asks it which state an
+  approve or an accept of interest enters (the reviews of P28-BE1).
 - ``app_accept_invitation(token_hash bytea, user_id uuid)`` -> uuid (the organisation), SECURITY DEFINER: for the
   signed-in user only (``user_id`` is ``app.user_id``; insufficient_privilege otherwise). The invitation with that
   hash, locked FOR UPDATE, is open: neither accepted nor revoked and ``expires_at`` after ``app_clock_now()``
@@ -171,6 +175,8 @@ Functions (pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_ap
 
 Operating rules for the code that uses this schema:
 
+- Whether an organisation is a public entity: ``SELECT app_org_is_public_entity(:org)``, never ``organizations`` under
+  the caller's RLS (a developer reads no delisted organisation).
 - Approve (``UNDER_REVIEW``) for a public entity: name the contact person and channel and leave ``contact_by`` NULL,
   then append the event to ``PROCUREMENT_ROUTE`` (refused for a private organisation: check_violation, the API's 409;
   a private organisation's approve goes to ``INTEREST_CONFIRMED`` as before, a public entity's never does). The
@@ -618,6 +624,17 @@ BEGIN
 END;
 $$;
 
+-- Whether an organisation is a public entity (REQ-ENG-06; AC-TRACK-5): organizations.public_entity, public
+-- information (the directory and the tracker's 3b show it), for any organisation whatever the caller may read (a
+-- developer reads no delisted organisation's row, so the API cannot read the flag under the caller's RLS); NULL for an
+-- unknown organisation. The state machine asks it which state an approve or an accept of interest enters.
+CREATE FUNCTION app_org_is_public_entity(p_org uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT o.public_entity FROM public.organizations o WHERE o.id = p_org
+$$;
+
 -- Accepts an invitation for the signed-in user (REQ-TEN-02; POST /api/invitations/{token}/accept): p_user is
 -- app.user_id (insufficient_privilege otherwise). The invitation with that hash, locked FOR UPDATE, is open: neither
 -- accepted nor revoked, and expiring after the shared clock's now (no_data_found otherwise: one refusal for an unknown,
@@ -840,6 +857,7 @@ $$;
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_nudge_candidates()": ("bridge_app",),  # the nudge job, no user bound
     "app_record_nudge(uuid, text, text, engagement_state)": ("bridge_app",),  # the nudge job, no user bound
+    "app_org_is_public_entity(uuid)": ("bridge_app",),  # the state machine's facts (public information)
     "app_accept_invitation(bytea, uuid)": ("bridge_app",),  # the signed-in invitee
     "app_invitation_preview(bytea)": ("bridge_app",),  # the public preview (the hash is the capability)
 }

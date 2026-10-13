@@ -320,6 +320,26 @@ async def test_3b_has_the_side_branches_of_stage_3(owner_engine: AsyncEngine) ->
         assert await t.state_of(conn, expired) == "EXPIRED"
 
 
+async def test_whether_an_organisation_is_a_public_entity_is_anyones_to_ask(owner_engine: AsyncEngine) -> None:
+    """``app_org_is_public_entity`` answers ``organizations.public_entity`` (public information) for any organisation,
+    whatever the caller reads: a developer bound session, which reads no delisted organisation's row, gets true for a
+    delisted public entity and false for a private one; an unknown organisation is NULL. The state machine asks it which
+    state an approve or an accept of interest enters (the reviews of P28-BE1)."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.run(
+            conn, "UPDATE organizations SET public_entity = true, delisted_at = now() WHERE id = :org", org=p.org
+        )
+        await t.act(conn, p.developer)
+        assert await t.run(conn, "SELECT count(*) FROM organizations WHERE id = :org", org=p.org) == 0  # unreadable
+        ask = "SELECT app_org_is_public_entity(:org)"
+        assert await t.run(conn, ask, org=p.org) is True
+        assert await t.run(conn, ask, org=p.other_org) is False
+        assert await t.run(conn, ask, org=uuid7()) is None
+        await t.act(conn, None)  # no user bound: the same answer
+        assert await t.run(conn, ask, org=p.org) is True
+
+
 # --- the decision ----------------------------------------------------------------------------------------------------
 
 

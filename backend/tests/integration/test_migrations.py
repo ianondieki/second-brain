@@ -631,6 +631,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "engagements_procurement_moved()": (True, set()),  # reads the engagement at commit
     "app_nudge_candidates()": (True, {"bridge_app"}),  # the nudge job, no user bound (ids only)
     "app_record_nudge(uuid, text, text, engagement_state)": (True, {"bridge_app"}),  # the nudge job, no user bound
+    "app_org_is_public_entity(uuid)": (True, {"bridge_app"}),  # the state machine's facts (public information)
     "app_accept_invitation(bytea, uuid)": (True, {"bridge_app"}),  # the signed-in invitee, for themselves
     "app_invitation_preview(bytea)": (True, {"bridge_app"}),  # the public preview: the hash is the capability
     "org_escalation_contacts_guard()": (False, set()),  # SECURITY INVOKER: the writer's RLS reads the roster
@@ -916,6 +917,7 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
         "engagements_procurement_moved()",
         "app_nudge_candidates()",
         "app_record_nudge(uuid,text,text,engagement_state)",
+        "app_org_is_public_entity(uuid)",
         "app_accept_invitation(bytea,uuid)",
         "app_invitation_preview(bytea)",
         "org_escalation_contacts_guard()",
@@ -945,6 +947,7 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
 FUNCTION_GRANTS_V15 = (
     "app_nudge_candidates()",
     "app_record_nudge(uuid,text,text,engagement_state)",
+    "app_org_is_public_entity(uuid)",
     "app_accept_invitation(bytea,uuid)",
     "app_invitation_preview(bytea)",
 )
