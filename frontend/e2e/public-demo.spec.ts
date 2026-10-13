@@ -17,7 +17,7 @@ const PERSONAS = [
   "Peter Kamau",
   "Rita Njeri",
   "Hassan Abdi",
-  "Staff Moderator",
+  "Staff Moderator (demo)",
 ];
 const BANNER =
   "Public demo: every name and organisation here is fictional, and the data resets every night at 03:00 EAT. Please don't enter real personal information.";

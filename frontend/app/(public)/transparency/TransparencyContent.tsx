@@ -11,6 +11,7 @@ import { ChevronDownIcon, ClosedIcon } from "@/components/ui/icons";
 import { Lattice } from "@/components/ui/Lattice";
 import { CheckIcon } from "@/components/ui/status-icons";
 import { formatCalendarDate, formatDay, formatMoment } from "@/lib/format";
+import { publicDemoOn } from "@/lib/public-demo";
 
 import { KEYS_HREF } from "../verify/certificate";
 import { Fingerprint } from "../verify/Fingerprint";
@@ -53,7 +54,7 @@ export async function TransparencyContent({ roots, keys }: TransparencyRead) {
         {roots === null ? (
           <EmptyState sentence={t("unavailable")} action={t("retry")} href="/transparency" />
         ) : latest === undefined ? (
-          <EmptyState sentence={t("empty")} action={t("emptyAction")} href="/verify" />
+          <EmptyState sentence={t(publicDemoOn() ? "emptyPublicDemo" : "empty")} action={t("emptyAction")} href="/verify" />
         ) : (
           <>
             <LatestRoot root={latest} t={t} locale={locale} listed={listed} />
