@@ -11,7 +11,7 @@ the calendar.
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import httpx
@@ -53,7 +53,7 @@ def _on_board(board: dict[str, Any], engagement: UUID) -> dict[str, Any]:
 def _dated(deadlines: dict[str, Any], engagement: UUID) -> dict[str, Any]:
     found = [i for i in deadlines["items"] if i["key"] == f"stage:{engagement}"]
     assert len(found) == 1, engagement
-    return found[0]
+    return cast(dict[str, Any], found[0])
 
 
 async def test_a_past_holiday_is_left_out_of_the_overdue_count_everywhere(
