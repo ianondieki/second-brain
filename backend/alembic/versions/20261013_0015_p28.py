@@ -8,7 +8,7 @@ and revision 0001's invitation policies (INSERT and UPDATE, stricter) and bridge
 columns of ``engagements`` with three CHECKs and bridge_app's UPDATE of two of them; three tables
 (``engagement_nudges``, ``org_niche_defaults``, ``org_escalation_contacts``) with their policies, triggers and grants;
 on ``invitations`` three CHECKs, a partial unique index and a guard; on ``memberships`` the last-owner guard and the
-clearing of a leaver's team seats; four functions bridge_app executes and seven trigger functions. Nothing else of
+clearing of a leaver's team seats; five functions bridge_app executes and seven trigger functions. Nothing else of
 revisions 0001 to 0014 is changed or dropped. Times written here are the shared clock's (``app_clock_now()``).
 
 The procurement route (docs/spec/06 6.9 stage 3b; ``PROCUREMENT_ROUTE`` has been a value of ``engagement_state``
@@ -78,9 +78,9 @@ The nudges ledger (REQ-NOT-05; the contract's B):
   (``engagement_nudges_no_update_delete`` and ``_no_truncate``: ``block_mutation()`` of revision 0002).
 - How the job gets there, as the expiry job (revision 0007): no application role reads every tenant's engagements, so
   ``app_nudge_candidates()`` lists, to a session with no user bound only, the open engagements a nudge may be due for
-  (ids only) with a member of the organisation to bind for its side, and ``app_record_nudge(engagement, kind, key)``
-  records a nudge for a session with no user bound only. bridge_app holds no INSERT on the ledger: no request can
-  record (and so suppress) a nudge.
+  (ids only) with a member of the organisation to bind for its side, and ``app_record_nudge(engagement, kind, key,
+  expected_state)`` records a nudge for a session with no user bound only. bridge_app holds no INSERT on the ledger: no
+  request can record (and so suppress) a nudge.
 
 The team (REQ-TEN-02; the contract's C). "An admin" is an active owner or admin of the row's organisation, narrowed by
 ``app.org_id`` when one is set (revision 0001's rule); "a triage member" an active owner, admin, reviewer or signatory
@@ -143,12 +143,18 @@ Functions (pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_ap
   its escalation contact, the assignments): the named contact while an active member, else the earliest active owner
   or admin, else the earliest active member; never the engagement's developer; NULL when it has none. Ordered by
   organisation, creation and id.
-- ``app_record_nudge(engagement uuid, kind text, key text)`` -> boolean, SECURITY DEFINER: the job only, with no user
-  bound (insufficient_privilege otherwise); NULL arguments are refused (invalid_parameter_value), an unknown engagement
-  too (no_data_found), a kind or key the CHECKs refuse is check_violation. Locks the engagement FOR KEY SHARE (an
-  append in flight is waited for and its outcome read, as the thread's gate), then records the nudge with the
-  engagement's organisation and the shared clock's time: true when this call recorded it (send it), false when it was
-  already recorded or the engagement has ended (send nothing).
+- ``app_record_nudge(engagement uuid, kind text, key text, expected_state engagement_state)`` -> boolean, SECURITY
+  DEFINER: the job only, with no user bound (insufficient_privilege otherwise); NULL arguments are refused
+  (invalid_parameter_value), an unknown engagement too (no_data_found), a kind or key the CHECKs refuse is
+  check_violation. Locks the engagement FOR KEY SHARE (an append in flight is waited for and its outcome read, as the
+  thread's gate), then records the nudge with the engagement's organisation and the shared clock's time: true when
+  this call recorded it (send it); false, recording nothing, when it was already recorded, the engagement has ended or
+  it is no longer in ``expected_state``, the state the job decided the nudge in (send nothing: a party's command
+  committed between the job's read and the record; the reviews of P28-BE1).
+- ``app_org_is_public_entity(org uuid)`` -> boolean, SECURITY DEFINER, STABLE: the organisation's ``public_entity``
+  (public information: the directory and the tracker's 3b show it), for any organisation whatever the caller reads
+  (a developer reads no delisted organisation's row); NULL for an unknown one. The state machine asks it which state an
+  approve or an accept of interest enters (the reviews of P28-BE1).
 - ``app_accept_invitation(token_hash bytea, user_id uuid)`` -> uuid (the organisation), SECURITY DEFINER: for the
   signed-in user only (``user_id`` is ``app.user_id``; insufficient_privilege otherwise). The invitation with that
   hash, locked FOR UPDATE, is open: neither accepted nor revoked and ``expires_at`` after ``app_clock_now()``
@@ -169,6 +175,8 @@ Functions (pinned search_path; EXECUTE revoked from PUBLIC; granted to bridge_ap
 
 Operating rules for the code that uses this schema:
 
+- Whether an organisation is a public entity: ``SELECT app_org_is_public_entity(:org)``, never ``organizations`` under
+  the caller's RLS (a developer reads no delisted organisation).
 - Approve (``UNDER_REVIEW``) for a public entity: name the contact person and channel and leave ``contact_by`` NULL,
   then append the event to ``PROCUREMENT_ROUTE`` (refused for a private organisation: check_violation, the API's 409;
   a private organisation's approve goes to ``INTEREST_CONFIRMED`` as before, a public entity's never does). The
@@ -182,10 +190,10 @@ Operating rules for the code that uses this schema:
 - The nudge job (every 15 minutes, on the shared clock): ``SELECT * FROM app_nudge_candidates()`` with no user bound;
   for each, decide in a session bound to the developer (the engagement, its chain, holds, milestones) and to
   ``member_id`` (the organisation's roster, escalation contact and assignments) what is due; then, with no user bound,
-  ``SELECT app_record_nudge(:engagement, :kind, :key)`` and queue the notifications in the same transaction only when
-  it returns true. Keys are the job's: the stage entry's event id or seq with the business-day count, the milestone id,
-  the contact-by date; never a name, address or free text. Org-side reads of the ledger (``escalated_at``) bind a
-  member; a developer-side response never reads it.
+  ``SELECT app_record_nudge(:engagement, :kind, :key, :state)`` (``state`` the one the nudge was decided in) and queue
+  the notifications in the same transaction only when it returns true. Keys are the job's: the stage entry's event id or
+  seq with the business-day count, the milestone id, the contact-by date; never a name, address or free text. Org-side
+  reads of the ledger (``escalated_at``) bind a member; a developer-side response never reads it.
 - Invite (an admin; check the role first, 403, and the 20-open cap and an existing member's address, 409): INSERT the
   invitation with ``invited_by`` the caller, ``expires_at`` seven days on the shared clock and the SHA-256 of the
   token; ``uq_invitations_open`` is the race of two invitations to one address (409). Revoke: ``UPDATE invitations SET
@@ -578,30 +586,35 @@ $$;
 
 -- Records one nudge before it is sent (REQ-NOT-05): the job only, with no user bound (bridge_app holds no INSERT on
 -- the ledger, so no request records, and so suppresses, a nudge). Locks the engagement FOR KEY SHARE first (an append
--- in flight is waited for and its outcome read). Returns true when this call recorded it (send it), false when it was
--- already recorded or the engagement has ended (send nothing). The organisation is the engagement's; the time the
--- shared clock's. The kind and key CHECKs refuse what is not a nudge's (check_violation).
-CREATE FUNCTION app_record_nudge(p_engagement uuid, p_kind text, p_key text) RETURNS boolean
+-- in flight is waited for and its outcome read). Returns true when this call recorded it (send it); false, recording
+-- nothing, when it was already recorded, the engagement has ended or is no longer in p_expected_state, the state the
+-- job decided the nudge in (a party's command committed between the job's read and this record: send nothing). The
+-- organisation is the engagement's; the time the shared clock's. The kind and key CHECKs refuse what is not a nudge's
+-- (check_violation).
+CREATE FUNCTION app_record_nudge(p_engagement uuid, p_kind text, p_key text, p_expected_state engagement_state)
+    RETURNS boolean
     LANGUAGE plpgsql VOLATILE SECURITY DEFINER
     SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
     v_org uuid;
     v_ended timestamptz;
+    v_state public.engagement_state;
 BEGIN
     IF public.app_user_id() IS NOT NULL THEN
         RAISE EXCEPTION 'app_record_nudge: the nudge job only, with no user bound'
             USING ERRCODE = 'insufficient_privilege';
     END IF;
-    IF p_engagement IS NULL OR p_kind IS NULL OR p_key IS NULL THEN
-        RAISE EXCEPTION 'app_record_nudge: name the engagement, the kind and the key'
+    IF p_engagement IS NULL OR p_kind IS NULL OR p_key IS NULL OR p_expected_state IS NULL THEN
+        RAISE EXCEPTION 'app_record_nudge: name the engagement, the kind, the key and the expected state'
             USING ERRCODE = 'invalid_parameter_value';
     END IF;
-    SELECT e.org_id, e.ended_at INTO v_org, v_ended FROM public.engagements e WHERE e.id = p_engagement FOR KEY SHARE;
+    SELECT e.org_id, e.ended_at, e.state INTO v_org, v_ended, v_state
+      FROM public.engagements e WHERE e.id = p_engagement FOR KEY SHARE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'app_record_nudge: no engagement %', p_engagement USING ERRCODE = 'no_data_found';
     END IF;
-    IF v_ended IS NOT NULL THEN
+    IF v_ended IS NOT NULL OR v_state IS DISTINCT FROM p_expected_state THEN
         RETURN false;
     END IF;
     INSERT INTO public.engagement_nudges (id, engagement_id, org_id, kind, key, sent_at)
@@ -609,6 +622,17 @@ BEGIN
     ON CONFLICT (engagement_id, kind, key) DO NOTHING;
     RETURN FOUND;
 END;
+$$;
+
+-- Whether an organisation is a public entity (REQ-ENG-06; AC-TRACK-5): organizations.public_entity, public
+-- information (the directory and the tracker's 3b show it), for any organisation whatever the caller may read (a
+-- developer reads no delisted organisation's row, so the API cannot read the flag under the caller's RLS); NULL for an
+-- unknown organisation. The state machine asks it which state an approve or an accept of interest enters.
+CREATE FUNCTION app_org_is_public_entity(p_org uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path = pg_catalog, public, pg_temp
+AS $$
+    SELECT o.public_entity FROM public.organizations o WHERE o.id = p_org
 $$;
 
 -- Accepts an invitation for the signed-in user (REQ-TEN-02; POST /api/invitations/{token}/accept): p_user is
@@ -832,7 +856,8 @@ $$;
 # EXECUTE grants (EXECUTE revoked from PUBLIC first).
 FUNCTION_GRANTS: dict[str, tuple[str, ...]] = {
     "app_nudge_candidates()": ("bridge_app",),  # the nudge job, no user bound
-    "app_record_nudge(uuid, text, text)": ("bridge_app",),  # the nudge job, no user bound
+    "app_record_nudge(uuid, text, text, engagement_state)": ("bridge_app",),  # the nudge job, no user bound
+    "app_org_is_public_entity(uuid)": ("bridge_app",),  # the state machine's facts (public information)
     "app_accept_invitation(bytea, uuid)": ("bridge_app",),  # the signed-in invitee
     "app_invitation_preview(bytea)": ("bridge_app",),  # the public preview (the hash is the capability)
 }
@@ -889,6 +914,16 @@ CREATE TRIGGER memberships_clear_team_seats
 """
 
 
+# An engagement in 3b, or in a side state it resumes to 3b from (the latest event that entered the side state names the
+# state it was entered from: revision 0003's chain resumes there). Revision 0014's code has no command that leaves 3b.
+IN_OR_PAUSED_FROM_3B = (
+    "SELECT EXISTS (SELECT 1 FROM engagements e WHERE e.state = 'PROCUREMENT_ROUTE'"
+    " OR (e.state IN ('ON_HOLD', 'INFO_REQUESTED', 'DISPUTED')"
+    " AND (SELECT ev.from_state FROM engagement_events ev WHERE ev.engagement_id = e.id AND ev.to_state = e.state"
+    " AND ev.from_state IS DISTINCT FROM ev.to_state ORDER BY ev.seq DESC LIMIT 1) = 'PROCUREMENT_ROUTE'))"
+)
+
+
 def _run_sql(script: str) -> None:
     """Run a SQL script verbatim on the migration's connection (same transaction); see revision 0001."""
     cursor = op.get_bind().connection.cursor()
@@ -931,11 +966,12 @@ def downgrade() -> None:
     the nudges ledger (after a downgrade and a new upgrade, the job would send again every nudge still due), the
     organisations' niche defaults and escalation contacts. Under the CLAUDE.md stop rule a downgrade of a database
     holding any of them is a destructive migration: back the database up and get the human's decision first. The
-    downgrade refuses while any engagement holds a decision or any of the three tables has a row, unless run with ``-x
-    allow_p28_loss=true`` (``alembic -x allow_p28_loss=true downgrade 0014``). It refuses in any case while an
-    engagement names a contact without a contact-by date (revision 0003's CHECK would refuse the row: give it its date,
-    or end the engagement, first). Invitations and memberships keep their rows (an accepted invitation stays accepted);
-    their grants and policies go back to revision 0001's."""
+    downgrade refuses while any engagement holds a decision, is in PROCUREMENT_ROUTE or in a side state it resumes to
+    PROCUREMENT_ROUTE from (revision 0014's code has no command that leaves 3b), or any of the three tables has a row,
+    unless run with ``-x allow_p28_loss=true`` (``alembic -x allow_p28_loss=true downgrade 0014``). It refuses in any
+    case while an engagement names a contact without a contact-by date (revision 0003's CHECK would refuse the row: give
+    it its date, or end the engagement, first). Invitations and memberships keep their rows (an accepted invitation
+    stays accepted); their grants and policies go back to revision 0001's."""
     allowed = context.get_x_argument(as_dictionary=True).get("allow_p28_loss") == "true"
     bind = op.get_bind()
     undated = bind.execute(
@@ -951,6 +987,8 @@ def downgrade() -> None:
     ]
     if bind.execute(sa.text("SELECT EXISTS (SELECT 1 FROM engagements WHERE procurement_route IS NOT NULL)")).scalar():
         holding.append("engagements (procurement decisions)")
+    if bind.execute(sa.text(IN_OR_PAUSED_FROM_3B)).scalar():
+        holding.append("engagements (in PROCUREMENT_ROUTE or paused from it)")
     if holding and not allowed:
         raise RuntimeError(
             f"revision 0015 downgrade: {', '.join(holding)} hold data this revision's downgrade drops; back the"

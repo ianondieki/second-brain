@@ -320,6 +320,26 @@ async def test_3b_has_the_side_branches_of_stage_3(owner_engine: AsyncEngine) ->
         assert await t.state_of(conn, expired) == "EXPIRED"
 
 
+async def test_whether_an_organisation_is_a_public_entity_is_anyones_to_ask(owner_engine: AsyncEngine) -> None:
+    """``app_org_is_public_entity`` answers ``organizations.public_entity`` (public information) for any organisation,
+    whatever the caller reads: a developer bound session, which reads no delisted organisation's row, gets true for a
+    delisted public entity and false for a private one; an unknown organisation is NULL. The state machine asks it which
+    state an approve or an accept of interest enters (the reviews of P28-BE1)."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.run(
+            conn, "UPDATE organizations SET public_entity = true, delisted_at = now() WHERE id = :org", org=p.org
+        )
+        await t.act(conn, p.developer)
+        assert await t.run(conn, "SELECT count(*) FROM organizations WHERE id = :org", org=p.org) == 0  # unreadable
+        ask = "SELECT app_org_is_public_entity(:org)"
+        assert await t.run(conn, ask, org=p.org) is True
+        assert await t.run(conn, ask, org=p.other_org) is False
+        assert await t.run(conn, ask, org=uuid7()) is None
+        await t.act(conn, None)  # no user bound: the same answer
+        assert await t.run(conn, ask, org=p.org) is True
+
+
 # --- the decision ----------------------------------------------------------------------------------------------------
 
 
@@ -477,7 +497,7 @@ async def test_the_direct_route_needs_twenty_characters_of_justification(owner_e
 
 # --- the nudges ledger (REQ-NOT-05) ----------------------------------------------------------------------------------
 
-RECORD = "SELECT app_record_nudge(:e, :kind, :key)"
+RECORD = "SELECT app_record_nudge(:e, :kind, :key, CAST(:state AS engagement_state))"
 CANDIDATES = "SELECT engagement_id, org_id, developer_id, member_id FROM app_nudge_candidates()"
 NUDGES = "SELECT count(*) FROM engagement_nudges WHERE engagement_id = :e"
 JOB_ONLY = "the nudge job only, with no user bound"
@@ -498,10 +518,12 @@ async def test_a_nudge_is_recorded_once_and_only_by_the_job(owner_engine: AsyncE
     first call returns true and stores the engagement's organisation and the shared clock's time; the same kind and key
     return false and store nothing; another key or kind is a new nudge; a session bound to a user (a member, the
     developer) is refused; NULL arguments, an unknown kind, a key that is not a code and an unknown engagement are
-    refused; once the engagement has ended nothing is recorded (false)."""
+    refused; nothing is recorded (false) once the engagement has ended or when it is no longer in the state the job
+    decided the nudge in (a party's command committed between the job's read and the record)."""
     async with t.as_app(owner_engine) as conn:
         p, engagement = await private_scene(conn, "INTEREST_CONFIRMED")
-        nudge = {"e": engagement, "kind": "contact_escalation", "key": "bd:3"}
+        here = "INTEREST_CONFIRMED"
+        nudge = {"e": engagement, "kind": "contact_escalation", "key": "bd:3", "state": here}
         for user, org in ((p.owner, p.org), (p.developer, None)):
             await t.act(conn, user, org)
             await t.expect(conn, RECORD, JOB_ONLY, **nudge)
@@ -510,11 +532,14 @@ async def test_a_nudge_is_recorded_once_and_only_by_the_job(owner_engine: AsyncE
         assert await t.run(conn, RECORD, **nudge) is True
         after = await t.run(conn, "SELECT app_clock_now()")
         assert await t.run(conn, RECORD, **nudge) is False
-        assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:6") is True
-        assert await t.run(conn, RECORD, e=engagement, kind="contact_overdue", key="2026-12-01") is True
+        assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:6", state=here) is True
+        assert await t.run(conn, RECORD, e=engagement, kind="contact_overdue", key="2026-12-01", state=here) is True
+        for stale in ("NDA_PENDING", "CONTACT_MADE", "UNDER_REVIEW"):  # the job read another state: nothing recorded
+            assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:7", state=stale) is False
         for bad, refusal in (
-            ({"kind": None}, "name the engagement, the kind and the key"),
-            ({"key": None}, "name the engagement, the kind and the key"),
+            ({"kind": None}, "name the engagement, the kind, the key and the expected state"),
+            ({"key": None}, "name the engagement, the kind, the key and the expected state"),
+            ({"state": None}, "name the engagement, the kind, the key and the expected state"),
             ({"kind": "pester"}, "ck_engagement_nudges_kind_known"),
             ({"key": "Dear Amina"}, "ck_engagement_nudges_key_valid"),
             ({"key": "amina@example.test"}, "ck_engagement_nudges_key_valid"),
@@ -538,8 +563,16 @@ async def test_a_nudge_is_recorded_once_and_only_by_the_job(owner_engine: AsyncE
         await t.act(conn, q.owner, q.org)
         await t.append(conn, ended, q.owner, "owner", "decline", "UNDER_REVIEW", "DECLINED", reason="BUDGET")
         await t.act(conn, None)
-        assert await t.run(conn, RECORD, e=ended, kind="contact_escalation", key="bd:3") is False
+        for state in ("UNDER_REVIEW", "DECLINED"):  # ended: nothing, whatever state the job names
+            assert await t.run(conn, RECORD, e=ended, kind="contact_escalation", key="bd:3", state=state) is False
         assert await t.run(conn, NUDGES, e=ended) == 0
+
+        await t.as_owner(conn)  # the race: the job decided in INTEREST_CONFIRMED, first contact committed meanwhile
+        r, raced = await private_scene(conn, "INTEREST_CONFIRMED")
+        await t.walk(conn, r, raced, "CONTACT_MADE")
+        await t.act(conn, None)
+        assert await t.run(conn, RECORD, e=raced, kind="contact_escalation", key="bd:3", state=here) is False
+        assert await t.run(conn, NUDGES, e=raced) == 0
 
 
 async def test_the_ledger_is_append_only_and_the_organisations_alone(owner_engine: AsyncEngine) -> None:
@@ -550,7 +583,10 @@ async def test_the_ledger_is_append_only_and_the_organisations_alone(owner_engin
     async with t.as_app(owner_engine) as conn:
         p, engagement = await private_scene(conn, "INTEREST_CONFIRMED")
         await t.act(conn, None)
-        assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:3") is True
+        recorded = await t.run(
+            conn, RECORD, e=engagement, kind="contact_escalation", key="bd:3", state="INTEREST_CONFIRMED"
+        )
+        assert recorded is True
         for reader, org in ((p.reviewer, p.org), (p.viewer, p.org), (p.owner, None)):
             await t.act(conn, reader, org)
             assert await t.run(conn, NUDGES, e=engagement) == 1, reader

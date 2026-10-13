@@ -2,7 +2,9 @@
 organisations' niche defaults and escalation contacts and every procurement decision. Under the CLAUDE.md stop rule
 it needs a backup and the human's decision, so it refuses while any of them holds data, unless run with ``-x
 allow_p28_loss=true``; and it refuses in any case while an engagement names a contact without a contact-by date
-(revision 0003's CHECK, which it restores, would refuse the row). A refusal leaves the database at 0015 as it was.
+(revision 0003's CHECK, which it restores, would refuse the row); and, without the flag, while an engagement is in
+PROCUREMENT_ROUTE or paused from it (revision 0014's code has no command that leaves 3b). A refusal leaves the
+database at 0015 as it was.
 Empty tables downgrade without the flag (the round trip in ``test_migrations.py``)."""
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from sqlalchemy.engine import URL
 
 from tests.integration import world as w
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
+from tests.integration.engagements import tracker as t
 
 TABLES = ("engagement_nudges", "org_niche_defaults", "org_escalation_contacts")
 
@@ -93,3 +96,41 @@ async def test_a_contact_without_its_date_holds_the_downgrade_even_when_told(url
     with pytest.raises(RuntimeError, match="names a contact without a contact-by date"):
         run_alembic(url, _with_flag)
     assert _state(url) == before
+
+
+async def test_an_engagement_in_or_paused_from_3b_holds_the_downgrade(url: URL) -> None:
+    """Revision 0014's code has no command that leaves PROCUREMENT_ROUTE, so the downgrade refuses (without the flag)
+    while an engagement is in 3b and while one is on hold from it; a hold entered from UNDER_REVIEW holds nothing. Once
+    the 3b engagement has ended, the downgrade runs without the flag (no other 0015 data exists here)."""
+    engine = role_engine(url, "bridge_owner")
+    try:
+        async with engine.begin() as conn:
+            p = await t.parties(conn)
+            await t.run(conn, "UPDATE organizations SET public_entity = true WHERE id = :org", org=p.org)
+            await t.act(conn, p.developer)
+            procuring = await t.engage(conn, p)
+            await t.walk(conn, p, procuring, "UNDER_REVIEW")
+            await t.act(conn, p.signatory, p.org)
+            await t.append(conn, procuring, p.signatory, "signatory", "approve", "UNDER_REVIEW", "PROCUREMENT_ROUTE")
+            await t.as_owner(conn)
+            q = await t.parties(conn)  # a hold from UNDER_REVIEW, which 0014's code resumes
+            await t.act(conn, q.developer)
+            reviewed = await t.engage(conn, q)
+            await t.walk(conn, q, reviewed, "UNDER_REVIEW")
+            await t.append(conn, reviewed, q.developer, "developer", "pause", "UNDER_REVIEW", "ON_HOLD")
+        with pytest.raises(RuntimeError, match=r"engagements \(in PROCUREMENT_ROUTE or paused from it\) hold"):
+            run_alembic(url, lambda config: command.downgrade(config, "0014"))
+        async with engine.begin() as conn:
+            await t.act(conn, p.developer)
+            await t.append(conn, procuring, p.developer, "developer", "pause", "PROCUREMENT_ROUTE", "ON_HOLD")
+        with pytest.raises(RuntimeError, match=r"engagements \(in PROCUREMENT_ROUTE or paused from it\) hold"):
+            run_alembic(url, lambda config: command.downgrade(config, "0014"))
+        assert _state(url)[0] == "0015"
+        async with engine.begin() as conn:
+            await t.act(conn, p.developer)
+            await t.append(conn, procuring, p.developer, "developer", "resume", "ON_HOLD", "PROCUREMENT_ROUTE")
+            await t.append(conn, procuring, p.developer, "developer", "withdraw", "PROCUREMENT_ROUTE", "WITHDRAWN")
+    finally:
+        await engine.dispose()
+    run_alembic(url, lambda config: command.downgrade(config, "0014"))
+    assert _state(url)[0] == "0014"
