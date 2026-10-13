@@ -273,3 +273,42 @@ def test_a_prior_knowledge_declaration_tells_the_owner_n31_by_email_always() -> 
     assert notify.mutable(event("start_review", R.REVIEWER, S.UNDER_REVIEW))
     by_developer = event(sm.PRIOR_KNOWLEDGE_DECLARED, R.DEVELOPER, S.SUBMITTED)
     assert notify.compose(by_developer, "Telco A", "Cold-chain alerts") is None  # only an organisation declares
+
+
+def test_a_public_entitys_3b_events_tell_the_other_party_what_comes_next() -> None:
+    """REQ-ENG-06 (N04, N17, N05): a public entity's approval enters its procurement route, so the developer reads that
+    it chooses how it will buy first; its accepted interest asks the organisation for the route; the choice tells the
+    developer the route and the contact-by date."""
+    approved = side("approve", R.SIGNATORY, S.UNDER_REVIEW, S.PROCUREMENT_ROUTE)
+    composed = notify.compose(approved, "County Government of C (fixture)", "Market fees")
+    assert composed is not None
+    party, notice = composed
+    assert (party, notice.kind, notice.title) == (DEV, "engagement.n04", "Procurement route determined")
+    assert "(non-binding)" in notice.body
+    assert "first chooses how it will buy" in notice.body
+    accepted = side("accept_interest", R.DEVELOPER, S.ORG_INTEREST, S.PROCUREMENT_ROUTE)
+    composed = notify.compose(accepted, "County C", "Market fees")
+    assert composed is not None
+    assert (composed[0], composed[1].body) == (
+        ORG,
+        'The developer accepted your interest in "Market fees". Choose your procurement route next.',
+    )
+    chosen = side(
+        "choose_route",
+        R.ADMIN,
+        S.PROCUREMENT_ROUTE,
+        S.INTEREST_CONFIRMED,
+        payload={"procurement_route": "rfq_tender", "contact_by": "2026-10-20"},
+    )
+    composed = notify.compose(chosen, "County C", "Market fees")
+    assert composed is not None
+    party, notice = composed
+    assert (party, notice.kind, notice.title) == (DEV, "engagement.n05", "Procurement route chosen")
+    assert notice.body == (
+        'County C chose how it will buy "Market fees": a request for quotation or tender. Its contact will reach you by'
+        " 20 Oct 2026."
+    )
+    unknown = side("choose_route", R.ADMIN, S.PROCUREMENT_ROUTE, S.INTEREST_CONFIRMED, payload={})
+    composed = notify.compose(unknown, "County C", "Market fees")
+    assert composed is not None
+    assert "its chosen route" in composed[1].body

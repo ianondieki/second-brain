@@ -24,6 +24,7 @@ export type PublishProblem =
   | "fields"
   | "d1Required"
   | "planLimit"
+  | "demoLimit"
   | "attestationsRequired"
   | "attestationsChanged"
   | "nothingToPublish";

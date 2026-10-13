@@ -3541,6 +3541,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs/{org_id}/engagements/{engagement_id}/procurement-route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose Procurement Route
+         * @description Choose a public entity's procurement route (stage 3b; docs/spec/06 6.9): an owner or admin of the organisation
+         *     (403 ``role_required`` for any other member), while the engagement waits in ``PROCUREMENT_ROUTE`` (409
+         *     otherwise), with the contact-by date of stage 3. The engagement enters ``INTEREST_CONFIRMED`` (non-binding): the
+         *     named contact may then read the developer's contact details, and the developer is told the route and gets EM2.
+         */
+        post: operations["choose_procurement_route_api_orgs__org_id__engagements__engagement_id__procurement_route_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{org_id}/engagements/{engagement_id}/recommendation": {
         parameters: {
             query?: never;
@@ -4751,14 +4774,16 @@ export interface components {
         };
         /**
          * ApproveBody
-         * @description Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date.
+         * @description Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date. A public
+         *     entity's approval enters its procurement route (3b): the contact-by date is named with the route, and one sent
+         *     here is not used.
          */
         ApproveBody: {
             /**
              * Contact By
-             * Format: date
+             * @description Required for a private organisation (422 invalid_contact_by without it): from today to policy.yaml's contact_by_max_bd (5) business days ahead. Not used for a public entity, which names it with its procurement route
              */
-            contact_by: string;
+            contact_by?: string | null;
             contact_channel: components["schemas"]["ContactChannel"];
             /**
              * Contact User Id
@@ -5625,7 +5650,7 @@ export interface components {
          * Command
          * @enum {string}
          */
-        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment" | "request_info" | "answer_info" | "cancel_request" | "pause" | "resume";
+        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "choose_route" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment" | "request_info" | "answer_info" | "cancel_request" | "pause" | "resume";
         /** CommandBody */
         CommandBody: {
             /**
@@ -6105,7 +6130,8 @@ export interface components {
         };
         /**
          * DeveloperEngagementDetail
-         * @description The developer's tracker (no organisation triage: D-68).
+         * @description The developer's tracker (no organisation triage, D-68; no escalation flag: the nudges ledger is the
+         *     organisation's).
          */
         DeveloperEngagementDetail: {
             /**
@@ -6186,6 +6212,8 @@ export interface components {
             payments: components["schemas"]["PaymentOut"][];
             /** @description The organisation's prior-knowledge declaration on this proposal; null when none */
             prior_knowledge?: components["schemas"]["DeveloperPriorKnowledgeOut"] | null;
+            /** @description A public entity's procurement route once chosen; null otherwise */
+            procurement?: components["schemas"]["ProcurementOut"] | null;
             /**
              * Proposal Id
              * Format: uuid
@@ -6209,6 +6237,11 @@ export interface components {
             /** Stage Label */
             stage_label: string;
             state: components["schemas"]["EngagementState"];
+            /**
+             * Steps
+             * @description The engagement's main-path stages in order (the stepper): stage 0 for an organisation's interest, stages 1-2 for a tagged proposal, PROCUREMENT_ROUTE (3b) only for a public entity (AC-TRACK-5)
+             */
+            steps?: components["schemas"]["StepOut"][];
             /**
              * Today
              * @description Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from
@@ -8200,6 +8233,11 @@ export interface components {
              */
             endorsements: components["schemas"]["EndorsementOut"][];
             /**
+             * Escalated At
+             * @description When the nudge job last escalated the current stage to the organisation's admins and escalation contact (first contact late or overdue, the procurement route or a milestone review waiting); null when it has not. The organisation's own: never on the developer's tracker
+             */
+            escalated_at?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -8232,6 +8270,8 @@ export interface components {
             payments: components["schemas"]["PaymentOut"][];
             /** @description The organisation's declaration window (always sent to a member) */
             prior_knowledge?: components["schemas"]["OrgPriorKnowledgeOut"] | null;
+            /** @description A public entity's procurement route once chosen; null otherwise */
+            procurement?: components["schemas"]["ProcurementOut"] | null;
             /**
              * Proposal Id
              * Format: uuid
@@ -8255,6 +8295,11 @@ export interface components {
             /** Stage Label */
             stage_label: string;
             state: components["schemas"]["EngagementState"];
+            /**
+             * Steps
+             * @description The engagement's main-path stages in order (the stepper): stage 0 for an organisation's interest, stages 1-2 for a tagged proposal, PROCUREMENT_ROUTE (3b) only for a public entity (AC-TRACK-5)
+             */
+            steps?: components["schemas"]["StepOut"][];
             /** @description The organisation's triage (always sent to a member) */
             team?: components["schemas"]["TeamFacts"] | null;
             /**
@@ -9226,6 +9271,60 @@ export interface components {
          * @enum {string}
          */
         ProblemStatus: "candidate" | "pending_review" | "published" | "rejected" | "archived";
+        /**
+         * ProcurementBody
+         * @description A public entity's procurement route (stage 3b; docs/spec/06 6.9), chosen by its owner or admin: how it will
+         *     buy, the written justification (required for direct procurement) and the contact-by date of stage 3.
+         */
+        ProcurementBody: {
+            /**
+             * Contact By
+             * Format: date
+             * @description The date the named contact reaches the developer by: from today to policy.yaml's contact_by_max_bd (5) business days ahead (422 invalid_contact_by)
+             */
+            contact_by: string;
+            /**
+             * Justification
+             * @description Plain text, line breaks allowed; trimmed, empty is none. Direct procurement needs 20 to 1,000 characters (422 justification_required); the other routes take none or at most 1,000 (422 invalid_justification). No contact details or links before first contact (422 contains_contact). Both parties read it
+             */
+            justification?: string | null;
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when last read; when sent, 409 stale if it moved
+             */
+            lock_version?: number | null;
+            route: components["schemas"]["ProcurementRoute"];
+        };
+        /**
+         * ProcurementOut
+         * @description A public entity's procurement route (3b), as both parties read it (R46: full transparency).
+         */
+        ProcurementOut: {
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /**
+             * Decided By Name
+             * @description The owner or admin who chose it ('Former member' once not readable)
+             */
+            decided_by_name: string;
+            /**
+             * Justification
+             * @description The organisation's own words: plain text
+             */
+            justification: string | null;
+            route: components["schemas"]["ProcurementRoute"];
+        };
+        /**
+         * ProcurementRoute
+         * @description How a public entity will buy (docs/spec/06 6.9 stage 3b, ``PROCUREMENT_ROUTE``; PPADA 2015, PPP Act 2021;
+         *     revision 0015, REQ-ENG-06). Chosen once by the organisation's owner or admin, together with the move to
+         *     ``INTEREST_CONFIRMED``; ``direct`` needs a written justification of at least 20 characters.
+         * @enum {string}
+         */
+        ProcurementRoute: "direct" | "rfq_tender" | "ppp_pip" | "innovation_challenge" | "pilot_mou";
         /** ProfileOut */
         ProfileOut: {
             /** Bio */
@@ -10778,6 +10877,20 @@ export interface components {
             pass: number;
             /** Pursue */
             pursue: number;
+        };
+        /**
+         * StepOut
+         * @description One main-path stage of the engagement's stepper, in order.
+         */
+        StepOut: {
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "review" | "contact_nda" | "agreement" | "implementation" | "close";
+            /** Label */
+            label: string;
+            state: components["schemas"]["EngagementState"];
         };
         /**
          * StepUpMethod
@@ -31499,6 +31612,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeclarationOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    choose_procurement_route_api_orgs__org_id__engagements__engagement_id__procurement_route_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */

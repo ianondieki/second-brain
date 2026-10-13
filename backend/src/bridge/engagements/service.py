@@ -62,6 +62,7 @@ ACTOR_ROLES: Final = {
 }  # a viewer acts in no tracker role
 HOLIDAY_WINDOW: Final = timedelta(days=400)  # covers the longest deadline (30 BD) and a year of test clock
 _NOW = text("SELECT app_clock_now()")
+_PUBLIC_ENTITIES = text("SELECT id, app_org_is_public_entity(id) FROM unnest(CAST(:ids AS uuid[])) AS id")
 _D2_OR_ABOVE = (DevVerification.D2, DevVerification.D3)
 
 
@@ -221,7 +222,8 @@ async def load_many(
 ) -> dict[UUID, Loaded]:
     """``load`` for each of ``engagements`` with one query per kind of row, however many there are (the lists,
     P16-E1): the current stage's round and endorsements, the agreement versions, the signed agreement's milestones,
-    the final payment, the NDA or acceptance certificate and its signatures, and the developer's level."""
+    the final payment, the NDA or acceptance certificate and its signatures, the developer's level, and whether each
+    organisation is a public entity (its approval goes through the procurement route, 3b)."""
     if not engagements:
         return {}
     ids = [e.id for e in engagements]
@@ -321,6 +323,10 @@ async def load_many(
         )
         for eid, kind, ref, party in found_signatures.tuples():
             signatures[(eid, kind, ref)].add(party)
+    # Whether each organisation is a public entity: public information, read through revision 0015's definer for
+    # whatever the caller may read (a developer reads no delisted organisation's row).
+    public = await db.execute(_PUBLIC_ENTITIES, {"ids": sorted({e.org_id for e in engagements})})
+    public_entities = {org_id for org_id, flag in public.tuples() if flag}
     levels: dict[UUID, DevVerification | None] = {}
     if developer_caller:
         found_levels = await db.execute(
@@ -342,6 +348,7 @@ async def load_many(
             developer_d2=developer_caller and levels.get(e.developer_id) in _D2_OR_ABOVE,
             deals_enabled=deals_enabled,
             side_use=side_use[e.id],
+            public_entity=e.org_id in public_entities,
         )
         for e in engagements
     }
@@ -406,6 +413,7 @@ def _loaded(
     developer_d2: bool,
     deals_enabled: bool,
     side_use: tuple[int, int, int] = (0, 0, 0),
+    public_entity: bool = False,
 ) -> Loaded:
     """One engagement's ``Loaded`` from the rows ``load_many`` read (agreements newest version first)."""
     latest = agreements[0] if agreements else None
@@ -440,6 +448,7 @@ def _loaded(
         questions_left=policy.info_requests_per_stage - questions,
         holds_left=policy.holds_per_stage - holds,
         hold_days_left=policy.hold_days_total - held,
+        public_entity=public_entity,
     )
     return loaded
 

@@ -24,6 +24,8 @@ import { stepUpStrings } from "../../strings";
 import { getAdminEvent } from "../data";
 import { EventDecision } from "../EventDecision";
 import { ADMIN_EVENTS_PATH } from "../events";
+import { DemoLocked } from "@/components/DemoLocked";
+import { publicDemoOn } from "@/lib/public-demo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminEvents");
@@ -108,17 +110,26 @@ export default async function AdminEventPage({ params }: PageProps<"/admin/event
           description={t("decision.lead")}
           className="decision-panel rounded-panel border bg-field p-5 sm:p-6"
         >
-          <ClientStrings strings={strings}>
-            <EventDecision eventId={event.id} seen={event.updated_at} />
-          </ClientStrings>
+          {/* The public demo (REQ-FND-04): staff are read-only. */}
+          {publicDemoOn() ? (
+            <DemoLocked variant="decide" />
+          ) : (
+            <ClientStrings strings={strings}>
+              <EventDecision eventId={event.id} seen={event.updated_at} />
+            </ClientStrings>
+          )}
         </Section>
       ) : null}
 
       {event.status === "published" ? (
         <div>
-          <ClientStrings strings={strings}>
-            <CancelEvent target={{ kind: "staff" }} eventId={event.id} poster={organiser} />
-          </ClientStrings>
+          {publicDemoOn() ? (
+            <DemoLocked />
+          ) : (
+            <ClientStrings strings={strings}>
+              <CancelEvent target={{ kind: "staff" }} eventId={event.id} poster={organiser} />
+            </ClientStrings>
+          )}
         </div>
       ) : null}
     </article>,

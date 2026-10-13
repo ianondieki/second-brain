@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { TopBar } from "@/components/TopBar";
 import { standaloneLinkClass } from "@/components/ui/Button";
+import { publicDemoOn } from "@/lib/public-demo";
 
 import { Suspense } from "react";
 
@@ -28,7 +29,7 @@ const sectionLink =
  * footer. Nothing here claims protection or a usage figure; every product picture is labelled example data.
  */
 export async function LandingContent() {
-  const t = await getTranslations("landing");
+  const [t, tDemo] = await Promise.all([getTranslations("landing"), getTranslations("publicDemo")]);
   return (
     <>
       <TopBar>
@@ -50,8 +51,9 @@ export async function LandingContent() {
               </Link>
             </li>
             <li className="lg:ml-3">
+              {/* In the public demo /login is the persona picker: the link says so (REQ-FND-04). */}
               <Link href="/login" className={standaloneLinkClass}>
-                {t("logIn")}
+                {publicDemoOn() ? tDemo("tryDemo") : t("logIn")}
               </Link>
             </li>
           </ul>

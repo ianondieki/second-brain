@@ -16,12 +16,13 @@ from sqlalchemy.exc import OperationalError
 from bridge.audit.chain import ChainProblem
 from bridge.config import ConfigurationError, Settings
 from bridge.crypto.envelope import LocalKeyWrapper
-from bridge.engagements import message_notify, notify
+from bridge.engagements import message_notify, notify, nudges
 from bridge.jobs import audit as audit_jobs
 from bridge.jobs import embeddings as embedding_jobs
 from bridge.jobs import events as event_jobs
 from bridge.jobs import expiry as expiry_jobs
 from bridge.jobs import message_uploads as upload_jobs
+from bridge.jobs import nudges as nudge_jobs
 from bridge.jobs import provenance as jobs
 from bridge.jobs import quiz as quiz_jobs
 from bridge.jobs import reminders as reminder_jobs
@@ -68,6 +69,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         "bridge.jobs.scouts",
         "bridge.jobs.research",  # P11: one research.run job per research run (REQ-RES-01)
         "bridge.jobs.expiry",  # P19: the tracker's clock, expiry and the end of holds (REQ-ENG-10)
+        "bridge.jobs.nudges",  # P28: escalations and reminders, each once (REQ-NOT-05)
         "bridge.jobs.saved_searches",  # P21: the daily saved-search alerts (REQ-PERS-03)
         "bridge.jobs.message_uploads",  # P21: the hourly purge of unsendable thread uploads (REQ-ENG-11)
         "bridge.jobs.quiz",  # P22: the nightly draft of Today's five (REQ-DEV-01)
@@ -84,6 +86,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         audit_jobs.VERIFY_TASK,
         notify.TASK,  # REQ-NOT-04: the tracker's notifications (P5)
         message_notify.TASK,  # REQ-ENG-11: N18, a new message in the thread (P21)
+        nudges.TASK,  # REQ-NOT-05: a recorded nudge's notices (P28)
         RESEARCH_RUN_TASK,  # REQ-RES-01 (P11)
     ):
         assert name in app.tasks
@@ -96,6 +99,7 @@ def test_the_task_modules_are_imported_by_the_worker() -> None:
         reminder_jobs.ORG_DIGEST_TASK: "*/15 * * * *",
         SCOUT_SCAN_TASK: "*/15 * * * *",
         expiry_jobs.TASK: "*/15 * * * *",
+        nudge_jobs.TASK: "*/15 * * * *",  # P28: escalations and reminders (REQ-NOT-05)
         saved_search_jobs.TASK: "5 4 * * *",  # P21: 07:05 in Nairobi
         upload_jobs.TASK: "17 * * * *",
         quiz_jobs.TASK: "30 23 * * *",  # P22: 02:30 in Nairobi

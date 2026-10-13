@@ -4,9 +4,9 @@ without a database.
 - AT-PD-2: with the mode off, or without the ``bridge.demo`` module (a production image), ``GET /api/public/demo``
   says ``enabled: false`` and the sign-in route is 404; the backend image deletes ``bridge/demo`` unless built with dev
   tools, and staging and production never get the persona module even from settings that skipped validation.
-- The allowlist is fixed in code: seven personas in the card's order (Hassan added by the orchestrator), each a demo
-  seed account at a reserved ``.example`` domain, with its name and role from the seed's data; the sign-in body takes
-  the key only.
+- The allowlist is fixed in code: seven personas in the card's order (Halima of State Department D shows the
+  procurement route), each a demo seed account at a reserved ``.example`` domain, with its name and role from the
+  seed's data; the sign-in body takes the key only.
 - Every API answer says ``X-Robots-Tag: noindex, nofollow`` while the mode is on, and none says it otherwise; the
   OpenAPI schema and the interactive docs are not served in the mode (the committed document is unchanged).
 """
@@ -34,7 +34,7 @@ from tests.unit.public.test_problem_route import Pages
 from tests.unit.public.test_routes import PATHS, Scene
 from tests.unit.public.test_routes import client as public_client
 
-KEYS = ["amina", "brian", "grace", "peter", "rita", "hassan", "moderator"]
+KEYS = ["amina", "brian", "grace", "peter", "rita", "halima", "moderator"]
 REMOVAL = re.compile(r'^RUN if \[ "\$WITH_DEV_TOOLS" != "true" \]; then rm -rf (\S+(?: \S+)*); fi$', re.MULTILINE)
 
 
@@ -53,7 +53,7 @@ def test_the_allowlist_is_seven_seeded_demo_accounts_in_order() -> None:
         assert persona.email in accounts, persona.email
         assert persona.email.endswith(".example")
     assert public_access.BY_KEY["peter"].email == "signatory@telco-a.example"
-    assert public_access.BY_KEY["hassan"].email == "owner@county-c.example"
+    assert public_access.BY_KEY["halima"].email == "owner@state-d.example"
 
 
 def test_the_personas_carry_the_seeds_names_roles_and_homes() -> None:
@@ -64,7 +64,7 @@ def test_the_personas_carry_the_seeds_names_roles_and_homes() -> None:
         ("grace", "Grace Mwangi", "org_admin", "Telco A (fixture): owner and admin", "/org"),
         ("peter", "Peter Kamau", "org_signatory", "Telco A (fixture): signatory", "/org"),
         ("rita", "Rita Njeri", "org_reviewer", "Telco A (fixture): reviewer", "/org"),
-        ("hassan", "Hassan Abdi", "org_admin", "County Government of C (fixture): owner and admin", "/org"),
+        ("halima", "Halima Yusuf", "org_admin", "State Department D (fixture): owner and admin", "/org"),
         ("moderator", "Staff Moderator (demo)", "staff", "Platform staff: moderator", "/admin"),
     ]
 

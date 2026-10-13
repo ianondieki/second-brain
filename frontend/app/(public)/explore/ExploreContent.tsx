@@ -10,6 +10,7 @@ import { Lattice } from "@/components/ui/Lattice";
 import { savesData } from "@/lib/data-saver-request";
 import { countyAnchor, NATIONWIDE, photoOf, STRIP, type Photo } from "@/lib/photos/photos";
 import type { ExploreCounty, ExploreTeaser, PublicExplore } from "@/lib/public/public-data";
+import { publicDemoOn } from "@/lib/public-demo";
 
 /** A problem's public page (app/(public)/explore/problems/[id]). */
 export const problemHref = (id: string) => `/explore/problems/${encodeURIComponent(id)}`;
@@ -104,6 +105,9 @@ export function countiesShown(counties: readonly ExploreCounty[]): ExploreCounty
  */
 export async function ExploreContent({ explore }: { explore: PublicExplore | null }) {
   const t = await getTranslations("explore");
+  // The public demo (REQ-FND-04): the call goes to /login's persona picker (sign-up is switched off there).
+  const demo = publicDemoOn();
+  const tDemo = await getTranslations("publicDemo");
   const counties = explore ? countiesShown(explore.counties) : [];
   // The first tile's photograph is a phone's LCP: fetched from the head, at high priority, in the format it will use.
   // Not under Save-Data or the data-saver switch (P27), where every tile is the night band (Picture).
@@ -136,8 +140,8 @@ export async function ExploreContent({ explore }: { explore: PublicExplore | nul
             </p>
           ) : null}
         </div>
-        <ButtonLink href="/signup" variant="primary" className="shrink-0">
-          {t("signUp")}
+        <ButtonLink href={demo ? "/login" : "/signup"} variant="primary" className="shrink-0">
+          {demo ? tDemo("tryDemo") : t("signUp")}
         </ButtonLink>
       </header>
 

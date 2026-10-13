@@ -2165,6 +2165,13 @@ time,
   }
 }
 
+/* The public demo's banner (components/PublicDemoBanner.tsx; REQ-FND-04), once dismissed in this browser session:
+   <html data-demo-banner-hidden> is set before the first paint by the layout's inline script, so it never flashes.
+   Outside any layer, so it wins over the banner's own utilities. */
+html[data-demo-banner-hidden] [data-demo-banner] {
+  display: none;
+}
+
 /* The server-drawn offline banner (components/offline/OfflineSlot.tsx) shows only while the page is read offline
    (<html data-offline>, set by components/offline/Register.tsx). Outside any layer, so it wins over the banner's own
    `flex` utility. */
