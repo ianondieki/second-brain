@@ -231,7 +231,7 @@ async def invite(
     except DBAPIError as exc:
         if _sqlstate(exc) == "42501":  # the UPDATE policy: a protected invitation, changed meanwhile
             raise forbidden("protected_role", PROTECTED_ROLE) from exc
-        raise
+        raise await _deadlock(db, exc) from exc  # it waits on an accept's row lock: a deadlock is 409 conflict
     if await _open_unexpired(db, org.org_id, email=address):
         raise ApiError(409, "already_invited", ALREADY_INVITED)
     if await _open_unexpired(db, org.org_id) >= MAX_OPEN:
