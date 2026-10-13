@@ -257,8 +257,13 @@ test("the data-saver switch sets its cookie, and the next pages carry no photogr
   await page.goto("/dev");
   await expect(page.locator("[data-greeting]")).not.toHaveAttribute("data-greeting", "plain"); // the photograph, before
 
+  // Its one place is Settings › Notifications › Data, for a developer as for an organisation member (P27 UX):
+  // Profile does not repeat it.
   await page.goto("/settings/profile");
-  const toggle = page.getByRole("switch", { name: "Data saver" });
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Data saver" })).toHaveCount(0);
+  await page.goto("/settings/notifications");
+  const toggle = page.locator("[data-data-saver-card]").getByRole("switch", { name: "Data saver" });
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
@@ -277,8 +282,8 @@ test("the data-saver switch sets its cookie, and the next pages carry no photogr
   await page.goto("/dev");
   await expect(page.locator("[data-greeting]")).toHaveAttribute("data-greeting", "plain");
 
-  await page.goto("/settings/profile");
-  await page.getByRole("switch", { name: "Data saver" }).click();
+  await page.goto("/settings/notifications");
+  await page.locator("[data-data-saver-card]").getByRole("switch", { name: "Data saver" }).click();
   await expect.poll(async () => (await context.cookies()).some((c) => c.name === "data-saver")).toBe(false);
 });
 

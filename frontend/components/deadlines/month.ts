@@ -33,9 +33,16 @@ export function addDays(day: string, n: number): string {
  */
 export function pickMonth(requested: string | string[] | undefined, today: string): string {
   const value = Array.isArray(requested) ? requested[0] : requested;
-  const match = value ? MONTH.exec(value) : null;
-  if (!match || Math.abs(Number(match[1]) - Number(today.slice(0, 4))) > YEARS_EITHER_SIDE) return today.slice(0, 7);
-  return value!;
+  if (!value || !MONTH.test(value) || !monthInRange(value, today)) return today.slice(0, 7);
+  return value;
+}
+
+/**
+ * Whether a month ("2036-12") is one `?month=` may show: within ten years of `today`'s year. The month links either
+ * side are drawn only to such a month, so a link never promises a month that would open as the current one.
+ */
+export function monthInRange(month: string, today: string): boolean {
+  return Math.abs(Number(month.slice(0, 4)) - Number(today.slice(0, 4))) <= YEARS_EITHER_SIDE;
 }
 
 /** The first of a month as a UTC date, the year set as written (Date.UTC would read 0–99 as 1900–1999). */

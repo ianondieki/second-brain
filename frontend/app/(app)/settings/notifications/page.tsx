@@ -20,7 +20,7 @@ import { PageHero } from "@/components/ui/PageHero";
 
 import { pickMembership } from "../../org/membership";
 import { OrgPicker } from "../../org/OrgPicker";
-import { DataSaverSwitch } from "../profile/DataSaverSwitch";
+import { DataSaverSwitch } from "./DataSaverSwitch";
 import { SettingsTabs } from "../SettingsTabs";
 import { notificationChoices, preferenceChoices, type ConsentItem } from "./choices";
 import { CalendarFeed } from "./CalendarFeed";
@@ -49,8 +49,8 @@ async function myConsents(): Promise<ConsentItem[]> {
  * Notification settings (docs/spec/07 item 1, the avatar menu; every email footer's "Manage notifications"): the
  * consents that decide which messages are sent, for anyone signed in, on either side (REQ-CON-01, REQ-NOT-03), and
  * the notification preferences beside them in their channel's group (REQ-NOT-06; P21: the saved-search digest). Then
- * "Data": the data-saver switch (P27, REQ-UX-08), the same one developers also have on Profile, here for both sides; it
- * acts at once on this device and is not part of "Save choices".
+ * "Data": the data-saver switch (P27, REQ-UX-08), its one place, for both sides (a developer's Profile does not repeat
+ * it); it acts at once on this device and is not part of "Save choices".
  */
 export default async function NotificationSettingsPage({ searchParams }: PageProps<"/settings/notifications">) {
   const me = await requireMe();

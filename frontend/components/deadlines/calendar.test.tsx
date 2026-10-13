@@ -52,9 +52,9 @@ afterEach(cleanup);
 const href = ({ month, day }: { month: string; day?: string }) =>
   `/dev/engagements?view=calendar&month=${month}${day ? `&day=${day}#day-list` : ""}`;
 
-async function month(items: Deadline[], today = "2026-10-12") {
+async function month(items: Deadline[], today = "2026-10-12", shown = "2026-10") {
   return renderWithIntl(
-    <>{await resolveServerTree(<MonthCalendar month="2026-10" today={today} items={items} href={href} />)}</>,
+    <>{await resolveServerTree(<MonthCalendar month={shown} today={today} items={items} href={href} />)}</>,
   ).container;
 }
 
@@ -89,6 +89,24 @@ describe("the month", () => {
     );
   });
 
+  // P27 UX (WCAG 2.4.4): a month the view would not show (more than ten years from today's) would open as the current
+  // month under the other's name, so its link is not drawn; the other side's is.
+  it("draws no link to a month beyond ten years either side of today's", async () => {
+    let container = await month([], "2026-10-12", "2036-12");
+    expect(container.querySelector("[data-month-link='next']")).toBeNull();
+    expect(screen.queryByRole("link", { name: /January 2037/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Previous month, November 2036" }).getAttribute("href")).toBe(
+      "/dev/engagements?view=calendar&month=2036-11",
+    );
+    cleanup();
+    container = await month([], "2026-10-12", "2016-01");
+    expect(container.querySelector("[data-month-link='previous']")).toBeNull();
+    expect(screen.queryByRole("link", { name: /December 2015/ })).toBeNull();
+    expect(screen.getByRole("link", { name: "Next month, February 2016" }).getAttribute("href")).toBe(
+      "/dev/engagements?view=calendar&month=2016-02",
+    );
+  });
+
   it("shows at most two chips a day, then +n more linking to the day's list; the day itself is that link too", async () => {
     const day = "2026-10-16";
     const items = ["a", "b", "c", "d"].map((id) => deadline({ key: `stage:${id}`, title: `Idea ${id}`, due_on: day }));
@@ -99,9 +117,13 @@ describe("the month", () => {
     const more = td.querySelector<HTMLAnchorElement>("[data-more]")!;
     expect(more.textContent).toBe("+2 more");
     expect(more.getAttribute("href")).toBe(`/dev/engagements?view=calendar&month=2026-10&day=${day}#day-list`);
-    expect(within(td).getByRole("link", { name: "16 October: 4 deadlines" }).getAttribute("href")).toBe(
-      more.getAttribute("href"),
-    );
+    const dayLink = within(td).getByRole("link", { name: "16 October: 4 deadlines" });
+    expect(dayLink.getAttribute("href")).toBe(more.getAttribute("href"));
+    // A 44 px target at every width: the drawn number is 28 px from 640 px, the link around it stays 44 px.
+    // Stacked above the first chip its overhang lies over, below the phone's fixed tab bar (z-10).
+    expect(dayLink.className.split(" ")).toEqual(expect.arrayContaining(["size-11", "sm:-m-2", "relative", "z-[1]"]));
+    expect(dayLink.className).not.toContain("sm:size-7");
+    expect(dayLink.querySelector("span")?.className).toContain("sm:size-7");
     // Phones: dots, at most three, decorative.
     expect(td.querySelectorAll("[aria-hidden='true'] > span")).toHaveLength(3);
   });
@@ -248,6 +270,27 @@ describe("the Calendar view", () => {
       "/dev/discover",
     );
     expect(container.querySelector("table")).toBeNull();
+  });
+
+  // P27 UX: an empty month is never a dead end. The month's heading and its links either side stay above the one
+  // sentence, which replaces only the grid and the lists, so a deadline in another month is one press away.
+  it("keeps the month's heading and the links to the months either side above an empty month", async () => {
+    const container = await view({ orgId: "org-1", month: "2026-12" });
+    const heading = screen.getByRole("heading", { level: 2, name: "December 2026" });
+    const previous = screen.getByRole("link", { name: "Previous month, November 2026" });
+    const next = screen.getByRole("link", { name: "Next month, January 2027" });
+    expect(previous.getAttribute("href")).toBe("/org/engagements?view=calendar&month=2026-11");
+    expect(next.getAttribute("href")).toBe("/org/engagements?view=calendar&month=2027-01");
+    const empty = container.querySelector<HTMLElement>("[data-deadlines='empty']")!;
+    expect(heading.compareDocumentPosition(empty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(next.compareDocumentPosition(empty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The month links are the view's, not the empty state's: it still holds one sentence and one action.
+    expect(empty.contains(next)).toBe(false);
+    expect(within(empty).getAllByRole("link")).toHaveLength(1);
+    expect(empty.textContent).toContain("No deadlines in December 2026.");
+    expect(container.querySelector("[data-month='2026-12']")?.getAttribute("aria-labelledby")).toBe("month-title");
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.querySelector("[data-deadlines-group]")).toBeNull();
   });
 
   it("lists what is overdue, then the next 30 days with the one live clock, and the page's ticker once", async () => {

@@ -150,9 +150,21 @@ test("a developer's deadlines: the month, the list with the live clock, each in 
     await hydrated(page);
     const card = page.locator("[data-calendar-feed-card]");
     await expect(card.locator("[data-feed-private]")).toContainText("This link is private");
+    // The worst frame timing a browser may give: a frame due before React's next task, so an animation-frame callback
+    // runs before the change it follows is committed (a microtask here; seen on the production build). A focus move
+    // made that way finds nothing to focus; the section's, made after the commit, is unaffected.
+    await page.evaluate(() => {
+      window.requestAnimationFrame = (callback) => {
+        queueMicrotask(() => callback(performance.now()));
+        return 0;
+      };
+    });
     await card.getByRole("button", { name: "Create a feed link" }).click();
     const field = card.getByRole("textbox", { name: "Feed link" });
     await expect(field).toHaveValue(/\/api\/calendar\/.+\.ics$/, STEP);
+    // The new link takes the focus, selected for copying (an effect after the commit, not a frame before it: on the
+    // production build the frame could come first and leave the focus nowhere).
+    await expect(field).toBeFocused();
     const first = await field.inputValue();
     await checkScreen(page, { strict: true });
     const anonymous = await playwright.request.newContext();
@@ -167,13 +179,17 @@ test("a developer's deadlines: the month, the list with the live clock, each in 
       expect(text).not.toContain("feed-must-not-carry-this");
 
       await card.getByRole("button", { name: "Make a new link" }).click();
+      await card.getByRole("button", { name: "Replace the link" }).click();
       await expect(field).not.toHaveValue(first, STEP);
+      await expect(field).toBeFocused();
       const second = await field.inputValue();
       expect((await anonymous.get(first)).status()).toBe(404);
       expect((await anonymous.get(second)).status()).toBe(200);
 
       await card.getByRole("button", { name: "Remove the feed" }).click();
+      await card.getByRole("button", { name: "Remove the link" }).click();
       await expect(card.getByRole("status")).toHaveText("The feed is removed. Its link no longer works.", STEP);
+      await expect(card.getByRole("button", { name: "Create a feed link" })).toBeFocused();
       expect((await anonymous.get(second)).status()).toBe(404);
       await checkScreen(page, { strict: true });
     } finally {
@@ -204,6 +220,15 @@ test("an organisation's calendar shows every deadline the API lists for it: stag
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Nairobi" }).format(new Date(listed.now));
   const end = new Date(Date.parse(`${today}T00:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10);
   const shown = listed.items.filter((item) => item.due_on <= end);
+  // The month's heading and its links either side, whether anything is due or not: an empty month is never a dead
+  // end (the one sentence replaces the grid and the lists only).
+  await expect(page.locator("h2#month-title")).toBeVisible();
+  for (const side of ["previous", "next"]) {
+    await expect(page.locator(`[data-month-link="${side}"]`)).toHaveAttribute(
+      "href",
+      /[?&]view=calendar&month=\d{4}-\d{2}/,
+    );
+  }
   if (shown.length === 0) {
     await expect(page.locator("[data-deadlines='empty']")).toBeVisible();
   } else {

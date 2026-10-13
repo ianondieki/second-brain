@@ -38,7 +38,8 @@
     "reviewP26": "[[COPY-REVIEW]] P26-B (REQ-DIR-01, REQ-UX-01, REQ-UX-02; D-67): companies.lead (one sentence), companies.groupCount (a niche section's count of organisations on the page), companies.findProblems (the company page's primary action: Discover filtered by its first niche, the niche's own name), companies.pitchIdea (the way to pitch: the picker lives on an idea), companies.otherNiches (the heading of the links to the organisation's other niches; the first is the primary action's), companies.responseFigure (the response record's figures; the API's own sentence stays beneath); companies.heldUnclaimedHint (the company page's E0 explanation before any pitch: docs/spec/06 6.2's held-tag sentence, pitch.heldUnclaimed, in the same shape, saying what a pitch to them would do rather than that one was saved; no new claim); removed: companies.detailNiches (the niches are links under their own heading), companies.nichesTitle (replaced by companies.otherNiches: the first niche is the primary action's)",
     "reviewP27cde": "[[COPY-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68): tracker.team.* (the organisation's team line and recommendation tally on its tracker), tracker.declaration.* (the declaration line on the organisation's tracker; tracker.declaration.received.* the developer's panel), tracker.ipNudge.* (the one note before a developer first shares a full proposal; docs/spec/06 6.1 non-blocking nudge), tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (declarationSheet.window and refusal.windowClosed* carry docs/spec/06 6.4 pt 5's sentence; titleHint says the row is permanent), engagements.* (the \"Assigned to me\" filter and the assignee line; engagements.assignedToMe is shared with the Board), profileSettings.references.* (D3, docs/spec/06 6.4 pt 8), help.confidential.priorKnowledge",
     "reviewP27clock": "[[COPY-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"in 6 days 14 hours 23 minutes\"), not \"14 h 23 min\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
-    "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private)."
+    "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private).",
+    "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\"."
   },
   "app": {
     "name": "Wazo",
@@ -4150,14 +4151,10 @@
     "failed": "Could not remove them. Try again."
   },
   "countdown": {
-    "days": "{days, plural, one {# day} other {# days}} {hours} h {minutes} min",
-    "hours": "{hours} h {minutes} min",
-    "minutes": "{minutes} min",
     "clockDays": "<f>{days}</f><u> d</u> <f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
     "clockHours": "<f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
     "clockMinutes": "<f>{minutes}</f><u> min</u>",
     "in": "in {time}",
-    "dueIn": "Due {date} · in {time}",
     "closesIn": "Proposals close in {time}",
     "at": "{date}, {time} EAT"
   },
@@ -4451,7 +4448,7 @@
     "columnsLabel": "Pipeline stages",
     "count": "{count, plural, one {# engagement} other {# engagements}}",
     "median": "median {days, plural, one {# day} other {# days}} in stage",
-    "stalled": "No movement for {count, plural, one {# business day} other {# business days}}",
+    "stalled": "No movement for {count}+ business days",
     "assignee": "Assigned to {name}",
     "columnEmpty": "None at this stage.",
     "empty": "No engagements to show on the board yet.",
@@ -4478,8 +4475,14 @@
     "liveUnread": "Your feed is live. No calendar app has read it yet.",
     "rotate": "Make a new link",
     "rotating": "Making a new link…",
+    "rotateConfirm": "Replace the link? Calendars that use the current one stop updating.",
+    "rotateYes": "Replace the link",
+    "rotateCancel": "Keep the current link",
     "remove": "Remove the feed",
     "removing": "Removing…",
+    "removeConfirm": "Remove the link? Calendars that use it stop updating.",
+    "removeYes": "Remove the link",
+    "removeCancel": "Keep the link",
     "removed": "The feed is removed. Its link no longer works.",
     "failed": "That did not work. Try again."
   }

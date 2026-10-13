@@ -16,9 +16,9 @@ import { formatCalendarDate } from "@/lib/format";
 /** The roles that may assign and recommend (engagements/models.py TRIAGE_ROLES). */
 const TRIAGE_ROLES = new Set(["owner", "admin", "reviewer", "signatory"]);
 
-/** Links styled as quiet text buttons, 44 px tall (the openers of the sheets). */
+/** Links styled as quiet text buttons, 44 px both ways (the openers of the sheets; "Assign" alone is narrower). */
 const OPENER =
-  "inline-flex min-h-11 items-center font-semibold text-accent underline decoration-1 underline-offset-4 hover:decoration-2";
+  "inline-flex min-h-11 min-w-11 items-center justify-center font-semibold text-accent underline decoration-1 underline-offset-4 hover:decoration-2";
 
 export function canTriage(detail: Pick<TrackerDetail, "my_roles">): boolean {
   return detail.my_roles.some((role) => TRIAGE_ROLES.has(role));

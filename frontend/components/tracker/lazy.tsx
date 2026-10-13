@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { lazy, Suspense, useId, useState, type ComponentProps, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState, type ComponentProps, type ComponentType } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Button } from "@/components/ui/Button";
@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/Button";
 // The tracker's rarely shown client parts (P23-3; docs/spec/07 item 5: the tracker route sits at its JS budget), each
 // in its own chunk that loads only on a page that draws it: the developer's Tier-2 share (until it is shared), the
 // named contact's reveal and the fresh-code form a signature or payment may ask for. The server still renders the
-// first two in the page's HTML. No code split may fail into the route's error boundary (PROGRESS.md, P16-C1): a part
+// first in the page's HTML; the reveal's button is drawn here and its chunk loads only when it is pressed (P27 UX:
+// the organisation's tracker was over its budget by that chunk). No code split may fail into the route's error boundary (PROGRESS.md, P16-C1): a part
 // whose chunk cannot load (offline, a new deploy) says so in one sentence with one way on, and the rest of the
 // tracker, its primary action included, stays.
 
@@ -37,7 +38,8 @@ function failSafe<P extends object>(load: () => Promise<ComponentType<P>>) {
 }
 
 const ShareTier2Chunk = failSafe(() => import("./ShareTier2").then((m) => m.ShareTier2));
-const ContactRevealChunk = failSafe(() => import("./ContactReveal").then((m) => m.ContactReveal));
+const loadContactReveal = () => import("./ContactReveal").then((m) => m.ContactReveal);
+const ContactRevealChunk = failSafe(loadContactReveal);
 /** Actions draws it inside its own Suspense, with its "Working…" fallback. */
 export const LazyStepUp = failSafe(() => import("./StepUp").then((m) => m.StepUp));
 
@@ -49,11 +51,44 @@ export function LazyShareTier2(props: ComponentProps<typeof ShareTier2Chunk>) {
   );
 }
 
-export function LazyContactReveal(props: ComponentProps<typeof ContactRevealChunk>) {
+/**
+ * "Show the developer's contact details" as a plain button in the page's HTML; the reveal's chunk is fetched when the
+ * pointer reaches it or it takes focus, and pressing it draws the part, which reveals at once (`start`). The focus
+ * stays on the busy button in its place while the chunk loads, then on the part's own; a chunk that cannot load says
+ * so (PartFailed).
+ */
+export function LazyContactReveal({ engagementId }: { engagementId: string }) {
+  const t = useStrings("trackerActions");
+  const [pressed, press] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const prefetch = () => void loadContactReveal().catch(() => undefined);
+  useEffect(() => {
+    if (pressed) box.current?.querySelector("button")?.focus();
+  }, [pressed]);
   return (
-    <Suspense fallback={null}>
-      <ContactRevealChunk {...props} />
-    </Suspense>
+    <div ref={box} data-contact-reveal="">
+      {pressed ? (
+        <Suspense
+          fallback={
+            <Button variant="secondary" busy>
+              {t("busy")}
+            </Button>
+          }
+        >
+          <ContactRevealChunk engagementId={engagementId} start />
+        </Suspense>
+      ) : (
+        <Button
+          variant="secondary"
+          data-opens="contact"
+          onClick={() => press(true)}
+          onPointerEnter={prefetch}
+          onFocus={prefetch}
+        >
+          {t("contact.reveal")}
+        </Button>
+      )}
+    </div>
   );
 }
 

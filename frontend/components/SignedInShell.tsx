@@ -6,6 +6,7 @@ import { AccountMenu } from "./AccountMenu";
 import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
 import { PaletteSlot } from "./palette/PaletteSlot";
 import { TopBar } from "./TopBar";
+import { BLEED_FRAME } from "./TopBarBase";
 
 export interface SignedInShellProps {
   homeHref: string;
@@ -14,6 +15,13 @@ export interface SignedInShellProps {
   nav?: ReactNode;
   /** Lists and directories use the full content width; forms and summaries keep a 36 rem column. */
   wide?: boolean;
+  /**
+   * The content runs on to the window's right edge (a 24 px margin) instead of stopping at the 72 rem frame, the rail
+   * staying where every other page has it, level with the logo, and the top bar's frame running on with it (never
+   * narrower than the content): the Engagements Board's five columns (P27), which the frame leaves at 160 px each.
+   * Below 1152 px the frame is the window already, so nothing changes. Implies `wide`.
+   */
+  bleed?: boolean;
   /** The page is the bell's own (/notifications): the bell carries aria-current="page". */
   bellCurrent?: boolean;
   /** The staff console's role, so the command palette lists the sections that role may open. */
@@ -36,13 +44,14 @@ export function SignedInShell({
   children,
   nav,
   wide = false,
+  bleed = false,
   bellCurrent = false,
   staffRole,
   offline,
 }: SignedInShellProps) {
   return (
     <>
-      <TopBar homeHref={homeHref} sticky>
+      <TopBar homeHref={homeHref} sticky bleed={bleed}>
         {/* docs/spec/07 item 1: the bell, then the avatar menu, on the right of the bar; P25 puts Search before them
             (the command palette, D-67). */}
         <div className="flex min-w-0 items-center gap-1 sm:gap-2" data-top-bar-controls="">
@@ -54,7 +63,14 @@ export function SignedInShell({
           <AccountMenu />
         </div>
       </TopBar>
-      <div className="mx-auto flex w-full max-w-6xl flex-1 lg:gap-10 lg:px-6">
+      <div
+        className={cn(
+          "flex w-full flex-1 lg:gap-10",
+          // The bleed's left padding is the frame's own, so the rail does not move between pages (TopBarBase).
+          bleed ? BLEED_FRAME : "mx-auto max-w-6xl lg:px-6",
+        )}
+        data-bleed={bleed ? "" : undefined}
+      >
         {nav}
         <main
           id="main"
@@ -68,7 +84,7 @@ export function SignedInShell({
           {/* Offline (P27, D-69): the banner over a page read from this device's copy, and the service worker; never
               in the staff console, which is never kept. */}
           {staffRole ? null : offline}
-          <div className={wide ? undefined : "max-w-xl"}>{children}</div>
+          <div className={wide || bleed ? undefined : "max-w-xl"}>{children}</div>
         </main>
       </div>
     </>

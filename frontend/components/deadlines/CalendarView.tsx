@@ -9,7 +9,7 @@ import { appNow } from "@/lib/api/server";
 import { readDeadlines } from "./data";
 import { DeadlineList } from "./DeadlineList";
 import { addDays, byDay, gridSpan, monthWeeks, nairobiDay, pickMonth, upcoming } from "./month";
-import { dayName, monthName, MonthCalendar } from "./MonthCalendar";
+import { dayName, monthName, MonthCalendar, MonthHeader } from "./MonthCalendar";
 
 export interface CalendarViewProps {
   /** "/dev/engagements" or "/org/engagements". */
@@ -30,7 +30,7 @@ export interface CalendarViewProps {
  * The Calendar tab of Engagements (P27 track A; REQ-ENG-13), server-rendered for both sides: the month (`?month=`,
  * the current Nairobi month by default) and, under it, the list that is the content: a day's deadlines when one is
  * picked (`?day=`, from the grid), what is overdue, and what falls due in the next 30 days, the next one with the live
- * clock (the page's one ticker). Nothing due at all: one sentence and one action.
+ * clock (the page's one ticker). Nothing due at all: the month's heading and links, then one sentence and one action.
  */
 export async function CalendarView({
   basePath,
@@ -65,13 +65,18 @@ export async function CalendarView({
   };
 
   if (grid.value.items.length === 0 && overdue.length === 0 && next.length === 0) {
+    // The month's heading and its links either side stay: the one sentence replaces the grid and the lists only, so
+    // a deadline in another month is still one press away (never a dead end).
     return (
-      <EmptyState
-        sentence={t(side === "developer" ? "emptyDev" : "emptyOrg", { month: monthName(locale, month) })}
-        action={t(side === "developer" ? "emptyDevAction" : "emptyOrgAction")}
-        href={emptyHref}
-        data-deadlines="empty"
-      />
+      <section aria-labelledby="month-title" data-month={month}>
+        <MonthHeader month={month} today={today} href={href} />
+        <EmptyState
+          sentence={t(side === "developer" ? "emptyDev" : "emptyOrg", { month: monthName(locale, month) })}
+          action={t(side === "developer" ? "emptyDevAction" : "emptyOrgAction")}
+          href={emptyHref}
+          data-deadlines="empty"
+        />
+      </section>
     );
   }
   return (

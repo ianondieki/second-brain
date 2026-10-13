@@ -145,7 +145,7 @@ test.describe("on the test clock", () => {
       await orgPage.reload();
       const card = orgPage.locator(`[data-engagement="${dev.engagementId}"]`);
       await expect(card).toHaveAttribute("data-stalled", "");
-      await expect(card.locator("[data-chip='stalled']")).toHaveText(/^No movement for \d+ business days$/);
+      await expect(card.locator("[data-chip='stalled']")).toHaveText(/^No movement for \d+\+ business days$/);
       await checkScreen(orgPage, { strict: true });
     } finally {
       await orgContext.close();

@@ -29,12 +29,17 @@ describe("TabNav", () => {
     expect(links.map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null]);
     const current = links[1].className.split(" ");
     expect(current).toEqual(expect.arrayContaining(["border-b-2", "border-accent", "text-ink", "font-bold"]));
-    expect(links[0].className.split(" ")).toEqual(expect.arrayContaining(["border-transparent", "font-semibold", "text-ink-soft"]));
+    expect(links[0].className.split(" ")).toEqual(
+      expect.arrayContaining(["border-transparent", "font-semibold", "text-ink-soft"]),
+    );
   });
 
   it("gives every tab a 44 px target and scrolls sideways inside itself", () => {
     render(<TabNav label="Views" items={ITEMS} current="tracker" />);
-    for (const link of screen.getAllByRole("link")) expect(link.className).toContain("min-h-11");
+    // 44 px both ways: a short label ("List") is widened to the target, not left at its words' width.
+    for (const link of screen.getAllByRole("link")) {
+      expect(link.className.split(" ")).toEqual(expect.arrayContaining(["min-h-11", "min-w-11"]));
+    }
     expect(screen.getByRole("list").className).toContain("overflow-x-auto");
   });
 });

@@ -106,6 +106,10 @@ describe("the team line on the organisation's tracker", () => {
       "Assign",
       "Recommend",
     ]);
+    // 44 px both ways: "Assign" alone is narrower than the target (docs/spec/07 item 6).
+    for (const opener of none.container.querySelectorAll("[data-opens='team']")) {
+      expect(opener.className.split(" ")).toEqual(expect.arrayContaining(["min-h-11", "min-w-11"]));
+    }
     expect(none.container.textContent).toContain("No recommendations yet");
     cleanup();
     const mine = await panel(

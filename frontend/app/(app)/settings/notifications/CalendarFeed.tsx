@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { api, type ApiClient } from "@/lib/api/client";
@@ -12,6 +12,8 @@ import { cn } from "@/components/ui/cn";
 export type FeedState = { kind: "none" } | { kind: "live" } | { kind: "shown"; url: string } | { kind: "removed" };
 
 type Busy = null | "create" | "rotate" | "remove";
+/** The changes that ask first, in place. */
+type Asked = "rotate" | "remove";
 
 /** The feed's address for subscribing: the URL as the API answered it, made absolute against this site if need be. */
 export function feedLinks(url: string, origin: string): { https: string; webcal: string; google: string } {
@@ -45,8 +47,9 @@ export async function changeFeed(
 /**
  * Settings › Notifications › Calendar feed (P27 track A; REQ-ENG-13; D-70), the page's one client part for it: create
  * the private feed link, see it once in a read-only field with Copy and the two ways to subscribe (Google Calendar,
- * and Apple Calendar or any app through webcal://), make a new link (the old one stops working at once) or remove the
- * feed. The link is never shown again after the page is left: the API keeps only its hash. `lastRead` is the time a
+ * and Apple Calendar or any app through webcal://), make a new link (the old one stops working at once, so the button
+ * first asks, in place: "Replace the link?" with Replace and Keep, no dialog) or remove the feed (asked the same way:
+ * "Remove the link?"). The link is never shown again after the page is left: the API keeps only its hash. `lastRead` is the time a
  * calendar app last fetched it, formatted by the server.
  */
 export function CalendarFeed({
@@ -62,10 +65,46 @@ export function CalendarFeed({
   const [state, setState] = useState<FeedState>({ kind: initial });
   const [busy, setBusy] = useState<Busy>(null);
   const [notice, setNotice] = useState<"" | "copied" | "copyFailed" | "failed" | "removed">("");
+  // "Make a new link" and "Remove the feed" ask first: a live subscription stops updating the moment its link is
+  // replaced or removed.
+  const [confirming, setConfirming] = useState<null | Asked>(null);
   const field = useRef<HTMLInputElement>(null);
   const createButton = useRef<HTMLButtonElement>(null);
+  const rotateButton = useRef<HTMLButtonElement>(null);
+  const removeButton = useRef<HTMLButtonElement>(null);
+  const question = useRef<HTMLDivElement>(null);
   const fieldId = useId();
   const noteId = useId();
+  const questionId = useId();
+  // Where the focus goes once the change it follows is on screen: an effect after the commit, never a frame that can
+  // come before it (the element to focus may not be there yet).
+  const focusTo = useRef<null | "question" | "rotate" | "remove" | "create" | "field">(null);
+  useEffect(() => {
+    const target = focusTo.current;
+    if (!target) return;
+    focusTo.current = null;
+    const element = { question, rotate: rotateButton, remove: removeButton, create: createButton, field }[target]
+      .current;
+    element?.focus();
+    if (target === "field") field.current?.select();
+  });
+
+  function ask(kind: Asked) {
+    if (busy) return;
+    setNotice("");
+    setConfirming(kind);
+    // The question takes the focus (read out with its two buttons next); never a held key landing on the change.
+    focusTo.current = "question";
+  }
+
+  function answer(go: boolean) {
+    const kind = confirming;
+    if (!kind) return;
+    setConfirming(null);
+    // Back to the button the question stood in for (it says "Making a new link…" or "Removing…" while it works).
+    focusTo.current = kind;
+    if (go) void run(kind);
+  }
 
   async function run(kind: Exclude<Busy, null>) {
     if (busy) return;
@@ -78,15 +117,12 @@ export function CalendarFeed({
       setState({ kind: "removed" });
       setNotice("removed");
       // The button pressed is gone: focus goes to the one that takes its place, never to the page's start.
-      requestAnimationFrame(() => createButton.current?.focus());
+      focusTo.current = "create";
       return;
     }
-    setState({ kind: "shown", url: result.url });
     // The new link has the focus's attention: the field it is in, selected for copying.
-    requestAnimationFrame(() => {
-      field.current?.focus();
-      field.current?.select();
-    });
+    focusTo.current = "field";
+    setState({ kind: "shown", url: result.url });
   }
 
   async function copy(url: string) {
@@ -133,7 +169,8 @@ export function CalendarFeed({
               value={links.https}
               aria-describedby={noteId}
               onFocus={(event) => event.currentTarget.select()}
-              className={cn(controlClass, "min-w-0 flex-1 font-mono text-sm")}
+              // Grows beside Copy from 640 px only: in the phone's column a zero basis would squash it to its text.
+              className={cn(controlClass, "min-w-0 font-mono text-sm sm:flex-1")}
               data-feed-url=""
             />
             <button type="button" className={actionClass} onClick={() => copy(links.https)} data-feed-copy="">
@@ -166,22 +203,54 @@ export function CalendarFeed({
       {state.kind === "live" ? (
         <p className="text-ink">{lastRead ? t("live", { date: lastRead }) : t("liveUnread")}</p>
       ) : null}
-      {state.kind === "live" || state.kind === "shown" ? (
+      {(state.kind === "live" || state.kind === "shown") && confirming ? (
+        <div
+          ref={question}
+          role="group"
+          aria-labelledby={questionId}
+          tabIndex={-1}
+          className="flex flex-col gap-3 focus-visible:outline-none"
+          data-feed-confirm=""
+          onKeyDown={(event) => {
+            if (event.key === "Escape") answer(false);
+          }}
+        >
+          <p id={questionId} className="max-w-[60ch] font-semibold text-ink">
+            {t(`${confirming}Confirm`)}
+          </p>
+          <p className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className={confirming === "remove" ? buttonClass("danger") : actionClass}
+              onClick={() => answer(true)}
+              data-feed-confirm-yes={confirming}
+            >
+              {t(`${confirming}Yes`)}
+            </button>
+            <button type="button" className={buttonClass("link")} onClick={() => answer(false)}>
+              {t(`${confirming}Cancel`)}
+            </button>
+          </p>
+        </div>
+      ) : null}
+      {(state.kind === "live" || state.kind === "shown") && !confirming ? (
         <p className="flex flex-wrap gap-3">
           <button
+            ref={rotateButton}
             type="button"
             className={actionClass}
             aria-disabled={busy !== null || undefined}
-            onClick={() => run("rotate")}
+            onClick={() => ask("rotate")}
             data-feed-rotate=""
           >
             {busy === "rotate" ? t("rotating") : t("rotate")}
           </button>
           <button
+            ref={removeButton}
             type="button"
             className={buttonClass("danger")}
             aria-disabled={busy !== null || undefined}
-            onClick={() => run("remove")}
+            onClick={() => ask("remove")}
             data-feed-remove=""
           >
             {busy === "remove" ? t("removing") : t("remove")}

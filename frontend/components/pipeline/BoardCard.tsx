@@ -17,9 +17,11 @@ import type { PipelineItem } from "./data";
  * One engagement on the board (P27 track B; REQ-ENG-14): the compact EngagementCard of the organisation's side. The
  * idea's title as the card's one link; the deadline (the live clock's figure while the window is open, compact, its
  * business days left to the tracker; words otherwise; the page's ticker); the developer's monogram beside at most two
- * chips: "Our turn" when the step is the organisation's and the stalled mark ("No movement for N business days",
- * neutral, words with the clock mark). The stage chip is dropped: the column says it. The assignee, when there is one,
- * is a quiet line, not a chip.
+ * chips: "Our turn" when the step is the organisation's and the stalled mark ("No movement for 5+ business days": the
+ * policy's threshold as a floor, since the API says only that it was passed, not by how many business days; neutral,
+ * words with the clock mark, a tag whose corners stay put when the narrow column wraps it). Both chips are the compact
+ * size, as the clock is (the columns are narrow). The stage chip is dropped:
+ * the column says it. The assignee, when there is one, is a quiet line, not a chip.
  */
 export function BoardCard({
   item,
@@ -65,12 +67,12 @@ export function BoardCard({
         {ours || item.stalled ? (
           <p className="flex min-w-0 flex-wrap items-center gap-2">
             {ours ? (
-              <Badge tone="warm" solid data-chip="turn" icon={<ChipMark kind="current" />}>
+              <Badge tone="warm" solid size="xs" data-chip="turn" icon={<ChipMark kind="current" />}>
                 {tt("ourTurn")}
               </Badge>
             ) : null}
             {item.stalled ? (
-              <Badge tone="neutral" data-chip="stalled" icon={<ClockIcon />}>
+              <Badge tone="neutral" wraps size="xs" data-chip="stalled" icon={<ClockIcon />}>
                 {t("stalled", { count: stalledAfter })}
               </Badge>
             ) : null}
