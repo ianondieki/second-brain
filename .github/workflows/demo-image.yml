@@ -1,0 +1,93 @@
+# The public demo's image (P28 track PD; REQ-FND-04; docs/runbooks/public-demo.md): builds
+# infra/demo/space/Dockerfile (context: the repository root) and pushes ghcr.io/<owner>/bridge-demo:latest and
+# :<commit SHA> with this workflow's own GITHUB_TOKEN (packages: write). No external secret, no provider call: the image
+# carries fake providers only. Pushes to the integration branch that touch the product build linux/amd64; a manual run
+# with arm64 ticked builds linux/amd64 and linux/arm64 (Oracle's Ampere VM) under QEMU, much slower, and also tags
+# :multiarch, the tag an Arm host pulls (a later amd64-only push moves :latest, never :multiarch).
+# GHCR packages start private: Codespaces, Hugging Face and an Oracle VM can pull the image only once the owner makes
+# the package public (the runbook's go-live checklist).
+name: demo-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      arm64:
+        description: Also build linux/arm64 (Oracle Always Free Ampere VM; QEMU, much slower)
+        type: boolean
+        default: false
+  push:
+    branches: [claude/eloquent-hypatia-aa3577]
+    paths:
+      - backend/**
+      - frontend/**
+      - infra/**
+      - .github/workflows/demo-image.yml
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: demo-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: build and push bridge-demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - name: Image name and tags (GHCR names are lower case)
+        id: meta
+        env:
+          ARM64: ${{ inputs.arm64 == true }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/bridge-demo"
+          tags="${image}:latest,${image}:${GITHUB_SHA}"
+          platforms="linux/amd64"
+          if [ "$ARM64" = "true" ]; then
+            tags="${tags},${image}:multiarch"
+            platforms="linux/amd64,linux/arm64"
+          fi
+          {
+            echo "image=${image}"
+            echo "tags=${tags}"
+            echo "platforms=${platforms}"
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
+        if: ${{ inputs.arm64 == true }}
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          file: infra/demo/space/Dockerfile
+          platforms: ${{ steps.meta.outputs.platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            org.opencontainers.image.title=bridge-demo
+            org.opencontainers.image.description=Public demo of the Bridge platform: the whole seeded product in one container on port 7860. Fictional data and fake providers; resets nightly; never production.
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=demo-image
+          cache-to: type=gha,scope=demo-image,mode=max
+      - name: Summary
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          PLATFORMS: ${{ steps.meta.outputs.platforms }}
+        run: |
+          {
+            echo "### bridge-demo pushed"
+            echo ""
+            echo "- \`${IMAGE}:latest\` and \`${IMAGE}:${GITHUB_SHA}\` (${PLATFORMS})"
+            echo "- Run it: \`docker run --rm -p 7860:7860 ${IMAGE}:latest\`, then open http://localhost:7860"
+            echo "- Hosts other than this repository's Actions pull it only once the package is public (docs/runbooks/public-demo.md)."
+          } >> "$GITHUB_STEP_SUMMARY"
