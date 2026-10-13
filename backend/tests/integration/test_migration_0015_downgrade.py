@@ -20,8 +20,7 @@ from sqlalchemy.engine import URL
 from tests.integration import world as w
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
 
-TABLES = ("engagement_nudges", "org_niche_defaults")
-ESCALATION = "SELECT count(*) FROM organizations WHERE escalation_contact_user_id IS NOT NULL"
+TABLES = ("engagement_nudges", "org_niche_defaults", "org_escalation_contacts")
 
 
 @pytest.fixture
@@ -36,7 +35,7 @@ def url(admin_url: URL) -> Iterator[URL]:
 
 
 def _state(url: URL) -> tuple[str, dict[str, int | None]]:
-    """The revision, each table's row count and the organisations naming an escalation contact (None when gone)."""
+    """The revision and each table's row count (None when the table is gone)."""
     engine = sa.create_engine(url, poolclass=sa.pool.NullPool)
     try:
         with engine.connect() as conn:
@@ -47,13 +46,6 @@ def _state(url: URL) -> tuple[str, dict[str, int | None]]:
                 counts[table] = (
                     conn.execute(sa.text(f"SELECT count(*) FROM {table}")).scalar_one() if exists.scalar_one() else None
                 )
-            column = conn.execute(
-                sa.text(
-                    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'organizations'"
-                    " AND column_name = 'escalation_contact_user_id')"
-                )
-            )
-            counts["escalation"] = conn.execute(sa.text(ESCALATION)).scalar_one() if column.scalar_one() else None
             return version, counts
     finally:
         engine.dispose()
@@ -69,7 +61,7 @@ async def _owner_sql(url: URL, *statements: str) -> w.World:
     engine = role_engine(url, "bridge_owner")
     try:
         async with engine.begin() as conn:
-            world = await w.build(conn, "p28")  # per tenant: a nudge and a niche default
+            world = await w.build(conn, "p28")  # per tenant: a nudge, a niche default and an escalation contact
             for statement in statements:
                 await conn.execute(sa.text(statement), {"org": world.a.org_id, "user": world.a.user_id})
             return world
@@ -78,10 +70,10 @@ async def _owner_sql(url: URL, *statements: str) -> w.World:
 
 
 async def test_the_downgrade_refuses_to_drop_p28_data_unless_told_to(url: URL) -> None:
-    await _owner_sql(url, "UPDATE organizations SET escalation_contact_user_id = :user WHERE id = :org")
-    held: dict[str, int | None] = {"engagement_nudges": 2, "org_niche_defaults": 2, "escalation": 1}
+    await _owner_sql(url)
+    held: dict[str, int | None] = {"engagement_nudges": 2, "org_niche_defaults": 2, "org_escalation_contacts": 2}
     assert _state(url) == ("0015", held)
-    with pytest.raises(RuntimeError, match="engagement_nudges, org_niche_defaults, organizations"):
+    with pytest.raises(RuntimeError, match="engagement_nudges, org_niche_defaults, org_escalation_contacts hold"):
         run_alembic(url, lambda config: command.downgrade(config, "0014"))
     assert _state(url) == ("0015", held)  # nothing was dropped
     run_alembic(url, _with_flag)
