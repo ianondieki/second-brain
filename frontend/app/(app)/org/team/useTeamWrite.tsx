@@ -46,7 +46,13 @@ export function retryLine(
 }
 
 /** Refusals after which the page is out of date: it is read again under the sentence. */
-const STALE: ReadonlySet<TeamRefusal> = new Set(["invitation_closed", "notFound", "unknown_niche", "already_member"]);
+const STALE: ReadonlySet<TeamRefusal> = new Set([
+  "invitation_closed",
+  "notFound",
+  "unknown_niche",
+  "already_member",
+  "conflict",
+]);
 
 export interface TeamWrite {
   busy: boolean;

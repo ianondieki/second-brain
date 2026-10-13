@@ -229,6 +229,7 @@ describe("Accept and join", () => {
     [402, "plan_limit", "Telco A (fixture) has no free seat on its plan just now. Ask the person who invited you.", false],
     [403, "public_demo_locked", en.invitationAccept.refusal.locked, false],
     [409, "developer_account", en.invitationAccept.refusal.developer, false],
+    [409, "conflict", en.invitationAccept.refusal.conflict, true],
     [429, "rate_limited", en.invitationAccept.refusal.rateLimited, true],
     [500, undefined, en.invitationAccept.refusal.generic, true],
   ])("answers %i %s in words", async (status, code, sentence, again) => {

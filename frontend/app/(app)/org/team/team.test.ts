@@ -199,6 +199,7 @@ describe("the writes", () => {
     [404, "not_found", "notFound"],
     [403, "role_not_permitted", "notAllowed"],
     [401, "unauthenticated", "signedOut"],
+    [409, "conflict", "conflict"],
     [500, undefined, "generic"],
   ])("name a %i %s as %s", (status, code, refusal) => {
     expect(teamRefusal(status, code ? { detail: { code, message: "server words" } } : undefined)).toBe(refusal);

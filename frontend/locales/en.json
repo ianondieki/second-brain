@@ -4698,7 +4698,8 @@
       "org_not_verified": "Inviting people opens once your organisation is verified.",
       "plan_limit": "Every seat on your plan is taken. A plan with more seats lets you invite someone else.",
       "plan_limitUpgrade": "Every seat on your plan is taken. {plan} has more.",
-      "signedOut": "Your session ended, so nothing was changed."
+      "signedOut": "Your session ended, so nothing was changed.",
+      "conflict": "This invitation changed at the same moment. The list is up to date now: try again."
     },
     "upgradeTo": "Upgrade to {plan}",
     "seePlans": "See plans",
@@ -4738,8 +4739,10 @@
       "generic": "Something went wrong. Try again.",
       "seats": "{org} has no free seat on its plan just now. Ask the person who invited you.",
       "rateLimited": "Too many tries just now.",
-      "developer": "This is a developer account, and an account works on one side only. Ask the organisation to invite another email address."
-    }
+      "developer": "This is a developer account, and an account works on one side only. Ask the organisation to invite another email address.",
+      "conflict": "This invitation changed at the same moment. Reload the page and try again."
+    },
+    "reload": "Reload"
   },
   "retryAfter": {
     "minute": "Try again in about a minute.",

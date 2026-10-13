@@ -20,6 +20,7 @@ type Refusal =
   | "locked"
   | "signedOut"
   | "rateLimited"
+  | "conflict"
   | "network"
   | "generic";
 
@@ -40,6 +41,7 @@ export function acceptRefusal(status: number, error: unknown): Refusal {
   if (code === "invitation_email_mismatch") return "mismatch";
   if (code === "already_member") return "member";
   if (code === "developer_account") return "developer";
+  if (code === "conflict") return "conflict";
   if (code === "public_demo_locked") return "locked";
   if (code === "plan_limit" || status === 402) return "seats";
   if (status === 429) return "rateLimited";
@@ -105,7 +107,11 @@ export function AcceptInvitation({
         <Alert ref={notice} className="w-full">
           <p data-refusal={refusal}>{t(`refusal.${refusal}`, { org: orgName })}</p>
           {refusal === "rateLimited" ? <p>{retryLine(tr, retryAfter)}</p> : null}
-          {refusal === "member" ? (
+          {refusal === "conflict" ? (
+            <a href={`/invitations/${token}`} className={standaloneLinkClass}>
+              {t("reload")}
+            </a>
+          ) : refusal === "member" ? (
             <a href="/org" className={standaloneLinkClass}>
               {t("openOrg")}
             </a>

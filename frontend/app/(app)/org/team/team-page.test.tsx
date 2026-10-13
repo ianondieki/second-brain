@@ -465,6 +465,14 @@ describe("the writes on the page", () => {
     expect(mocks.refresh).toHaveBeenCalledTimes(2);
   });
 
+  it("says a resend that raced an acceptance, and reads the list again", async () => {
+    vi.mocked(mocks.calls.resend).mockResolvedValueOnce({ ok: false, refusal: "conflict" });
+    await renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Resend the invitation to wanjiru@telco-a.example" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(en.teamAdmin.refusal.conflict);
+    expect(mocks.refresh).toHaveBeenCalled();
+  });
+
   it("re-reads the list when an invitation was closed meanwhile", async () => {
     vi.mocked(mocks.calls.revoke).mockResolvedValueOnce({ ok: false, refusal: "invitation_closed" });
     await renderPage();

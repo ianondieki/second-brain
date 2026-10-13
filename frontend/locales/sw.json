@@ -4698,7 +4698,8 @@
       "org_not_verified": "Kualika watu kunafunguka shirika lenu likishathibitishwa.",
       "plan_limit": "Nafasi zote za mpango wenu zimejaa. Mpango wenye nafasi zaidi utakuwezesha kumwalika mtu mwingine.",
       "plan_limitUpgrade": "Nafasi zote za mpango wenu zimejaa. {plan} una nafasi zaidi.",
-      "signedOut": "Muda wa kuingia umekwisha, kwa hivyo hakuna kilichobadilishwa."
+      "signedOut": "Muda wa kuingia umekwisha, kwa hivyo hakuna kilichobadilishwa.",
+      "conflict": "Mwaliko huu ulibadilika wakati huo huo. Orodha sasa ni ya kisasa: jaribu tena."
     },
     "upgradeTo": "Pandisha hadi {plan}",
     "seePlans": "Tazama mipango",
@@ -4738,8 +4739,10 @@
       "generic": "Kuna tatizo. Jaribu tena.",
       "seats": "{org} haina nafasi wazi katika mpango wake kwa sasa. Muulize aliyekualika.",
       "rateLimited": "Majaribio mengi mno kwa sasa.",
-      "developer": "Hii ni akaunti ya msanidi, na akaunti hufanya kazi upande mmoja tu. Iombe shirika ikualike kwa anwani nyingine ya barua pepe."
-    }
+      "developer": "Hii ni akaunti ya msanidi, na akaunti hufanya kazi upande mmoja tu. Iombe shirika ikualike kwa anwani nyingine ya barua pepe.",
+      "conflict": "Mwaliko huu ulibadilika wakati huo huo. Pakia ukurasa upya kisha ujaribu tena."
+    },
+    "reload": "Pakia upya"
   },
   "retryAfter": {
     "minute": "Jaribu tena baada ya dakika moja hivi.",

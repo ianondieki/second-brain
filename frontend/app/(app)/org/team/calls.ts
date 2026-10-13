@@ -28,6 +28,7 @@ export type TeamRefusal =
   | "rate_limited"
   | "public_demo_locked"
   | "signedOut"
+  | "conflict"
   | "notAllowed"
   | "notFound"
   | "network"
@@ -52,6 +53,8 @@ const BY_CODE: Record<string, TeamRefusal> = {
   invalid_member: "invalid_member",
   rate_limited: "rate_limited",
   public_demo_locked: "public_demo_locked",
+  // A resend racing an acceptance (or another resend): the invitation changed meanwhile.
+  conflict: "conflict",
 };
 
 /** The refusal for an answer's status and error body. */
