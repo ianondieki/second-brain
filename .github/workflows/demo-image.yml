@@ -1,7 +1,8 @@
 # The public demo's image (P28 track PD; REQ-FND-04; docs/runbooks/public-demo.md): builds
 # infra/demo/space/Dockerfile (context: the repository root) and pushes ghcr.io/<owner>/bridge-demo:latest and
-# :<commit SHA> with this workflow's own GITHUB_TOKEN (packages: write). No external secret, no provider call: the image
-# carries fake providers only. Pushes to the integration branch that touch the product build linux/amd64; a manual run
+# :<commit SHA> with this workflow's own GITHUB_TOKEN (packages: write). No external secret, and the build calls no
+# provider (the image itself simulates email, SMS and payments; its one outbound call, at run time, is a certificate
+# timestamp from a public TSA). Pushes to the integration branch that touch the product build linux/amd64; a manual run
 # with arm64 ticked builds linux/amd64 and linux/arm64 (Oracle's Ampere VM) under QEMU, much slower, and also tags
 # :multiarch, the tag an Arm host pulls (a later amd64-only push moves :latest, never :multiarch).
 # GHCR packages start private: Codespaces, Hugging Face and an Oracle VM can pull the image only once the owner makes
@@ -76,7 +77,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             org.opencontainers.image.title=bridge-demo
-            org.opencontainers.image.description=Public demo of the Bridge platform: the whole seeded product in one container on port 7860. Fictional data and fake providers; resets nightly; never production.
+            org.opencontainers.image.description=Public demo of the Bridge platform: the whole seeded product in one container on port 7860. Fictional data, simulated email, SMS and payments; resets nightly; never production.
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha,scope=demo-image

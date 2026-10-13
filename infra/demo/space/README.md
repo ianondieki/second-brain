@@ -4,17 +4,20 @@ One container image that runs the whole seeded Bridge product on one port (7860)
 Codespaces now, a Hugging Face Docker Space or an Oracle Always Free Arm VM later (P28 track PD, REQ-FND-04; the
 owner's steps are in `docs/runbooks/public-demo.md`).
 
-**A demo only.** Every name and organisation in it is fictional, every provider is a fake (email stays in an internal
-Mailpit, SMS and payments are simulated, LLM calls answer with the deterministic fallback, attachment scanning and
-embeddings are the fakes), its secrets are thrown away at every boot, and its data is wiped every night. Never point
-it at real data, real providers or real users' accounts, and never use it as a base for production.
+**A demo only.** Every name and organisation in it is fictional. Email stays in an internal Mailpit, SMS and payments
+are simulated, LLM calls answer with the deterministic fallback, attachment scanning and embeddings are the fakes, and
+SeaweedFS's usage statistics are off. **One connection leaves the container**: when a proposal is registered, the
+worker asks a public timestamp service for an RFC 3161 timestamp of its certificate (DigiCert, with FreeTSA as the
+fallback; the app's defaults, as in `make demo`), sending a hash, never the proposal. Nothing else is sent anywhere.
+Its secrets are thrown away at every boot and its data is wiped every night. Never point it at real data, real
+providers or real users' accounts, and never use it as a base for production.
 
 ## What is inside
 
 | Part | From | Listens on |
 |---|---|---|
 | Web app (Next.js standalone, Node 22) | `frontend/`, built with `/api` rewritten to `127.0.0.1:8000` | `0.0.0.0:$PORT` (7860), the only public port |
-| API (FastAPI, uvicorn) | `backend/` (`uv.lock`, with the demo seed and dev tools) | `127.0.0.1:8000` |
+| API (FastAPI, uvicorn; its interactive docs are off in public mode) | `backend/` (`uv.lock`, with the demo seed and dev tools) | `127.0.0.1:8000` |
 | Job worker (procrastinate) | `backend/` | none |
 | PostgreSQL 16 + pgvector | the PGDG apt repository (signed key, checked by hash) | `127.0.0.1:5432` |
 | S3 (SeaweedFS 4.47) | `chrislusf/seaweedfs:4.47`'s `weed` binary | `127.0.0.1` only |
@@ -47,14 +50,19 @@ Open http://localhost:7860 once the log says `ready in N s`. Or pull the publish
 
 Nothing else from the environment reaches the app.
 
+Visitors' sign-in throttles are counted per address, which the API reads from the `X-Forwarded-For` header the web app
+passes on: behind an edge proxy that sends it (Caddy; Hugging Face and Codespaces unverified) each visitor has their
+own; run bare with `docker run -p`, every visitor shares one (`127.0.0.1`). The runbook's go-live checklist has the
+check.
+
 ## Measured (2026-10-13, linux/amd64, 4 CPUs)
 
 | | |
 |---|---|
 | Image size | 1.59 GB unpacked, 414 MB compressed (the registry download) |
-| Boot, `docker run` to the first `200` on `/` | 46-48 s (the supervisor logs `ready in` 49-52 s) |
-| Memory, steady after sign-ins and page loads (`docker stats`) | 550-590 MiB; the boot stays below that |
-| Nightly reset (stop, wipe, boot again) | 50 s |
+| Boot, `docker run` to the first `200` on `/` | 40-53 s over five runs (the supervisor logs `ready in` 49-60 s) |
+| Memory, steady after sign-ins and page loads (`docker stats`) | 533-594 MiB; the boot stays below that |
+| Nightly reset (stop, wipe, boot again) | 50-62 s |
 | `docker stop` | 5 s |
 
 Give it at least 1 GB of memory; 2 GB leaves room for traffic. Codespaces' smallest machine (8 GB), a Hugging Face

@@ -60,9 +60,10 @@ jobs:
           # Bridge: public demo
 
           A public demonstration of Bridge, the developer and enterprise platform. Pick a persona on the sign-in page
-          and you are signed in with one press. Every name and organisation here is fictional, nothing is sent to
-          anyone (email, SMS and payments are simulated), and the data resets every night at 03:00 EAT. Please do not
-          enter real personal information.
+          and you are signed in with one press. Every name and organisation here is fictional, email, SMS and
+          payments are simulated, and the data resets every night at 03:00 EAT. Please do not enter real personal
+          information. The one thing the demo sends out: when a proposal is registered, a hash of its certificate
+          goes to a public timestamp service (DigiCert, or FreeTSA as the fallback) for a trusted timestamp.
 
           The image is built from the project's repository on GitHub (`infra/demo/space/`); this Space only runs it.
           EOF
