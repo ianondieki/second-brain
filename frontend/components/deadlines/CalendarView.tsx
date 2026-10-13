@@ -91,7 +91,7 @@ export async function CalendarView({
           {ofDay.length > 0 ? (
             <DeadlineList items={ofDay} now={now} orgId={orgId} side={side} />
           ) : (
-            <p className="text-ink-soft">{t("nextEmpty")}</p>
+            <p className="text-ink-soft">{t("dayEmpty", { date: dayName(locale, picked) })}</p>
           )}
         </Section>
       ) : null}
