@@ -15,16 +15,24 @@ written here are the shared clock's (``app_clock_now()``).
 The procurement route (docs/spec/06 6.9 stage 3b; ``PROCUREMENT_ROUTE`` has been a value of ``engagement_state``
 since revision 0002, so no enum value is added and nothing needs an autocommit block):
 
-- Where 3b sits. The contract puts it between ``UNDER_REVIEW`` and ``INTEREST_CONFIRMED``: a public entity's
-  signatory approves to proceed (``UNDER_REVIEW -> PROCUREMENT_ROUTE``, naming the contact person and channel, not yet
-  the contact-by date), then its owner or admin chooses the route (``PROCUREMENT_ROUTE -> INTEREST_CONFIRMED``, with
-  the contact-by date). Revision 0003's backstop admitted 3b "around stage 3" (``PROCUREMENT_ROUTE`` from
-  ``UNDER_REVIEW`` or ``INTEREST_CONFIRMED``; ``CONTACT_MADE`` from ``INTEREST_CONFIRMED`` or ``PROCUREMENT_ROUTE``);
+- Where 3b sits. The contract puts it before ``INTEREST_CONFIRMED``: a public entity's signatory approves to proceed
+  (``UNDER_REVIEW -> PROCUREMENT_ROUTE``, naming the contact person and channel, not yet the contact-by date), or the
+  developer accepts a public entity's interest (``ORG_INTEREST -> PROCUREMENT_ROUTE``, the organisation-initiated
+  path); then its owner or admin chooses the route (``PROCUREMENT_ROUTE -> INTEREST_CONFIRMED``, with the contact-by
+  date). Revision 0003's backstop admitted 3b "around stage 3" (``PROCUREMENT_ROUTE`` from ``UNDER_REVIEW`` or
+  ``INTEREST_CONFIRMED``; ``CONTACT_MADE`` from ``INTEREST_CONFIRMED`` or ``PROCUREMENT_ROUTE``);
   ``engagement_main_path_predecessors`` is replaced in place (``CREATE OR REPLACE``: same signature, owner, IMMUTABLE,
-  pinned search_path, no EXECUTE for any role) so that ``PROCUREMENT_ROUTE`` follows ``UNDER_REVIEW`` only and
-  ``CONTACT_MADE`` follows ``INTEREST_CONFIRMED`` only. ``INTEREST_CONFIRMED``'s predecessors are unchanged
-  (``ORG_INTEREST``, ``UNDER_REVIEW``, ``PROCUREMENT_ROUTE``, ``CONTACT_MADE``). No engagement of any database took
-  either removed step (the state machine never offered 3b), and existing chains are never re-checked.
+  pinned search_path, no EXECUTE for any role) so that ``PROCUREMENT_ROUTE`` follows ``UNDER_REVIEW`` or
+  ``ORG_INTEREST`` only and ``CONTACT_MADE`` follows ``INTEREST_CONFIRMED`` only. ``INTEREST_CONFIRMED``'s predecessors
+  are unchanged (``ORG_INTEREST``, ``UNDER_REVIEW``, ``PROCUREMENT_ROUTE``, ``CONTACT_MADE``): a private organisation
+  keeps exactly its paths. No engagement of any database took a removed step (the state machine never offered 3b), and
+  existing chains are never re-checked.
+- Through 3b, for a public entity (the orchestrator's ruling on P28-M's open question).
+  ``engagements_procurement_guard`` refuses the projection's forward move into ``INTEREST_CONFIRMED`` from
+  ``UNDER_REVIEW`` or ``ORG_INTEREST`` for an organisation whose ``public_entity`` is true (check_violation): a public
+  entity enters stage 3 only from ``PROCUREMENT_ROUTE``. A resume into ``INTEREST_CONFIRMED`` from a side state it was
+  entered from (a hold, a request for information) stays generic, and so does revision 0003's return of a disputed first
+  contact (``CONTACT_MADE -> INTEREST_CONFIRMED``), which comes after 3b and skips nothing.
 - Side branches. Revision 0003's chain lets a side state (``DECLINED``, ``WITHDRAWN``, ``EXPIRED``, ``ON_HOLD``,
   ``INFO_REQUESTED``, ``DISPUTED``, ``TERMINATED``) be entered from any open state and resumes ``ON_HOLD``,
   ``INFO_REQUESTED`` and ``DISPUTED`` only to the state they were entered from, so 3b has every side branch
@@ -154,7 +162,9 @@ Operating rules for the code that uses this schema:
 
 - Approve (``UNDER_REVIEW``) for a public entity: name the contact person and channel and leave ``contact_by`` NULL,
   then append the event to ``PROCUREMENT_ROUTE`` (refused for a private organisation: check_violation, the API's 409;
-  a private organisation's approve goes to ``INTEREST_CONFIRMED`` as before).
+  a private organisation's approve goes to ``INTEREST_CONFIRMED`` as before, a public entity's never does). The
+  developer's accept of a public entity's interest (``ORG_INTEREST``) likewise appends ``PROCUREMENT_ROUTE``, not
+  ``INTEREST_CONFIRMED`` (refused: check_violation).
 - Choose the route (an owner or admin; check the role first, 403): in one transaction, ``UPDATE engagements SET
   procurement_route = :route, procurement_justification = :text, contact_by = :by`` (one statement: the CHECKs see
   them together; trim the justification first; leave ``procurement_decided_at`` and ``procurement_decided_by`` out
@@ -171,8 +181,11 @@ Operating rules for the code that uses this schema:
   invitation with ``invited_by`` the caller, ``expires_at`` seven days on the shared clock and the SHA-256 of the
   token; ``uq_invitations_open`` is the race of two invitations to one address (409). Revoke: ``UPDATE invitations SET
   revoked_at = now() WHERE id = :id`` (no row: it was not open, 404 or 409). Resend: ``UPDATE invitations SET
-  token_hash = :new, expires_at = :at WHERE id = :id``. An expired invitation blocks a new one to the same address
-  until it is revoked or resent.
+  token_hash = :new, expires_at = :at WHERE id = :id``. An expired invitation is still open under
+  ``uq_invitations_open`` (an index cannot read the clock) and so blocks re-inviting its address: the create path
+  revokes an expired open invitation for the same organisation and address before inserting, in the same transaction
+  (``UPDATE invitations SET revoked_at = now() WHERE org_id = :org AND email = :email AND expires_at <=
+  app_clock_now()``; the policy reaches open rows only), and counts only unexpired open invitations against the cap.
 - The public preview: ``SELECT * FROM app_invitation_preview(:hash)`` (no row: 404). Accept (signed in):
   ``SELECT app_accept_invitation(:hash, :me)``; map no_data_found to 404, insufficient_privilege to 403
   ``invitation_email_mismatch``, unique_violation to 409; audit it.
@@ -357,8 +370,10 @@ INVITATION_POLICIES: tuple[Policy, ...] = (
 # ACL and triggers.
 # ---------------------------------------------------------------------------------------------------------------------
 
-# The main path's legal predecessors with 3b between stages 2 and 3 (the P28 contract): PROCUREMENT_ROUTE follows
-# UNDER_REVIEW only, CONTACT_MADE follows INTEREST_CONFIRMED only. Every other row is revision 0003's.
+# The main path's legal predecessors with 3b before stage 3 (the P28 contract): PROCUREMENT_ROUTE follows UNDER_REVIEW
+# or ORG_INTEREST only, CONTACT_MADE follows INTEREST_CONFIRMED only. Every other row is revision 0003's (a public
+# entity's forward move into INTEREST_CONFIRMED from anything but PROCUREMENT_ROUTE is engagements_procurement_guard's
+# refusal: this function knows no organisation).
 PREDECESSORS_SQL = r"""
 CREATE OR REPLACE FUNCTION engagement_main_path_predecessors(p_state engagement_state) RETURNS engagement_state[]
     LANGUAGE sql IMMUTABLE
@@ -369,7 +384,7 @@ AS $$
         WHEN 'SUBMITTED' THEN '{}'
         WHEN 'UNDER_REVIEW' THEN '{SUBMITTED}'
         WHEN 'INTEREST_CONFIRMED' THEN '{ORG_INTEREST,UNDER_REVIEW,PROCUREMENT_ROUTE,CONTACT_MADE}'
-        WHEN 'PROCUREMENT_ROUTE' THEN '{UNDER_REVIEW}'
+        WHEN 'PROCUREMENT_ROUTE' THEN '{UNDER_REVIEW,ORG_INTEREST}'
         WHEN 'CONTACT_MADE' THEN '{INTEREST_CONFIRMED}'
         WHEN 'NDA_PENDING' THEN '{CONTACT_MADE}'
         WHEN 'NDA_SIGNED' THEN '{NDA_PENDING}'
@@ -421,7 +436,9 @@ FUNCTIONS_SQL = r"""
 -- revision 0013's declarations; it names the decider), the time the shared clock's and the decider the bound user,
 -- whatever was sent; once decided, the route, justification, time and decider never change, for every role. The move
 -- out of PROCUREMENT_ROUTE (the projection's) goes to INTEREST_CONFIRMED only with the route decided and the contact
--- named with its contact-by date; a decided route leaves 3b for INTEREST_CONFIRMED only. SECURITY INVOKER: current_user
+-- named with its contact-by date; a decided route leaves 3b for INTEREST_CONFIRMED only. A public entity's forward move
+-- into INTEREST_CONFIRMED (from UNDER_REVIEW or ORG_INTEREST) is refused: it goes through 3b (a resume, and the return
+-- of a disputed first contact from CONTACT_MADE, are not judged). SECURITY INVOKER: current_user
 -- is the writer (the projection's state change runs as the owner, which reads the organisation; a member's decision
 -- runs as bridge_app, judged by app_is_member).
 CREATE FUNCTION engagements_procurement_guard() RETURNS trigger
@@ -473,6 +490,11 @@ BEGIN
            AND NOT coalesce((SELECT o.public_entity FROM public.organizations o WHERE o.id = NEW.org_id), false) THEN
             RAISE EXCEPTION 'engagements: PROCUREMENT_ROUTE is for a public entity only'
                 USING ERRCODE = 'check_violation';
+        END IF;
+        IF NEW.state = 'INTEREST_CONFIRMED' AND OLD.state IN ('UNDER_REVIEW', 'ORG_INTEREST')
+           AND coalesce((SELECT o.public_entity FROM public.organizations o WHERE o.id = NEW.org_id), false) THEN
+            RAISE EXCEPTION 'engagements: a public entity''s engagement enters INTEREST_CONFIRMED through'
+                ' PROCUREMENT_ROUTE, not from %', OLD.state USING ERRCODE = 'check_violation';
         END IF;
         IF OLD.state = 'PROCUREMENT_ROUTE' THEN
             IF NEW.state = 'INTEREST_CONFIRMED' THEN

@@ -192,7 +192,7 @@ def _database_predecessors() -> dict[str, set[str]]:
     """The newest revision's engagement_main_path_predecessors() (revision 0015's since P28)."""
     found = database_predecessors()
     assert len(found) == 15
-    assert found["PROCUREMENT_ROUTE"] == {"UNDER_REVIEW"}  # 3b between stages 2 and 3 (revision 0015)
+    assert found["PROCUREMENT_ROUTE"] == {"UNDER_REVIEW", "ORG_INTEREST"}  # 3b before stage 3 (revision 0015)
     return found
 
 

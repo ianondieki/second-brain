@@ -57,6 +57,7 @@ DECISION = (
     " procurement_decided_by AS decided_by FROM engagements WHERE id = :e"
 )
 PUBLIC_ONLY = "PROCUREMENT_ROUTE is for a public entity only"
+THROUGH_3B = "a public entity's engagement enters INTEREST_CONFIRMED through PROCUREMENT_ROUTE"
 DECIDED_IN_3B = "decided in PROCUREMENT_ROUTE only"
 OWNER_OR_ADMIN = "an owner or admin of the organisation decides"
 NEVER_CHANGES = "a procurement decision never changes"
@@ -175,10 +176,10 @@ def _engage_params(p: t.Parties, state: str) -> dict[str, object]:
     }
 
 
-async def test_3b_follows_under_review_only_and_leads_to_interest_confirmed(owner_engine: AsyncEngine) -> None:
-    """Revision 0015's predecessors: PROCUREMENT_ROUTE is entered from UNDER_REVIEW only (never from SUBMITTED, never
-    back from INTEREST_CONFIRMED) and left for INTEREST_CONFIRMED, never straight for CONTACT_MADE (revision 0003's
-    "around stage 3" path); stage 3 then goes on to CONTACT_MADE as before."""
+async def test_3b_follows_review_and_leads_to_interest_confirmed(owner_engine: AsyncEngine) -> None:
+    """Revision 0015's predecessors: PROCUREMENT_ROUTE is entered from UNDER_REVIEW (or ORG_INTEREST: the next test),
+    never from SUBMITTED, never back from INTEREST_CONFIRMED, and left for INTEREST_CONFIRMED, never straight for
+    CONTACT_MADE (revision 0003's "around stage 3" path); stage 3 then goes on to CONTACT_MADE as before."""
     async with t.as_app(owner_engine) as conn:
         p = await t.parties(conn)
         await t.run(conn, "UPDATE organizations SET public_entity = true WHERE id = :org", org=p.org)
@@ -213,6 +214,73 @@ async def test_3b_follows_under_review_only_and_leads_to_interest_confirmed(owne
         )
         await t.walk(conn, p, engagement, "CONTACT_MADE")
         await immediately(conn)  # the decision moved with the engagement: nothing is left for commit
+
+
+async def test_a_public_entity_enters_stage_3_only_through_3b_and_a_private_one_as_before(
+    owner_engine: AsyncEngine,
+) -> None:
+    """The orchestrator's ruling (P28-M): a public entity's engagement enters INTEREST_CONFIRMED only from
+    PROCUREMENT_ROUTE. Its signatory's approve from UNDER_REVIEW and the developer's accept of its interest from
+    ORG_INTEREST are refused, the accept into 3b admitted; a resume into stage 3 (a hold) and the return of a disputed
+    first contact from CONTACT_MADE stay as they were. A private organisation keeps exactly today's paths: both moves
+    into stage 3 are admitted and its interest never enters 3b."""
+    async with t.as_app(owner_engine) as conn:
+        p, reviewed = await public_scene(conn)
+        await t.act(conn, p.signatory, p.org)
+        await t.run(
+            conn,
+            "UPDATE engagements SET contact_user_id = :c, contact_channel = 'email', contact_by = :by WHERE id = :e",
+            c=p.owner,
+            by=CONTACT_BY,
+            e=reviewed,
+        )
+        approve = t.event_params(reviewed, p.signatory, "signatory", "approve", "UNDER_REVIEW", "INTEREST_CONFIRMED")
+        await t.expect(conn, t.APPEND, THROUGH_3B, **approve)
+
+        await t.as_owner(conn)
+        q = await t.parties(conn)
+        await t.run(conn, "UPDATE organizations SET public_entity = true WHERE id = :org", org=q.org)
+        await t.act(conn, q.signatory, q.org)
+        interest = await t.engage(conn, q, origin="org_browse", state="ORG_INTEREST")
+        await t.act(conn, q.developer)
+        accept = t.event_params(
+            interest, q.developer, "developer", "accept_interest", "ORG_INTEREST", "INTEREST_CONFIRMED"
+        )
+        await t.expect(conn, t.APPEND, THROUGH_3B, **accept)
+        await t.append(conn, interest, q.developer, "developer", "accept_interest", "ORG_INTEREST", "PROCUREMENT_ROUTE")
+        await t.act(conn, q.owner, q.org)
+        await t.run(
+            conn,
+            "UPDATE engagements SET contact_user_id = :c, contact_channel = 'email' WHERE id = :e",
+            c=q.owner,
+            e=interest,
+        )
+        await decide_and_move(conn, q, interest)
+        assert await t.state_of(conn, interest) == "INTEREST_CONFIRMED"
+        await t.act(conn, q.developer)  # a hold in stage 3 resumes to it, a public entity's too
+        await t.append(conn, interest, q.developer, "developer", "pause", "INTEREST_CONFIRMED", "ON_HOLD")
+        await t.append(conn, interest, q.developer, "developer", "resume", "ON_HOLD", "INTEREST_CONFIRMED")
+        await t.walk(conn, q, interest, "CONTACT_MADE")
+        await t.act(conn, q.owner, q.org)  # revision 0003's return of a disputed first contact, after 3b
+        await t.append(conn, interest, q.owner, "owner", "dispute_contact", "CONTACT_MADE", "INTEREST_CONFIRMED")
+        await immediately(conn)
+
+        await t.as_owner(conn)
+        _, approved = await private_scene(conn, "INTEREST_CONFIRMED")  # UNDER_REVIEW -> INTEREST_CONFIRMED, as before
+        assert await t.state_of(conn, approved) == "INTEREST_CONFIRMED"
+        await t.as_owner(conn)
+        s = await t.parties(conn)
+        await t.act(conn, s.signatory, s.org)
+        private_interest = await t.engage(conn, s, origin="org_browse", state="ORG_INTEREST")
+        await t.act(conn, s.developer)
+        to_3b = t.event_params(
+            private_interest, s.developer, "developer", "accept_interest", "ORG_INTEREST", "PROCUREMENT_ROUTE"
+        )
+        await t.expect(conn, t.APPEND, PUBLIC_ONLY, **to_3b)
+        await t.append(
+            conn, private_interest, s.developer, "developer", "accept_interest", "ORG_INTEREST", "INTEREST_CONFIRMED"
+        )
+        assert await t.state_of(conn, private_interest) == "INTEREST_CONFIRMED"
 
 
 async def test_3b_has_the_side_branches_of_stage_3(owner_engine: AsyncEngine) -> None:
