@@ -7,6 +7,7 @@ import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
+import { InfoIcon } from "@/components/ui/status-icons";
 
 import type { Calls } from "../calls";
 import { ACCEPT_ATTRIBUTE, attachmentType, fileSizeParts, MAX_FILE_NAME_HEADER } from "../files";
@@ -22,6 +23,8 @@ export interface AttachmentsProps {
   /** Drafts and saves first: a published idea's files get new ids in the new draft version. */
   ensureDraft: () => Promise<DraftReady>;
   getCalls: () => Promise<Calls>;
+  /** The public demo (REQ-FND-04): file uploads are switched off; this sentence stands where "Add a file" would. */
+  uploadsLocked?: string;
 }
 
 type Problem = UploadProblem | "notSaved" | "fileGone";
@@ -46,7 +49,7 @@ function saveProblem(problem: SaveProblem): Problem {
  * idea removes the draft's copy, never the registered version's (which stays as it was registered). A file the API
  * did not remove stays listed.
  */
-export function Attachments({ attachments, onAttachments, ensureDraft, getCalls }: AttachmentsProps) {
+export function Attachments({ attachments, onAttachments, ensureDraft, getCalls, uploadsLocked }: AttachmentsProps) {
   const t = useStrings("ideaEditor");
   const f = useStrings("ideaFields");
   const id = useId();
@@ -145,7 +148,12 @@ export function Attachments({ attachments, onAttachments, ensureDraft, getCalls 
         {state.kind === "busy" && state.name ? t("uploading", { name: state.name }) : null}
       </p>
 
-      {full ? null : (
+      {uploadsLocked ? (
+        <p className="flex items-start gap-2 text-ink" data-demo-locked="">
+          <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />
+          <span>{uploadsLocked}</span>
+        </p>
+      ) : full ? null : (
         <div>
           {/* The real input stays in the accessibility tree and takes focus; the label is its visible button. */}
           <input
