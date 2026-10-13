@@ -106,12 +106,19 @@ class OnEngagement(Protocol):
 
 def party_email(plan: OnEngagement, who: str) -> str:
     """The address of the person who acts as ``who`` (``DEVELOPER`` or an ``OrgRole`` value) on ``plan``'s engagement:
-    the proposal's owner, or the fixture's first seat with that role (its owner first)."""
+    the proposal's owner, or the fixture's first seat with that role (its owner first); an organisation with no seat in
+    that role acts through its owner (State Department D has no reviewer: its owner starts the review). The driver
+    takes a step only when its actor is offered it, so a role the owner cannot stand in for still stops the run."""
     if who == DEVELOPER:
         return next(p.owner for p in PROPOSALS if p.key == plan.proposal)
     org = _org(plan.org)
     seats = ([org.owner] if org.owner else []) + list(org.seats)
-    return next(seat.email for seat in seats if OrgRole(who) in seat.roles)
+    holder = next((seat.email for seat in seats if OrgRole(who) in seat.roles), None)
+    if holder is None and org.owner is not None:
+        return org.owner.email
+    if holder is None:
+        raise DemoSeedError(f"{org.legal_name} has nobody to act as {who}")
+    return holder
 
 
 class Driver:

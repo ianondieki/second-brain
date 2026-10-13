@@ -1,9 +1,10 @@
 """Revision 0008 (REQ-ENG-11; AC-TRACK-9's database half; D-57 (1), (3), (4)): the engagement thread's messages.
 
 - The stage gate (``engagement_thread_open()``): nobody posts before the chain has entered ``INTEREST_CONFIRMED`` or
-  a later main-path stage (a side state or ``PROCUREMENT_ROUTE`` before stage 3 keeps it closed; on a public entity's
-  procurement route that skips stage 3 it opens at ``CONTACT_MADE``); from then on both sides post, through the deal
-  states and the side states entered after it; after ``DECLINED``, ``WITHDRAWN``, ``EXPIRED``,
+  a later main-path stage (a side state or a public entity's ``PROCUREMENT_ROUTE`` before stage 3 keeps it closed;
+  since revision 0015 3b always leads to ``INTEREST_CONFIRMED``, never straight to ``CONTACT_MADE``, and a chain whose
+  genesis is later on the main path is open); from then on both sides post, through the deal states and the side
+  states entered after it; after ``DECLINED``, ``WITHDRAWN``, ``EXPIRED``,
   ``TERMINATED`` and ``CLOSED`` the thread is read-only for every role, and still readable by the parties.
 - Who: a party posts as themselves on their own side (the developer as ``developer``; an owner, admin, reviewer,
   signatory or finance member as ``org``; never a viewer); the parties read every message (viewers included) and
@@ -20,6 +21,7 @@ Every test runs in one rolled-back transaction (``tracker.as_app``). The race wi
 
 from __future__ import annotations
 
+from datetime import date
 from uuid import UUID
 
 import psycopg
@@ -83,6 +85,27 @@ async def _closed_for_both(conn: AsyncConnection, p: t.Parties, engagement: UUID
     await t.act(conn, p.developer)
 
 
+async def _public_entity(conn: AsyncConnection, p: t.Parties) -> None:
+    """As the owner: the parties' organisation is a public entity (revision 0015: only one enters PROCUREMENT_ROUTE)."""
+    await t.as_owner(conn)
+    await t.run(conn, "UPDATE organizations SET public_entity = true WHERE id = :org", org=p.org)
+
+
+async def _decide_route(conn: AsyncConnection, p: t.Parties, engagement: UUID) -> None:
+    """Revision 0015: the owner (an owner and admin) names the contact, decides the procurement route and moves the
+    engagement on to INTEREST_CONFIRMED, in one transaction."""
+    await t.act(conn, p.owner, p.org)
+    await t.run(
+        conn,
+        "UPDATE engagements SET contact_user_id = :c, contact_channel = 'email', contact_by = :by,"
+        " procurement_route = 'rfq_tender' WHERE id = :e",
+        c=p.owner,
+        by=date(2026, 12, 1),
+        e=engagement,
+    )
+    await t.append(conn, engagement, p.owner, "admin", "procurement_route", "PROCUREMENT_ROUTE", "INTEREST_CONFIRMED")
+
+
 async def test_the_thread_opens_at_interest_confirmed_for_both_sides(owner_engine: AsyncEngine) -> None:
     """Given an engagement on its way to stage 3, When either side posts before INTEREST_CONFIRMED (in SUBMITTED,
     UNDER_REVIEW, a hold entered there, or PROCUREMENT_ROUTE ahead of stage 3), Then the gate refuses; once
@@ -97,11 +120,11 @@ async def test_the_thread_opens_at_interest_confirmed_for_both_sides(owner_engin
         await t.append(conn, engagement, p.developer, "developer", "pause", "UNDER_REVIEW", "ON_HOLD")
         await _closed_for_both(conn, p, engagement, "ON_HOLD")  # a hold before stage 3
         await t.append(conn, engagement, p.developer, "developer", "resume", "ON_HOLD", "UNDER_REVIEW")
+        await _public_entity(conn, p)
         await t.act(conn, p.signatory, p.org)  # 3b ahead of stage 3 (a public entity)
         await t.append(conn, engagement, p.signatory, "signatory", "procure", "UNDER_REVIEW", "PROCUREMENT_ROUTE")
         await _closed_for_both(conn, p, engagement, "PROCUREMENT_ROUTE")
-        await t.act(conn, p.signatory, p.org)
-        await t.append(conn, engagement, p.signatory, "signatory", "approve", "PROCUREMENT_ROUTE", "INTEREST_CONFIRMED")
+        await _decide_route(conn, p, engagement)
         await post(conn, engagement, p.developer, "developer")
         for member in (p.owner, p.signatory, p.reviewer, p.finance):
             await post(conn, engagement, member, "org", p.org)
@@ -113,13 +136,15 @@ async def test_the_thread_opens_at_interest_confirmed_for_both_sides(owner_engin
         assert await t.run(conn, COUNT, e=engagement) == 7
 
 
-async def test_the_public_entity_path_opens_the_thread_at_contact_made(owner_engine: AsyncEngine) -> None:
-    """Given a public entity's engagement on revision 0003's 3b path that never enters INTEREST_CONFIRMED
-    (UNDER_REVIEW -> PROCUREMENT_ROUTE -> CONTACT_MADE), Then the thread is closed at PROCUREMENT_ROUTE, opens for both
-    sides at CONTACT_MADE and stays open on the way to NDA_SIGNED; and a chain whose genesis is later on the main path
-    (the owner's insert at NDA_SIGNED, as revision 0003's backfill wrote) is open too."""
+async def test_the_public_entity_path_opens_the_thread_at_interest_confirmed(owner_engine: AsyncEngine) -> None:
+    """Given a public entity's engagement on the 3b path (UNDER_REVIEW -> PROCUREMENT_ROUTE), Then the thread is closed
+    at PROCUREMENT_ROUTE, revision 0015 refuses the step straight to CONTACT_MADE (3b leads to INTEREST_CONFIRMED once
+    the route is decided), the thread opens for both sides at INTEREST_CONFIRMED and stays open on the way to
+    NDA_SIGNED; and a chain whose genesis is later on the main path (the owner's insert at NDA_SIGNED, as revision
+    0003's backfill wrote) is open too."""
     async with t.as_app(owner_engine) as conn:
         p = await t.parties(conn)
+        await _public_entity(conn, p)
         await t.act(conn, p.developer)
         engagement = await t.engage(conn, p)
         await t.walk(conn, p, engagement, "UNDER_REVIEW")
@@ -127,15 +152,19 @@ async def test_the_public_entity_path_opens_the_thread_at_contact_made(owner_eng
         await t.append(conn, engagement, p.owner, "owner", "procure", "UNDER_REVIEW", "PROCUREMENT_ROUTE")
         await _closed_for_both(conn, p, engagement, "PROCUREMENT_ROUTE")
         await t.act(conn, p.owner, p.org)
-        await t.append(conn, engagement, p.owner, "owner", "mark_contacted", "PROCUREMENT_ROUTE", "CONTACT_MADE")
+        await t.expect(
+            conn,
+            t.APPEND,
+            "CONTACT_MADE cannot follow PROCUREMENT_ROUTE",
+            **t.event_params(engagement, p.owner, "owner", "mark_contacted", "PROCUREMENT_ROUTE", "CONTACT_MADE"),
+        )
+        await _decide_route(conn, p, engagement)
         await post(conn, engagement, p.developer, "developer")
         await post(conn, engagement, p.owner, "org", p.org)
         await t.walk(conn, p, engagement, "NDA_SIGNED")
         await post(conn, engagement, p.signatory, "org", p.org, body="Signed.")
         await t.act(conn, p.developer)
         assert await t.run(conn, COUNT, e=engagement) == 3
-        confirmed = "SELECT count(*) FROM engagement_events WHERE engagement_id = :e AND to_state = :s"
-        assert await t.run(conn, confirmed, e=engagement, s="INTEREST_CONFIRMED") == 0
         await t.as_owner(conn)
         q = await t.parties(conn)
         later = await t.engage(conn, q, state="NDA_SIGNED")  # the owner's insert: a genesis at NDA_SIGNED

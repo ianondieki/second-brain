@@ -381,6 +381,30 @@ class ContactChannel(StrEnum):
     IN_PERSON = "in_person"
 
 
+class ProcurementRoute(StrEnum):
+    """How a public entity will buy (docs/spec/06 6.9 stage 3b, ``PROCUREMENT_ROUTE``; PPADA 2015, PPP Act 2021;
+    revision 0015, REQ-ENG-06). Chosen once by the organisation's owner or admin, together with the move to
+    ``INTEREST_CONFIRMED``; ``direct`` needs a written justification of at least 20 characters."""
+
+    DIRECT = "direct"  # direct procurement, with a written justification
+    RFQ_TENDER = "rfq_tender"  # request for quotation or tender
+    PPP_PIP = "ppp_pip"  # a privately-initiated PPP proposal
+    INNOVATION_CHALLENGE = "innovation_challenge"  # an innovation challenge or grant
+    PILOT_MOU = "pilot_mou"  # a pilot under a memorandum of understanding
+
+
+class NudgeKind(StrEnum):
+    """What the nudge job sends, once per engagement, kind and key (``engagement_nudges``, revision 0015; REQ-NOT-05,
+    REQ-NOT-03, REQ-ENG-05; docs/spec/06 6.9 Due rules, 6.10 EM5 and EM6). A text CHECK, not a database enum."""
+
+    CONTACT_ESCALATION = "contact_escalation"  # INTEREST_CONFIRMED + escalate_bd: the admins and escalation contact
+    CONTACT_OVERDUE = "contact_overdue"  # the contact-by date passed: EM6 to both sides
+    NDA_REMINDER = "nda_reminder"  # NDA_PENDING at each remind_bd: the signers who have not signed (EM5)
+    PROCUREMENT_ESCALATION = "procurement_escalation"  # PROCUREMENT_ROUTE at +5 BD of its 10
+    MILESTONE_REMINDER = "milestone_reminder"  # a submitted milestone unreviewed for reminder_bd
+    MILESTONE_ESCALATION = "milestone_escalation"  # ... and for escalation_bd: the admins and escalation contact
+
+
 class IpTerms(StrEnum):
     """docs/spec/06 6.9 stage 8. The internal e-signature refuses ``assignment`` and ``exclusive_licence``."""
 

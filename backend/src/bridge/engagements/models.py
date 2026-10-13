@@ -27,6 +27,11 @@ Rules the database enforces (revision 0003; the state machine in ``engagements/s
   staff's); a message is posted once the chain has entered ``INTEREST_CONFIRMED`` or a later main-path stage
   (``CONTACT_MADE`` on a public entity's procurement route) and until it ends, and is append-only like a note (D-54's
   redaction aside).
+- The procurement route (revision 0015, REQ-ENG-06): only a public entity's engagement enters ``PROCUREMENT_ROUTE``
+  (3b, after ``UNDER_REVIEW``); its owner or admin decides the route there, once, in the transaction that moves it to
+  ``INTEREST_CONFIRMED`` (the decision's time and decider are the database's); a decision never changes.
+- The nudges ledger (revision 0015, REQ-NOT-05): each escalation or reminder the job sends is recorded once per
+  engagement, kind and key through ``app_record_nudge``; the organisation's members read it, the developer never.
 - Times (event, note and message ``created_at``, ``stage_entered_at``, ``ended_at``, ``endorsed_at``, ``signed_at``,
   ``recorded_at``, ``confirmed_at``) are the database's, on the shared clock ``app_clock_now()`` (the test clock's
   offset applies only where the owner enabled it: dev, test and staging databases).
@@ -79,8 +84,10 @@ from bridge.models.enums import (
     EngagementState,
     IpTerms,
     MilestoneState,
+    NudgeKind,
     OrgRole,
     PaymentMethod,
+    ProcurementRoute,
     RecommendationStance,
     SignatureDocumentKind,
     StepUpMethod,
@@ -108,6 +115,30 @@ def end_reason_matches(state_column: str) -> str:
 VIA_ENGAGEMENT = {"info": {"tenancy": Tenancy.ORG_OR_USER, "via": "engagements"}}
 SHA256_SIZE = "octet_length({column}) = 32"
 
+# Revision 0015 (REQ-ENG-06; docs/spec/06 6.9 stage 3b). The justification is plain text the organisation writes (line
+# breaks allowed, as a note or a message), at most 1,000 characters and not blank; ``direct`` needs at least 20
+# characters once the ends are trimmed (the API trims first, then checks 20 to 1,000).
+PROCUREMENT_JUSTIFICATION_MAX_CHARS = 1000
+PROCUREMENT_DIRECT_MIN_CHARS = 20
+CONTACT_CONSISTENT = (
+    "(contact_user_id IS NULL) = (contact_channel IS NULL)"
+    " AND (contact_by IS NULL OR contact_user_id IS NOT NULL)"
+    " AND (contact_by IS NOT NULL OR contact_user_id IS NULL OR procurement_route IS NULL)"
+)
+PROCUREMENT_DECIDED = (
+    "(procurement_route IS NULL) = (procurement_decided_at IS NULL)"
+    " AND (procurement_route IS NULL) = (procurement_decided_by IS NULL)"
+)
+PROCUREMENT_JUSTIFICATION_VALID = (
+    "procurement_justification IS NULL OR (procurement_route IS NOT NULL"
+    " AND procurement_justification ~ '[^[:space:]]'"
+    f" AND char_length(procurement_justification) <= {PROCUREMENT_JUSTIFICATION_MAX_CHARS})"
+)
+PROCUREMENT_DIRECT_JUSTIFIED = (
+    "procurement_route IS DISTINCT FROM 'direct'"
+    f" OR char_length(btrim(coalesce(procurement_justification, ''))) >= {PROCUREMENT_DIRECT_MIN_CHARS}"
+)
+
 
 class Engagement(IdMixin, TimestampsMixin, Base):
     """One proposal x one organisation (docs/spec/03). ``state`` is the projection of ``engagement_events``."""
@@ -124,12 +155,14 @@ class Engagement(IdMixin, TimestampsMixin, Base):
         CheckConstraint(f"coalesce({end_reason_matches('state')}, false)", name="end_reason_matches_state"),
         # Set by the database when the engagement enters a terminal state (and only then).
         CheckConstraint(f"(ended_at IS NOT NULL) = (state IN ({TERMINAL}))", name="ended_exactly_when_terminal"),
-        # The organisation's named contact (docs/spec/06 6.9 stage 3): person, channel and contact-by date together.
-        CheckConstraint(
-            "(contact_user_id IS NULL) = (contact_channel IS NULL)"
-            " AND (contact_channel IS NULL) = (contact_by IS NULL)",
-            name="contact_complete",
-        ),
+        # The organisation's named contact (docs/spec/06 6.9 stage 3; revision 0015): person and channel together, a
+        # contact-by date only with them; a public entity names the person and channel when it approves to proceed
+        # and the date with its procurement route (3b), so once the route is decided a named contact has its date.
+        CheckConstraint(CONTACT_CONSISTENT, name="contact_consistent"),
+        # The procurement route (3b, revision 0015): decided once, with its time and decider (the database's).
+        CheckConstraint(PROCUREMENT_DECIDED, name="procurement_decided"),
+        CheckConstraint(PROCUREMENT_JUSTIFICATION_VALID, name="procurement_justification_valid"),
+        CheckConstraint(PROCUREMENT_DIRECT_JUSTIFIED, name="procurement_direct_justified"),
         {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "developer_id"}},
     )
 
@@ -153,6 +186,15 @@ class Engagement(IdMixin, TimestampsMixin, Base):
     contact_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
     contact_channel: Mapped[ContactChannel | None] = mapped_column(pg_enum(ContactChannel, "contact_channel"))
     contact_by: Mapped[date | None] = mapped_column(Date)
+    # Revision 0015 (REQ-ENG-06, AC-TRACK-5): a public entity's procurement route, decided by its owner or admin while
+    # the engagement is in PROCUREMENT_ROUTE, in the transaction that moves it to INTEREST_CONFIRMED, and never changed
+    # afterwards. The app writes the route and the justification; the time and the decider are the database's.
+    procurement_route: Mapped[ProcurementRoute | None] = mapped_column(pg_enum(ProcurementRoute, "procurement_route"))
+    procurement_justification: Mapped[str | None] = mapped_column(Text)  # the organisation's words, shown to both
+    procurement_decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_onupdate=FetchedValue()
+    )
+    procurement_decided_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), server_onupdate=FetchedValue())
 
     __mapper_args__ = {"version_id_col": lock_version, "version_id_generator": False}  # noqa: RUF012
 
@@ -732,6 +774,40 @@ class CalendarFeed(IdMixin, Base):
     last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
 
 
+# --- Revision 0015 (P28): the nudges ledger (REQ-NOT-05, REQ-NOT-03, REQ-ENG-05; AC-MAIL-2) -------------------------
+
+NUDGE_KINDS = tuple(kind.value for kind in NudgeKind)
+NUDGE_KEY_MAX_CHARS = 120
+# A key is a code the job makes (a business-day count, a milestone id, a date): no free text, address or name fits.
+NUDGE_KEY_VALID = f"key ~ '^[A-Za-z0-9_.:+-]{{1,{NUDGE_KEY_MAX_CHARS}}}$'"
+
+
+class EngagementNudge(IdMixin, Base):
+    """One nudge the job sent (REQ-NOT-05; P28 track B): an escalation to the organisation's admins and escalation
+    contact, a contact-overdue notice (EM6), an NDA or milestone reminder. Recorded before sending, once per
+    engagement, kind and key (``uq_engagement_nudges_engagement_id_kind_key``), so a nudge fires once whatever the job's
+    retries. Written only by ``app_record_nudge(engagement, kind, key, expected_state)`` (the job, no user bound: true
+    when this call recorded it, false when it was already recorded, the engagement has ended or left the state the nudge
+    was decided in); ``org_id`` is the engagement's and
+    ``sent_at`` the shared clock's. Append-only for every role. Read by the organisation's members only (the latest
+    escalation is the tracker's "Escalated to your admins on ..."), never by the engagement's developer, a member or
+    not, nor by staff."""
+
+    __tablename__ = "engagement_nudges"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "kind", "key"),
+        CheckConstraint(f"kind IN ({', '.join(repr(kind) for kind in NUDGE_KINDS)})", name="kind_known"),
+        CheckConstraint(NUDGE_KEY_VALID, name="key_valid"),
+        ORG_SCOPED,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    kind: Mapped[str] = mapped_column(Text)  # a NudgeKind value
+    key: Mapped[str] = mapped_column(Text)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
 __all__ = [
     "Agreement",
     "CalendarFeed",
@@ -744,6 +820,7 @@ __all__ = [
     "EngagementMessageAttachment",
     "EngagementMessageRead",
     "EngagementNote",
+    "EngagementNudge",
     "EngagementRecommendation",
     "Milestone",
     "PaymentRecord",

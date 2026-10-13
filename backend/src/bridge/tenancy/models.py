@@ -1,13 +1,47 @@
-"""Organisations, memberships, invitations and the cross-org signal table (REQ-TEN-01). Tenancy ORG: RLS by active
-membership (``app_is_member``), narrowed to ``app.org_id`` when a request is scoped to one organisation; every
-signed-in user also reads *listed* organisations (unclaimed, E1 or E2 and not delisted: the directory)."""
+"""Organisations, memberships, invitations, niche defaults and the cross-org signal table (REQ-TEN-01, REQ-TEN-02).
+Tenancy ORG: RLS by active membership (``app_is_member``), narrowed to ``app.org_id`` when a request is scoped to one
+organisation; every signed-in user also reads *listed* organisations (unclaimed, E1 or E2 and not delisted: the
+directory).
+
+Team (revision 0015, REQ-TEN-02; the database's half):
+
+- An organisation always keeps an active owner against the organisation's own writes: ``memberships_last_owner_guard``
+  refuses removing or demoting its last active owner (SQLSTATE 55000, the API's 409 ``last_owner``); the definer
+  functions (a claim's transfer, staff's roster correction) and the owner role are not judged. bridge_app updates a
+  membership's ``roles``, ``status`` and ``updated_at`` only; members leave by ``status = 'removed'``.
+- A membership leaving ``active`` clears its user's niche defaults and the escalation contact if it is them; losing the
+  owner, admin, reviewer and signatory roles clears their niche defaults (``memberships_clear_team_seats``).
+- ``OrgEscalationContact``: one per organisation, an active member (a trigger), set by an owner or admin, read by the
+  organisation's members only (a table of its own: every signed-in user reads listed organisations' rows).
+- Invitations: listed, created, revoked and resent by the organisation's owners and admins (only owners invite owners
+  or signatories); bridge_app inserts ``id, org_id, email, roles, token_hash, invited_by`` (the caller) and
+  ``expires_at`` and updates ``token_hash``, ``expires_at`` (a resend) and ``revoked_at`` (the shared clock, whatever
+  is sent) of an open invitation only; an accepted or revoked one never changes; one open invitation per organisation
+  and address (case-insensitive: ``uq_invitations_open``; an expired one stays open until revoked or resent).
+  ``app_accept_invitation(token_hash, user)`` accepts for the signed-in user; ``app_invitation_preview(token_hash)``
+  answers the organisation's name and the roles of an open invitation to anyone holding the token.
+"""
 
 from __future__ import annotations
 
 from datetime import date, datetime
 from uuid import UUID
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, LargeBinary, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    FetchedValue,
+    ForeignKey,
+    Index,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +50,8 @@ from bridge.models.enums import MembershipStatus, OrgKind, OrgRole, OrgSource, O
 from bridge.models.types import CIText, pg_enum, pg_enum_array
 
 ORG = {"info": {"tenancy": Tenancy.ORG, "tenant_column": "org_id"}}
+# Revision 0015: an invitation expires at most 30 days after it was created (both on the shared clock).
+INVITATION_MAX_DAYS = 30
 
 
 class Organization(IdMixin, TimestampsMixin, Base):
@@ -64,7 +100,22 @@ class Membership(IdMixin, TimestampsMixin, Base):
 
 class Invitation(IdMixin, CreatedMixin, Base):
     __tablename__ = "invitations"
-    __table_args__ = (ORG,)
+    __table_args__ = (
+        # Revision 0015: one open invitation per organisation and address (citext: case-insensitive).
+        Index(
+            "uq_invitations_open",
+            "org_id",
+            "email",
+            unique=True,
+            postgresql_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
+        ),
+        CheckConstraint("accepted_at IS NULL OR revoked_at IS NULL", name="accepted_or_revoked"),
+        CheckConstraint("cardinality(roles) > 0", name="roles_not_empty"),
+        CheckConstraint(
+            f"expires_at <= created_at + interval '{INVITATION_MAX_DAYS} days'", name="expires_within_30_days"
+        ),
+        ORG,
+    )
 
     org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     email: Mapped[str] = mapped_column(CIText())
@@ -72,8 +123,29 @@ class Invitation(IdMixin, CreatedMixin, Base):
     token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
     invited_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Revision 0015: the shared clock's, whatever is sent (accepted only through app_accept_invitation); created_at too.
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
+
+
+class OrgNicheDefault(IdMixin, Base):
+    """The organisation's default reviewer for a niche (REQ-TEN-02; revision 0015): a new engagement in that niche is
+    assigned to them through P27's assignments, unless someone already assigned it. One per organisation and niche.
+    Set, changed and removed by an owner or admin (the policies); the user is an active owner, admin, reviewer or
+    signatory of the organisation (a trigger, every role; the API narrows it to reviewer, signatory or admin), and the
+    row goes when they leave or lose those roles. Members read them. ``created_at`` and ``updated_at`` are the shared
+    clock's."""
+
+    __tablename__ = "org_niche_defaults"
+    __table_args__ = (UniqueConstraint("org_id", "niche_id"), ORG)
+
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"))
+    niche_id: Mapped[UUID] = mapped_column(ForeignKey("niches.id"))
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("app_clock_now()"), server_onupdate=FetchedValue()
+    )
 
 
 class SignalEvent(IdMixin, Base):
@@ -92,3 +164,19 @@ class SignalEvent(IdMixin, Base):
     actor_hash: Mapped[bytes | None] = mapped_column(LargeBinary)
     org_hash: Mapped[bytes | None] = mapped_column(LargeBinary)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OrgEscalationContact(Base):
+    """Who, besides the organisation's admins, is told of escalations (REQ-TEN-02; revision 0015): one active member per
+    organisation (a trigger, every role), set and removed by an owner or admin (upsert on ``org_id``), read by the
+    organisation's members only, never by another organisation, a developer of one of its engagements or staff. Goes
+    when the member leaves the organisation or their account is deleted. ``updated_at`` is the shared clock's."""
+
+    __tablename__ = "org_escalation_contacts"
+    __table_args__ = (ORG,)
+
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("app_clock_now()"), server_onupdate=FetchedValue()
+    )

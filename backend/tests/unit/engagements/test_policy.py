@@ -1,4 +1,5 @@
-"""REQ-ENG-01, REQ-BD-01: ``backend/config/policy.yaml`` holds every tracker deadline, and loading it fails closed."""
+"""REQ-ENG-01, REQ-BD-01: ``backend/config/policy.yaml`` holds every tracker deadline, and loading it fails closed.
+REQ-ENG-06: a public entity's procurement route (3b) is due in 10 business days, escalated at 5, and never expires."""
 
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ def test_the_shipped_policy_has_the_spec_deadlines() -> None:
         EngagementState.ORG_INTEREST: 5,
         EngagementState.SUBMITTED: 10,
         EngagementState.UNDER_REVIEW: 15,
+        EngagementState.PROCUREMENT_ROUTE: 10,
         EngagementState.INTEREST_CONFIRMED: 5,
         EngagementState.CONTACT_MADE: 5,
         EngagementState.NDA_PENDING: 5,
@@ -43,6 +45,10 @@ def test_the_shipped_policy_has_the_spec_deadlines() -> None:
     assert (confirmed.escalate_bd, confirmed.expire_bd) == (3, 10)
     assert policy.stage(EngagementState.ORG_INTEREST).expire_bd == 5
     assert policy.stage(EngagementState.NDA_PENDING).remind_bd == (2, 4)
+    # docs/spec/06 6.9 stage 3b: "<=10 BD", no expiry; P28 track B escalates it at +5 BD of its 10.
+    procurement = policy.stage(EngagementState.PROCUREMENT_ROUTE)
+    assert (procurement.due_bd, procurement.escalate_bd, procurement.expire_bd) == (10, 5, None)
+    assert (policy.milestone_reminder_bd, policy.milestone_escalation_bd) == (3, 5)
     assert policy.stage(EngagementState.CLOSED) == p.StagePolicy()
     # REQ-ENG-10: a hold resumes at most 60 days ahead; only the four expiring stages carry expire_bd.
     assert policy.on_hold_max_days == 60
@@ -122,6 +128,14 @@ def _broken(change: str) -> dict[str, Any]:
         data["side_states"]["actions_per_day"] = 50
     elif change == "side_zero":
         data["side_states"]["actions_per_hour"] = 0
+    elif change == "procurement_missing":
+        del data["stages"]["PROCUREMENT_ROUTE"]
+    elif change == "procurement_expires":
+        data["stages"]["PROCUREMENT_ROUTE"]["expire_bd"] = 10
+    elif change == "escalate_after_due":
+        data["stages"]["PROCUREMENT_ROUTE"]["escalate_bd"] = 11
+    elif change == "remind_after_due":
+        data["stages"]["NDA_PENDING"]["remind_bd"] = [2, 6]
     return data
 
 
@@ -159,6 +173,10 @@ def _broken(change: str) -> dict[str, Any]:
         "side_missing",
         "side_keys",
         "side_zero",
+        "procurement_missing",
+        "procurement_expires",
+        "escalate_after_due",
+        "remind_after_due",
     ],
 )
 def test_a_broken_policy_is_refused(change: str) -> None:

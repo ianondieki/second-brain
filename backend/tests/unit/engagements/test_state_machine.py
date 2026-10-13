@@ -6,14 +6,15 @@ written from docs/spec/06 6.9 independently of the module, and every transition 
 backstop (revision 0003's ``engagement_main_path_predecessors``). Guards, "whose turn", the caller's actions, the
 business-day deadlines and the input checks are covered branch by branch (100% branch coverage of the module).
 REQ-ENG-10 (part): the side states INFO_REQUESTED and ON_HOLD (before the agreement), each left for the state it was
-entered from, and the expiry of the four stages that expire.
+entered from, and the expiry of the four stages that expire. REQ-ENG-06 (AC-TRACK-5): a public entity's approval and
+the acceptance of its interest enter PROCUREMENT_ROUTE (3b), where its owner or admin chooses the route; a private
+organisation's never do.
 """
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
+from itertools import pairwise
 
 import pytest
 
@@ -28,14 +29,15 @@ from bridge.models.enums import (
     EngagementState,
     IpTerms,
     MilestoneState,
+    ProcurementRoute,
 )
+from tests.unit.engagements.backstop import database_predecessors
 
 S = EngagementState
 R = EngagementActorRole
 C = sm.Command
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 POLICY = load_policy()
-REVISION_0003 = Path(__file__).resolve().parents[3] / "alembic" / "versions" / "20260929_0003_schema_v3.py"
 
 DECIDERS = {R.OWNER, R.ADMIN, R.SIGNATORY, R.REVIEWER}
 EDITORS = {R.OWNER, R.ADMIN, R.SIGNATORY}
@@ -43,6 +45,7 @@ PAYERS = {R.OWNER, R.ADMIN, R.SIGNATORY, R.FINANCE}
 BEFORE_AGREEMENT = {
     S.SUBMITTED,
     S.UNDER_REVIEW,
+    S.PROCUREMENT_ROUTE,
     S.INTEREST_CONFIRMED,
     S.CONTACT_MADE,
     S.NDA_PENDING,
@@ -62,6 +65,7 @@ EXPECTED: dict[sm.Command, tuple[bool, set[R], set[S], S | None, S | None, bool]
     C.START_REVIEW: (False, DECIDERS, {S.SUBMITTED}, S.UNDER_REVIEW, None, False),
     C.DECLINE: (False, DECIDERS, {S.SUBMITTED, S.UNDER_REVIEW}, S.DECLINED, None, False),
     C.APPROVE: (False, {R.SIGNATORY}, {S.UNDER_REVIEW}, S.INTEREST_CONFIRMED, None, False),
+    C.CHOOSE_ROUTE: (False, {R.OWNER, R.ADMIN}, {S.PROCUREMENT_ROUTE}, S.INTEREST_CONFIRMED, None, False),
     C.WITHDRAW: (True, set(), BEFORE_AGREEMENT | PAUSED, S.WITHDRAWN, None, False),
     C.MARK_CONTACTED: (False, DECIDERS, {S.INTEREST_CONFIRMED}, S.CONTACT_MADE, None, False),
     C.CONFIRM_CONTACT: (True, set(), {S.CONTACT_MADE}, None, None, False),
@@ -138,6 +142,9 @@ def test_the_table_is_the_spec_table() -> None:
         assert row.sources == sources, command
         assert (row.target, row.completes, row.deals) == (target, completes, deals), command
         assert row.resumes is (command in RESUMING), command
+        # 3b (AC-TRACK-5): only the approval and the acceptance of an interest enter it, for a public entity.
+        public = S.PROCUREMENT_ROUTE if command in (C.APPROVE, C.ACCEPT_INTEREST) else None
+        assert row.public_target is public, command
         if row.target is None and row.completes is None:
             assert not row.sources & sm.TERMINAL  # a same-state event never follows a terminal state
 
@@ -191,19 +198,17 @@ def test_deal_steps_are_refused_while_the_deals_flag_is_off() -> None:
 
 
 def _database_predecessors() -> dict[str, set[str]]:
-    """revision 0003's engagement_main_path_predecessors(): WHEN '<state>' THEN '{<states>}'."""
-    source = REVISION_0003.read_text(encoding="utf-8")
-    body = source[source.index("CREATE FUNCTION engagement_main_path_predecessors") :]
-    body = body[: body.index("$$;")]
-    found = re.findall(r"WHEN '([A-Z_]+)' THEN '\{([A-Z_,]*)\}'", body)
+    """The newest revision's engagement_main_path_predecessors() (revision 0015's since P28)."""
+    found = database_predecessors()
     assert len(found) == 15
-    return {state: set(filter(None, before.split(","))) for state, before in found}
+    assert found["PROCUREMENT_ROUTE"] == {"UNDER_REVIEW", "ORG_INTEREST"}  # 3b before stage 3 (revision 0015)
+    return found
 
 
 def test_every_transition_stays_inside_the_database_backstop() -> None:
     predecessors = _database_predecessors()
     for row in sm.TABLE.values():
-        for target in filter(None, (row.target, row.completes)):
+        for target in filter(None, (row.target, row.completes, row.public_target)):
             for source in row.sources:
                 if target is source:
                     continue
@@ -668,3 +673,134 @@ def test_an_unanswered_question_expires_after_its_answer_by_date() -> None:
     assert sm.expiry_reason(S.INFO_REQUESTED) is EngagementEndReason.NO_DEV_RESPONSE
     assert sm.expiry_reason(S.SUBMITTED) is EngagementEndReason.NO_REVIEW
     assert sm.expiry_reason(S.NEGOTIATION) is None
+
+
+# ------------------------------------------------------------------------------------------- procurement route (3b)
+
+SIGNATORY_ACTOR = sm.Actor(ORG, frozenset({R.SIGNATORY}))
+PUBLIC = sm.Facts(public_entity=True, contact_named=True)
+PRIVATE = sm.Facts(public_entity=False, contact_named=True)
+
+
+def test_a_public_entitys_approval_and_accepted_interest_enter_the_procurement_route() -> None:
+    """AT-A-1, AC-TRACK-5 both ways: a public entity's approval (and the developer's acceptance of its interest) enters
+    PROCUREMENT_ROUTE; a private organisation's goes straight to INTEREST_CONFIRMED, exactly as before."""
+    approved = sm.decide(C.APPROVE, SIGNATORY_ACTOR, S.UNDER_REVIEW, PUBLIC)
+    assert (approved.to_state, approved.notice) == (S.PROCUREMENT_ROUTE, "N04")
+    assert sm.decide(C.APPROVE, SIGNATORY_ACTOR, S.UNDER_REVIEW, PRIVATE).to_state is S.INTEREST_CONFIRMED
+    accepted = sm.decide(C.ACCEPT_INTEREST, ACTORS[0], S.ORG_INTEREST, PUBLIC)
+    assert (accepted.to_state, accepted.endorse) == (S.PROCUREMENT_ROUTE, sm.Endorse.BEFORE)
+    assert sm.decide(C.ACCEPT_INTEREST, ACTORS[0], S.ORG_INTEREST, PRIVATE).to_state is S.INTEREST_CONFIRMED
+    # The other rows ignore the fact: a public entity's review, decline and first contact are everyone's.
+    assert sm.decide(C.START_REVIEW, SIGNATORY_ACTOR, S.SUBMITTED, PUBLIC).to_state is S.UNDER_REVIEW
+    assert sm.decide(C.MARK_CONTACTED, SIGNATORY_ACTOR, S.INTEREST_CONFIRMED, PUBLIC).to_state is S.CONTACT_MADE
+
+
+def test_only_an_owner_or_admin_chooses_the_route_and_it_enters_stage_3() -> None:
+    """AT-A-2: the route is the organisation's admin's (docs/spec/06 6.9 stage 3b); a signatory, a reviewer, finance
+    and the developer are refused (403), and it is chosen in 3b only (409)."""
+    for roles in ({R.OWNER}, {R.ADMIN}, {R.OWNER, R.ADMIN, R.SIGNATORY}):
+        decision = sm.decide(C.CHOOSE_ROUTE, sm.Actor(ORG, frozenset(roles)), S.PROCUREMENT_ROUTE, PUBLIC)
+        assert (decision.to_state, decision.notice, decision.step_up) == (S.INTEREST_CONFIRMED, "N05", False)
+        assert decision.role in {R.OWNER, R.ADMIN}
+    for role in (R.SIGNATORY, R.REVIEWER, R.FINANCE):
+        with pytest.raises(sm.Forbidden) as refused:
+            sm.decide(C.CHOOSE_ROUTE, sm.Actor(ORG, frozenset({role})), S.PROCUREMENT_ROUTE, PUBLIC)
+        assert refused.value.code == "role_required"
+    with pytest.raises(sm.Forbidden):
+        sm.decide(C.CHOOSE_ROUTE, ACTORS[0], S.PROCUREMENT_ROUTE, PUBLIC)
+    owner = sm.Actor(ORG, frozenset({R.OWNER}))
+    for state in (S.UNDER_REVIEW, S.INTEREST_CONFIRMED, S.ON_HOLD):
+        with pytest.raises(sm.Conflict):
+            sm.decide(C.CHOOSE_ROUTE, owner, state, PUBLIC)
+
+
+def test_the_procurement_route_waits_for_the_organisation_and_has_its_side_branches() -> None:
+    """3b is the organisation's turn (its owner or admin); the developer may withdraw and either party may pause, as at
+    stage 3 (revision 0015: every side branch INTEREST_CONFIRMED has); nobody declines or asks for information there."""
+    assert sm.pending(S.PROCUREMENT_ROUTE, PUBLIC) == (sm.Pending(C.CHOOSE_ROUTE, ORG),)
+    assert sm.whose_turn(S.PROCUREMENT_ROUTE, PUBLIC) == (ORG,)
+    owner = sm.Actor(ORG, frozenset({R.OWNER, R.ADMIN}))
+    assert sm.available(owner, S.PROCUREMENT_ROUTE, PUBLIC) == (C.CHOOSE_ROUTE, C.PAUSE)
+    assert sm.available(SIGNATORY_ACTOR, S.PROCUREMENT_ROUTE, PUBLIC) == (C.PAUSE,)
+    assert sm.available(ACTORS[0], S.PROCUREMENT_ROUTE, PUBLIC) == (C.WITHDRAW, C.PAUSE)
+    back = sm.decide(C.RESUME, owner, S.ON_HOLD, sm.Facts(paused_from=S.PROCUREMENT_ROUTE, public_entity=True))
+    assert back.to_state is S.PROCUREMENT_ROUTE
+    assert S.PROCUREMENT_ROUTE in sm.BEFORE_CONTACT
+    assert S.PROCUREMENT_ROUTE not in sm.CONTACT_REVEALED  # the developer's details wait for stage 3
+    assert S.PROCUREMENT_ROUTE not in sm.EXPIRY  # no auto-expiry (the spec gives none)
+    assert (sm.STAGE_LABELS[S.PROCUREMENT_ROUTE], sm.STAGE_GROUPS[S.PROCUREMENT_ROUTE]) == (
+        "Procurement route determined",
+        "contact_nda",
+    )
+
+
+def test_the_steps_include_3b_only_for_a_public_entity() -> None:
+    """AC-TRACK-5: a public entity's tracker includes PROCUREMENT_ROUTE; a private organisation's does not. The main
+    path is in the database's order: 3b follows stage 2 (or stage 0) and precedes stage 3."""
+    public = sm.steps(org_initiated=False, public_entity=True)
+    private = sm.steps(org_initiated=False, public_entity=False)
+    assert public[:4] == (S.SUBMITTED, S.UNDER_REVIEW, S.PROCUREMENT_ROUTE, S.INTEREST_CONFIRMED)
+    assert S.PROCUREMENT_ROUTE not in private
+    assert private == tuple(state for state in public if state is not S.PROCUREMENT_ROUTE)
+    assert public[-1] is S.CLOSED
+    assert len(public) == 14
+    interest = sm.steps(org_initiated=True, public_entity=True)
+    assert interest[:3] == (S.ORG_INTEREST, S.PROCUREMENT_ROUTE, S.INTEREST_CONFIRMED)
+    assert sm.steps(org_initiated=True, public_entity=False)[:2] == (S.ORG_INTEREST, S.INTEREST_CONFIRMED)
+    predecessors = _database_predecessors()
+    for path in (public, private, interest):
+        for before, after in pairwise(path):
+            assert before.value in predecessors[after.value], (before, after)
+
+
+def test_a_justification_is_plain_text_and_direct_procurement_needs_one() -> None:
+    """AT-A-2: direct procurement needs 20 to 1,000 characters (trimmed, control and format characters dropped); the
+    other routes take none or up to 1,000."""
+    direct = ProcurementRoute.DIRECT
+    reason = "Single-source: the only licensed provider of the county's revenue platform."
+    assert sm.check_justification(direct, f"  {reason}\u202e  ") == reason
+    for short in (None, "", "   ", "Too short to say", "x" * 19 + "\u200b\u200b"):
+        with pytest.raises(sm.Invalid) as refused:
+            sm.check_justification(direct, short)
+        assert (refused.value.status, refused.value.code) == (422, "justification_required")
+    assert sm.check_justification(direct, "x" * 20) == "x" * 20
+    assert sm.check_justification(direct, "y" * 1000) == "y" * 1000
+    for route in ProcurementRoute:
+        with pytest.raises(sm.Invalid) as long:
+            sm.check_justification(route, "z" * 1001)
+        assert long.value.code == "invalid_justification"
+        if route is not direct:
+            assert sm.check_justification(route, None) is None
+            assert sm.check_justification(route, " \n ") is None
+            assert sm.check_justification(route, "Line one\nLine two") == "Line one\nLine two"
+    assert (sm.JUSTIFICATION_MIN_CHARS, sm.JUSTIFICATION_MAX_CHARS) == (20, 1000)
+
+
+def test_pauses_move_a_count_of_business_days_from_a_stage_entry() -> None:
+    """The expiry job's arithmetic, shared with the nudge job: a count of N business days from the entry day runs out
+    at the end of the N-th business day after it, plus the business days pauses moved the stage's deadline by."""
+    monday = date(2026, 10, 5)
+    assert sm.paused_business_days(None, date(2026, 10, 9), set()) == 0
+    assert sm.paused_business_days(date(2026, 10, 9), None, set()) == 0
+    assert sm.paused_business_days(date(2026, 10, 9), date(2026, 10, 13), set()) == 2  # Fri -> Tue
+    assert sm.paused_business_days(date(2026, 10, 9), date(2026, 10, 7), set()) == 0  # never negative
+    assert sm.after_business_days(monday, 3, 0, set()) == sm.end_of_day(date(2026, 10, 8))
+    assert sm.after_business_days(monday, 3, 2, set()) == sm.end_of_day(date(2026, 10, 12))
+    assert sm.after_business_days(monday, 3, 0, {date(2026, 10, 7)}) == sm.end_of_day(date(2026, 10, 9))
+
+
+def test_the_contact_by_window_is_counted_on_the_nairobi_day_and_the_holidays() -> None:
+    """The contact-by date's window starts on today in Africa/Nairobi, not the UTC date (22:30 UTC on Thu 1 Oct 2026
+    is 01:30 EAT on Fri 2 Oct), and skips a gazetted holiday inside it."""
+    late = datetime(2026, 10, 1, 22, 30, tzinfo=UTC)  # Fri 2 Oct 01:30 EAT
+    sm.check_contact_by(date(2026, 10, 2), late, set(), POLICY)  # today in Nairobi
+    sm.check_contact_by(date(2026, 10, 9), late, set(), POLICY)  # Fri + 5 BD (the UTC date's would end on Thu 8)
+    for wrong in (date(2026, 10, 1), date(2026, 10, 12)):  # yesterday in Nairobi; past the 5th business day
+        with pytest.raises(sm.Invalid):
+            sm.check_contact_by(wrong, late, set(), POLICY)
+    holiday = {date(2026, 10, 6)}  # a Tuesday inside the window: the 5th business day moves to Mon 12 Oct
+    sm.check_contact_by(date(2026, 10, 12), late, holiday, POLICY)
+    with pytest.raises(sm.Invalid) as refused:
+        sm.check_contact_by(date(2026, 10, 13), late, holiday, POLICY)
+    assert "12 Oct 2026" in refused.value.message

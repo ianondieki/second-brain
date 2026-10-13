@@ -8,6 +8,9 @@
 # expire_bd (ORG_INTEREST, SUBMITTED, UNDER_REVIEW, INTEREST_CONFIRMED only): the periodic job bridge/jobs/expiry.py
 # ends an engagement left that many BD after it entered the stage as EXPIRED; a request for information or a hold
 # pauses the count (the business days paused are added back).
+# escalate_bd and remind_bd (REQ-NOT-05): the periodic job bridge/jobs/nudges.py tells the organisation's admins (and
+# its escalation contact) once that many BD after the stage was entered, or reminds the signers who have not signed,
+# paused the same way; neither may fall after the stage's due_bd.
 version: 1
 
 stages:
@@ -17,6 +20,10 @@ stages:
   SUBMITTED: {due_bd: 10, expire_bd: 20}
   # Stage 2: the signatory's decision; expires at 30 BD (NO_DECISION).
   UNDER_REVIEW: {due_bd: 15, expire_bd: 30}
+  # Stage 3b (public entities only, REQ-ENG-06): after the signatory approves to proceed, an owner or admin chooses
+  # the procurement route within 10 BD; the nudge job escalates to the admins and the escalation contact at +5 BD.
+  # No expiry (docs/spec/06 6.9 gives none).
+  PROCUREMENT_ROUTE: {due_bd: 10, escalate_bd: 5}
   # Stage 3: first contact by the named contact-by date (at most 5 BD ahead); escalation to the org admin at +3 BD;
   # EXPIRED (CONTACT_NOT_MADE) at +10 BD from entering the stage.
   INTEREST_CONFIRMED: {due_bd: 5, escalate_bd: 3, expire_bd: 10}
@@ -46,6 +53,8 @@ contact:
 milestones:
   review_window_bd_default: 5
   review_window_bd_max: 60
+  # A milestone submitted for review and left unreviewed: the nudge job reminds the organisation's reviewers of the
+  # engagement after reminder_bd and escalates to its admins (and escalation contact) after escalation_bd.
   reminder_bd: 3
   escalation_bd: 5
   max_per_agreement: 20

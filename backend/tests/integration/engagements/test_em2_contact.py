@@ -97,8 +97,10 @@ async def test_em2_is_sent_once_with_the_spec_copy(owner_engine: AsyncEngine, ap
 async def test_tier2_status_counts_the_named_people_who_viewed_under_nda(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
-    """``tier2_status`` from the access log and the grants; a public entity gets the procurement sentence."""
-    world = await build(owner_engine, public_entity=True)
+    """``tier2_status`` from the access log and the grants; a public entity gets the procurement sentence. Since
+    revision 0015 a public entity enters INTEREST_CONFIRMED only through PROCUREMENT_ROUTE, which the API gains with
+    P28 track A; until then the organisation becomes a public entity once approved (EM2 reads it when it is sent)."""
+    world = await build(owner_engine)
     async with owner_engine.begin() as conn:
         await conn.execute(
             text(
@@ -123,6 +125,8 @@ async def test_tier2_status_counts_the_named_people_who_viewed_under_nda(
                 },
             )
     engagement = await approve(owner_engine, app_engine, world, await db_today(owner_engine))
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("UPDATE organizations SET public_entity = true WHERE id = :o"), {"o": world.org})
     provider = FakeEmailProvider()
     await run_notifications(owner_engine, app_engine, engagement, provider)
     [message] = provider.outbox
