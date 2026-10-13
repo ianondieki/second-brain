@@ -50,6 +50,13 @@ describe("errorKey", () => {
     expect(en.errors.public_demo_locked).toBe("This is switched off in the public demo.");
   });
 
+  it("maps the public demo's daily publish limit to its own sentence", () => {
+    expect(errorKey({ detail: { code: "public_demo_limit", message: "x" } })).toBe("public_demo_limit");
+    expect(en.errors.public_demo_limit).toBe(
+      "The public demo publishes up to 20 versions a day for each account. Try again tomorrow.",
+    );
+  });
+
   it("has an English message for every key it can return", () => {
     for (const key of [...KNOWN_ERROR_CODES, "validation", "generic", "network"] as const) {
       expect(en.errors[key], key).toBeTruthy();
