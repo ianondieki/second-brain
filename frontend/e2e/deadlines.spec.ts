@@ -150,6 +150,15 @@ test("a developer's deadlines: the month, the list with the live clock, each in 
     await hydrated(page);
     const card = page.locator("[data-calendar-feed-card]");
     await expect(card.locator("[data-feed-private]")).toContainText("This link is private");
+    // The worst frame timing a browser may give: a frame due before React's next task, so an animation-frame callback
+    // runs before the change it follows is committed (a microtask here; seen on the production build). A focus move
+    // made that way finds nothing to focus; the section's, made after the commit, is unaffected.
+    await page.evaluate(() => {
+      window.requestAnimationFrame = (callback) => {
+        queueMicrotask(() => callback(performance.now()));
+        return 0;
+      };
+    });
     await card.getByRole("button", { name: "Create a feed link" }).click();
     const field = card.getByRole("textbox", { name: "Feed link" });
     await expect(field).toHaveValue(/\/api\/calendar\/.+\.ics$/, STEP);

@@ -60,6 +60,24 @@ describe("the calendar feed", () => {
     expect(document.querySelector("[data-primary]")).toBeNull();
   });
 
+  // P27 UX: the focus moves run after the change is committed, never in a frame that may come first. A frame due
+  // before React's next task (a microtask here) would find no field to focus; the section's effect is unaffected.
+  it("moves the focus after the change is on screen, whatever the frame timing", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      queueMicrotask(() => callback(performance.now()));
+      return 0;
+    });
+    renderWithIntl(<CalendarFeed initial="none" lastRead={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "Create a feed link" }));
+    const field = await screen.findByRole("textbox", { name: "Feed link" });
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the feed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the link" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Create a feed link" })),
+    );
+  });
+
   it("copies the link and says so; where the clipboard is refused, selects it and says to copy it", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
