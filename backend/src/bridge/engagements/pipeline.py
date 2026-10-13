@@ -72,9 +72,9 @@ def as_group(name: str) -> StageGroup:
     raise ValueError(f"not a stage group: {name}")
 
 
+# STAGE_GROUPS puts a public entity's procurement route (3b) with Contact and NDA, where the spec places it.
 _GROUP_OF: Final[Mapping[EngagementState, StageGroup]] = {
-    **{state: as_group(name) for state, name in sm.STAGE_GROUPS.items()},
-    S.PROCUREMENT_ROUTE: "contact_nda",  # stage 3b, between approval and first contact (docs/spec/06 6.9)
+    state: as_group(name) for state, name in sm.STAGE_GROUPS.items()
 }
 ENDED: Final = frozenset({S.DECLINED, S.WITHDRAWN, S.EXPIRED, S.TERMINATED})
 # The group an event's ``to_state`` enters, in SQL (NULL for a side or terminal state outside the five groups).

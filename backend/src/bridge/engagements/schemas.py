@@ -36,6 +36,7 @@ from bridge.models.enums import (
     MilestoneState,
     OrgRole,
     PaymentMethod,
+    ProcurementRoute,
     RecommendationStance,
     SignatureDocumentKind,
     StepUpMethod,
@@ -56,11 +57,43 @@ class CommandBody(BaseModel):
 
 
 class ApproveBody(CommandBody):
-    """Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date."""
+    """Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date. A public
+    entity's approval enters its procurement route (3b): the contact-by date is named with the route, and one sent
+    here is not used."""
 
     contact_user_id: UUID
     contact_channel: ContactChannel
-    contact_by: date
+    contact_by: date | None = Field(
+        default=None,
+        description="Required for a private organisation (422 invalid_contact_by without it): from today to"
+        " policy.yaml's contact_by_max_bd (5) business days ahead. Not used for a public entity, which names it with"
+        " its procurement route",
+    )
+
+
+class ProcurementBody(BaseModel):
+    """A public entity's procurement route (stage 3b; docs/spec/06 6.9), chosen by its owner or admin: how it will
+    buy, the written justification (required for direct procurement) and the contact-by date of stage 3."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    route: ProcurementRoute
+    justification: str | None = Field(
+        default=None,
+        max_length=2000,
+        pattern=LINES,
+        description="Plain text, line breaks allowed; trimmed, empty is none. Direct procurement needs 20 to 1,000"
+        " characters (422 justification_required); the other routes take none or at most 1,000 (422"
+        " invalid_justification). No contact details or links before first contact (422 contains_contact). Both"
+        " parties read it",
+    )
+    contact_by: date = Field(
+        description="The date the named contact reaches the developer by: from today to policy.yaml's"
+        " contact_by_max_bd (5) business days ahead (422 invalid_contact_by)"
+    )
+    lock_version: int | None = Field(
+        default=None, ge=0, description="The engagement's lock_version when last read; when sent, 409 stale if it moved"
+    )
 
 
 class DeclineBody(CommandBody):
@@ -149,6 +182,26 @@ class DueOut(BaseModel):
 class PendingOut(BaseModel):
     command: Command
     party: EngagementParty
+
+
+StageGroup = Literal["review", "contact_nda", "agreement", "implementation", "close"]
+
+
+class StepOut(BaseModel):
+    """One main-path stage of the engagement's stepper, in order."""
+
+    state: EngagementState
+    label: str
+    group: StageGroup
+
+
+class ProcurementOut(BaseModel):
+    """A public entity's procurement route (3b), as both parties read it (R46: full transparency)."""
+
+    route: ProcurementRoute
+    justification: str | None = Field(description="The organisation's own words: plain text")
+    decided_at: datetime
+    decided_by_name: str = Field(description="The owner or admin who chose it ('Former member' once not readable)")
 
 
 class EngagementSummary(BaseModel):
@@ -310,6 +363,14 @@ class EngagementDetail(EngagementSummary):
     notes: list[NoteOut] = Field(description="The side states' questions, answers and reasons, in event order")
     side_limits: SideLimitsOut | None = Field(
         default=None, description="The caps left for the current stage's side states; null once ended or none apply"
+    )
+    steps: list[StepOut] = Field(
+        default_factory=list,
+        description="The engagement's main-path stages in order (the stepper): stage 0 for an organisation's interest,"
+        " stages 1-2 for a tagged proposal, PROCUREMENT_ROUTE (3b) only for a public entity (AC-TRACK-5)",
+    )
+    procurement: ProcurementOut | None = Field(
+        default=None, description="A public entity's procurement route once chosen; null otherwise"
     )
     # Always sent; optional in the generated web types (no non-null default), so a client reads an older API as "no
     # day sent".
@@ -652,8 +713,6 @@ class CalendarFeedStatus(BaseModel):
 
 
 # -------------------------------------------------------------------------------------------- pipeline (REQ-ENG-14)
-
-StageGroup = Literal["review", "contact_nda", "agreement", "implementation", "close"]
 
 
 class PipelineItem(EngagementSummary):

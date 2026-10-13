@@ -13,6 +13,13 @@
    is re-read;
 4. close the tag when the engagement ends, and queue the other party's notification (outbox, same transaction).
 
+The procurement route (REQ-ENG-06, revision 0015): a public entity's approval names the contact person and channel and
+enters ``PROCUREMENT_ROUTE`` (3b) without a contact-by date; its owner or admin then chooses the route
+(``choose_route``): the route, its justification and the contact-by date are written in one UPDATE (the database stamps
+the decision's time and decider), then the event enters ``INTEREST_CONFIRMED`` with the contact-by date as its
+deadline, in the same transaction (the database refuses the decision at commit otherwise). The justification is the
+organisation's plain text, shown to both parties on the engagement row, never in the chain (its keyed digest is).
+
 Side states (REQ-ENG-10 part): entering ``INFO_REQUESTED`` or ``ON_HOLD`` records the date of the deadline it pauses in
 the event's payload (``paused_due_on``; a hold also its ``resume_at``); leaving it for the state it was entered from
 sets that deadline moved by the business days paused (``state_machine.resumed_deadline``). A note's text never enters
@@ -84,6 +91,7 @@ from bridge.models.enums import (
     OrgRole,
     OrgVerification,
     PaymentMethod,
+    ProcurementRoute,
     ProposalStatus,
     SignatureDocumentKind,
     StepUpMethod,
@@ -123,6 +131,15 @@ class RequestMeta:
 class ContactInput:
     user_id: UUID
     channel: ContactChannel
+    contact_by: date | None  # None (or ignored): a public entity names it with its procurement route
+
+
+@dataclass(frozen=True, slots=True)
+class ProcurementInput:
+    """A public entity's procurement route (3b): the route, its justification and the contact-by date."""
+
+    route: ProcurementRoute
+    justification: str | None
     contact_by: date
 
 
@@ -158,6 +175,7 @@ class Inputs:
     """A command's body beyond ``lock_version`` (each command reads its own part)."""
 
     contact: ContactInput | None = None
+    procurement: ProcurementInput | None = None
     decline: sm.DeclineDetails | None = None
     terms: TermsInput | None = None
     payment: PaymentInput | None = None
@@ -466,23 +484,26 @@ async def _nothing(step: Step) -> None:
 async def _accept_interest(step: Step) -> None:
     """The contact the organisation named when it expressed interest, recorded like an approval's. The developer
     cannot read the organisation's roster: the role is the one an earlier event recorded, else ``member`` (the
-    database holds the contact to be an active member)."""
+    database holds the contact to be an active member). A public entity's accepted interest enters its procurement
+    route (3b): its deadline is the stage's, and the contact-by date comes with the route."""
     engagement = step.engagement
     if engagement.contact_user_id is None or engagement.contact_channel is None or engagement.contact_by is None:
         raise sm.Conflict("contact_not_named", "The organisation has not named its contact person yet.")
+    procurement = step.decision.to_state is S.PROCUREMENT_ROUTE
     role = await step.db.scalar(
         select(EngagementEvent.payload["contact_role"].astext)
         .where(EngagementEvent.engagement_id == engagement.id, EngagementEvent.payload.has_key("contact_role"))
         .order_by(EngagementEvent.seq.desc())
         .limit(1)
     )
-    step.named_deadline = engagement.contact_by
     step.payload.update(
         contact_user_id=str(engagement.contact_user_id),
         contact_role=role or UNKNOWN_CONTACT_ROLE,
         contact_channel=engagement.contact_channel.value,
-        contact_by=engagement.contact_by.isoformat(),
     )
+    if not procurement:
+        step.named_deadline = engagement.contact_by
+        step.payload["contact_by"] = engagement.contact_by.isoformat()
 
 
 async def _decline(step: Step) -> None:
@@ -521,10 +542,17 @@ async def _decline(step: Step) -> None:
 
 
 async def _approve(step: Step) -> None:
+    """Approve to proceed: the contact person, channel and contact-by date (stage 3); a public entity names the person
+    and channel only, and enters its procurement route (3b), where the date is named with the route."""
     contact = step.inputs.contact
     if contact is None:  # the router always sends one
         raise sm.Invalid("invalid_contact", "Name the contact person, channel and contact-by date.")
-    sm.check_contact_by(contact.contact_by, step.now, step.holidays, step.policy)
+    procurement = step.decision.to_state is S.PROCUREMENT_ROUTE
+    contact_by = None if procurement else contact.contact_by
+    if not procurement:
+        if contact_by is None:
+            raise sm.Invalid("invalid_contact_by", "Choose the contact-by date.")
+        sm.check_contact_by(contact_by, step.now, step.holidays, step.policy)
     membership = await membership_of(step.db, step.party.org_id, contact.user_id)
     if membership is None:
         raise sm.Invalid("invalid_contact", "Choose an active member of your organisation as the contact person.")
@@ -533,14 +561,54 @@ async def _approve(step: Step) -> None:
     engagement = step.engagement
     engagement.contact_user_id = contact.user_id
     engagement.contact_channel = contact.channel
-    engagement.contact_by = contact.contact_by
+    engagement.contact_by = contact_by
     await step.db.flush()  # the ORM's version check (lock_version) and the database's contact rules
-    step.named_deadline = contact.contact_by
+    step.named_deadline = contact_by
     step.payload.update(
-        contact_user_id=str(contact.user_id),
-        contact_role=role.value,
-        contact_channel=contact.channel.value,
-        contact_by=contact.contact_by.isoformat(),
+        contact_user_id=str(contact.user_id), contact_role=role.value, contact_channel=contact.channel.value
+    )
+    if contact_by is not None:
+        step.payload["contact_by"] = contact_by.isoformat()
+
+
+async def _choose_route(step: Step) -> None:
+    """A public entity's procurement route (3b; the caller's role is the state machine's: an owner or admin): the
+    justification as plain text (direct procurement needs one; no contact details before first contact), the
+    contact-by date from today to ``contact_by_max_bd`` business days ahead, the contact named at the approval. The
+    route, justification and date are one UPDATE (the CHECKs see them together; the database stamps the decision's
+    time and decider), and the event that follows enters stage 3 with the date as its deadline."""
+    choice = step.inputs.procurement
+    if choice is None:  # the router always sends one
+        raise sm.Invalid("invalid_route", "Choose the procurement route and the contact-by date.")
+    justification = sm.check_justification(choice.route, choice.justification)
+    if justification is not None and contact_codes(justification):
+        raise sm.Invalid(
+            "contains_contact",
+            "Contact details and links are shared once first contact is made. Remove them from the text.",
+        )
+    sm.check_contact_by(choice.contact_by, step.now, step.holidays, step.policy)
+    engagement = step.engagement
+    if engagement.contact_user_id is None or engagement.contact_channel is None:  # named with the approval
+        raise sm.Conflict("contact_not_named", "The organisation has not named its contact person yet.")
+    engagement.procurement_route = choice.route
+    engagement.procurement_justification = justification
+    engagement.contact_by = choice.contact_by
+    await step.db.flush()
+    step.named_deadline = choice.contact_by
+    step.payload.update(procurement_route=choice.route.value, contact_by=choice.contact_by.isoformat())
+    if justification is not None:  # free text stays out of the chain: its keyed digest is in it
+        digest: bytes = (
+            await step.db.execute(_DIGEST, {"user_id": step.party.user_id, "data": justification})
+        ).scalar_one()
+        step.payload["justification_sha256"] = digest.hex()
+    await audit(
+        step.db,
+        "engagement.procurement_route_chosen",
+        actor_user_id=step.party.user_id,
+        org_id=step.party.org_id,
+        subject_type="engagement",
+        subject_id=engagement.id,
+        payload={k: v for k, v in step.payload.items() if k != "endorsement_id"},
     )
 
 
@@ -862,6 +930,7 @@ EFFECTS: Final[dict[sm.Command, Effect]] = {
     C.START_REVIEW: _nothing,
     C.DECLINE: _decline,
     C.APPROVE: _approve,
+    C.CHOOSE_ROUTE: _choose_route,
     C.WITHDRAW: _nothing,
     C.MARK_CONTACTED: _nothing,
     C.CONFIRM_CONTACT: _nothing,

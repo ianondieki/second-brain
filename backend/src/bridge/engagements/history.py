@@ -19,7 +19,7 @@ import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Final
+from typing import Final, get_args
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
@@ -62,8 +62,11 @@ from bridge.engagements.schemas import (
     OrgEngagementDetail,
     PaymentOut,
     PendingOut,
+    ProcurementOut,
     SideLimitsOut,
     SignatureOut,
+    StageGroup,
+    StepOut,
 )
 from bridge.engagements.service import (
     Loaded,
@@ -81,6 +84,7 @@ from bridge.models.enums import (
     AgreementStatus,
     EngagementActorRole,
     EngagementEndReason,
+    EngagementOrigin,
     EngagementParty,
     EngagementState,
     MilestoneState,
@@ -101,6 +105,11 @@ async def _names(db: AsyncSession, ids: Iterable[UUID | None]) -> dict[UUID, str
 
 
 HANDLE_FALLBACK = "Developer"  # a version without a handle (never registered): the organisation sees this
+_GROUPS: Final[tuple[StageGroup, ...]] = get_args(StageGroup)
+# The stepper's group of each main-path stage (state_machine.STAGE_GROUPS, typed for the API).
+STAGE_GROUP: Final[dict[EngagementState, StageGroup]] = {
+    state: group for state, name in sm.STAGE_GROUPS.items() for group in _GROUPS if group == name
+}
 FORMER_MEMBER = "Former member"  # [[COPY-REVIEW]] a message's sender whose name the caller can no longer read
 
 
@@ -384,7 +393,12 @@ async def detail(
     ).scalars()
     names = await _names(
         db,
-        [engagement.contact_user_id, *(s.signer_user_id for s in signatures), *(e.user_id for e in endorsements)],
+        [
+            engagement.contact_user_id,
+            engagement.procurement_decided_by,
+            *(s.signer_user_id for s in signatures),
+            *(e.user_id for e in endorsements),
+        ],
     )
     hidden = None if base.developer_named else engagement.developer_id
     if hidden is not None:
@@ -478,6 +492,8 @@ async def detail(
             for n in notes
         ],
         side_limits=_side_limits(engagement.state, loaded.facts),
+        steps=steps_of(engagement, public_entity=loaded.facts.public_entity),
+        procurement=_procurement(engagement, names),
         today=sm.platform_day(now),  # the clock the commands check a hold's date against
     ).model_dump(exclude={"my_party"})
     if party.is_developer:  # never the organisation's triage (D-68)
@@ -493,6 +509,29 @@ async def detail(
         my_party=EngagementParty.ORG,
         team=team_facts.get(engagement.id),
         prior_knowledge=await prior_knowledge.for_org(db, engagement, party.org_roles, sm.platform_day(now)),
+    )
+
+
+def steps_of(engagement: Engagement, *, public_entity: bool) -> list[StepOut]:
+    """The engagement's stepper (``state_machine.steps``): its main-path stages with their labels and groups; 3b only
+    for a public entity (AC-TRACK-5)."""
+    org_initiated = engagement.origin is not EngagementOrigin.TAGGED
+    return [
+        StepOut(state=state, label=sm.STAGE_LABELS[state], group=STAGE_GROUP[state])
+        for state in sm.steps(org_initiated=org_initiated, public_entity=public_entity)
+    ]
+
+
+def _procurement(engagement: Engagement, names: dict[UUID, str]) -> ProcurementOut | None:
+    """A public entity's chosen procurement route (both parties read it), or None before it is chosen."""
+    if engagement.procurement_route is None or engagement.procurement_decided_at is None:
+        return None
+    decider = engagement.procurement_decided_by
+    return ProcurementOut(
+        route=engagement.procurement_route,
+        justification=engagement.procurement_justification,
+        decided_at=engagement.procurement_decided_at,
+        decided_by_name=(names.get(decider) if decider is not None else None) or FORMER_MEMBER,
     )
 
 

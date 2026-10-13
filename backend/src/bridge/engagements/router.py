@@ -16,7 +16,10 @@ Reads (parties only; anyone else gets 404):
 Commands: ``POST /api/engagements/{id}/<command>`` (and ``.../milestones/{milestone_id}/<step>``), one per row of
 the state machine's table, each with ``lock_version``; the side states (REQ-ENG-10 part) are ``request-info``,
 ``answer-info``, ``pause`` and ``resume``, each with its text (a question, an answer, a reason), and
-``cancel-request`` (the organisation withdraws its open question). Refusals: 404 (not a
+``cancel-request`` (the organisation withdraws its open question). A public entity's procurement route (3b,
+REQ-ENG-06) is chosen by its owner or admin under the organisation's path:
+``POST /api/orgs/{org_id}/engagements/{id}/procurement-route`` (``ProcurementBody``; a non-member, or another
+organisation's engagement, 404). Refusals: 404 (not a
 party), 403 (wrong party or role, a missing fresh second factor for signing or endorsing, D2 for the developer's
 agreement signature, the deals flag), 409 (a transition not in the table, a precondition, a stale ``lock_version``),
 422 (an invalid body). A command's response is the engagement as the caller now sees it.
@@ -39,6 +42,7 @@ from bridge.engagements.commands import (
     Inputs,
     MilestoneInput,
     PaymentInput,
+    ProcurementInput,
     RequestMeta,
     TermsInput,
     execute,
@@ -54,9 +58,11 @@ from bridge.engagements.schemas import (
     DocumentOut,
     EngagementList,
     HistoryOut,
+    OrgEngagementDetail,
     OrgEngagementList,
     PauseBody,
     PaymentBody,
+    ProcurementBody,
     RequestInfoBody,
     ResumeBody,
     TermsBody,
@@ -210,6 +216,28 @@ async def approve(body: ApproveBody, request: Request, party: PartyDep, db: Db, 
     """Approve to proceed (non-binding), naming the contact person, channel and contact-by date (stage 3; EM2)."""
     contact = ContactInput(body.contact_user_id, body.contact_channel, body.contact_by)
     return await _run(request, db, settings, party, sm.Command.APPROVE, body, Inputs(contact=contact))
+
+
+@router.post("/api/orgs/{org_id}/engagements/{engagement_id}/procurement-route")
+async def choose_procurement_route(
+    engagement_id: UUID, body: ProcurementBody, request: Request, org: OrgMember, db: Db, settings: SettingsDep
+) -> OrgEngagementDetail:
+    """Choose a public entity's procurement route (stage 3b; docs/spec/06 6.9): an owner or admin of the organisation
+    (403 ``role_required`` for any other member), while the engagement waits in ``PROCUREMENT_ROUTE`` (409
+    otherwise), with the contact-by date of stage 3. The engagement enters ``INTEREST_CONFIRMED`` (non-binding): the
+    named contact may then read the developer's contact details, and the developer is told the route and gets EM2."""
+    engagement = await team.org_engagement(db, org.org_id, engagement_id, org.live.user.id)  # 404: another's
+    party = await resolve_party(db, org.live, engagement_id)
+    inputs = Inputs(procurement=ProcurementInput(body.route, body.justification, body.contact_by))
+    # Without lock_version, the version just read: a route is chosen once and in 3b only (the state machine and the
+    # database), so a decision never overwrites another.
+    lock = body.lock_version if body.lock_version is not None else engagement.lock_version
+    await execute(db, settings, party, sm.Command.CHOOSE_ROUTE, lock_version=lock, meta=_meta(request), inputs=inputs)
+    await db.commit()
+    detail = await history.detail(db, party, deals_enabled=settings.feature_deals_enabled)
+    if not isinstance(detail, OrgEngagementDetail):  # pragma: no cover - org_engagement refused the developer
+        raise not_found()
+    return detail
 
 
 @router.post(f"{PREFIX}/decline")
