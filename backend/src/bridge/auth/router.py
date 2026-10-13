@@ -58,6 +58,7 @@ from bridge.auth.schemas import (
     UserOut,
 )
 from bridge.errors import ERROR_RESPONSES, ApiError, not_found
+from bridge.me.caller import side_of
 from bridge.notifications.email import EmailProvider
 from bridge.profiles.consents import SESSION_ONLY_MESSAGE
 from bridge.public_demo import LOCKED
@@ -72,6 +73,8 @@ MESSAGES = {
     "invalid_email": "Enter a standard email address, such as name@example.com.",
     "terms_not_accepted": "Accept the terms to create an account.",
     "org_details_required": "Enter your organisation's name and type.",
+    # [[COPY-REVIEW]] P28 (D-72): an invitation joins an existing organisation, as an organisation account only.
+    "invitation_conflict": "An invitation joins its organisation: sign up as a member, without a new organisation.",
     "consents_version_required": "Reload the page to see the current consent wording.",
     "consent_text_changed": "The consent wording has changed. Reload the page and choose again.",
     "consent_session_only": SESSION_ONLY_MESSAGE,  # the settings API's words (REQ-PROP-05)
@@ -136,7 +139,10 @@ async def signup(
 ) -> AcceptedResponse:
     """Create an account and email its link; 202 "check your email" whether or not the address has an account. 422
     invalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or
-    consent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed."""
+    consent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.
+    With ``invitation`` (an organisation's invitation link's token; P28, D-72) and side "org" without ``org``: an
+    invitee's account (no developer profile, organisation or plan), only while the link is open (else 422
+    org_details_required); ``invitation`` with side "developer" or with ``org`` is 422 invitation_conflict."""
     try:
         outcome = await service.signup(db, settings, body, client_ip(request))
     except service.AuthError as exc:
@@ -269,12 +275,8 @@ async def me(live: PendingSession, db: Db) -> MeResponse:
         pending = user_out(user).model_copy(update={"staff_role": None})
         return MeResponse(user=pending, memberships=[], mfa=mfa, side="pending")
     memberships = await my_memberships(db, user.id)
-    if user.staff_role:
-        side = "staff"
-    elif await service.has_developer_profile(db, user.id):
-        side = "developer"
-    else:
-        side = "org" if memberships else "developer"
+    # P28 (D-72): one side per account; without a developer profile, an organisation account, member of one or not.
+    side = side_of(staff=bool(user.staff_role), developer=await service.has_developer_profile(db, user.id))
     return MeResponse(
         user=user_out(user),
         memberships=[MembershipOut(org_id=m.org.id, org_name=m.org.legal_name, roles=m.roles) for m in memberships],
