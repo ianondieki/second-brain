@@ -220,7 +220,7 @@ async def test_the_fictional_public_seed_has_no_real_organisation_and_no_news_ex
             "owner@telco-a.example",
             "signatory@telco-a.example",
             "reviewer@telco-a.example",
-            "owner@county-c.example",
+            "owner@state-d.example",
             "moderator@staff.example",
         ],
     )
@@ -314,7 +314,7 @@ async def test_the_status_route_lists_the_personas(app: AsyncEngine) -> None:
     async with visitor(app) as client:
         body = (await client.get("/api/public/demo")).json()
     assert body["enabled"] is True
-    assert [p["key"] for p in body["personas"]] == ["amina", "brian", "grace", "peter", "rita", "hassan", "moderator"]
+    assert [p["key"] for p in body["personas"]] == ["amina", "brian", "grace", "peter", "rita", "halima", "moderator"]
 
 
 # ------------------------------------------------------------------------------------------------------------ AT-PD-2
@@ -360,21 +360,21 @@ async def test_unknown_personas_and_other_fields_sign_nobody_in(fictional: Seede
 async def test_an_allowlisted_address_that_is_not_an_active_demo_account_is_refused(
     fictional: Seeded, app: AsyncEngine, owner: AsyncEngine, change: str
 ) -> None:
-    hassan = "owner@county-c.example"
+    halima = "owner@state-d.example"
     async with owner.begin() as conn:
-        await conn.execute(text(change), {"e": hassan})
+        await conn.execute(text(change), {"e": halima})
     try:
         async with visitor(app, ip="41.90.2.6") as client:
-            response = await client.post(SIGN_IN, json={"persona": "hassan"})
+            response = await client.post(SIGN_IN, json={"persona": "halima"})
             assert (response.status_code, response.json()["detail"]["code"]) == (400, "unknown_persona")
             assert get_settings().session_cookie_name not in client.cookies
     finally:
         async with owner.begin() as conn:
             await conn.execute(
-                text("UPDATE users SET demo_account = true, status = 'active' WHERE email = :e"), {"e": hassan}
+                text("UPDATE users SET demo_account = true, status = 'active' WHERE email = :e"), {"e": halima}
             )
     async with visitor(app, ip="41.90.2.7") as client:
-        assert (await client.post(SIGN_IN, json={"persona": "hassan"})).status_code == 200
+        assert (await client.post(SIGN_IN, json={"persona": "halima"})).status_code == 200
 
 
 async def test_sign_ins_are_throttled_per_ip(fictional: Seeded, app: AsyncEngine) -> None:

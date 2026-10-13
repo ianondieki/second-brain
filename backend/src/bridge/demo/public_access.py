@@ -91,7 +91,7 @@ PERSONAS: Final[tuple[Persona, ...]] = (
     Persona("grace", "owner@telco-a.example", "org_admin", "/org"),
     Persona("peter", "signatory@telco-a.example", "org_signatory", "/org"),
     Persona("rita", "reviewer@telco-a.example", "org_reviewer", "/org"),
-    Persona("hassan", "owner@county-c.example", "org_admin", "/org"),
+    Persona("halima", "owner@state-d.example", "org_admin", "/org"),
     Persona("moderator", "moderator@staff.example", "staff", "/admin"),
 )
 BY_KEY: Final = {persona.key: persona for persona in PERSONAS}
