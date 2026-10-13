@@ -153,7 +153,8 @@ def warn_shared_bucket(now: float) -> bool:
     if _SHARED_WARNING.last is not None and now - _SHARED_WARNING.last < SHARED_WARNING_EVERY:
         return False
     _SHARED_WARNING.last = now
-    log.warning("auth.demo_persona_shared_bucket")  # per-visitor throttling is unavailable: one shared bucket
+    # Per call, so a logger cached under an earlier configuration is never reused (as ``deliveries.send_email``).
+    get_logger(__name__).warning("auth.demo_persona_shared_bucket")  # per-visitor throttling is unavailable
     return True
 
 
