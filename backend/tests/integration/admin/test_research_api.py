@@ -55,7 +55,7 @@ class Client(Protocol):
 @pytest.fixture
 async def world(owner_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> ResearchWorld:
     found = await make_research_world(owner_engine)
-    monkeypatch.setattr(research_api, "get_catalogue", lambda: found.catalogue)
+    monkeypatch.setattr(research_api, "catalogue_for", lambda settings: found.catalogue)  # every route's catalogue
     return found
 
 
