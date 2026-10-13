@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { DemoLocked } from "@/components/DemoLocked";
 import { PortalNavFor } from "@/components/PortalNavFor";
 import { Section } from "@/components/ui/Section";
 import { SignedInShell } from "@/components/SignedInShell";
@@ -12,6 +13,7 @@ import { homeOf } from "@/lib/auth/routing";
 import { formatMoment } from "@/lib/format";
 import { DATA_SAVER_COOKIE } from "@/lib/data-saver";
 import { clientStrings, pickedStrings } from "@/lib/i18n/client-strings";
+import { publicDemoOn } from "@/lib/public-demo";
 
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -116,16 +118,24 @@ export default async function NotificationSettingsPage({ searchParams }: PagePro
                     <OrgPicker memberships={me.memberships} current={feedOrg.org_id} action="/settings/notifications" />
                   ) : null}
                   {feedOrg ? <p className="text-ink">{tf("forOrg", { org: feedOrg.org_name })}</p> : null}
-                  <p className="max-w-[62ch] text-sm text-ink-soft" data-feed-private="">
-                    {tf("private")}
-                  </p>
-                  <ClientStrings strings={await clientStrings(["calendarFeed"])}>
-                    <CalendarFeed
-                      initial={feed?.active ? "live" : "none"}
-                      orgId={feedOrg?.org_id}
-                      lastRead={feed?.last_fetched_at ? formatMoment(locale, feed.last_fetched_at) : null}
-                    />
-                  </ClientStrings>
+                  {/* The public demo (REQ-FND-04): making, rotating and removing a feed is switched off (the API refuses
+                      it); "Add to calendar" on each item still downloads its .ics. */}
+                  {publicDemoOn() ? (
+                    <DemoLocked />
+                  ) : (
+                    <>
+                      <p className="max-w-[62ch] text-sm text-ink-soft" data-feed-private="">
+                        {tf("private")}
+                      </p>
+                      <ClientStrings strings={await clientStrings(["calendarFeed"])}>
+                        <CalendarFeed
+                          initial={feed?.active ? "live" : "none"}
+                          orgId={feedOrg?.org_id}
+                          lastRead={feed?.last_fetched_at ? formatMoment(locale, feed.last_fetched_at) : null}
+                        />
+                      </ClientStrings>
+                    </>
+                  )}
                 </div>
               </Section>
             </Card>
