@@ -482,6 +482,26 @@ describe("the route, once chosen, for both parties", () => {
     expect(entry.querySelector("[data-event-route]")?.textContent).toBe("Route: Request for quotation or tender");
   });
 
+  it("words a public entity's approval as leading to the route, not to stage 3; a private one's as before", () => {
+    const base = history();
+    const approval = (to_state: "PROCUREMENT_ROUTE" | "INTEREST_CONFIRMED") => ({
+      ...base.events[1],
+      id: `0199b000-0000-7000-8000-0000000000${to_state === "PROCUREMENT_ROUTE" ? "e4" : "e5"}`,
+      seq: 3,
+      actor_name: "Otieno Mwita",
+      command: "approve",
+      from_state: "UNDER_REVIEW" as const,
+      to_state,
+    });
+    renderWithIntl(<HistoryList history={{ ...base, events: [...base.events, approval("PROCUREMENT_ROUTE")] }} />);
+    const entry = document.querySelector("[data-event='approve']")!;
+    expect(entry.querySelector("h3")?.textContent).toBe("Approved; the procurement route comes next");
+    expect(entry.textContent).not.toContain("Approved to proceed");
+    cleanup();
+    renderWithIntl(<HistoryList history={{ ...base, events: [...base.events, approval("INTEREST_CONFIRMED")] }} />);
+    expect(document.querySelector("[data-event='approve'] h3")?.textContent).toBe("Approved to proceed (non-binding)");
+  });
+
   it("ignores a route it does not know in an event's payload", () => {
     const base = history();
     const odd = { ...base.events[1], id: "x", seq: 3, command: "choose_route", payload: { procurement_route: "<b>x</b>" } };

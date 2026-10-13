@@ -140,11 +140,14 @@ export function HistoryList({
               {mark}
               <div className="min-w-0 flex-1">
                 <h3 className="font-semibold text-ink">
-                  {EVENT_KEYS.has(event.command)
-                    ? t(`event.${event.command as Command | "create" | "expire"}`)
-                    : event.command === "prior_knowledge_declared"
-                      ? t("history.priorKnowledgeDeclared")
-                      : t("event.other")}
+                  {/* A public entity's approval leads to its procurement route (3b), not yet to stage 3. */}
+                  {event.command === "approve" && event.to_state === "PROCUREMENT_ROUTE"
+                    ? t("event.approveToRoute")
+                    : EVENT_KEYS.has(event.command)
+                      ? t(`event.${event.command as Command | "create" | "expire"}`)
+                      : event.command === "prior_knowledge_declared"
+                        ? t("history.priorKnowledgeDeclared")
+                        : t("event.other")}
                 </h3>
                 <p className="mt-0.5 flex flex-wrap gap-x-3 text-sm text-ink-soft">
                   <span className="text-ink">
