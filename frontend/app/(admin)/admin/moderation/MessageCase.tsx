@@ -12,6 +12,8 @@ import { decidedLine } from "./CaseRow";
 import { MessageDecision } from "./MessageDecision";
 import { caseHref, messageReasons, outcomeChip, outcomeKey, type Case } from "./moderation";
 import { caseStrings } from "./strings";
+import { DemoLocked } from "@/components/DemoLocked";
+import { publicDemoOn } from "@/lib/public-demo";
 
 /**
  * A party's report of one engagement message (REQ-ENG-11; D-57 (4)): the reasons the reporter chose, the one message
@@ -87,15 +89,20 @@ export async function MessageCase({ item, nextId }: { item: Case; nextId: string
           headingId="decision"
           className="decision-panel rounded-panel border bg-field p-5 lg:sticky lg:top-24 lg:col-start-2 lg:row-start-2"
         >
-          <ClientStrings key="decision" strings={await caseStrings()}>
-            <MessageDecision
-              caseId={item.id}
-              actions={result ? [] : item.actions}
-              blocked={item.blocked}
-              decided={result && line ? { outcome: result, line } : null}
-              nextHref={nextId ? caseHref(nextId) : null}
-            />
-          </ClientStrings>
+          {/* The public demo (REQ-FND-04): staff are read-only; an undecided case shows the locked line. */}
+          {publicDemoOn() && !result ? (
+            <DemoLocked />
+          ) : (
+            <ClientStrings key="decision" strings={await caseStrings()}>
+              <MessageDecision
+                caseId={item.id}
+                actions={result ? [] : item.actions}
+                blocked={item.blocked}
+                decided={result && line ? { outcome: result, line } : null}
+                nextHref={nextId ? caseHref(nextId) : null}
+              />
+            </ClientStrings>
+          )}
         </Section>
       </div>
     </article>

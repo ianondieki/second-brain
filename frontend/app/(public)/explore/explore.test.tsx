@@ -119,3 +119,21 @@ describe("Credits", () => {
     }
   });
 });
+
+// REQ-FND-04: in the public demo the call goes to /login's persona picker (sign-up is switched off there).
+describe("Explore in the public demo", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("calls \"Try the demo\" to /login, with no sign-up link; as before with the mode off", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    const { container } = await explore(EXPLORE);
+    const primary = container.querySelector<HTMLAnchorElement>("a[data-primary]")!;
+    expect(primary.getAttribute("href")).toBe("/login");
+    expect(primary.textContent).toBe(en.publicDemo.tryDemo);
+    expect(container.querySelector('a[href="/signup"]')).toBeNull();
+    cleanup();
+    vi.stubEnv("PUBLIC_DEMO", "false");
+    const off = await explore(EXPLORE);
+    expect(off.container.querySelector("a[data-primary]")!.getAttribute("href")).toBe("/signup");
+  });
+});

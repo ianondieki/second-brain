@@ -194,3 +194,21 @@ describe("the queue's row", () => {
     expect(document.querySelector("[data-chip='reason']")).toBeNull();
   });
 });
+
+// REQ-FND-04: staff are read-only in the public demo; the reported message still reads.
+describe("a message report in the public demo", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("shows the locked line instead of Dismiss and Uphold; as before with the mode off", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    await page(report());
+    expect(document.querySelector("[data-message-body]")).not.toBeNull();
+    expect(document.querySelector("[data-demo-locked]")!.textContent).toBe(en.publicDemo.locked);
+    expect(screen.queryByRole("button", { name: /dismiss|uphold/i })).toBeNull();
+    cleanup();
+    vi.stubEnv("PUBLIC_DEMO", "false");
+    await page(report());
+    expect(document.querySelector("[data-demo-locked]")).toBeNull();
+    expect(screen.getAllByRole("button", { name: /dismiss|uphold/i }).length).toBeGreaterThan(0);
+  });
+});

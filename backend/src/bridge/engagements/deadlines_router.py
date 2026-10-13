@@ -43,6 +43,7 @@ from bridge.engagements.schemas import CalendarFeedOut, CalendarFeedStatus, Dead
 from bridge.engagements.service import app_now
 from bridge.errors import ERROR_RESPONSES, json_errors, not_found
 from bridge.events import calendar
+from bridge.public_demo import LOCKED
 from bridge.tenancy.deps import OrgMember
 from bridge.tenancy.models import Organization
 
@@ -182,7 +183,7 @@ async def my_feed(live: CurrentSession, db: Db) -> CalendarFeedStatus:
     return await feeds.status(db, live.user.id, None)
 
 
-@router.post(f"{ME}/calendar-feed", status_code=201)
+@router.post(f"{ME}/calendar-feed", status_code=201, dependencies=[LOCKED])  # REQ-FND-04: no public URL
 async def create_my_feed(live: CurrentSession, db: Db, settings: SettingsDep) -> CalendarFeedOut:
     """A private feed of the caller's deadlines (a new URL; the previous one stops working at once)."""
     return await _create(db, settings, live.user.id, None)
@@ -200,7 +201,7 @@ async def org_feed(org: OrgMember, db: Db) -> CalendarFeedStatus:
     return await feeds.status(db, org.live.user.id, org.org_id)
 
 
-@router.post(f"{ORG}/calendar-feed", status_code=201)
+@router.post(f"{ORG}/calendar-feed", status_code=201, dependencies=[LOCKED])  # REQ-FND-04: no public URL
 async def create_org_feed(org: OrgMember, db: Db, settings: SettingsDep) -> CalendarFeedOut:
     """A private feed of the organisation's deadlines, for the caller (one per member)."""
     return await _create(db, settings, org.live.user.id, org.org_id)

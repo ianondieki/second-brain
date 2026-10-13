@@ -40,6 +40,7 @@ from bridge.audit.service import record as audit
 from bridge.auth.deps import Db
 from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, not_found
 from bridge.models.enums import AuditActor
+from bridge.public_demo import LOCKED
 from bridge.quiz.models import FLAG_REASONS, RAW_TEXT_MAX_CHARS, REASON_MAX_CHARS, QuizFlag, QuizQuestion, QuizSet
 
 router = APIRouter(prefix="/api/admin/quiz", tags=["admin"], responses=ERROR_RESPONSES)
@@ -262,6 +263,7 @@ def _sqlstate(exc: DBAPIError) -> str:
 
 @router.post(
     "/sets/{set_id}/decision",
+    dependencies=[LOCKED],  # staff are read-only in the public demo (REQ-FND-04)
     responses={409: {"model": ApiErrorBody, "description": f"{DECISION_CONFLICTS} (approving a set of a past day)"}},
 )
 async def decide_quiz_set(set_id: UUID, body: QuizDecisionIn, staff: StaffAdmin, db: Db) -> QuizSetSummaryOut:
@@ -334,13 +336,13 @@ async def _set_status(
     return QuizQuestionStatusOut(question_id=question_id, set_id=set_id, status=status, rescored=rescored)
 
 
-@router.post("/questions/{question_id}/pull")
+@router.post("/questions/{question_id}/pull", dependencies=[LOCKED])  # read-only staff in the public demo
 async def pull_quiz_question(question_id: UUID, body: QuizPullIn, staff: StaffAdmin, db: Db) -> QuizQuestionStatusOut:
     """Withdraw a question (it counts for nobody) and rescore its set's attempts."""
     return await _set_status(db, staff, question_id, "pulled", body.reason)
 
 
-@router.post("/questions/{question_id}/restore")
+@router.post("/questions/{question_id}/restore", dependencies=[LOCKED])  # read-only staff in the public demo
 async def restore_quiz_question(question_id: UUID, staff: StaffAdmin, db: Db) -> QuizQuestionStatusOut:
     """Put a withdrawn question back and rescore its set's attempts; flags never pull it again."""
     return await _set_status(db, staff, question_id, "live", None)

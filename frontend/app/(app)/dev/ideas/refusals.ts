@@ -8,6 +8,9 @@ import { common, detail, fieldsRefusal, type PublishProblem, type Refusal, type 
 /** A refused publish (POST /api/me/proposals/{id}/publish). */
 export function publishRefusal(status: number, body: unknown): Refusal<PublishProblem> {
   const code = apiErrorCode(body);
+  // The public demo (REQ-FND-04) publishes a limited number of versions a day per account: a 429 of its own, ahead of
+  // the shared "too many attempts" (which says to wait a minute).
+  if (status === 429 && code === "public_demo_limit") return { problem: "demoLimit", fields: [] };
   const shared = common(status, code);
   if (shared) return { problem: shared, fields: [] };
   if (status === 403 && code === "d1_required") return { problem: "d1Required", fields: [] };

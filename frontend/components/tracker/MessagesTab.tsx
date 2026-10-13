@@ -1,10 +1,12 @@
 import { getLocale, getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { DemoLocked } from "@/components/DemoLocked";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Section } from "@/components/ui/Section";
 import { InfoIcon } from "@/components/ui/status-icons";
 import { clientStrings } from "@/lib/i18n/client-strings";
+import { publicDemoOn } from "@/lib/public-demo";
 
 import type { ThreadRead } from "./data";
 import { nairobiToday } from "./input";
@@ -67,6 +69,10 @@ export async function MessagesTab({ detail, read, trackerHref }: { detail: Detai
     : thread.can_post
       ? null
       : t("messages.viewer");
+  // The public demo (REQ-FND-04): file uploads are switched off. The composer is handed a thread that takes no files
+  // (as a team thread's), so it draws no Attach and ships nothing new; one line under it says why. Server-side only:
+  // the tracker routes sit at their 150 KB budget.
+  const uploadsOff = publicDemoOn() && thread.can_post && !closed && thread.limits.max_attachments > 0;
   return (
     <Section
       {...frame}
@@ -83,7 +89,7 @@ export async function MessagesTab({ detail, read, trackerHref }: { detail: Detai
       <ClientStrings strings={await clientStrings(["trackerMessages"])}>
         <EngagementThread
           engagementId={detail.id}
-          initial={thread}
+          initial={uploadsOff ? { ...thread, limits: { ...thread.limits, max_attachments: 0 } } : thread}
           today={detail.today ?? nairobiToday()}
           locale={locale}
           orgName={detail.org_name}
@@ -91,6 +97,9 @@ export async function MessagesTab({ detail, read, trackerHref }: { detail: Detai
           empty={closed ? null : thread.can_post ? t("messages.empty") : t("messages.emptyViewer")}
         />
       </ClientStrings>
+      {uploadsOff ? (
+        <DemoLocked sentence={(await getTranslations("publicDemo"))("attachLocked")} className="mt-4 text-sm" />
+      ) : null}
       {note ? (
         <p className="mt-6 flex max-w-[65ch] items-start gap-2 text-ink" data-thread-closed={closed ? "read_only" : "viewer"}>
           <InfoIcon className="mt-0.5 size-5 shrink-0 text-accent" />

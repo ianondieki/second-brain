@@ -120,7 +120,9 @@ class DemoReport:
 async def in_process_app(
     settings: Settings, engine: AsyncEngine, runtime: DemoRuntime
 ) -> AsyncIterator[tuple[FastAPI, async_sessionmaker[AsyncSession]]]:
-    app = create_app(settings)
+    # The seed's own API is the operator's, never a visitor's: the public demo's lock (REQ-FND-04) would refuse the
+    # TOTP confirmation and uploads it drives, so it runs unlocked. What it seeds still follows PUBLIC_DEMO_CONTENT.
+    app = create_app(settings.model_copy(update={"public_demo": False}))
     factory = create_session_factory(engine)
     app.state.engine = engine
     app.state.session_factory = factory

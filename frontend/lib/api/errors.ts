@@ -30,6 +30,11 @@ export const KNOWN_ERROR_CODES = [
   "unauthenticated",
   "mfa_required",
   "step_up_required",
+  // The public demo (REQ-FND-04): any route switched off there answers 403 with this code, so a control the screen
+  // did not lock still shows the right sentence.
+  "public_demo_locked",
+  // The public demo's daily cap on published versions per account (429): its own sentence, not "too many attempts".
+  "public_demo_limit",
 ] as const;
 
 export type KnownErrorCode = (typeof KNOWN_ERROR_CODES)[number];
