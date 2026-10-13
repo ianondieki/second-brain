@@ -84,7 +84,8 @@ class Command(StrEnum):
     START_REVIEW = "start_review"
     DECLINE = "decline"
     APPROVE = "approve"
-    CHOOSE_ROUTE = "choose_route"  # stage 3b: a public entity's owner or admin chooses its procurement route
+    # Stage 3b: a public entity's owner or admin chooses its procurement route.
+    CHOOSE_ROUTE = "choose_route"
     WITHDRAW = "withdraw"
     MARK_CONTACTED = "mark_contacted"
     CONFIRM_CONTACT = "confirm_contact"
