@@ -194,7 +194,9 @@ self-reported references and the IP nudge (docs/spec/06 §6.4 pt 8, §6.1), **RE
 and the data-saver switch (docs/spec/07 item 5, brought forward) (P27, `tasks/P27.md`, D-68 to D-70; N30 and N31
 below are P27's; all six built and gated 2026-10-12, PROGRESS.md "P27 report"); **REQ-FND-04** Public demo (the
 public-demo mode, persona sign-in, the all-in-one image and the Codespaces link; the durable host waits on D-71) and the
-P28 feature tracks (P28, `tasks/P28.md`). The ids are used in commits, code and tests as every other REQ-ID is.
+P28 feature tracks: **REQ-TEN-02** Team (invitations, removal, a default reviewer per niche, an escalation
+contact; docs/spec/07 item 1) and **REQ-ENG-17** Engagements CSV export (the `csv_export` entitlement, docs/spec/05),
+beside the spec's own REQ-ENG-06, REQ-NOT-03/05, REQ-ENG-05 and REQ-AUD-01 (P28, `tasks/P28.md`). The ids are used in commits, code and tests as every other REQ-ID is.
 
 ## 4. Acceptance tests (one row per AC or AC clause)
 
