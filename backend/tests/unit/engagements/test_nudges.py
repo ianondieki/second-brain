@@ -20,7 +20,8 @@ from bridge.engagements.calendar import NAIROBI
 from bridge.engagements.policy import load_policy
 from bridge.models.enums import EngagementParty, EngagementState, NudgeKind, OrgRole
 
-S, K = EngagementState, NudgeKind
+S = EngagementState
+K = NudgeKind
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 POLICY = load_policy()
 MONDAY = date(2026, 10, 5)

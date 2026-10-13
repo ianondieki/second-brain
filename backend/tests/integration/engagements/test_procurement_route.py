@@ -216,8 +216,9 @@ async def test_only_an_owner_or_admin_chooses_the_route_with_a_valid_body(
         ):
             refused = await s.owner.post(route_path(world, t.engagement), json=body)
             assert (refused.status_code, refused.json()["detail"]["code"]) == (422, code), body
-        for body in ({**good, "route": "barter"}, {**good, "extra": 1}, {"route": "direct"}):
-            assert (await s.owner.post(route_path(world, t.engagement), json=body)).status_code == 422
+        malformed: list[dict[str, Any]] = [{**good, "route": "barter"}, {**good, "extra": 1}, {"route": "direct"}]
+        for wrong in malformed:
+            assert (await s.owner.post(route_path(world, t.engagement), json=wrong)).status_code == 422
         stale = await s.owner.post(route_path(world, t.engagement), json={**good, "lock_version": 0})
         assert (stale.status_code, stale.json()["detail"]["code"]) == (409, "stale")
         assert (await t.detail(s.owner))["state"] == "PROCUREMENT_ROUTE"
@@ -288,7 +289,7 @@ async def test_the_chosen_route_enters_stage_3_for_both_parties(
     assert "direct procurement" in route_notice[0].body
     assert [row.kind for row in told].count("engagement.n04") == 1  # the approval into 3b
     to_developer = [m for m in provider.outbox if m.to == world.developer_email]
-    assert sorted(m.tag for m in to_developer) == ["em2", "engagement.n05"]  # EM2 once, and the route (mutable)
+    assert sorted(m.tag or "" for m in to_developer) == ["em2", "engagement.n05"]  # EM2 once, the route (mutable)
     em2 = next(m for m in to_developer if m.tag == "em2")
     assert "Public bodies may need to run a competitive process" in em2.text
     status = next(m for m in to_developer if m.tag == "engagement.n05")
