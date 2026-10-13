@@ -11,8 +11,9 @@ Standard library only: the image's command (infra/demo/space/Dockerfile), run as
 3. starts SeaweedFS (S3, its telemetry off) and Mailpit on 127.0.0.1 only;
 4. runs infra/docker-compose.demo.yml's migrate step (migrations, buckets, the provenance key, the demo seed) with the
    demo compose's environment plus ``PUBLIC_DEMO=true``;
-5. starts the API (127.0.0.1:8000), the job worker and the web app on ``PORT`` (default 7860, every interface): the
-   only port a visitor reaches.
+5. starts the API (127.0.0.1:8000) and the job worker, both with ``PUBLIC_DEMO_FROZEN_AT`` set to the instant the seed
+   finished (kept until the next reset, through any crash-restart), and the web app on ``PORT`` (default 7860, every
+   interface): the only port a visitor reaches.
 
 A child that crashes is restarted with back-off. At 03:00 Africa/Nairobi (00:00 UTC; Kenya keeps no daylight saving),
 or on SIGUSR1, the nightly reset stops the children, wipes the data and boots again with new secrets. SIGTERM and
@@ -158,6 +159,11 @@ def public_base_url(port: int) -> str:
     return f"http://localhost:{port}"
 
 
+def frozen_instant() -> str:
+    """Now, as PUBLIC_DEMO_FROZEN_AT takes it: ISO 8601 with its zone (UTC), to the second."""
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
 def next_reset(now: datetime) -> datetime:
     local = now.astimezone(EAT)
     due = local.replace(hour=RESET_HOUR_EAT, minute=0, second=0, microsecond=0)
@@ -256,6 +262,7 @@ class Supervisor:
         self.base_url = public_base_url(port)
         self.cookie_secure = os.environ.get("COOKIE_SECURE", "true").strip() or "true"
         self.secrets: dict[str, str] = {}
+        self.frozen_at: str | None = None  # PUBLIC_DEMO_FROZEN_AT for this boot's API and worker
         self.children: dict[str, Child] = {}
         self.stopping = False
         self.reset_requested = False
@@ -280,6 +287,7 @@ class Supervisor:
             DATABASE_URL=f"postgresql+psycopg://bridge_app:{s['BRIDGE_APP_PASSWORD']}@{db}",
             DATABASE_OWNER_URL=f"postgresql+psycopg://bridge_owner:{s['BRIDGE_OWNER_PASSWORD']}@{db}",
             **{name: s[name] for name in APP_SECRETS},
+            **({"PUBLIC_DEMO_FROZEN_AT": self.frozen_at} if self.frozen_at else {}),
         )
 
     def web_env(self) -> dict[str, str]:
@@ -353,7 +361,7 @@ class Supervisor:
         if self.stopping:
             raise Stopping
         began = time.monotonic()
-        self.reset_requested = False
+        self.reset_requested, self.frozen_at = False, None
         self.secrets = new_secrets()
         wipe()
         log(f"boot: data wiped, new secrets; site {self.base_url} (content: {self.content})")
@@ -362,6 +370,10 @@ class Supervisor:
         for command in MIGRATE:
             self.step("migrate", command.split(), self.app_env())
         log("migrated and seeded")
+        # Signed-out public pages show the data as of this instant until the next reset: taken once, after the seed,
+        # and fixed in the API's and worker's environment, so a crash-restarted child keeps it (empty, the API would
+        # take its own start, which a restart moves).
+        self.frozen_at = frozen_instant()
         self.start_app()
         log(f"ready in {time.monotonic() - began:.0f} s: {self.base_url} (port {self.port})")
 
