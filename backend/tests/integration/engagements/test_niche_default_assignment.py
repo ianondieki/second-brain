@@ -16,11 +16,15 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+import pytest
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.db import bind_tenant, create_session_factory
 from bridge.engagements import team
 from bridge.engagements.team import N30, default_title
+from bridge.ids import uuid7
+from tests.integration.engagements import api_world
 from tests.integration.engagements.api_world import clients, db_today, deals_on
 from tests.integration.matching.scout_world import ScoutWorld, build, publish, rows
 
@@ -151,3 +155,51 @@ async def test_a_default_never_overwrites_an_assignment(owner_engine: AsyncEngin
     assert await live_assignee(owner_engine, manual) == [(world.org.signatory, world.org.owner)]
     assert await live_assignee(owner_engine, cleared) == []
     assert await n30s(owner_engine, world.org.reviewer) == []
+
+
+async def test_the_rule_on_a_submitted_engagement_and_its_refusals(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The rule itself, bound to a member: a SUBMITTED engagement takes the default too (its Pitch-time hook waits on
+    a database function, see the module docstring); not in an opening state, or with no member bound, nothing; and
+    the assignment guard is the backstop when the member checks are bypassed (nothing assigned, no error)."""
+    world = await api_world.build(owner_engine)
+    engagement = await api_world.open_engagement(app_engine, world)
+    [version] = await rows(owner_engine, "SELECT niche_id FROM proposal_versions WHERE id = :v", v=world.version)
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text("INSERT INTO org_niche_defaults (id, org_id, niche_id, user_id) VALUES (:id, :o, :n, :u)"),
+            {"id": uuid7(), "o": world.org, "n": version.niche_id, "u": world.reviewer},
+        )
+    factory = create_session_factory(app_engine)
+
+    async def apply(user: UUID | None) -> team.DefaultAssigned | None:
+        async with factory() as db:
+            await bind_tenant(db, user_id=user, org_id=world.org)
+            done = await team.assign_niche_default(db, world.org, engagement)
+            await db.commit()
+            return done
+
+    async def finance_default(db: Any, org_id: UUID, niche_id: UUID | None) -> UUID:
+        return world.finance
+
+    async def anyone_triages(db: Any, org_id: UUID, user_id: UUID) -> bool:
+        return True
+
+    with monkeypatch.context() as patched:
+        patched.setattr(team, "_default_for", finance_default)
+        patched.setattr(team, "_is_triage_member", anyone_triages)
+        assert await apply(world.signatory) is None  # engagement_assignments_guard: finance never triages
+    assert await live_assignee(owner_engine, engagement) == []
+    assert await apply(None) is None  # no member bound: the job of nobody
+    done = await apply(world.signatory)
+    assert done is not None
+    assert (done.assignee_id, done.tell, done.title) == (world.reviewer, True, api_world.PROPOSAL_TITLE)
+    assert await live_assignee(owner_engine, engagement) == [(world.reviewer, world.signatory)]
+    async with owner_engine.begin() as conn:  # unassigned again: a closed row is a choice, never overwritten
+        await conn.execute(
+            text("UPDATE engagement_assignments SET unassigned_at = now() WHERE engagement_id = :e"), {"e": engagement}
+        )
+    async with api_world.clients(app_engine, SETTINGS, world.reviewer) as (reviewer,):
+        assert (await api_world.Tracker(engagement).post(reviewer, "start-review")).status_code == 200
+    assert await apply(world.signatory) is None  # under review, and someone chose: nothing
