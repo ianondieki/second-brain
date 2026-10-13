@@ -98,13 +98,13 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "country",
         "updated_at",
         "county_code",  # revision 0002
-        "escalation_contact_user_id",  # revision 0015
     },
     # revision 0015: a membership's roles and status change (never its organisation or user); an open invitation is
     # resent (token and expiry) or revoked (never its organisation, address, roles, inviter, or acceptance)
     "memberships": {"roles", "status", "updated_at"},
     "invitations": {"token_hash", "expires_at", "revoked_at"},
     "org_niche_defaults": {"user_id"},
+    "org_escalation_contacts": {"user_id"},
     # 0011: the switch; 0013: the D3 references and the nudge's dismissal
     "developer_profiles": {"headline", "bio", "county_code", "updated_at", "peers_visible"}
     | {"github_login", "kecobo_number", "kipi_number", "ip_nudge_dismissed_at"},
@@ -356,8 +356,10 @@ APP_GRANTS: dict[str, set[str]] = {
     "calendar_feeds": {S, I, U},
     # revision 0015: the nudges ledger is read by the organisation's members, written only by app_record_nudge
     "engagement_nudges": {S},
-    # revision 0015: an organisation's default reviewer per niche, set and removed by its admins
+    # revision 0015: an organisation's default reviewer per niche and its escalation contact, set and removed by its
+    # admins
     "org_niche_defaults": {S, I, U, D},
+    "org_escalation_contacts": {S, I, U, D},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -631,7 +633,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_record_nudge(uuid, text, text)": (True, {"bridge_app"}),  # the nudge job, no user bound
     "app_accept_invitation(bytea, uuid)": (True, {"bridge_app"}),  # the signed-in invitee, for themselves
     "app_invitation_preview(bytea)": (True, {"bridge_app"}),  # the public preview: the hash is the capability
-    "organizations_escalation_contact_guard()": (False, set()),  # SECURITY INVOKER: the writer's RLS reads the roster
+    "org_escalation_contacts_guard()": (False, set()),  # SECURITY INVOKER: the writer's RLS reads the roster
     "org_niche_defaults_guard()": (False, set()),  # likewise
     "invitations_guard()": (False, set()),
     "memberships_last_owner_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer
@@ -841,7 +843,7 @@ def schema_snapshot(url: URL) -> dict[str, list[str]]:
 
 
 # Revision 0015's tables (REQ-NOT-05).
-V15_TABLES = ("engagement_nudges", "org_niche_defaults")
+V15_TABLES = ("engagement_nudges", "org_niche_defaults", "org_escalation_contacts")
 # Revision 0013's tables (REQ-ENG-15, REQ-PROV-06, REQ-ENG-13).
 V13_TABLES = (
     "engagement_assignments",
@@ -866,7 +868,6 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
         "engagements.procurement_justification text",
         "engagements.procurement_decided_at timestamp with time zone",
         "engagements.procurement_decided_by uuid",
-        "organizations.escalation_contact_user_id uuid",
         "uq_invitations_open.org_id uuid",  # the partial unique index's own columns
         "uq_invitations_open.email citext",
     }
@@ -896,8 +897,13 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
         "ck_engagement_nudges_kind_known",
         "ck_engagement_nudges_key_valid",
         "ck_invitations_accepted_or_revoked",
-        "fk_organizations_escalation_contact_user_id_users",
+        "ck_invitations_roles_not_empty",
+        "ck_invitations_expires_within_30_days",
+        "pk_org_escalation_contacts",
+        "fk_org_escalation_contacts_org_id_organizations",
+        "fk_org_escalation_contacts_user_id_users",
     } <= {line.split(" ")[1] for line in added["constraints"]}
+    assert not any(line.startswith("organizations ") for line in added["constraints"])  # no column of its own
     assert (
         "CREATE UNIQUE INDEX uq_invitations_open ON public.invitations USING btree (org_id, email) WHERE"
         in " ".join(added["indexes"])
@@ -912,7 +918,7 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
         "app_record_nudge(uuid,text,text)",
         "app_accept_invitation(bytea,uuid)",
         "app_invitation_preview(bytea)",
-        "organizations_escalation_contact_guard()",
+        "org_escalation_contacts_guard()",
         "org_niche_defaults_guard()",
         "invitations_guard()",
         "memberships_last_owner_guard()",
@@ -922,7 +928,6 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
     assert {
         "engagements.procurement_route bridge_app UPDATE",
         "engagements.procurement_justification bridge_app UPDATE",
-        "organizations.escalation_contact_user_id bridge_app UPDATE",
         "memberships.roles bridge_app UPDATE",
         "memberships.status bridge_app UPDATE",
         "memberships.updated_at bridge_app UPDATE",
@@ -931,7 +936,8 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
         "invitations.revoked_at bridge_app UPDATE",
     } <= added["column_acl"]
     assert "invitations.accepted_at bridge_app UPDATE" not in added["column_acl"]
-    assert {"engagement_nudges bridge_app SELECT", "org_niche_defaults bridge_app SELECT"} <= added["table_acl"]
+    assert {f"{table} bridge_app SELECT" for table in V15_TABLES} <= added["table_acl"]
+    assert not any(line.startswith("organizations.") for line in added["columns"] | added["column_acl"])
     for signature in FUNCTION_GRANTS_V15:
         assert f"{signature} bridge_app EXECUTE" in added["function_acl"]
 
@@ -1876,6 +1882,10 @@ V15_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
     ("org_niche_defaults", "INSERT"): (None, _V15_ADMIN),
     ("org_niche_defaults", "UPDATE"): (_V15_ADMIN, _V15_ADMIN),
     ("org_niche_defaults", "DELETE"): (_V15_ADMIN, None),
+    ("org_escalation_contacts", "SELECT"): (f"({_V13_MEMBER})", None),
+    ("org_escalation_contacts", "INSERT"): (None, _V15_ADMIN),
+    ("org_escalation_contacts", "UPDATE"): (_V15_ADMIN, _V15_ADMIN),
+    ("org_escalation_contacts", "DELETE"): (_V15_ADMIN, None),
     ("invitations", "SELECT"): (_V15_ADMIN, None),
     ("invitations", "INSERT"): (None, f"((invited_by = app_user_id()) AND {_V15_UNPROTECTED} AND {_V13_IN_ORG})"),
     ("invitations", "UPDATE"): (
@@ -1888,10 +1898,10 @@ V15_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
 
 async def test_schema_v12_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
     """Revision 0015: the nudges ledger has one policy, SELECT, for the organisation's members (narrowed by app.org_id)
-    and never the engagement's own developer (nobody writes it but app_record_nudge); a niche default is read by the
-    members and written by an owner or admin; an invitation is read by an owner or admin (revision 0001's), inserted by
-    one as themselves (an owner for a protected role) and updated while open, both narrowed by app.org_id. Every policy
-    is bridge_app's."""
+    and never the engagement's own developer (nobody writes it but app_record_nudge); a niche default and the escalation
+    contact are read by the members and written by an owner or admin; an invitation is read by an owner or admin
+    (revision 0001's), inserted by one as themselves (an owner for a protected role) and updated while open, both
+    narrowed by app.org_id. Every policy is bridge_app's."""
     found = await rows(
         owner_engine,
         "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, qual, with_check FROM pg_policies"
@@ -2801,6 +2811,7 @@ V15_INSERTABLE: dict[str, set[str]] = {
     "engagement_nudges": set(),
     "invitations": {"id", "org_id", "email", "roles", "token_hash", "invited_by", "expires_at"},
     "org_niche_defaults": {"id", "org_id", "niche_id", "user_id"},
+    "org_escalation_contacts": {"org_id", "user_id"},
 }
 
 
@@ -3581,8 +3592,8 @@ V15_TRIGGERS = {
         "org_niche_defaults_guard",
         ROW | BEFORE | ON_INSERT | ON_UPDATE,
     ),
-    ("organizations", "organizations_escalation_contact_guard"): (
-        "organizations_escalation_contact_guard",
+    ("org_escalation_contacts", "org_escalation_contacts_guard"): (
+        "org_escalation_contacts_guard",
         ROW | BEFORE | ON_INSERT | ON_UPDATE,
     ),
     ("invitations", "invitations_guard"): ("invitations_guard", ROW | BEFORE | ON_INSERT | ON_UPDATE),

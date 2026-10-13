@@ -11,8 +11,8 @@ Team (revision 0015, REQ-TEN-02; the database's half):
   membership's ``roles``, ``status`` and ``updated_at`` only; members leave by ``status = 'removed'``.
 - A membership leaving ``active`` clears its user's niche defaults and the escalation contact if it is them; losing the
   owner, admin, reviewer and signatory roles clears their niche defaults (``memberships_clear_team_seats``).
-- ``Organization.escalation_contact_user_id``: an active member of the organisation or NULL (a trigger), set by an
-  owner or admin (the organisation's UPDATE policy).
+- ``OrgEscalationContact``: one per organisation, an active member (a trigger), set by an owner or admin, read by the
+  organisation's members only (a table of its own: every signed-in user reads listed organisations' rows).
 - Invitations: listed, created, revoked and resent by the organisation's owners and admins (only owners invite owners
   or signatories); bridge_app inserts ``id, org_id, email, roles, token_hash, invited_by`` (the caller) and
   ``expires_at`` and updates ``token_hash``, ``expires_at`` (a resend) and ``revoked_at`` (the shared clock, whatever
@@ -50,6 +50,8 @@ from bridge.models.enums import MembershipStatus, OrgKind, OrgRole, OrgSource, O
 from bridge.models.types import CIText, pg_enum, pg_enum_array
 
 ORG = {"info": {"tenancy": Tenancy.ORG, "tenant_column": "org_id"}}
+# Revision 0015: an invitation expires at most 30 days after it was created (both on the shared clock).
+INVITATION_MAX_DAYS = 30
 
 
 class Organization(IdMixin, TimestampsMixin, Base):
@@ -82,8 +84,6 @@ class Organization(IdMixin, TimestampsMixin, Base):
     e2_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reverify_due_on: Mapped[date | None] = mapped_column(Date)  # annual E2 re-verification
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # no Tier-2 access while set
-    # Revision 0015 (REQ-TEN-02): who, besides the admins, is told of escalations (an active member, or NULL).
-    escalation_contact_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
 
 class Membership(IdMixin, TimestampsMixin, Base):
@@ -110,6 +110,10 @@ class Invitation(IdMixin, CreatedMixin, Base):
             postgresql_where=text("accepted_at IS NULL AND revoked_at IS NULL"),
         ),
         CheckConstraint("accepted_at IS NULL OR revoked_at IS NULL", name="accepted_or_revoked"),
+        CheckConstraint("cardinality(roles) > 0", name="roles_not_empty"),
+        CheckConstraint(
+            f"expires_at <= created_at + interval '{INVITATION_MAX_DAYS} days'", name="expires_within_30_days"
+        ),
         ORG,
     )
 
@@ -119,7 +123,7 @@ class Invitation(IdMixin, CreatedMixin, Base):
     token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
     invited_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # Revision 0015: the shared clock's, whatever is sent (accepted only through app_accept_invitation).
+    # Revision 0015: the shared clock's, whatever is sent (accepted only through app_accept_invitation); created_at too.
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
 
@@ -160,3 +164,19 @@ class SignalEvent(IdMixin, Base):
     actor_hash: Mapped[bytes | None] = mapped_column(LargeBinary)
     org_hash: Mapped[bytes | None] = mapped_column(LargeBinary)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OrgEscalationContact(Base):
+    """Who, besides the organisation's admins, is told of escalations (REQ-TEN-02; revision 0015): one active member per
+    organisation (a trigger, every role), set and removed by an owner or admin (upsert on ``org_id``), read by the
+    organisation's members only, never by another organisation, a developer of one of its engagements or staff. Goes
+    when the member leaves the organisation or their account is deleted. ``updated_at`` is the shared clock's."""
+
+    __tablename__ = "org_escalation_contacts"
+    __table_args__ = (ORG,)
+
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("app_clock_now()"), server_onupdate=FetchedValue()
+    )
