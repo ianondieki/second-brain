@@ -1320,8 +1320,7 @@ two frontend MAJORs (the Board cramped inside the prose width from 1280, the sta
 empty month replacing the month links so another month's deadline cannot be reached) and two backend MAJORs (overdue
 counts differ between the lists and the Calendar because `history.py` loaded holidays from today forward; the
 declaration window is unreachable on a moved demo clock because the Tier-2 view is stamped on the database clock) →
-a fix round (frontend, `history.py` holidays, revision 0014 stamping evidence on the app clock), the re-check and
-the second gate are recorded below when done.
+the fix round, the re-check and the second gate below.
 
 **Gate** (every image rebuilt from `a0e797b`; four fresh resets): Playwright 258 passed, 12 skipped (45 min); the
 test-clock stage 9 of 10 at first — the declaration window scenario moved a fixed 15 calendar days, which landed on
@@ -1352,17 +1351,77 @@ made-up feed token (43 base64url characters) read as a credential: the fixture i
 commit's fingerprint recorded (`2b483c5`); npm audit red (D-56); the backend job cancelled at its 35-minute limit (the
 owner's call); the informational no-skip-list legacy job red as off Windows. Run 363 on `2b483c5`: frontend, Playwright with the clock scenarios, the demo story, hygiene, both legacy jobs, gitleaks, pip-audit, osv-scanner and Trivy green; npm audit red (D-56); the backend job cancelled at its limit; the informational no-skip-list legacy job red as off Windows.
 
+**The ux-review's fix round and the second gate** (2026-10-12 23:10 → 2026-10-13 03:00 UTC). ux-reviewer
+CHANGES_REQUIRED on the first pass: axe strict 0 and Lighthouse performance ≥ 90 on every P27 screen, but four MAJORs —
+the Board cramped inside the prose width from 1280 (five ~160 px columns, the stalled pill wrapping word by word); an
+empty month replacing the month links, so a deadline in another month could not be reached; the same overdue deadline
+counted 49 business days on the List, the Board and the tracker and 48 on the Calendar (`history.py` loaded holidays
+from today forward, so past holidays counted as working days); and the declaration window unreachable on a moved demo
+clock, since the first Tier-2 view was stamped on the database clock while the window closed on the shared clock. Fixed
+in three worktrees and merged: `fff6399` (one overdue count: `all_holidays` moved to `service.py` and used by
+`summaries` and `detail`; a seven-surface integration test), `9ee4230` (revision 0014: `evidence_time_guard` stamps
+`document_views.started_at`, `nda_acceptances.accepted_at` and `legal_acceptances.accepted_at` on `app_clock_now()` —
+the database's real time in production, the test clock's offset on a dev/test stack — with `attestations.created_at`
+kept on `now()` beside its real-time proofs; security-reviewer PASS, three doc MINORs taken; the demo can declare after
+a clock move), `3855162` (the Board bleeds to the window's margin from 1152 px with the top bar's frame matching and the
+rail fixed; Badge `wraps`/`xs` so the stalled tag is two lines; the empty month keeps its heading and links and the
+month links stop at ±10 years; funnel bars match their printed conversion; "No movement for 5+ business days"; 44 px
+targets for the tabs, the openers and the day links; the feed URL field at 48 px, in-place confirms for Make a new link
+and Remove with focus moved from an animation frame to an effect — a real production bug, focus landed on `<body>`, now
+under a deterministic regression test; data saver once, under Notifications › Data; `countdown.*` keys removed; Swahili
+fixes; the contact reveal loads on press, which brought the organisation's tracker in the reveal state from 150,694 B to
+149,830 B — a route the first gate had not measured because its organisation cookie found no tracker; reviewer
+CHANGES_REQUIRED → PASS after the regression test, the day link's stacking and the edge month links). Then `cac750c`
+(the picked day's empty sentence said "next 30 days"; a re-check MINOR). Second gate on the rebuilt images: Playwright
+258 passed, 10 skipped, 2 failed — `messages.spec`'s clean attachment ended "blocked" on both projects under the full
+suite's load (the demo stack runs no ClamAV; the fake scanner's fail-closed path), green in the first gate, in CI's
+Playwright job on the same commit and 6/6 on an immediate re-run; the test-clock stage 9 passed with the window scenario
+pinned to one project; every route under budget (trackers 149,830 B); the P27 and README screenshot sets refreshed; the
+walkthrough green. Lighthouse mobile Slow 4G, medians of three, accessibility 100 everywhere, performance ≥ 90 on every
+route (the table below; the Homes measured through a seeded Chrome profile — the ux-reviewer found that the first-login
+tour writes a cookie into Chrome's jar, after which Chrome drops Lighthouse's injected `Cookie` header, `/api/auth/me`
+answers 401 and the offline island's stale-tab guard reloads to `/login`: a harness effect, not a product fault).
+ux-reviewer re-check: PASS (edges equal at 1152–1920, the stalled tag two lines, the month links at both bounds, seven
+sources agreeing on one count, the declaration scenario green on both projects light and dark, axe 0 everywhere; two
+MINORs left: the day sentence above, fixed, and LCP medians above 2.5 s on the Board and the Homes from a ~1.1 s render
+delay of the hero lead text on about half the lab runs — the font swap, to trace before G8). CI `pr.yml` run 365 on
+`b5e09ee`: Playwright with the clock scenarios, the demo story, frontend, hygiene, both legacy jobs, gitleaks,
+pip-audit, osv-scanner and Trivy green, the backend job cancelled by the workflow's concurrency group when run 366 was
+dispatched (npm audit red, D-56; the informational no-skip-list legacy job red as off Windows). Run 366 on `cac750c`:
+frontend, hygiene, both legacy jobs, gitleaks, pip-audit, osv-scanner and Trivy green at the time of writing, the
+backend, Playwright and demo-story jobs still running; their result and the integration merge are recorded in the "Open
+branches" line above.
+| Route (second gate) | LCP light | LCP dark | Performance light | Performance dark |
+|---|---|---|---|---|
+| `/dev` (seeded profile) | 3.37 s | 3.41 s | 91 | 90 |
+| `/dev/engagements` | 3.22 s | 2.60 s | 92 | 96 |
+| `/dev/engagements?view=calendar` | 2.43 s | 3.04 s | 97 | 94 |
+| the developer's tracker | 3.23 s | 2.43 s | 92 | 97 |
+| `/dev/companies` | 3.52 s | 2.82 s | 90 | 95 |
+| `/org` (seeded profile) | 2.39 s | 2.35 s | 97 | 97 |
+| `/org/engagements` (twice: the tracker search fell back to the list) | 3.44 s, 2.96 s | 2.73 s, 2.74 s | 91, 94 | 96, 96 |
+| `/org/engagements?view=board` | 2.44 s | 2.18 s | 97 | 99 |
+| `/org/engagements?view=calendar` | 2.49 s | 3.21 s | 97 | 91 |
+| `/admin/moderation` | 2.48 s | 2.17 s | 97 | 99 |
+| `/login` | 2.34 s | 2.01 s | 98 | 99 |
+
 **Deviations and residuals.**
-- Budget: 149,719 B gzipped on the trackers after FE-2's +308 B and the ticker's −812 B; the tightest route in the
-  product. The next tracker feature must be lazy or trade bytes.
-- The Board's five columns sit side by side from 1280 px, not 1024 (the main column is 700–856 px beside the rail);
+- Budget: 149,830 B gzipped on both trackers in the contact-reveal state, after the reveal's chunk moved to a press
+  (150,694 B when the ux-review measured it; the gate's organisation cookie had found no tracker, so the first gate
+  measured the list in its place — and the second gate's Lighthouse pass still did, see the table); 170 B of
+  headroom, the tightest route in the product. The next tracker feature must be lazy or trade bytes.
+- The Board's five columns sit side by side from 1152 px (the fix round's `bleed` frame runs it to the window's
+  margin with the top bar matching), not 1024;
   the feed section's island handles create/rotate/remove/copy (the app has no server actions); the Inbox's "Assigned
   to me" is a client-side filter over the API's 50-item page (an API `assignee` query: a later card).
 - Database backstops deferred to the next revision (db-migrations): the assignment guard's assignee-is-not-the-
   developer clause; `login_attempts` retention (the fetch and assignment ledgers grow). Pagination of the
   organisation's engagements list: a separate card.
-- Clock epoch: `document_views.started_at` is the database clock while the window closes on the shared clock (a
-  later revision moves it to `app_clock_now()`).
+- Clock epoch: fixed by revision 0014 (the Tier-2 view, the NDA and the terms are stamped on the shared clock, the
+  attestation stays on real time). Left: the window scenario runs on one Playwright project, since it moves the
+  shared clock two weeks for every scenario after it; a demo database seeded under 0013 with a moved clock keeps its
+  closed windows for existing views (`make demo-reset`); the owner's preview mark in `views.py` uses the real clock,
+  which differs only on a moved stack; production must fail closed on `test_clock.enabled` at startup (Phase 8).
 - Offline copies outlive a session ended server-side for at most 7 days; the cached organisation tracker carries the
   assignee's name and the tally (never the notes); `FetchEvent.resultingClientId` is missing on Safari ≤ 16, where
   pages are kept through the island's `visit` only.
@@ -1374,18 +1433,22 @@ owner's call); the informational no-skip-list legacy job red as off Windows. Run
 - Commit hygiene: several commits over ~300 lines (BE-1 four, BE-2 two, FE-1 four, FE-2 eight); three FE-1 commits do
   not build alone (each repaired by the next); one FE-2 commit tagged REQ-DEV-04 carries ENG/PROV rewiring. Recorded,
   not rewritten.
-- Lighthouse cannot measure the two Homes under this harness any more: the run ends on `/login?next=…` with an
-  RSC MIME (`text/x-component`) on most attempts although `curl` with the same cookie and user agent gets the page
-  (one run each scored 90 light and 91 dark, LCP 3.2–3.5 s); the Homes are the pages that register the service worker
-  first, so the next round checks the worker's handling of a navigation under Lighthouse's header-injected session.
+- Lighthouse and the Homes: the first gate's `/login` endings were the first-login tour's cookie in Chrome's jar,
+  after which Chrome drops Lighthouse's injected `Cookie` header (the ux-reviewer's trace; the service worker was not
+  at fault); the gate measures the Homes through a seeded Chrome profile now. LCP medians above 2.5 s on the Board and
+  the Homes come from a ~1.1 s render delay of the hero lead text on about half the lab runs (the font swap): a trace
+  before G8.
+- `messages.spec`'s clean attachment ended "blocked" on both projects in the second gate under the full suite's load
+  (the demo stack runs no ClamAV; the fake scanner's fail-closed path), green in the first gate, in CI and 6/6 on an
+  immediate re-run: the scan job should tell a timeout (retry) from a detection (a follow-up card).
 - Orchestrator slip caught before pushing: a `git reset` after BE-1's first merge attempt left a merge commit with an
   incomplete tree; redone from saved patches and verified against the feature branch.
 - `[[SW-REVIEW]]`: `_meta.reviewP27`, `reviewP27clock`, `reviewP27fe1` ("wastani wa kati" for median; count
-  fallbacks without plural forms), `reviewP27cde`; `[[COPY-REVIEW]]`: the same keys (the private-link sentence, the
+  fallbacks without plural forms), `reviewP27cde`, `reviewP27ux`; `[[COPY-REVIEW]]`: the same keys (the private-link sentence, the
   declaration sheet's three sentences, the certificate sentence, the IP note, the window-closed sentence).
 
 **For the owner.** D-56 (npm audit), the backend CI limit, the Prettier configuration, the copy and Swahili reviews
-above; three decisions taken under the standing mandate to confirm or reverse: D-68, D-69, D-70. To run it: `git fetch origin && git checkout claude/eloquent-hypatia-aa3577 && git pull`, then `make demo-reset` (rebuilds the images, runs revision 0013 and the seed; the service worker of the previous build is replaced on the next sign-in).
+above; three decisions taken under the standing mandate to confirm or reverse: D-68, D-69, D-70. To run it: `git fetch origin && git checkout claude/eloquent-hypatia-aa3577 && git pull`, then `make demo-reset` (rebuilds the images, runs revisions 0013 and 0014 and the seed; the service worker of the previous build is replaced on the next sign-in).
 
 ### P26 report (2026-10-12): the live deadline clock everywhere it is due; Companies in the portal's language
 
