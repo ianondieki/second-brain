@@ -84,9 +84,13 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
         </>
       }
     >
-      <ClientStrings strings={await clientStrings(["tour"])}>
-        <FirstLoginTour side="org" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("org")} />
-      </ClientStrings>
+      {/* No tour for an account with no organisation yet (an invitee before accepting): the one line it needs comes
+          first, under the greeting. */}
+      {missing === "none" ? null : (
+        <ClientStrings strings={await clientStrings(["tour"])}>
+          <FirstLoginTour side="org" initialDone={tourDone} scenes={tourDone ? undefined : tourScenes("org")} />
+        </ClientStrings>
+      )}
       <div className="max-w-5xl">
         {/* The greeting on Nairobi at this time of day, the developer Home's GreetingBand: the eyebrow, the name, the
             lead and the one primary action. */}
@@ -114,7 +118,10 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
               {/* The organisation's Team (REQ-TEN-02): not one of the five sections, so a quiet link here on every
                   width (and beside Help on the rail from 1024 px, and in the command palette). */}
               <Link href={`/org/team${query}`} className={standaloneLinkClass} data-home="team">
-                {(await getTranslations("orgHome"))("team")}
+                {/* Owners and admins manage invitations; everyone else reads the team. */}
+                {(await getTranslations("orgHome"))(
+                  org.roles.includes("owner") || org.roles.includes("admin") ? "team" : "teamMember",
+                )}
               </Link>
             </div>
           ) : null}
@@ -122,6 +129,16 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
       </div>
 
       <div className="mt-8 flex max-w-5xl flex-col gap-12 lg:mt-10">
+        {missing === "none" ? (
+          // No organisation yet (REQ-TEN-02): an invitee who confirmed their address before accepting, or a removed
+          // member. The invitation link in their email is how they join: said first, right under the greeting.
+          <EmptyState
+            sentence={ti("noOrg")}
+            action={(await getTranslations("orgHome"))("helpAction")}
+            href="/help"
+            data-home="no-org"
+          />
+        ) : null}
         {/* Two-step sign-in: one quiet line when it is on (the confirmation after turning it on), a notice while off. */}
         {mfa === "on" ? (
           <p className="-mt-6 flex items-center gap-2 text-sm text-ink-soft" data-home="security">
@@ -149,15 +166,6 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
 
         {missing === "notMember" ? (
           <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" />
-        ) : missing === "none" ? (
-          // No organisation yet (REQ-TEN-02): an invitee who confirmed their address before accepting, or a removed
-          // member. The invitation link in their email is how they join.
-          <EmptyState
-            sentence={ti("noOrg")}
-            action={(await getTranslations("orgHome"))("helpAction")}
-            href="/help"
-            data-home="no-org"
-          />
         ) : null}
 
         {/* The Inbox asks for two-step sign-in first (the API refuses it before then), so it waits for the setup. */}
