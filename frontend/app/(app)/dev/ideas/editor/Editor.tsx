@@ -127,6 +127,8 @@ export interface EditorProps {
   checks?: ChecksCalls;
   /** Today's last overlap check of this idea, drawn on the server (CheckAnswer), or nothing. */
   lastOverlap?: ReactNode;
+  /** The public demo's sentence when file uploads are switched off (REQ-FND-04), shown in place of "Add a file". */
+  uploadsLocked?: string;
 }
 
 /** The screen's publish checklist (../checklist publishChecklist), handed over by the review step. */
@@ -662,6 +664,7 @@ export function Editor(props: EditorProps) {
             onAttachments={changeAttachments}
             ensureDraft={ensureDraft}
             getCalls={getCalls}
+            uploadsLocked={props.uploadsLocked}
           />
         </Suspense>
       ) : null}

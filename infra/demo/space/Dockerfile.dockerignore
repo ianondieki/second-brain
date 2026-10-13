@@ -1,0 +1,33 @@
+# The build context of infra/demo/space/Dockerfile is the repository root; BuildKit reads this file (named after the
+# Dockerfile) instead of a root .dockerignore. An allowlist: only what the Dockerfile copies, minus what
+# backend/.dockerignore and frontend/.dockerignore leave out (a root context does not read those two files).
+*
+!backend
+!frontend
+!infra/postgres/roles.sql
+!infra/postgres/prepare_db.sql
+!infra/demo/demo.py
+!infra/demo/space/run.py
+
+**/__pycache__
+**/.env
+**/.env.*
+
+backend/.venv
+backend/.mypy_cache
+backend/.ruff_cache
+backend/.pytest_cache
+backend/tests
+backend/coverage.json
+backend/.coverage
+
+frontend/node_modules
+frontend/.next
+# Tests never ship in the image (next build type-checks every included file; test/ and demo/ import e2e/).
+frontend/e2e
+frontend/test
+frontend/demo
+frontend/**/*.test.ts
+frontend/**/*.test.tsx
+frontend/test-results
+frontend/playwright-report

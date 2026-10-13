@@ -123,6 +123,7 @@ exist only in dev and test: the seed and the helpers refuse staging and producti
 | `owner@telco-a.example`, `signatory@telco-a.example`, `finance@telco-a.example` | Telco A (fixture): owner and admin, signatory, finance | the Inbox and Engagements: each seat sees the steps that are its to take (review, approve, sign, record a payment); the owner also sees the scout's matches (with why each matched) and the scout's settings |
 | `owner@sacco-b.example`, `signatory@sacco-b.example`, `reviewer@sacco-b.example`, `finance@sacco-b.example` | SACCO B (fixture), the same seats | the Inbox with two proposals in progress |
 | `owner@county-c.example` | County Government of C (fixture), owner (E1: domain verified, not yet E2) | the Inbox: proposals wait until it is E2; it has asked for E2, which is the claim in the staff console |
+| `owner@state-d.example`, `signatory@state-d.example` | State Department D (fixture), a public entity (E2): Halima Yusuf, owner and admin; Otieno Mwita, signatory | the procurement route: Brian's USSD reminders, approved to proceed by the signatory, wait for the owner to choose how the department will buy (direct procurement with a justification, a request for quotation or tender, and the other routes) and the contact-by date |
 | `admin@staff.example` | Platform staff, admin | the staff console: Research (seeded, approved problem cards; start a run), Moderation and Claims (read-only) |
 | `moderator@staff.example` | Platform staff, moderator | the staff console: Moderation only (open cases, decide one) |
 

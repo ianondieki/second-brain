@@ -522,12 +522,20 @@
         "type": "object"
       },
       "ApproveBody": {
-        "description": "Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date.",
+        "description": "Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date. A public\nentity's approval enters its procurement route (3b): the contact-by date is named with the route, and one sent\nhere is not used.",
         "properties": {
           "contact_by": {
-            "format": "date",
-            "title": "Contact By",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for a private organisation (422 invalid_contact_by without it): from today to policy.yaml's contact_by_max_bd (5) business days ahead. Not used for a public entity, which names it with its procurement route",
+            "title": "Contact By"
           },
           "contact_channel": {
             "$ref": "#/components/schemas/ContactChannel"
@@ -547,8 +555,7 @@
         "required": [
           "lock_version",
           "contact_user_id",
-          "contact_channel",
-          "contact_by"
+          "contact_channel"
         ],
         "title": "ApproveBody",
         "type": "object"
@@ -2748,6 +2755,7 @@
           "start_review",
           "decline",
           "approve",
+          "choose_route",
           "withdraw",
           "mark_contacted",
           "confirm_contact",
@@ -3818,7 +3826,7 @@
         "type": "object"
       },
       "DeveloperEngagementDetail": {
-        "description": "The developer's tracker (no organisation triage: D-68).",
+        "description": "The developer's tracker (no organisation triage, D-68; no escalation flag: the nudges ledger is the\norganisation's).",
         "properties": {
           "actions": {
             "description": "The commands the caller may run now (the action buttons)",
@@ -3999,6 +4007,17 @@
             ],
             "description": "The organisation's prior-knowledge declaration on this proposal; null when none"
           },
+          "procurement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcurementOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A public entity's procurement route once chosen; null otherwise"
+          },
           "proposal_id": {
             "format": "uuid",
             "title": "Proposal Id",
@@ -4060,6 +4079,14 @@
           },
           "state": {
             "$ref": "#/components/schemas/EngagementState"
+          },
+          "steps": {
+            "description": "The engagement's main-path stages in order (the stepper): stage 0 for an organisation's interest, stages 1-2 for a tagged proposal, PROCUREMENT_ROUTE (3b) only for a public entity (AC-TRACK-5)",
+            "items": {
+              "$ref": "#/components/schemas/StepOut"
+            },
+            "title": "Steps",
+            "type": "array"
           },
           "today": {
             "anyOf": [
@@ -8826,6 +8853,19 @@
             "title": "Endorsements",
             "type": "array"
           },
+          "escalated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the nudge job last escalated the current stage to the organisation's admins and escalation contact (first contact late or overdue, the procurement route or a milestone review waiting); null when it has not. The organisation's own: never on the developer's tracker",
+            "title": "Escalated At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -8896,6 +8936,17 @@
             ],
             "description": "The organisation's declaration window (always sent to a member)"
           },
+          "procurement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcurementOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A public entity's procurement route once chosen; null otherwise"
+          },
           "proposal_id": {
             "format": "uuid",
             "title": "Proposal Id",
@@ -8957,6 +9008,14 @@
           },
           "state": {
             "$ref": "#/components/schemas/EngagementState"
+          },
+          "steps": {
+            "description": "The engagement's main-path stages in order (the stepper): stage 0 for an organisation's interest, stages 1-2 for a tagged proposal, PROCUREMENT_ROUTE (3b) only for a public entity (AC-TRACK-5)",
+            "items": {
+              "$ref": "#/components/schemas/StepOut"
+            },
+            "title": "Steps",
+            "type": "array"
           },
           "team": {
             "anyOf": [
@@ -11311,6 +11370,104 @@
           "archived"
         ],
         "title": "ProblemStatus",
+        "type": "string"
+      },
+      "ProcurementBody": {
+        "additionalProperties": false,
+        "description": "A public entity's procurement route (stage 3b; docs/spec/06 6.9), chosen by its owner or admin: how it will\nbuy, the written justification (required for direct procurement) and the contact-by date of stage 3.",
+        "properties": {
+          "contact_by": {
+            "description": "The date the named contact reaches the developer by: from today to policy.yaml's contact_by_max_bd (5) business days ahead (422 invalid_contact_by)",
+            "format": "date",
+            "title": "Contact By",
+            "type": "string"
+          },
+          "justification": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "pattern": "^[^\\x00-\\x08\\x0b-\\x1f\\x7f]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain text, line breaks allowed; trimmed, empty is none. Direct procurement needs 20 to 1,000 characters (422 justification_required); the other routes take none or at most 1,000 (422 invalid_justification). No contact details or links before first contact (422 contains_contact). Both parties read it",
+            "title": "Justification"
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The engagement's lock_version when last read; when sent, 409 stale if it moved",
+            "title": "Lock Version"
+          },
+          "route": {
+            "$ref": "#/components/schemas/ProcurementRoute"
+          }
+        },
+        "required": [
+          "route",
+          "contact_by"
+        ],
+        "title": "ProcurementBody",
+        "type": "object"
+      },
+      "ProcurementOut": {
+        "description": "A public entity's procurement route (3b), as both parties read it (R46: full transparency).",
+        "properties": {
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by_name": {
+            "description": "The owner or admin who chose it ('Former member' once not readable)",
+            "title": "Decided By Name",
+            "type": "string"
+          },
+          "justification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's own words: plain text",
+            "title": "Justification"
+          },
+          "route": {
+            "$ref": "#/components/schemas/ProcurementRoute"
+          }
+        },
+        "required": [
+          "route",
+          "justification",
+          "decided_at",
+          "decided_by_name"
+        ],
+        "title": "ProcurementOut",
+        "type": "object"
+      },
+      "ProcurementRoute": {
+        "description": "How a public entity will buy (docs/spec/06 6.9 stage 3b, ``PROCUREMENT_ROUTE``; PPADA 2015, PPP Act 2021;\nrevision 0015, REQ-ENG-06). Chosen once by the organisation's owner or admin, together with the move to\n``INTEREST_CONFIRMED``; ``direct`` needs a written justification of at least 20 characters.",
+        "enum": [
+          "direct",
+          "rfq_tender",
+          "ppp_pip",
+          "innovation_challenge",
+          "pilot_mou"
+        ],
+        "title": "ProcurementRoute",
         "type": "string"
       },
       "ProfileOut": {
@@ -14933,6 +15090,36 @@
           "discuss"
         ],
         "title": "StanceCounts",
+        "type": "object"
+      },
+      "StepOut": {
+        "description": "One main-path stage of the engagement's stepper, in order.",
+        "properties": {
+          "group": {
+            "enum": [
+              "review",
+              "contact_nda",
+              "agreement",
+              "implementation",
+              "close"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngagementState"
+          }
+        },
+        "required": [
+          "state",
+          "label",
+          "group"
+        ],
+        "title": "StepOut",
         "type": "object"
       },
       "StepUpMethod": {
@@ -42465,6 +42652,140 @@
           }
         },
         "summary": "Post Prior Knowledge",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/engagements/{engagement_id}/procurement-route": {
+      "post": {
+        "description": "Choose a public entity's procurement route (stage 3b; docs/spec/06 6.9): an owner or admin of the organisation\n(403 ``role_required`` for any other member), while the engagement waits in ``PROCUREMENT_ROUTE`` (409\notherwise), with the contact-by date of stage 3. The engagement enters ``INTEREST_CONFIRMED`` (non-binding): the\nnamed contact may then read the developer's contact details, and the developer is told the route and gets EM2.",
+        "operationId": "choose_procurement_route_api_orgs__org_id__engagements__engagement_id__procurement_route_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgEngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Choose Procurement Route",
         "tags": [
           "engagements"
         ]

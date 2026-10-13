@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
+import { DemoLocked } from "@/components/DemoLocked";
 import { PortalNavFor } from "@/components/PortalNavFor";
 import { SignedInShell } from "@/components/SignedInShell";
 import { BackLink } from "@/components/ui/BackLink";
@@ -11,6 +12,7 @@ import { Section } from "@/components/ui/Section";
 import { requireMe } from "@/lib/api/server";
 import { homeOf } from "@/lib/auth/routing";
 import { clientStrings, pickedStrings } from "@/lib/i18n/client-strings";
+import { publicDemoOn } from "@/lib/public-demo";
 
 import { SettingsTabs } from "../SettingsTabs";
 import { PasswordSettings } from "./PasswordSettings";
@@ -45,33 +47,61 @@ export default async function SecurityPage() {
           lead={(await getTranslations("portal"))("settings.leadSecurity")}
           tabs={<SettingsTabs current="security" developer={me.side === "developer"} />}
         />
-        {/* Server-formatted strings, not next-intl's client runtime (about 3.5 KB of the budget; P16-D). */}
-        <ClientStrings
-          strings={{
-            ...(await clientStrings(["security", "password", "fields", "validation", "errors"])),
-            ...(await pickedStrings("signup", ["passwordHint"])),
-          }}
-        >
-          <PasswordStateProvider initial={me.user.password_set}>
-            <div className="flex flex-col gap-6">
-              <Card variant="flat" className="p-5 sm:p-6">
-                <Section title={t("title")} headingId="two-step-heading" description={t("lead")} headingStyle="card">
-                  <SecuritySettings
-                    enrolled={me.mfa.enrolled}
-                    required={me.mfa.required}
-                    homeHref={home}
-                    email={me.user.email}
-                    productName={tApp("name")}
-                  />
-                </Section>
-              </Card>
-              <Card variant="flat" className="p-5 sm:p-6">
-                <PasswordSettings email={me.user.email} />
-              </Card>
-            </div>
-          </PasswordStateProvider>
-        </ClientStrings>
+        {publicDemoOn() ? (
+          <DemoLockedSecurity />
+        ) : (
+          <>
+            {/* Server-formatted strings, not next-intl's client runtime (about 3.5 KB of the budget; P16-D). */}
+            <ClientStrings
+              strings={{
+                ...(await clientStrings(["security", "password", "fields", "validation", "errors"])),
+                ...(await pickedStrings("signup", ["passwordHint"])),
+              }}
+            >
+              <PasswordStateProvider initial={me.user.password_set}>
+                <div className="flex flex-col gap-6">
+                  <Card variant="flat" className="p-5 sm:p-6">
+                    <Section title={t("title")} headingId="two-step-heading" description={t("lead")} headingStyle="card">
+                      <SecuritySettings
+                        enrolled={me.mfa.enrolled}
+                        required={me.mfa.required}
+                        homeHref={home}
+                        email={me.user.email}
+                        productName={tApp("name")}
+                      />
+                    </Section>
+                  </Card>
+                  <Card variant="flat" className="p-5 sm:p-6">
+                    <PasswordSettings email={me.user.email} />
+                  </Card>
+                </div>
+              </PasswordStateProvider>
+            </ClientStrings>
+          </>
+        )}
       </div>
     </SignedInShell>
+  );
+}
+
+/**
+ * The public demo (REQ-FND-04): two-step sign-in (enrol, turn off, recovery codes) and the password are switched off
+ * for the shared personas, so each card keeps its heading and says so in one line, with no form and no script.
+ */
+async function DemoLockedSecurity() {
+  const [t, tPassword] = await Promise.all([getTranslations("security"), getTranslations("password")]);
+  return (
+    <div className="flex flex-col gap-6" data-security-locked="">
+      <Card variant="flat" className="p-5 sm:p-6">
+        <Section title={t("title")} headingId="two-step-heading" headingStyle="card">
+          <DemoLocked />
+        </Section>
+      </Card>
+      <Card variant="flat" className="p-5 sm:p-6">
+        <Section title={tPassword("title")} headingId="password-heading" headingStyle="card">
+          <DemoLocked />
+        </Section>
+      </Card>
+    </div>
   );
 }

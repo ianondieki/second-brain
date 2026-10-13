@@ -3,13 +3,16 @@ to a model of an engagement never reach a state off the main path, its two exits
 (REQ-ENG-10 part: INFO_REQUESTED, ON_HOLD), never take a step the database's backstop would refuse (a side state is
 entered from the main path and always left for the state it was entered from), and never leave a dual-endorsement
 stage or a signing stage without both parties (a pause keeps what the stage had: endorsements and signatures).
-(The chain's half, "always a verifiable chain", runs against the database in the integration suite.)
+(The chain's half, "always a verifiable chain", runs against the database in the integration suite.) REQ-ENG-06
+(AC-TRACK-5): a public entity's engagement reaches stage 3 only through PROCUREMENT_ROUTE (3b), a private
+organisation's never enters it.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
+import pytest
 from hypothesis import event, given, settings
 from hypothesis import strategies as st
 
@@ -101,8 +104,8 @@ def apply(model: Model, command: sm.Command, decision: sm.Decision, milestone: i
         model.facts = replace(f, payment_recorded=True)
     elif command is sm.Command.MARK_CONTACTED:
         model.enter(S.CONTACT_MADE, endorsed=frozenset({ORG}))  # the organisation's endorsement comes with it
-    elif command is sm.Command.APPROVE:
-        model.enter(S.INTEREST_CONFIRMED, contact_named=True)
+    elif command is sm.Command.APPROVE:  # stage 3, or a public entity's 3b
+        model.enter(decision.to_state, contact_named=True)
     else:
         model.enter(decision.to_state)
 
@@ -160,6 +163,10 @@ def step_once(model: Model, actor: sm.Actor, command: sm.Command, milestone: int
 def check_history(model: Model) -> None:
     entered_from: S | None = None
     for before, after in model.history:
+        if model.facts.public_entity:  # AC-TRACK-5: stage 3 through 3b only (revision 0015's guard)
+            assert not (after is S.INTEREST_CONFIRMED and before in {S.UNDER_REVIEW, S.ORG_INTEREST}), (before, after)
+        else:
+            assert after is not S.PROCUREMENT_ROUTE, before
         if after in sm.PAUSED:
             assert before in set(sm.MAIN_PATH) - sm.TERMINAL, (before, after)
             entered_from = before
@@ -172,11 +179,11 @@ def check_history(model: Model) -> None:
 
 
 @settings(max_examples=400, deadline=None)
-@given(start=st.sampled_from([S.SUBMITTED, S.ORG_INTEREST]), sequence=steps, d2=st.booleans())
+@given(start=st.sampled_from([S.SUBMITTED, S.ORG_INTEREST]), sequence=steps, d2=st.booleans(), public=st.booleans())
 def test_random_sequences_never_leave_the_legal_paths(
-    start: S, sequence: list[tuple[int, int, sm.Command, int, int, IpTerms]], d2: bool
+    start: S, sequence: list[tuple[int, int, sm.Command, int, int, IpTerms]], d2: bool, public: bool
 ) -> None:
-    model = Model(start, sm.Facts(contact_named=start is S.ORG_INTEREST, developer_d2=d2))
+    model = Model(start, sm.Facts(contact_named=start is S.ORG_INTEREST, developer_d2=d2, public_entity=public))
     for actor_index, choice, random_command, mode, milestone, terms in sequence:
         actor, command = ACTORS[actor_index], random_command
         if mode != 0:  # a legal step by anyone who has one (exits only now and then)
@@ -194,9 +201,11 @@ def test_random_sequences_never_leave_the_legal_paths(
     check_history(model)
 
 
-def test_following_the_pending_actions_reaches_closed() -> None:
-    """The model and the table agree: taking each pending action in turn walks SUBMITTED to CLOSED."""
-    model = Model(S.SUBMITTED, sm.Facts(developer_d2=True))
+@pytest.mark.parametrize("public", [False, True])
+def test_following_the_pending_actions_reaches_closed(public: bool) -> None:
+    """The model and the table agree: taking each pending action in turn walks SUBMITTED to CLOSED (a public entity's
+    engagement through its procurement route)."""
+    model = Model(S.SUBMITTED, sm.Facts(developer_d2=True, public_entity=public))
     for _ in range(60):
         if model.state is S.CLOSED:
             break
@@ -204,4 +213,5 @@ def test_following_the_pending_actions_reaches_closed() -> None:
         actor = next(a for a in ACTORS if pending.command in sm.available(a, model.state, model.facts))
         step_once(model, actor, pending.command, 0, IpTerms.NON_EXCLUSIVE_LICENCE, d2=True)
     assert model.state is S.CLOSED
+    assert ((S.PROCUREMENT_ROUTE, S.INTEREST_CONFIRMED) in model.history) is public
     check_history(model)

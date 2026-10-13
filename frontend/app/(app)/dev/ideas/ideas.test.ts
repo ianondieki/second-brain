@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import en from "@/locales/en.json";
+
 import { publish, saveDraft, searchProblems, uploadAttachment } from "./calls";
 import { draftBody } from "./draft";
 import { linksProblem, publishChecklist } from "./checklist";
@@ -380,5 +382,17 @@ describe("calls", () => {
     const fake = client(Response.json({ items: [] }));
     await searchProblems({ q: "  maziwa  ", niche: "" }, fake.api);
     expect(fake.calls[0][2]).toEqual({ params: { query: { q: "maziwa", niche: undefined, limit: 20 } } });
+  });
+});
+
+// REQ-FND-04: the public demo publishes a limited number of versions a day per account (429 public_demo_limit).
+describe("a publish refused by the public demo's daily limit", () => {
+  it("is its own problem with its own sentence, not the shared \"too many attempts\"", () => {
+    const body = { detail: { code: "public_demo_limit", message: "The public demo publishes up to 20 versions a day." } };
+    expect(publishRefusal(429, body)).toEqual({ problem: "demoLimit", fields: [] });
+    expect(publishRefusal(429, { detail: { code: "too_many_attempts" } }).problem).toBe("rateLimited");
+    expect(en.ideaEditor.problem.demoLimit).toBe(
+      "The public demo publishes up to 20 versions a day for each account. Try again tomorrow.",
+    );
   });
 });

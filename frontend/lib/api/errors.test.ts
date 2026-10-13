@@ -39,6 +39,24 @@ describe("errorKey", () => {
     }
   });
 
+  // REQ-FND-04: a switched-off route of the public demo answers 403 public_demo_locked; whatever screen asked, the
+  // sentence is the demo's own, not "Something went wrong".
+  it("maps the public demo's 403 to its own sentence, through settle too", async () => {
+    const body = { detail: { code: "public_demo_locked", message: "This is switched off in the public demo." } };
+    expect(errorKey(body)).toBe("public_demo_locked");
+    expect(fieldForError("public_demo_locked")).toBeUndefined();
+    const response = new Response(null, { status: 403 });
+    expect(await settle(Promise.resolve({ error: body, response }))).toEqual({ ok: false, key: "public_demo_locked", status: 403 });
+    expect(en.errors.public_demo_locked).toBe("This is switched off in the public demo.");
+  });
+
+  it("maps the public demo's daily publish limit to its own sentence", () => {
+    expect(errorKey({ detail: { code: "public_demo_limit", message: "x" } })).toBe("public_demo_limit");
+    expect(en.errors.public_demo_limit).toBe(
+      "The public demo publishes up to 20 versions a day for each account. Try again tomorrow.",
+    );
+  });
+
   it("has an English message for every key it can return", () => {
     for (const key of [...KNOWN_ERROR_CODES, "validation", "generic", "network"] as const) {
       expect(en.errors[key], key).toBeTruthy();

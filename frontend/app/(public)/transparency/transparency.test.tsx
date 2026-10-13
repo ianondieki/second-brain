@@ -246,3 +246,17 @@ describe("/transparency", () => {
     expect(within(aside).getByRole("link", { name: "transparency page" }).getAttribute("href")).toBe("/transparency");
   });
 });
+
+describe("the public demo's empty state (REQ-FND-04)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("says the demo never completes a day instead of promising a first fingerprint", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    api({ roots: [], keys: [ACTIVE] });
+    await openPage();
+    const empty = part("roots").querySelector<HTMLElement>("[data-empty-state]")!;
+    expect(empty.querySelector("p")!.textContent).toBe(
+      "This public demo starts afresh every night, so it never completes a full day; the daily fingerprints appear on the running platform.",
+    );
+  });
+});

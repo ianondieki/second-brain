@@ -21,6 +21,11 @@ engagement (its named contact and the members who acted on it, each still an act
 read the organisation's roster, so an engagement nobody at the organisation has touched yet notifies nobody there;
 the organisation's inbox shows it (the full dispatch to role seats, REQ-NOT-03, comes after the prototype).
 
+A public entity's procurement route (REQ-ENG-06): its approval and its accepted interest enter 3b (N04, N17: the other
+party reads that the route comes first); the owner's or admin's choice tells the developer the route and the contact-by
+date (N05), in-app and by email in the developer's language (``bridge.notifications.nudge_copy``, English or
+Kiswahili; mutable), and enters stage 3, so EM2 follows. The organisation's justification is never in a notice.
+
 An organisation's prior-knowledge declaration (REQ-PROV-06, its ``prior_knowledge_declared`` event) tells the
 developer (N31): in-app and by status email, always (a provenance record the owner must see: not mutable), naming the
 organisation and the idea's title only, never the evidence's title or hash.
@@ -56,8 +61,9 @@ from bridge.models.enums import (
     EngagementState,
     GrantStatus,
     NotificationChannel,
+    ProcurementRoute,
 )
-from bridge.notifications import em2, n17, status
+from bridge.notifications import em2, n17, nudge_copy, status
 from bridge.notifications.deliveries import send_email
 from bridge.notifications.email import EmailMessage, EmailProvider
 from bridge.notifications.models import InAppNotification, NotificationDelivery
@@ -90,6 +96,9 @@ SENTENCES: Final[dict[tuple[sm.Command, EngagementParty], str]] = {
     (C.START_REVIEW, ORG): '{org} started reviewing "{title}".',
     (C.DECLINE, ORG): '{org} declined "{title}". Reason: {reason}.',
     (C.APPROVE, ORG): '{org} approved "{title}" to proceed (non-binding). They will contact you shortly.',
+    (C.CHOOSE_ROUTE, ORG): (
+        '{org} chose how it will buy "{title}": {route}. Its contact will reach you by {contact_by}.'
+    ),
     (C.WITHDRAW, DEV): 'The developer withdrew "{title}".',
     (C.MARK_CONTACTED, ORG): '{org} marked first contact on "{title}". Confirm it on your tracker.',
     (C.CONFIRM_CONTACT, DEV): 'The developer confirmed first contact on "{title}".',
@@ -137,9 +146,20 @@ EXPIRED_SENTENCES: Final = {
     DEV: 'Your engagement with {org} on "{title}" expired: {reason}.',
     ORG: 'The engagement on "{title}" expired: {reason}.',
 }
+# [[COPY-REVIEW]] a public entity's approval, and the developer's acceptance of its interest, enter its procurement
+# route (3b, REQ-ENG-06) rather than stage 3: what the other party reads then.
+TO_PROCUREMENT: Final[dict[sm.Command, str]] = {
+    C.APPROVE: (
+        '{org} approved "{title}" to proceed (non-binding). As a public body it first chooses how it will buy; then its'
+        " contact will reach you."
+    ),
+    C.ACCEPT_INTEREST: 'The developer accepted your interest in "{title}". Choose your procurement route next.',
+}
+# How a public entity will buy (docs/spec/06 6.9 stage 3b), as the developer's notice names it in English.
+ROUTE_WORDS: Final = nudge_copy.ROUTES["en"]
 RESUMED_SENTENCE: Final = '"{title}" is no longer on hold: it resumed on its date. Due dates moved by the time on hold.'
 # Party events that also go by email in the status layout (the system's always do).
-EMAILED: Final = frozenset({C.REQUEST_INFO, C.ANSWER_INFO, C.CANCEL_REQUEST, C.PAUSE, C.RESUME})
+EMAILED: Final = frozenset({C.REQUEST_INFO, C.ANSWER_INFO, C.CANCEL_REQUEST, C.PAUSE, C.RESUME, C.CHOOSE_ROUTE})
 # An expiry's words when the stage it ended reads better than its reason code (an unanswered question).
 EXPIRY_LABELS_BY_STATE: Final = {EngagementState.INFO_REQUESTED: "the organisation's question was not answered in time"}
 # [[COPY-REVIEW]] the title of a notice about an event that returns to the stage it left, named by what happened
@@ -149,6 +169,7 @@ EVENT_TITLES: Final[dict[sm.Command, str]] = {
     C.ANSWER_INFO: "Question answered",
     C.CANCEL_REQUEST: "Question withdrawn",
     C.RESUME: "Resumed",
+    C.CHOOSE_ROUTE: "Procurement route chosen",
 }
 # [[COPY-REVIEW]] N31, the developer's notice of an organisation's prior-knowledge declaration (in-app and the status
 # email's sentence): the organisation and the idea's title only.
@@ -216,12 +237,19 @@ def compose(
         return None
     acted = DEV if event.actor_role is EngagementActorRole.DEVELOPER else ORG
     sentence = SENTENCES.get((command, acted))
+    if event.to_state is EngagementState.PROCUREMENT_ROUTE and event.from_state is not event.to_state:
+        sentence = TO_PROCUREMENT.get(command, sentence)
     if notice is None or sentence is None:
         return None
     reason = DECLINE_LABELS.get(event.end_reason, "") if event.end_reason else ""
     payload = dict(event.payload)
     body = sentence.format(
-        org=em2.one_line(company), title=em2.one_line(title), reason=reason, until=_until(payload.get("resume_at"))
+        org=em2.one_line(company),
+        title=em2.one_line(title),
+        reason=reason,
+        until=_until(payload.get("resume_at")),
+        route=_route(payload.get("procurement_route")),
+        contact_by=_until(payload.get("contact_by")),
     )
     if event.end_reason is EngagementEndReason.ALREADY_IN_PROGRESS_INTERNALLY and "internal_start_date" in payload:
         body += f" They attest the same work was already in progress internally since {payload['internal_start_date']}."
@@ -230,6 +258,30 @@ def compose(
     label = EVENT_TITLES.get(command) or sm.STAGE_LABELS.get(event.to_state, event.to_state.value)
     told = sm.other(acted)
     return told, Notice(f"engagement.{notice.lower()}", label, body, engagement_path(told, event.engagement_id))
+
+
+def _route(value: object) -> str:
+    """The procurement route of a choice's event payload, in words."""
+    try:
+        return ROUTE_WORDS[ProcurementRoute(str(value))]
+    except ValueError:
+        return "its chosen route"
+
+
+def route_chosen(event: EngagementEvent, company: str, title: str, locale: nudge_copy.Locale) -> nudge_copy.Wording:
+    """The developer's notice of a chosen procurement route (N05) in their language: the route and the contact-by
+    date from the event's payload, never the justification."""
+    payload = dict(event.payload)
+    try:
+        route: ProcurementRoute | None = ProcurementRoute(str(payload.get("procurement_route")))
+    except ValueError:
+        route = None
+    try:
+        contact_by: date | None = date.fromisoformat(str(payload.get("contact_by")))
+    except ValueError:
+        contact_by = None
+    values = nudge_copy.Values(org=company, title=title, on=contact_by, route=route)
+    return nudge_copy.wording("route_chosen", locale, values)
 
 
 def _until(resume_at: object) -> str:
@@ -316,6 +368,50 @@ async def _send_status(
         kind=notice.kind,
         user_id=user.id,
         dedupe_key=status.dedupe_key(event.id, user.id),
+    )
+    return delivery.status is not DeliveryStatus.QUEUED
+
+
+async def _tell_route(
+    db: AsyncSession,
+    provider: EmailProvider,
+    settings: Settings,
+    engagement: Engagement,
+    event: EngagementEvent,
+    notice: Notice,
+    company: str,
+    title: str,
+) -> bool:
+    """N05 to the developer (the session is bound to them): the chosen route in-app and by email, in their language,
+    once per event; the email per their preference for ``engagement.n05``. False while the email is still queued."""
+    developer = await db.get(User, engagement.developer_id)
+    if developer is None:
+        return True
+    locale = nudge_copy.locale_of(developer.locale)
+    words = route_chosen(event, company, title, locale)
+    await _in_app(db, developer.id, None, Notice(notice.kind, words.title, words.body, notice.link), event.id)
+    if developer.email_verified_at is None:
+        return True
+    if not await channel_enabled(db, developer.id, notice.kind, NotificationChannel.EMAIL):
+        return True
+    rendered = nudge_copy.render(
+        words,
+        locale,
+        engagement_id=engagement.id,
+        path=notice.link,
+        base_url=settings.public_base_url,
+        product=settings.product_name,
+    )
+    message = EmailMessage(
+        to=developer.email, subject=rendered.subject, text=rendered.text, html=rendered.html, tag=notice.kind
+    )
+    delivery = await send_email(
+        db,
+        provider,
+        message=message,
+        kind=notice.kind,
+        user_id=developer.id,
+        dedupe_key=status.dedupe_key(event.id, developer.id),
     )
     return delivery.status is not DeliveryStatus.QUEUED
 
@@ -503,7 +599,9 @@ async def deliver(
             composed = compose(event, company, title, reason_text=reason_text)
             notices = dict([composed]) if composed is not None else {}
         by_email = emailed(event)
-        if DEV in notices:
+        if DEV in notices and event.command == C.CHOOSE_ROUTE.value:  # in the developer's language
+            done = await _tell_route(db, provider, settings, engagement, event, notices[DEV], company, title) and done
+        elif DEV in notices:
             await _in_app(db, developer_id, None, notices[DEV], event.id)
             if by_email:
                 sent = await _send_status(

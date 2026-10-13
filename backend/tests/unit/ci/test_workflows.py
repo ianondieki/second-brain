@@ -8,7 +8,11 @@ by infra/ci/egress-lock.sh (probed in CI) and tests/egress.py; this file checks 
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -187,3 +191,73 @@ def test_egress_lock_rejects_everything_but_private_networks() -> None:
 def test_nightly_live_evals_are_off_until_d18_changes() -> None:
     evals = load("nightly.yml")["jobs"]["evals"]
     assert evals["if"] == "vars.LIVE_EVALS_ENABLED == 'true'"
+
+
+# ---------------------------------------------------------------- the public demo (REQ-FND-04, P28 track PD)
+
+
+def permission_blocks(workflow: dict[str, Any]) -> list[Any]:
+    """The workflow's own permissions and every job's (a mapping, or a string such as write-all)."""
+    return [workflow.get("permissions"), *(job.get("permissions") for job in workflow["jobs"].values())]
+
+
+def writes_packages(block: Any) -> bool:
+    return block == "write-all" or (isinstance(block, dict) and block.get("packages") == "write")
+
+
+def test_only_the_demo_image_workflow_may_write_packages() -> None:
+    writers = [name for name in workflow_files() if any(writes_packages(b) for b in permission_blocks(load(name)))]
+    assert writers == ["demo-image.yml"]
+
+
+def test_the_demo_image_is_never_built_for_a_pull_request() -> None:
+    triggers = load("demo-image.yml")["on"]
+    assert set(triggers) == {"workflow_dispatch", "push"}
+    assert not {"pull_request", "pull_request_target"} & set(triggers)
+    assert triggers["push"]["branches"] == ["claude/eloquent-hypatia-aa3577"]
+
+
+def test_a_push_never_cancels_a_manual_demo_image_run() -> None:
+    concurrency = load("demo-image.yml")["concurrency"]
+    assert "github.event_name" in concurrency["group"]
+    assert "inputs.arm64" in concurrency["group"]
+    assert concurrency["cancel-in-progress"] == "${{ github.event_name == 'push' }}"
+
+
+def test_the_demo_space_workflow_is_manual_and_gated_on_its_settings() -> None:
+    workflow = load("demo-space.yml")
+    assert set(workflow["on"]) == {"workflow_dispatch"}
+    steps = workflow["jobs"]["space"]["steps"]
+    check = steps[0]
+    assert check["id"] == "settings"
+    # The check sees only whether the token exists, never the token.
+    assert check["env"] == {"HAS_TOKEN": "${{ secrets.HF_TOKEN != '' }}", "HF_SPACE": "${{ vars.HF_SPACE }}"}
+    assert [step.get("if") for step in steps[1:]] == ["steps.settings.outputs.ready == 'true'"] * (len(steps) - 1)
+
+
+BASH = shutil.which("bash")
+
+
+@pytest.mark.skipif(sys.platform == "win32" or BASH is None, reason="runs the step's bash script")
+@pytest.mark.parametrize(
+    ("has_token", "space", "ready"),
+    [
+        ("false", "", "false"),
+        ("true", "", "false"),
+        ("false", "owner/bridge-demo", "false"),
+        ("true", "owner/bridge-demo", "true"),
+    ],
+)
+def test_the_demo_space_settings_step_skips_without_hf_token_or_hf_space(
+    tmp_path: Path, has_token: str, space: str, ready: str
+) -> None:
+    script = load("demo-space.yml")["jobs"]["space"]["steps"][0]["run"]
+    output, summary = tmp_path / "output", tmp_path / "summary"
+    env = {"PATH": os.environ["PATH"], "HAS_TOKEN": has_token, "HF_SPACE": space}
+    env |= {"GITHUB_OUTPUT": str(output), "GITHUB_STEP_SUMMARY": str(summary)}
+    # GitHub's own shell for `run:` steps; the step must succeed (exit 0) whether it skips or not.
+    assert BASH is not None
+    subprocess.run([BASH, "--noprofile", "--norc", "-eo", "pipefail", "-c", script], env=env, check=True)
+    assert output.read_text(encoding="utf-8").strip() == f"ready={ready}"
+    skipped = summary.exists() and "skipped" in summary.read_text(encoding="utf-8")
+    assert skipped == (ready == "false")

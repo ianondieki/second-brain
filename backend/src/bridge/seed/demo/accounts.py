@@ -186,7 +186,7 @@ async def _ensure_seat(
 
 async def owner_facts(owner: AsyncEngine, niches: dict[str, UUID], report: DemoReport) -> None:
     """What staff decide and no application path writes yet: the D-37 demo flag, D2, and each fixture organisation's
-    verification level, verified domain, county and niche."""
+    verification level, verified domain, county, niche and whether it is a public entity (P28)."""
     emails = sorted(report.users)
     flagged = await _execute(
         owner, "UPDATE users SET demo_account = true WHERE email = ANY(:emails) AND NOT demo_account", emails=emails
@@ -198,15 +198,17 @@ async def owner_facts(owner: AsyncEngine, niches: dict[str, UUID], report: DemoR
         changed = await _execute(
             owner,
             "UPDATE organizations SET verification = CAST(:level AS org_verification), verified_domain = :domain,"
-            " official_domains = CAST(:domains AS citext[]), county_code = :county,"
+            " official_domains = CAST(:domains AS citext[]), county_code = :county, public_entity = :public,"
             " e2_verified_at = CASE WHEN :level = 'e2' THEN coalesce(e2_verified_at, now()) END, updated_at = now()"
             " WHERE id = :id AND (verification <> CAST(:level AS org_verification)"
-            " OR verified_domain IS DISTINCT FROM :domain OR county_code IS DISTINCT FROM :county)",
+            " OR verified_domain IS DISTINCT FROM :domain OR county_code IS DISTINCT FROM :county"
+            " OR public_entity IS DISTINCT FROM :public)",
             id=org_id,
             level=org.verification.value,
             domain=org.domain,
             domains=[org.domain] if org.domain else [],
             county=org.county,
+            public=org.public_entity,
         )
         if changed:
             report.did(f"{org.legal_name} verified {org.verification.value}")
