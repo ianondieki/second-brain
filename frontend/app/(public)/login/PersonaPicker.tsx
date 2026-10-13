@@ -59,16 +59,17 @@ export function PersonaPicker({ personas, label, strings }: PersonaPickerProps) 
           key={persona.key}
           data-persona={persona.key}
           className={
-            "relative -mx-2 grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-3 rounded-control border-b " +
-            "border-line px-2 py-4 hover:bg-wash-soft sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+            "relative grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-2.5 border-b border-line py-4 " +
+            "sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
           }
         >
           {persona.body}
           <Button
             busy={busy === persona.key}
             onClick={() => void signIn(persona)}
-            // The row is the target: the button's ::after covers it (the button stays the one control).
-            className="col-start-2 justify-self-start after:absolute after:inset-0 after:rounded-control sm:col-start-3"
+            // The row is the target: the button's ::after covers it (the button stays the one control, and its hover
+            // shows wherever the row is pointed at).
+            className="col-start-2 justify-self-start after:absolute after:inset-0 sm:col-start-3"
           >
             {busy === persona.key ? strings.signingIn : persona.label}
           </Button>

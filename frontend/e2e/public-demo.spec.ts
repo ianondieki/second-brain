@@ -104,6 +104,7 @@ test("Settings › Security shows the locked line in place of two-step sign-in a
 
 test("the user menu's sign-out reads \"Switch persona\" and returns to the picker", async ({ page }) => {
   await signInAs(page, "Amina Wanjiru", /\/dev(\?.*)?$/);
+  await page.goto("/settings/security");
   await page.getByRole("button", { name: "Account" }).click();
   await page.getByRole("button", { name: "Switch persona" }).click();
   await expect(page).toHaveURL(/\/login$/);

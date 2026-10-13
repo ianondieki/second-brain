@@ -42,7 +42,7 @@ function CloseIcon(props: IconProps) {
 export async function PublicDemoBanner() {
   const t = await getTranslations("publicDemo");
   return (
-    <section aria-label={t("bannerLabel")} data-demo-banner="" className="bg-night text-on-night">
+    <section aria-label={t("bannerLabel")} data-demo-banner="" className="border-b border-night-line bg-night text-on-night">
       <div className="mx-auto flex w-full max-w-6xl items-center gap-2 py-1 pr-1 pl-4 sm:pr-3 sm:pl-6">
         <p className="min-w-0 flex-1 py-1.5 text-sm leading-5 text-pretty">
           {t.rich("banner", {
