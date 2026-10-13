@@ -34,7 +34,7 @@ from bridge.auth.mailer import PendingEmail
 from bridge.auth.models import AuthIdentity, LoginToken, User
 from bridge.auth.schemas import OrgSignup, SignupRequest
 from bridge.billing.service import start_free_subscription
-from bridge.config import Settings
+from bridge.config import DEMO_ENVS, Settings
 from bridge.db import bind_tenant
 from bridge.engagements.calendar import local_date
 from bridge.ids import uuid7
@@ -360,6 +360,26 @@ async def start_session(db: AsyncSession, settings: Settings, user: User, user_a
     )
     await bind_tenant(db, user_id=user.id)
     return LoginOutcome(live, mfa_required=mfa)
+
+
+async def start_demo_persona_session(
+    db: AsyncSession, settings: Settings, user: User, user_agent: str | None
+) -> sessions.LiveSession:
+    """The public demo's persona session (REQ-FND-04; ``bridge.demo.public_access``, its only caller): signed in with
+    the second factor counted as done now (``mfa_pending`` false, ``mfa_verified_at`` now), so step-up actions work
+    for ADR-002's 12 hours without a code a visitor cannot have. It refuses (``RuntimeError``) unless ``PUBLIC_DEMO``
+    is on in dev or test and ``user`` is an active demo account (``users.demo_account``, set only by the owner role):
+    it can never waive the second factor of a real account, whoever calls it. The caller audits ``auth.login``."""
+    if not settings.public_demo or settings.app_env not in DEMO_ENVS:
+        raise RuntimeError("persona sessions exist only in the public demo (PUBLIC_DEMO, APP_ENV dev or test)")
+    if user.status != UserStatus.ACTIVE or not user.demo_account:
+        raise RuntimeError("only an active demo account gets a persona session")
+    live = await sessions.create(
+        db, user, ttl=timedelta(days=settings.session_ttl_days), mfa_pending=False, user_agent=user_agent
+    )
+    live.row.mfa_verified_at = clock.utcnow()
+    await bind_tenant(db, user_id=user.id)
+    return live
 
 
 def _same(presented: str, expected: str) -> bool:

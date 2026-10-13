@@ -32,6 +32,7 @@ SAFE_FIELDS = frozenset(
         "set_id", "origin",  # P22: a quiz set's row id and its origin, model or seeded (REQ-DEV-01)
         "refused", "abandoned",  # P23: counts of the re-embed job's refused writes and rows left for the next run
         "cleared", "stale",  # P23: counts of the embedding job's emptied vectors and rows still stale per table
+        "persona",  # P28: a public demo persona's key from the fixed allowlist, never the request's text (REQ-FND-04)
     }
 )  # fmt: skip
 # ``error`` is an exception's type name, or a provider's reply with every address redacted and its length capped

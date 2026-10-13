@@ -8,6 +8,7 @@ Brief: the statement's predicate, proven against rows in ``integration/public``)
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -27,13 +28,17 @@ class Pages:
     def __init__(self, monkeypatch: pytest.MonkeyPatch, found: set[UUID], *, allowed: bool = True) -> None:
         self.found, self.throttled = found, 0
         self.loads: list[UUID] = []
+        self.frozen: list[datetime | None] = []  # the public demo's freeze each load was given (REQ-FND-04)
 
         async def allow(*_: Any, **__: Any) -> bool:
             self.throttled += 1
             return allowed
 
-        async def problem(factory: Any, problem_id: UUID, *, demo: bool) -> PublicProblem | None:
+        async def problem(
+            factory: Any, problem_id: UUID, *, demo: bool, frozen_at: datetime | None = None
+        ) -> PublicProblem | None:
             self.loads.append(problem_id)
+            self.frozen.append(frozen_at)
             return feed.problem_page(row(id=problem_id), demo=demo) if problem_id in self.found else None
 
         monkeypatch.setattr(verify, "allow", allow)
