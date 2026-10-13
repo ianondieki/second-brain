@@ -1,6 +1,6 @@
 """X1-3 follow-up: the seed keeps reference data in sync with its files without touching rows it does not own.
 
-Each test runs inside a transaction that is rolled back, so the shared test database keeps the real reference data.
+Each test runs inside a transaction that is rolled back, so the module's own database keeps the real reference data.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ import copy
 import hashlib
 import os
 import subprocess
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -25,8 +25,25 @@ from bridge.ids import uuid7
 from bridge.seed.legal import load_legal_templates, seed_legal_templates, template_body
 from bridge.seed.reference import load_reference, seed_all, seed_holidays, seed_plans
 from tests.hermetic import python_module
+from tests.integration.conftest import own_database, role_engine
 
 BACKEND = Path(__file__).resolve().parents[2]
+
+
+# The module's own database (REQ-FND-02): other modules add counties, organisations and plans to the shared session
+# database (each with a code of its own, and rows that point at it), so counting the reference data there depended on
+# which modules ran first. These fixtures replace the session ones for this module only; the assertions are unchanged.
+@pytest.fixture(scope="module")
+def database_url(admin_url: URL) -> Iterator[URL]:
+    with own_database(admin_url, "bridge_seed") as url:
+        yield url
+
+
+@pytest.fixture(scope="module")
+async def owner_engine(database_url: URL) -> AsyncIterator[AsyncEngine]:
+    engine = role_engine(database_url, "bridge_owner")
+    yield engine
+    await engine.dispose()
 
 
 @pytest.fixture
