@@ -52,6 +52,8 @@ ROUTES: dict[sm.Command, str] = {
     sm.Command.START_REVIEW: "start-review",
     sm.Command.DECLINE: "decline",
     sm.Command.APPROVE: "approve",
+    # A public entity's procurement route (3b, REQ-ENG-06): under the organisation's path, so not a member's 404.
+    sm.Command.CHOOSE_ROUTE: "procurement-route",
     sm.Command.WITHDRAW: "withdraw",
     sm.Command.MARK_CONTACTED: "mark-contacted",
     sm.Command.CONFIRM_CONTACT: "confirm-contact",
@@ -86,6 +88,8 @@ def body_for(command: sm.Command, world: Any, today: Any) -> dict[str, Any]:
         return {"reason": "BUDGET"}
     if command is sm.Command.APPROVE:
         return {"contact_user_id": str(world.owner), "contact_channel": "email", "contact_by": str(today)}
+    if command is sm.Command.CHOOSE_ROUTE:
+        return {"route": "rfq_tender", "contact_by": str(today)}
     if command is sm.Command.PROPOSE_TERMS:
         return simple_terms(today)
     if command is sm.Command.RECORD_PAYMENT:
@@ -132,10 +136,17 @@ async def test_every_actor_and_command_on_a_submitted_engagement_matches_the_tab
                     expected = error.status
                 else:
                     continue  # it would run: not sent, the engagement stays SUBMITTED
-                response = await t.post(client, route, body_for(command, world, today), lock=lock)
+                body = {"lock_version": lock, **body_for(command, world, today)}
+                if command is sm.Command.CHOOSE_ROUTE:  # the organisation's path: the developer is no member
+                    path = f"/api/orgs/{world.org}/engagements/{engagement}/{route}"
+                    response = await client.post(path, json=body)
+                    expected = 404 if actor.party is EngagementParty.DEVELOPER else expected
+                else:
+                    response = await client.post(t.path(f"/{route}"), json=body)
                 assert response.status_code == expected, (name, route, response.text)
                 code = response.json()["detail"]["code"]
-                assert code in {"not_your_action", "role_required", "illegal_transition"}, (name, route, code)
+                codes = {"not_your_action", "role_required", "illegal_transition", "not_found"}
+                assert code in codes, (name, route, code)
         assert (await t.detail(signed_in[0]))["lock_version"] == lock  # nothing changed
 
 
