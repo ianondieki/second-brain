@@ -94,7 +94,14 @@ export default async function OrganisationEngagementsPage({ searchParams }: Page
             {exportRefusal ? (
               <ExportRefusalNotice refusal={exportRefusal} retry={retryParam(params.retry)} orgId={org.org_id} />
             ) : null}
-            <Body memberships={memberships} org={org} query={query} userId={me.user.id} mine={mine} />
+            <Body
+              memberships={memberships}
+              org={org}
+              query={query}
+              userId={me.user.id}
+              mine={mine}
+              planLine={exportRefusal !== "plan"}
+            />
           </>
         ) : (
           <div>
@@ -162,11 +169,14 @@ async function Body({
   query,
   userId,
   mine,
+  planLine = true,
 }: {
   memberships: Membership[];
   org: Membership;
   query: string;
   userId: string;
+  /** The CSV plan line, off under the export's own "plan" notice. */
+  planLine?: boolean;
   /** "Assigned to me" (`?assignee=me`): only the engagements assigned to the caller. */
   mine: boolean;
 }) {
@@ -183,7 +193,7 @@ async function Body({
           allHref={allHref}
           mineHref={`${ENGAGEMENTS_PATH}${orgQuery(memberships, org.org_id, { assignee: "me" })}`}
         />
-        <CsvExport orgId={org.org_id} />
+        <CsvExport orgId={org.org_id} planLine={planLine} />
       </div>
     ) : null;
   const shown =

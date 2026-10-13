@@ -73,6 +73,13 @@ describe("Export CSV", () => {
     expect(screen.getByRole("link", { name: "See plans" }).getAttribute("href")).toBe(`/billing?org=${ORG_ID}`);
   });
 
+  it("leaves the plan line to the export's own notice under ?export=plan (one line, not two)", async () => {
+    api({ limits: { csv_export: false }, plans: PLANS });
+    render(<>{await resolveServerTree(<CsvExport orgId={ORG_ID} planLine={false} />)}</>);
+    expect(document.querySelector("[data-csv-off]")).toBeNull();
+    expect(mocks.get).toHaveBeenCalledTimes(1); // the plans are not read for a line not drawn
+  });
+
   it("treats anything but an explicit true as off (a string such as 'release-2' grants nothing)", async () => {
     api({ limits: { csv_export: "release-2" }, plans: PLANS });
     await renderExport();

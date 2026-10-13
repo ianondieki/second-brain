@@ -99,7 +99,16 @@ export async function ExportRefusalNotice({
  * The link or the line, under the list's filter. Nothing when the plan cannot be read in time: the list never waits
  * on it or says something it does not know.
  */
-export async function CsvExport({ orgId, className }: { orgId: string; className?: string }) {
+export async function CsvExport({
+  orgId,
+  className,
+  planLine = true,
+}: {
+  orgId: string;
+  className?: string;
+  /** false under the export's own "plan" notice (?export=plan), which says the same: one line, not two. */
+  planLine?: boolean;
+}) {
   const options = async () => ({
     headers: await forwardHeaders(),
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -122,6 +131,7 @@ export async function CsvExport({ orgId, className }: { orgId: string; className
       </a>
     );
   }
+  if (!planLine) return null;
   const plans = await read(async () =>
     serverApi().GET("/api/plans", { params: { query: { side: "org" } }, ...(await options()) }),
   );
