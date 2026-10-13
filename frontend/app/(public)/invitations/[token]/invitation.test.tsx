@@ -233,12 +233,24 @@ describe("Accept and join", () => {
     expect(post).toHaveBeenCalledWith("/api/invitations/{token}/accept", { params: { path: { token: TOKEN } } });
   });
 
+  it("offers to sign out and use another address after a mismatch, coming back to the invitation", async () => {
+    const { api, post } = client({ status: 403, error: { detail: { code: "invitation_email_mismatch", message: "x" } } });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    renderAccept(api);
+    fireEvent.click(screen.getByRole("button", { name: "Accept and join" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out and use another address" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith(`/invitations/${TOKEN}`));
+    expect(post).toHaveBeenLastCalledWith("/api/auth/logout");
+    vi.unstubAllGlobals();
+  });
+
   it("says only that the invitation is for a different address, and offers no second try", async () => {
     const { api } = client({ status: 403, error: { detail: { code: "invitation_email_mismatch", message: "x" } } });
     renderAccept(api);
     fireEvent.click(screen.getByRole("button", { name: "Accept and join" }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe(en.invitationAccept.refusal.mismatch);
+    expect(alert.querySelector("p")?.textContent).toBe(en.invitationAccept.refusal.mismatch);
     expect(alert.textContent).not.toMatch(/@/);
     expect(screen.queryByRole("button", { name: "Accept and join" })).toBeNull();
   });

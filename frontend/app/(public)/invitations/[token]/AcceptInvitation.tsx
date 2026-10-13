@@ -101,6 +101,19 @@ export function AcceptInvitation({
     setBusy(false);
   }
 
+  async function switchAccount() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await client.POST("/api/auth/logout");
+    } catch {
+      // Signed out or not, the page read again shows where things stand.
+    }
+    // A full load after signing out, as the account menu's sign-out does: nothing of the old session stays rendered.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign(`/invitations/${token}`);
+  }
+
   return (
     <div className="flex flex-col items-stretch gap-4 sm:items-start">
       {refusal ? (
@@ -115,6 +128,12 @@ export function AcceptInvitation({
             <a href="/org" className={standaloneLinkClass}>
               {t("openOrg")}
             </a>
+          ) : refusal === "mismatch" ? (
+            // Another address than the invitation's: sign out, then this page again (signed out, its sign-in and
+            // sign-up offers), so the right account can accept.
+            <Button variant="link" busy={busy} onClick={() => void switchAccount()} data-switch-account="">
+              {busy ? t("signingOut") : t("switchAccount")}
+            </Button>
           ) : refusal === "signedOut" ? (
             <a href={signInHref} className={standaloneLinkClass}>
               {t("signIn")}
