@@ -111,11 +111,13 @@ describe("the calendar feed", () => {
     expect(calls.list).toEqual([]);
     expect(screen.queryByRole("group")).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Make a new link" })));
-    // Escape keeps it too.
+    // Escape keeps it too, and the focus goes back to the button as well.
     fireEvent.click(screen.getByRole("button", { name: "Make a new link" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("group")));
     fireEvent.keyDown(screen.getByRole("group"), { key: "Escape" });
     expect(screen.queryByRole("group")).toBeNull();
     expect(calls.list).toEqual([]);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Make a new link" })));
   });
 
   it("asks before removing the feed, in place, the same way; keeping it calls nothing", async () => {
@@ -130,9 +132,11 @@ describe("the calendar feed", () => {
     expect(calls.list).toEqual([]);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remove the feed" })));
     fireEvent.click(screen.getByRole("button", { name: "Remove the feed" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("group")));
     fireEvent.keyDown(screen.getByRole("group"), { key: "Escape" });
     expect(screen.queryByRole("group")).toBeNull();
     expect(calls.list).toEqual([]);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remove the feed" })));
     // Confirmed: the feed goes, and the focus goes to the button that takes the place of the pressed one.
     fireEvent.click(screen.getByRole("button", { name: "Remove the feed" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove the link" }));

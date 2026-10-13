@@ -153,6 +153,9 @@ test("a developer's deadlines: the month, the list with the live clock, each in 
     await card.getByRole("button", { name: "Create a feed link" }).click();
     const field = card.getByRole("textbox", { name: "Feed link" });
     await expect(field).toHaveValue(/\/api\/calendar\/.+\.ics$/, STEP);
+    // The new link takes the focus, selected for copying (an effect after the commit, not a frame before it: on the
+    // production build the frame could come first and leave the focus nowhere).
+    await expect(field).toBeFocused();
     const first = await field.inputValue();
     await checkScreen(page, { strict: true });
     const anonymous = await playwright.request.newContext();
@@ -169,6 +172,7 @@ test("a developer's deadlines: the month, the list with the live clock, each in 
       await card.getByRole("button", { name: "Make a new link" }).click();
       await card.getByRole("button", { name: "Replace the link" }).click();
       await expect(field).not.toHaveValue(first, STEP);
+      await expect(field).toBeFocused();
       const second = await field.inputValue();
       expect((await anonymous.get(first)).status()).toBe(404);
       expect((await anonymous.get(second)).status()).toBe(200);
@@ -176,6 +180,7 @@ test("a developer's deadlines: the month, the list with the live clock, each in 
       await card.getByRole("button", { name: "Remove the feed" }).click();
       await card.getByRole("button", { name: "Remove the link" }).click();
       await expect(card.getByRole("status")).toHaveText("The feed is removed. Its link no longer works.", STEP);
+      await expect(card.getByRole("button", { name: "Create a feed link" })).toBeFocused();
       expect((await anonymous.get(second)).status()).toBe(404);
       await checkScreen(page, { strict: true });
     } finally {
