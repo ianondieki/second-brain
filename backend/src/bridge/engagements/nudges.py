@@ -31,7 +31,8 @@ candidate, so nothing is due while the clock is paused.
 Each engagement is decided in its own transaction: bound to its developer (the engagement, its chain, its NDA's
 signatures, its milestones), then to ``member_id`` with the organisation (its roster, escalation contact and
 assignment: the organisation's own, never read as the developer, D-68), then with no user bound each due nudge is
-recorded (``app_record_nudge(engagement, kind, key)``) and its notification queued in the same transaction only when
+recorded (``app_record_nudge(engagement, kind, key, state)``, with the state the nudge was decided in: a command a
+party committed meanwhile makes it record nothing) and its notification queued in the same transaction only when
 that call recorded it (``engagements.nudge_notify``, ``deliver``): a nudge fires once, whatever the runs and retries.
 Keys are the job's codes: the stage entry's event seq with the business-day count (``overdue`` for EM6), the
 milestone and its submission's seq; never a name, an address or free text. One engagement's failure is logged and
@@ -88,7 +89,7 @@ from bridge.notifications.email import EmailMessage, EmailProvider
 from bridge.notifications.in_app import MAX_TITLE_CHARS, post_in_app
 from bridge.notifications.preferences import channel_enabled
 from bridge.proposals.models import ProposalVersion
-from bridge.tenancy.models import Membership, Organization
+from bridge.tenancy.models import Membership, Organization, OrgEscalationContact
 from bridge.tenancy.service import membership_of
 from bridge.web_paths import engagement_path
 
@@ -98,7 +99,7 @@ DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 TASK: Final = "engagements.nudge_notify"
 QUEUE: Final = notify.QUEUE
 _CANDIDATES: Final = text("SELECT engagement_id, org_id, developer_id, member_id FROM app_nudge_candidates()")
-_RECORD: Final = text("SELECT app_record_nudge(:engagement, :kind, :key)")
+_RECORD: Final = text("SELECT app_record_nudge(:engagement, :kind, :key, CAST(:state AS engagement_state))")
 # The stages a nudge counts from the main-path entry of (a milestone counts from its submission).
 COUNTED: Final = frozenset({S.INTEREST_CONFIRMED, S.NDA_PENDING, S.PROCUREMENT_ROUTE})
 # The nudges that flag the organisation's admins: the latest is the tracker's ``escalated_at`` (organisation only).
@@ -348,7 +349,7 @@ async def roster_of(db: AsyncSession, engagement: Engagement) -> Roster:
         if user != engagement.developer_id  # D-68: never the engagement's own developer
     }
     escalation = await db.scalar(
-        select(Organization.escalation_contact_user_id).where(Organization.id == engagement.org_id)
+        select(OrgEscalationContact.user_id).where(OrgEscalationContact.org_id == engagement.org_id)
     )
     assignee = await db.scalar(
         select(EngagementAssignment.assignee_user_id).where(
@@ -412,9 +413,14 @@ async def nudge_one(
     sent: list[Sent] = []
     for nudge in due:
         people, developer = recipients(nudge, roster, signed=signed)
-        params = {"engagement": engagement.id, "kind": nudge.kind.value, "key": nudge.key}
+        params = {
+            "engagement": engagement.id,
+            "kind": nudge.kind.value,
+            "key": nudge.key,
+            "state": engagement.state.value,  # the state it was decided in
+        }
         if not (await db.execute(_RECORD, params)).scalar_one():
-            continue  # already sent (or the engagement ended meanwhile)
+            continue  # already sent, or the engagement ended or moved on meanwhile
         if people or developer:
             args = _args(engagement, nudge, people, developer)
             await defer(db, TASK, args, queue=QUEUE, lock=f"engagement:{engagement.id}")
