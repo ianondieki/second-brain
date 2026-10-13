@@ -42,8 +42,6 @@ const loadContactReveal = () => import("./ContactReveal").then((m) => m.ContactR
 const ContactRevealChunk = failSafe(loadContactReveal);
 /** Actions draws it inside its own Suspense, with its "Working…" fallback. */
 export const LazyStepUp = failSafe(() => import("./StepUp").then((m) => m.StepUp));
-/** A public entity's procurement route (REQ-ENG-06): loaded when its button is pressed; Actions draws its Suspense. */
-export const LazyRouteSheet = failSafe(() => import("./RouteSheet").then((m) => m.RouteSheet));
 
 export function LazyShareTier2(props: ComponentProps<typeof ShareTier2Chunk>) {
   return (

@@ -368,11 +368,18 @@ export const FORM_COMMANDS = ["approve", "decline", "propose_terms", "record_pay
 export type FormCommand = (typeof FORM_COMMANDS)[number];
 
 /**
- * The side states' commands (REQ-ENG-10 part): each opens a sheet over the tracker (a bottom sheet on phones), four
- * with a text the other party reads (a question, an answer, a reason) and the organisation's withdrawal of its
- * question as a confirmation.
+ * The commands that open a sheet over the tracker (a bottom sheet on phones; SideSheet.tsx, loaded when one opens): the
+ * side states' (REQ-ENG-10 part), four with a text the other party reads (a question, an answer, a reason) and the
+ * organisation's withdrawal of its question as a confirmation; and a public entity's procurement route (REQ-ENG-06).
  */
-export const SHEET_COMMANDS = ["request_info", "answer_info", "pause", "resume", "cancel_request"] as const satisfies readonly Command[];
+export const SHEET_COMMANDS = [
+  "request_info",
+  "answer_info",
+  "pause",
+  "resume",
+  "cancel_request",
+  "choose_route",
+] as const satisfies readonly Command[];
 export type SheetCommand = (typeof SHEET_COMMANDS)[number];
 
 /** Commands that end the engagement: a confirmation first, never the primary button. */
@@ -445,17 +452,17 @@ export function actionItems(detail: Pick<Detail, "actions" | "awaiting" | "my_pa
 }
 
 const PREFIX = "/api/engagements/{engagement_id}" as const;
-/** A public entity's procurement route (3b) is chosen under the organisation's path (REQ-ENG-06; RouteSheet). */
-export const ORG_PREFIX = "/api/orgs/{org_id}/engagements/{engagement_id}" as const;
 
-/** URL segment of each command without a milestone (backend engagements/router.py); choose_route's is ORG_PREFIX's. */
+/**
+ * URL segment of each command without a milestone (backend engagements/router.py). choose_route's path is the
+ * organisation's, built by its lazily loaded sheet (procurement.ts routeRequest), so the first load never carries it.
+ */
 export const COMMAND_SEGMENT = {
   accept_interest: "accept-interest",
   decline_interest: "decline-interest",
   start_review: "start-review",
   decline: "decline",
   approve: "approve",
-  choose_route: "procurement-route",
   withdraw: "withdraw",
   mark_contacted: "mark-contacted",
   confirm_contact: "confirm-contact",
@@ -475,7 +482,7 @@ export const COMMAND_SEGMENT = {
   cancel_request: "cancel-request",
   pause: "pause",
   resume: "resume",
-} as const satisfies Record<Exclude<Command, MilestoneCommand>, string>;
+} as const satisfies Record<Exclude<Command, MilestoneCommand | "choose_route">, string>;
 
 export const MILESTONE_SEGMENT = {
   start_milestone: "start",
@@ -486,8 +493,7 @@ export const MILESTONE_SEGMENT = {
 
 /** Every path the tracker builds is a route of the frozen OpenAPI (a renamed route fails the type check here). */
 type CommandPath =
-  | `${typeof PREFIX}/${(typeof COMMAND_SEGMENT)[Exclude<keyof typeof COMMAND_SEGMENT, "choose_route">]}`
-  | `${typeof ORG_PREFIX}/${(typeof COMMAND_SEGMENT)["choose_route"]}`
+  | `${typeof PREFIX}/${(typeof COMMAND_SEGMENT)[keyof typeof COMMAND_SEGMENT]}`
   | `${typeof PREFIX}/milestones/{milestone_id}/${(typeof MILESTONE_SEGMENT)[MilestoneCommand]}`;
 export const COMMAND_PATHS_EXIST: [CommandPath] extends [keyof paths] ? true : never = true;
 
@@ -525,7 +531,7 @@ export interface CommandRequest {
 
 /** The request for a command on an engagement read at `lockVersion` (a 409 `stale` when it changed since). */
 export function commandRequest(
-  // choose_route is sent under the organisation's path, built by its lazily loaded sheet (RouteSheet.routeRequest).
+  // choose_route is sent under the organisation's path, built by its lazily loaded sheet (procurement.ts routeRequest).
   command: Exclude<Command, "choose_route">,
   engagementId: string,
   lockVersion: number,

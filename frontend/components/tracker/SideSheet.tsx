@@ -10,17 +10,27 @@ import { TextField } from "@/components/ui/TextField";
 
 import type { Refusal } from "./calls";
 import { formatDate } from "./input";
-import type { SheetCommand, SheetInput, SideLimits } from "./model";
+import { commandRequest, type CommandRequest, type FormInput, type SheetCommand, type SheetInput, type SideLimits } from "./model";
+import { RouteSheet } from "./RouteSheet";
 import { addDays, HOLD_MAX_DAYS, QUESTION_MAX_CHARS, REASON_MAX_CHARS } from "./sheet";
 
 // The side states' sheets (REQ-ENG-10 part; docs/spec/06 6.9 side branches): a question, its answer, a hold, an early
 // resume, and the organisation's withdrawal of its question. Each is a native modal <dialog> drawn as the confirmation
 // dialogs are (a bottom sheet on phones, D-52), with a form inside: the text the other party reads, and a hold's
 // date. The sheet checks only that the text is there; the API decides the rest (a 422 comes back as a refusal inside
-// the sheet). Loaded when one opens (Actions.tsx), so the tracker's first load carries none of it.
+// the sheet). Loaded when one opens (Actions.tsx), so the tracker's first load carries none of it. A public entity's
+// procurement route (REQ-ENG-06) opens through the same lazy chunk (RouteSheet), and each sheet builds its own request,
+// so neither the route's organisation path nor its refusals' handling joins the first load.
+
+/** The side states' text sheets. */
+type TextCommand = Exclude<SheetCommand, "choose_route">;
 
 export interface SideSheetProps {
   command: SheetCommand;
+  engagementId: string;
+  lockVersion: number;
+  /** choose_route: the engagement's organisation, whose path the route is sent under. */
+  orgId?: string;
   busy: boolean;
   /** The refusal of the last attempt, shown above the buttons unless it belongs to a field. */
   problem?: ReactNode;
@@ -40,9 +50,24 @@ export interface SideSheetProps {
   today?: string | null;
   /** What the policy's caps leave this stage (the API's `side_limits`); each figure shown only when sent. */
   limits?: SideLimits | null;
-  onSubmit: (input: SheetInput) => void;
+  /** The request the sheet built, with the lock_version the page read. */
+  onSubmit: (request: CommandRequest) => void;
   /** The sheet closed without sending (Cancel or Escape). */
   onClose: () => void;
+}
+
+export function SideSheet(props: SideSheetProps) {
+  const { command } = props;
+  if (command === "choose_route") return <RouteSheet {...props} />;
+  return (
+    <TextSheet
+      {...props}
+      command={command}
+      onSubmit={(input) =>
+        props.onSubmit(commandRequest(command, props.engagementId, props.lockVersion, { input: input as FormInput }))
+      }
+    />
+  );
 }
 
 const SUBMIT = {
@@ -51,7 +76,7 @@ const SUBMIT = {
   pause: "sheet.pause.submit",
   resume: "sheet.resume.submit",
   cancel_request: "sheet.cancelRequest.submit",
-} as const satisfies Record<SheetCommand, string>;
+} as const satisfies Record<TextCommand, string>;
 
 /** Refusals about what was typed: said on the field itself (aria-invalid, aria-describedby), which keeps the focus. */
 const FIELD_OF: Partial<Record<Refusal, "text" | "date">> = {
@@ -61,7 +86,7 @@ const FIELD_OF: Partial<Record<Refusal, "text" | "date">> = {
   holdLimit: "date",
 };
 
-export function SideSheet(props: SideSheetProps) {
+function TextSheet(props: Omit<SideSheetProps, "onSubmit"> & { command: TextCommand; onSubmit: (input: SheetInput) => void }) {
   const t = useStrings("trackerActions");
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();

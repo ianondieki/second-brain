@@ -8,7 +8,9 @@ import { Actions, type ActionsProps } from "./Actions";
 import type { CommandOutcome } from "./calls";
 import { Procurement } from "./Deal";
 import { HistoryList } from "./HistoryList";
+import { refusalOf } from "./calls";
 import { actionItems, isPublicEntity, subStages, type CommandRequest, type Detail, type StageStep } from "./model";
+import { plainJustification } from "./procurement";
 import { SubStageList } from "./Stepper";
 import { WhoseTurn } from "./WhoseTurn";
 
@@ -216,6 +218,17 @@ describe("the procurement route's sheet (REQ-ENG-06)", () => {
     expect(screen.getByRole("status").textContent).toContain("Done. The tracker is up to date.");
   });
 
+  it("drops the control characters the API refuses, keeping line feeds and tabs (REQ-ENG-06)", async () => {
+    const { dialog, runImpl } = await openSheet();
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Direct procurement/ }));
+    fireEvent.change(within(dialog).getByLabelText("Justification"), {
+      target: { value: "\u0007 Only this developer\u0000 runs\tthe gateway;\nno other\u001b supplier\u007f does. \r" },
+    });
+    await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Confirm the route" })));
+    expect((runImpl.mock.calls[0][0].body as { justification?: string }).justification).toBe("Only this developer runs\tthe gateway;\nno other supplier does.");
+    expect(plainJustification("  \u0001\u0002  ")).toBe("");
+  });
+
   it("takes no justification for another route (null), and labels it optional", async () => {
     const { dialog, runImpl } = await openSheet();
     fireEvent.click(within(dialog).getByRole("radio", { name: /Request for quotation or tender/ }));
@@ -229,9 +242,10 @@ describe("the procurement route's sheet (REQ-ENG-06)", () => {
     });
   });
 
+  // justification_required and invalid_justification fall back to a plain 422 ("invalid", calls.ts), as does the
+  // schema's refusal of the text's characters: the sheet says it on the justification.
   it.each([
-    ["justificationRequired", "Justification", "Direct procurement needs a written justification of at least 20 characters."],
-    ["invalidJustification", "Justification", "That justification was not accepted."],
+    ["invalid", "Justification", "That justification was not accepted. Write it in plain words, in no more than 1,000 characters."],
     ["containsContact", "Justification", "Contact details stay out of the tracker until first contact is made"],
     ["invalidContactBy", "Contact by", "Choose a contact-by date from today, no more than five business days ahead."],
   ] as const)("keeps the sheet open on a 422 %s, the reason on its field, which takes the focus", async (refusal, label, words) => {
@@ -269,6 +283,15 @@ describe("the procurement route's sheet (REQ-ENG-06)", () => {
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole("button", { name: "Choose the procurement route" })),
     );
+  });
+});
+
+describe("the route's refusals in the first load (calls.ts)", () => {
+  it("leave the justification's codes to a plain 422, which the sheet says on its field", () => {
+    for (const code of ["justification_required", "invalid_justification"]) {
+      expect(refusalOf(422, { detail: { code, message: "x" } })).toBe("invalid");
+    }
+    expect(refusalOf(422, { detail: { code: "invalid_contact_by", message: "x" } })).toBe("invalidContactBy");
   });
 });
 

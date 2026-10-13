@@ -10,7 +10,7 @@ import { useHydrated } from "@/lib/hooks/useHydrated";
 
 import { confirmStepUp, runCommand, type Refusal } from "./calls";
 import type { Member } from "./CommandForm";
-import { LazyRouteSheet, LazyStepUp } from "./lazy";
+import { LazyStepUp } from "./lazy";
 import {
   commandRequest,
   isEndingCommand,
@@ -71,8 +71,8 @@ export interface ActionsProps {
 type Mode =
   | { kind: "list" }
   | { kind: "form"; item: ActionItem & { command: FormCommand } }
-  // choose_route's sheet (RouteSheet) is drawn as the side states' are, over the list.
-  | { kind: "sheet"; item: ActionItem & { command: SheetCommand | "choose_route" } }
+  // The side states' sheets and a public entity's procurement route (SideSheet, RouteSheet), over the list.
+  | { kind: "sheet"; item: ActionItem & { command: SheetCommand } }
   | { kind: "confirm"; item: ActionItem }
   | { kind: "stepUp"; item: ActionItem; request: CommandRequest };
 
@@ -144,7 +144,7 @@ export function Actions(props: ActionsProps) {
   }
 
   function requestFor(item: ActionItem, input?: FormInput): CommandRequest {
-    // Never choose_route: its sheet builds its own request (RouteSheet.routeRequest).
+    // Never choose_route: a sheet's command, whose sheet builds its own request (SideSheet).
     return commandRequest(item.command as Exclude<Command, "choose_route">, props.engagementId, props.lockVersion, {
       milestoneId: item.milestone?.id,
       input,
@@ -186,8 +186,7 @@ export function Actions(props: ActionsProps) {
     setPressed(keyOf(item));
     opener.current = keyOf(item);
     if (isFormCommand(item.command)) setMode({ kind: "form", item: item as ActionItem & { command: FormCommand } });
-    else if (isSheetCommand(item.command) || item.command === "choose_route")
-      setMode({ kind: "sheet", item: item as ActionItem & { command: SheetCommand } });
+    else if (isSheetCommand(item.command)) setMode({ kind: "sheet", item: item as ActionItem & { command: SheetCommand } });
     else if (isEndingCommand(item.command)) setMode({ kind: "confirm", item });
     else void run(item, requestFor(item));
   }
@@ -281,29 +280,18 @@ export function Actions(props: ActionsProps) {
         </Suspense>
       ) : null}
 
-      {mode.kind === "sheet" && mode.item.command === "choose_route" ? (
+      {mode.kind === "sheet" ? (
         <Suspense fallback={null}>
-          {/* engagementId, lockVersion, orgId, locale and today come from the props of the same names. */}
-          <LazyRouteSheet
+          {/* engagementId, lockVersion, orgId, counterpart, question, resumeOn, locale, today and limits come from the
+              props of the same names; the sheet builds the request. */}
+          <SideSheet
             {...props}
+            command={mode.item.command}
             busy={busy}
             problem={message}
             notice={notice}
             onClose={cancel}
             onSubmit={(request) => void run(mode.item, request)}
-          />
-        </Suspense>
-      ) : mode.kind === "sheet" ? (
-        <Suspense fallback={null}>
-          {/* counterpart, question, resumeOn, locale, today and limits come from the props of the same names. */}
-          <SideSheet
-            {...props}
-            command={mode.item.command as SheetCommand}
-            busy={busy}
-            problem={message}
-            notice={notice}
-            onClose={cancel}
-            onSubmit={(input) => void run(mode.item, requestFor(mode.item, input as FormInput))}
           />
         </Suspense>
       ) : null}

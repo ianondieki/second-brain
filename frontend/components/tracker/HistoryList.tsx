@@ -19,8 +19,8 @@ import {
   type History,
   type HistoryEvent,
   type Note,
-  type ProcurementRoute,
 } from "./model";
+import { isRoute } from "./procurement";
 import { Eat } from "./When";
 
 /** The event names the History tab words: every command, plus the genesis ("create") and the system's expiry. */
@@ -171,16 +171,13 @@ function RouteText({ event }: { event: HistoryEvent }) {
   const t = useTranslations("tracker");
   const names = useTranslations("procurement");
   const route = event.command === "choose_route" ? event.payload.procurement_route : undefined;
-  if (typeof route !== "string" || !(ROUTES as readonly string[]).includes(route)) return null;
+  if (!isRoute(route)) return null;
   return (
     <p data-event-route={route} className="mt-1 text-sm text-ink">
-      {t("history.route", { route: names(`route.${route as ProcurementRoute}`) })}
+      {t("history.route", { route: names(`route.${route}`) })}
     </p>
   );
 }
-
-/** The five routes (backend models/enums.py ProcurementRoute), for reading a payload. */
-const ROUTES = ["direct", "rfq_tender", "ppp_pip", "innovation_challenge", "pilot_mou"] as const satisfies readonly ProcurementRoute[];
 
 /** An event's text: its kind as a small label (a hold's with the resume date), then the words as written. */
 function NoteText({ note, locale }: { note: Note | undefined; locale: string }) {

@@ -52,8 +52,13 @@ describe("the tracker's routes", () => {
 
   it("load the procurement route's sheet only when its button is pressed (REQ-ENG-06; the JS budget)", () => {
     const tracker = reachable("components/tracker/EngagementScreen.tsx");
-    expect(tracker.has("components/tracker/lazy.tsx")).toBe(true);
     expect(tracker.has("components/tracker/RouteSheet.tsx")).toBe(false);
+    // The turn card's client code (Actions and what it imports) carries neither the sheet nor the route's path, list
+    // and limits (procurement.ts, shared with the server-rendered History and route block).
+    const client = reachable("components/tracker/Actions.tsx");
+    expect(client.has("components/tracker/RouteSheet.tsx")).toBe(false);
+    expect(client.has("components/tracker/SideSheet.tsx")).toBe(false);
+    expect(client.has("components/tracker/procurement.ts")).toBe(false);
   });
 
   it("never reach the turn card's buttons from the Messages route", () => {

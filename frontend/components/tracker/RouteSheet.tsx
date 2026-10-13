@@ -11,39 +11,15 @@ import { TextField } from "@/components/ui/TextField";
 
 import type { Refusal } from "./calls";
 import { nairobiToday } from "./input";
-import { COMMAND_SEGMENT, ORG_PREFIX, type CommandRequest, type ProcurementInput, type ProcurementRoute } from "./model";
+import type { CommandRequest, ProcurementRoute } from "./model";
+import { JUSTIFICATION_MAX, JUSTIFICATION_MIN, plainJustification, routeRequest, ROUTES } from "./procurement";
 
 // A public entity's procurement route (stage 3b; REQ-ENG-06, AC-TRACK-5; docs/spec/06 6.9): its owner or admin chooses
 // how the organisation will buy, writes the justification direct procurement needs, and names the contact-by date of
-// stage 3. A native modal <dialog> drawn as the side states' sheets are (a bottom sheet on phones, D-52), loaded only
-// when "Choose the procurement route" is pressed (components/tracker/lazy.tsx), so the tracker's first load carries
-// none of it. The sheet checks what it can (a route, the justification's length, a date); the API decides the rest
-// (the business-day window, contact details in the text) and its refusals are said on the field they concern.
-
-/** The five routes, in the order the sheet offers them (backend models/enums.py ProcurementRoute). */
-export const ROUTES = [
-  "rfq_tender",
-  "direct",
-  "ppp_pip",
-  "innovation_challenge",
-  "pilot_mou",
-] as const satisfies readonly ProcurementRoute[];
-
-/** Direct procurement's justification, and any route's (backend engagements/commands.py). */
-export const JUSTIFICATION_MIN = 20;
-export const JUSTIFICATION_MAX = 1000;
-
-/**
- * The route's request: under the organisation's path (POST /api/orgs/{org_id}/engagements/{id}/procurement-route), with
- * the lock_version the page read (409 stale when it moved).
- */
-export function routeRequest(engagementId: string, orgId: string, lockVersion: number, input: ProcurementInput): CommandRequest {
-  return {
-    path: `${ORG_PREFIX}/${COMMAND_SEGMENT.choose_route}`,
-    params: { org_id: orgId, engagement_id: engagementId },
-    body: { ...input, lock_version: lockVersion },
-  };
-}
+// stage 3. A native modal <dialog> drawn as the side states' sheets are (a bottom sheet on phones, D-52), opened
+// through their lazy chunk (SideSheet) when "Choose the procurement route" is pressed, so the tracker's first load
+// carries none of it. The sheet checks what it can (a route, the justification's length, a date); the API decides the
+// rest (the business-day window, contact details in the text) and its refusals are said on the field they concern.
 
 export interface RouteSheetProps {
   engagementId: string;
@@ -65,10 +41,15 @@ export interface RouteSheetProps {
 
 type FieldName = "route" | "justification" | "date";
 
-/** API refusals about what was typed, said on the field (trackerActions.refusal.*). */
+/**
+ * API refusals about what was typed, said on the field. The justification's own codes (justification_required,
+ * invalid_justification: the sheet already checks both lengths, so the API's count differs only where it drops
+ * characters the field shows) and the schema's refusal of its characters arrive as a plain 422 ("invalid": calls.ts
+ * keeps this sheet's codes out of the first load); the route and the date are always well formed here, so a plain
+ * 422 is the justification's.
+ */
 const FIELD_OF: Partial<Record<Refusal, FieldName>> = {
-  justificationRequired: "justification",
-  invalidJustification: "justification",
+  invalid: "justification",
   containsContact: "justification",
   invalidContactBy: "date",
 };
@@ -89,7 +70,11 @@ export function RouteSheet(props: RouteSheetProps) {
   const code = props.notice?.refusal;
   const field = code ? FIELD_OF[code] : undefined;
   const [edited, setEdited] = useState<object | null | undefined>(null);
-  const refused = field && props.notice && props.notice !== edited ? ta(`refusal.${code!}`) : undefined;
+  const direct = route === "direct";
+  const refused =
+    field && props.notice && props.notice !== edited
+      ? ta(code === "invalid" ? "refusal.invalidJustification" : `refusal.${code!}`)
+      : undefined;
   const ids = { route: `${id}-route`, justification: `${id}-justification`, date: `${id}-date` };
 
   useEffect(() => {
@@ -104,12 +89,10 @@ export function RouteSheet(props: RouteSheetProps) {
     if (refusedField && props.notice) document.getElementById(refusedField)?.focus();
   }, [props.notice, refusedField]);
 
-  const direct = route === "direct";
-
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (props.busy) return;
-    const value = text.trim();
+    const value = plainJustification(text);
     const next: Partial<Record<FieldName, string>> = {
       route: route ? undefined : t("sheet.error.route"),
       justification:
