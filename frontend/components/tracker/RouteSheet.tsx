@@ -107,8 +107,9 @@ export function RouteSheet(props: RouteSheetProps) {
     setErrors(next);
     const first = (["route", "justification", "date"] as const).find((name) => next[name]);
     if (first || !route) {
-      const target = first === "route" ? document.querySelector<HTMLElement>(`#${CSS.escape(ids.route)} input`) : null;
-      (target ?? document.getElementById(ids[first ?? "route"]))?.focus();
+      // The route's error goes to its first radio; the others to their field.
+      const box = document.getElementById(ids[first ?? "route"]);
+      (first === "date" || first === "justification" ? box : box?.querySelector<HTMLElement>("input"))?.focus();
       return;
     }
     props.onSubmit({ route, justification: value || null, contact_by: by });

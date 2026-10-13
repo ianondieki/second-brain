@@ -50,6 +50,12 @@ describe("the tracker's routes", () => {
     expect(tracker.has("components/tracker/MessagesTab.tsx")).toBe(false);
   });
 
+  it("load the procurement route's sheet only when its button is pressed (REQ-ENG-06; the JS budget)", () => {
+    const tracker = reachable("components/tracker/EngagementScreen.tsx");
+    expect(tracker.has("components/tracker/lazy.tsx")).toBe(true);
+    expect(tracker.has("components/tracker/RouteSheet.tsx")).toBe(false);
+  });
+
   it("never reach the turn card's buttons from the Messages route", () => {
     for (const entry of [
       "components/tracker/MessagesScreen.tsx",
