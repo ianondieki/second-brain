@@ -29,9 +29,10 @@ and never on a developer's. Neither changes the engagement's state; only the tra
   organisation (``assigned_by``, the INSERT policy's writer). Never over an assignment (live or closed: someone chose),
   never to the engagement's own developer, and never to a member who no longer holds a triage role. Audited as a
   system event (the rule assigned it, ``reason: niche_default``); the assignee is told (N30) unless they are the
-  member whose action opened the engagement. Hooked where an organisation member opens an engagement
-  (``ORG_INTEREST``: ``bridge.engagements.interest_router``). A ``SUBMITTED`` engagement is opened in its developer's
-  session, which reads none of the organisation's rows: that path waits on a database function (the P28 report).
+  member whose action opened the engagement. Hooked where an engagement opens: an organisation member's interest
+  (``ORG_INTEREST``, in the signatory's transaction: ``bridge.engagements.interest_router``) and a Pitch (``SUBMITTED``,
+  opened in the developer's session, which reads none of the organisation's rows: after the commit,
+  ``apply_niche_defaults`` asks ``app_niche_default_assignee`` and binds the member it names).
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ from datetime import timedelta
 from typing import Final
 from uuid import UUID
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, func, insert, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -117,6 +118,7 @@ TOO_MANY_ASSIGNMENTS: Final = "You have changed assignments many times this hour
 DEFAULT_TITLE: Final = 'Assigned to you as the niche\'s default reviewer: "{title}"'
 DEFAULT_BODY: Final = "A new engagement in a niche you cover. Open the tracker to pick it up."
 DEFAULT_STATES: Final = frozenset({EngagementState.SUBMITTED, EngagementState.ORG_INTEREST})
+_DEFAULT_ASSIGNEE: Final = text("SELECT app_niche_default_assignee(:engagement)")  # revision 0015's definer
 
 log = get_logger(__name__)
 
@@ -530,9 +532,12 @@ async def _default_for(db: AsyncSession, org_id: UUID, niche_id: UUID | None) ->
     return found.get(niche_id) or (found.get(parent) if parent is not None else None)
 
 
-async def assign_niche_default(db: AsyncSession, org_id: UUID, engagement_id: UUID) -> DefaultAssigned | None:
+async def assign_niche_default(
+    db: AsyncSession, org_id: UUID, engagement_id: UUID, *, opener: UUID | None = None
+) -> DefaultAssigned | None:
     """Assign a new engagement to its niche's default reviewer (see the module docstring), in the caller's transaction
-    (a savepoint: a refusal leaves it usable), bound to a triage member of ``org_id``; None when none was assigned."""
+    (a savepoint: a refusal leaves it usable), bound to a triage member of ``org_id``; None when none was assigned.
+    ``opener`` is who opened the engagement (the bound member when None): the assignee is told unless it is them."""
     actor, _ = tenant_of(db)
     engagement: Engagement | None = await db.scalar(
         select(Engagement).where(Engagement.id == engagement_id, Engagement.org_id == org_id)
@@ -581,7 +586,7 @@ async def assign_niche_default(db: AsyncSession, org_id: UUID, engagement_id: UU
         },
     )
     title = (version.title if version else None) or SOME_PROPOSAL
-    return DefaultAssigned(engagement.id, assignment_id, assignee, title, tell=assignee != actor)
+    return DefaultAssigned(engagement.id, assignment_id, assignee, title, tell=assignee != (opener or actor))
 
 
 async def tell_default_assignee(
@@ -599,3 +604,33 @@ async def tell_default_assignee(
         title=default_title(assigned.title),
         body=DEFAULT_BODY,
     )
+
+
+async def apply_niche_defaults(
+    factory: async_sessionmaker[AsyncSession], developer_id: UUID, opened: Sequence[tuple[UUID, UUID]]
+) -> list[DefaultAssigned]:
+    """After a Pitch committed its ``SUBMITTED`` engagements (``(engagement, organisation)`` pairs): each one's niche
+    default through ``app_niche_default_assignee`` (revision 0015: the developer's session reads none of the
+    organisation's rows), then, when it names a member, ``assign_niche_default`` in a session bound to that member
+    and the organisation (``assigned_by`` the member, P27's path; a unique violation means someone assigned it first:
+    nothing is done) and N30 to them. Never raises: an error is logged and the next engagement is tried."""
+    done: list[DefaultAssigned] = []
+    for engagement_id, org_id in opened:
+        try:
+            async with factory() as db:
+                await bind_tenant(db, user_id=developer_id)
+                member: UUID | None = await db.scalar(_DEFAULT_ASSIGNEE, {"engagement": engagement_id})
+            if member is None:
+                continue
+            async with factory() as db:
+                await bind_tenant(db, user_id=member, org_id=org_id)
+                assigned = await assign_niche_default(db, org_id, engagement_id, opener=developer_id)
+                await db.commit()
+        except Exception as exc:  # the Pitch stands whatever happens here
+            failed = type(exc).__name__
+            log.error("engagement.niche_default_failed", engagement_id=str(engagement_id), error_type=failed)
+            continue
+        if assigned is not None:
+            await tell_default_assignee(factory, org_id, assigned)
+            done.append(assigned)
+    return done
