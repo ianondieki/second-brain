@@ -164,14 +164,14 @@ async def test_revoked_resent_and_expired_links_are_404(owner_engine: AsyncEngin
         for dead in (tokens[revoked_to], old, tokens[expired_to]):
             assert (await owner.get(f"/api/invitations/{dead}")).status_code == 404
         assert (await owner.get(f"/api/invitations/{new}")).status_code == 200
-        assert (await owner.get(f"/api/invitations/{'x' * 10}")).status_code == 404  # malformed: no lookup
+        assert (await owner.get(f"/api/invitations/{'x' * 10}")).status_code == 404  # malformed
 
         listed = {i["id"]: i["expired"] for i in (await owner.get(f"/api/orgs/{world.org}/team")).json()["invitations"]}
         assert listed == {resent["id"]: False, expired["id"]: True}
         renewed = await invite(owner, world.org, expired_to)  # the expired one is revoked first
         assert renewed.status_code == 201, renewed.text
-        listed = {i["id"] for i in (await owner.get(f"/api/orgs/{world.org}/team")).json()["invitations"]}
-        assert listed == {resent["id"], renewed.json()["id"]}
+        still_open = {i["id"] for i in (await owner.get(f"/api/orgs/{world.org}/team")).json()["invitations"]}
+        assert still_open == {resent["id"], renewed.json()["id"]}
     for dead_one in (revoked, expired):
         [row] = await rows(owner_engine, "SELECT revoked_at FROM invitations WHERE id = :id", id=dead_one["id"])
         assert row.revoked_at is not None

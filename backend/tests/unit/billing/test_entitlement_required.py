@@ -4,6 +4,8 @@ the plan that has it: the first up the subscriber's upgrade ladder with the feat
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 
 from bridge.billing import plans
@@ -24,7 +26,7 @@ def test_csv_export_without_the_entitlement_names_growth(code: str) -> None:
     with pytest.raises(EntitlementRequired) as refused:
         require_entitlement(SETTINGS, ent(code), "csv_export")
     assert refused.value.status_code == 403
-    assert refused.value.detail == {
+    assert cast(dict[str, Any], refused.value.detail) == {
         "code": "entitlement_required",
         "message": "This needs the Growth plan.",
         "limit_key": "csv_export",
@@ -41,8 +43,9 @@ def test_a_plan_with_csv_export_passes(code: str) -> None:
 def test_a_feature_no_plan_of_the_side_has_names_none() -> None:
     with pytest.raises(EntitlementRequired) as refused:
         require_entitlement(SETTINGS, ent("org_claimed"), "no_such_feature")
-    assert refused.value.detail["upgrade"] is None  # type: ignore[index]
-    assert refused.value.detail["message"] == "This is not part of your plan."  # type: ignore[index]
+    detail = cast(dict[str, Any], refused.value.detail)
+    assert detail["upgrade"] is None
+    assert detail["message"] == "This is not part of your plan."
 
 
 def test_the_ladder_comes_first_then_the_cheapest_self_serve_plan() -> None:

@@ -18,6 +18,7 @@ from uuid import uuid4
 import pytest
 from uvicorn.logging import AccessFormatter
 
+from bridge.auth.crypto import new_token
 from bridge.auth.sessions import LiveSession
 from bridge.errors import ApiError
 from bridge.logging import configure_logging, redact_secret_segments
@@ -32,7 +33,7 @@ def org(*roles: OrgRole) -> OrgContext:
 
 
 def test_a_new_token_is_well_formed_and_only_its_sha256_is_kept() -> None:
-    tokens = {invitations.new_token() for _ in range(50)}
+    tokens = {new_token() for _ in range(50)}
     assert len(tokens) == 50  # random
     for token in tokens:
         assert len(token) == invitations.TOKEN_CHARS
@@ -82,7 +83,7 @@ def access_log() -> Iterator[io.StringIO]:
 @pytest.mark.parametrize("suffix", ["", "/accept", "/accept?x=1"])
 def test_an_invitation_token_never_reaches_the_access_log(access_log: io.StringIO, suffix: str) -> None:
     configure_logging()
-    token = invitations.new_token()
+    token = new_token()
     ACCESS.info('%s - "%s %s HTTP/%s" %d', "203.0.113.9:50000", "GET", f"/api/invitations/{token}{suffix}", "1.1", 200)
     line = access_log.getvalue()
     assert "/api/invitations/[redacted]" in line
