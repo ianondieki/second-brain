@@ -112,7 +112,7 @@ describe("the invitation page", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Join Telco A (fixture)");
     expect(screen.getByText("Telco A (fixture) invited you to join as admin and reviewer.")).toBeTruthy();
     const signIn = screen.getByRole("link", { name: "Sign in to accept" });
-    expect(signIn.getAttribute("href")).toBe(`/login?next=%2Finvitations%2F${TOKEN}`);
+    expect(signIn.getAttribute("href")).toBe(`/login?next=%2Forg%2Fjoin%2F${TOKEN}`);
     expect(signIn.hasAttribute("data-primary")).toBe(true);
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Create an account" }).getAttribute("href")).toBe("/signup");
@@ -155,6 +155,21 @@ describe("the invitation page", () => {
     cleanup();
     await renderPage();
     expect(screen.queryByRole("button", { name: "Accept and join" })).toBeNull();
+  });
+});
+
+describe("the way back through sign-in", () => {
+  it("returns to /org/join/{token}, a signed-in page that sends the person on to the invitation", async () => {
+    const redirect = vi.fn(() => {
+      throw new Error("NEXT_REDIRECT");
+    });
+    vi.doMock("next/navigation", () => ({ redirect }));
+    const { default: JoinRedirect } = await import("@/app/(app)/org/join/[token]/page");
+    await expect(JoinRedirect({ params: Promise.resolve({ token: TOKEN }) } as never)).rejects.toThrow("NEXT_REDIRECT");
+    expect(redirect).toHaveBeenLastCalledWith(`/invitations/${TOKEN}`);
+    await expect(JoinRedirect({ params: Promise.resolve({ token: "../../x" }) } as never)).rejects.toThrow();
+    expect(redirect).toHaveBeenLastCalledWith("/");
+    vi.doUnmock("next/navigation");
   });
 });
 
@@ -210,7 +225,7 @@ describe("Accept and join", () => {
     fireEvent.click(screen.getByRole("button", { name: "Accept and join" }));
     const alert = await screen.findByRole("alert");
     expect(within(alert).getByRole("link", { name: "Sign in again" }).getAttribute("href")).toBe(
-      `/login?next=%2Finvitations%2F${TOKEN}`,
+      `/login?next=%2Forg%2Fjoin%2F${TOKEN}`,
     );
   });
 

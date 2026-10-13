@@ -1,24 +1,16 @@
 import { forwardHeaders, serverApi } from "@/lib/api/server";
 import type { components } from "@/lib/api/schema";
 
+import { isInvitationToken } from "./paths";
+
+export { invitationPath, isInvitationToken, joinPath } from "./paths";
+
 // The invitation link's page (REQ-TEN-02; docs/platform/tasks/P28.md track C): what GET /api/invitations/{token}
 // says before anyone signs in, the organisation's name and the roles, nothing else. The token is the link's
 // capability: it goes to this site's API only (never a third party: the page's Referrer-Policy is no-referrer,
 // security-headers.ts), and it is never logged here (the API's access log redacts the path).
 
 export type InvitationPreview = components["schemas"]["InvitationPreview"];
-
-/** A link's token as the API issues it: 32 random bytes, URL-safe base64, unpadded (tenancy/invitations.py). */
-const TOKEN = /^[A-Za-z0-9_-]{43}$/;
-
-export function isInvitationToken(value: string): boolean {
-  return TOKEN.test(value);
-}
-
-/** The page's own path for a token (its return path through sign-in). */
-export function invitationPath(token: string): string {
-  return `/invitations/${token}`;
-}
 
 export type InvitationRead =
   | { kind: "ok"; preview: InvitationPreview }

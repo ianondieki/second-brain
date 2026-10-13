@@ -16,7 +16,7 @@ import { publicDemoOn } from "@/lib/public-demo";
 import { loginHref } from "@/lib/return-path";
 
 import { AcceptInvitation } from "./AcceptInvitation";
-import { invitationPath, readInvitation } from "./invitation";
+import { invitationPath, joinPath, readInvitation } from "./invitation";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("invitation");
@@ -28,7 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * An invitation link (REQ-TEN-02; docs/platform/tasks/P28.md track C, AT-C-1): "Join {org}" and the roles it gives,
  * read on the server from the public preview. Signed in, "Accept and join" (the one primary action) and the portal
- * opens; signed out, "Sign in to accept" (back here after, ?next=) and the way to create an account first. A link
+ * opens; signed out, "Sign in to accept" (back here after, through ?next= and /org/join) and the way to create an account first. A link
  * that opens nothing (spent, revoked, resent over, expired or unknown: one answer) is one calm sentence and the home
  * page. In the public demo accepting is switched off. Server-rendered; only Accept is a client island.
  */
@@ -74,7 +74,7 @@ export default async function InvitationPage({ params }: PageProps<"/invitations
       <div className="flex flex-col gap-5" data-invitation="signedOut">
         <p className="text-ink">{t("signInLead")}</p>
         <div>
-          <ButtonLink href={loginHref(here)} variant="primary" prefetch={false} className="w-full sm:w-auto">
+          <ButtonLink href={loginHref(joinPath(token))} variant="primary" prefetch={false} className="w-full sm:w-auto">
             {t("signIn")}
           </ButtonLink>
         </div>

@@ -10,6 +10,8 @@ import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode } from "@/lib/api/error-code";
 import { loginHref } from "@/lib/return-path";
 
+import { joinPath } from "./paths";
+
 type Refusal = "mismatch" | "gone" | "member" | "seats" | "locked" | "signedOut" | "rateLimited" | "network" | "generic";
 
 /** Refusals that another press cannot change: the button goes. */
@@ -83,7 +85,7 @@ export function AcceptInvitation({
               {t("openOrg")}
             </a>
           ) : refusal === "signedOut" ? (
-            <a href={loginHref(`/invitations/${token}`)} className={standaloneLinkClass}>
+            <a href={loginHref(joinPath(token))} className={standaloneLinkClass}>
               {t("signIn")}
             </a>
           ) : null}

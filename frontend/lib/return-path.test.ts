@@ -66,23 +66,6 @@ describe("safeReturnPath", () => {
     expect(mfaHref("https://evil.example")).toBe("/auth/mfa");
   });
 
-  // REQ-TEN-02: an invitation link is public, but accepting needs a session, so sign-in comes back to it, written
-  // plainly like any return path (its page checks the token's shape); the proxy still treats it as a public page.
-  it("keeps an invitation link as a return path, written plainly", () => {
-    const token = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE";
-    expect(safeReturnPath(`/invitations/${token}`)).toBe(`/invitations/${token}`);
-    expect(loginHref(`/invitations/${token}`)).toBe(`/login?next=%2Finvitations%2F${token}`);
-    for (const attempt of [
-      `//invitations/${token}`,
-      `/invitations/../${token}`,
-      `/invitations/%2F%2Fevil.example`,
-      `/invitations//evil.example`,
-      `/invitationsx/${token}`,
-    ]) {
-      expect(safeReturnPath(attempt), attempt).toBeUndefined();
-    }
-  });
-
   it("reads a page's ?next= parameter, the first when repeated", () => {
     expect(returnPathParam("/dev")).toBe("/dev");
     expect(returnPathParam(["/org", "/dev"])).toBe("/org");
