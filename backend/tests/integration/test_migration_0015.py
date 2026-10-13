@@ -987,6 +987,89 @@ async def test_a_new_engagement_finds_its_niche_default_through_the_definer(owne
         assert await assignee(conn, mine, None) is None
 
 
+LIVE_ASSIGNEE = "SELECT assignee_user_id FROM engagement_assignments WHERE engagement_id = :e AND unassigned_at IS NULL"
+
+
+async def assign_to(conn: AsyncConnection, org: UUID, engagement: UUID, assignee: UUID, by: UUID) -> None:
+    """``by`` (a triage member, bound) assigns the engagement to ``assignee`` (revision 0013's path)."""
+    await t.act(conn, by, org)
+    await t.run(
+        conn,
+        "INSERT INTO engagement_assignments (id, engagement_id, org_id, assignee_user_id, assigned_by)"
+        " VALUES (:id, :e, :org, :a, :by)",
+        id=uuid7(),
+        e=engagement,
+        org=org,
+        a=assignee,
+        by=by,
+    )
+
+
+async def live_assignee(conn: AsyncConnection, engagement: UUID) -> object:
+    await t.as_owner(conn)
+    return await t.run(conn, LIVE_ASSIGNEE, e=engagement)
+
+
+async def test_a_leavers_live_assignments_close_with_their_seat(owner_engine: AsyncEngine) -> None:
+    """``memberships_clear_team_seats`` closes a member's live assignments in the organisation (``unassigned_at``, the
+    shared clock, as revision 0013 closes one) when they lose every triage role or leave, whoever does it: an owner's
+    demotion to viewer, staff's roster correction (``app_staff_remove_membership``), and an owner who is the
+    engagement's own developer and reads none of its assignments (D-68). A role change that keeps a triage role keeps
+    the assignment live, and the same person's assignment in another organisation stays live."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        await t.act(conn, p.developer)
+        engagement = await t.engage(conn, p)
+        await t.as_owner(conn)
+        q = await t.parties(conn)
+        await t.member(conn, q.org, p.reviewer, "{reviewer}")  # the reviewer works for both organisations
+        await t.act(conn, q.developer)
+        elsewhere = await t.engage(conn, q)
+        await assign_to(conn, p.org, engagement, p.reviewer, p.signatory)
+        await assign_to(conn, q.org, elsewhere, p.reviewer, q.signatory)
+        roles = "UPDATE memberships SET roles = CAST(:roles AS org_role[]) WHERE org_id = :org AND user_id = :u"
+        await t.act(conn, p.owner, p.org)
+        await t.run(conn, roles, roles="{reviewer,finance}", org=p.org, u=p.reviewer)
+        assert await live_assignee(conn, engagement) == p.reviewer  # still a triage member
+        await t.act(conn, p.owner, p.org)
+        await t.run(conn, roles, roles="{viewer}", org=p.org, u=p.reviewer)  # the demotion
+        assert await live_assignee(conn, engagement) is None
+        assert await live_assignee(conn, elsewhere) == p.reviewer  # the other organisation's stays
+
+        await assign_to(conn, p.org, engagement, p.signatory, p.signatory)
+        await t.as_owner(conn)
+        membership = await t.run(
+            conn, "SELECT id FROM memberships WHERE org_id = :org AND user_id = :u", org=p.org, u=p.signatory
+        )
+        await t.act(conn, p.staff)  # staff's roster correction, a definer
+        assert await t.run(conn, "SELECT app_staff_remove_membership(:m, 'roster correction')", m=membership) is True
+        assert await live_assignee(conn, engagement) is None
+
+        extra = await add_member(conn, p, "{reviewer}")
+        await assign_to(conn, p.org, engagement, extra, p.owner)
+        await t.as_owner(conn)
+        await t.member(conn, p.org, p.developer, "{owner}")  # the developer becomes an owner of the organisation
+        await t.act(conn, p.developer, p.org)
+        assert (
+            await t.run(conn, "SELECT count(*) FROM engagement_assignments WHERE engagement_id = :e", e=engagement) == 0
+        )
+        removed = await t.rowcount(
+            conn, "UPDATE memberships SET status = 'removed' WHERE org_id = :org AND user_id = :u", org=p.org, u=extra
+        )
+        assert removed == 1
+        assert await live_assignee(conn, engagement) is None
+        closed = (
+            await conn.execute(
+                sa.text(
+                    "SELECT count(*) FILTER (WHERE unassigned_at IS NOT NULL AND unassigned_at >= assigned_at),"
+                    " count(*) FROM engagement_assignments WHERE engagement_id = :e"
+                ),
+                {"e": engagement},
+            )
+        ).one()
+        assert tuple(closed) == (3, 3)
+
+
 async def test_the_escalation_contact_is_the_members_own_and_leaves_with_them(owner_engine: AsyncEngine) -> None:
     """The security review's MINOR (P28-M): the escalation contact is a row of ``org_escalation_contacts``, not a column
     of ``organizations`` (whose listed rows every signed-in user reads). An owner or admin names an active member, one
