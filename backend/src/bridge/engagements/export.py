@@ -2,9 +2,12 @@
 ``csv_export``).
 
 ``GET /api/orgs/{org_id}/engagements.csv`` (any active member; 404 for anyone else): the organisation's plan must have
-``csv_export`` (403 ``entitlement_required`` naming the plan that has it: ``bridge.billing.entitlements``). One row per
-engagement of the organisation (its own, read under the member's Row-Level Security; at most ``EXPORT_CAP``, oldest
-first), exactly as the organisation's Engagements list shows it (``history.summaries`` and the team's facts, the same
+``csv_export`` (the paywall's 402 ``plan_limit``, its ``upgrade`` naming the plan that has it:
+``bridge.billing.entitlements.require_feature``), and each member exports at most ``EXPORTS_PER_HOUR`` times in any
+hour (429 ``rate_limited`` with ``Retry-After``, counted before the engagements are read). One row per engagement of
+the organisation (its own, read under the member's Row-Level Security; newest first, as the list; at most
+``EXPORT_CAP``, and ``X-Export-Truncated: true`` when the cap cut it), exactly as the organisation's Engagements list
+shows it (``history.summaries`` and the team's facts, the same
 code): the columns ``COLUMNS``, the stage by its label, the dates as Nairobi dates (ISO 8601), the developer as the list
 names them at that stage (their handle until the engagement reveals them, never more), the assignee as the team sees
 them, and the procurement route by its label (empty when none).
@@ -38,11 +41,17 @@ from bridge.engagements.schemas import OrgEngagementSummary
 from bridge.engagements.service import app_now
 from bridge.errors import ERROR_RESPONSES, json_errors
 from bridge.models.enums import ProcurementRoute
+from bridge.teams import limits
 from bridge.tenancy.deps import OrgMember
 
 router = APIRouter(tags=["engagements"])
 CSV_EXPORT: Final = "csv_export"  # the plan's entitlement (plans.yaml)
-EXPORT_CAP: Final = 10_000  # rows per file
+EXPORT_CAP: Final = 10_000  # rows per file (newest first)
+EXPORTS_PER_HOUR: Final = 10  # per member, in any hour
+EXPORT_PURPOSE: Final = "engagements_export"  # the login_attempts ledger's purpose label
+TRUNCATED_HEADER: Final = "X-Export-Truncated"
+# [[COPY-REVIEW]]
+TOO_MANY_EXPORTS: Final = f"You have exported {EXPORTS_PER_HOUR} times in the last hour. Try again later."
 MEDIA_TYPE: Final = "text/csv; charset=utf-8"
 BOM: Final = "\ufeff"
 COLUMNS: Final = (
@@ -66,7 +75,16 @@ ROUTE_LABELS: Final[dict[ProcurementRoute, str]] = {
     ProcurementRoute.PILOT_MOU: "Pilot under an MOU",
 }
 CSV_RESPONSES: Final[dict[int | str, dict[str, Any]]] = {
-    200: {"content": {"text/csv": {}}, "description": "One row per engagement (UTF-8 with a byte-order mark, CRLF)"},
+    200: {
+        "content": {"text/csv": {}},
+        "description": "One row per engagement (UTF-8 with a byte-order mark, CRLF), newest first",
+        "headers": {
+            TRUNCATED_HEADER: {
+                "description": f"true when the file stops at {EXPORT_CAP} rows; absent otherwise",
+                "schema": {"type": "string", "enum": ["true"]},
+            }
+        },
+    },
     **json_errors(*ERROR_RESPONSES),  # every shared status, as JSON (the success is not)
 }
 
@@ -116,13 +134,23 @@ async def export_engagements(org: OrgMember, db: Db, settings: SettingsDep) -> R
     """Download the organisation's engagements as CSV (the plan's ``csv_export``): one row per engagement, as the
     Engagements list shows it."""
     plan = await entitlements.for_subject(db, settings, org_id=org.org_id)
-    entitlements.require_entitlement(settings, plan, CSV_EXPORT)
+    entitlements.require_feature(settings, plan, CSV_EXPORT)
+    await limits.spend(
+        db,
+        settings.secret_key.get_secret_value(),
+        purpose=EXPORT_PURPOSE,
+        user_id=org.live.user.id,
+        limit=EXPORTS_PER_HOUR,
+        window=limits.HOUR,
+        code="rate_limited",
+        message=TOO_MANY_EXPORTS,
+    )
     found = list(
         (
             await db.scalars(
                 select(Engagement)
                 .where(Engagement.org_id == org.org_id)
-                .order_by(Engagement.created_at, Engagement.id)
+                .order_by(Engagement.updated_at.desc(), Engagement.id.desc())  # newest first, as the list
                 .limit(EXPORT_CAP + 1)
             )
         ).all()
@@ -144,12 +172,11 @@ async def export_engagements(org: OrgMember, db: Db, settings: SettingsDep) -> R
         payload={"format": "csv", "rows": len(items), "truncated": truncated},
     )
     await db.commit()
-    return Response(
-        content=body,
-        media_type=MEDIA_TYPE,
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename(today)}"',
-            "Cache-Control": "no-store",
-            "X-Content-Type-Options": "nosniff",
-        },
-    )
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename(today)}"',
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if truncated:
+        headers[TRUNCATED_HEADER] = "true"
+    return Response(content=body, media_type=MEDIA_TYPE, headers=headers)
