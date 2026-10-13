@@ -248,6 +248,13 @@ Default applied: (b), nothing refactored in M2. Recommended: (b), taking the 15 
 - Blocks: nothing in P28; developers who are also organisation staff need two addresses until decided.
 - Decision:
 
+### D-73 · Where Team sits in the organisation's navigation (P28; REQ-TEN-02; docs/spec/07 item 1)
+- Why: spec 07 item 1 lists the Enterprise sections as "Inbox · Engagements · Problems · Team". Since P22 the organisation's tab bar carries Home, Inbox, Engagements, Problems and Events (Events took the fifth slot; five is spec 07's maximum). P28 adds Team without displacing anything: a quiet link in the rail's footer beside Help from 1024 px, a "Your team" link beside Home's primary action at every width, and an entry in the command palette. On phones Team is therefore one step further away than spec 07 draws it.
+- Options: (a) keep P28's placement (Team is set up rarely; Events is visited more); (b) Team replaces Events in the tab bar and Events moves to Home's strip and the palette; (c) amend spec 07 item 1 to name Events, with Team under the account area.
+- Recommended default: (a), with (c) as the wording fix.
+- Blocks: nothing.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
