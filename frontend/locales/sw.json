@@ -2423,7 +2423,7 @@
     "nextYou": "Hatua yako inayofuata: {step}",
     "nextThem": "Hatua inayofuata ya {name}: {step}",
     "waitingAdmin": "Inasubiri msimamizi achague njia ya ununuzi.",
-    "escalated": "Imepelekwa kwa wasimamizi wenu tarehe <nowrap>{date}</nowrap>.",
+    "escalated": "Imepelekwa kwa wasimamizi tarehe <nowrap>{date}</nowrap>.",
     "endReason": {
       "NOT_PRIORITY": "Si kipaumbele kwa sasa",
       "ALREADY_IN_PROGRESS_INTERNALLY": "Tayari inafanyika ndani",

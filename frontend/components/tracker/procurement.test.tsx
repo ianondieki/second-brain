@@ -416,7 +416,7 @@ describe("an escalation on the organisation's tracker (REQ-NOT-05)", () => {
   it("says once, quietly, when the stage was escalated to the admins", () => {
     renderWithIntl(<WhoseTurn detail={inRoute(["signatory"], { escalated_at: escalated } as Partial<Detail>)} />);
     const line = document.querySelector("[data-escalated]")!;
-    expect(line.textContent).toBe("Escalated to your admins on 13 Oct 2026.");
+    expect(line.textContent).toBe("Escalated to the admins on 13 Oct 2026.");
     expect(line.className).toContain("text-ink-soft");
     expect(line.className).not.toMatch(/error|warm/);
     expect(document.querySelectorAll("[data-escalated]")).toHaveLength(1);

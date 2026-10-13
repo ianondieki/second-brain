@@ -2423,7 +2423,7 @@
     "nextYou": "Your next step: {step}",
     "nextThem": "Next step for {name}: {step}",
     "waitingAdmin": "Waiting for an admin to choose the procurement route.",
-    "escalated": "Escalated to your admins on <nowrap>{date}</nowrap>.",
+    "escalated": "Escalated to the admins on <nowrap>{date}</nowrap>.",
     "endReason": {
       "NOT_PRIORITY": "Not a current priority",
       "ALREADY_IN_PROGRESS_INTERNALLY": "Already in progress internally",
