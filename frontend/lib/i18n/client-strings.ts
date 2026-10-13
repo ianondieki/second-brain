@@ -76,6 +76,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "teamAdmin",
   "invitationAccept",
   "retryAfter",
+  "procurement",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 

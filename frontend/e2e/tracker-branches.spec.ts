@@ -253,7 +253,10 @@ test("the organisation asks a question, the developer answers it, both read it i
     await expect(banner(orgPage)).toContainText("Answer the question");
     await expect(stepper(orgPage).locator("[aria-current='step']")).toHaveAttribute("data-state", "onHold");
     await expect(stepper(orgPage).locator("[aria-current='step']")).toContainText("Review");
-    await expect(stepper(orgPage).getByRole("listitem")).toHaveCount(5);
+    // Still the five groups, no extra step for the side state (the current group's own stages, P28, are a list
+    // nested in its step, so the groups are counted as the stepper's own items).
+    await expect(stepper(orgPage).locator(":scope > li")).toHaveCount(5);
+    await expect(stepper(orgPage).locator("[data-substage='INFO_REQUESTED']")).toHaveCount(0);
     await expect(actions(orgPage).getByRole("button")).toHaveText(["Withdraw the question"]);
     await checkScreen(orgPage, { strict: true });
 

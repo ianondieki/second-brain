@@ -17,6 +17,7 @@ import {
   isFormCommand,
   isSheetCommand,
   type ActionItem,
+  type Command,
   type CommandRequest,
   type FormCommand,
   type FormInput,
@@ -59,6 +60,10 @@ export interface ActionsProps {
   today?: string | null;
   /** What the policy's caps leave this stage (the API's `side_limits`). */
   limits?: SideLimits | null;
+  /** The engagement's organisation: choose_route is sent under its path. */
+  orgId?: string;
+  /** approve: a public entity names the contact-by date with its procurement route (3b), not here. */
+  publicEntity?: boolean;
   runImpl?: typeof runCommand;
   confirmImpl?: typeof confirmStepUp;
 }
@@ -66,6 +71,7 @@ export interface ActionsProps {
 type Mode =
   | { kind: "list" }
   | { kind: "form"; item: ActionItem & { command: FormCommand } }
+  // The side states' sheets and a public entity's procurement route (SideSheet, RouteSheet), over the list.
   | { kind: "sheet"; item: ActionItem & { command: SheetCommand } }
   | { kind: "confirm"; item: ActionItem }
   | { kind: "stepUp"; item: ActionItem; request: CommandRequest };
@@ -138,7 +144,11 @@ export function Actions(props: ActionsProps) {
   }
 
   function requestFor(item: ActionItem, input?: FormInput): CommandRequest {
-    return commandRequest(item.command, props.engagementId, props.lockVersion, { milestoneId: item.milestone?.id, input });
+    // Never choose_route: a sheet's command, whose sheet builds its own request (SideSheet).
+    return commandRequest(item.command as Exclude<Command, "choose_route">, props.engagementId, props.lockVersion, {
+      milestoneId: item.milestone?.id,
+      input,
+    });
   }
 
   async function run(item: ActionItem, request: CommandRequest, retried = false) {
@@ -272,7 +282,8 @@ export function Actions(props: ActionsProps) {
 
       {mode.kind === "sheet" ? (
         <Suspense fallback={null}>
-          {/* counterpart, question, resumeOn, locale, today and limits come from the props of the same names. */}
+          {/* engagementId, lockVersion, orgId, counterpart, question, resumeOn, locale, today and limits come from the
+              props of the same names; the sheet builds the request. */}
           <SideSheet
             {...props}
             command={mode.item.command}
@@ -280,7 +291,7 @@ export function Actions(props: ActionsProps) {
             problem={message}
             notice={notice}
             onClose={cancel}
-            onSubmit={(input) => void run(mode.item, requestFor(mode.item, input as FormInput))}
+            onSubmit={(request) => void run(mode.item, request)}
           />
         </Suspense>
       ) : null}

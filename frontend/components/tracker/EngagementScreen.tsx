@@ -22,7 +22,7 @@ import { Actions } from "./Actions";
 import { documentLinkClass } from "./document-link";
 import { LazyContactReveal } from "./lazy";
 import { engagementDocument, engagementHistory, orgMembers } from "./data";
-import { Agreements, ContactPerson, Payments, Signatures } from "./Deal";
+import { Agreements, ContactPerson, Payments, Procurement, Signatures } from "./Deal";
 import { Endorsements } from "./Endorsements";
 import { HistoryList } from "./HistoryList";
 import { IpNudge } from "./IpNudge";
@@ -32,6 +32,7 @@ import {
   documentKinds,
   DUAL_ENDORSEMENT_STATES,
   formatDate,
+  isPublicEntity,
   kesAmount,
   offersContactReveal,
   shortHash,
@@ -100,7 +101,12 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
     <ClientStrings
       strings={await clientStrings(
         // The organisation's sheets (team, declaration) read their own strings; the developer's tracker has neither.
-        org ? ["trackerActions", "teamSheet", "declarationSheet"] : ["trackerActions"],
+        // The procurement route's sheet reads its own, sent only to an owner or admin who can choose it now.
+        [
+          "trackerActions",
+          ...(org ? (["teamSheet", "declarationSheet"] as const) : []),
+          ...(detail.actions.includes("choose_route") ? (["procurement"] as const) : []),
+        ],
       )}
     >
       <TrackerHeader detail={detail} basePath={basePath} query={query} />
@@ -129,6 +135,8 @@ export async function EngagementScreen({ detail, me, tab, doc, basePath, query =
           locale={locale}
           today={detail.today ?? null}
           limits={detail.side_limits}
+          orgId={detail.org_id}
+          publicEntity={isPublicEntity(detail)}
         />
       </TurnCard>
       {/* The one-time celebration of a closed engagement, drawn on the server; the cookie says whether it was seen. */}
@@ -176,10 +184,16 @@ async function TrackerTab({ detail, me }: { detail: Detail; me: Me }) {
   const dual = DUAL_ENDORSEMENT_STATES.has(detail.state) || detail.endorsements.some((e) => e.milestone_id === null);
   const namedContact = offersContactReveal(detail, me.user.id);
   const nothing =
-    !dual && !detail.contact && detail.agreements.length === 0 && detail.signatures.length === 0 && detail.payments.length === 0;
+    !dual &&
+    !detail.contact &&
+    !detail.procurement &&
+    detail.agreements.length === 0 &&
+    detail.signatures.length === 0 &&
+    detail.payments.length === 0;
   return (
     <>
       {dual ? <Endorsements detail={detail} /> : null}
+      <Procurement detail={detail} />
       {detail.contact ? (
         <div className="flex flex-col gap-4">
           <ContactPerson detail={detail} />
