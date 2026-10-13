@@ -10,6 +10,10 @@ import { Icon, type IconProps } from "./ui/status-icons";
 // Dismissal costs no JavaScript bundle: DEMO_BANNER_SCRIPT (inline in <head>, as the theme's) hides it before the first
 // paint when this browser session has dismissed it, so nothing shifts on hydrate, and handles the button's press by
 // delegation. Without script the button is not drawn (the layout's <noscript> style), so it never sits there inert.
+//
+// The banner's "03:00 EAT" (publicDemo.banner, en and sw) is written into the copy, not fetched: it and the image's
+// reset hour (RESET_HOUR_EAT in infra/demo/space/run.py) change together (docs/runbooks/public-demo.md; the locales'
+// _meta.reviewP28pd says so too).
 
 /** sessionStorage: the banner was dismissed in this browser session. */
 export const DEMO_BANNER_STORAGE_KEY = "wazo-demo-banner";
@@ -20,13 +24,19 @@ export const DEMO_BANNER_HIDDEN_ATTRIBUTE = "data-demo-banner-hidden";
  * Inline, before paint, no dependencies: hide the banner when this session dismissed it; on a press of the dismiss
  * button, hide it, remember that for the session, and move focus to the page's main region (the pressed button is
  * gone). Storage may be blocked (a private window): the banner then hides for this page only.
+ *
+ * The focus never scrolls (ux review of P28-PD, MAJOR 2): on a phone #main starts below the top bar, so a plain
+ * focus() scrolled the page by the bar's height and hid it. `preventScroll` keeps the page where it is; a browser that
+ * ignores the option is put back to the position read just before the focus.
  */
 export const DEMO_BANNER_SCRIPT =
   `(function(){var k=${JSON.stringify(DEMO_BANNER_STORAGE_KEY)},a=${JSON.stringify(DEMO_BANNER_HIDDEN_ATTRIBUTE)},` +
   `d=document.documentElement;try{if(sessionStorage.getItem(k)==="1")d.setAttribute(a,"")}catch(e){}` +
   `document.addEventListener("click",function(e){var t=e.target;` +
   `if(!(t instanceof Element)||!t.closest("[data-demo-dismiss]"))return;d.setAttribute(a,"");` +
-  `try{sessionStorage.setItem(k,"1")}catch(e){}var m=document.getElementById("main");if(m)m.focus()})})();`;
+  `try{sessionStorage.setItem(k,"1")}catch(e){}var m=document.getElementById("main");if(!m)return;` +
+  `var x=window.scrollX,y=window.scrollY;m.focus({preventScroll:true});` +
+  `if(window.scrollX!==x||window.scrollY!==y)window.scrollTo(x,y)})})();`;
 
 /** What a browser without script reads: no dismiss button (it could do nothing there). */
 export const DEMO_BANNER_NOSCRIPT_CSS = "[data-demo-dismiss]{display:none}";

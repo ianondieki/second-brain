@@ -68,6 +68,19 @@ describe("DemoLocked", () => {
     expect([...lines].map((line) => line.textContent)).toEqual([LOCKED, en.publicDemo.attachLocked]);
     for (const line of lines) expect(line.querySelectorAll("button, input, a")).toHaveLength(0);
   });
+
+  // ux review of P28-PD (MAJOR 1): under a feature's heading the generic line read as the feature's state ("two-step
+  // sign-in: switched off") while the persona's two-step sign-in is on. Each variant names what is switched off.
+  it("says that changing or deciding is off with the change and decide variants", async () => {
+    renderWithIntl(<>{await resolveServerTree(<DemoLocked variant="change" />)}</>);
+    renderWithIntl(<>{await resolveServerTree(<DemoLocked variant="decide" />)}</>);
+    const lines = [...document.querySelectorAll("[data-demo-locked]")];
+    expect(lines.map((line) => line.textContent)).toEqual([
+      "Changing this is switched off in the public demo.",
+      "Deciding is switched off in the public demo.",
+    ]);
+    expect(lines.map((line) => line.getAttribute("data-demo-locked"))).toEqual(["change", "decide"]);
+  });
 });
 
 describe("Settings › Security", () => {
@@ -76,13 +89,16 @@ describe("Settings › Security", () => {
     return renderWithIntl(<>{await resolveServerTree(await SecurityPage())}</>);
   }
 
-  it("keeps both headings and shows the locked line in place of two-step sign-in and the password", async () => {
+  it("keeps both headings and says changing each is off, in place of two-step sign-in and the password", async () => {
     vi.stubEnv("PUBLIC_DEMO", "true");
     await renderSecurity();
     const locked = document.querySelector("[data-security-locked]")!;
     expect(within(locked as HTMLElement).getByRole("heading", { name: en.security.title })).toBeTruthy();
     expect(within(locked as HTMLElement).getByRole("heading", { name: en.password.title })).toBeTruthy();
-    expect([...locked.querySelectorAll("[data-demo-locked]")].map((line) => line.textContent)).toEqual([LOCKED, LOCKED]);
+    // Not the generic line: under "Two-step sign-in" it would read as the persona's state (it is on).
+    const lines = [...locked.querySelectorAll("[data-demo-locked]")].map((line) => line.textContent);
+    expect(lines).toEqual([en.publicDemo.changeLocked, en.publicDemo.changeLocked]);
+    expect(lines).not.toContain(LOCKED);
     // No form, field or button of either: enrol, turn off, recovery codes and the password are all gone.
     expect(document.querySelectorAll("form, input, button")).toHaveLength(0);
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
@@ -130,10 +146,18 @@ describe("the idea editor's files", () => {
     expect(document.querySelector("[data-demo-locked]")!.textContent).toBe(LOCKED);
     expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(screen.getByText("plan.pdf")).toBeTruthy();
+    // No hint about adding files, and nothing left pointing at it (ux review of P28-PD, MINOR 4).
+    const { MAX_ATTACHMENTS } = await import("@/app/(app)/dev/ideas/ideas");
+    const hint = en.ideaEditor.filesHint.replace("{max}", String(MAX_ATTACHMENTS));
+    expect(screen.queryByText(hint)).toBeNull();
+    expect(document.querySelector('[id$="-hint"]')).toBeNull();
+    expect(document.querySelector("[aria-describedby]")).toBeNull();
     cleanup();
     renderWithIntl(<Attachments {...props} />);
-    expect(document.querySelector('input[type="file"]')).not.toBeNull();
+    const input = document.querySelector('input[type="file"]')!;
+    expect(input).not.toBeNull();
     expect(document.querySelector("[data-demo-locked]")).toBeNull();
+    expect(document.getElementById(input.getAttribute("aria-describedby")!)!.textContent).toBe(hint);
   });
 });
 
@@ -148,9 +172,18 @@ describe("/signup", () => {
     await renderSignup();
     const empty = document.querySelector<HTMLElement>("[data-empty-state]")!;
     expect(empty.querySelector("p")!.textContent).toBe(en.publicDemo.signupLocked);
-    const action = within(empty).getByRole("link", { name: en.publicDemo.signupAction });
+    // One name for the action (ux review of P28-PD, MINOR 5): a persona, as on /login and in "Switch persona".
+    const action = within(empty).getByRole("link", { name: "Choose a persona" });
     expect(action.getAttribute("href")).toBe("/login");
     expect(document.querySelectorAll("form, input")).toHaveLength(0);
+  });
+
+  it("is the sign-up form with the mode off, with no persona action", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "false");
+    await renderSignup();
+    expect(document.querySelector("form")).not.toBeNull();
+    expect(screen.queryByRole("link", { name: "Choose a persona" })).toBeNull();
+    expect(document.querySelector("[data-demo-locked]")).toBeNull();
   });
 });
 

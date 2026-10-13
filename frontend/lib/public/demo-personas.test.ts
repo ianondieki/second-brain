@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { demoPersonas, forgetDemoPersonas, personaDetail, PERSONAS_TTL_MS } from "./demo-personas";
+import { demoPersonas, forgetDemoPersonas, personaLine, personaName, personaOrg, PERSONAS_TTL_MS } from "./demo-personas";
 
 // REQ-FND-04: /login's persona picker reads GET /api/public/demo on the server, reused for a minute.
 
@@ -76,25 +76,46 @@ describe("demoPersonas", () => {
   });
 });
 
-// The API writes each persona's detail line in English only: in another language the web derives it (REQ-FND-04).
-describe("personaDetail", () => {
-  const level = (value: string) => `Kiwango cha uthibitisho ${value}`;
+// The line under each name is built on the web in every language (REQ-FND-04; ux review of P28-PD, MINOR 3): what the
+// persona does, never the API's English detail (it repeats the role and carries the seed's "(fixture)").
+describe("personaName", () => {
+  it("drops the seed's mark at the end of a name, and nothing else", () => {
+    expect(personaName("Staff Moderator (demo)")).toBe("Staff Moderator");
+    expect(personaName("  Staff Moderator (Demo)  ")).toBe("Staff Moderator");
+    expect(personaName("Grace Mwangi")).toBe("Grace Mwangi");
+    expect(personaName("Ali (demo) Hassan")).toBe("Ali (demo) Hassan");
+    expect(personaName("(demo)")).toBe("(demo)"); // never an empty name
+  });
+});
 
-  it("is the API's own line in English", () => {
-    expect(personaDetail({ role: "org_admin", detail: "Telco A (fixture): owner and admin" }, "en", level)).toBe(
-      "Telco A (fixture): owner and admin",
-    );
-    expect(personaDetail({ role: "staff", detail: " " }, "en", level)).toBeNull();
+describe("personaOrg", () => {
+  it("is the organisation's name before the colon, without the seed's mark", () => {
+    expect(personaOrg("Telco A (fixture): owner and admin")).toBe("Telco A");
+    expect(personaOrg("County Government of C (fixture): owner and admin")).toBe("County Government of C");
+    expect(personaOrg("State Department D: signatory")).toBe("State Department D");
+    expect(personaOrg("Telco A (fixture): a: b")).toBe("Telco A");
   });
 
-  it("is derived in Swahili: the organisation's name, a developer's level in a translated line, nothing for staff", () => {
-    expect(personaDetail({ role: "org_signatory", detail: "Telco A (fixture): signatory" }, "sw", level)).toBe("Telco A (fixture)");
-    expect(personaDetail({ role: "org_admin", detail: "County Government of C (fixture): owner" }, "sw", level)).toBe(
-      "County Government of C (fixture)",
-    );
-    expect(personaDetail({ role: "developer", detail: "Developer, D2" }, "sw", level)).toBe("Kiwango cha uthibitisho D2");
-    expect(personaDetail({ role: "developer", detail: "Developer" }, "sw", level)).toBeNull();
-    expect(personaDetail({ role: "staff", detail: "Platform staff: moderator" }, "sw", level)).toBeNull();
-    expect(personaDetail({ role: "org_reviewer", detail: "no colon" }, "sw", level)).toBeNull();
+  it("is null when the detail names no organisation (no colon, nothing before it, only the mark)", () => {
+    expect(personaOrg("Telco A, owner and admin")).toBeNull();
+    expect(personaOrg(": owner")).toBeNull();
+    expect(personaOrg(" (fixture): owner")).toBeNull();
+    expect(personaOrg("")).toBeNull();
+  });
+});
+
+describe("personaLine", () => {
+  const about = (role: string, org: string) => `${role}|${org}`;
+
+  it("asks for the role's sentence, with the organisation for an organisation persona", () => {
+    expect(personaLine({ role: "developer", detail: "Developer, D2" }, about)).toBe("developer|");
+    expect(personaLine({ role: "staff", detail: "Platform staff: moderator" }, about)).toBe("staff|");
+    expect(personaLine({ role: "org_admin", detail: "Telco A (fixture): owner and admin" }, about)).toBe("org_admin|Telco A");
+    expect(personaLine({ role: "org_signatory", detail: "Telco A (fixture): signatory" }, about)).toBe("org_signatory|Telco A");
+    expect(personaLine({ role: "org_reviewer", detail: "Telco A (fixture): reviewer" }, about)).toBe("org_reviewer|Telco A");
+  });
+
+  it("draws no line for an organisation persona whose organisation cannot be read", () => {
+    expect(personaLine({ role: "org_reviewer", detail: "no colon" }, about)).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import { createTranslator } from "next-intl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/locales/en.json";
+import sw from "@/locales/sw.json";
 import { renderWithIntl } from "@/test/intl";
 import { resolveServerTree } from "@/test/server-tree";
 
@@ -16,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   personas: vi.fn(),
   signedIn: vi.fn(async () => null),
   fetch: vi.fn<(request: Request) => Promise<Response>>(),
-  locale: { value: "en" },
+  locale: { value: "en" as "en" | "sw" },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -28,8 +29,13 @@ vi.mock("next/navigation", () => ({
 vi.mock("next-intl/server", () => ({
   getLocale: async () => mocks.locale.value,
   getMessages: async () => en,
+  // The page's language: the catalogue of the locale this test set (the rendered tree's own provider is English).
   getTranslations: async (namespace?: string) =>
-    createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+    createTranslator({
+      locale: mocks.locale.value,
+      messages: (mocks.locale.value === "sw" ? sw : en) as typeof en,
+      namespace: namespace as never,
+    }),
 }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers(), cookies: async () => ({ get: () => undefined }) }));
 // renderWithIntl provides the messages; the server's IntlScope picks them on the server only.
@@ -59,9 +65,11 @@ const PERSONAS = [
   { key: "grace", name: "Grace Mwangi", role: "org_admin", detail: "Telco A (fixture): owner and admin", home: "/org" },
   { key: "peter", name: "Peter Kamau", role: "org_signatory", detail: "Telco A (fixture): signatory", home: "/org" },
   { key: "rita", name: "Rita Njeri", role: "org_reviewer", detail: "Telco A (fixture): reviewer", home: "/org" },
-  { key: "hassan", name: "Hassan Abdi", role: "org_admin", detail: "County Government of C (fixture): owner", home: "/org" },
-  { key: "moderator", name: "Staff Moderator", role: "staff", detail: "Platform staff: moderator", home: "/admin" },
+  { key: "hassan", name: "Hassan Abdi", role: "org_admin", detail: "County Government of C (fixture): owner and admin", home: "/org" },
+  { key: "moderator", name: "Staff Moderator (demo)", role: "staff", detail: "Platform staff: moderator", home: "/admin" },
 ];
+/** The names as drawn: the seed's " (demo)" dropped. */
+const NAMES = ["Amina Wanjiru", "Brian Otieno", "Grace Mwangi", "Peter Kamau", "Rita Njeri", "Hassan Abdi", "Staff Moderator"];
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -96,38 +104,67 @@ describe("/login in the public demo", () => {
   it("offers every persona the API returned, in its order: the name as a heading, the role, the detail, one button", async () => {
     await renderLogin();
     expect(screen.getByRole("heading", { level: 1, name: "Try the demo as…" })).toBeTruthy();
-    const list = screen.getByRole("list", { name: "People you can sign in as" });
+    // The same noun as /signup's "Choose a persona" and the menu's "Switch persona" (ux review of P28-PD, MINOR 5).
+    expect(screen.getByText("Choose a persona. One press signs you in and opens their Home.")).toBeTruthy();
+    const list = screen.getByRole("list", { name: "Personas you can sign in as" });
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(7);
-    expect(rows.map((row) => within(row).getByRole("heading", { level: 2 }).textContent)).toEqual(PERSONAS.map((p) => p.name));
+    expect(rows.map((row) => within(row).getByRole("heading", { level: 2 }).textContent)).toEqual(NAMES);
     const grace = rows[2];
     expect(within(grace).getByText("Organisation admin")).toBeTruthy();
-    expect(within(grace).getByText("Telco A (fixture): owner and admin")).toBeTruthy();
     expect(within(rows[6]).getByText("Platform staff", { selector: "p.font-semibold" })).toBeTruthy();
     // One button per row, its accessible name naming the persona; its visible word is "Continue".
     for (const [index, row] of rows.entries()) {
       const buttons = within(row).getAllByRole("button");
       expect(buttons).toHaveLength(1);
-      expect(buttons[0].textContent).toBe(`Continue as ${PERSONAS[index].name}`);
-      expect(within(row).getByRole("button", { name: `Continue as ${PERSONAS[index].name}` })).toBe(buttons[0]);
+      expect(buttons[0].textContent).toBe(`Continue as ${NAMES[index]}`);
+      expect(within(row).getByRole("button", { name: `Continue as ${NAMES[index]}` })).toBe(buttons[0]);
     }
   });
 
-  it("derives each line under the name in Swahili instead of the API's English detail", async () => {
+  // ux review of P28-PD (MINOR 3): the line under each name says what the persona does, built here in every language;
+  // never the API's English detail (it repeats the role above it and carries the seed's "(fixture)").
+  const line = (key: string) => document.querySelector(`[data-persona="${key}"] h2 + p + p`)?.textContent ?? null;
+
+  it("says under each name what the persona does, with the organisation's plain name", async () => {
+    await renderLogin();
+    expect(line("amina")).toBe("Publishes ideas and answers the organisations that want them");
+    expect(line("brian")).toBe("Publishes ideas and answers the organisations that want them");
+    expect(line("grace")).toBe("Runs the team, scouts and pipeline at Telco A");
+    expect(line("peter")).toBe("Approves and signs for Telco A");
+    expect(line("rita")).toBe("Reviews proposals and makes recommendations for Telco A");
+    expect(line("hassan")).toBe("Runs the team, scouts and pipeline at County Government of C");
+    expect(line("moderator")).toBe("Reads the moderation and research queues");
+    const text = document.querySelector("[data-personas]")!.textContent!;
+    for (const word of ["(fixture)", "(demo)", "owner and admin", "Developer, D2", "Platform staff: moderator"]) {
+      expect(text).not.toContain(word);
+    }
+  });
+
+  it("builds the same lines in Swahili, the organisation's name as written", async () => {
     mocks.locale.value = "sw";
     await renderLogin();
-    const line = (key: string) => document.querySelector(`[data-persona="${key}"] h2 + p + p`)?.textContent ?? null;
-    expect(line("grace")).toBe("Telco A (fixture)");
-    expect(line("hassan")).toBe("County Government of C (fixture)");
-    expect(line("amina")).toBe("Verification level D2"); // publicDemo.detailLevel (this test reads the English catalogue)
-    expect(line("moderator")).toBeNull();
+    expect(line("amina")).toBe(sw.publicDemo.about.developer);
+    expect(line("grace")).toBe("Huendesha timu, skauti na mchakato wa Telco A");
+    expect(line("peter")).toBe("Huidhinisha na kutia sahihi kwa niaba ya Telco A");
+    expect(line("rita")).toBe("Hukagua mapendekezo na kutoa ushauri kwa Telco A");
+    expect(line("moderator")).toBe(sw.publicDemo.about.staff);
+    expect(screen.getByRole("button", { name: "Endelea kama Staff Moderator" })).toBeTruthy();
     expect(document.body.textContent).not.toContain("owner and admin");
+    expect(document.body.textContent).not.toContain("(fixture)");
+  });
+
+  it("draws no line for an organisation persona whose organisation cannot be read", async () => {
+    mocks.personas.mockResolvedValue([{ ...PERSONAS[2], detail: "owner and admin" }]);
+    await renderLogin();
+    expect(line("grace")).toBeNull();
+    expect(screen.getByText("Organisation admin")).toBeTruthy();
   });
 
   it("renders whatever count the API returns (no fixed number)", async () => {
     mocks.personas.mockResolvedValue(PERSONAS.slice(0, 2));
     await renderLogin();
-    expect(within(screen.getByRole("list", { name: "People you can sign in as" })).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(screen.getByRole("list", { name: "Personas you can sign in as" })).getAllByRole("listitem")).toHaveLength(2);
   });
 
   it("offers personas only: no email or password form, no emailed link, no sign-up (all switched off in the demo)", async () => {
@@ -201,7 +238,7 @@ describe("/login in the public demo", () => {
   it("says so in one line with \"Try again\" (the page itself), and no form, when no persona could be read", async () => {
     mocks.personas.mockResolvedValue(null);
     await renderLogin();
-    expect(screen.queryByRole("list", { name: "People you can sign in as" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Personas you can sign in as" })).toBeNull();
     const empty = document.querySelector<HTMLElement>("[data-personas-unavailable]")!;
     expect(empty.querySelector("p")!.textContent).toBe(en.publicDemo.unavailable);
     expect(within(empty).getByRole("link", { name: "Try again" }).getAttribute("href")).toBe("/login");
@@ -221,7 +258,7 @@ describe("/login with the mode off", () => {
     await renderLogin();
     expect(mocks.personas).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { level: 1, name: en.login.title })).toBeTruthy();
-    expect(screen.queryByRole("list", { name: "People you can sign in as" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Personas you can sign in as" })).toBeNull();
     expect(document.querySelector("details")).toBeNull();
     expect(screen.getByRole("button", { name: en.login.magicLink })).toBeTruthy();
     expect(document.querySelector('a[href="/signup"]')).not.toBeNull();

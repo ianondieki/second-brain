@@ -151,7 +151,7 @@ export default async function QuizSetPage({ params }: PageProps<"/admin/quiz/[id
         >
           {/* The public demo (REQ-FND-04): staff are read-only. */}
           {publicDemoOn() ? (
-            <DemoLocked />
+            <DemoLocked variant="decide" />
           ) : (
             <ClientStrings strings={strings}>
               <SetDecision setId={set.id} day={day} dayOver={dayOver} />

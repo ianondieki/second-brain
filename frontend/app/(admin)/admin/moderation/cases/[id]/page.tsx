@@ -175,7 +175,7 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
           {/* Keyed, so it keeps its state (the status line) when a refresh changes what is around it. In the public demo
               (REQ-FND-04) staff are read-only: an undecided case shows the locked line in place of its decision. */}
           {publicDemoOn() && !result ? (
-            <DemoLocked />
+            <DemoLocked variant="decide" />
           ) : (
             <ClientStrings key="decision" strings={await caseStrings()}>
               <CaseDecision

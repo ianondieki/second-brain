@@ -30,6 +30,10 @@ timestamp service for an RFC 3161 timestamp of its certificate (DigiCert, with F
 600 MB of memory (`infra/demo/space/README.md` has the measured figures; give it at least 1 GB). It is a demo only:
 never point it at real data or real providers.
 
+**The nightly reset** (03:00 EAT, `RESET_HOUR_EAT` in `infra/demo/space/run.py`; `infra/demo/space/README.md` has its
+timing): the banner's "03:00 EAT" is written into the web's copy (`publicDemo.banner` in `frontend/locales/en.json`
+and `sw.json`), not read from the image, so a change to the reset hour changes those two strings in the same commit.
+
 `.github/workflows/demo-image.yml` builds it on every push to the integration branch that touches `backend/`,
 `frontend/` or `infra/`, and pushes `ghcr.io/ianondieki/bridge-demo:latest` and `:<commit SHA>`; run it by hand with
 **arm64** ticked to also build the Arm image (tag `:multiarch`).

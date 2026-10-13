@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useStrings } from "@/components/ClientStrings";
 import en from "@/locales/en.json";
+import sw from "@/locales/sw.json";
 import { resolveServerTree } from "@/test/server-tree";
 
 import {
@@ -49,6 +50,16 @@ describe("the banner", () => {
     expect(region.className).not.toMatch(/\b(fixed|sticky|absolute)\b/); // in the flow: it never covers content
   });
 
+  // The hour is written into the copy, not fetched (ux review of P28-PD, MINOR 7): this keeps it equal to the image's.
+  it("names the image's reset hour in both languages (infra/demo/space/run.py RESET_HOUR_EAT)", () => {
+    const supervisor = readFileSync(join(process.cwd(), "../infra/demo/space/run.py"), "utf8");
+    const hour = /^RESET_HOUR_EAT = (\d{1,2})$/m.exec(supervisor)?.[1];
+    expect(hour).toBeDefined();
+    const time = `${hour!.padStart(2, "0")}:00 EAT`;
+    expect(en.publicDemo.banner).toContain(time);
+    expect(sw.publicDemo.banner).toContain(time);
+  });
+
   it("is hidden by a rule outside any layer once <html> carries the dismissed mark", () => {
     const css = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
     expect(css).toMatch(/html\[data-demo-banner-hidden\] \[data-demo-banner\] \{\s*display: none;\s*\}/);
@@ -81,6 +92,33 @@ describe("dismissal (the inline script)", () => {
     expect(document.documentElement.hasAttribute(DEMO_BANNER_HIDDEN_ATTRIBUTE)).toBe(true);
     expect(sessionStorage.getItem(DEMO_BANNER_STORAGE_KEY)).toBe("1");
     expect(document.activeElement).toBe(document.getElementById("main"));
+  });
+
+  it("moves focus without scrolling (preventScroll), and puts back a scroll a browser made anyway", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const scrollTo = vi.fn();
+    vi.stubGlobal("scrollTo", scrollTo);
+    try {
+      run();
+      document.querySelector("[data-demo-dismiss]")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      // (Each run() in this file adds its listener to the same document: every one of them focuses the same way.)
+      expect(focus).toHaveBeenCalled();
+      expect(focus.mock.calls.every((args) => JSON.stringify(args) === JSON.stringify([{ preventScroll: true }]))).toBe(true);
+      expect(focus.mock.contexts.every((element) => element === document.getElementById("main"))).toBe(true);
+      expect(scrollTo).not.toHaveBeenCalled(); // nothing moved
+
+      // A browser that ignores preventScroll and scrolls #main into view: the page goes back where it was.
+      document.documentElement.removeAttribute(DEMO_BANNER_HIDDEN_ATTRIBUTE);
+      focus.mockImplementation(() => {
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 41 });
+      });
+      document.querySelector("[data-demo-dismiss]")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(scrollTo).toHaveBeenCalledWith(0, 0);
+    } finally {
+      focus.mockRestore();
+      vi.unstubAllGlobals();
+      Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    }
   });
 
   it("ignores every other press", () => {
