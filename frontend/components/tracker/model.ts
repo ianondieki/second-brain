@@ -434,8 +434,8 @@ export function actionItems(detail: Pick<Detail, "actions" | "awaiting" | "my_pa
 }
 
 const PREFIX = "/api/engagements/{engagement_id}" as const;
-/** A public entity's procurement route (3b) is chosen under the organisation's path (REQ-ENG-06). */
-const ORG_PREFIX = "/api/orgs/{org_id}/engagements/{engagement_id}" as const;
+/** A public entity's procurement route (3b) is chosen under the organisation's path (REQ-ENG-06; RouteSheet). */
+export const ORG_PREFIX = "/api/orgs/{org_id}/engagements/{engagement_id}" as const;
 
 /** URL segment of each command without a milestone (backend engagements/router.py); choose_route's is ORG_PREFIX's. */
 export const COMMAND_SEGMENT = {
@@ -514,16 +514,13 @@ export interface CommandRequest {
 
 /** The request for a command on an engagement read at `lockVersion` (a 409 `stale` when it changed since). */
 export function commandRequest(
-  command: Command,
+  // choose_route is sent under the organisation's path, built by its lazily loaded sheet (RouteSheet.routeRequest).
+  command: Exclude<Command, "choose_route">,
   engagementId: string,
   lockVersion: number,
-  { milestoneId, input, orgId }: { milestoneId?: string; input?: FormInput; orgId?: string } = {},
+  { milestoneId, input }: { milestoneId?: string; input?: FormInput } = {},
 ): CommandRequest {
   const body = { ...(input ?? {}), lock_version: lockVersion };
-  if (command === "choose_route") {
-    if (!orgId) throw new TypeError(`${command} needs the organisation`);
-    return { path: `${ORG_PREFIX}/${COMMAND_SEGMENT[command]}`, params: { org_id: orgId, engagement_id: engagementId }, body };
-  }
   if (isMilestoneCommand(command)) {
     if (!milestoneId) throw new TypeError(`${command} needs a milestone`);
     return {

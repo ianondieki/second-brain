@@ -17,6 +17,7 @@ import {
   isFormCommand,
   isSheetCommand,
   type ActionItem,
+  type Command,
   type CommandRequest,
   type FormCommand,
   type FormInput,
@@ -143,10 +144,10 @@ export function Actions(props: ActionsProps) {
   }
 
   function requestFor(item: ActionItem, input?: FormInput): CommandRequest {
-    return commandRequest(item.command, props.engagementId, props.lockVersion, {
+    // Never choose_route: its sheet builds its own request (RouteSheet.routeRequest).
+    return commandRequest(item.command as Exclude<Command, "choose_route">, props.engagementId, props.lockVersion, {
       milestoneId: item.milestone?.id,
       input,
-      orgId: props.orgId,
     });
   }
 
@@ -282,14 +283,14 @@ export function Actions(props: ActionsProps) {
 
       {mode.kind === "sheet" && mode.item.command === "choose_route" ? (
         <Suspense fallback={null}>
+          {/* engagementId, lockVersion, orgId, locale and today come from the props of the same names. */}
           <LazyRouteSheet
+            {...props}
             busy={busy}
             problem={message}
             notice={notice}
-            locale={props.locale}
-            today={props.today}
             onClose={cancel}
-            onSubmit={(input) => void run(mode.item, requestFor(mode.item, input))}
+            onSubmit={(request) => void run(mode.item, request)}
           />
         </Suspense>
       ) : mode.kind === "sheet" ? (

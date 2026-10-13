@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { detail, history, inImplementation, summary } from "@/test/engagement";
 
+import { routeRequest } from "./RouteSheet";
 import {
   actionItems,
   awaitsMe,
@@ -195,12 +196,11 @@ describe("actions become buttons, and buttons become requests", () => {
 
   it("chooses a public entity's procurement route under the organisation's path (REQ-ENG-06)", () => {
     const route = { route: "direct" as const, justification: "Only this developer runs the county's USSD gateway.", contact_by: "2026-10-16" };
-    expect(commandRequest("choose_route", "e1", 4, { orgId: "o1", input: route })).toEqual({
+    expect(routeRequest("e1", "o1", 4, route)).toEqual({
       path: "/api/orgs/{org_id}/engagements/{engagement_id}/procurement-route",
       params: { org_id: "o1", engagement_id: "e1" },
       body: { ...route, lock_version: 4 },
     });
-    expect(() => commandRequest("choose_route", "e1", 4)).toThrow(TypeError);
   });
 });
 

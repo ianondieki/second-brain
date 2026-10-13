@@ -11,7 +11,7 @@ import { TextField } from "@/components/ui/TextField";
 
 import type { Refusal } from "./calls";
 import { nairobiToday } from "./input";
-import type { ProcurementInput, ProcurementRoute } from "./model";
+import { COMMAND_SEGMENT, ORG_PREFIX, type CommandRequest, type ProcurementInput, type ProcurementRoute } from "./model";
 
 // A public entity's procurement route (stage 3b; REQ-ENG-06, AC-TRACK-5; docs/spec/06 6.9): its owner or admin chooses
 // how the organisation will buy, writes the justification direct procurement needs, and names the contact-by date of
@@ -33,7 +33,23 @@ export const ROUTES = [
 export const JUSTIFICATION_MIN = 20;
 export const JUSTIFICATION_MAX = 1000;
 
+/**
+ * The route's request: under the organisation's path (POST /api/orgs/{org_id}/engagements/{id}/procurement-route), with
+ * the lock_version the page read (409 stale when it moved).
+ */
+export function routeRequest(engagementId: string, orgId: string, lockVersion: number, input: ProcurementInput): CommandRequest {
+  return {
+    path: `${ORG_PREFIX}/${COMMAND_SEGMENT.choose_route}`,
+    params: { org_id: orgId, engagement_id: engagementId },
+    body: { ...input, lock_version: lockVersion },
+  };
+}
+
 export interface RouteSheetProps {
+  engagementId: string;
+  /** The engagement's organisation, whose path the route is sent under. */
+  orgId?: string;
+  lockVersion: number;
   busy: boolean;
   /** The refusal of the last attempt, shown above the buttons unless it belongs to a field. */
   problem?: ReactNode;
@@ -42,7 +58,7 @@ export interface RouteSheetProps {
   locale?: string;
   /** Today in Nairobi on the platform's clock (the API's `today`); absent: the browser's day. */
   today?: string | null;
-  onSubmit: (input: ProcurementInput) => void;
+  onSubmit: (request: CommandRequest) => void;
   /** The sheet closed without sending (Cancel or Escape). */
   onClose: () => void;
 }
@@ -112,7 +128,13 @@ export function RouteSheet(props: RouteSheetProps) {
       (first === "date" || first === "justification" ? box : box?.querySelector<HTMLElement>("input"))?.focus();
       return;
     }
-    props.onSubmit({ route, justification: value || null, contact_by: by });
+    props.onSubmit(
+      routeRequest(props.engagementId, props.orgId ?? "", props.lockVersion, {
+        route,
+        justification: value || null,
+        contact_by: by,
+      }),
+    );
   }
 
   function edit(name: FieldName) {
