@@ -232,6 +232,15 @@ during the Phase 7 UX pass and Phase 8 hardening, and add lint warnings (ruff `P
 `max-lines-per-function`/`max-depth`) so they stop growing; (c) split only those over 150 lines now.
 Default applied: (b), nothing refactored in M2. Recommended: (b), taking the 15 over 150 lines first.
 
+### D-71 · Where the public demo runs, and when it goes live (P28; REQ-FND-04; amends D-36 for the demo only)
+- Why: the owner asked on 2026-10-13 for "a working link for the application that anyone can access for demonstration purposes". D-36 (zero spend: no hosting, no new accounts) stands for everything else. The research note `docs/platform/research/public-demo-hosting.md` (read 2026-10-13) found no host that runs the ~1 GB all-in-one demo container durably at zero spend without a card: Hugging Face Docker Spaces now need PRO; Fly.io has no free tier; Render and Koyeb free tiers have 512 MB; Oracle Always Free fits but needs a card to sign up. GitHub Codespaces runs it free on your existing GitHub account, but only while the codespace runs (idle timeout at most 4 h). Agents never create accounts or spend, so the host is yours to choose. Two open legal decisions also block "any hosted release": D-38 (news excerpts) and D-39 (the legal drafts).
+- Built either way (P28, no decision needed): the public-demo mode (persona sign-in, locked account and upload actions, the fictional-data banner, `noindex`, the nightly reset at 03:00 EAT), conservative content by default (the four fictional organisations and the six official-source excerpts only: no real organisations from `ke_provisional.yaml`, none of the 13 news excerpts), one image for any Docker host (`ghcr.io/<owner>/bridge-demo`, built by `demo-image.yml` with GitHub's own token), the Codespaces link, a Hugging Face workflow and an Oracle runbook (`docs/runbooks/public-demo.md`).
+- Options for the durable link: (a) a Hugging Face Docker Space with PRO, USD 9/month (least effort: a token and one workflow run; stable `https://<name>.hf.space`); (b) an Oracle Cloud Always Free Arm VM (free; a card for verification; you run Docker and Caddy on it with the runbook's commands; Oracle may reclaim an idle VM); (c) Codespaces only, on demand (free; you start it before a demo and share the link while it runs); (d) a small paid VPS or Fly.io machine (a few dollars a month; same image).
+- Go-live checklist (yours, whichever option): D-38 decided (the news excerpts stay out unless you set `PUBLIC_DEMO_CONTENT=full` after the terms review); D-39 accepted for a hosted demo (the legal texts are labelled drafts); real organisations stay out until G6's official citations; make the GHCR package public (Packages → bridge-demo → Change visibility) so the hosts can pull it.
+- Recommended default: (c) now (no spend, nothing to decide but the go-live checklist), and (a) if you want a link that is always up.
+- Blocks: the durable public link only.
+- Decision:
+
 ## Decided
 
 | Id | Decision | Date | Recorded in |
