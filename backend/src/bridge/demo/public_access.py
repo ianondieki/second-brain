@@ -42,7 +42,6 @@ Security reasoning (for the security review):
 
 from __future__ import annotations
 
-import ipaddress
 import time
 from dataclasses import dataclass
 from functools import lru_cache
@@ -136,25 +135,8 @@ def unknown_persona() -> ApiError:
 
 
 def per_visitor(ip: str, settings: Settings) -> bool:
-    """Whether ``ip`` tells visitors apart: a global address that is not one of ``TRUSTED_PROXIES``. A loopback,
-    private, link-local or otherwise non-global address, a trusted proxy's own address and an unreadable one say
-    nothing about who is asking (Codespaces' port forwarder, a bare ``docker run -p``, a proxy that adds no
-    X-Forwarded-For: then every visitor shares one address)."""
-    try:
-        address = ipaddress.ip_address(ip)
-    except ValueError:
-        return False
-    if not address.is_global:
-        return False
-    for entry in (part.strip() for part in settings.trusted_proxies.split(",")):
-        if entry == "*":
-            return False
-        try:
-            if address in ipaddress.ip_network(entry, strict=False):
-                return False
-        except ValueError:
-            continue
-    return True
+    """Whether ``ip`` tells visitors apart (``bridge.auth.throttle.per_visitor`` with ``TRUSTED_PROXIES``)."""
+    return throttle.per_visitor(ip, settings.trusted_proxies)
 
 
 @dataclass(slots=True)
