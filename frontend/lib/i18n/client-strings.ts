@@ -75,6 +75,7 @@ export const CLIENT_STRING_NAMESPACES = [
   "calendarFeed",
   "teamAdmin",
   "invitationAccept",
+  "retryAfter",
 ] as const;
 export type ClientNamespace = (typeof CLIENT_STRING_NAMESPACES)[number];
 

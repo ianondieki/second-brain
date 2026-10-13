@@ -4424,7 +4424,11 @@
     "filterAll": "Yote",
     "exportCsv": "Hamisha CSV",
     "csvOff": "Kuhamisha CSV kunakuja na mpango wa {plan}. <link>Tazama mipango</link>",
-    "csvOffUnknown": "Kuhamisha CSV si sehemu ya mpango wako. <link>Tazama mipango</link>"
+    "csvOffUnknown": "Kuhamisha CSV si sehemu ya mpango wako. <link>Tazama mipango</link>",
+    "exportSignedOut": "Muda wa kuingia uliisha kabla faili halijawa tayari. <link>Ingia tena</link>",
+    "exportRateLimited": "Uhamishaji mwingi mno kwa sasa.",
+    "exportNotFound": "Hakuna uhamishaji wa shirika hilo hapa.",
+    "exportFailed": "Faili halikuweza kutengenezwa kwa sasa. <link>Jaribu tena</link>"
   },
   "deadlines": {
     "previous": "Mwezi uliopita, {month}",
@@ -4609,7 +4613,6 @@
     "escalationLead": "Wasimamizi wenu wanaarifiwa mawasiliano ya kwanza au uamuzi unapochelewa. Mtu mmoja zaidi anaweza kuarifiwa pamoja nao.",
     "escalationIs": "{name} anaarifiwa kuhusu upandishaji pamoja na wasimamizi wenu.",
     "escalationNone": "Ni wasimamizi wenu tu wanaoarifiwa kuhusu upandishaji.",
-    "demoLocked": "Kubadilisha timu kumezimwa katika onyesho la umma.",
     "readFailed": "Timu haikuweza kusomwa kwa sasa.",
     "retry": "Jaribu tena",
     "notMember": "Wewe si mwanachama wa shirika hilo.",
@@ -4680,7 +4683,7 @@
       "unknown_niche": "Mojawapo ya niche hizi imebadilika wakati huo. Ukurasa sasa ni wa kisasa: chagua tena.",
       "invalid_default_reviewer": "Chagua mkaguzi, mtia saini au msimamizi kwa kila niche.",
       "invalid_member": "Chagua mtu ambaye bado ni mwanachama.",
-      "rate_limited": "Mabadiliko mengi mno kwa sasa. Jaribu tena baada ya dakika moja.",
+      "rate_limited": "Mabadiliko mengi mno kwa sasa.",
       "public_demo_locked": "Kubadilisha timu kumezimwa katika onyesho la umma.",
       "notAllowed": "Ni mmiliki au msimamizi tu anayeweza kubadilisha timu, na ni mmiliki tu anayeweza kubadilisha majukumu.",
       "notFound": "Hicho hakipo tena. Ukurasa sasa ni wa kisasa.",
@@ -4688,12 +4691,14 @@
       "generic": "Kuna tatizo. Jaribu tena.",
       "org_not_verified": "Kualika watu kunafunguka shirika lenu likishathibitishwa.",
       "plan_limit": "Nafasi zote za mpango wenu zimejaa. Mpango wenye nafasi zaidi utakuwezesha kumwalika mtu mwingine.",
-      "plan_limitUpgrade": "Nafasi zote za mpango wenu zimejaa. {plan} una nafasi zaidi."
+      "plan_limitUpgrade": "Nafasi zote za mpango wenu zimejaa. {plan} una nafasi zaidi.",
+      "signedOut": "Muda wa kuingia umekwisha, kwa hivyo hakuna kilichobadilishwa."
     },
     "upgradeTo": "Pandisha hadi {plan}",
     "seePlans": "Tazama mipango",
     "verificationHelp": "Jinsi uthibitishaji unavyofanya kazi",
-    "loading": "Inapakia…"
+    "loading": "Inapakia…",
+    "signIn": "Ingia tena"
   },
   "invitation": {
     "pageTitle": "Mwaliko",
@@ -4708,8 +4713,9 @@
     "dead": "Kilitumika, kilifutwa au kilibadilishwa, au siku zake 7 zimekwisha. Muombe aliyekualika akutumie kingine.",
     "home": "Nenda ukurasa wa mwanzo",
     "rateLimitedTitle": "Majaribio mengi mno",
-    "rateLimited": "Viungo vingi vya mialiko vimefunguliwa kutoka hapa kwa sasa. Subiri dakika moja, kisha upakie ukurasa huu upya.",
-    "demoLocked": "Kukubali mialiko kumezimwa katika onyesho la umma."
+    "rateLimited": "Viungo vingi vya mialiko vimefunguliwa kutoka hapa kwa sasa.",
+    "demoLocked": "Kukubali mialiko kumezimwa katika onyesho la umma.",
+    "developerAccount": "Hii ni akaunti ya msanidi, na akaunti hufanya kazi upande mmoja tu. Iombe shirika ikualike kwa anwani nyingine ya barua pepe."
   },
   "invitationAccept": {
     "accept": "Kubali na ujiunge",
@@ -4725,7 +4731,15 @@
       "network": "Hakuna muunganisho. Jaribu tena.",
       "generic": "Kuna tatizo. Jaribu tena.",
       "seats": "{org} haina nafasi wazi katika mpango wake kwa sasa. Muulize aliyekualika.",
-      "rateLimited": "Majaribio mengi mno kwa sasa. Subiri dakika moja, kisha ujaribu tena."
+      "rateLimited": "Majaribio mengi mno kwa sasa.",
+      "developer": "Hii ni akaunti ya msanidi, na akaunti hufanya kazi upande mmoja tu. Iombe shirika ikualike kwa anwani nyingine ya barua pepe."
     }
+  },
+  "retryAfter": {
+    "minute": "Jaribu tena baada ya dakika moja hivi.",
+    "minutes": "Jaribu tena baada ya dakika {count} hivi.",
+    "hour": "Jaribu tena baada ya saa moja hivi.",
+    "hours": "Jaribu tena baada ya saa {count} hivi.",
+    "later": "Jaribu tena baadaye."
   }
 }

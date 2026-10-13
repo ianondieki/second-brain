@@ -4424,7 +4424,11 @@
     "filterAll": "All",
     "exportCsv": "Export CSV",
     "csvOff": "CSV export comes with the {plan} plan. <link>See plans</link>",
-    "csvOffUnknown": "CSV export is not part of your plan. <link>See plans</link>"
+    "csvOffUnknown": "CSV export is not part of your plan. <link>See plans</link>",
+    "exportSignedOut": "Your session ended before the file was ready. <link>Sign in again</link>",
+    "exportRateLimited": "Too many exports just now.",
+    "exportNotFound": "There is no export for that organisation here.",
+    "exportFailed": "The file could not be made just now. <link>Try again</link>"
   },
   "deadlines": {
     "previous": "Previous month, {month}",
@@ -4609,7 +4613,6 @@
     "escalationLead": "Your admins hear when a first contact or a decision runs late. One more person can hear it with them.",
     "escalationIs": "{name} hears of escalations with your admins.",
     "escalationNone": "Only your admins hear of escalations.",
-    "demoLocked": "Changing the team is switched off in the public demo.",
     "readFailed": "The team could not be read just now.",
     "retry": "Try again",
     "notMember": "You are not a member of that organisation.",
@@ -4680,7 +4683,7 @@
       "unknown_niche": "One of these niches changed meanwhile. The page is up to date now: choose again.",
       "invalid_default_reviewer": "Choose a reviewer, signatory or admin for each niche.",
       "invalid_member": "Choose someone who is still a member.",
-      "rate_limited": "Too many changes just now. Try again in a minute.",
+      "rate_limited": "Too many changes just now.",
       "public_demo_locked": "Changing the team is switched off in the public demo.",
       "notAllowed": "Only an owner or admin can change the team, and only an owner can change roles.",
       "notFound": "That is no longer here. The page is up to date now.",
@@ -4688,12 +4691,14 @@
       "generic": "Something went wrong. Try again.",
       "org_not_verified": "Inviting people opens once your organisation is verified.",
       "plan_limit": "Every seat on your plan is taken. A plan with more seats lets you invite someone else.",
-      "plan_limitUpgrade": "Every seat on your plan is taken. {plan} has more."
+      "plan_limitUpgrade": "Every seat on your plan is taken. {plan} has more.",
+      "signedOut": "Your session ended, so nothing was changed."
     },
     "upgradeTo": "Upgrade to {plan}",
     "seePlans": "See plans",
     "verificationHelp": "How verification works",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "signIn": "Sign in again"
   },
   "invitation": {
     "pageTitle": "Invitation",
@@ -4708,8 +4713,9 @@
     "dead": "It was used, revoked or replaced, or its 7 days are over. Ask the person who invited you for a new one.",
     "home": "Go to the home page",
     "rateLimitedTitle": "Too many tries",
-    "rateLimited": "Too many invitation links were opened from here just now. Wait a minute, then reload this page.",
-    "demoLocked": "Accepting invitations is switched off in the public demo."
+    "rateLimited": "Too many invitation links were opened from here just now.",
+    "demoLocked": "Accepting invitations is switched off in the public demo.",
+    "developerAccount": "This is a developer account, and an account works on one side only. Ask the organisation to invite another email address."
   },
   "invitationAccept": {
     "accept": "Accept and join",
@@ -4725,7 +4731,15 @@
       "network": "No connection. Try again.",
       "generic": "Something went wrong. Try again.",
       "seats": "{org} has no free seat on its plan just now. Ask the person who invited you.",
-      "rateLimited": "Too many tries just now. Wait a minute, then try again."
+      "rateLimited": "Too many tries just now.",
+      "developer": "This is a developer account, and an account works on one side only. Ask the organisation to invite another email address."
     }
+  },
+  "retryAfter": {
+    "minute": "Try again in about a minute.",
+    "minutes": "Try again in about {count} minutes.",
+    "hour": "Try again in about an hour.",
+    "hours": "Try again in about {count} hours.",
+    "later": "Try again later."
   }
 }
