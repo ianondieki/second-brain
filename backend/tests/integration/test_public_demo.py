@@ -6,8 +6,13 @@
   Peter (Telco A's signatory) expresses interest in Amina's proposal and Amina accepts it, both step-up actions, and
   the moderator opens the staff queue (staff routes need a fresh second factor), none with a code.
 - AT-PD-2: with the mode off the route is 404 and ``/api/public/demo`` says ``enabled: false``.
+- AT-PD-3: an unknown persona, an account that is no longer a demo account or no longer active, and a key outside the
+  allowlist are 400 ``unknown_persona``; a body naming an email is refused (422) and signs nobody in; 30 attempts a
+  minute per IP, then 429.
+- AT-PD-4: a persona's password change, second-factor change, role change, uploads (proposal attachment, message
+  attachment, the file check) and the clock's move are 403 ``public_demo_locked`` and change nothing.
 - AT-PD-5: ``fictional`` leaves out every ``ke_provisional`` organisation and every research card citing a news
-  excerpt.
+  excerpt; ``full`` restores both.
 
 The database is the module's own: the demo seed's rows would disturb other tests' counts in the shared one.
 """
@@ -247,3 +252,134 @@ async def test_with_the_mode_off_there_is_no_persona_sign_in(fictional: Seeded, 
             "reset_hour_eat": None,
         }
         assert get_settings().session_cookie_name not in client.cookies
+
+
+# ------------------------------------------------------------------------------------------------------------ AT-PD-3
+
+
+async def test_unknown_personas_and_other_fields_sign_nobody_in(fictional: Seeded, app: AsyncEngine) -> None:
+    async with visitor(app, ip="127.0.2.5") as client:
+        for persona in ("nobody", "admin", "AMINA", " amina", "admin@staff.example"):
+            response = await client.post(SIGN_IN, json={"persona": persona})
+            assert response.status_code == 400, persona
+            assert response.json() == {
+                "detail": {"code": "unknown_persona", "message": "Choose one of the demo personas."}
+            }
+        named = await client.post(SIGN_IN, json={"persona": "amina", "email": "admin@staff.example"})
+        assert named.status_code == 422
+        assert (await client.post(SIGN_IN, json={"email": "amina@developers.example"})).status_code == 422
+        assert get_settings().session_cookie_name not in client.cookies
+        assert (await client.get("/api/auth/me")).status_code == 401
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "UPDATE users SET demo_account = false WHERE email = :e",
+        "UPDATE users SET status = 'suspended' WHERE email = :e",
+    ],
+)
+async def test_an_allowlisted_address_that_is_not_an_active_demo_account_is_refused(
+    fictional: Seeded, app: AsyncEngine, owner: AsyncEngine, change: str
+) -> None:
+    hassan = "owner@county-c.example"
+    async with owner.begin() as conn:
+        await conn.execute(text(change), {"e": hassan})
+    try:
+        async with visitor(app, ip="127.0.2.6") as client:
+            response = await client.post(SIGN_IN, json={"persona": "hassan"})
+            assert (response.status_code, response.json()["detail"]["code"]) == (400, "unknown_persona")
+            assert get_settings().session_cookie_name not in client.cookies
+    finally:
+        async with owner.begin() as conn:
+            await conn.execute(
+                text("UPDATE users SET demo_account = true, status = 'active' WHERE email = :e"), {"e": hassan}
+            )
+    async with visitor(app, ip="127.0.2.7") as client:
+        assert (await client.post(SIGN_IN, json={"persona": "hassan"})).status_code == 200
+
+
+async def test_sign_ins_are_throttled_per_ip(fictional: Seeded, app: AsyncEngine) -> None:
+    async with visitor(app, ip="127.0.2.8") as client:
+        for n in range(30):  # refused attempts count too
+            assert (await client.post(SIGN_IN, json={"persona": "nobody"})).status_code == 400, n
+        response = await client.post(SIGN_IN, json={"persona": "amina"})
+        assert (response.status_code, response.json()["detail"]["code"]) == (429, "too_many_attempts")
+    async with visitor(app, ip="127.0.2.9") as other:  # another address is not held back
+        assert (await other.post(SIGN_IN, json={"persona": "amina"})).status_code == 200
+
+
+# ------------------------------------------------------------------------------------------------------------ AT-PD-4
+
+
+async def test_a_persona_cannot_change_credentials_roles_files_or_the_clock(
+    fictional: Seeded, app: AsyncEngine, owner: AsyncEngine
+) -> None:
+    _, report = fictional
+    before = await rows(owner, "SELECT id, password_hash, totp_enabled_at FROM users ORDER BY id")
+    roles_before = await rows(owner, "SELECT id, roles FROM memberships ORDER BY id")
+    clock_before = await scalar(owner, "SELECT clock_offset FROM test_clock")
+    engagement = await scalar(
+        owner,
+        "SELECT e.id FROM engagements e JOIN proposals p ON p.id = e.proposal_id WHERE p.owner_id = :u LIMIT 1",
+        u=report.users[AMINA.email],
+    )
+    telco = report.orgs[TELCO_A.legal_name]
+    peter = report.users["signatory@telco-a.example"]
+    async with visitor(app, ip="127.0.3.1") as amina, visitor(app, ip="127.0.3.2") as grace:
+        assert (await sign_in(amina, "amina")).status_code == 200
+        assert (await sign_in(grace, "grace")).status_code == 200
+        attempts = [
+            await amina.post(
+                "/api/auth/password", json={"current_password": "bridge-demo-2026", "new_password": "x" * 16}
+            ),
+            await amina.post("/api/auth/totp/disable"),
+            await amina.post("/api/auth/totp/enrol", json={"password": "bridge-demo-2026"}),
+            await amina.post("/api/auth/totp/recovery-codes", json={"current_password": "bridge-demo-2026"}),
+            await amina.post("/api/auth/magic-link", json={"email": AMINA.email}),
+            await amina.post(
+                f"/api/me/proposals/{report.proposals[P1.key]}/attachments",
+                content=b"%PDF-1.4 demo",
+                headers={"Content-Type": "application/pdf", "X-File-Name": "a.pdf"},
+            ),
+            await amina.post(
+                f"/api/engagements/{engagement}/messages/attachments",
+                content=b"%PDF-1.4 demo",
+                headers={"Content-Type": "application/pdf", "X-File-Name": "a.pdf"},
+            ),
+            await amina.post("/api/verify", content=b"any file", headers={"Content-Type": "application/octet-stream"}),
+            await amina.post("/api/test-clock/advance", json={"days": 30}),
+            await grace.put(f"/api/orgs/{telco}/members/{peter}/roles", json={"roles": ["viewer"]}),
+        ]
+        for response in attempts:
+            assert response.status_code == 403, (response.request.url, response.text)
+            assert response.json() == {"detail": LOCKED}
+            assert response.headers["x-robots-tag"] == "noindex, nofollow"
+        assert (await amina.get("/api/test-clock")).status_code == 200  # reading the clock stays open
+    assert await rows(owner, "SELECT id, password_hash, totp_enabled_at FROM users ORDER BY id") == before
+    assert await rows(owner, "SELECT id, roles FROM memberships ORDER BY id") == roles_before
+    assert await scalar(owner, "SELECT clock_offset FROM test_clock") == clock_before
+
+
+async def test_signing_up_is_switched_off(fictional: Seeded, app: AsyncEngine) -> None:
+    async with visitor(app, ip="127.0.3.3") as client:
+        response = await client.post("/api/auth/signup", json={"email": "someone@example.com"})
+    assert (response.status_code, response.json()) == (403, {"detail": LOCKED})
+
+
+# ------------------------------------------------------------------------------------------------- AT-PD-5 (full, last)
+
+
+async def test_full_content_restores_the_directory_and_the_research_cards(
+    fictional: Seeded, owner: AsyncEngine, app: AsyncEngine
+) -> None:
+    """Last in the module: the same database seeded again with PUBLIC_DEMO_CONTENT=full gains what fictional left out
+    (the image wipes its data every night, so a real switch starts from an empty database)."""
+    directory, report = await seed(owner, app, public(public_demo_content="full"))
+    assert directory is not None
+    assert await scalar(owner, "SELECT count(*) FROM organizations WHERE slug = ANY(:s)", s=PROVISIONAL) == len(
+        PROVISIONAL
+    )
+    assert await scalar(owner, "SELECT count(*) FROM research_runs") == len(SEEDED_ANSWERS)
+    assert await scalar(owner, "SELECT count(*) FROM problem_sources WHERE source_type = 'news'") > 0
+    assert not [note for note in report.notes if note.startswith("research cards:")]
