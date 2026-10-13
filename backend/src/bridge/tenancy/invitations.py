@@ -1,24 +1,30 @@
 """Inviting people into an organisation (REQ-TEN-02; docs/platform/tasks/P28.md track C; revision 0015's call order).
 
 - **Invite** (``invite``, an owner or admin): one invitation per address and organisation, for the roles the inviter
-  may grant (only an owner invites an owner or a signatory: 403 ``protected_role``, revision 0001's rule). Under a
-  transaction advisory lock per organisation: an active member's address is 409 ``already_member``; an expired open
-  invitation to the address is revoked first (an index cannot read the clock, so it would block the address); an
-  unexpired open one is 409 ``already_invited`` (resend it instead); at most ``MAX_OPEN`` unexpired open invitations per
-  organisation (409 ``too_many_invitations``). The token is ``TOKEN_BYTES`` random bytes (``bridge.auth.crypto``,
-  URL-safe base64); only its SHA-256 is stored, and it expires ``VALID_DAYS`` days on the shared clock. The token is
-  returned to the router for the email only, never in a response, an audit row or a log line.
+  may grant (only an owner invites an owner or a signatory: 403 ``protected_role``, revision 0001's rule), from an
+  organisation that is at least E1 (403 ``org_not_verified``). The email counts against the send limits first
+  (``invitation_limits``: 429 ``rate_limited``, committed before anything else). Under a transaction advisory lock per
+  organisation: an active member's address is 409 ``already_member``; an expired open invitation to the address is
+  revoked first (an index cannot read the clock, so it would block the address; only an owner revokes one holding a
+  protected role, 403 ``protected_role``); an unexpired open one is 409 ``already_invited`` (resend it instead); at
+  most ``MAX_OPEN`` unexpired open invitations per organisation (409 ``too_many_invitations``); the active members and
+  the unexpired open invitations stay within the plan's ``seats`` (402 ``plan_limit``). The token is 32 random bytes
+  (``bridge.auth.crypto``, URL-safe base64); only its SHA-256 is stored, and it expires ``VALID_DAYS`` days on the
+  shared clock. The token is returned to the router for the email only, never in a response, an audit row or a log
+  line.
 - **Resend** (``resend``): the open invitation is revoked and a new one inserted for the same address and roles, in
   one transaction (a new id, token, creation time and expiry: revision 0015's ``expires_within_30_days`` counts from
-  the creation, so an in-place token update would fail on an old invitation); the old link dies at once. An expired
-  one counts against the cap again. **Revoke** (``revoke``): ``revoked_at`` (the database's clock). A closed (accepted
-  or revoked) invitation is 409 ``invitation_closed``; another organisation's or an unknown one 404.
+  the creation, so an in-place token update would fail on an old invitation); the old link dies at once. The same
+  checks as an invite: E1, the send limits, an address that has become a member (409 ``already_member``), the cap
+  (an expired one counts again) and the seats. **Revoke** (``revoke``): ``revoked_at`` (the database's clock). A
+  closed (accepted or revoked) invitation is 409 ``invitation_closed``; another organisation's or an unknown one 404.
 - **Preview** (``preview``, anyone holding the link): the organisation's name and the roles of an open invitation
   (``app_invitation_preview``), else nothing.
 - **Accept** (``accept``, signed in): ``app_accept_invitation`` checks that the invitation is open and that the user's
   verified address is the invitation's (case-insensitive), then inserts or reactivates the membership. Unknown, spent,
   revoked, resent-over or expired: 404; another address or an unverified one: 403 ``invitation_email_mismatch``;
-  already an active member: 409 ``already_member``.
+  already an active member: 409 ``already_member``; the plan's seats are re-checked with the new member counted (402
+  ``plan_limit``, nothing committed).
 
 Each step is audited on the organisation's chain by ids (the invitation, the membership) and roles: never the token
 and never the address.
@@ -39,10 +45,13 @@ from bridge.audit.service import record as audit
 from bridge.auth.crypto import new_token, token_hash
 from bridge.auth.models import User
 from bridge.auth.sessions import LiveSession
+from bridge.billing import entitlements
+from bridge.config import Settings
 from bridge.errors import ApiError, forbidden, not_found
 from bridge.ids import uuid7
-from bridge.models.enums import MembershipStatus, OrgRole
+from bridge.models.enums import MembershipStatus, OrgRole, OrgVerification
 from bridge.notifications.email import is_mailbox
+from bridge.tenancy import invitation_limits
 from bridge.tenancy.deps import OrgContext
 from bridge.tenancy.invitation_email import VALID_DAYS
 from bridge.tenancy.models import Invitation, Membership, Organization
@@ -50,6 +59,8 @@ from bridge.tenancy.team import PROTECTED, open_invitations
 from bridge.tenancy.team_schemas import InvitationAccepted, InvitationPreview, OrgInvitation
 
 MAX_OPEN: Final = 20  # unexpired open invitations per organisation
+SEATS: Final = "seats"  # the plan's limit (plans.yaml): active members and unexpired open invitations together
+VERIFIED: Final = frozenset({OrgVerification.E1, OrgVerification.E2})
 TOKEN_CHARS: Final = 43  # bridge.auth.crypto.new_token: URL-safe base64 of 32 random bytes, unpadded
 _TOKEN: Final = re.compile(rf"[A-Za-z0-9_-]{{{TOKEN_CHARS}}}")
 _LOCK: Final = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
@@ -65,6 +76,7 @@ CLOSED: Final = "This invitation was already accepted or revoked."
 MISMATCH: Final = "This invitation is for another email address. Sign in with the address it was sent to."
 NO_INVITATION: Final = "This invitation link is not valid any more. Ask for a new one."
 INVALID_EMAIL: Final = "Enter one plain email address."
+NOT_VERIFIED: Final = "Verify your organisation (its email domain, E1) before inviting people."
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +133,46 @@ async def _one(db: AsyncSession, org_id: UUID, invitation_id: UUID) -> OrgInvita
     return shown
 
 
+async def _check_verified(db: AsyncSession, org_id: UUID) -> None:
+    """403 ``org_not_verified`` unless the organisation is at least E1 (a verified domain): an unverified organisation
+    never sends invitation emails (the security review: no mailing from unclaimed or pending organisations)."""
+    level = await db.scalar(select(Organization.verification).where(Organization.id == org_id))
+    if level not in VERIFIED:
+        raise forbidden("org_not_verified", NOT_VERIFIED)
+
+
+async def _is_member(db: AsyncSession, org_id: UUID, address: str) -> bool:
+    member = await db.scalar(
+        select(Membership.id)
+        .join(User, User.id == Membership.user_id)
+        .where(Membership.org_id == org_id, Membership.status == MembershipStatus.ACTIVE, User.email == address)
+    )
+    return member is not None
+
+
+async def _active_members(db: AsyncSession, org_id: UUID) -> int:
+    count = await db.scalar(
+        select(func.count())
+        .select_from(Membership)
+        .where(Membership.org_id == org_id, Membership.status == MembershipStatus.ACTIVE)
+    )
+    return int(count or 0)
+
+
+async def _check_seats(db: AsyncSession, settings: Settings, org_id: UUID) -> None:
+    """402 ``plan_limit`` (``seats``) when one more invitation would take the active members and the unexpired open
+    invitations past the plan's seats (``entitlements.check_count``, with the next plan up)."""
+    plan = await entitlements.for_subject(db, settings, org_id=org_id)
+    used = await _active_members(db, org_id) + await _open_unexpired(db, org_id)
+    entitlements.check_count(settings, plan, SEATS, used=used)
+
+
+async def _spend(db: AsyncSession, settings: Settings, org: OrgContext, address: str, ip: str) -> None:
+    """Count the email (``invitation_limits``) and commit the count before anything else is checked or written."""
+    await invitation_limits.spend_send(db, settings, org, address, ip)
+    await db.commit()
+
+
 async def _insert(db: AsyncSession, org: OrgContext, address: str, roles: set[OrgRole]) -> tuple[UUID, str]:
     """Insert an open invitation from the caller with a new token (the database stamps ``created_at``); its id and
     token. ``uq_invitations_open`` is the race of two invitations to one address: 409 ``already_invited``."""
@@ -144,36 +196,41 @@ async def _insert(db: AsyncSession, org: OrgContext, address: str, roles: set[Or
     return invitation_id, token
 
 
-async def invite(db: AsyncSession, org: OrgContext, email: str, roles: list[OrgRole]) -> Issued:
+async def invite(
+    db: AsyncSession, settings: Settings, org: OrgContext, email: str, roles: list[OrgRole], ip: str
+) -> Issued:
     """Create the invitation (see the module docstring), in the caller's transaction (the router commits)."""
     wanted = set(roles)
     check_grantable(org, wanted)
     address = normalise_email(email)
     if not is_mailbox(address):  # the mailer sends to one bare address only
         raise ApiError(422, "invalid_email", INVALID_EMAIL)
+    await _check_verified(db, org.org_id)
+    await _spend(db, settings, org, address, ip)
     await _lock(db, org.org_id)
-    member = await db.scalar(
-        select(Membership.id)
-        .join(User, User.id == Membership.user_id)
-        .where(Membership.org_id == org.org_id, Membership.status == MembershipStatus.ACTIVE, User.email == address)
-    )
-    if member is not None:
+    if await _is_member(db, org.org_id, address):
         raise ApiError(409, "already_member", ALREADY_MEMBER)
-    await db.execute(  # an expired open invitation would block the address (uq_invitations_open): revoke it first
-        update(Invitation)
-        .where(
-            Invitation.org_id == org.org_id,
-            Invitation.email == address,
-            *_open(),
-            Invitation.expires_at <= func.app_clock_now(),
-        )
-        .values(revoked_at=func.now())
-        .execution_options(synchronize_session=False)
+    stale = (  # an expired open invitation would block the address (uq_invitations_open): revoke it first
+        Invitation.org_id == org.org_id,
+        Invitation.email == address,
+        *_open(),
+        Invitation.expires_at <= func.app_clock_now(),
     )
+    for held in (await db.scalars(select(Invitation.roles).where(*stale))).all():
+        check_grantable(org, {OrgRole(r) for r in held})  # only an owner revokes an owner's or a signatory's
+    try:
+        await db.execute(
+            update(Invitation).where(*stale).values(revoked_at=func.now()).execution_options(synchronize_session=False)
+        )
+    except DBAPIError as exc:
+        if _sqlstate(exc) == "42501":  # the UPDATE policy: a protected invitation, changed meanwhile
+            raise forbidden("protected_role", PROTECTED_ROLE) from exc
+        raise
     if await _open_unexpired(db, org.org_id, email=address):
         raise ApiError(409, "already_invited", ALREADY_INVITED)
     if await _open_unexpired(db, org.org_id) >= MAX_OPEN:
         raise ApiError(409, "too_many_invitations", TOO_MANY, limit=MAX_OPEN)
+    await _check_seats(db, settings, org.org_id)
     invitation_id, token = await _insert(db, org, address, wanted)
     await audit(
         db,
@@ -201,16 +258,22 @@ async def _open_invitation(db: AsyncSession, org: OrgContext, invitation_id: UUI
     return found
 
 
-async def resend(db: AsyncSession, org: OrgContext, invitation_id: UUID) -> Issued:
+async def resend(db: AsyncSession, settings: Settings, org: OrgContext, invitation_id: UUID, ip: str) -> Issued:
     """Replace an open invitation with a new one (a new id, token, creation and expiry: revision 0015's 30-day CHECK
     counts from the creation), in the caller's transaction (the router commits): the old link dies with it."""
-    await _lock(db, org.org_id)
     found = await _open_invitation(db, org, invitation_id)
+    await _check_verified(db, org.org_id)
+    await _spend(db, settings, org, str(found.email), ip)
+    await _lock(db, org.org_id)
+    found = await _open_invitation(db, org, invitation_id)  # again, under the lock
+    if await _is_member(db, org.org_id, str(found.email)):
+        raise ApiError(409, "already_member", ALREADY_MEMBER)
     expired = bool(await db.scalar(select(func.app_clock_now() >= found.expires_at)))
     if expired and await _open_unexpired(db, org.org_id) >= MAX_OPEN:
         raise ApiError(409, "too_many_invitations", TOO_MANY, limit=MAX_OPEN)
     if not await _close(db, found.id):  # accepted or revoked meanwhile
         raise ApiError(409, "invitation_closed", CLOSED)
+    await _check_seats(db, settings, org.org_id)
     new_id, token = await _insert(db, org, str(found.email), {OrgRole(r) for r in found.roles})
     await audit(
         db,
@@ -263,7 +326,7 @@ async def preview(db: AsyncSession, token: str) -> InvitationPreview | None:
     return InvitationPreview(org_name=row.org_name, roles=sorted(OrgRole(r) for r in row.roles))
 
 
-async def accept(db: AsyncSession, live: LiveSession, token: str) -> InvitationAccepted:
+async def accept(db: AsyncSession, settings: Settings, live: LiveSession, token: str) -> InvitationAccepted:
     """Accept the invitation ``token`` opens as the signed-in user, in the caller's transaction (the router commits)."""
     digest = token_digest(token)
     if digest is None:
@@ -287,6 +350,8 @@ async def accept(db: AsyncSession, live: LiveSession, token: str) -> InvitationA
             .where(Membership.org_id == org_id, Membership.user_id == live.user.id)
         )
     ).one()
+    plan = await entitlements.for_subject(db, settings, org_id=org_id)  # the joiner reads it now, as a member
+    entitlements.check_count(settings, plan, SEATS, used=await _active_members(db, org_id) - 1)  # 402: not committed
     roles = sorted(OrgRole(r) for r in joined.roles)
     await audit(
         db,

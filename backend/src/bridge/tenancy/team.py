@@ -2,7 +2,8 @@
 
 Reads (``team_view``, any active member): the active members by name with their roles and the day they joined (the
 membership's creation), each one's address only for an owner or admin reading; the open invitations (owners and
-admins only, else null: the table's own policy shows them no others); the default reviewer per niche; the escalation
+admins only, else null: the table's own policy shows them no others); the default reviewer per niche (active niches
+only: a retired niche can be neither chosen nor shown, and the next PUT of the set drops its row); the escalation
 contact.
 
 Writes (an owner or admin; the routes check the role first, the policies of revisions 0001 and 0015 are the backstop):
@@ -84,7 +85,7 @@ async def team_view(db: AsyncSession, org: OrgContext) -> OrgTeam:
         select(Niche.slug, Niche.name_en, d.user_id, User.display_name)
         .join(Niche, Niche.id == d.niche_id)
         .join(User, User.id == d.user_id)
-        .where(d.org_id == org.org_id)
+        .where(d.org_id == org.org_id, Niche.active.is_(True))  # a retired niche's default is not shown (nor set)
         .order_by(Niche.name_en, Niche.slug)
     )
     escalation = (

@@ -14,7 +14,8 @@ from bridge.config import Settings
 from bridge.ids import uuid7
 from bridge.notifications.email import EmailMessage
 from tests.integration.api import outbox
-from tests.integration.engagements.api_world import deals_on
+from tests.integration.engagements.api_world import World, build, deals_on
+from tests.integration.matching.scout_world import subscribe
 
 SETTINGS: Settings = deals_on()
 LINK = re.compile(r"https?://[^/\s]+/invitations/([A-Za-z0-9_-]{43})")
@@ -72,3 +73,12 @@ async def audit_actions(owner_engine: AsyncEngine, org: UUID, prefix: str) -> li
         org=org,
         prefix=f"{prefix}%",
     )
+
+
+async def team_world(owner_engine: AsyncEngine, plan: str | None = "org_enterprise") -> World:
+    """The tracker's world (an E2 organisation, five members) on ``plan`` (Enterprise: seats unlimited, so the
+    invitation tests are about invitations; None leaves it on the free plan, whose 2 seats it already exceeds)."""
+    world = await build(owner_engine)
+    if plan is not None:
+        await subscribe(owner_engine, world.org, plan)
+    return world
