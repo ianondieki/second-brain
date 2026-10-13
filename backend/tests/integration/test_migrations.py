@@ -344,6 +344,8 @@ APP_GRANTS: dict[str, set[str]] = {
     "engagement_recommendations": {S, I, U, D},
     "prior_knowledge_declarations": {S, I},
     "calendar_feeds": {S, I, U},
+    # revision 0015: the nudges ledger is read by the organisation's members, written only by app_record_nudge
+    "engagement_nudges": {S},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -613,6 +615,8 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     # revision 0015: the procurement route (trigger functions: nobody)
     "engagements_procurement_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer
     "engagements_procurement_moved()": (True, set()),  # reads the engagement at commit
+    "app_nudge_candidates()": (True, {"bridge_app"}),  # the nudge job, no user bound (ids only)
+    "app_record_nudge(uuid, text, text)": (True, {"bridge_app"}),  # the nudge job, no user bound
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -817,6 +821,8 @@ def schema_snapshot(url: URL) -> dict[str, list[str]]:
         engine.dispose()
 
 
+# Revision 0015's tables (REQ-NOT-05).
+V15_TABLES = ("engagement_nudges",)
 # Revision 0013's tables (REQ-ENG-15, REQ-PROV-06, REQ-ENG-13).
 V13_TABLES = (
     "engagement_assignments",
@@ -827,53 +833,59 @@ V13_TABLES = (
 
 
 def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[str]]) -> None:
-    """Revision 0015 (P28-M): what it adds and the four things of earlier revisions it replaces (revision 0003's
+    """Revision 0015 (P28-M): what it adds and the things of earlier revisions it replaces (revision 0003's
     predecessors and contact CHECK)."""
     added = {kind: set(at_0015[kind]) - set(at_0014[kind]) for kind in SNAPSHOT}
     removed = {kind: set(at_0014[kind]) - set(at_0015[kind]) for kind in SNAPSHOT}
-    assert {kind for kind in SNAPSHOT if added[kind] or removed[kind]} == {
-        "columns",
-        "constraints",
-        "enums",
-        "functions",
-        "triggers",
-        "column_acl",
-        "function_acl",
-    }
+    assert {kind for kind in SNAPSHOT if added[kind] or removed[kind]} == set(SNAPSHOT)
+    for kind in set(SNAPSHOT) - {"constraints", "functions"}:  # additive but for the two replacements
+        assert not removed[kind], (kind, removed[kind])
     assert added["enums"] == {"procurement_route direct,rfq_tender,ppp_pip,innovation_challenge,pilot_mou"}
-    assert added["columns"] == {
+    engagement_columns = {
         "engagements.procurement_route procurement_route",
         "engagements.procurement_justification text",
         "engagements.procurement_decided_at timestamp with time zone",
         "engagements.procurement_decided_by uuid",
     }
+    assert engagement_columns <= added["columns"]
+    relations = {column.split(".")[0] for column in added["columns"] - engagement_columns}
+    assert set(V15_TABLES) <= relations
+    assert all(name in V15_TABLES or name.startswith(("pk_", "uq_", "ix_")) for name in relations), relations
+    assert added["rls"] == {f"{table} true false" for table in V15_TABLES}
+    assert {line.split(" ")[0] for line in added["policies"]} == set(V15_TABLES)
     assert {line.split(" ")[1] for line in removed["constraints"]} == {"ck_engagements_contact_complete"}
-    assert {line.split(" ")[1] for line in added["constraints"]} == {
+    assert {
         "ck_engagements_contact_consistent",
         "ck_engagements_procurement_decided",
         "ck_engagements_procurement_justification_valid",
         "ck_engagements_procurement_direct_justified",
         "fk_engagements_procurement_decided_by_users",
         "engagements_procurement_moved",  # the constraint trigger's own entry
-    }
+        "ck_engagement_nudges_kind_known",
+        "ck_engagement_nudges_key_valid",
+    } <= {line.split(" ")[1] for line in added["constraints"]}
     (replaced,) = removed["functions"]
     assert replaced.startswith("engagement_main_path_predecessors(engagement_state) false "), replaced
     assert {line.split(" ")[0] for line in added["functions"]} == {
         "engagement_main_path_predecessors(engagement_state)",  # replaced in place: only the body
         "engagements_procurement_guard()",
         "engagements_procurement_moved()",
+        "app_nudge_candidates()",
+        "app_record_nudge(uuid,text,text)",
     }
-    assert {line.split(" ")[1] for line in added["triggers"]} == {
-        "engagements_procurement_guard",
-        "engagements_procurement_moved",
+    assert {(line.split(" ")[0], line.split(" ")[1]) for line in added["triggers"]} == {
+        ("engagements", "engagements_procurement_guard"),
+        ("engagements", "engagements_procurement_moved"),
+        ("engagement_nudges", "engagement_nudges_no_update_delete"),
+        ("engagement_nudges", "engagement_nudges_no_truncate"),
     }
-    assert added["column_acl"] == {
+    assert {
         "engagements.procurement_route bridge_app UPDATE",
         "engagements.procurement_justification bridge_app UPDATE",
-    }
-    assert not removed["column_acl"]
-    assert {line.split(" ")[1] for line in added["function_acl"]} == {"bridge_owner"}  # trigger functions: nobody
-    assert not removed["function_acl"]
+    } <= added["column_acl"]
+    assert "engagement_nudges bridge_app SELECT" in added["table_acl"]
+    for signature in ("app_nudge_candidates()", "app_record_nudge(uuid,text,text)"):
+        assert f"{signature} bridge_app EXECUTE" in added["function_acl"]
 
 
 def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
@@ -1461,6 +1473,11 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
             held = "SELECT has_table_privilege('bridge_app', :t, :p) OR (:p IN ('INSERT', 'UPDATE')"
             held += " AND has_any_column_privilege('bridge_app', :t, :p))"
             assert not await scalar(owner_engine, held, t=v13_table, p=privilege), f"{v13_table} {privilege}"
+    # revision 0015: the nudges ledger is written only by app_record_nudge and never changes
+    for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
+        held = "SELECT has_table_privilege('bridge_app', 'engagement_nudges', :p) OR (:p IN ('INSERT', 'UPDATE')"
+        held += " AND has_any_column_privilege('bridge_app', 'engagement_nudges', :p))"
+        assert not await scalar(owner_engine, held, p=privilege), f"engagement_nudges {privilege}"
 
 
 async def test_schema_v5_policies_are_exactly_the_notes_and_the_in_app_ones(owner_engine: AsyncEngine) -> None:
@@ -3445,6 +3462,12 @@ V15_TRIGGERS = {
         ROW | BEFORE | ON_INSERT | ON_UPDATE,
     ),
     ("engagements", "engagements_procurement_moved"): ("engagements_procurement_moved", ROW | ON_UPDATE),
+    # the nudges ledger is append-only for every role
+    ("engagement_nudges", "engagement_nudges_no_update_delete"): (
+        "block_mutation",
+        ROW | BEFORE | ON_UPDATE | ON_DELETE,
+    ),
+    ("engagement_nudges", "engagement_nudges_no_truncate"): ("block_mutation", BEFORE | ON_TRUNCATE),
 }
 
 

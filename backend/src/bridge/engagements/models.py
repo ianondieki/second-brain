@@ -79,6 +79,7 @@ from bridge.models.enums import (
     EngagementState,
     IpTerms,
     MilestoneState,
+    NudgeKind,
     OrgRole,
     PaymentMethod,
     ProcurementRoute,
@@ -768,6 +769,39 @@ class CalendarFeed(IdMixin, Base):
     last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
 
 
+# --- Revision 0015 (P28): the nudges ledger (REQ-NOT-05, REQ-NOT-03, REQ-ENG-05; AC-MAIL-2) -------------------------
+
+NUDGE_KINDS = tuple(kind.value for kind in NudgeKind)
+NUDGE_KEY_MAX_CHARS = 120
+# A key is a code the job makes (a business-day count, a milestone id, a date): no free text, address or name fits.
+NUDGE_KEY_VALID = f"key ~ '^[A-Za-z0-9_.:+-]{{1,{NUDGE_KEY_MAX_CHARS}}}$'"
+
+
+class EngagementNudge(IdMixin, Base):
+    """One nudge the job sent (REQ-NOT-05; P28 track B): an escalation to the organisation's admins and escalation
+    contact, a contact-overdue notice (EM6), an NDA or milestone reminder. Recorded before sending, once per
+    engagement, kind and key (``uq_engagement_nudges_engagement_id_kind_key``), so a nudge fires once whatever the job's
+    retries. Written only by ``app_record_nudge(engagement, kind, key)`` (the job, no user bound: true when this call
+    recorded it, false when it was already recorded or the engagement has ended); ``org_id`` is the engagement's and
+    ``sent_at`` the shared clock's. Append-only for every role. Read by the organisation's members only (the latest
+    escalation is the tracker's "Escalated to your admins on ..."), never by the engagement's developer, a member or
+    not, nor by staff."""
+
+    __tablename__ = "engagement_nudges"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "kind", "key"),
+        CheckConstraint(f"kind IN ({', '.join(repr(kind) for kind in NUDGE_KINDS)})", name="kind_known"),
+        CheckConstraint(NUDGE_KEY_VALID, name="key_valid"),
+        ORG_SCOPED,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    kind: Mapped[str] = mapped_column(Text)  # a NudgeKind value
+    key: Mapped[str] = mapped_column(Text)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
 __all__ = [
     "Agreement",
     "CalendarFeed",
@@ -780,6 +814,7 @@ __all__ = [
     "EngagementMessageAttachment",
     "EngagementMessageRead",
     "EngagementNote",
+    "EngagementNudge",
     "EngagementRecommendation",
     "Milestone",
     "PaymentRecord",
