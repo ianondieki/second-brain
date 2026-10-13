@@ -125,5 +125,12 @@ export interface Paywall {
   billing: string;
 }
 
+/**
+ * Sign in again, back to the Team page: lib/return-path's loginHref("/org/team") written out, so the Team page's
+ * script does not take lib/return-path, which the sign-in screens' chunk keeps to itself (team.test.ts checks the two
+ * agree).
+ */
+export const TEAM_SIGN_IN = "/login?next=%2Forg%2Fteam";
+
 /** The organisation pages' "?org=" links for the Team page. */
 export const TEAM_PATH = "/org/team";

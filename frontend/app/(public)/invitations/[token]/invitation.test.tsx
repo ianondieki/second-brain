@@ -197,7 +197,12 @@ describe("Accept and join", () => {
   }
 
   function renderAccept(api: ApiClient) {
-    return renderWithIntl(<AcceptInvitation token={TOKEN} orgName="Telco A (fixture)" client={api} />);
+    return renderWithIntl(<AcceptInvitation
+        token={TOKEN}
+        orgName="Telco A (fixture)"
+        signInHref={`/login?next=%2Forg%2Fjoin%2F${TOKEN}`}
+        client={api}
+      />);
   }
 
   it("joins and opens the organisation's portal", async () => {

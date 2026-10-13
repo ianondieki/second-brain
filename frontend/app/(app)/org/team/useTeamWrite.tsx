@@ -7,11 +7,10 @@ import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 
-import { loginHref } from "@/lib/return-path";
 import { retryWhen } from "@/lib/retry-after";
 
 import type { TeamOutcome, TeamRefusal } from "./calls";
-import type { Paywall } from "./team";
+import { TEAM_SIGN_IN, type Paywall } from "./team";
 
 // The fresh-code form (the tracker's StepUp, with its code field) is a chunk of its own, fetched only when the API asks
 // for it: the page's first load stays under the 150 KB budget (docs/spec/07 item 5).
@@ -154,7 +153,7 @@ export function useTeamWrite({
           {plan ? t("upgradeTo", { plan }) : t("seePlans")}
         </a>
       ) : refused.refusal === "signedOut" ? (
-        <a href={loginHref("/org/team")} className={standaloneLinkClass}>
+        <a href={TEAM_SIGN_IN} className={standaloneLinkClass}>
           {t("signIn")}
         </a>
       ) : refused.refusal === "org_not_verified" ? (

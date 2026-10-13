@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { ApiClient } from "@/lib/api/client";
+import { loginHref } from "@/lib/return-path";
 
 import { teamCalls, teamRefusal } from "./calls";
 import {
@@ -12,6 +13,7 @@ import {
   reviewerChoices,
   roleWords,
   splitRoles,
+  TEAM_SIGN_IN,
   type TeamMember,
 } from "./team";
 
@@ -67,6 +69,12 @@ describe("roles on a row", () => {
     const label = (role: string) => role.charAt(0).toUpperCase() + role.slice(1);
     expect(roleWords(["finance", "reviewer"], label, "en")).toBe("reviewer and finance");
     expect(roleWords(["viewer", "admin", "signatory"], label, "en")).toBe("admin, signatory, and viewer");
+  });
+});
+
+describe("sign in again", () => {
+  it("is lib/return-path's address for the Team page", () => {
+    expect(TEAM_SIGN_IN).toBe(loginHref("/org/team"));
   });
 });
 

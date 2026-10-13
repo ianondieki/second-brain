@@ -5,8 +5,8 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { SelectField } from "@/components/ui/SelectField";
 
+import { TeamSelect } from "./fields";
 import { teamCalls, type TeamCalls } from "./calls";
 import { useTeamWrite } from "./useTeamWrite";
 
@@ -58,7 +58,7 @@ export function EscalationContact({
         </Alert>
       ) : null}
       {write.problem}
-      <SelectField
+      <TeamSelect
         id={`${id}-contact`}
         name="escalation_contact"
         label={t("escalationLabel")}
@@ -75,7 +75,7 @@ export function EscalationContact({
             {member.name}
           </option>
         ))}
-      </SelectField>
+      </TeamSelect>
       <div>
         <Button type="submit" variant="secondary" busy={write.busy} data-save-escalation="">
           {write.busy ? t("saving") : t("saveEscalation")}

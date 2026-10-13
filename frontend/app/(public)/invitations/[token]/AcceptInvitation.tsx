@@ -8,10 +8,8 @@ import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode } from "@/lib/api/error-code";
-import { loginHref } from "@/lib/return-path";
 import { retryAfterSeconds, retryWhen } from "@/lib/retry-after";
 
-import { joinPath } from "./paths";
 
 type Refusal =
   | "mismatch"
@@ -60,10 +58,13 @@ export function acceptRefusal(status: number, error: unknown): Refusal {
 export function AcceptInvitation({
   token,
   orgName,
+  signInHref,
   client = api,
 }: {
   token: string;
   orgName: string;
+  /** Sign in again, back here (built on the server: the sign-in screens keep lib/return-path to themselves). */
+  signInHref: string;
   client?: ApiClient;
 }) {
   const t = useStrings("invitationAccept");
@@ -109,7 +110,7 @@ export function AcceptInvitation({
               {t("openOrg")}
             </a>
           ) : refusal === "signedOut" ? (
-            <a href={loginHref(joinPath(token))} className={standaloneLinkClass}>
+            <a href={signInHref} className={standaloneLinkClass}>
               {t("signIn")}
             </a>
           ) : null}

@@ -5,8 +5,8 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { SelectField } from "@/components/ui/SelectField";
 
+import { TeamSelect } from "./fields";
 import { teamCalls, type TeamCalls } from "./calls";
 import { nicheDefaultsBody, type NicheRow } from "./team";
 import { useTeamWrite } from "./useTeamWrite";
@@ -67,7 +67,7 @@ export function NicheDefaults({
       {rows.map((row) => {
         const current = picked[row.slug] ?? "";
         return (
-          <SelectField
+          <TeamSelect
             key={row.slug}
             id={`${id}-${row.slug}`}
             name={row.slug}
@@ -87,7 +87,7 @@ export function NicheDefaults({
                 {member.name}
               </option>
             ))}
-          </SelectField>
+          </TeamSelect>
         );
       })}
       <div>

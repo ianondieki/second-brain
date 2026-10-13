@@ -7,8 +7,8 @@ import { Alert } from "@/components/ui/Alert";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { FieldError } from "@/components/ui/Field";
 import { Form, SubmitButton } from "@/components/ui/Form";
-import { TextField } from "@/components/ui/TextField";
 
+import { TeamTextInput } from "./fields";
 import { teamCalls, type TeamCalls } from "./calls";
 import type { OrgRole, Paywall } from "./team";
 import { useTeamWrite } from "./useTeamWrite";
@@ -93,7 +93,7 @@ export function InviteForm({
         </Alert>
       ) : null}
       {write.problem}
-      <TextField
+      <TeamTextInput
         id={`${id}-email`}
         type="email"
         name="email"
