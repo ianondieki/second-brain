@@ -285,6 +285,68 @@ async def test_a_public_entity_enters_stage_3_only_through_3b_and_a_private_one_
         assert await t.state_of(conn, private_interest) == "INTEREST_CONFIRMED"
 
 
+ENGAGEMENT_CONTACT = (
+    "SELECT contact_user_id, CAST(contact_channel AS text) AS channel, contact_by FROM engagements WHERE id = :e"
+)
+NAME_CONTACT = "UPDATE engagements SET contact_user_id = :c, contact_channel = 'email', contact_by = :by WHERE id = :e"
+
+
+async def contact_of(conn: AsyncConnection, engagement: UUID) -> tuple[object, ...]:
+    return tuple((await conn.execute(sa.text(ENGAGEMENT_CONTACT), {"e": engagement})).one())
+
+
+async def test_entering_3b_clears_the_contact_by_date_on_both_paths(owner_engine: AsyncEngine) -> None:
+    """No contact-by date during 3b, whichever way the engagement enters it: the signatory's approve (the person and
+    channel named, a date sent too) and the developer's accept of a public entity's interest (whose contact the
+    organisation named with a date, and which the developer may not change) both leave the person and channel and
+    clear the date; so does a resume into 3b after the date was set during a hold, and the owner's insert in 3b. The
+    contact CHECK holds throughout, and the route decision sets the date as it moves the engagement to stage 3."""
+    async with t.as_app(owner_engine) as conn:
+        p, approved = await public_scene(conn)
+        await t.act(conn, p.signatory, p.org)
+        await t.run(conn, NAME_CONTACT, c=p.owner, by=CONTACT_BY, e=approved)
+        await t.append(conn, approved, p.signatory, "signatory", "approve", "UNDER_REVIEW", "PROCUREMENT_ROUTE")
+        assert await contact_of(conn, approved) == (p.owner, "email", None)
+        await decide_and_move(conn, p, approved)
+        assert await contact_of(conn, approved) == (p.owner, "email", CONTACT_BY)  # the decision's date
+
+        await t.as_owner(conn)
+        q = await t.parties(conn)
+        await t.run(conn, "UPDATE organizations SET public_entity = true WHERE id = :org", org=q.org)
+        await t.act(conn, q.signatory, q.org)
+        interest = await t.engage(conn, q, origin="org_browse", state="ORG_INTEREST")
+        await t.run(conn, NAME_CONTACT, c=q.signatory, by=CONTACT_BY, e=interest)
+        await t.act(conn, q.developer)
+        await t.expect(conn, NAME_CONTACT, RLS, c=q.signatory, by=None, e=interest)  # not the developer's to write
+        await t.append(conn, interest, q.developer, "developer", "accept_interest", "ORG_INTEREST", "PROCUREMENT_ROUTE")
+        assert await contact_of(conn, interest) == (q.signatory, "email", None)
+        await t.append(conn, interest, q.developer, "developer", "pause", "PROCUREMENT_ROUTE", "ON_HOLD")
+        await t.act(conn, q.signatory, q.org)
+        await t.run(conn, "UPDATE engagements SET contact_by = :by WHERE id = :e", by=CONTACT_BY, e=interest)
+        await t.act(conn, q.developer)
+        await t.append(conn, interest, q.developer, "developer", "resume", "ON_HOLD", "PROCUREMENT_ROUTE")
+        assert await contact_of(conn, interest) == (q.signatory, "email", None)
+
+        await t.as_owner(conn)
+        r = await t.parties(conn)
+        await t.run(conn, "UPDATE organizations SET public_entity = true WHERE id = :org", org=r.org)
+        inserted = uuid7()
+        await t.run(
+            conn,
+            "INSERT INTO engagements (id, proposal_id, org_id, developer_id, version_id, origin, state,"
+            " contact_user_id, contact_channel, contact_by) VALUES (:id, :p, :org, :dev, :v, 'org_browse',"
+            " 'PROCUREMENT_ROUTE', :c, 'email', :by)",
+            id=inserted,
+            p=r.proposal,
+            org=r.org,
+            dev=r.developer,
+            v=r.version,
+            c=r.owner,
+            by=CONTACT_BY,
+        )
+        assert await contact_of(conn, inserted) == (r.owner, "email", None)
+
+
 async def test_3b_has_the_side_branches_of_stage_3(owner_engine: AsyncEngine) -> None:
     """From PROCUREMENT_ROUTE: a hold and a request for information resume to it; the organisation declines; the
     developer withdraws; the system expires it (each, undecided)."""
@@ -808,6 +870,121 @@ async def test_niche_defaults_are_set_by_admins_for_triage_members(owner_engine:
         assert await t.run(conn, DEFAULTS, org=p.org) == 0  # the admin lost the triage roles, the signatory left
         await t.run(conn, DEFAULT, **default(p, niche, p.reviewer))
         assert await t.rowcount(conn, "DELETE FROM org_niche_defaults WHERE org_id = :org", org=p.org) == 1
+
+
+ASSIGNEE = "SELECT app_niche_default_assignee(:e)"
+NOT_A_PARTY = "the engagement's developer, a member of its organisation or the job with no user bound only"
+
+
+async def set_default(conn: AsyncConnection, org: UUID, niche: UUID, user: UUID) -> None:
+    """As the owner: the organisation's default reviewer for the niche (the guard still judges the user)."""
+    await t.as_owner(conn)
+    await t.run(
+        conn,
+        "INSERT INTO org_niche_defaults (id, org_id, niche_id, user_id) VALUES (:id, :org, :niche, :user)"
+        " ON CONFLICT (org_id, niche_id) DO UPDATE SET user_id = EXCLUDED.user_id",
+        id=uuid7(),
+        org=org,
+        niche=niche,
+        user=user,
+    )
+
+
+async def assignee(conn: AsyncConnection, engagement: UUID, user: UUID | None, org: UUID | None = None) -> object:
+    await t.act(conn, user, org)
+    return await t.run(conn, ASSIGNEE, e=engagement)
+
+
+async def test_a_new_engagement_finds_its_niche_default_through_the_definer(owner_engine: AsyncEngine) -> None:
+    """``app_niche_default_assignee``: the developer who opened the engagement (who reads neither the defaults nor the
+    roster), a member of the organisation and the job with no user bound learn the organisation's default for the
+    version's niche, else for its parent; NULL once the engagement left SUBMITTED, once it had an assignment (live or
+    closed), and when the default is the engagement's developer, not an active member or not a triage member (a
+    default that fails is not replaced by the parent's). A bound user who is neither the developer nor a member is
+    refused, an unknown engagement too; with no user bound an unknown engagement is NULL."""
+    async with t.as_app(owner_engine) as conn:
+        p = await t.parties(conn)
+        niche = await t.run(conn, "SELECT niche_id FROM proposal_versions WHERE id = :v", v=p.version)
+        parent = await add_niche(conn)
+        await t.run(conn, "UPDATE niches SET parent_id = :parent WHERE id = :n", parent=parent, n=niche)
+        await t.act(conn, p.developer)
+        engagement = await t.engage(conn, p)
+        for caller, org in ((p.developer, None), (p.viewer, p.org), (None, None)):
+            assert await assignee(conn, engagement, caller, org) is None, caller  # no default yet
+        await set_default(conn, p.org, parent, p.signatory)  # the parent's default: the fallback
+        for caller, org in ((p.developer, None), (p.viewer, p.org), (None, None)):
+            assert await assignee(conn, engagement, caller, org) == p.signatory, caller
+        await set_default(conn, p.org, niche, p.reviewer)  # the niche's own default wins
+        assert await assignee(conn, engagement, p.developer) == p.reviewer
+        for refused, org in ((p.other_member, p.other_org), (p.outsider, None), (p.staff, None)):
+            await t.act(conn, refused, org)
+            await t.expect(conn, ASSIGNEE, NOT_A_PARTY, e=engagement)
+            await t.expect(conn, ASSIGNEE, NOT_A_PARTY, e=uuid7())
+        assert await assignee(conn, uuid7(), None) is None
+
+        # a default that fails is not replaced by the parent's: the guard and the seat-clearing are switched off in
+        # this rolled-back transaction to leave a viewer's and a leaver's default behind
+        await t.as_owner(conn)
+        await t.run(conn, "ALTER TABLE org_niche_defaults DISABLE TRIGGER org_niche_defaults_guard")
+        await t.run(conn, "ALTER TABLE memberships DISABLE TRIGGER memberships_clear_team_seats")
+        await set_default(conn, p.org, niche, p.viewer)
+        assert await assignee(conn, engagement, None) is None  # not a triage member
+        await set_default(conn, p.org, niche, p.reviewer)
+        await t.as_owner(conn)
+        await t.run(
+            conn, "UPDATE memberships SET status = 'removed' WHERE org_id = :o AND user_id = :u", o=p.org, u=p.reviewer
+        )
+        assert await assignee(conn, engagement, None) is None  # not an active member
+        await t.as_owner(conn)
+        await t.run(
+            conn, "UPDATE memberships SET status = 'active' WHERE org_id = :o AND user_id = :u", o=p.org, u=p.reviewer
+        )
+        await t.run(conn, "ALTER TABLE org_niche_defaults ENABLE TRIGGER org_niche_defaults_guard")
+        await t.run(conn, "ALTER TABLE memberships ENABLE TRIGGER memberships_clear_team_seats")
+        assert await assignee(conn, engagement, None) == p.reviewer
+
+        await t.act(conn, p.signatory, p.org)  # an assignment, then closed: never again
+        await t.run(
+            conn,
+            "INSERT INTO engagement_assignments (id, engagement_id, org_id, assignee_user_id, assigned_by)"
+            " VALUES (:id, :e, :org, :a, :a)",
+            id=uuid7(),
+            e=engagement,
+            org=p.org,
+            a=p.signatory,
+        )
+        assert await assignee(conn, engagement, None) is None
+        await t.act(conn, p.signatory, p.org)
+        await t.run(
+            conn, "UPDATE engagement_assignments SET unassigned_at = now() WHERE engagement_id = :e", e=engagement
+        )
+        assert await assignee(conn, engagement, None) is None  # closed, still had one
+
+        await t.as_owner(conn)
+        q = await t.parties(conn)  # stage 0 counts; a later stage does not; the developer is never their own reviewer
+        q_niche = await t.run(conn, "SELECT niche_id FROM proposal_versions WHERE id = :v", v=q.version)
+        await t.act(conn, q.signatory, q.org)
+        interest = await t.engage(conn, q, origin="org_browse", state="ORG_INTEREST")
+        await set_default(conn, q.org, q_niche, q.reviewer)
+        assert await assignee(conn, interest, q.developer) == q.reviewer
+        await t.as_owner(conn)
+        r = await t.parties(conn)
+        r_niche = await t.run(conn, "SELECT niche_id FROM proposal_versions WHERE id = :v", v=r.version)
+        await t.act(conn, r.developer)
+        reviewed = await t.engage(conn, r)
+        await set_default(conn, r.org, r_niche, r.reviewer)
+        await t.walk(conn, r, reviewed, "UNDER_REVIEW")
+        assert await assignee(conn, reviewed, r.developer) is None  # no longer SUBMITTED
+        await t.as_owner(conn)
+        own = await t.parties(conn)
+        own_niche = await t.run(conn, "SELECT niche_id FROM proposal_versions WHERE id = :v", v=own.version)
+        await t.act(conn, own.developer)
+        mine = await t.engage(conn, own)  # then the developer joins the organisation and is made its default
+        await t.as_owner(conn)
+        await t.member(conn, own.org, own.developer, "{reviewer}")
+        await set_default(conn, own.org, own_niche, own.developer)
+        assert await assignee(conn, mine, own.developer) is None
+        assert await assignee(conn, mine, None) is None
 
 
 async def test_the_escalation_contact_is_the_members_own_and_leaves_with_them(owner_engine: AsyncEngine) -> None:

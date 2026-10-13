@@ -634,6 +634,7 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "app_org_is_public_entity(uuid)": (True, {"bridge_app"}),  # the state machine's facts (public information)
     "app_accept_invitation(bytea, uuid)": (True, {"bridge_app"}),  # the signed-in invitee, for themselves
     "app_invitation_preview(bytea)": (True, {"bridge_app"}),  # the public preview: the hash is the capability
+    "app_niche_default_assignee(uuid)": (True, {"bridge_app"}),  # the developer, a member or the job: a user id only
     "org_escalation_contacts_guard()": (False, set()),  # SECURITY INVOKER: the writer's RLS reads the roster
     "org_niche_defaults_guard()": (False, set()),  # likewise
     "invitations_guard()": (False, set()),
@@ -920,6 +921,7 @@ def assert_v15_changes(at_0014: dict[str, list[str]], at_0015: dict[str, list[st
         "app_org_is_public_entity(uuid)",
         "app_accept_invitation(bytea,uuid)",
         "app_invitation_preview(bytea)",
+        "app_niche_default_assignee(uuid)",
         "org_escalation_contacts_guard()",
         "org_niche_defaults_guard()",
         "invitations_guard()",
@@ -950,6 +952,7 @@ FUNCTION_GRANTS_V15 = (
     "app_org_is_public_entity(uuid)",
     "app_accept_invitation(bytea,uuid)",
     "app_invitation_preview(bytea)",
+    "app_niche_default_assignee(uuid)",
 )
 
 
