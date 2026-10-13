@@ -8,7 +8,9 @@ RLS). In-app is always on and is never looked up here.
 ``CATALOGUE`` lists the kinds a person sets on the notification settings page (``bridge.notifications.
 preferences_router``), each with its channel and its default, plus the in-app kinds registered alongside them (always
 on, never settable): P21's saved-search alerts (D-57 (7)), the daily in-app ``saved_search_match`` and the opt-in
-``saved_search_digest`` email, off until the person turns it on.
+``saved_search_digest`` email, off until the person turns it on. P28 (REQ-NOT-05) adds the tracker's N05 emails
+(escalations of first contact and of the procurement route, EM6 Contact overdue, the procurement route chosen) and N12's
+(a milestone review escalated), both on by default; N07's EM5 (a signature needed) is 🔒 and never offered.
 """
 
 from __future__ import annotations
@@ -26,6 +28,8 @@ from bridge.notifications.models import NotificationPreference
 SAVED_SEARCH_MATCH: Final = "saved_search_match"  # in-app, once per saved search and day (P21 track C)
 SAVED_SEARCH_DIGEST: Final = "saved_search_digest"  # the day's saved-search counts by email, opt-in (P21 track C)
 ENGAGEMENT_MESSAGE: Final = "engagement.n18"  # N18, a new message on an engagement: its email is mutable (P21 track A)
+ENGAGEMENT_CONTACT: Final = "engagement.n05"  # N05: escalations, EM6, the route chosen (P28 track B; mutable)
+ENGAGEMENT_MILESTONES: Final = "engagement.n12"  # N12: a milestone review escalated (P28 track B; mutable)
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +42,7 @@ class KindInfo:
     default: bool
     label: str  # the settings page's line [[COPY-REVIEW]]
     developer_only: bool = False  # offered only to someone with a developer profile
+    org_only: bool = False  # offered only to an active member of an organisation
 
 
 CATALOGUE: Final[tuple[KindInfo, ...]] = (
@@ -63,6 +68,21 @@ CATALOGUE: Final[tuple[KindInfo, ...]] = (
         mutable=True,
         default=True,
         label="A new message on an engagement, by email (at most one per engagement every 30 minutes)",
+    ),
+    KindInfo(
+        ENGAGEMENT_CONTACT,
+        NotificationChannel.EMAIL,
+        mutable=True,
+        default=True,
+        label="First contact or a procurement route running late, and the route a public body chose, by email",
+    ),
+    KindInfo(
+        ENGAGEMENT_MILESTONES,
+        NotificationChannel.EMAIL,
+        mutable=True,
+        default=True,
+        label="A milestone waiting too long for your organisation's review, by email",
+        org_only=True,
     ),
 )
 _BY_KEY: Final = {(info.kind, info.channel): info for info in CATALOGUE}
