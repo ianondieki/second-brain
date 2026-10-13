@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.audit.service import record as audit
 from bridge.auth.models import User
-from bridge.engagements import chain, documents, prior_knowledge, team
+from bridge.engagements import chain, documents, nudges, prior_knowledge, team
 from bridge.engagements import state_machine as sm
 from bridge.engagements.calendar import add_business_days, local_date
 from bridge.engagements.commands import agreement_document
@@ -504,11 +504,13 @@ async def detail(
             ip_nudge=await ip_nudge(db, engagement, actions),
         )
     team_facts = await team.team_facts(db, engagement.org_id, [engagement.id], party.user_id)
+    stage = None if engagement.state in sm.TERMINAL else loaded.facts.paused_from or engagement.state
     return OrgEngagementDetail(
         **shared,
         my_party=EngagementParty.ORG,
         team=team_facts.get(engagement.id),
         prior_knowledge=await prior_knowledge.for_org(db, engagement, party.org_roles, sm.platform_day(now)),
+        escalated_at=await nudges.escalated_at(db, engagement, stage),
     )
 
 

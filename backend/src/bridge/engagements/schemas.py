@@ -539,7 +539,8 @@ class DeveloperPriorKnowledgeOut(BaseModel):
 
 
 class DeveloperEngagementDetail(EngagementDetail):
-    """The developer's tracker (no organisation triage: D-68)."""
+    """The developer's tracker (no organisation triage, D-68; no escalation flag: the nudges ledger is the
+    organisation's)."""
 
     my_party: Literal[EngagementParty.DEVELOPER]
     prior_knowledge: DeveloperPriorKnowledgeOut | None = Field(
@@ -559,6 +560,12 @@ class OrgEngagementDetail(EngagementDetail):
     team: TeamFacts | None = Field(default=None, description="The organisation's triage (always sent to a member)")
     prior_knowledge: OrgPriorKnowledgeOut | None = Field(
         default=None, description="The organisation's declaration window (always sent to a member)"
+    )
+    escalated_at: datetime | None = Field(
+        default=None,
+        description="When the nudge job last escalated the current stage to the organisation's admins and escalation"
+        " contact (first contact late or overdue, the procurement route or a milestone review waiting); null when it"
+        " has not. The organisation's own: never on the developer's tracker",
     )
 
 
