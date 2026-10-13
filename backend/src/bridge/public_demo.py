@@ -1,0 +1,92 @@
+"""The public demo's switches, present in every image (REQ-FND-04; docs/platform/tasks/P28.md track PD; D-71).
+
+``PUBLIC_DEMO=true`` (``bridge.config``; refused at start-up unless ``APP_ENV`` is set explicitly to dev or test) makes
+the deployment a public demo that anyone may open:
+
+- **The personas.** ``GET /api/public/demo`` (``status``) lists them, and ``POST /api/auth/demo/sign-in`` signs a
+  visitor in as one with a single press. Both come from ``bridge.demo.public_access`` (``PERSONA_MODULE``), which the
+  backend image deletes unless built with ``WITH_DEV_TOOLS=true`` (``backend/Dockerfile`` removes ``src/bridge/demo``),
+  and which is used only while ``PUBLIC_DEMO`` is on and ``APP_ENV`` is dev or test (``persona_module``). A production
+  image has no persona code at all, a production process refuses ``PUBLIC_DEMO``, and an image without the module
+  answers ``enabled: false`` and 404 for the sign-in.
+- **The lock.** ``refuse_in_public_demo`` (``LOCKED``, applied by route) answers 403 ``public_demo_locked`` on every
+  route that would let one visitor lock the others out of a shared persona or put a file on the server: sign-up,
+  magic-link and verification requests (no link could be read; spending one stays open), password changes, two-step
+  sign-in (enrol, cancel, confirm, recovery codes, disable), OAuth (start, callback, unlinking), organisation role
+  changes, every upload (proposal and message attachments, the file check of ``/api/verify``) and the dev/test clock's
+  move. The password sign-in, the second step and sign-out stay open. ``tests/unit/test_public_demo_lock.py`` walks
+  the app's routes and fails when a route that takes a file is not locked.
+- **Not indexed.** Every API answer carries ``X-Robots-Tag: noindex, nofollow`` (``ROBOTS_HEADERS``, ``bridge.main``).
+- **Fictional content.** With ``PUBLIC_DEMO_CONTENT=fictional`` (the default) the seed loads only fictional
+  organisations and official-source research excerpts (``fictional_only``; ``bridge.seed.directory`` and
+  ``bridge.seed.demo.research``).
+"""
+
+from __future__ import annotations
+
+import importlib
+import importlib.util
+from types import ModuleType
+from typing import Final
+
+from fastapi import APIRouter, Depends
+
+from bridge.auth.deps import SettingsDep
+from bridge.config import DEMO_ENVS, Settings
+from bridge.errors import ApiError
+from bridge.public.schemas import DemoPersona, PublicDemo
+
+PERSONA_MODULE: Final = "bridge.demo.public_access"
+LOCKED_CODE: Final = "public_demo_locked"
+LOCKED_MESSAGE: Final = "This is switched off in the public demo."  # [[COPY-REVIEW]]
+ROBOTS_HEADERS: Final = {"X-Robots-Tag": "noindex, nofollow"}
+OFF: Final = PublicDemo(enabled=False, personas=[], reset_hour_eat=None)
+
+
+async def refuse_in_public_demo(settings: SettingsDep) -> None:
+    """403 ``public_demo_locked`` while ``PUBLIC_DEMO`` is on; nothing otherwise. A route dependency, so it answers
+    before the route reads a body, a session or a file."""
+    if settings.public_demo:
+        raise ApiError(403, LOCKED_CODE, LOCKED_MESSAGE)
+
+
+LOCKED: Final = Depends(refuse_in_public_demo)
+
+
+def fictional_only(settings: Settings) -> bool:
+    """Whether the seed loads fictional content only: ``PUBLIC_DEMO`` on with ``PUBLIC_DEMO_CONTENT=fictional``. Then
+    the provisional directory of real organisations and the research cards that cite a non-official excerpt (news,
+    D-38) are left out; ``full``, or the mode off, changes nothing."""
+    return settings.public_demo and settings.public_demo_content == "fictional"
+
+
+def persona_module(settings: Settings) -> ModuleType | None:
+    """``bridge.demo.public_access`` where the public demo runs (``PUBLIC_DEMO`` on, ``APP_ENV`` dev or test) and the
+    image carries it; None everywhere else."""
+    if not settings.public_demo or settings.app_env not in DEMO_ENVS:
+        return None
+    try:
+        if importlib.util.find_spec(PERSONA_MODULE) is None:
+            return None
+    except ModuleNotFoundError:  # bridge.demo itself is absent (a production image)
+        return None
+    return importlib.import_module(PERSONA_MODULE)
+
+
+def persona_router(settings: Settings) -> APIRouter | None:
+    """The persona sign-in router (``POST /api/auth/demo/sign-in``), or None where the public demo does not run."""
+    module = persona_module(settings)
+    if module is None:
+        return None
+    router: APIRouter = module.build_router(settings)
+    return router
+
+
+def status(settings: Settings) -> PublicDemo:
+    """What ``GET /api/public/demo`` answers: the personas while the public demo runs, else ``OFF``."""
+    module = persona_module(settings)
+    if module is None:
+        return OFF
+    personas: list[DemoPersona] = module.personas()
+    reset_hour: int = module.RESET_HOUR_EAT
+    return PublicDemo(enabled=True, personas=personas, reset_hour_eat=reset_hour)
