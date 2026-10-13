@@ -24,6 +24,7 @@ The database is the module's own: the demo seed's rows would disturb other tests
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -49,7 +50,7 @@ from bridge.notifications.email import FakeEmailProvider
 from bridge.seed.demo import DemoReport, DemoRuntime, seed_demo
 from bridge.seed.demo.data import AMINA, DEMO_PASSWORD, ORGS, P1, P2, STAFF_ADMIN, TELCO_A
 from bridge.seed.demo.proposals import _draft
-from bridge.seed.demo.research import OFFICIAL_ANSWERS, SEEDED_ANSWERS
+from bridge.seed.demo.research import OFFICIAL_ANSWERS, SEEDED_ANSWERS, SeededExampleClient
 from bridge.seed.directory import directory_loadable, load_directory, seed_directory
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
@@ -119,7 +120,40 @@ async def seed(owner: AsyncEngine, app: AsyncEngine, settings: Settings) -> Seed
 
 @pytest.fixture(scope="module")
 async def fictional(owner: AsyncEngine, app: AsyncEngine) -> Seeded:
-    return await seed(owner, app, public())
+    """The fictional public seed, recording the excerpt ids each seeded research run sent (``SENT``)."""
+    original = SeededExampleClient.complete
+
+    async def recording(self: SeededExampleClient, task: str, messages: Any, schema: Any, **kwargs: Any) -> Any:
+        texts = " ".join(getattr(part, "value", "") for message in messages for part in message.parts)
+        SENT.append(set(re.findall(r"id: ([a-z][a-z0-9-]*)", texts)))
+        return await original(self, task, messages, schema, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(SeededExampleClient, "complete", recording)
+        return await seed(owner, app, public())
+
+
+SENT: list[set[str]] = []  # per seeded research run of the fictional seed: the excerpt ids its "model" was sent
+# What a rerun must not add to (sessions, sign-in attempts and audit events grow with every sign-in, so not those).
+SEEDED_TABLES = (
+    "users",
+    "organizations",
+    "memberships",
+    "proposals",
+    "proposal_versions",
+    "problems",
+    "problem_sources",
+    "research_runs",
+    "engagements",
+    "engagement_messages",
+    "tags",
+    "signal_events",
+    "saved_searches",
+    "quiz_sets",
+    "quiz_attempts",
+    "events",
+    "trend_cards",
+)
 
 
 async def rows(engine: AsyncEngine, sql: str, **params: object) -> list[Any]:
@@ -174,6 +208,9 @@ async def test_the_fictional_public_seed_has_no_real_organisation_and_no_news_ex
         )
     ]
     assert await scalar(owner, "SELECT count(*) FROM research_runs") == 1
+    # The run was sent the official excerpts a fictional run may use, and nothing else (catalogue_for, not the full
+    # catalogue, whose freshest SACCO excerpts are news).
+    assert [{"ke-sac-003", "ke-sac-004", "ke-sac-005"}] == SENT
     assert (
         f"research cards: {len(SEEDED_ANSWERS)} citing news excerpts left out of the public demo, with"
         f" {len(OFFICIAL_ANSWERS)} citing official excerpts only in their place (PUBLIC_DEMO_CONTENT=full seeds the"
@@ -195,6 +232,22 @@ async def test_the_fictional_public_seed_has_no_real_organisation_and_no_news_ex
     )
     assert len(personas) == 7
     assert all((p.demo_account, p.status, p.totp) == (True, "active", True) for p in personas)
+
+
+async def test_seeding_the_fictional_demo_again_changes_nothing(
+    fictional: Seeded, owner: AsyncEngine, app: AsyncEngine
+) -> None:
+    """The image seeds on every boot of a wiped database, and a rerun on a seeded one tops nothing up."""
+
+    async def counts() -> dict[str, int]:
+        return {table: int(await scalar(owner, f"SELECT count(*) FROM {table}")) for table in SEEDED_TABLES}
+
+    before = await counts()
+    directory, report = await seed(owner, app, public())
+    assert directory is None
+    assert report.created == []
+    assert await counts() == before
+    assert len(SENT) == 1  # no second research run
 
 
 # ------------------------------------------------------------------------------------------------------------ AT-PD-1
@@ -496,10 +549,12 @@ async def test_the_persona_allowlist_is_the_only_way_in(fictional: Seeded, app: 
         assert (await client.get("/api/auth/me")).status_code == 401
 
 
-async def test_the_admin_api_lists_official_excerpts_only(fictional: Seeded, app: AsyncEngine) -> None:
+async def test_the_admin_api_lists_official_excerpts_only(
+    fictional: Seeded, app: AsyncEngine, owner: AsyncEngine
+) -> None:
     """Even a staff admin (who cannot sign in to the public demo; signed in directly here) sees only the official
-    excerpts there, and starts no run (staff writes are locked; ``test_public_demo_content`` shows a niche without
-    official excerpts is refused); with the mode off every saved excerpt is listed."""
+    excerpts there, and neither starts a run nor decides a card (staff writes are locked; ``test_public_demo_content``
+    shows a niche without official excerpts is refused); with the mode off every saved excerpt is listed."""
     _, report = fictional
     admin = report.users[STAFF_ADMIN.email]
     async with visitor(app, ip="41.90.3.5") as client:
@@ -509,6 +564,10 @@ async def test_the_admin_api_lists_official_excerpts_only(fictional: Seeded, app
         assert len(sources["excerpts"]) == 6
         locked = await client.post("/api/admin/research/runs", json={"niche": "health", "country": "KE"})
         assert (locked.status_code, locked.json()) == (403, {"detail": LOCKED})  # staff start nothing here
+        card = await scalar(owner, "SELECT p.id FROM problems p JOIN research_runs r ON r.id = p.research_run_id")
+        decided = await client.post(f"/api/admin/research/candidates/{card}/decision", json={"decision": "reject"})
+        assert (decided.status_code, decided.json()) == (403, {"detail": LOCKED})  # nor decide a card
+        assert await scalar(owner, "SELECT status::text FROM problems WHERE id = :p", p=card) == "published"
     async with visitor(app, get_settings(), ip="41.90.3.6") as client:
         await sign_in_as(client, app, admin, mfa_verified=True)
         assert len((await client.get("/api/admin/research/sources")).json()["excerpts"]) == 19

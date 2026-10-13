@@ -15,6 +15,7 @@ from typing import Any, cast
 from uuid import UUID
 
 import pytest
+import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.config import Settings, fictional_only, get_settings
@@ -23,7 +24,15 @@ from bridge.problems.research import checks
 from bridge.problems.research.pipeline import RunRefused, start_run
 from bridge.problems.research.policy import get_research_policy
 from bridge.problems.research.runtime import ResearchRuntime
-from bridge.problems.research.sources import Catalogue, catalogue_for, get_catalogue, load_catalogue, official_only
+from bridge.problems.research.sources import (
+    TREND_EXCERPTS_FILE,
+    Catalogue,
+    CatalogueKind,
+    catalogue_for,
+    get_catalogue,
+    load_catalogue,
+    official_only,
+)
 from bridge.seed.demo.research import (
     OFFICIAL_ANSWERS,
     SEEDED_ANSWERS,
@@ -157,3 +166,13 @@ async def test_a_niche_without_official_excerpts_cannot_be_run_in_the_fictional_
     with pytest.raises(RunRefused, match="no_saved_excerpts"):
         await start_run(db, user_id=UUID(int=1), niche_slug="health", country="KE", catalogue=catalogue_for(public()))
     assert "health" in catalogue_for(public(public_demo_content="full")).niches("KE")
+
+
+def test_every_trend_excerpt_is_an_official_source() -> None:
+    """Trends read ``trend_excerpts.yaml`` without the fictional filter (every technology publisher on the TECH
+    allowlist is official): a news trend excerpt fails here before it could reach the public demo."""
+    trends = load_catalogue(kind=CatalogueKind.TRENDS)
+    assert trends.excerpts
+    assert {e.source_type for e in trends.excerpts} == {"official"}
+    raw = yaml.safe_load(TREND_EXCERPTS_FILE.read_text(encoding="utf-8"))["excerpts"]
+    assert {item["source_type"] for item in raw} == {"official"}
