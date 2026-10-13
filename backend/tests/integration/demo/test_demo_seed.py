@@ -396,7 +396,7 @@ async def test_the_fixture_organisations_have_their_levels_seats_and_terms(
                 owner,
                 "SELECT legal_name, verification::text AS level, verified_domain::text AS domain, county_code,"
                 " (SELECT array_agg(n.slug::text) FROM org_niches o JOIN niches n ON n.id = o.niche_id"
-                "  WHERE o.org_id = organizations.id) AS niches"
+                "  WHERE o.org_id = organizations.id) AS niches, public_entity"
                 " FROM organizations WHERE id = :id",
                 id=report.orgs[org.legal_name],
             )
@@ -408,6 +408,7 @@ async def test_the_fixture_organisations_have_their_levels_seats_and_terms(
             org.county,
             [org.niche],
         )
+        assert found.public_entity is (org is COUNTY_C)  # P28: the county government is a public entity
         members = {
             email: sorted(roles)
             for email, roles in await rows(

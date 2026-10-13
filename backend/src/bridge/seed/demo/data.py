@@ -80,6 +80,7 @@ class DemoOrg:
     county: str  # ISO 3166-2:KE code
     owner: DemoSeat | None  # signs the organisation up (owner and admin); None for E0
     seats: tuple[DemoSeat, ...] = ()
+    public_entity: bool = False  # a public body: its approvals go through the procurement route (3b, REQ-ENG-06)
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +211,7 @@ COUNTY_C = DemoOrg(
     niche="county-government",
     county="KE-32",
     owner=_seat("county-c.example", "owner", "Hassan Abdi", OrgRole.OWNER, OrgRole.ADMIN),
+    public_entity=True,  # a county government (P28): its E2 claim asks for the same
 )
 NGO_D = DemoOrg(
     legal_name="NGO D (fixture)",
