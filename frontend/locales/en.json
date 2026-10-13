@@ -4677,8 +4677,14 @@
       "notAllowed": "Only an owner or admin can change the team, and only an owner can change roles.",
       "notFound": "That is no longer here. The page is up to date now.",
       "network": "No connection. Try again.",
-      "generic": "Something went wrong. Try again."
-    }
+      "generic": "Something went wrong. Try again.",
+      "org_not_verified": "Inviting people opens once your organisation is verified.",
+      "plan_limit": "Every seat on your plan is taken. A plan with more seats lets you invite someone else.",
+      "plan_limitUpgrade": "Every seat on your plan is taken. {plan} has more."
+    },
+    "upgradeTo": "Upgrade to {plan}",
+    "seePlans": "See plans",
+    "verificationHelp": "How verification works"
   },
   "invitation": {
     "pageTitle": "Invitation",
@@ -4700,6 +4706,7 @@
     "accept": "Accept and join",
     "accepting": "Joining…",
     "openOrg": "Open your organisation",
+    "signIn": "Sign in again",
     "refusal": {
       "mismatch": "This invitation is for a different email address. Sign in with the address it was sent to, then open the link again.",
       "gone": "This invitation link no longer works. Ask the person who invited you for a new one.",
@@ -4707,7 +4714,9 @@
       "locked": "Accepting invitations is switched off in the public demo.",
       "signedOut": "Your session ended. Sign in again to accept.",
       "network": "No connection. Try again.",
-      "generic": "Something went wrong. Try again."
+      "generic": "Something went wrong. Try again.",
+      "seats": "{org} has no free seat on its plan just now. Ask the person who invited you.",
+      "rateLimited": "Too many tries just now. Wait a minute, then try again."
     }
   }
 }

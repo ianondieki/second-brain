@@ -1,5 +1,6 @@
 import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode, detailOf } from "@/lib/api/error-code";
+import { upgradePlanOf } from "@/lib/billing/upgrade";
 
 import type { OrgRole } from "./team";
 
@@ -15,6 +16,8 @@ export type TeamRefusal =
   | "already_member"
   | "already_invited"
   | "too_many_invitations"
+  | "org_not_verified"
+  | "plan_limit"
   | "protected_role"
   | "invitation_closed"
   | "protected_member"
@@ -35,6 +38,8 @@ const BY_CODE: Record<string, TeamRefusal> = {
   already_member: "already_member",
   already_invited: "already_invited",
   too_many_invitations: "too_many_invitations",
+  org_not_verified: "org_not_verified",
+  plan_limit: "plan_limit",
   protected_role: "protected_role",
   invitation_closed: "invitation_closed",
   protected_member: "protected_member",
@@ -52,6 +57,7 @@ const BY_CODE: Record<string, TeamRefusal> = {
 export function teamRefusal(status: number, error: unknown): TeamRefusal {
   const code = apiErrorCode(error);
   if (code && code in BY_CODE) return BY_CODE[code];
+  if (status === 402) return "plan_limit";
   if (status === 404) return "notFound";
   if (status === 403) return "notAllowed";
   if (status === 429) return "rate_limited";
@@ -60,7 +66,14 @@ export function teamRefusal(status: number, error: unknown): TeamRefusal {
 
 export type TeamOutcome<T = null> =
   | { ok: true; value: T }
-  | { ok: false; refusal: TeamRefusal; /** too_many_invitations: the cap the API names. */ limit?: number };
+  | {
+      ok: false;
+      refusal: TeamRefusal;
+      /** too_many_invitations: the cap the API names. */
+      limit?: number;
+      /** plan_limit (the plan's seats, 402): the next plan up that has more, as the API names it. */
+      upgrade?: string;
+    };
 
 async function settle<T>(
   call: Promise<{ data?: T; error?: unknown; response: Response }>,
@@ -69,7 +82,13 @@ async function settle<T>(
     const { data, error, response } = await call;
     if (response.ok) return { ok: true, value: data ?? null };
     const limit = detailOf(error)?.limit;
-    return { ok: false, refusal: teamRefusal(response.status, error), ...(typeof limit === "number" ? { limit } : {}) };
+    const upgrade = response.status === 402 ? upgradePlanOf(error) : null;
+    return {
+      ok: false,
+      refusal: teamRefusal(response.status, error),
+      ...(typeof limit === "number" ? { limit } : {}),
+      ...(upgrade ? { upgrade } : {}),
+    };
   } catch {
     return { ok: false, refusal: "network" };
   }

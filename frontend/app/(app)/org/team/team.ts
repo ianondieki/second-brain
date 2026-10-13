@@ -43,6 +43,12 @@ export function splitRoles(roles: readonly OrgRole[]): { chips: OrgRole[]; rest:
   return { chips: sorted.slice(0, ROLE_CHIPS), rest: sorted.slice(ROLE_CHIPS) };
 }
 
+/** "reviewer and finance": role names as words in a sentence, most powerful first, in the page's language. */
+export function roleWords(roles: readonly OrgRole[], label: (role: OrgRole) => string, locale: string): string {
+  const words = sortRoles(roles).map((role) => label(role).toLocaleLowerCase(locale));
+  return new Intl.ListFormat(locale, { type: "conjunction" }).format(words);
+}
+
 /** Owners and admins manage the team: invitations, removals, niche defaults, the escalation contact. */
 export function manages(roles: readonly string[]): boolean {
   return roles.includes("owner") || roles.includes("admin");

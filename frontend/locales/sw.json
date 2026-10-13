@@ -4677,8 +4677,14 @@
       "notAllowed": "Ni mmiliki au msimamizi tu anayeweza kubadilisha timu, na ni mmiliki tu anayeweza kubadilisha majukumu.",
       "notFound": "Hicho hakipo tena. Ukurasa sasa ni wa kisasa.",
       "network": "Hakuna muunganisho. Jaribu tena.",
-      "generic": "Kuna tatizo. Jaribu tena."
-    }
+      "generic": "Kuna tatizo. Jaribu tena.",
+      "org_not_verified": "Kualika watu kunafunguka shirika lenu likishathibitishwa.",
+      "plan_limit": "Nafasi zote za mpango wenu zimejaa. Mpango wenye nafasi zaidi utakuwezesha kumwalika mtu mwingine.",
+      "plan_limitUpgrade": "Nafasi zote za mpango wenu zimejaa. {plan} una nafasi zaidi."
+    },
+    "upgradeTo": "Pandisha hadi {plan}",
+    "seePlans": "Tazama mipango",
+    "verificationHelp": "Jinsi uthibitishaji unavyofanya kazi"
   },
   "invitation": {
     "pageTitle": "Mwaliko",
@@ -4700,6 +4706,7 @@
     "accept": "Kubali na ujiunge",
     "accepting": "Inajiunga…",
     "openOrg": "Fungua shirika lako",
+    "signIn": "Ingia tena",
     "refusal": {
       "mismatch": "Mwaliko huu ni wa anwani nyingine ya barua pepe. Ingia kwa anwani ambayo ulitumwa kwake, kisha ufungue kiungo tena.",
       "gone": "Kiungo hiki cha mwaliko hakifanyi kazi tena. Muombe aliyekualika akutumie kingine.",
@@ -4707,7 +4714,9 @@
       "locked": "Kukubali mialiko kumezimwa katika onyesho la umma.",
       "signedOut": "Muda wa kuingia umekwisha. Ingia tena ili ukubali.",
       "network": "Hakuna muunganisho. Jaribu tena.",
-      "generic": "Kuna tatizo. Jaribu tena."
+      "generic": "Kuna tatizo. Jaribu tena.",
+      "seats": "{org} haina nafasi wazi katika mpango wake kwa sasa. Muulize aliyekualika.",
+      "rateLimited": "Majaribio mengi mno kwa sasa. Subiri dakika moja, kisha ujaribu tena."
     }
   }
 }

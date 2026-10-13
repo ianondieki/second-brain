@@ -18,7 +18,9 @@ const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+$/;
 
 /**
  * "Invite someone" (REQ-TEN-02): a work email and the roles to give, then Send (the page's one primary action). The
- * API emails a link valid for 7 days; the open invitations below are read again. An admin who is not an owner is
+ * API emails a link valid for 7 days; the open invitations below are read again. Refused for the plan's seats (402
+ * plan_limit), the line names the plan with more and links to its checkout; refused before the organisation is
+ * verified (403 org_not_verified), it says so and points to how verification works. An admin who is not an owner is
  * offered the roles they may give only (owner and signatory are an owner's to give). A fresh second factor asked for
  * first takes the form's place, then the invitation is sent.
  */
@@ -26,18 +28,21 @@ export function InviteForm({
   orgId,
   roles,
   enrolled,
+  planNames = {},
   calls,
 }: {
   orgId: string;
   /** The roles this person may give, most powerful first (team.ts grantableRoles). */
   roles: readonly OrgRole[];
   enrolled: boolean;
+  /** The organisation plans' names by code, for the seats paywall's "Upgrade to {plan}" (402 plan_limit). */
+  planNames?: Readonly<Record<string, string>>;
   calls?: TeamCalls;
 }) {
   const t = useStrings("teamAdmin");
   const id = useId();
   const api = calls ?? teamCalls(orgId);
-  const write = useTeamWrite({ enrolled, primary: true });
+  const write = useTeamWrite({ enrolled, primary: true, paywall: { orgId, names: planNames } });
   const [email, setEmail] = useState("");
   const [chosen, setChosen] = useState<ReadonlySet<OrgRole>>(new Set());
   const [errors, setErrors] = useState<{ email?: string; roles?: string }>({});

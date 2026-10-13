@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useStrings } from "@/components/ClientStrings";
 import { StepUp } from "@/components/tracker/StepUp";
 import { Alert } from "@/components/ui/Alert";
+import { standaloneLinkClass } from "@/components/ui/Button";
+import { billingHref, upgradeHref } from "@/lib/billing/upgrade";
 
 import type { TeamOutcome, TeamRefusal } from "./calls";
 
@@ -33,11 +35,23 @@ export interface TeamWrite {
  * (without it the step-up can only point to turning it on). `primary`: the code's Confirm is the screen's one primary
  * action (only where it replaces the invitation form, whose Send is that action otherwise).
  */
-export function useTeamWrite({ enrolled, primary = false }: { enrolled: boolean; primary?: boolean }): TeamWrite {
+export function useTeamWrite({
+  enrolled,
+  primary = false,
+  paywall,
+}: {
+  enrolled: boolean;
+  primary?: boolean;
+  /**
+   * Where a 402 plan_limit (the plan's seats) leads: the organisation's checkout for the plan the API names, called by
+   * its name from the plan ladder (`names`, code → name), or Plan & billing when the name is not known.
+   */
+  paywall?: { orgId: string; names: Readonly<Record<string, string>> };
+}): TeamWrite {
   const t = useStrings("teamAdmin");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [refused, setRefused] = useState<{ refusal: TeamRefusal; limit?: number } | null>(null);
+  const [refused, setRefused] = useState<{ refusal: TeamRefusal; limit?: number; upgrade?: string } | null>(null);
   const [retry, setRetry] = useState<(() => Promise<void>) | null>(null);
   const notice = useRef<HTMLDivElement>(null);
   const mounted = useRef(true);
@@ -73,13 +87,40 @@ export function useTeamWrite({ enrolled, primary = false }: { enrolled: boolean;
     }
     setRetry(null);
     // A second step-up request right after a fresh code is not asked again: it is said as a passing failure.
-    setRefused({ refusal: outcome.refusal === "stepUp" ? "generic" : outcome.refusal, limit: outcome.limit });
+    setRefused({
+      refusal: outcome.refusal === "stepUp" ? "generic" : outcome.refusal,
+      limit: outcome.limit,
+      upgrade: outcome.upgrade,
+    });
     if (STALE.has(outcome.refusal)) router.refresh();
   }
 
+  const plan = refused?.upgrade ? paywall?.names[refused.upgrade] : undefined;
   const problem = refused ? (
     <Alert ref={notice} className="w-full">
-      <p data-refusal={refused.refusal}>{t(`refusal.${refused.refusal}`, { limit: refused.limit ?? 20 })}</p>
+      <p data-refusal={refused.refusal}>
+        {refused.refusal === "plan_limit" && plan
+          ? t("refusal.plan_limitUpgrade", { plan })
+          : t(`refusal.${refused.refusal}`, { limit: refused.limit ?? 20 })}
+      </p>
+      {refused.refusal === "plan_limit" && paywall ? (
+        // The link is built from the plan's code alone (lib/billing/upgrade.ts), never from a URL in the answer.
+        <a
+          href={
+            refused.upgrade
+              ? upgradeHref(refused.upgrade, { org: paywall.orgId, next: `/org/team?org=${paywall.orgId}` })
+              : billingHref(paywall.orgId)
+          }
+          className={standaloneLinkClass}
+          data-upgrade={refused.upgrade ?? ""}
+        >
+          {plan ? t("upgradeTo", { plan }) : t("seePlans")}
+        </a>
+      ) : refused.refusal === "org_not_verified" ? (
+        <a href="/help" className={standaloneLinkClass}>
+          {t("verificationHelp")}
+        </a>
+      ) : null}
     </Alert>
   ) : null;
 

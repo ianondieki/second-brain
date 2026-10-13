@@ -19,17 +19,20 @@ export function InvitationActions({
   invitationId,
   email,
   enrolled,
+  planNames = {},
   calls,
 }: {
   orgId: string;
   invitationId: string;
   email: string;
   enrolled: boolean;
+  /** As InviteForm's: a resend refused for the plan's seats names the plan with more. */
+  planNames?: Readonly<Record<string, string>>;
   calls?: TeamCalls;
 }) {
   const t = useStrings("teamAdmin");
   const api = calls ?? teamCalls(orgId);
-  const write = useTeamWrite({ enrolled });
+  const write = useTeamWrite({ enrolled, paywall: { orgId, names: planNames } });
   const [doing, setDoing] = useState<"resend" | "revoke" | null>(null);
   const [resent, setResent] = useState(false);
   const done = useRef<HTMLDivElement>(null);

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { unstable_rethrow } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { ClientStrings } from "@/components/ClientStrings";
@@ -14,7 +15,7 @@ import { publicDemoOn } from "@/lib/public-demo";
 import { orgContext } from "../data";
 import { OrgRefusal } from "../OrgRefusal";
 import { OrgPicker } from "../OrgPicker";
-import { getVerification } from "../scout-data";
+import { getVerification, readOrgPlans } from "../scout-data";
 import { TEAM_PATH } from "./team";
 import { getOrgNiches, getTeam } from "./team-data";
 import { TeamView } from "./TeamView";
@@ -28,8 +29,19 @@ export async function generateMetadata(): Promise<Metadata> {
 async function verificationOf(orgId: string) {
   try {
     return await getVerification(orgId);
-  } catch {
+  } catch (error) {
+    unstable_rethrow(error); // the session ended: the redirect to sign in still happens
     return null;
+  }
+}
+
+/** The organisation plans' names by code (the seats paywall names the plan with more), or {} when unread. */
+async function planNames(): Promise<Record<string, string>> {
+  try {
+    return Object.fromEntries(((await readOrgPlans()) ?? []).map((plan) => [plan.code, plan.name]));
+  } catch (error) {
+    unstable_rethrow(error);
+    return {};
   }
 }
 
@@ -58,10 +70,11 @@ export default async function OrganisationTeamPage({ searchParams }: PageProps<"
         />
       );
   } else {
-    const [read, niches, level] = await Promise.all([
+    const [read, niches, level, names] = await Promise.all([
       getTeam(org.org_id),
       getOrgNiches(org.org_id),
       verificationOf(org.org_id),
+      planNames(),
     ]);
     verification = level;
     if (read.kind === "refused") {
@@ -86,6 +99,7 @@ export default async function OrganisationTeamPage({ searchParams }: PageProps<"
             orgName={org.org_name}
             me={{ userId: me.user.id, roles: org.roles, enrolled: me.mfa.enrolled }}
             niches={niches}
+            planNames={names}
             demo={publicDemoOn()}
           />
         </ClientStrings>

@@ -23,6 +23,7 @@ import {
   mayRemove,
   nicheRows,
   reviewerChoices,
+  roleWords,
   sortRoles,
   splitRoles,
   type OpenInvitation,
@@ -39,14 +40,13 @@ export interface TeamViewProps {
   me: { userId: string; roles: readonly string[]; enrolled: boolean };
   /** The organisation's niches, as its directory card lists them. */
   niches: readonly { slug: string; label: string }[];
-  /** The public demo is on: every write is switched off, so each control is one calm line instead. */
+  /** The organisation plans' names by code (the seats paywall's "Upgrade to {plan}"); empty when unread. */
+  planNames?: Readonly<Record<string, string>>;
+  /**
+   * The public demo is on: invitations, removals and role changes are switched off (the API refuses them), so those
+   * controls are one calm line instead; the niche defaults and the escalation contact stay open.
+   */
   demo: boolean;
-}
-
-/** "reviewer and finance": role names as words in a sentence, in the page's language. */
-function roleWords(roles: readonly OrgRole[], label: (role: OrgRole) => string, locale: string): string {
-  const words = sortRoles(roles).map((role) => label(role).toLocaleLowerCase(locale));
-  return new Intl.ListFormat(locale, { type: "conjunction" }).format(words);
 }
 
 /**
@@ -55,9 +55,11 @@ function roleWords(roles: readonly OrgRole[], label: (role: OrgRole) => string, 
  * member reads all of it; only owners and admins get the controls (role changes are an owner's alone), each a small
  * client island of its own. In the public demo every control is the calm "switched off" line instead.
  */
-export async function TeamView({ team, orgId, orgName, me, niches, demo }: TeamViewProps) {
+export async function TeamView({ team, orgId, orgName, me, niches, planNames = {}, demo }: TeamViewProps) {
   const [t, ta, locale] = await Promise.all([getTranslations("orgTeam"), getTranslations("teamAdmin"), getLocale()]);
-  const admin = manages(me.roles) && !demo;
+  const manager = manages(me.roles);
+  // Membership changes (invite, remove, roles) are switched off in the public demo; the settings below them are not.
+  const admin = manager && !demo;
   const label = (role: OrgRole) => ta(`role.${role}`);
   const locked = <DemoLocked sentence={t("demoLocked")} className="mt-4" />;
   const names = new Map(team.members.map((m) => [m.user_id, m.name]));
@@ -97,7 +99,7 @@ export async function TeamView({ team, orgId, orgName, me, niches, demo }: TeamV
             </li>
           ))}
         </ul>
-        {demo && manages(me.roles) ? (
+        {demo && manager ? (
           locked
         ) : !admin ? (
           <p className="mt-4 text-sm text-ink-soft">{t("readOnly")}</p>
@@ -120,7 +122,12 @@ export async function TeamView({ team, orgId, orgName, me, niches, demo }: TeamV
           ) : (
             <div className="rounded-panel border border-line bg-field p-5 sm:p-6">
               <h3 className="mb-4 text-lg text-ink">{t("inviteTitle")}</h3>
-              <InviteForm orgId={orgId} roles={grantableRoles(me.roles)} enrolled={me.enrolled} />
+              <InviteForm
+                orgId={orgId}
+                roles={grantableRoles(me.roles)}
+                enrolled={me.enrolled}
+                planNames={planNames}
+              />
             </div>
           )}
           {team.invitations.length > 0 ? (
@@ -142,6 +149,7 @@ export async function TeamView({ team, orgId, orgName, me, niches, demo }: TeamV
                             invitationId={invitation.id}
                             email={invitation.email}
                             enrolled={me.enrolled}
+                            planNames={planNames}
                           />
                         ) : null
                       }
@@ -162,21 +170,18 @@ export async function TeamView({ team, orgId, orgName, me, niches, demo }: TeamV
       >
         {rows.length === 0 ? (
           <EmptyState sentence={t("noNiches")} action={t("noNichesAction")} href="/help" />
-        ) : admin ? (
+        ) : manager ? (
           <NicheDefaults orgId={orgId} rows={rows} choices={choices} enrolled={me.enrolled} />
         ) : (
-          <>
-            <DescriptionList aria-label={t("defaultsLabel")}>
-              {rows.map((row) => (
-                <Description key={row.slug} label={row.name}>
-                  <span data-niche-default={row.slug} className={row.userId ? undefined : "text-ink-soft"}>
-                    {row.userId ? (names.get(row.userId) ?? t("notSet")) : t("notSet")}
-                  </span>
-                </Description>
-              ))}
-            </DescriptionList>
-            {demo && manages(me.roles) ? locked : null}
-          </>
+          <DescriptionList aria-label={t("defaultsLabel")}>
+            {rows.map((row) => (
+              <Description key={row.slug} label={row.name}>
+                <span data-niche-default={row.slug} className={row.userId ? undefined : "text-ink-soft"}>
+                  {row.userId ? (names.get(row.userId) ?? t("notSet")) : t("notSet")}
+                </span>
+              </Description>
+            ))}
+          </DescriptionList>
         )}
       </Section>
 
@@ -186,7 +191,7 @@ export async function TeamView({ team, orgId, orgName, me, niches, demo }: TeamV
         description={t("escalationLead")}
         data-team="escalation"
       >
-        {admin ? (
+        {manager ? (
           <EscalationContact
             orgId={orgId}
             members={team.members.map(({ user_id, name }) => ({ user_id, name }))}
@@ -194,14 +199,9 @@ export async function TeamView({ team, orgId, orgName, me, niches, demo }: TeamV
             enrolled={me.enrolled}
           />
         ) : (
-          <>
-            <p className="text-ink" data-escalation-contact={team.escalation_contact?.user_id ?? ""}>
-              {team.escalation_contact
-                ? t("escalationIs", { name: team.escalation_contact.name })
-                : t("escalationNone")}
-            </p>
-            {demo && manages(me.roles) ? locked : null}
-          </>
+          <p className="text-ink" data-escalation-contact={team.escalation_contact?.user_id ?? ""}>
+            {team.escalation_contact ? t("escalationIs", { name: team.escalation_contact.name }) : t("escalationNone")}
+          </p>
         )}
       </Section>
     </div>
