@@ -35,6 +35,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("react-dom", async (original) => ({ ...(await original<typeof import("react-dom")>()), preload: vi.fn() }));
 vi.mock("@/lib/i18n/client-strings", () => ({ clientStrings: async () => ({}) }));
 vi.mock("@/components/tour/FirstLoginTour", () => ({ FirstLoginTour: () => null }));
+// The tour stands in as a marker: whether Home mounts it at all.
+vi.mock("@/components/tour/FirstLoginTour", () => ({ FirstLoginTour: () => <div data-first-login-tour="" /> }));
 vi.mock("@/components/SignedInShell", () => ({
   SignedInShell: ({ nav, children }: { nav: ReactNode; children: ReactNode }) => (
     <>
@@ -44,18 +46,25 @@ vi.mock("@/components/SignedInShell", () => ({
   ),
 }));
 
-const state = vi.hoisted(() => ({ now: "2026-10-08T06:30:00Z", activity: null as unknown }));
+const state = vi.hoisted(() => ({
+  now: "2026-10-08T06:30:00Z",
+  activity: null as unknown,
+  roles: ["reviewer"] as string[],
+  none: false,
+}));
 vi.mock("@/lib/api/server", () => ({ appNow: () => state.now }));
 vi.mock("@/components/activity/fetch", () => ({ getActivity: async () => state.activity }));
-const membership = { org_id: ORG_ID, org_name: ORG_NAME, roles: ["reviewer"] };
 vi.mock("./data", () => ({
-  orgContext: async () => ({
-    me: { user: { display_name: "Rita Njeri" }, mfa: { enrolled: true, required: true, verified: true } },
-    memberships: [membership],
-    org: membership,
-    missing: null,
-    query: "",
-  }),
+  orgContext: async () => {
+    const membership = { org_id: ORG_ID, org_name: ORG_NAME, roles: state.roles };
+    return {
+      me: { user: { display_name: "Rita Njeri" }, mfa: { enrolled: true, required: true, verified: true } },
+      memberships: state.none ? [] : [membership],
+      org: state.none ? null : membership,
+      missing: state.none ? "none" : null,
+      query: "",
+    };
+  },
   getInbox: async () => ({ kind: "page", page: { items: [], next_cursor: null, held_count: 0, verification: "e2" } }),
 }));
 vi.mock("./scout-data", () => ({ getMatches: async () => ({ kind: "ok", value: [] }) }));
@@ -65,6 +74,8 @@ vi.mock("./brief-data", () => ({ getBriefs: async () => ({ kind: "ok", value: br
 beforeEach(() => {
   state.now = "2026-10-08T06:30:00Z"; // 09:30 in Nairobi
   state.activity = null;
+  state.roles = ["reviewer"];
+  state.none = false;
 });
 afterEach(cleanup);
 
@@ -112,6 +123,29 @@ describe("the organisation Home (P25)", () => {
     await home();
     const section = screen.getByRole("region", { name: "Your last 26 weeks" });
     expect(within(section).getByText("4 actions in the last 26 weeks")).toBeTruthy();
+  });
+});
+
+describe("the organisation Home's Team link and its no-organisation state (REQ-TEN-02)", () => {
+  it("offers a member their team, and an owner or admin their team and invitations", async () => {
+    const { unmount } = await home();
+    expect(document.querySelector("[data-first-login-tour]")).not.toBeNull(); // the tour, for a member (absent below)
+    expect(document.querySelector("[data-home='team']")?.textContent).toBe(en.orgHome.teamMember);
+    unmount();
+    state.roles = ["admin"];
+    await home();
+    expect(document.querySelector("[data-home='team']")?.textContent).toBe(en.orgHome.team);
+  });
+
+  it("puts the invitation line right under the greeting, with no tour, for an account with no organisation", async () => {
+    state.none = true;
+    const { container } = await home();
+    expect(container.querySelector("[data-first-login-tour]")).toBeNull();
+    const line = container.querySelector<HTMLElement>("[data-home='no-org']")!;
+    expect(line.textContent).toContain("open the invitation link in your email");
+    const security = container.querySelector<HTMLElement>("[data-home='security']")!;
+    // Before the two-step sign-in line in reading order.
+    expect(line.compareDocumentPosition(security) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

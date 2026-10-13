@@ -5,11 +5,7 @@ import { useState } from "react";
 
 import { useStrings } from "./ClientStrings";
 
-import { withCsrf } from "@/lib/api/csrf";
-import { forgetEmail } from "@/lib/auth/remembered-email";
-
-import { forgetOffline } from "./offline/clear";
-import { forgetRecent } from "./palette/remember";
+import { endSession } from "@/lib/auth/sign-out";
 
 import { Button } from "./ui/Button";
 import { AlertIcon } from "./ui/status-icons";
@@ -27,16 +23,8 @@ export function SignOutButton() {
   async function signOut() {
     setBusy(true);
     setFailed(false);
-    // This device's offline copies of trackers go first (P27, D-69), awaited, whatever the API then answers.
-    await forgetOffline();
-    // Only the CSRF helper, not the typed client: this button is on every signed-in page (the 150 KB JS budget).
-    const status = await withCsrf()("/api/auth/logout", { method: "POST", credentials: "same-origin" }).then(
-      (response) => response.status,
-      () => 0, // offline or reset: may still be signed in
-    );
-    if (status === 204 || status === 401) {
-      forgetEmail(); // the next person on this device should not see this address offered back
-      forgetRecent(); // nor the command palette's recent pages (P25)
+    // Offline copies first, then the session, then this device's remembered address and recent pages (lib/auth/sign-out).
+    if (await endSession()) {
       router.replace("/login");
       router.refresh();
       return;

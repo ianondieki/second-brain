@@ -164,7 +164,7 @@ describe("the idea editor's files", () => {
 describe("/signup", () => {
   async function renderSignup() {
     const { default: SignupPage } = await import("@/app/(public)/signup/page");
-    return renderWithIntl(<>{await resolveServerTree(await SignupPage())}</>);
+    return renderWithIntl(<>{await resolveServerTree(await SignupPage({ searchParams: Promise.resolve({}) } as never))}</>);
   }
 
   it("is one sentence and one action, to the persona picker, in the public demo", async () => {

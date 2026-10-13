@@ -50,6 +50,8 @@ export async function PaletteSlot({ homeHref, staffRole }: { homeHref: string; s
           }));
   const goTo: PaletteLink[] = [
     ...sections,
+    // The organisation's Team (REQ-TEN-02): not one of the portal's five sections, so listed after them.
+    ...(portal === "org" ? [{ id: "go-team", title: nav("team"), href: `/org/team${query}` }] : []),
     { id: "go-settings", title: t("settings"), href: "/settings/security" },
     { id: "go-notifications", title: t("notifications"), href: "/notifications" },
     { id: "go-help", title: shell("help"), href: "/help" },

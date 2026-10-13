@@ -18,3 +18,17 @@ export function renderWithIntl(ui: ReactElement, options?: RenderOptions) {
     options,
   );
 }
+
+/**
+ * Renders a page's tree with next-intl's English messages but none of the server-formatted client strings: the page
+ * must send every namespace its client islands read (its own <ClientStrings>), or the islands show raw keys and the
+ * test fails (the P28 re-check's MAJOR: a namespace the page forgot).
+ */
+export function renderWithPageStrings(ui: ReactElement, options?: RenderOptions) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={en}>
+      {ui}
+    </NextIntlClientProvider>,
+    options,
+  );
+}

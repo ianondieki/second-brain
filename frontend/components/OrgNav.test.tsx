@@ -62,3 +62,20 @@ describe("OrgNav", () => {
     expect(screen.getByRole("link", { name: "Home" }).hasAttribute("aria-current")).toBe(false);
   });
 });
+
+// REQ-TEN-02: Team is not a sixth section; it is a quiet link in the rail's footer beside Help (from 1024 px), outside
+// the portal's <nav>, keeping the chosen organisation and marked on its own page.
+describe("Team in the rail's footer", () => {
+  it("sits beside Help, outside the sections, with the organisation kept and its page marked", () => {
+    renderWithIntl(<OrgNav query="?org=01a0ee62-0000-7000-8000-00000000000b" team />);
+    const nav = screen.getByRole("navigation", { name: "Organisation" });
+    expect(within(nav).queryByRole("link", { name: "Team" })).toBeNull();
+    const footer = screen.getByRole("complementary", { name: "More" });
+    const links = within(footer).getAllByRole("link");
+    expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
+      ["Team", "/org/team?org=01a0ee62-0000-7000-8000-00000000000b"],
+      ["Help", "/help"],
+    ]);
+    expect(links[0].getAttribute("aria-current")).toBe("page");
+  });
+});

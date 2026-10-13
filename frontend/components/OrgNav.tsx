@@ -10,7 +10,9 @@ import { HomeIcon } from "./ui/icons";
  * The organisation portal's sections (docs/spec/07 item 1: Inbox · Engagements · Problems · Team, at most five; Home
  * holds the second-factor prompt until onboarding lands). Only the built ones are listed: each later screen adds its
  * row here in the spec's order (Problems: the Problem Briefs, REQ-DIR-05; Events, REQ-DEV-02, the fifth and last: P22
- * card B default (6); Team waits for its screens and a free place). Same look and behaviour as DevNav.
+ * card B default (6)). Team (REQ-TEN-02, P28) has no free place among them: it is a quiet link in the rail's footer
+ * beside Help from 1024 px (no script: the shell's client code stays as it was), Home's link on every width, and the
+ * command palette. Same look and behaviour as DevNav.
  */
 export const ORG_SECTIONS = [
   { key: "home", href: "/org", Icon: HomeIcon },
@@ -26,12 +28,22 @@ export type OrgSection = (typeof ORG_SECTIONS)[number]["key"];
  * The organisation portal's navigation (PortalNav, as DevNav). `query` ("?org=<id>" for members of several
  * organisations) keeps the chosen organisation across sections.
  */
-export function OrgNav({ current, query = "" }: { current?: OrgSection; query?: string }) {
+export function OrgNav({
+  current,
+  query = "",
+  team = false,
+}: {
+  current?: OrgSection;
+  query?: string;
+  /** The Team page is the one shown (its rail link carries aria-current). */
+  team?: boolean;
+}) {
   const t = useTranslations("nav");
   const shell = useTranslations("shell");
   return (
     <PortalNav
       help={{ href: "/help", label: shell("help") }}
+      footer={{ label: t("more"), links: [{ key: "team", href: `/org/team${query}`, label: t("team"), current: team }] }}
       label={t("organisation")}
       current={current}
       query={query}
