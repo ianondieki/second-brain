@@ -391,7 +391,7 @@ API's 5 s keep-alive against the Next.js proxy), narrowed at its cause with the 
 structural items are D-51. The final M2 report with the quality scorecard is below ("M2 report"). The demo stack is
 stopped since a container restart: `make demo-reset` before showing it.
 
-**Open branches** (2026-10-12): none. P27: the fix round after the ux-review is in progress; the integration merge is recorded here when done (integration head before it `9c96817`; see the P27 report). P26 merged into the integration branch as `9c96817` (the feature branch at `6358150`; integration head before it `18e9fa9`'s successor; see the P26 report). P24 merged into the integration branch as `18e9fa9` (the feature branch at `4dcf057`; integration head before it `1e789b5`; see the P24 report). P23-3 merged into the integration branch (see the P23-3 report). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
+**Open branches** (2026-10-13): none. P27 merged into the integration branch as `d4c9a12` (the feature branch at `1b41cfa`; integration head before it `9c96817`; see the P27 report). P26 merged into the integration branch as `9c96817` (the feature branch at `6358150`; integration head before it `18e9fa9`'s successor; see the P26 report). P24 merged into the integration branch as `18e9fa9` (the feature branch at `4dcf057`; integration head before it `1e789b5`; see the P24 report). P23-3 merged into the integration branch (see the P23-3 report). P23-2 merged into the integration branch as `0b2a5fd` (the feature branch at `6817ef7`; integration head
 before it `fbaa3dd`); from P23-2 on, a gated phase is merged into the integration branch without waiting for the owner's
 word (the owner, 2026-10-07). P23-1 merged as `4883047` on the owner's instruction (merge commit of
 `claude/fervent-mccarthy-0zyqn2` at `68d5826`); integration head before it `e651622`. P22-C merged as `3316909` on the owner's instruction (merge commit of
@@ -1388,9 +1388,11 @@ delay of the hero lead text on about half the lab runs — the font swap, to tra
 `b5e09ee`: Playwright with the clock scenarios, the demo story, frontend, hygiene, both legacy jobs, gitleaks,
 pip-audit, osv-scanner and Trivy green, the backend job cancelled by the workflow's concurrency group when run 366 was
 dispatched (npm audit red, D-56; the informational no-skip-list legacy job red as off Windows). Run 366 on `cac750c`:
-frontend, hygiene, both legacy jobs, gitleaks, pip-audit, osv-scanner and Trivy green at the time of writing, the
-backend, Playwright and demo-story jobs still running; their result and the integration merge are recorded in the "Open
-branches" line above.
+Playwright with the clock scenarios, the demo story, frontend, hygiene, both legacy jobs, gitleaks, pip-audit,
+osv-scanner and Trivy green; npm audit red (D-56); the backend job cancelled at its 35-minute limit after its static
+checks (ruff, mypy over src and tests, the OpenAPI drift check) had passed and pytest was running — the owner's call, as
+in every round since P20; the informational no-skip-list legacy job red as off Windows. Merged into the integration
+branch as `d4c9a12`.
 | Route (second gate) | LCP light | LCP dark | Performance light | Performance dark |
 |---|---|---|---|---|
 | `/dev` (seeded profile) | 3.37 s | 3.41 s | 91 | 90 |
