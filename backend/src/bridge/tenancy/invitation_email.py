@@ -161,5 +161,5 @@ async def deliver(
             await db.commit()
             return row.status == DeliveryStatus.SENT
     except Exception as exc:  # a background send has no caller to report to
-        get_logger(__name__).error("org.invitation_email_failed", org_id=str(org_id), error_type=type(exc).__name__)
+        get_logger(__name__).error("org.invitation_email_failed", error_type=type(exc).__name__)
         return False

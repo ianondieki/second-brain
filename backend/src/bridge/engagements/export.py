@@ -36,7 +36,7 @@ from bridge.engagements.calendar import local_date
 from bridge.engagements.models import Engagement
 from bridge.engagements.schemas import OrgEngagementSummary
 from bridge.engagements.service import app_now
-from bridge.errors import json_errors
+from bridge.errors import ERROR_RESPONSES, json_errors
 from bridge.models.enums import ProcurementRoute
 from bridge.tenancy.deps import OrgMember
 
@@ -67,7 +67,7 @@ ROUTE_LABELS: Final[dict[ProcurementRoute, str]] = {
 }
 CSV_RESPONSES: Final[dict[int | str, dict[str, Any]]] = {
     200: {"content": {"text/csv": {}}, "description": "One row per engagement (UTF-8 with a byte-order mark, CRLF)"},
-    **json_errors(401, 403, 404, 422),
+    **json_errors(*ERROR_RESPONSES),  # every shared status, as JSON (the success is not)
 }
 
 
