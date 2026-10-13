@@ -26,6 +26,8 @@ import { QuestionActions } from "../QuestionActions";
 import { ADMIN_QUIZ_PATH, averageScore, flagReason, isDayOver, nairobiDay, pulledBecause, type QuizAdminQuestion } from "../quiz";
 import { SetDecision } from "../SetDecision";
 import { topicLabel } from "@/app/(app)/dev/quiz/quiz";
+import { DemoLocked } from "@/components/DemoLocked";
+import { publicDemoOn } from "@/lib/public-demo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminQuiz");
@@ -126,6 +128,8 @@ export default async function QuizSetPage({ params }: PageProps<"/admin/quiz/[id
       </Section>
 
       <Section title={t("set.questionsHeading")} headingId="set-questions">
+        {/* The public demo (REQ-FND-04): one locked line for the list instead of Pull and Restore on every question. */}
+        {publicDemoOn() ? <DemoLocked className="mb-4" /> : null}
         <ClientStrings strings={strings}>
           <ol aria-labelledby="set-questions" className="flex flex-col divide-y divide-line rounded-panel border border-line bg-field">
             {questions.map((question, index) => (
@@ -145,9 +149,14 @@ export default async function QuizSetPage({ params }: PageProps<"/admin/quiz/[id
           description={t("decision.lead")}
           className="decision-panel rounded-panel border bg-field p-5 sm:p-6"
         >
-          <ClientStrings strings={strings}>
-            <SetDecision setId={set.id} day={day} dayOver={dayOver} />
-          </ClientStrings>
+          {/* The public demo (REQ-FND-04): staff are read-only. */}
+          {publicDemoOn() ? (
+            <DemoLocked />
+          ) : (
+            <ClientStrings strings={strings}>
+              <SetDecision setId={set.id} day={day} dayOver={dayOver} />
+            </ClientStrings>
+          )}
         </Section>
       ) : null}
     </article>,
@@ -238,7 +247,9 @@ async function AdminQuestion({ question, right }: { question: QuizAdminQuestion;
         ) : null}
         {question.restored_at ? <p className="text-ink">{t("question.restored")}</p> : null}
       </div>
-      <QuestionActions questionId={question.id} number={question.position} status={question.status} />
+      {publicDemoOn() ? null : (
+        <QuestionActions questionId={question.id} number={question.position} status={question.status} />
+      )}
     </article>
   );
 }

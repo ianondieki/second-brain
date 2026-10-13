@@ -38,6 +38,8 @@ import {
   type Case,
 } from "../../moderation";
 import { caseStrings } from "../../strings";
+import { DemoLocked } from "@/components/DemoLocked";
+import { publicDemoOn } from "@/lib/public-demo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminModeration");
@@ -170,27 +172,32 @@ export default async function CasePage({ params }: PageProps<"/admin/moderation/
             !subjectGone && "lg:sticky lg:top-24 lg:col-start-2 lg:row-start-2",
           )}
         >
-          {/* Keyed, so it keeps its state (the status line) when a refresh changes what is around it. */}
-          <ClientStrings key="decision" strings={await caseStrings()}>
-            <CaseDecision
-              caseId={item.id}
-              versionId={item.subject_version_id}
-              kind={isBriefCase(item) ? "brief" : kind === "problem" ? "problem" : kind === "proposal" ? "proposal" : "other"}
-              actions={result ? [] : item.actions}
-              blocked={item.blocked}
-              decided={result && line ? { outcome: result, line } : null}
-              nextHref={nextId ? caseHref(nextId) : null}
-              lead={
-                actionable
-                  ? seen === "briefHidden"
-                    ? t("case.leadBrief")
-                    : seen === "public"
-                      ? t("case.leadPublic")
-                      : t("case.leadHidden")
-                  : null
-              }
-            />
-          </ClientStrings>
+          {/* Keyed, so it keeps its state (the status line) when a refresh changes what is around it. In the public demo
+              (REQ-FND-04) staff are read-only: an undecided case shows the locked line in place of its decision. */}
+          {publicDemoOn() && !result ? (
+            <DemoLocked />
+          ) : (
+            <ClientStrings key="decision" strings={await caseStrings()}>
+              <CaseDecision
+                caseId={item.id}
+                versionId={item.subject_version_id}
+                kind={isBriefCase(item) ? "brief" : kind === "problem" ? "problem" : kind === "proposal" ? "proposal" : "other"}
+                actions={result ? [] : item.actions}
+                blocked={item.blocked}
+                decided={result && line ? { outcome: result, line } : null}
+                nextHref={nextId ? caseHref(nextId) : null}
+                lead={
+                  actionable
+                    ? seen === "briefHidden"
+                      ? t("case.leadBrief")
+                      : seen === "public"
+                        ? t("case.leadPublic")
+                        : t("case.leadHidden")
+                    : null
+                }
+              />
+            </ClientStrings>
+          )}
         </Section>
       </div>
     </article>,

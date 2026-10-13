@@ -20,6 +20,7 @@ export interface DetailsStepProps {
   onAttachments: AttachmentsProps["onAttachments"];
   ensureDraft: AttachmentsProps["ensureDraft"];
   getCalls: () => Promise<Calls>;
+  uploadsLocked?: AttachmentsProps["uploadsLocked"];
 }
 
 const WRITTEN = ["approach", "architecture", "pricing", "notes"] as const;

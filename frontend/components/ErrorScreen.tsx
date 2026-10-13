@@ -14,7 +14,7 @@ const PRIMARY = "btn btn-primary";
 export function ErrorScreen({ retry }: { retry: () => void }) {
   const t = useStrings("errorPage");
   return (
-    <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 pt-8 pb-16 sm:px-6 lg:pt-16">
+    <main id="main" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 pt-8 pb-16 focus:outline-none sm:px-6 lg:pt-16">
       <div className="max-w-md">
         <h1 className="text-2xl text-ink lg:text-3xl">{t("title")}</h1>
         <p className="mt-3 text-ink-soft">{t("body")}</p>

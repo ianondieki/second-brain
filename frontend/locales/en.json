@@ -40,7 +40,8 @@
     "reviewP27clock": "[[COPY-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"in 6 days 14 hours 23 minutes\"), not \"14 h 23 min\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private).",
     "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\". deadlines.dayEmpty (\"Nothing falls due on {date}.\"): the picked day's empty state said \"in the next 30 days\" (ux re-check MINOR, spec 04 §4.2).",
-    "reviewP28tr": "[[COPY-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (the public /transparency page: what the daily signed fingerprints over the audit history are, in plain words; how to check a certificate, with a link to /verify; the latest fingerprint, earlier days, the signing keys with their status; the empty state before the first full day and the two \"did not load\" states), landing.footer.transparency (the footer's link) and verify.transparency (one quiet line under the /verify panel). No claim that anything cannot be altered: the wording is that a change makes the fingerprints disagree. Review round 1: the lead limits the claim to events recorded before a fingerprint was taken; howTo says /verify checks a certificate's own fingerprint, signature and timestamp, separate from the daily fingerprints; keysLead states the signed text exactly; signatureFor names each earlier day's signature control; verify.transparency reworded."
+    "reviewP28tr": "[[COPY-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (the public /transparency page: what the daily signed fingerprints over the audit history are, in plain words; how to check a certificate, with a link to /verify; the latest fingerprint, earlier days, the signing keys with their status; the empty state before the first full day and the two \"did not load\" states), landing.footer.transparency (the footer's link) and verify.transparency (one quiet line under the /verify panel). No claim that anything cannot be altered: the wording is that a change makes the fingerprints disagree. Review round 1: the lead limits the claim to events recorded before a fingerprint was taken; howTo says /verify checks a certificate's own fingerprint, signature and timestamp, separate from the daily fingerprints; keysLead states the signed text exactly; signatureFor names each earlier day's signature control; verify.transparency reworded.",
+    "reviewP28pd": "[[COPY-REVIEW]] P28-PD (REQ-FND-04; D-71): publicDemo.* (the public demo: the banner on every page, its label and its dismiss button; /login's persona picker, its title, lead, role names, the button \"Continue as {name}\" whose \"as {name}\" part is read by screen readers only, its two error lines, the line and \"Try again\" when no persona could be read (no email form: password sign-in is switched off in the demo); the line under each name is the API's English detail in English, and derived on the web in other languages (publicDemo.detailLevel for a developer, the organisation's name for an organisation persona, none for staff); the calm lines where a switched-off control would be (publicDemo.locked, attachLocked under the message composer, signupLocked with its action on /signup); the landing's \"Try the demo\"; \"Switch persona\" for the user menu's sign-out while the mode is on), errors.public_demo_locked (the API's 403 for any switched-off route), errors.public_demo_limit and ideaEditor.problem.demoLimit (the public demo's daily cap on published versions, 429 public_demo_limit; the backend's own wording)"
   },
   "app": {
     "name": "Wazo",
@@ -619,7 +620,9 @@
     "step_up_required": "Confirm with the current code from your authenticator app to continue.",
     "validation": "Some of the details were not accepted. Check the form, then try again.",
     "generic": "Something went wrong. Try again in a moment.",
-    "network": "We could not reach the server. Check your connection, then try again."
+    "network": "We could not reach the server. Check your connection, then try again.",
+    "public_demo_locked": "This is switched off in the public demo.",
+    "public_demo_limit": "The public demo publishes up to 20 versions a day for each account. Try again tomorrow."
   },
   "errorPage": {
     "title": "This page did not load",
@@ -2026,7 +2029,8 @@
       "rateLimited": "Too many attempts. Wait a minute, then try again.",
       "notSaved": "Fix the marked fields first, so your changes can be saved.",
       "fileGone": "This file was already removed or replaced. Reload the page to see the current list.",
-      "checklist": "Before you can publish, fix what is listed below."
+      "checklist": "Before you can publish, fix what is listed below.",
+      "demoLimit": "The public demo publishes up to 20 versions a day for each account. Try again tomorrow."
     },
     "required": {
       "title": "Add a title.",
@@ -4523,5 +4527,35 @@
     "keysUnavailable": "The signing keys did not load. Try again in a moment.",
     "keysEmpty": "No signing key is published yet.",
     "signatureFor": "Signature for {day}"
+  },
+  "publicDemo": {
+    "banner": "<b>Public demo:</b> every name and organisation here is fictional, and the data resets every night at 03:00 EAT. Please don't enter real personal information.",
+    "bannerLabel": "Public demo notice",
+    "bannerDismiss": "Hide the demo notice",
+    "pickerTitle": "Try the demo as…",
+    "pickerLead": "Choose who to be. One press signs you in and opens their Home.",
+    "personasLabel": "People you can sign in as",
+    "detailLevel": "Verification level {level}",
+    "continue": "Continue <hidden>as {name}</hidden>",
+    "signingIn": "Signing in…",
+    "tooMany": "Too many sign-ins from here just now. Try again in a minute.",
+    "failed": "That sign-in did not go through. Try again in a moment.",
+    "unavailable": "The demo people could not be loaded just now. Try again in a moment.",
+    "retry": "Try again",
+    "role": {
+      "developer": "Developer",
+      "org_admin": "Organisation admin",
+      "org_signatory": "Organisation signatory",
+      "org_reviewer": "Organisation reviewer",
+      "staff": "Platform staff"
+    },
+    "locked": "Switched off in the public demo.",
+    "attachLocked": "Attaching files is switched off in the public demo.",
+    "signupLocked": "Creating an account is switched off in the public demo.",
+    "signupAction": "Choose a demo person",
+    "tryDemo": "Try the demo",
+    "switchPersona": "Switch persona",
+    "switchingPersona": "Switching…",
+    "switchRetry": "Try switching again"
   }
 }
