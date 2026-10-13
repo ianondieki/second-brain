@@ -85,6 +85,16 @@ describe("the current step's \"Now\" line", () => {
 
   it("keeps the API's label for a stage the locales do not name", async () => {
     const odd = inRoute({ state: "DISPUTED", stage_label: "In dispute", stage_group: "agreement" } as Partial<Detail>);
-    expect(nowLine(await spine(odd))).toBe("Now: In dispute");
+    const container = await spine(odd);
+    expect(nowLine(container)).toBe("Now: In dispute");
+    // No stage list to repeat it: the line shows at every width.
+    expect(container.querySelector("[data-substages]")).toBeNull();
+    expect(container.querySelector("[data-stage-now]")?.className).not.toContain("max-lg:hidden");
+  });
+
+  it("gives way on phones to the stage list, whose current stage says the same (from 1024 px it stays)", async () => {
+    const container = await spine(inRoute());
+    expect(container.querySelector("[data-substages='column'] [data-substage='PROCUREMENT_ROUTE']")).not.toBeNull();
+    expect(container.querySelector("[data-stage-now]")?.className).toContain("max-lg:hidden");
   });
 });

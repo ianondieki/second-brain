@@ -153,9 +153,12 @@ export async function TrackerSpine({ detail, history }: { detail: Detail; histor
         actor={actors}
         detail={
           <>
-            {/* On hold the chip already says it: no "Now: On hold" under "On hold". */}
+            {/* On hold the chip already says it: no "Now: On hold" under "On hold". On phones the group's own stages
+                follow right below, the current one in bold with its word: the line would say it twice there. */}
             {detail.state === "ON_HOLD" ? null : (
-              <span className="block font-semibold">{t("stageNow", { stage: stageName(t, detail.state, detail.stage_label) })}</span>
+              <span data-stage-now="" className={cn("block font-semibold", sub.length > 0 && "max-lg:hidden")}>
+                {t("stageNow", { stage: stageName(t, detail.state, detail.stage_label) })}
+              </span>
             )}
             {!isFinished(detail.state) ? (
               <span className="block text-ink-soft">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>

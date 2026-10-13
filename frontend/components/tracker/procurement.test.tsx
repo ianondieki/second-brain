@@ -119,6 +119,7 @@ describe("the stepper's stages from the API's steps (AC-TRACK-5)", () => {
     renderWithIntl(<SubStageList stages={paused.map((s) => ({ ...s, label: "x" }))} group="review" />);
     const items = within(screen.getByRole("list", { name: "Within Review" })).getAllByRole("listitem");
     expect(items[1].getAttribute("data-state")).toBe("onHold");
+    expect(items[1].querySelector("[data-substage-word]")?.textContent).toBe("Waiting for an answer");
     expect(items[1].textContent).toContain("Under review: Waiting for an answer");
     expect(items[1].textContent).not.toContain("Current");
     expect(items[0].textContent).toContain("Proposal submitted: Completed");
@@ -151,6 +152,10 @@ describe("the stepper's stages from the API's steps (AC-TRACK-5)", () => {
     expect(items[0].getAttribute("data-substage")).toBe("PROCUREMENT_ROUTE");
     expect(items[0].textContent).toContain("Procurement route: Current");
     expect(items[1].textContent).toContain("Approved to proceed (non-binding): Pending");
+    // The current stage's word shows too (mark, words and colour); done and pending ones keep the mark alone.
+    expect(items[0].querySelector("[data-substage-word]")?.textContent).toBe("Current");
+    expect(items[0].querySelector("[data-substage-word]")?.className).toContain("text-accent");
+    expect(items[1].querySelector("[data-substage-word]")).toBeNull();
   });
 });
 

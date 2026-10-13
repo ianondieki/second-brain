@@ -147,6 +147,9 @@ export function SubStageList({
       {stages.map((stage) => {
         const done = stage.mark === "completed";
         const pending = stage.mark === "pending";
+        // Where the engagement stands: its word shows too (mark, words and colour; docs/spec/07 item 6).
+        const here = !done && !pending;
+        const tone = stage.mark === "current" ? "text-accent" : CHIP_TONE[stage.mark];
         return (
           <li
             key={stage.state}
@@ -160,10 +163,15 @@ export function SubStageList({
           >
             <ChipMark
               kind={stage.mark}
-              className={cn("mt-0.5 size-3.5", pending ? "text-ink-soft" : done || stage.mark === "current" ? "text-accent" : CHIP_TONE[stage.mark])}
+              className={cn("mt-0.5 size-3.5", pending ? "text-ink-soft" : done ? "text-accent" : tone)}
             />
             <span aria-hidden="true" className="min-w-0">
               {name(stage)}
+              {here ? (
+                <span data-substage-word="" className={cn("ml-2 font-medium whitespace-nowrap", tone)}>
+                  {t(`chip.${stage.word ?? stage.mark}`)}
+                </span>
+              ) : null}
             </span>
             <span className="sr-only">{t("subStage", { stage: name(stage), state: t(`chip.${stage.word ?? stage.mark}`) })}</span>
           </li>
