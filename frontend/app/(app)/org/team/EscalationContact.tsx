@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 
 import { TeamSelect } from "./fields";
 import { teamCalls, type TeamCalls } from "./calls";
-import { useTeamWrite } from "./useTeamWrite";
+import { useFocusWhen, useTeamWrite } from "./useTeamWrite";
 
 /**
  * The escalation contact (REQ-TEN-02; P28 track B's escalations reach them as well as the admins): one select of the
@@ -33,7 +33,7 @@ export function EscalationContact({
   const write = useTeamWrite({ enrolled });
   const [picked, setPicked] = useState(current ?? "");
   const [saved, setSaved] = useState(false);
-  const done = useRef<HTMLDivElement>(null);
+  const done = useFocusWhen(saved);
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,7 +43,6 @@ export function EscalationContact({
       () => api.setEscalationContact(picked || null),
       () => {
         setSaved(true);
-        requestAnimationFrame(() => done.current?.focus());
       },
     );
   }

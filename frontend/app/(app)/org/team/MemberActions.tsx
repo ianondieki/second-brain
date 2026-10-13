@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 
 import type { TeamCalls } from "./calls";
 import type { OrgRole } from "./team";
+import { useFocusWhen } from "./useTeamWrite";
 
 // The open step (roles or removal) is a chunk of its own, fetched when a button is pressed (MemberEditor.tsx).
 const MemberEditor = lazy(() => import("./MemberEditor").then((module) => ({ default: module.MemberEditor })));
@@ -42,7 +43,7 @@ export function MemberActions({
   // The button that opened the step, to give focus back to when it closes (the idle buttons are drawn anew).
   const returnTo = useRef<Mode>("idle");
   const actions = useRef<HTMLDivElement>(null);
-  const done = useRef<HTMLDivElement>(null);
+  const done = useFocusWhen(saved);
 
   // Focus back to the button that opened the step when it closes (WCAG 2.4.3).
   useEffect(() => {
@@ -76,7 +77,6 @@ export function MemberActions({
           onSaved={() => {
             setMode("idle");
             setSaved(true);
-            requestAnimationFrame(() => done.current?.focus());
           }}
         />
       </Suspense>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 
 import { teamCalls, type TeamCalls } from "./calls";
 import type { Paywall } from "./team";
-import { useTeamWrite } from "./useTeamWrite";
+import { useFocusWhen, useTeamWrite } from "./useTeamWrite";
 
 /**
  * An open invitation's two quiet actions (REQ-TEN-02): Resend (a new 7-day link, the earlier one stops working; the
@@ -36,7 +36,7 @@ export function InvitationActions({
   const write = useTeamWrite({ enrolled, paywall });
   const [doing, setDoing] = useState<"resend" | "revoke" | null>(null);
   const [resent, setResent] = useState(false);
-  const done = useRef<HTMLDivElement>(null);
+  const done = useFocusWhen(resent);
 
   function act(kind: "resend" | "revoke") {
     if (write.busy) return;
@@ -45,10 +45,9 @@ export function InvitationActions({
     void write.run(
       () => (kind === "resend" ? api.resend(invitationId) : api.revoke(invitationId)),
       () => {
-        if (kind === "resend") {
-          setResent(true);
-          requestAnimationFrame(() => done.current?.focus());
-        }
+        if (kind === "resend") setResent(true);
+        // Revoked, the row leaves the list: the Invitations heading takes focus (as Remove gives it to Members).
+        else document.getElementById("team-invitations")?.focus();
       },
     );
   }

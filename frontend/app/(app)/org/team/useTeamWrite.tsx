@@ -36,6 +36,18 @@ function StepUpUnavailable({ onCancel }: { onCancel: () => void }) {
   );
 }
 
+/**
+ * A ref for a success line that takes focus once it is drawn (WCAG 2.4.3), from an effect on its own state rather than
+ * a frame callback that can run before it exists, or while the page is read again (router.refresh).
+ */
+export function useFocusWhen(shown: unknown) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (shown) ref.current?.focus();
+  }, [shown]);
+  return ref;
+}
+
 /** "Try again in about 5 minutes." from the API's Retry-After, or "Try again later." when it gave none. */
 export function retryLine(
   tr: (key: "minute" | "minutes" | "hour" | "hours" | "later", values?: Record<string, number>) => string,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { TeamSelect } from "./fields";
 import { teamCalls, type TeamCalls } from "./calls";
 import { nicheDefaultsBody, type NicheRow } from "./team";
-import { useTeamWrite } from "./useTeamWrite";
+import { useFocusWhen, useTeamWrite } from "./useTeamWrite";
 
 /**
  * The default reviewer per niche (REQ-TEN-02; AT-C-3): one select per niche of the organisation, offering the members
@@ -38,7 +38,7 @@ export function NicheDefaults({
     Object.fromEntries(rows.map((row) => [row.slug, row.userId ?? ""])),
   );
   const [saved, setSaved] = useState(false);
-  const done = useRef<HTMLDivElement>(null);
+  const done = useFocusWhen(saved);
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,7 +49,6 @@ export function NicheDefaults({
       () => api.setNicheDefaults(items),
       () => {
         setSaved(true);
-        requestAnimationFrame(() => done.current?.focus());
       },
     );
   }

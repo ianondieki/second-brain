@@ -79,7 +79,7 @@ export function MemberEditor({
         data-member-roles={member.user_id}
       >
         {write.problem}
-        <fieldset className="flex flex-col">
+        <fieldset className="flex flex-col" aria-describedby={rolesError ? `${id}-roles-error` : undefined}>
           <legend
             ref={(node) => {
               first.current = node;
@@ -91,7 +91,7 @@ export function MemberEditor({
           </legend>
           {rolesError ? (
             <div className="mt-1.5">
-              <FieldError>{rolesError}</FieldError>
+              <FieldError id={`${id}-roles-error`}>{rolesError}</FieldError>
             </div>
           ) : null}
           <div className="mt-1 grid gap-x-6 sm:grid-cols-2">

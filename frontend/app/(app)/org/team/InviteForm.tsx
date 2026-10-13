@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
@@ -11,7 +11,7 @@ import { Form, SubmitButton } from "@/components/ui/Form";
 import { TeamTextInput } from "./fields";
 import { teamCalls, type TeamCalls } from "./calls";
 import type { OrgRole, Paywall } from "./team";
-import { useTeamWrite } from "./useTeamWrite";
+import { useFocusWhen, useTeamWrite } from "./useTeamWrite";
 
 /** Light checks only (the API is the judge): something before and after one "@", no spaces. */
 const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+$/;
@@ -47,7 +47,7 @@ export function InviteForm({
   const [chosen, setChosen] = useState<ReadonlySet<OrgRole>>(new Set());
   const [errors, setErrors] = useState<{ email?: string; roles?: string }>({});
   const [invited, setInvited] = useState<string | null>(null);
-  const done = useRef<HTMLDivElement>(null);
+  const done = useFocusWhen(invited);
 
   function toggle(role: OrgRole, on: boolean) {
     setChosen((current) => {
@@ -78,7 +78,6 @@ export function InviteForm({
         setEmail("");
         setChosen(new Set());
         setInvited(address);
-        requestAnimationFrame(() => done.current?.focus());
       },
     );
   }
