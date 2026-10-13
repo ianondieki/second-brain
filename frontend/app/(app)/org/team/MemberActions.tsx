@@ -1,25 +1,23 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { useStrings } from "@/components/ClientStrings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { Checkbox } from "@/components/ui/Checkbox";
-import { FieldError } from "@/components/ui/Field";
 
-import { teamCalls, type TeamCalls } from "./calls";
-import { ROLES, sortRoles, type OrgRole } from "./team";
+import type { TeamCalls } from "./calls";
+import type { OrgRole } from "./team";
 
-import { useTeamWrite } from "./useTeamWrite";
+// The open step (roles or removal) is a chunk of its own, fetched when a button is pressed (MemberEditor.tsx).
+const MemberEditor = lazy(() => import("./MemberEditor").then((module) => ({ default: module.MemberEditor })));
 
 type Mode = "idle" | "roles" | "remove";
 
 /**
- * A member's actions for an owner or admin (REQ-TEN-02): "Change roles" (an owner's alone: PUT …/roles, which asks for
- * a fresh second factor) opens the six roles in place with Save; "Remove" asks in place, saying what removing does,
- * before anything happens (their open assignments are cleared; a fresh second factor may be asked for first). The
- * last owner and the protected roles are refused by the API and said here in words.
+ * A member's actions for an owner or admin (REQ-TEN-02): "Change roles" (an owner's alone) and "Remove", each opening
+ * its step in place (MemberEditor, loaded on the press); "Roles saved." when the roles were changed. The last owner and
+ * the protected roles are refused by the API and said there in words.
  */
 export function MemberActions({
   orgId,
@@ -39,25 +37,16 @@ export function MemberActions({
   calls?: TeamCalls;
 }) {
   const t = useStrings("teamAdmin");
-  const id = useId();
-  const api = calls ?? teamCalls(orgId);
-  const write = useTeamWrite({ enrolled });
   const [mode, setMode] = useState<Mode>("idle");
-  const [chosen, setChosen] = useState<ReadonlySet<OrgRole>>(new Set(member.roles));
-  const [rolesError, setRolesError] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
   // The button that opened the step, to give focus back to when it closes (the idle buttons are drawn anew).
   const returnTo = useRef<Mode>("idle");
   const actions = useRef<HTMLDivElement>(null);
-  const first = useRef<HTMLElement | null>(null);
   const done = useRef<HTMLDivElement>(null);
 
-  // Focus follows the step (WCAG 2.4.3): into what opened, back to its button when it closes.
+  // Focus back to the button that opened the step when it closes (WCAG 2.4.3).
   useEffect(() => {
-    if (mode !== "idle") {
-      first.current?.focus();
-      return;
-    }
+    if (mode !== "idle") return;
     const back = returnTo.current;
     returnTo.current = "idle";
     if (back === "idle") return;
@@ -65,127 +54,32 @@ export function MemberActions({
     actions.current?.querySelector<HTMLElement>(selector)?.focus();
   }, [mode]);
 
-  function close() {
-    returnTo.current = mode;
-    setMode("idle");
-    write.reset();
-    setRolesError(undefined);
-  }
-
   function open(next: Mode) {
     setSaved(false);
-    write.reset();
-    if (next === "roles") setChosen(new Set(member.roles));
     setMode(next);
   }
 
-  function saveRoles(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (write.busy) return;
-    if (chosen.size === 0) {
-      setRolesError(t("rolesRequired"));
-      document.getElementById(`${id}-role-${ROLES[0]}`)?.focus();
-      return;
-    }
-    void write.run(
-      () => api.setRoles(member.user_id, sortRoles([...chosen])),
-      () => {
-        setMode("idle");
-        setSaved(true);
-        requestAnimationFrame(() => done.current?.focus());
-      },
-    );
-  }
-
-  function remove() {
-    if (write.busy) return;
-    // On success the row leaves the page; the Members heading takes focus (the page's own handler, team-focus).
-    void write.run(
-      () => api.remove(member.user_id),
-      () => document.getElementById("team-members")?.focus(),
-    );
-  }
-
-  if (write.stepUp) return <div className="mt-1 w-full sm:col-span-2">{write.stepUp}</div>;
-
-  if (mode === "roles") {
+  if (mode !== "idle") {
     return (
-      <form
-        onSubmit={saveRoles}
-        className="mt-1 flex w-full flex-col gap-4 sm:col-span-2"
-        data-member-roles={member.user_id}
-      >
-        {write.problem}
-        <fieldset className="flex flex-col">
-          <legend
-            ref={(node) => {
-              first.current = node;
-            }}
-            tabIndex={-1}
-            className="font-medium text-ink focus:outline-none"
-          >
-            {t("rolesFor", { name: member.name })}
-          </legend>
-          {rolesError ? (
-            <div className="mt-1.5">
-              <FieldError>{rolesError}</FieldError>
-            </div>
-          ) : null}
-          <div className="mt-1 grid gap-x-6 sm:grid-cols-2">
-            {ROLES.map((role) => (
-              <Checkbox
-                key={role}
-                id={`${id}-role-${role}`}
-                checked={chosen.has(role)}
-                onChange={(event) => {
-                  const on = event.target.checked;
-                  setRolesError(undefined);
-                  setChosen((current) => {
-                    const next = new Set(current);
-                    if (on) next.add(role);
-                    else next.delete(role);
-                    return next;
-                  });
-                }}
-                label={t(`role.${role}`)}
-              />
-            ))}
-          </div>
-        </fieldset>
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button type="submit" variant="secondary" busy={write.busy}>
-            {write.busy ? t("saving") : t("saveRoles")}
-          </Button>
-          <Button variant="link" busy={write.busy} onClick={close}>
-            {t("cancel")}
-          </Button>
-        </div>
-      </form>
-    );
-  }
-
-  if (mode === "remove") {
-    return (
-      <div className="mt-1 flex w-full flex-col gap-4 sm:col-span-2" data-member-remove={member.user_id}>
-        <p
-          ref={(node) => {
-            first.current = node;
+      <Suspense fallback={<p role="status" className="text-sm text-ink-soft sm:col-span-2">{t("loading")}</p>}>
+        <MemberEditor
+          mode={mode}
+          orgId={orgId}
+          orgName={orgName}
+          member={member}
+          enrolled={enrolled}
+          calls={calls}
+          onClose={() => {
+            returnTo.current = mode;
+            setMode("idle");
           }}
-          tabIndex={-1}
-          className="max-w-[60ch] text-ink focus:outline-none"
-        >
-          {t("removeConfirm", { name: member.name, org: orgName })}
-        </p>
-        {write.problem}
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button variant="secondary" busy={write.busy} onClick={close} data-remove-cancel="">
-            {t("cancel")}
-          </Button>
-          <Button variant="danger" busy={write.busy} onClick={remove} data-remove-confirm="">
-            {write.busy ? t("removing") : t("removeYes", { name: member.name })}
-          </Button>
-        </div>
-      </div>
+          onSaved={() => {
+            setMode("idle");
+            setSaved(true);
+            requestAnimationFrame(() => done.current?.focus());
+          }}
+        />
+      </Suspense>
     );
   }
 

@@ -178,6 +178,14 @@ async function renderPage() {
 
 const memberRow = (userId: string) => document.querySelector<HTMLElement>(`[data-member="${userId}"]`)!;
 
+/** The removal's confirm button, once its step (a chunk loaded on the press) is drawn. */
+const confirmButton = (row: HTMLElement) =>
+  waitFor(() => {
+    const button = row.querySelector<HTMLElement>("[data-remove-confirm]");
+    expect(button).not.toBeNull();
+    return button!;
+  });
+
 describe("an owner's Team page", () => {
   it("lists the members with email, joined date and at most two role chips, the rest in words", async () => {
     await renderPage();
@@ -485,7 +493,7 @@ describe("the writes on the page", () => {
     await renderPage();
     const row = memberRow(PETER);
     fireEvent.click(within(row).getByRole("button", { name: "Remove Peter Kamau" }));
-    const question = within(row).getByText(
+    const question = await within(row).findByText(
       `Remove Peter Kamau from ${ORG_NAME}? They lose access at once, and engagements assigned to them become unassigned.`,
     );
     await waitFor(() => expect(document.activeElement).toBe(question));
@@ -495,7 +503,7 @@ describe("the writes on the page", () => {
       expect(document.activeElement).toBe(within(row).getByRole("button", { name: "Remove Peter Kamau" })),
     );
     fireEvent.click(within(row).getByRole("button", { name: "Remove Peter Kamau" }));
-    fireEvent.click(row.querySelector<HTMLElement>("[data-remove-confirm]")!);
+    fireEvent.click(await confirmButton(row));
     await waitFor(() => expect(mocks.calls.remove).toHaveBeenCalledWith(PETER));
     expect(mocks.refresh).toHaveBeenCalled();
   });
@@ -508,7 +516,7 @@ describe("the writes on the page", () => {
     await renderPage();
     const row = memberRow(PETER);
     fireEvent.click(within(row).getByRole("button", { name: "Remove Peter Kamau" }));
-    fireEvent.click(row.querySelector<HTMLElement>("[data-remove-confirm]")!);
+    fireEvent.click(await confirmButton(row));
     expect((await within(row).findByRole("alert")).textContent).toBe(sentence);
   });
 
@@ -516,7 +524,7 @@ describe("the writes on the page", () => {
     await renderPage();
     const row = memberRow(FAITH);
     fireEvent.click(within(row).getByRole("button", { name: "Change roles of Faith Achieng" }));
-    const group = within(row).getByRole("group", { name: "Roles of Faith Achieng" });
+    const group = await within(row).findByRole("group", { name: "Roles of Faith Achieng" });
     expect((within(group).getByRole("checkbox", { name: "Finance" }) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(within(group).getByRole("checkbox", { name: "Reviewer" }));
     fireEvent.click(within(row).getByRole("button", { name: "Save roles" }));
@@ -528,7 +536,7 @@ describe("the writes on the page", () => {
     await renderPage();
     const row = memberRow(FAITH);
     fireEvent.click(within(row).getByRole("button", { name: "Change roles of Faith Achieng" }));
-    fireEvent.click(within(row).getByRole("checkbox", { name: "Finance" }));
+    fireEvent.click(await within(row).findByRole("checkbox", { name: "Finance" }));
     fireEvent.click(within(row).getByRole("button", { name: "Save roles" }));
     expect(within(row).getByText(en.teamAdmin.rolesRequired)).toBeTruthy();
     expect(mocks.calls.setRoles).not.toHaveBeenCalled();
