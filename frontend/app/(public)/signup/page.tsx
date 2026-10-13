@@ -12,26 +12,52 @@ import { homeOf } from "@/lib/auth/routing";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { publicDemoOn } from "@/lib/public-demo";
 
+import { isInvitationToken, readInvitation } from "../invitations/[token]/invitation";
 import { SignupForm } from "./SignupForm";
 
-export async function generateMetadata(): Promise<Metadata> {
+// With ?invitation= the address carries an invitation link's token: no referrer leaves the page (as on the link's own
+// page, security-headers.ts), and it is never indexed.
+export async function generateMetadata({ searchParams }: PageProps<"/signup">): Promise<Metadata> {
   const t = await getTranslations("signup");
-  return { title: t("title") };
+  const invited = (await searchParams).invitation !== undefined;
+  return invited
+    ? { title: t("title"), referrer: "no-referrer", robots: { index: false, follow: false } }
+    : { title: t("title") };
 }
 
-/** Sign up; a person already signed in goes to their own home (a server-side redirect, like / and /login). */
-export default async function SignupPage() {
+/**
+ * Sign up; a person already signed in goes to their own home (a server-side redirect, like / and /login). With
+ * `?invitation=<token>` (REQ-TEN-02, from an invitation link's "Create an account"), the form is an invitee's: the
+ * organisation named from the link's public preview, no side choice and no organisation details; a link that no
+ * longer opens anything is the invitation page's dead-link sentence instead.
+ */
+export default async function SignupPage({ searchParams }: PageProps<"/signup">) {
   const me = await getSignedIn();
   if (me) redirect(homeOf(me));
   if (publicDemoOn()) return <DemoSignup />;
+  const requested = (await searchParams).invitation;
+  const token = typeof requested === "string" && isInvitationToken(requested) ? requested : null;
+  const invited = token ? await readInvitation(token) : null;
   const [t, consents] = await Promise.all([getTranslations("signup"), getSignupConsents()]);
+  if (requested !== undefined && invited?.kind !== "ok") {
+    const ti = await getTranslations("invitation");
+    return (
+      <AuthShell photo="signUp">
+        <PageHeader title={ti("deadTitle")} />
+        <EmptyState className="mt-6" sentence={ti("dead")} action={t("plainSignup")} href="/signup" />
+      </AuthShell>
+    );
+  }
   return (
     <AuthShell photo="signUp">
       <PageHeader title={t("title")} lead={t("lead")} />
       <IntlScope namespaces={["signup", "fields", "validation", "errors", "orgKind"]}>
         {/* The password field's show/hide words are server-formatted (components/ui/PasswordField.tsx). */}
         <ClientStrings strings={await clientStrings(["fields"])}>
-          <SignupForm initialConsents={consents} />
+          <SignupForm
+            initialConsents={consents}
+            invitation={invited?.kind === "ok" && token ? { token, org: invited.preview.org_name } : undefined}
+          />
         </ClientStrings>
       </IntlScope>
     </AuthShell>

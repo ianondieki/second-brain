@@ -120,7 +120,7 @@ describe("the invitation page", () => {
     expect(signIn.getAttribute("href")).toBe(`/login?next=%2Forg%2Fjoin%2F${TOKEN}`);
     expect(signIn.hasAttribute("data-primary")).toBe(true);
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Create an account" }).getAttribute("href")).toBe("/signup");
+    expect(screen.getByRole("link", { name: "Create an account" }).getAttribute("href")).toBe(`/signup?invitation=${TOKEN}`);
     expect(screen.queryByRole("button", { name: "Accept and join" })).toBeNull();
   });
 

@@ -350,7 +350,10 @@
     "terms": "I accept the <terms>terms of service<hint> (opens in a new tab)</hint></terms>",
     "submit": "Create account",
     "submitting": "Creating account…",
-    "haveAccount": "Already have an account? <login>Log in</login>"
+    "haveAccount": "Already have an account? <login>Log in</login>",
+    "invitationLead": "You are creating an account to join {org}. Use the email address the invitation was sent to.",
+    "invitationGone": "This invitation link no longer works. Ask the person who invited you for a new one.",
+    "plainSignup": "Create an account without it"
   },
   "orgKind": {
     "company": "Company",
@@ -493,7 +496,7 @@
     "title": "Welcome, {name}",
     "devLead": "Your developer home is being built. For now, you can choose how you sign in.",
     "orgLead": "You are signed in for {org}.",
-    "orgLeadNoName": "You are signed in for your organisation.",
+    "orgLeadNoName": "You are signed in on the organisation side.",
     "mfaOn": "Two-step sign-in is on.",
     "mfaOff": "Two-step sign-in is off.",
     "mfaRequired": "Two-step sign-in is off. Your role needs it, and it takes about two minutes to turn on.",
@@ -685,7 +688,8 @@
       "briefsValue": "{count} open",
       "briefsMetaNone": "None open yet"
     },
-    "team": "Your team and invitations"
+    "team": "Your team and invitations",
+    "helpAction": "Open Help"
   },
   "inbox": {
     "pageTitle": "Inbox",
@@ -726,7 +730,7 @@
     "pages": "Inbox pages",
     "newestPage": "Back to the newest",
     "staleCursor": "This page of the Inbox is no longer available.",
-    "noOrg": "Your account is not a member of an organisation yet.",
+    "noOrg": "Your account is not in an organisation yet: if you were invited, open the invitation link in your email to join.",
     "notMember": "Your account is not a member of this organisation.",
     "openOwnInbox": "Open your Inbox",
     "refusedMfaSetup": "Turn on two-step sign-in to see the Inbox of {org}.",
@@ -4708,7 +4712,7 @@
     "lead": "{org} invited you to join as {roles}.",
     "signInLead": "Sign in with the email address this invitation was sent to.",
     "signIn": "Sign in to accept",
-    "noAccount": "New here? Create an account with that address, then open this link again.",
+    "noAccount": "New here? Create an account with that address. Once it is confirmed, open this link again to accept.",
     "create": "Create an account",
     "signedInAs": "You are signed in as {email}.",
     "deadTitle": "This invitation link no longer works",

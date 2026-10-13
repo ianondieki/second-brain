@@ -149,6 +149,15 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
 
         {missing === "notMember" ? (
           <EmptyState sentence={ti("notMember")} action={ti("openOwnInbox")} href="/org/inbox" />
+        ) : missing === "none" ? (
+          // No organisation yet (REQ-TEN-02): an invitee who confirmed their address before accepting, or a removed
+          // member. The invitation link in their email is how they join.
+          <EmptyState
+            sentence={ti("noOrg")}
+            action={(await getTranslations("orgHome"))("helpAction")}
+            href="/help"
+            data-home="no-org"
+          />
         ) : null}
 
         {/* The Inbox asks for two-step sign-in first (the API refuses it before then), so it waits for the setup. */}

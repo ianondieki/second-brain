@@ -99,7 +99,7 @@ export default async function InvitationPage({ params }: PageProps<"/invitations
         </div>
         <div className="border-t border-line pt-5">
           <p className="text-sm text-ink-soft">{t("noAccount")}</p>
-          <Link href="/signup" prefetch={false} className={standaloneLinkClass}>
+          <Link href={`/signup?invitation=${token}`} prefetch={false} className={standaloneLinkClass}>
             {t("create")}
           </Link>
         </div>

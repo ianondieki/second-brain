@@ -350,7 +350,10 @@
     "terms": "Ninakubali <terms>masharti ya huduma<hint> (yanafunguka kwenye kichupo kipya)</hint></terms>",
     "submit": "Fungua akaunti",
     "submitting": "Inafungua akaunti…",
-    "haveAccount": "Tayari una akaunti? <login>Ingia</login>"
+    "haveAccount": "Tayari una akaunti? <login>Ingia</login>",
+    "invitationLead": "Unafungua akaunti ili ujiunge na {org}. Tumia anwani ya barua pepe ambayo mwaliko ulitumwa kwake.",
+    "invitationGone": "Kiungo hiki cha mwaliko hakifanyi kazi tena. Muombe aliyekualika akutumie kingine.",
+    "plainSignup": "Fungua akaunti bila mwaliko"
   },
   "orgKind": {
     "company": "Kampuni",
@@ -493,7 +496,7 @@
     "title": "Karibu, {name}",
     "devLead": "Ukurasa wako wa msanidi programu unajengwa. Kwa sasa, unaweza kuchagua jinsi unavyoingia.",
     "orgLead": "Umeingia kwa niaba ya {org}.",
-    "orgLeadNoName": "Umeingia kwa niaba ya shirika lako.",
+    "orgLeadNoName": "Umeingia upande wa shirika.",
     "mfaOn": "Kuingia kwa hatua mbili kumewashwa.",
     "mfaOff": "Kuingia kwa hatua mbili kumezimwa.",
     "mfaRequired": "Kuingia kwa hatua mbili kumezimwa. Jukumu lako linakihitaji, na kukiwasha huchukua takriban dakika mbili.",
@@ -685,7 +688,8 @@
       "briefsValue": "{count} wazi",
       "briefsMetaNone": "Hakuna lililo wazi bado"
     },
-    "team": "Timu yenu na mialiko"
+    "team": "Timu yenu na mialiko",
+    "helpAction": "Fungua Msaada"
   },
   "inbox": {
     "pageTitle": "Kikasha",
@@ -726,7 +730,7 @@
     "pages": "Kurasa za Kikasha",
     "newestPage": "Rudi kwa mapya zaidi",
     "staleCursor": "Ukurasa huu wa Kikasha haupatikani tena.",
-    "noOrg": "Akaunti yako bado si mwanachama wa shirika lolote.",
+    "noOrg": "Akaunti yako bado haiko katika shirika: ikiwa ulialikwa, fungua kiungo cha mwaliko kwenye barua pepe yako ili ujiunge.",
     "notMember": "Akaunti yako si mwanachama wa shirika hili.",
     "openOwnInbox": "Fungua Kikasha chako",
     "refusedMfaSetup": "Washa kuingia kwa hatua mbili ili kuona Kikasha cha {org}.",
@@ -4708,7 +4712,7 @@
     "lead": "{org} imekualika ujiunge kama {roles}.",
     "signInLead": "Ingia kwa anwani ya barua pepe ambayo mwaliko huu ulitumwa kwake.",
     "signIn": "Ingia ili ukubali",
-    "noAccount": "Mgeni hapa? Fungua akaunti kwa anwani hiyo, kisha ufungue kiungo hiki tena.",
+    "noAccount": "Mgeni hapa? Fungua akaunti kwa anwani hiyo. Ikishathibitishwa, fungua kiungo hiki tena ili ukubali.",
     "create": "Fungua akaunti",
     "signedInAs": "Umeingia kama {email}.",
     "deadTitle": "Kiungo hiki cha mwaliko hakifanyi kazi tena",
