@@ -150,6 +150,14 @@ class Settings(BaseSettings):
     feature_tier2_enabled: bool = False
     feature_deals_enabled: bool = False
 
+    # The public demo (REQ-FND-04; tasks/P28.md track PD; D-71): one-press persona sign-in, the lock on credential,
+    # membership, upload and clock routes (bridge.public_demo), X-Robots-Tag noindex. Refused at start-up unless
+    # APP_ENV is set explicitly to dev or test (DEMO_ENVS), so staging and production never run it. Its content:
+    # fictional (the default) seeds only the fixture organisations and official-source research excerpts; full adds the
+    # provisional directory of real organisations and the news excerpts (after D-38 and G6's citations).
+    public_demo: bool = False
+    public_demo_content: Literal["fictional", "full"] = "fictional"
+
     # Tier-2 envelope encryption (bridge.crypto.envelope; ADR-007): each proposal's data key is wrapped by a key
     # encryption key. Dev/test: TIER2_LOCAL_KEK (base64 of 32 bytes). Production: KMS only (TIER2_KMS_KEY_ID). Code
     # that needs the wrapper fails closed when neither is set; no key is ever generated implicitly.
@@ -391,6 +399,11 @@ class Settings(BaseSettings):
             problems.append(
                 "PAYMENT_PROVIDER=fake is for dev and test only: staging and production take no simulated payments"
                 " (D-36)"
+            )
+        if self.public_demo and (self.app_env not in DEMO_ENVS or "app_env" not in self.model_fields_set):
+            problems.append(
+                "PUBLIC_DEMO=true runs only with APP_ENV set explicitly to dev or test (the public demo's personas sign"
+                " in without a password or second factor; staging and production never run it)"
             )
         problems.extend(self._key_problems())
         problems.extend(self._llm_problems())
