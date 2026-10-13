@@ -52,8 +52,9 @@ Nothing else from the environment reaches the app.
 
 Visitors' sign-in throttles are counted per address, which the API reads from the `X-Forwarded-For` header the web app
 passes on: behind an edge proxy that sends it (Caddy; Hugging Face and Codespaces unverified) each visitor has their
-own; run bare with `docker run -p`, every visitor shares one (`127.0.0.1`). The runbook's go-live checklist has the
-check.
+own; run bare with `docker run -p`, every visitor who sends no such header shares one (`127.0.0.1`), and a visitor
+who sends the header chooses their own address. So run it behind an edge proxy that sets the header (Caddy does);
+the runbook's go-live checklist has the check.
 
 ## Measured (2026-10-13, linux/amd64, 4 CPUs)
 
