@@ -1,9 +1,11 @@
 """Logging (docs/spec/08 Observability; REQ-AUTH-02 fix round 1): the OAuth routes' query strings, which carry the
-authorization code, the state and the provider's error text, never reach uvicorn's access log."""
+authorization code, the state and the provider's error text, never reach uvicorn's access log; nor does a private
+calendar feed's token, a path segment (REQ-ENG-13, D-70)."""
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
 import logging
 import socket
@@ -14,7 +16,8 @@ import pytest
 import uvicorn
 from uvicorn.logging import AccessFormatter
 
-from bridge.logging import DropQueryStrings, configure_logging
+from bridge.engagements import feeds
+from bridge.logging import SECRET_SEGMENTS, DropQueryStrings, configure_logging, redact_secret_segments
 from bridge.main import create_app
 
 SECRETS = ("4%2F0Aabc-code-secret", "st4te-secret", "provider+error+text")
@@ -136,3 +139,96 @@ def test_a_download_links_signature_never_reaches_the_access_log(access_log: io.
     line = access_log.getvalue()
     assert signature not in line
     assert f"{path}?expires=1800000000&{key}=[redacted]" in line
+
+
+# ------------------------------------------------------------------------- a capability in the path (D-70)
+
+# The shape of a live feed token (32 bytes as 43 base64url characters), derived rather than written out so no
+# secret scanner takes the fixture for a credential.
+FEED_TOKEN = base64.urlsafe_b64encode(bytes(range(7, 39))).rstrip(b"=").decode()
+NEAR_MISS = "A" * 42 + "B"  # 43 characters, but not a canonical token: answered 404 before the database is asked
+
+
+def log_status(path: str, status: int) -> None:
+    ACCESS.info('%s - "%s %s HTTP/%s" %d', "203.0.113.9:50000", "GET", path, "1.1", status)
+
+
+@pytest.mark.parametrize("status", [200, 404])
+@pytest.mark.parametrize(
+    ("path", "logged"),
+    [
+        (f"/api/calendar/{FEED_TOKEN}.ics", "/api/calendar/[redacted]"),
+        (f"/api/calendar/{FEED_TOKEN}.ics?ts=1&q=Wanjiku", "/api/calendar/[redacted]?ts=1&q=[redacted]"),
+        (f"/api/calendar/{NEAR_MISS}.ics", "/api/calendar/[redacted]"),
+        (f"/api/calendar/{FEED_TOKEN}", "/api/calendar/[redacted]"),  # no suffix: still a token
+        (f"/api/calendar/{FEED_TOKEN}.ics/", "/api/calendar/[redacted]"),  # a trailing slash (a redirect): too
+        (f"/api/calendar/{FEED_TOKEN}.ics/x?y=1", "/api/calendar/[redacted]?y=1"),
+        ("/api/calendar/nope.ics", "/api/calendar/[redacted]"),
+        (f"/api//calendar/{FEED_TOKEN}.ics", "/api//calendar/[redacted]"),  # a doubled slash (404): still a token
+        (f"/API/Calendar/{FEED_TOKEN}.ics", "/API/Calendar/[redacted]"),  # letter case (404): still a token
+    ],
+)
+def test_a_calendar_feed_token_never_reaches_the_access_log(
+    access_log: io.StringIO, path: str, logged: str, status: int
+) -> None:
+    """D-70 (REQ-ENG-13, security review MAJOR): a private feed's URL carries its capability as a path segment; the
+    access log keeps the route and drops the segment (the ``.ics`` suffix with it), whatever the answer, with or
+    without a query string, and for a malformed or near-miss token too."""
+    configure_logging()
+    log_status(path, status)
+    line = access_log.getvalue()
+    assert f'"GET {logged} HTTP/1.1" {status}' in line
+    assert "[redacted]" in line
+    assert FEED_TOKEN not in line
+    assert NEAR_MISS not in line
+    assert ".ics" not in line
+    assert "Wanjiku" not in line
+
+
+BESIDE_THE_FEED = ["/api/calendar", "/api/calendar/", "/api/me/calendar-feed", "/api/events/e/calendar.ics"]
+
+
+@pytest.mark.parametrize("path", [*BESIDE_THE_FEED, "/api/calendars/x"])
+def test_paths_beside_the_feed_keep_their_segments(access_log: io.StringIO, path: str) -> None:
+    configure_logging()
+    log_status(path, 200)
+    assert f'"GET {path} HTTP/1.1" 200' in access_log.getvalue()
+
+
+def test_the_feed_path_is_the_path_the_rule_redacts() -> None:
+    """The route's path (``feeds.FEED_PATH``) and the log rule's prefix cannot drift apart."""
+    token, _ = feeds.new_token()
+    path = feeds.FEED_PATH.format(token=token)
+    assert [rule.match(path) is not None for rule in SECRET_SEGMENTS] == [True]
+    assert redact_secret_segments(path) == "/api/calendar/[redacted]"
+    assert feeds.FEED_PATH.startswith("/api/calendar/")
+    assert all(rule.match("/api/calendar/x") and rule.match("/api//calendar//x") for rule in SECRET_SEGMENTS)
+
+
+@pytest.mark.parametrize("http", ["h11", "httptools"])
+async def test_a_real_uvicorn_server_logs_feed_paths_without_their_token(access_log: io.StringIO, http: str) -> None:
+    """Guards the record shape the rule relies on against uvicorn upgrades. A near-miss token answers 404 before any
+    database work, as an unknown one would."""
+    app = create_app()  # installs the filter, as in production
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(app, http=http, log_config=None))
+    serving = asyncio.create_task(server.serve(sockets=[sock]))
+    try:
+        for _ in range(500):
+            if server.started:
+                break
+            await asyncio.sleep(0.01)
+        async with httpx.AsyncClient(trust_env=False) as http_client:
+            plain = await http_client.get(f"http://127.0.0.1:{port}/api/calendar/{NEAR_MISS}.ics")
+            queried = await http_client.get(f"http://127.0.0.1:{port}/api/calendar/{NEAR_MISS}.ics?ts=1")
+        assert (plain.status_code, queried.status_code) == (404, 404)
+    finally:
+        server.should_exit = True
+        await serving
+        sock.close()
+    line = access_log.getvalue()
+    assert '"GET /api/calendar/[redacted] HTTP/1.1" 404' in line
+    assert '"GET /api/calendar/[redacted]?ts=1 HTTP/1.1" 404' in line
+    assert NEAR_MISS not in line

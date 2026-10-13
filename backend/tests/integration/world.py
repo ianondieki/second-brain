@@ -10,7 +10,8 @@ and their sources, revision 0010: approved or published rows that developers rea
 RLS tests fail otherwise, so a new tenant table cannot ship without a
 fixture and a policy. Revision 0011's team tables are each tenant's with its pitcher (an accepted invitation, its
 thread with a message from each, the tenant's read marker and block of a third developer, and the pitcher credited on
-the tenant's published and draft proposals). For the
+the tenant's published and draft proposals). Revision 0013's: the tenant's organisation's assignment, recommendation
+and prior-knowledge declaration on its engagement, and the tenant's personal and organisation calendar feeds. For the
 PUBLISHED tables each tenant has rows every signed-in user may read (published, clear) and rows only its owner may
 read (drafts, held, hidden, candidate), so the tests prove both halves of the rule.
 """
@@ -547,6 +548,57 @@ async def add_team_rows(
         )
 
 
+async def add_triage_rows(
+    conn: AsyncConnection, engagement_id: UUID, org_id: UUID, proposal_id: UUID, version_id: UUID, member_id: UUID
+) -> None:
+    """Revision 0013: the organisation's member (the tenant, its owner and admin) assigned to the engagement and their
+    recommendation on it; the organisation's prior-knowledge declaration on it (the owner's insert keeps the window it
+    sends: no Tier-2 view of the pitched proposal exists in the world); the member's two calendar feeds, personal and
+    the organisation's. Written as the owner."""
+    await _insert(
+        conn,
+        "INSERT INTO engagement_assignments (id, engagement_id, org_id, assignee_user_id, assigned_by)"
+        " VALUES (:id, :engagement, :org, :member, :member)",
+        id=uuid7(),
+        engagement=engagement_id,
+        org=org_id,
+        member=member_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO engagement_recommendations (id, engagement_id, org_id, member_user_id, stance, note)"
+        " VALUES (:id, :engagement, :org, :member, 'pursue', 'Worth a pilot')",
+        id=uuid7(),
+        engagement=engagement_id,
+        org=org_id,
+        member=member_id,
+    )
+    nairobi_today = "(now() AT TIME ZONE 'Africa/Nairobi')::date"
+    await _insert(
+        conn,
+        "INSERT INTO prior_knowledge_declarations (id, engagement_id, org_id, proposal_id, version_id, declared_by,"
+        " evidence_sha256, evidence_title, evidence_dated_on, first_tier2_view_at, window_closes_on)"
+        f" VALUES (:id, :engagement, :org, :proposal, :version, :member, :sha, 'Internal pilot memo',"
+        f" {nairobi_today} - 30, now(), {nairobi_today} + 14)",
+        id=uuid7(),
+        engagement=engagement_id,
+        org=org_id,
+        proposal=proposal_id,
+        version=version_id,
+        member=member_id,
+        sha=hashlib.sha256(b"rls-fixture-evidence").digest(),
+    )
+    for org in (None, org_id):
+        await _insert(
+            conn,
+            "INSERT INTO calendar_feeds (id, user_id, org_id, token_hash) VALUES (:id, :member, :org, :hash)",
+            id=uuid7(),
+            member=member_id,
+            org=org,
+            hash=hashlib.sha256(uuid7().bytes).digest(),
+        )
+
+
 async def build(conn: AsyncConnection, tag: str) -> World:
     """Create the world inside ``conn`` (owner role). ``tag`` keeps emails and slugs unique per test session."""
     niche_id, plan_id = uuid7(), uuid7()
@@ -892,6 +944,9 @@ async def build(conn: AsyncConnection, tag: str) -> World:
         # --- Schema v9 (revision 0011): the tenant's team-up with its pitcher; absent at older revisions ---
         if await has_table(conn, "team_threads"):
             await add_team_rows(conn, user_id, pitcher, public_problem, (published, draft), f"{label}-{tag}")
+        # --- Schema v11 (revision 0013): the engagement's triage and declaration, the tenant's calendar feeds ---
+        if await has_table(conn, "engagement_assignments"):
+            await add_triage_rows(conn, engagement_id, org_id, pitched, pitched_version, user_id)
         tenants.append(Tenant(user_id, org_id, email, published, draft, held, hidden, published_version, draft_version))
     # --- Schema v7 (revision 0009): the quiz; absent when the world is built at an older revision ---
     if await has_table(conn, "quiz_sets"):
@@ -1088,6 +1143,17 @@ TENANT_ROWS: dict[str, Rows] = {
         owners=f"SELECT c.proposal_id::text || c.user_id::text AS key, {NO_ORG} AS org, p.owner_id AS usr,"
         f" {_PUBLIC_PROPOSAL} AS pub FROM proposal_contributors c JOIN proposals p ON p.id = c.proposal_id",
     ),
+    # revision 0013: an assignment and a recommendation are their organisation's only (never the engagement's
+    # developer's: D-68); a declaration is its engagement's readers' (as the tracker's rows); a calendar feed its user's
+    # only, an organisation's feed included
+    "engagement_assignments": _rows("engagement_assignments", "t.id::text", "t.org_id", NO_USER),
+    "engagement_recommendations": _rows("engagement_recommendations", "t.id::text", "t.org_id", NO_USER),
+    "prior_knowledge_declarations": Rows(
+        key="prior_knowledge_declarations.id::text",
+        owners="SELECT t.id::text AS key, e.org_id AS org, e.developer_id AS usr, false AS pub"
+        " FROM prior_knowledge_declarations t JOIN engagements e ON e.id = t.engagement_id",
+    ),
+    "calendar_feeds": _rows("calendar_feeds", "t.id::text", NO_ORG, "t.user_id"),
 }
 
 # STAFF tables: (key expression, owner query returning the keys of the fixture rows).

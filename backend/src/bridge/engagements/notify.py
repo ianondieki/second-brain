@@ -21,6 +21,10 @@ engagement (its named contact and the members who acted on it, each still an act
 read the organisation's roster, so an engagement nobody at the organisation has touched yet notifies nobody there;
 the organisation's inbox shows it (the full dispatch to role seats, REQ-NOT-03, comes after the prototype).
 
+An organisation's prior-knowledge declaration (REQ-PROV-06, its ``prior_knowledge_declared`` event) tells the
+developer (N31): in-app and by status email, always (a provenance record the owner must see: not mutable), naming the
+organisation and the idea's title only, never the evidence's title or hash.
+
 Wording is fixed product copy ([[COPY-REVIEW]]); a decline's written reason (``OTHER``) is the one free text, passed
 in the job's arguments to the developer's notification (it never enters the hash chain).
 """
@@ -67,6 +71,7 @@ QUEUE: Final = "notifications"
 TASK: Final = "engagements.notify"
 GENESIS: Final = "create"  # the database's first event of every engagement (revision 0003)
 N17_KIND: Final = "engagement.n17"
+N31_KIND: Final = "engagement.n31"
 C = sm.Command
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 DECLINE_LABELS: Final = {  # docs/spec/06 6.9 Codes. [[COPY-REVIEW]]
@@ -145,6 +150,10 @@ EVENT_TITLES: Final[dict[sm.Command, str]] = {
     C.CANCEL_REQUEST: "Question withdrawn",
     C.RESUME: "Resumed",
 }
+# [[COPY-REVIEW]] N31, the developer's notice of an organisation's prior-knowledge declaration (in-app and the status
+# email's sentence): the organisation and the idea's title only.
+DECLARED_TITLE: Final = "Prior-knowledge declaration"
+DECLARED_SENTENCE: Final = '{org} made a prior-knowledge declaration on "{title}". See it on your tracker.'
 # [[COPY-REVIEW]] the developer's in-app N17, when an organisation expresses interest (stage 0).
 INTEREST_SENTENCE: Final = '{org} is interested in "{title}". Accept or decline on your tracker.'
 ORG_ROLES: Final = frozenset(
@@ -193,6 +202,11 @@ def compose(
         body = INTEREST_SENTENCE.format(org=em2.one_line(company), title=em2.one_line(title))
         label = sm.STAGE_LABELS[EngagementState.ORG_INTEREST]
         return DEV, Notice(N17_KIND, label, body, engagement_path(DEV, event.engagement_id))
+    if event.command == sm.PRIOR_KNOWLEDGE_DECLARED:
+        if event.actor_role not in ORG_ROLES:
+            return None
+        body = DECLARED_SENTENCE.format(org=em2.one_line(company), title=em2.one_line(title))
+        return DEV, Notice(N31_KIND, DECLARED_TITLE, body, engagement_path(DEV, event.engagement_id))
     try:
         command = sm.Command(event.command)
     except ValueError:  # the genesis ("create") and anything outside the table
@@ -250,7 +264,16 @@ def compose_system(event: EngagementEvent, company: str, title: str) -> list[tup
 
 def emailed(event: EngagementEvent) -> bool:
     """Whether the event's notices also go by email in the status layout."""
-    return event.actor_role is EngagementActorRole.SYSTEM or event.command in EMAILED
+    return (
+        event.actor_role is EngagementActorRole.SYSTEM
+        or event.command in EMAILED
+        or event.command == sm.PRIOR_KNOWLEDGE_DECLARED
+    )
+
+
+def mutable(event: EngagementEvent) -> bool:
+    """Whether the recipient's email preference applies (N31's email is always sent: REQUIREMENTS.md §5)."""
+    return event.command != sm.PRIOR_KNOWLEDGE_DECLARED
 
 
 async def _send_status(
@@ -264,12 +287,13 @@ async def _send_status(
     title: str,
 ) -> bool:
     """The status email of ``notice`` to ``user_id`` (the session is bound to them), once per event, when their
-    preference for the kind allows it; False while the send is still queued after transient errors."""
+    preference for the kind allows it (a ``mutable`` event's); False while the send is still queued after transient
+    errors."""
     user = await db.get(User, user_id)
     if user is None or user.email_verified_at is None:
         get_logger(__name__).warning("status_email.skipped", event_id=str(event.id), user_id=str(user_id))
         return True
-    if not await channel_enabled(db, user.id, notice.kind, NotificationChannel.EMAIL):
+    if mutable(event) and not await channel_enabled(db, user.id, notice.kind, NotificationChannel.EMAIL):
         return True
     rendered = status.render(
         status.StatusFacts(

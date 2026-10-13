@@ -26,6 +26,11 @@ the privileged changes that run only through SECURITY DEFINER functions (revisio
   version, time or text hash, or inserts a problem's (the worker writes them through the definers); only bridge_app
   executes the embedding definers, and nobody their internal helpers; no definer function inserts a consent decision
   (its time is the database's for every writer but the owner).
+- Revision 0013 (REQ-ENG-15, REQ-PROV-06, REQ-ENG-13, REQ-DEV-04): only bridge_app touches the assignments,
+  recommendations, declarations and calendar feeds, with exactly its matrix; only bridge_app updates the profile's D3
+  references and nudge dismissal; only bridge_app executes the window and feed definers, nobody the business-day
+  helper; no function body inserts, updates or deletes a prior-knowledge declaration (its window and its one redaction
+  are the owner's own session's only).
 """
 
 from __future__ import annotations
@@ -361,6 +366,141 @@ async def test_no_definer_function_inserts_a_consent_decision(owner_engine: Asyn
                 )
             )
             assert list((await conn.execute(scan)).scalars()) == ["scan_probe()"]
+        finally:
+            await transaction.rollback()
+
+
+V13_PRIVILEGES: dict[str, set[str]] = {
+    "engagement_assignments": {"SELECT", "INSERT", "UPDATE"},  # closed by an UPDATE, never deleted
+    "engagement_recommendations": {"SELECT", "INSERT", "UPDATE", "DELETE"},  # withdrawn by its member
+    "prior_knowledge_declarations": {"SELECT", "INSERT"},  # append-only
+    "calendar_feeds": {"SELECT", "INSERT", "UPDATE"},  # revoked by an UPDATE
+}
+
+
+@pytest.mark.parametrize("table", sorted(V13_PRIVILEGES))
+@pytest.mark.parametrize("privilege", PRIVILEGES)
+async def test_only_bridge_app_touches_the_v13_tables(owner_engine: AsyncEngine, table: str, privilege: str) -> None:
+    """Revision 0013: the assignments, recommendations, prior-knowledge declarations and calendar feeds are touched by
+    bridge_app alone (the worker included: it binds a recipient and reads under their RLS), with exactly the privileges
+    it needs; no other role of the cluster holds any privilege on them."""
+    expected = {"bridge_app"} if privilege in V13_PRIVILEGES[table] else set()
+    assert await roles_holding(owner_engine, table, privilege) == expected
+
+
+async def test_the_d3_references_are_bridge_apps_to_update(owner_engine: AsyncEngine) -> None:
+    """Revision 0013 (REQ-DEV-04): bridge_app updates the D3 references and the nudge's dismissal (its own profile, by
+    revision 0001's policy); no other role of the cluster updates them."""
+    async with owner_engine.connect() as conn:
+        for column in ("github_login", "kecobo_number", "kipi_number", "ip_nudge_dismissed_at"):
+            updaters = await conn.execute(
+                text(
+                    "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                    " AND r.rolname NOT LIKE 'pg\\_%'"
+                    " AND has_column_privilege(r.oid, 'public.developer_profiles', :c, 'UPDATE')"
+                ),
+                {"c": column},
+            )
+            assert sorted(updaters.scalars()) == ["bridge_app"], column
+
+
+@pytest.mark.parametrize(
+    ("signature", "callers"),
+    [
+        ("public.app_prior_knowledge_window(uuid)", {"bridge_app"}),
+        ("public.app_calendar_feed_lookup(bytea)", {"bridge_app"}),
+        ("public.app_calendar_feed_touch(uuid)", {"bridge_app"}),
+        ("public.kenyan_business_days_after(date, integer)", set()),
+    ],
+)
+async def test_only_bridge_app_executes_the_v13_definers(
+    owner_engine: AsyncEngine, signature: str, callers: set[str]
+) -> None:
+    """Revision 0013: the window and feed definers are executable by bridge_app alone of every role of the cluster,
+    PUBLIC included; the business-day helper by nobody but the owner."""
+    async with owner_engine.connect() as conn:
+        found = await conn.execute(
+            text(
+                "SELECT r.rolname FROM pg_roles r WHERE NOT r.rolsuper AND r.rolname <> 'bridge_owner'"
+                " AND r.rolname NOT LIKE 'pg\\_%' AND has_function_privilege(r.oid, :sig, 'EXECUTE')"
+            ),
+            {"sig": signature},
+        )
+        assert set(found.scalars()) == callers
+        public = "SELECT has_function_privilege('public', :sig, 'EXECUTE')"
+        assert (await conn.execute(text(public), {"sig": signature})).scalar_one() is False
+
+
+# Revision 0013, the security review's MINOR 2 and its re-check's (B). A function the owner runs (a SECURITY DEFINER
+# one, or any function a definer calls) acts as the owner; the declaration window's bypass and the one redaction are the
+# owner's own session's with no user bound only. So no function body of the schema may insert, update or delete a
+# declaration, and every body that runs dynamic SQL (EXECUTE) or builds text with format() is reviewed by hand (a
+# dynamic statement can name the table in pieces): this list, with why each is safe. A new one fails until it is
+# reviewed here.
+DECLARATION_WRITE = (
+    "(insert[[:space:]]+into|update|delete[[:space:]]+from)[[:space:]]+(only[[:space:]]+)?(public[.])?"
+    '"?prior_knowledge_declarations"?([^_a-z0-9]|$)'
+)
+DYNAMIC_SQL = "\\mexecute\\M|\\mformat[[:space:]]*[(]"
+REVIEWED_DYNAMIC: dict[str, str] = {
+    "app_decide_claim(uuid,boolean,text)": "format() builds a decision reason string; no EXECUTE, no declaration",
+}
+FUNCTION_SCAN = text(
+    "SELECT p.oid::regprocedure::text AS signature, p.prosrc ~* :write AS writes, p.prosrc ~* :dynamic AS dynamic"
+    " FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND NOT EXISTS (SELECT 1 FROM pg_depend d"
+    " WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')"
+    " AND (p.prosrc ~* :write OR p.prosrc ~* :dynamic)"
+)
+# Probes the scan must catch (created and rolled back): the literal insert, an update and a delete (the re-check's (B):
+# a definer that redacts or removes a declaration), the reviewer's insert built in pieces, a format()-built statement,
+# and dynamic SQL in an INVOKER function a definer could call.
+SCAN_PROBES = {
+    "probe_literal()": "CREATE FUNCTION probe_literal() RETURNS void LANGUAGE sql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ INSERT INTO public.prior_knowledge_declarations"
+    " (id, engagement_id, org_id, proposal_id, version_id, declared_by, evidence_sha256, evidence_title,"
+    " evidence_dated_on, first_tier2_view_at, window_closes_on) SELECT uuid7(), e.id, e.org_id, e.proposal_id,"
+    " e.version_id, e.developer_id, '\\x00', 'probe', current_date, now(), current_date + 1 FROM engagements e"
+    " WHERE false $$",
+    "probe_update()": "CREATE FUNCTION probe_update() RETURNS void LANGUAGE sql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ UPDATE prior_knowledge_declarations"
+    " SET evidence_title = '[redacted]' WHERE false $$",
+    "probe_delete()": "CREATE FUNCTION probe_delete() RETURNS void LANGUAGE sql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ DELETE FROM ONLY public.prior_knowledge_declarations"
+    " WHERE false $$",
+    "probe_pieces()": "CREATE FUNCTION probe_pieces() RETURNS void LANGUAGE plpgsql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ BEGIN EXECUTE 'INSERT INTO public.' || 'prior_knowledge_'"
+    " || 'declarations SELECT * FROM public.' || 'prior_knowledge_' || 'declarations WHERE false'; END $$",
+    "probe_format()": "CREATE FUNCTION probe_format() RETURNS text LANGUAGE sql SECURITY DEFINER"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ SELECT format('INSERT INTO %I', 'x') $$",
+    "probe_invoker()": "CREATE FUNCTION probe_invoker() RETURNS void LANGUAGE plpgsql"
+    " SET search_path = pg_catalog, public, pg_temp AS $$ BEGIN EXECUTE 'SELECT 1'; END $$",
+}
+
+
+async def test_no_function_writes_a_declaration_or_runs_unreviewed_dynamic_sql(owner_engine: AsyncEngine) -> None:
+    """Revision 0013 (the security review's MINOR 2 and its re-check's (B)): ``prior_knowledge_declarations_window``
+    keeps a writer's own window, and ``prior_knowledge_declarations_redaction_guard`` admits the one redaction, only for
+    the table's owner in its own session with no user bound (a seed, a backfill, a DSR script), and a function the owner
+    runs acts as the owner. No function body of the schema, definer or not, inserts, updates or deletes a declaration;
+    the only bodies with dynamic SQL or format() are the reviewed ones; and the scan catches each probe: a literal
+    insert, an update, a delete, the review's insert built in pieces (``'prior_knowledge_' || 'declarations'``), a
+    format()-built statement and an INVOKER function's EXECUTE."""
+    patterns = {"write": DECLARATION_WRITE, "dynamic": DYNAMIC_SQL}
+    async with owner_engine.connect() as conn:
+        transaction = await conn.begin()
+        try:
+            found = (await conn.execute(FUNCTION_SCAN, patterns)).all()
+            assert [row.signature for row in found if row.writes] == []
+            assert {row.signature for row in found if row.dynamic} == set(REVIEWED_DYNAMIC)
+            for statement in SCAN_PROBES.values():
+                await conn.execute(text(statement))
+            flagged = (await conn.execute(FUNCTION_SCAN, patterns)).all()
+            assert {row.signature for row in flagged} - set(REVIEWED_DYNAMIC) == set(SCAN_PROBES)
+            assert {row.signature for row in flagged if row.writes} == {
+                "probe_literal()",
+                "probe_update()",
+                "probe_delete()",
+            }
         finally:
             await transaction.rollback()
 

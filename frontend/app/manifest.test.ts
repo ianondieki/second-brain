@@ -10,10 +10,12 @@ import en from "@/locales/en.json";
 import manifest, { BLOOM, PAPER } from "./manifest";
 
 // P24 (REQ-UX-04): Wazo installs as a standalone app (Android's home screen), in the tokens' colours, with icons drawn
-// from the mark; no service worker yet.
+// from the mark. P27 (REQ-UX-08; D-69) adds the service worker (public/sw.js, served at the scope the manifest names)
+// and the account menu's "Install Wazo"; the start page stays "/".
 
 vi.mock("next-intl/server", () => ({
-  getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+  getTranslations: async (namespace: string) =>
+    createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
 }));
 
 describe("the web app manifest", () => {
@@ -25,6 +27,13 @@ describe("the web app manifest", () => {
     expect(root).toContain(`--paper: ${PAPER};`);
     expect(root).toContain(`--accent: ${BLOOM};`);
     expect([m.background_color, m.theme_color]).toEqual([PAPER, BLOOM]);
+  });
+
+  it("has its service worker at the root, the manifest's scope, so the worker controls every page it names", async () => {
+    const m = await manifest();
+    expect(statSync(join(process.cwd(), "public", "sw.js")).isFile()).toBe(true);
+    expect(m.scope).toBe("/");
+    expect(m.start_url).toBe("/");
   });
 
   it("lists a 192 and a 512 icon and a maskable one, each a committed PNG of that size", async () => {

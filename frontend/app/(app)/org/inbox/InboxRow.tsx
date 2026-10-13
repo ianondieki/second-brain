@@ -25,12 +25,15 @@ export function InboxRow({
   trackerHref,
   org,
   band,
+  assignee = null,
 }: {
   item: InboxItem;
   href: string;
   trackerHref?: string;
   org?: Membership;
   band?: ReactNode;
+  /** Who its engagement is assigned to, as a quiet line in the meta ("Assigned to Wanjiru Kamau"; P27). */
+  assignee?: string | null;
 }) {
   const t = useTranslations("inbox");
   const tp = useTranslations("orgProposal");
@@ -50,6 +53,7 @@ export function InboxRow({
         <span className="flex flex-wrap gap-x-4 gap-y-1">
           {teaser.niche ? <span>{teaser.niche.label}</span> : null}
           <time dateTime={item.pitched_at}>{t("sent", { date: formatDay(locale, item.pitched_at) })}</time>
+          {assignee ? <span data-assignee-line="">{assignee}</span> : null}
         </span>
       }
       chips={[<StageChip key="stage" engagement={item.engagement} href={trackerHref} />]}

@@ -5,7 +5,7 @@ import { apiErrorCode } from "@/lib/api/error-code";
 import { forwardHeaders, serverApi } from "@/lib/api/server";
 
 import type { Member } from "./CommandForm";
-import type { Detail, DocumentKind, History, Summary } from "./model";
+import type { Detail, DocumentKind, History, OrgSummary, Summary } from "./model";
 import type { Thread } from "./messages/thread";
 import type { Tier2Share } from "./share";
 
@@ -21,7 +21,7 @@ async function options() {
 /** Why an engagement read was refused, as the screens word it (`tracker.refused.*`). */
 export type ReadRefusal = "notFound" | "mfaSetup" | "bothParties";
 
-function refused(status: number, error: unknown, path: string): ReadRefusal {
+export function refused(status: number, error: unknown, path: string): ReadRefusal {
   // The session ended between the page's /me check and this call, or still owes its second factor.
   if (status === 401) redirect(apiErrorCode(error) === "mfa_required" ? "/auth/mfa" : "/login");
   const code = apiErrorCode(error);
@@ -41,8 +41,8 @@ export async function myEngagements(): Promise<Summary[]> {
   throw new Error(`GET /api/me/engagements answered ${response.status}`);
 }
 
-/** An organisation's engagements (GET /api/orgs/{org_id}/engagements; any member). */
-export async function orgEngagements(orgId: string): Promise<Read<Summary[]>> {
+/** An organisation's engagements (GET /api/orgs/{org_id}/engagements; any member), each with its team facts. */
+export async function orgEngagements(orgId: string): Promise<Read<OrgSummary[]>> {
   const { data, error, response } = await serverApi().GET("/api/orgs/{org_id}/engagements", {
     params: { path: { org_id: orgId } },
     ...(await options()),

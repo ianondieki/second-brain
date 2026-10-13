@@ -12,7 +12,20 @@ export interface TopBarBaseProps {
   /** Signed-in screens (P25): the bar stays at the top from 1024 px, where the rail and the Search sit under it and
    *  the page's scroll padding keeps a focused control clear of it (globals.css). Phones keep the whole height. */
   sticky?: boolean;
+  /**
+   * The page's content runs on to the window's right edge (SignedInShell `bleed`, P27): the bar's frame does too, the
+   * wordmark staying level with the rail (the same left padding as the shell's), so the bar is never narrower than the
+   * content under it. Below 1152 px nothing changes.
+   */
+  bleed?: boolean;
 }
+
+/**
+ * A bleeding page's frame from 1024 px (SignedInShell and the top bar share it): the 72 rem frame's own left edge
+ * (half of what is left beside 72 rem, plus its 24 px; `100%` is the body's width, scrollbar excluded), and a 24 px
+ * margin on the right, at the window's edge.
+ */
+export const BLEED_FRAME = "lg:pr-6 lg:pl-[max(1.5rem,calc((100%_-_72rem)/2_+_1.5rem))]";
 
 /**
  * Skip link plus the top bar: a quiet white band with a hairline under it, the wordmark (a link home) on the left and
@@ -21,7 +34,13 @@ export interface TopBarBaseProps {
  * page's scroll padding clearing it, so it never covers a focused control. Without
  * next/link in its module (see components/anchor.ts); pages use TopBar.
  */
-export async function TopBarBase({ homeHref = "/", Anchor: Home, children, sticky = false }: TopBarBaseProps) {
+export async function TopBarBase({
+  homeHref = "/",
+  Anchor: Home,
+  children,
+  sticky = false,
+  bleed = false,
+}: TopBarBaseProps) {
   const t = await getTranslations("shell");
   return (
     <>
@@ -37,10 +56,22 @@ export async function TopBarBase({ homeHref = "/", Anchor: Home, children, stick
       <header
         data-top-bar=""
         data-sticky={sticky ? "" : undefined}
-        className={sticky ? "border-b border-line bg-field lg:sticky lg:top-0 lg:z-20" : "border-b border-line bg-field"}
+        className={
+          sticky ? "border-b border-line bg-field lg:sticky lg:top-0 lg:z-20" : "border-b border-line bg-field"
+        }
       >
-        <div className="mx-auto flex min-h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Home href={homeHref} className="-mx-1 inline-flex min-h-11 items-center px-1 no-underline" aria-label={t("workingName")}>
+        <div
+          className={
+            bleed
+              ? `flex min-h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 ${BLEED_FRAME}`
+              : "mx-auto flex min-h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6"
+          }
+        >
+          <Home
+            href={homeHref}
+            className="-mx-1 inline-flex min-h-11 items-center px-1 no-underline"
+            aria-label={t("workingName")}
+          >
             <Wordmark size={30} />
           </Home>
           {children}

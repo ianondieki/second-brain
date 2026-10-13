@@ -3,12 +3,20 @@
 Every command body carries ``lock_version``: the engagement's version the caller last read (409 ``stale`` when it
 moved on). Money is KES in minor units (cents). Views never carry a signer's IP address or user agent (evidence kept
 for disputes), and the History (``HistoryOut``) is the same JSON for both parties (AC-TRACK-3).
+
+The tracker's detail is one shape per side (P27, D-68): ``DeveloperEngagementDetail`` (the developer's: the
+prior-knowledge declaration made on their proposal and the IP nudge) and ``OrgEngagementDetail`` (an organisation
+member's: the team facts and the declaration window), told apart by ``my_party``. The organisation's own triage
+(``TeamFacts``: who is assigned, the members' internal recommendations) is on organisation-side schemas only
+(``OrgEngagementSummary``, ``OrgEngagementDetail``, the Inbox's engagement, the pipeline's items); the developer's
+``EngagementSummary`` and ``DeveloperEngagementDetail`` have no ``team`` field at all.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -26,7 +34,9 @@ from bridge.models.enums import (
     GrantSource,
     IpTerms,
     MilestoneState,
+    OrgRole,
     PaymentMethod,
+    RecommendationStance,
     SignatureDocumentKind,
     StepUpMethod,
 )
@@ -310,6 +320,190 @@ class EngagementDetail(EngagementSummary):
     )
 
 
+# ---------------------------------------------------------------------------------------------------------------------
+# Team triage (REQ-ENG-15, D-68; docs/spec/03 ``reviewer``: "may Recommend internally without changing state"). The
+# organisation's own: on organisation-side responses only, never on a developer's.
+# ---------------------------------------------------------------------------------------------------------------------
+
+RAW_TEXT_MAX_CHARS = 1000  # a recommendation's note or an evidence title before trimming: longer is refused unread
+
+
+class TeamPerson(BaseModel):
+    """A member of the organisation as the team sheet names them ("Former member" once their name is not readable)."""
+
+    user_id: UUID
+    display_name: str
+
+
+class StanceCounts(BaseModel):
+    """How many of the organisation's members recommend each stance on the engagement (the header's tally)."""
+
+    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True, serialize_by_alias=True)
+
+    pursue: int = Field(ge=0)
+    pass_: int = Field(ge=0, alias="pass")
+    discuss: int = Field(ge=0)
+
+
+class MyRecommendationOut(BaseModel):
+    """The caller's own recommendation on the engagement."""
+
+    stance: RecommendationStance
+    note: str | None
+
+
+class TeamFacts(BaseModel):
+    """The organisation's triage of one engagement, as one of its members reads it (D-68: never a developer)."""
+
+    assignee: TeamPerson | None = Field(description="The member the engagement is assigned to; null when nobody")
+    recommendations: StanceCounts
+    mine: MyRecommendationOut | None = Field(description="The caller's own recommendation; null when they made none")
+
+
+class TeamMemberOut(TeamPerson):
+    role: OrgRole = Field(description="The member's first role of owner, admin, signatory and reviewer")
+
+
+class RecommendationOut(BaseModel):
+    """One member's internal recommendation: plain text, rendered as text; members of the organisation only."""
+
+    user_id: UUID
+    display_name: str
+    stance: RecommendationStance
+    note: str | None
+    updated_at: datetime
+
+
+class TeamOut(BaseModel):
+    """The team sheet of one engagement (members of its organisation only)."""
+
+    engagement_id: UUID
+    members: list[TeamMemberOut] = Field(
+        description="The members the engagement may be assigned to: active owners, admins, signatories and reviewers"
+    )
+    assignee: TeamPerson | None
+    recommendations: list[RecommendationOut] = Field(description="Every member's recommendation, newest first")
+
+
+class AssigneeBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID | None = Field(
+        description="The member to assign (an owner, admin, reviewer or signatory of the organisation); null unassigns"
+    )
+
+
+class RecommendationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stance: RecommendationStance
+    note: str | None = Field(
+        default=None,
+        max_length=RAW_TEXT_MAX_CHARS,
+        description="One line of plain text, at most 200 characters once trimmed; empty or null for none. Members of"
+        " the organisation read it; the developer never does",
+    )
+
+
+class OrgEngagementSummary(EngagementSummary):
+    """An engagement in the organisation's list: the summary and the organisation's own triage."""
+
+    team: TeamFacts | None = Field(default=None, description="The organisation's triage (always sent to a member)")
+
+
+class OrgEngagementList(BaseModel):
+    items: list[OrgEngagementSummary]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The prior-knowledge declaration (REQ-PROV-06; docs/spec/06 6.4 pt 5).
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+class DeclarationBody(BaseModel):
+    """An organisation's prior-knowledge declaration: the SHA-256 of dated internal evidence (hashed in the browser;
+    the file never leaves the device), the organisation's own title for it and the evidence's date."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_sha256_hex: str = Field(pattern=r"^[0-9A-Fa-f]{64}$", description="The evidence's SHA-256: 64 hex digits")
+    evidence_title: str = Field(
+        min_length=1,
+        max_length=RAW_TEXT_MAX_CHARS,
+        description="One line of plain text, at most 200 characters once trimmed (the developer reads it)",
+    )
+    evidence_dated_on: date = Field(description="The evidence's date: no later than today in Africa/Nairobi")
+
+
+class DeclarationOut(BaseModel):
+    """A recorded declaration (append-only; hashed into the engagement's event chain)."""
+
+    id: UUID
+    engagement_id: UUID
+    evidence_sha256_hex: str
+    evidence_title: str
+    evidence_dated_on: date
+    declared_at: datetime
+    first_tier2_view_at: datetime
+    window_closes_on: date
+
+
+class OrgPriorKnowledgeOut(BaseModel):
+    """The organisation's declaration window on the engagement: it opens at the organisation's first Tier-2 view of the
+    proposal and closes at the end of ``window_closes_on`` (the 10th Kenyan business day after that view's day) in
+    Africa/Nairobi; null before any view."""
+
+    first_tier2_view_at: datetime | None
+    window_closes_on: date | None
+    declared_at: datetime | None = Field(description="When the organisation declared; null while it has not")
+    can_declare: bool = Field(
+        description="The caller may declare now: a Tier-2 view exists, the window is open, no declaration yet, the"
+        " engagement has not ended and the caller is an owner, admin or signatory"
+    )
+
+
+class DeveloperPriorKnowledgeOut(BaseModel):
+    """The prior-knowledge declaration an organisation made on the developer's proposal, as the developer reads it."""
+
+    org_name: str
+    declared_at: datetime
+    evidence_sha256_hex: str
+    evidence_title: str = Field(description="The organisation's own words: plain text")
+    evidence_dated_on: date
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# The tracker's detail, one shape per side (``my_party`` tells them apart).
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+class DeveloperEngagementDetail(EngagementDetail):
+    """The developer's tracker (no organisation triage: D-68)."""
+
+    my_party: Literal[EngagementParty.DEVELOPER]
+    prior_knowledge: DeveloperPriorKnowledgeOut | None = Field(
+        default=None, description="The organisation's prior-knowledge declaration on this proposal; null when none"
+    )
+    ip_nudge: bool = Field(
+        default=False,
+        description="Show the one note about KIPI and KECOBO registration: the developer's next step is send_nda, the"
+        " proposal has no Tier-2 view yet and the developer has not dismissed the note",
+    )
+
+
+class OrgEngagementDetail(EngagementDetail):
+    """An organisation member's tracker: the organisation's triage and its declaration window."""
+
+    my_party: Literal[EngagementParty.ORG]
+    team: TeamFacts | None = Field(default=None, description="The organisation's triage (always sent to a member)")
+    prior_knowledge: OrgPriorKnowledgeOut | None = Field(
+        default=None, description="The organisation's declaration window (always sent to a member)"
+    )
+
+
+TrackerDetail = Annotated[DeveloperEngagementDetail | OrgEngagementDetail, Field(discriminator="my_party")]
+
+
 class HistoryEventOut(BaseModel):
     id: UUID
     seq: int
@@ -389,3 +583,129 @@ class Tier2ShareOut(BaseModel):
     source: GrantSource | None
     shared_at: datetime | None
     counts_as_unlock: bool = Field(description="True for a proposal not tagged to the organisation (REQ-BIL-03).")
+
+
+# ------------------------------------------------------------------------------------------- deadlines (REQ-ENG-13)
+
+
+class DeadlineKind(StrEnum):
+    """What a deadline is (docs/platform/tasks/P27.md track A): an engagement's stage deadline, the answer-by date of
+    the organisation's question, a signed agreement's milestone, a Brief's closing day, an event's start."""
+
+    STAGE = "stage"
+    ANSWER = "answer"
+    MILESTONE = "milestone"
+    BRIEF = "brief"
+    EVENT = "event"
+
+
+class DeadlineOut(BaseModel):
+    """One deadline the viewer carries. Titles, dates and names only (D-70): never a note, a message, a Brief's
+    statement or a proposal's text."""
+
+    key: str = Field(description="'{kind}:{id}': unique in the list, stable while the item lasts")
+    kind: DeadlineKind
+    title: str = Field(
+        description="What falls due: the stage's label and the proposal's title (stage), 'Information requested' and"
+        " the title (answer), 'Milestone n' and the title (milestone), the Brief's title (brief), the event's title"
+        " (event)"
+    )
+    context: str = Field(
+        description="The other party's name for an engagement's deadline (the developer's handle for an organisation"
+        " until they are named); the organisation that posted a Brief or an event (the product's name for the"
+        " platform's events)"
+    )
+    href: str = Field(description="The web app's page of the item, in the viewer's portal")
+    due_at: datetime = Field(
+        description="The instant it falls due, in UTC: the end of the Nairobi day of a stage, answer, milestone or"
+        " Brief deadline; an event's start"
+    )
+    due_on: date = Field(description="The Africa/Nairobi date of due_at")
+    business_days_left: int = Field(description="Kenyan business days from today (Nairobi) to due_on; negative past it")
+    overdue: bool = Field(description="due_at has passed (never for an event: an event is not missed)")
+    mine: bool = Field(
+        description="The viewer's side acts: whose turn it is on an engagement's step; always true for a Brief or an"
+        " event (the viewer's own entry)"
+    )
+    engagement_id: UUID | None = Field(description="The engagement of a stage, answer or milestone deadline")
+
+
+class DeadlineList(BaseModel):
+    """The viewer's deadlines sorted by ``due_at``; ``now`` is the platform clock they were read at."""
+
+    items: list[DeadlineOut]
+    now: datetime
+
+
+class CalendarFeedOut(BaseModel):
+    """A new private calendar feed (D-70): the URL is shown once; only its token's SHA-256 is kept."""
+
+    url: str = Field(description="The absolute feed URL to subscribe to; treat it like a password")
+
+
+class CalendarFeedStatus(BaseModel):
+    """Whether the caller has a live feed (the URL itself cannot be shown again: create a new one to see it)."""
+
+    active: bool
+    created_at: datetime | None
+    last_fetched_at: datetime | None = Field(description="The last time a calendar app read the live feed")
+
+
+# -------------------------------------------------------------------------------------------- pipeline (REQ-ENG-14)
+
+StageGroup = Literal["review", "contact_nda", "agreement", "implementation", "close"]
+
+
+class PipelineItem(EngagementSummary):
+    """An engagement on the organisation's board: its summary and how long it has been where it is."""
+
+    stage_entered_at: datetime = Field(
+        description="When the engagement entered the stage of its column from the main path: a side state"
+        " (INFO_REQUESTED, ON_HOLD) does not restart it"
+    )
+    last_event_at: datetime = Field(description="The engagement's latest tracker event (its hash chain)")
+    days_in_stage: int = Field(ge=0, description="Calendar days (Nairobi) since stage_entered_at")
+    stalled: bool = Field(
+        description="Active, not on hold, and no tracker event for stalled_after_bd Kenyan business days or more"
+    )
+    team: TeamFacts | None = Field(
+        default=None,
+        description="The organisation's triage facts (REQ-ENG-15): the assignee and the recommendations' tally",
+    )
+
+
+class PipelineColumn(BaseModel):
+    group: StageGroup
+    count: int = Field(ge=0)
+    median_days_in_stage: float | None = Field(
+        description="The median days_in_stage of the column's open engagements (CLOSED ones left out); null with none"
+    )
+    items: list[PipelineItem] = Field(description="Longest in the stage first")
+
+
+class FunnelEntered(BaseModel):
+    """Engagements whose first entry into each stage group fell inside the window."""
+
+    review: int = Field(ge=0)
+    contact_nda: int = Field(ge=0)
+    agreement: int = Field(ge=0)
+    implementation: int = Field(ge=0)
+    close: int = Field(ge=0)
+
+
+class FunnelOut(BaseModel):
+    window_days: int
+    entered: FunnelEntered
+    closed: int = Field(ge=0, description="Engagements that reached CLOSED inside the window")
+    ended: int = Field(ge=0, description="Engagements that ended DECLINED, WITHDRAWN, EXPIRED or TERMINATED inside it")
+
+
+class PipelineOut(BaseModel):
+    """The organisation's engagements by stage group (Review, Contact and NDA, Agreement, Implementation, Close; an
+    engagement in a side state under the stage it left; ended ones in none, and Close only those closed inside the
+    funnel's window) and the funnel of the last ``window_days`` days."""
+
+    columns: list[PipelineColumn]
+    funnel: FunnelOut
+    stalled_after_bd: int
+    now: datetime

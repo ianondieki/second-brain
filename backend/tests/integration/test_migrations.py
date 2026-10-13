@@ -1,16 +1,18 @@
-"""Revisions 0001 to 0012 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
+"""Revisions 0001 to 0014 (REQ-TEN-01, REQ-AUD-01, REQ-CON-01, REQ-REPO-01, REQ-PROV-01, REQ-ENG-01, REQ-ENG-02,
 REQ-LLM-01, REQ-SCOUT-01, REQ-RES-01, REQ-TREND-01, REQ-BIL-08, REQ-ENG-10, REQ-NOT-03, REQ-PROP-03, REQ-ENG-11,
-REQ-REPO-02, REQ-PERS-03, REQ-DEV-01, REQ-DEV-02, REQ-DEV-03, REQ-PERS-02, REQ-EMB-01; docs/spec/08 Migrations and
-Tenancy; AC-IP-2).
+REQ-REPO-02, REQ-PERS-03, REQ-DEV-01, REQ-DEV-02, REQ-DEV-03, REQ-PERS-02, REQ-EMB-01, REQ-ENG-13, REQ-ENG-15,
+REQ-PROV-06, REQ-DEV-04; docs/spec/08 Migrations and Tenancy; AC-IP-2).
 
-Migration round trip and drift (each of 0012, 0011, 0010, 0009, 0008, 0007, 0006, 0005, 0004, 0003 and 0002 leaves the
-revision before it exactly as it found it), table classification, RLS coverage generated from the ORM metadata, the
-grant matrix of every role, role attributes, the helper and SECURITY DEFINER functions, the append-only hash-chained
-audit log, the evidence triggers of schema v2, the tracker triggers of schema v3, the schema v4 triggers and column
-grants, the schema v5 notes triggers, policies and in-app column grant, the tags policies revision 0007 leaves as they
-were, the schema v6 (revision 0008), v7 (revision 0009), v8 (revision 0010) and v9 (revision 0011) policies,
-triggers and column grants, schema v10's (revision 0012) embedding columns, indexes, functions and narrowed problems
-grants, the listed-organisations policy and the Procrastinate schema.
+Migration round trip and drift (each of 0014, 0013, 0012, 0011, 0010, 0009, 0008, 0007, 0006, 0005, 0004, 0003 and 0002
+leaves the revision before it exactly as it found it), table classification, RLS coverage generated from the ORM
+metadata, the grant matrix of every role, role attributes, the helper and SECURITY DEFINER functions, the append-only
+hash-chained audit log, the evidence triggers of schema v2 (on the clocks revision 0014 gives them), the tracker
+triggers of schema v3, the schema v4 triggers and column grants, the schema v5 notes triggers, policies and in-app
+column grant, the tags policies revision 0007 leaves as they were, the schema v6 (revision 0008), v7 (revision 0009), v8
+(revision 0010) and v9 (revision 0011) policies, triggers and column grants, schema v10's (revision 0012) embedding
+columns, indexes, functions and narrowed problems grants, schema v11's (revision 0013) triage, declaration and calendar
+feed tables with their policies, triggers and grants and the profile's D3 columns, the listed-organisations policy and
+the Procrastinate schema.
 The tracker's behaviour (chain, projection, parties, payments, clock) is tested in ``integration/engagements/``;
 schema v4's in ``integration/matching/``, ``integration/problems/`` and ``integration/billing/``; schema v5's (the
 notes' writers and readers, marking read) in ``test_rls.py``; revision 0007's ``app_close_tag(tag, status)`` in
@@ -23,7 +25,10 @@ decisions and the reminder job's list) in ``integration/events/test_events_schem
 ``integration/events/test_trends_schema.py``; schema v9's (peers, blocks, team invitations, threads and messages,
 reports and contributors) in ``integration/teams/test_peers_schema.py`` and ``integration/teams/test_teams_schema.py``;
 schema v10's (the embedding readers, writers and clearer, the consent and liked-niche triggers) in
-``integration/embeddings/test_embeddings_schema.py``.
+``integration/embeddings/test_embeddings_schema.py``; schema v11's (assignments, recommendations, the declaration's
+window and append-only rule, the feeds' lookup, touch and rotation, the D3 CHECKs, the downgrade's refusal) in
+``integration/test_migration_0013.py``; revision 0014's evidence clock (a view on the moved shared clock opens a window
+the organisation declares in) in ``integration/test_migration_0014.py``.
 """
 
 from __future__ import annotations
@@ -53,6 +58,7 @@ import bridge.models.all  # noqa: F401  # registers every table
 from bridge.ids import uuid7
 from bridge.models import Base, Tenancy
 from bridge.models.base import RLS_TENANCIES
+from bridge.models.text import FORBIDDEN_TEXT_CHARS, NOT_BLANK
 from tests.integration import world as w
 from tests.integration.conftest import BACKEND, create_database, drop_database, role_engine, run_alembic
 from tests.integration.engagements import tracker
@@ -89,7 +95,9 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
         "updated_at",
         "county_code",  # revision 0002
     },
-    "developer_profiles": {"headline", "bio", "county_code", "updated_at", "peers_visible"},  # 0011: the switch
+    # 0011: the switch; 0013: the D3 references and the nudge's dismissal
+    "developer_profiles": {"headline", "bio", "county_code", "updated_at", "peers_visible"}
+    | {"github_login", "kecobo_number", "kipi_number", "ip_nudge_dismissed_at"},
     # revision 0002: never moderation_state, owners, keys or decisions; revision 0012: never the embedding columns
     "problems": {"title", "statement", "affected_group", "niche_id", "country", "county_code", "updated_at"},
     "problem_briefs": {"visibility", "budget_band", "deadline", "status", "updated_at"},
@@ -218,6 +226,11 @@ APP_COLUMN_UPDATES: dict[str, set[str]] = {
     # revision 0011: a read marker moves; a contributor is removed (never the keys, the thread or the time added)
     "team_thread_reads": {"last_read_at"},
     "proposal_contributors": {"removed_at"},
+    # revision 0013: an assignment is closed (never its keys, people or time), a recommendation's stance and note
+    # change (its times are the database's), a feed is revoked (its last fetch is app_calendar_feed_touch's)
+    "engagement_assignments": {"unassigned_at"},
+    "engagement_recommendations": {"stance", "note"},
+    "calendar_feeds": {"revoked_at"},
 }
 APP_GRANTS: dict[str, set[str]] = {
     "users": {S, I, U},
@@ -324,6 +337,12 @@ APP_GRANTS: dict[str, set[str]] = {
     "team_messages": {S, I},
     "team_thread_reads": {S, I, U},
     "proposal_contributors": {S, I, U},
+    # revision 0013: an assignment is closed, never deleted; a recommendation is withdrawn by its member (DELETE); a
+    # declaration is append-only; a feed is revoked, never deleted by the app
+    "engagement_assignments": {S, I, U},
+    "engagement_recommendations": {S, I, U, D},
+    "prior_knowledge_declarations": {S, I},
+    "calendar_feeds": {S, I, U},
 }
 # Every other runtime role: its whole matrix (table -> privileges) and its column-scoped UPDATEs.
 ROLE_GRANTS: dict[str, dict[str, set[str]]] = {
@@ -578,6 +597,18 @@ FUNCTIONS: dict[str, tuple[bool, set[str]]] = {
     "profile_embedding_clear(uuid)": (False, set()),
     "consents_profiling_withdrawn()": (True, set()),  # clears the vector bridge_app cannot update
     "consents_created_now()": (False, set()),  # the database's time for a consent decision
+    # revision 0013: triage, the prior-knowledge window and calendar feeds (internal and trigger functions: nobody)
+    "app_prior_knowledge_window(uuid)": (True, {"bridge_app"}),  # the API's facts and the window trigger (INVOKER)
+    "app_calendar_feed_lookup(bytea)": (True, {"bridge_app"}),  # the unauthenticated feed read
+    "app_calendar_feed_touch(uuid)": (True, {"bridge_app"}),  # the feed read, after the lookup
+    "kenyan_business_days_after(date, integer)": (False, set()),
+    "engagement_assignments_guard()": (False, set()),  # SECURITY INVOKER: the writer's RLS reads the roster
+    "engagement_recommendations_guard()": (False, set()),  # SECURITY INVOKER: likewise
+    "prior_knowledge_declarations_window()": (False, set()),  # SECURITY INVOKER: current_user is the writer
+    "prior_knowledge_declarations_redaction_guard()": (False, set()),  # SECURITY INVOKER: current_user is the writer
+    "calendar_feeds_guard()": (False, set()),
+    "memberships_revoke_calendar_feeds()": (True, set()),  # revokes another user's feeds
+    "users_revoke_calendar_feeds()": (True, set()),  # likewise
 }
 PINNED_SEARCH_PATH = "search_path=pg_catalog, public, pg_temp"
 
@@ -782,6 +813,15 @@ def schema_snapshot(url: URL) -> dict[str, list[str]]:
         engine.dispose()
 
 
+# Revision 0013's tables (REQ-ENG-15, REQ-PROV-06, REQ-ENG-13).
+V13_TABLES = (
+    "engagement_assignments",
+    "engagement_recommendations",
+    "prior_knowledge_declarations",
+    "calendar_feeds",
+)
+
+
 def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     run_alembic(scratch_url, lambda config: command.upgrade(config, "0001"))
     at_0001 = schema_snapshot(scratch_url)
@@ -836,23 +876,22 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
     assert narrowed.startswith("moderation_cases bridge_app_insert INSERT")
     assert "developer_profiles.peers_visible bridge_app UPDATE" in at_0011["column_acl"]
     assert "app_peers(integer,integer) bridge_app EXECUTE" in at_0011["function_acl"]
-    run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
-    run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
-    at_head = schema_snapshot(scratch_url)
-    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0011[kind]}
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0012"))
+    at_0012 = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_0012[kind] != at_0011[kind]}
     # 0012 adds columns, indexes, functions and a trigger and narrows one grant and one policy: no table or enum
     assert changed == {"columns", "indexes", "functions", "triggers", "column_acl", "function_acl", "policies"}
     for kind in set(SNAPSHOT) - {"column_acl", "policies"}:  # additive: every object of 0011 is still there, unchanged
-        assert set(at_0011[kind]) <= set(at_head[kind]), kind
-    (narrowed,) = set(at_0011["policies"]) - set(at_head["policies"])  # a profile is inserted without an embedding
+        assert set(at_0011[kind]) <= set(at_0012[kind]), kind
+    (narrowed,) = set(at_0011["policies"]) - set(at_0012["policies"])  # a profile is inserted without an embedding
     assert narrowed.startswith("developer_profiles bridge_app_insert INSERT")
-    revoked = set(at_0011["column_acl"]) - set(at_head["column_acl"])  # bridge_app writes no problem embedding
+    revoked = set(at_0011["column_acl"]) - set(at_0012["column_acl"])  # bridge_app writes no problem embedding
     assert revoked == {
         f"problems.{column} bridge_app {privilege}"
         for column in ("embedding", "embed_model", "embed_version")
         for privilege in ("INSERT", "UPDATE")
     }
-    assert set(at_head["columns"]) - set(at_0011["columns"]) == {
+    assert set(at_0012["columns"]) - set(at_0011["columns"]) == {
         "developer_profiles.profile_embedded_at timestamp with time zone",
         "developer_profiles.profile_embedding_hash text",
         "problems.embedded_at timestamp with time zone",
@@ -860,12 +899,55 @@ def test_upgrade_downgrade_upgrade_without_drift(scratch_url: URL) -> None:
         "ix_developer_profiles_profile_embedding.profile_embedding vector(1024)",  # the indexes' own columns
         "ix_problems_embedding.embedding vector(1024)",
     }
-    assert set(at_head["indexes"]) - set(at_0011["indexes"]) == {
+    assert set(at_0012["indexes"]) - set(at_0011["indexes"]) == {
         "CREATE INDEX ix_developer_profiles_profile_embedding ON public.developer_profiles USING hnsw"
         " (profile_embedding vector_cosine_ops)",
         "CREATE INDEX ix_problems_embedding ON public.problems USING hnsw (embedding vector_cosine_ops)",
     }
-    assert "app_profiles_to_embed(text,text,integer) bridge_app EXECUTE" in at_head["function_acl"]
+    assert "app_profiles_to_embed(text,text,integer) bridge_app EXECUTE" in at_0012["function_acl"]
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "0013"))
+    at_0013 = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_0013[kind] != at_0012[kind]}
+    assert changed == set(SNAPSHOT), "0013 adds a type, columns, tables, functions, policies, triggers and grants"
+    for kind in SNAPSHOT:  # additive: every object of 0012 is still there, unchanged
+        assert set(at_0012[kind]) <= set(at_0013[kind]), kind
+    assert set(at_0013["enums"]) - set(at_0012["enums"]) == {"recommendation_stance pursue,pass,discuss"}
+    profile_columns = {
+        "developer_profiles.github_login character varying(39)",
+        "developer_profiles.kecobo_number character varying(40)",
+        "developer_profiles.kipi_number character varying(40)",
+        "developer_profiles.ip_nudge_dismissed_at timestamp with time zone",
+    }
+    added = set(at_0013["columns"]) - set(at_0012["columns"])
+    assert profile_columns <= added
+    relations = {column.split(".")[0] for column in added - profile_columns}  # the new tables and their indexes
+    assert set(V13_TABLES) <= relations
+    assert all(name in V13_TABLES or name.startswith(("pk_", "uq_", "ix_")) for name in relations), relations
+    assert {
+        "developer_profiles.github_login bridge_app UPDATE",
+        "developer_profiles.kecobo_number bridge_app UPDATE",
+        "developer_profiles.kipi_number bridge_app UPDATE",
+        "developer_profiles.ip_nudge_dismissed_at bridge_app UPDATE",
+    } <= set(at_0013["column_acl"])
+    for signature in ("app_prior_knowledge_window(uuid)", "app_calendar_feed_lookup(bytea)"):
+        assert f"{signature} bridge_app EXECUTE" in at_0013["function_acl"]
+    run_alembic(scratch_url, lambda config: command.upgrade(config, "head"))
+    run_alembic(scratch_url, command.check)  # raises AutogenerateDiffsDetected on drift from the ORM
+    at_head = schema_snapshot(scratch_url)
+    changed = {kind for kind in SNAPSHOT if at_head[kind] != at_0013[kind]}
+    assert changed == {"functions"}, "0014 replaces one function's body; its owner, ACL and triggers stay"
+    (replaced,) = set(at_0013["functions"]) - set(at_head["functions"])
+    (replacement,) = set(at_head["functions"]) - set(at_0013["functions"])
+    assert replaced.startswith("evidence_time_guard() false "), replaced  # SECURITY INVOKER, as revision 0002's
+    assert replacement.rsplit(" ", 1)[0] == replaced.rsplit(" ", 1)[0]  # signature, definer, search_path: only the body
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0013"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0014 leaves every object of 0013 exactly as it found it (revision 0002's body restored)
+        assert after[kind] == at_0013[kind], kind
+    run_alembic(scratch_url, lambda config: command.downgrade(config, "0012"))
+    after = schema_snapshot(scratch_url)
+    for kind in SNAPSHOT:  # 0013 leaves every object of 0012 exactly as it found it (the profile's grants included)
+        assert after[kind] == at_0012[kind], kind
     run_alembic(scratch_url, lambda config: command.downgrade(config, "0011"))
     after = schema_snapshot(scratch_url)
     for kind in SNAPSHOT:  # 0012 leaves every object of 0011 exactly as it found it (the problems grants included)
@@ -1202,6 +1284,10 @@ async def test_bridge_app_updates_only_the_allowed_columns(owner_engine: AsyncEn
     keys = {"proposal_id", "org_id", "developer_id", "version_id", "origin"}
     assert not (projection | keys) & updatable["engagements"]  # the chain's projection is the database's (0003)
     assert "demo_account" not in updatable["users"]  # the owner's (D-37)
+    # revision 0013: the database's times and the definers' stamps
+    assert not {"assigned_at", "assignee_user_id", "assigned_by", "org_id"} & updatable["engagement_assignments"]
+    assert not {"created_at", "updated_at", "member_user_id"} & updatable["engagement_recommendations"]
+    assert not {"created_at", "last_fetched_at", "token_hash", "user_id", "org_id"} & updatable["calendar_feeds"]
     assert not {"confirmed_at", "amount_kes_minor", "recorded_by", "recorded_at"} & updatable["payment_records"]
 
 
@@ -1301,6 +1387,19 @@ async def test_append_only_tables_deny_update_delete_truncate_to_the_app(owner_e
             held = "SELECT has_table_privilege('bridge_app', :t, :p) OR (:p IN ('INSERT', 'UPDATE')"
             held += " AND has_any_column_privilege('bridge_app', :t, :p))"
             assert not await scalar(owner_engine, held, t=team_table, p=privilege), f"{team_table} {privilege}"
+    # revision 0013: a declaration is append-only (no column UPDATE either); an assignment is closed and a feed revoked,
+    # never deleted; a recommendation is deleted only by its member (DELETE held, the policy narrows it)
+    v13_tables: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("prior_knowledge_declarations", ("UPDATE", "DELETE", "TRUNCATE")),
+        ("engagement_assignments", ("DELETE", "TRUNCATE")),
+        ("engagement_recommendations", ("TRUNCATE",)),
+        ("calendar_feeds", ("DELETE", "TRUNCATE")),
+    )
+    for v13_table, v13_privileges in v13_tables:
+        for privilege in v13_privileges:
+            held = "SELECT has_table_privilege('bridge_app', :t, :p) OR (:p IN ('INSERT', 'UPDATE')"
+            held += " AND has_any_column_privilege('bridge_app', :t, :p))"
+            assert not await scalar(owner_engine, held, t=v13_table, p=privilege), f"{v13_table} {privilege}"
 
 
 async def test_schema_v5_policies_are_exactly_the_notes_and_the_in_app_ones(owner_engine: AsyncEngine) -> None:
@@ -1529,6 +1628,133 @@ async def test_tags_keep_revision_0002s_policies(owner_engine: AsyncEngine) -> N
     (update,) = (row for row in found if row.cmd == "UPDATE")
     assert update.qual == "(developer_id = app_user_id())"
     assert update.with_check == "((developer_id = app_user_id()) AND (status = 'withdrawn'::tag_status))"
+
+
+_V13_IN_ORG = "((app_org_id() IS NULL) OR (org_id = app_org_id()))"
+_V13_MEMBER = f"app_is_member(org_id) AND {_V13_IN_ORG}"
+_V13_TRIAGE = f"app_is_member(org_id, '{{owner,admin,reviewer,signatory}}'::org_role[]) AND {_V13_IN_ORG}"
+
+
+def _v13_of_engagement(table: str, extra: str = "") -> str:
+    return (
+        "(EXISTS ( SELECT 1\n   FROM engagements e\n"
+        f"  WHERE ((e.id = {table}.engagement_id) AND (e.org_id = {table}.org_id){extra})))"
+    )
+
+
+def _v13_not_its_developer(table: str) -> str:
+    """The security review's MINOR 1: the engagement's own developer, a member of the organisation or not."""
+    return (
+        "(NOT (EXISTS ( SELECT 1\n   FROM engagements e\n"
+        f"  WHERE ((e.id = {table}.engagement_id) AND (e.developer_id = app_user_id())))))"
+    )
+
+
+_V13_NOT_MINE = " AND (e.developer_id <> app_user_id())"
+_V13_ASSIGNMENTS_READER = f"({_V13_MEMBER} AND {_v13_not_its_developer('engagement_assignments')})"
+_V13_ASSIGNMENTS_CLOSER = f"{_V13_TRIAGE} AND {_v13_not_its_developer('engagement_assignments')}"
+_V13_RECOMMENDATIONS_READER = f"{_V13_MEMBER} AND {_v13_not_its_developer('engagement_recommendations')}"
+_V13_OWN_RECOMMENDATION = (
+    f"((member_user_id = app_user_id()) AND {_V13_TRIAGE} AND {_v13_not_its_developer('engagement_recommendations')})"
+)
+
+
+# Revision 0013's policies, whole (USING, WITH CHECK) per (table, command): each term stays even where another layer
+# already covers it (the guards' membership checks, the window trigger's engagement check).
+V13_POLICIES: dict[tuple[str, str], tuple[str | None, str | None]] = {
+    ("engagement_assignments", "SELECT"): (_V13_ASSIGNMENTS_READER, None),
+    ("engagement_assignments", "INSERT"): (
+        None,
+        f"((assigned_by = app_user_id()) AND {_V13_TRIAGE} AND "
+        + _v13_of_engagement("engagement_assignments", _V13_NOT_MINE)
+        + ")",
+    ),
+    ("engagement_assignments", "UPDATE"): (
+        f"((unassigned_at IS NULL) AND {_V13_ASSIGNMENTS_CLOSER})",
+        f"({_V13_ASSIGNMENTS_CLOSER})",
+    ),
+    ("engagement_recommendations", "SELECT"): (f"({_V13_RECOMMENDATIONS_READER})", None),
+    ("engagement_recommendations", "INSERT"): (
+        None,
+        f"((member_user_id = app_user_id()) AND {_V13_TRIAGE} AND "
+        + _v13_of_engagement("engagement_recommendations", _V13_NOT_MINE)
+        + ")",
+    ),
+    ("engagement_recommendations", "UPDATE"): (_V13_OWN_RECOMMENDATION, _V13_OWN_RECOMMENDATION),
+    ("engagement_recommendations", "DELETE"): (
+        f"((member_user_id = app_user_id()) AND {_V13_RECOMMENDATIONS_READER})",
+        None,
+    ),
+    ("prior_knowledge_declarations", "SELECT"): (
+        "(EXISTS ( SELECT 1\n   FROM engagements e\n  WHERE (e.id = prior_knowledge_declarations.engagement_id)))",
+        None,
+    ),
+    ("prior_knowledge_declarations", "INSERT"): (
+        None,
+        "((declared_by = app_user_id()) AND app_is_member(org_id, '{owner,admin,signatory}'::org_role[]) AND"
+        f" {_V13_IN_ORG} AND "
+        + _v13_of_engagement(
+            "prior_knowledge_declarations",
+            " AND (e.proposal_id = prior_knowledge_declarations.proposal_id)"
+            " AND (e.version_id = prior_knowledge_declarations.version_id)" + _V13_NOT_MINE,
+        )
+        + ")",
+    ),
+    ("calendar_feeds", "SELECT"): ("(user_id = app_user_id())", None),
+    ("calendar_feeds", "INSERT"): (None, f"((user_id = app_user_id()) AND ((org_id IS NULL) OR ({_V13_MEMBER})))"),
+    ("calendar_feeds", "UPDATE"): ("(user_id = app_user_id())", "(user_id = app_user_id())"),
+}
+
+
+async def test_schema_v11_policies_are_exactly_the_planned_ones(owner_engine: AsyncEngine) -> None:
+    """Revision 0013: each new table has a policy for each command it is granted and no other, every policy is
+    bridge_app's, and each is pinned whole: an assignment and a recommendation are read by the organisation's members
+    (narrowed by app.org_id) and nobody else, written by an owner, admin, reviewer or signatory as themselves on an
+    engagement of the row's organisation (a recommendation the member's own; withdrawn by its member whatever their
+    role), and never read, written, closed or withdrawn by the engagement's own developer, even as a member (the
+    security review's MINOR 1); a declaration is read by whoever reads its engagement and inserted by an owner, admin
+    or signatory as themselves naming the engagement's organisation, proposal and version, never on their own
+    engagement (the re-check's (D)), and has no UPDATE or DELETE policy (append-only); a calendar feed is its user's
+    own, an organisation's only for a member of it."""
+    found = await rows(
+        owner_engine,
+        "SELECT tablename, policyname, cmd, CAST(roles AS text[]) AS roles, qual, with_check FROM pg_policies"
+        " WHERE schemaname = 'public' AND tablename = ANY (:tables)",
+        tables=list(V13_TABLES),
+    )
+    assert {(row.tablename, row.policyname, row.cmd) for row in found} == {
+        (table, f"bridge_app_{cmd.lower()}", cmd) for table, cmd in V13_POLICIES
+    }
+    assert {role for row in found for role in row.roles} == {"bridge_app"}
+    assert {(row.tablename, row.cmd): (row.qual, row.with_check) for row in found} == V13_POLICIES
+
+
+# Revision 0013's one-line text columns (the security review's MINOR 5): (table, column, constraint).
+V13_TEXT_CHECKS = (
+    ("engagement_recommendations", "note", "ck_engagement_recommendations_note_valid"),
+    ("prior_knowledge_declarations", "evidence_title", "ck_prior_knowledge_declarations_evidence_title_valid"),
+    ("developer_profiles", "kecobo_number", "ck_developer_profiles_kecobo_number_valid"),
+    ("developer_profiles", "kipi_number", "ck_developer_profiles_kipi_number_valid"),
+)
+
+
+async def test_every_one_line_check_is_the_shared_text_rule(owner_engine: AsyncEngine) -> None:
+    """Each one-line CHECK of revision 0013 carries ``bridge.models.text``'s pattern verbatim, in the database and in
+    the ORM (alembic check compares no CHECK), so the API's ``is_one_line`` and the database refuse the same strings
+    (``test_migration_0013.py`` sends them)."""
+    found = await rows(
+        owner_engine,
+        "SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conname = ANY (:names)",
+        names=[name for _, _, name in V13_TEXT_CHECKS],
+    )
+    definitions = {row.conname: row.definition for row in found}
+    assert set(definitions) == {name for _, _, name in V13_TEXT_CHECKS}
+    for table, column, name in V13_TEXT_CHECKS:
+        # a varchar column deparses as (column)::text
+        assert f"!~ '{FORBIDDEN_TEXT_CHARS}'::text)" in definitions[name], name
+        assert f"~ '{NOT_BLANK}'::text)" in definitions[name], name
+        orm = [str(c.sqltext) for c in TABLES[table].constraints if isinstance(c, sa.CheckConstraint)]
+        assert any(f"{column} !~ '{FORBIDDEN_TEXT_CHARS}'" in text for text in orm), (table, column)
 
 
 @pytest.mark.parametrize("role", sorted(ROLE_GRANTS))
@@ -2391,7 +2617,20 @@ V11_INSERTABLE: dict[str, set[str]] = {
 }
 
 
-@pytest.mark.parametrize(("table", "insertable"), sorted({**V10_INSERTABLE, **V11_INSERTABLE}.items()))
+# Revision 0013: the columns bridge_app inserts (an assignment's time and close, a recommendation's times, a
+# declaration's window and time, a feed's times are the database's or the definers').
+V13_INSERTABLE: dict[str, set[str]] = {
+    "engagement_assignments": {"id", "engagement_id", "org_id", "assignee_user_id", "assigned_by"},
+    "engagement_recommendations": {"id", "engagement_id", "org_id", "member_user_id", "stance", "note"},
+    "prior_knowledge_declarations": {"id", "engagement_id", "org_id", "proposal_id", "version_id", "declared_by"}
+    | {"evidence_sha256", "evidence_title", "evidence_dated_on"},
+    "calendar_feeds": {"id", "user_id", "org_id", "token_hash"},
+}
+
+
+@pytest.mark.parametrize(
+    ("table", "insertable"), sorted({**V10_INSERTABLE, **V11_INSERTABLE, **V13_INSERTABLE}.items())
+)
 async def test_schema_v8_insert_columns_are_exactly_the_apps(
     owner_engine: AsyncEngine, table: str, insertable: set[str]
 ) -> None:
@@ -2838,8 +3077,10 @@ async def test_append_only_evidence_refuses_update_and_delete_even_for_the_owner
 
 async def test_evidence_times_are_the_databases(owner_engine: AsyncEngine) -> None:
     """When an attestation was made, the Master Enterprise Terms or an NDA accepted and a Tier-2 view started is
-    evidence: the database sets it to now() on insert, whatever the writer sends (a backdated value is replaced), for
-    every role, the owner included."""
+    evidence: the database sets it on insert, whatever the writer sends (a backdated value is replaced), for every
+    role, the owner included. An attestation's is now(), its registration's clock; an acceptance's and a view's the
+    shared clock at the insert (``app_clock_now()``, revision 0014: after the transaction's start, before the next
+    reading of the clock). The shared clock moved is ``test_migration_0014.py``'s."""
     backdated = datetime.now(UTC) - timedelta(days=30)
     async with rolled_back(owner_engine) as conn:
         owner, _niche, proposal, version = await _registered_proposal(conn)
@@ -2879,13 +3120,14 @@ async def test_evidence_times_are_the_databases(owner_engine: AsyncEngine) -> No
             ),
         ):
             await conn.execute(sa.text(statement), params | row)
+        stamped = sa.text("SELECT created_at = now() FROM attestations WHERE id = :id")
+        assert (await conn.execute(stamped, {"id": attestation})).scalar_one() is True, "attestations.created_at"
         for table, column, row_id in (
-            ("attestations", "created_at", attestation),
             ("legal_acceptances", "accepted_at", terms),
             ("nda_acceptances", "accepted_at", nda),
             ("document_views", "started_at", view),
         ):
-            stamped = sa.text(f"SELECT {column} = now() FROM {table} WHERE id = :id")
+            stamped = sa.text(f"SELECT {column} >= now() AND {column} <= app_clock_now() FROM {table} WHERE id = :id")
             assert (await conn.execute(stamped, {"id": row_id})).scalar_one() is True, f"{table}.{column} was backdated"
 
 
@@ -3088,6 +3330,52 @@ V12_TRIGGERS = {
     ("consents", "consents_profiling_withdrawn"): ("consents_profiling_withdrawn", ROW | ON_INSERT),
     ("consents", "consents_created_now"): ("consents_created_now", ROW | BEFORE | ON_INSERT),
 }
+# Revision 0013: the engagement's visibility first on each engagement-scoped table's INSERT, then its guard (an
+# assignment's and a recommendation's organisation and member, the declaration's window); a declaration is append-only
+# for every role but the owner's one redaction of its title; a feed's revocation is the database's time, once, and a
+# membership or account leaving active revokes its feeds.
+V13_TRIGGERS = {
+    ("engagement_assignments", "engagement_assignments_0_visible"): (
+        "tracker_engagement_visible",
+        ROW | BEFORE | ON_INSERT,
+    ),
+    ("engagement_assignments", "engagement_assignments_guard"): (
+        "engagement_assignments_guard",
+        ROW | BEFORE | ON_INSERT | ON_UPDATE,
+    ),
+    ("engagement_recommendations", "engagement_recommendations_0_visible"): (
+        "tracker_engagement_visible",
+        ROW | BEFORE | ON_INSERT,
+    ),
+    ("engagement_recommendations", "engagement_recommendations_guard"): (
+        "engagement_recommendations_guard",
+        ROW | BEFORE | ON_INSERT | ON_UPDATE,
+    ),
+    ("prior_knowledge_declarations", "prior_knowledge_declarations_0_visible"): (
+        "tracker_engagement_visible",
+        ROW | BEFORE | ON_INSERT,
+    ),
+    ("prior_knowledge_declarations", "prior_knowledge_declarations_1_window"): (
+        "prior_knowledge_declarations_window",
+        ROW | BEFORE | ON_INSERT,
+    ),
+    ("prior_knowledge_declarations", "prior_knowledge_declarations_no_delete"): (
+        "block_mutation",
+        ROW | BEFORE | ON_DELETE,
+    ),
+    ("prior_knowledge_declarations", "prior_knowledge_declarations_redaction_guard"): (
+        "prior_knowledge_declarations_redaction_guard",
+        ROW | BEFORE | ON_UPDATE,
+    ),
+    ("prior_knowledge_declarations", "prior_knowledge_declarations_no_truncate"): (
+        "block_mutation",
+        BEFORE | ON_TRUNCATE,
+    ),
+    ("calendar_feeds", "calendar_feeds_guard"): ("calendar_feeds_guard", ROW | BEFORE | ON_UPDATE),
+    # a feed dies with its membership or account (AFTER UPDATE OF status, WHEN it leaves active)
+    ("memberships", "memberships_revoke_calendar_feeds"): ("memberships_revoke_calendar_feeds", ROW | ON_UPDATE),
+    ("users", "users_revoke_calendar_feeds"): ("users_revoke_calendar_feeds", ROW | ON_UPDATE),
+}
 
 
 async def test_a_published_briefs_text_changes_only_with_a_return_to_review(owner_engine: AsyncEngine) -> None:
@@ -3136,7 +3424,7 @@ async def test_every_trigger_is_installed_and_enabled(owner_engine: AsyncEngine)
         " AND c.relnamespace = 'public'::regnamespace AND c.relname NOT LIKE 'procrastinate%'",
     )
     expected = AUDIT_TRIGGERS | V2_TRIGGERS | V3_TRIGGERS | V5_TRIGGERS | V6_TRIGGERS | V8_TRIGGERS | V9_TRIGGERS
-    expected |= V10_TRIGGERS | V11_TRIGGERS | V12_TRIGGERS
+    expected |= V10_TRIGGERS | V11_TRIGGERS | V12_TRIGGERS | V13_TRIGGERS
     assert {(row.table_name, row.tgname): (row.function, row.tgtype) for row in found} == expected
     assert {row.tgenabled for row in found} == {"O"}
 
@@ -3228,17 +3516,21 @@ async def test_app_can_defer_fetch_and_finish_a_job(app_engine: AsyncEngine) -> 
         assert (await conn.execute(status, {"j": fetched})).scalar_one() == "succeeded"
 
 
+V13_ENGAGEMENT_TABLES = ("engagement_assignments", "engagement_recommendations", "prior_knowledge_declarations")
+
+
 async def test_the_visibility_trigger_fires_first_on_every_tracker_table(owner_engine: AsyncEngine) -> None:
     """Triggers of one timing and event fire in name order: on every tracker table the first BEFORE INSERT row trigger
-    is tracker_engagement_visible() (review P1, MAJOR 1)."""
+    is tracker_engagement_visible() (review P1, MAJOR 1); revision 0013's engagement-scoped tables too."""
     found = await rows(
         owner_engine,
         "SELECT DISTINCT ON (c.relname) c.relname AS table_name, p.proname AS function FROM pg_trigger t"
         " JOIN pg_class c ON c.oid = t.tgrelid JOIN pg_proc p ON p.oid = t.tgfoid"
         " WHERE NOT t.tgisinternal AND c.relname = ANY (:tables) AND t.tgtype & 7 = 7"  # ROW | BEFORE | INSERT
         ' ORDER BY c.relname, t.tgname COLLATE "C"',
-        tables=[*V3_TRACKER_TABLES, "engagement_notes", *V8_THREAD_TABLES],
+        tables=[*V3_TRACKER_TABLES, "engagement_notes", *V8_THREAD_TABLES, *V13_ENGAGEMENT_TABLES],
     )
     assert {row.table_name: row.function for row in found} == dict.fromkeys(
-        (*V3_TRACKER_TABLES, "engagement_notes", *V8_THREAD_TABLES), "tracker_engagement_visible"
+        (*V3_TRACKER_TABLES, "engagement_notes", *V8_THREAD_TABLES, *V13_ENGAGEMENT_TABLES),
+        "tracker_engagement_visible",
     )

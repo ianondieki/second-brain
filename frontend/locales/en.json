@@ -1,6 +1,7 @@
 {
   "_meta": {
     "reviewP26a": "[[COPY-REVIEW]] P26-A (REQ-TRACK-03, REQ-UX-02): countdown.clockDays, countdown.clockHours, countdown.clockMinutes (the live deadline clock, one message per largest unit, each figure and unit word tagged (f, u), so each language sets the order and spacing; a leading unit that is zero is not drawn, on the engagement cards of both lists, Home's Needs-you cards and the tracker's figure panel)",
+    "reviewP27f": "[[COPY-REVIEW]] P27-F (REQ-UX-08; D-69): offline.banner (the banner over a page shown from this device's copy while offline; {time} is when that copy was made, in Nairobi time), shell.install (the account menu's entry where the browser offers installing), offline.* (the /offline page: one sentence and \"Try again\"; offline.kept shows only when this device keeps the portal's Engagements list), profileSettings.dataSaver, profileSettings.dataSaverExplain, notificationSettings.dataTitle (the data-saver switch)",
     "reviewP25c2": "[[COPY-REVIEW]] P25-C2 (REQ-UX-01, REQ-UX-02, REQ-UX-04, REQ-UX-06; D-67): portal.* (the eyebrows saying where you are, the organisation portal's, the console's and the signed-out screens' new lines: portal.eyebrow.*, portal.settings.*, portal.proposal.means (the NDA step's second column heading; the step's own lead and the viewer-logging notice stay verbatim), portal.inbox.matchesTitle, portal.auth.credits), adminResearch.stepUp.retry (\"Try again\" when the fresh-code form cannot be fetched), adminResearch.stepUp.loading, briefForm.preview.* (the live preview of how a Brief reads on Discover, mirroring discover.brief* and problem.label.org_brief)",
     "reviewP11f": "[[COPY-REVIEW]] P11-F (REQ-RES-01, REQ-RES-02): admin.*, adminResearch.*, problem.*; problem.label.* follow the backend's docs/spec/06 6.5 labels (bridge/problems/service.py); the D-45 checklist text comes from the API verbatim (a placeholder until the G2 legal pack)",
     "reviewP15f": "[[COPY-REVIEW]] P15-F (REQ-ADM-01, REQ-MOD-01, REQ-DIR-03 queue): admin.nav.moderation, admin.nav.claims, adminModeration.*, adminClaims.*; adminModeration.reason.* name the pre-screen's reason codes (bridge/proposals/prescreen.py, docs/spec/06 6.12); E0/E1/E2 follow docs/spec/03",
@@ -34,7 +35,11 @@
     "reviewP23c": "[[COPY-REVIEW]] P23-3 (REQ-TRACK-03, REQ-DEV-01, REQ-UX-01): countdown.* (the deadline countdown on Home's Next deadline tile and Needs you card, the tracker's deadline and a Brief's Proposals wanted by line: the figure from its largest unit down in words, days with an ICU plural, h and min kept short (countdown.days, .hours, .minutes, each the whole figure so no words are joined in code); countdown.in (\"in {time}\", Home), countdown.dueIn (\"Due {date} · in {time}\", the tracker's one deadline line), countdown.closesIn (\"Proposals close in {time}\") and countdown.at (the full instant in Nairobi time, the time element's title)); past the instant the existing words stay (devHome.stats.deadlineOverdue, tracker.deadline.was, briefs.state.closed); trackerActions.partFailed and .partReload (a part of the tracker whose code did not load: the share, the contact reveal, the code form)",
     "reviewP24": "[[COPY-REVIEW]] P24-C (REQ-UX-01, REQ-UX-03, REQ-UX-04; D-66): landing.eyebrow, landing.title (the italic accent phrase, its accent tag), landing.sample.demo/due/dueWords/units.*, landing.stats.* (product constants: 5 tracker stages, 47 counties, 16 niches in seed/reference.yaml, 0 contact details before an NDA), landing.counties.*, landing.how.eyebrow/title and the three mono chips (landing.how.*.chip), landing.reasons.* (the values.* are the ranker's own English chip texts, bridge/matching/ranker.py, shown as a seeded example), landing.activity.*, landing.nav.explore, landing.footer.explore/credits, explore.*, credits.*, home.greeting (by the hour of the app clock in Nairobi), og.* (share cards); removed with the strip and the sides panels: landing.trust.*, landing.who.*, landing.nav.organisations, landing.sample.label; explore.nationwide/nationwideNote/seeded, problemPage.* (the public problem page: the organisation line names the verification level only, never a name), og.problemAlt; removed: landing.activity.kind.stage_reached (deferred by the backend), og.alt (the idea card)",
     "reviewP25": "[[COPY-REVIEW]] P25-C1 (REQ-UX-01, REQ-UX-05, REQ-UX-06; D-67): palette.* (the command palette, palette.unavailable when the search cannot answer: the Search button, its groups, the actions, the keys; palette.kind.* name the API's search groups), activity.* (the activity calendar: title, total, legend, the per-day tip and the hidden table, activity.kind.* the API's action kinds); eyebrow.* (P25-C2: each developer list screen's mono eyebrow saying where you are; eyebrow.devHome carries the day in Nairobi); engagementCard.* (the engagement card's five-dot stage line, read as one image, and who it waits on); activity.busiest (the busiest day in words)",
-    "reviewP26": "[[COPY-REVIEW]] P26-B (REQ-DIR-01, REQ-UX-01, REQ-UX-02; D-67): companies.lead (one sentence), companies.groupCount (a niche section's count of organisations on the page), companies.findProblems (the company page's primary action: Discover filtered by its first niche, the niche's own name), companies.pitchIdea (the way to pitch: the picker lives on an idea), companies.otherNiches (the heading of the links to the organisation's other niches; the first is the primary action's), companies.responseFigure (the response record's figures; the API's own sentence stays beneath); companies.heldUnclaimedHint (the company page's E0 explanation before any pitch: docs/spec/06 6.2's held-tag sentence, pitch.heldUnclaimed, in the same shape, saying what a pitch to them would do rather than that one was saved; no new claim); removed: companies.detailNiches (the niches are links under their own heading), companies.nichesTitle (replaced by companies.otherNiches: the first niche is the primary action's)"
+    "reviewP26": "[[COPY-REVIEW]] P26-B (REQ-DIR-01, REQ-UX-01, REQ-UX-02; D-67): companies.lead (one sentence), companies.groupCount (a niche section's count of organisations on the page), companies.findProblems (the company page's primary action: Discover filtered by its first niche, the niche's own name), companies.pitchIdea (the way to pitch: the picker lives on an idea), companies.otherNiches (the heading of the links to the organisation's other niches; the first is the primary action's), companies.responseFigure (the response record's figures; the API's own sentence stays beneath); companies.heldUnclaimedHint (the company page's E0 explanation before any pitch: docs/spec/06 6.2's held-tag sentence, pitch.heldUnclaimed, in the same shape, saying what a pitch to them would do rather than that one was saved; no new claim); removed: companies.detailNiches (the niches are links under their own heading), companies.nichesTitle (replaced by companies.otherNiches: the first niche is the primary action's)",
+    "reviewP27cde": "[[COPY-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68): tracker.team.* (the organisation's team line and recommendation tally on its tracker), tracker.declaration.* (the declaration line on the organisation's tracker; tracker.declaration.received.* the developer's panel), tracker.ipNudge.* (the one note before a developer first shares a full proposal; docs/spec/06 6.1 non-blocking nudge), tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (declarationSheet.window and refusal.windowClosed* carry docs/spec/06 6.4 pt 5's sentence; titleHint says the row is permanent), engagements.* (the \"Assigned to me\" filter and the assignee line; engagements.assignedToMe is shared with the Board), profileSettings.references.* (D3, docs/spec/06 6.4 pt 8), help.confidential.priorKnowledge",
+    "reviewP27clock": "[[COPY-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"in 6 days 14 hours 23 minutes\"), not \"14 h 23 min\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
+    "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private).",
+    "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\". deadlines.dayEmpty (\"Nothing falls due on {date}.\"): the picked day's empty state said \"in the next 30 days\" (ux re-check MINOR, spec 04 §4.2)."
   },
   "app": {
     "name": "Wazo",
@@ -59,7 +64,8 @@
       "system": "System",
       "light": "Light",
       "dark": "Dark"
-    }
+    },
+    "install": "Install {product}"
   },
   "panel": {
     "title": "How it works",
@@ -503,6 +509,7 @@
   "notificationSettings": {
     "pageTitle": "Notifications",
     "lead": "Emails about a step in your proposals and engagements, such as an approval or a signature, are always sent. Choose which other messages you get.",
+    "dataTitle": "Data",
     "channel": {
       "email": "Email",
       "whatsapp": "WhatsApp"
@@ -571,7 +578,8 @@
       "title": "What stays confidential",
       "tier1": "Tier 1 is the public teaser: its title, problem and summary. Everyone signed in can see it, so it cannot carry contact details or links.",
       "tier2": "Tier 2 is the full details: shown to verified people at organisations that accepted our NDA, plus platform staff under logged, owner-notified break-glass, and every view is logged and watermarked to the viewer.",
-      "record": "Publishing gives you timestamped evidence of what you submitted and when, and your idea's page shows who opened the full details."
+      "record": "Publishing gives you timestamped evidence of what you submitted and when, and your idea's page shows who opened the full details.",
+      "priorKnowledge": "Within 10 business days of first viewing your full proposal, an organisation may declare that it already had similar work by recording a fingerprint (SHA-256) of its dated evidence. You see the declaration on your tracker. Declarations are not recorded on the platform after this window."
     },
     "reminders": {
       "title": "Reminders",
@@ -2544,7 +2552,8 @@
       "messageSide": {
         "developer": "Developer",
         "org": "Organisation"
-      }
+      },
+      "priorKnowledgeDeclared": "Prior knowledge declared"
     },
     "event": {
       "create": "Engagement opened",
@@ -2635,6 +2644,44 @@
       "pageTitle": "Messages: {title}",
       "endedBeforeOpen": "This engagement ended before messages opened, so there is no thread.",
       "emptyViewer": "No messages yet."
+    },
+    "team": {
+      "label": "Your team on this engagement",
+      "assignedTo": "Assigned to {name}",
+      "assignedToYou": "Assigned to you",
+      "unassigned": "Not assigned yet",
+      "assign": "Assign",
+      "change": "Change",
+      "tally": "Recommended: pursue <f>{pursue}</f> · pass <f>{pass}</f> · discuss <f>{discuss}</f>",
+      "none": "No recommendations yet",
+      "see": "See recommendations",
+      "recommend": "Recommend"
+    },
+    "declaration": {
+      "label": "Prior-knowledge declaration",
+      "notYet": "The declaration window opens after your organisation's first full-proposal view.",
+      "open": "Your organisation can declare existing similar work until {date}.",
+      "openOthers": "An owner, admin or signatory of your organisation can declare existing similar work until {date}.",
+      "declare": "Declare prior knowledge",
+      "declared": "Your organisation declared prior knowledge on {date}.",
+      "closed": "The declaration window closed on {date}.",
+      "received": {
+        "title": "Prior-knowledge declaration from {org} on {date}",
+        "lead": "{org} says it already had similar work before it first viewed your full proposal. It recorded a fingerprint of its dated evidence, not the evidence itself.",
+        "hash": "Fingerprint (SHA-256)",
+        "evidenceTitle": "Title",
+        "evidenceDate": "Evidence dated",
+        "help": "What a declaration means"
+      }
+    },
+    "ipNudge": {
+      "label": "Before you share",
+      "body": "Before you share a full proposal for the first time, you may want to look at KIPI's utility-model or patent filing and KECOBO's voluntary copyright registration. Neither is required here.",
+      "kipi": "KIPI (kipi.go.ke)",
+      "kecobo": "KECOBO (copyright.go.ke)",
+      "dismiss": "Dismiss",
+      "failed": "Could not dismiss the note. Try again.",
+      "newTab": "(opens in a new tab)"
     }
   },
   "trackerActions": {
@@ -3072,6 +3119,14 @@
     "title": "Page not found",
     "body": "There is no page at this address.",
     "home": "Go to the home page"
+  },
+  "offline": {
+    "pageTitle": "You're offline",
+    "banner": "You're offline. This is {page} as of {time} EAT. Actions are available once you're back online.",
+    "title": "You're offline",
+    "body": "This page is not kept on this device, so it opens once you're back online.",
+    "retry": "Try again",
+    "kept": "The trackers you opened recently are kept on this device: <link>Engagements</link>."
   },
   "settingsNav": {
     "label": "Settings",
@@ -4054,6 +4109,8 @@
     "on": "On",
     "off": "Off",
     "explain": "Developers in your county or niches can see your handle, headline and shared niches. Never organisations.",
+    "dataSaver": "Data saver",
+    "dataSaverExplain": "No photographs and the smallest images, on this device.",
     "save": "Save",
     "saving": "Saving…",
     "saved": "Profile saved.",
@@ -4068,6 +4125,18 @@
       "unblocking": "Unblocking…",
       "unblocked": "{name} is unblocked. Threads that closed stay closed.",
       "failed": "Could not unblock them. Try again."
+    },
+    "references": {
+      "title": "Self-reported references",
+      "lead": "Shown on your certificates as self-reported. Nobody checks them.",
+      "github": "GitHub login",
+      "githubHint": "Letters, digits and single hyphens, up to 39 characters.",
+      "kecobo": "KECOBO reference",
+      "kecoboHint": "Your copyright registration number, if you have one. Up to 40 characters.",
+      "kipi": "KIPI reference",
+      "kipiHint": "Your patent or utility-model filing number, if you have one. Up to 40 characters.",
+      "invalidGithub": "A GitHub login has letters, digits and single hyphens (not first or last), up to 39 characters.",
+      "invalidReference": "Use one line of up to 40 characters, with no invisible characters."
     }
   },
   "ideaContributors": {
@@ -4082,14 +4151,10 @@
     "failed": "Could not remove them. Try again."
   },
   "countdown": {
-    "days": "{days, plural, one {# day} other {# days}} {hours} h {minutes} min",
-    "hours": "{hours} h {minutes} min",
-    "minutes": "{minutes} min",
     "clockDays": "<f>{days}</f><u> d</u> <f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
     "clockHours": "<f>{hours}</f><u> h</u> <f>{minutes}</f><u> min</u>",
     "clockMinutes": "<f>{minutes}</f><u> min</u>",
     "in": "in {time}",
-    "dueIn": "Due {date} · in {time}",
     "closesIn": "Proposals close in {time}",
     "at": "{date}, {time} EAT"
   },
@@ -4228,5 +4293,198 @@
   "engagementCard": {
     "stageOf": "Stage {step} of {total}: {stage}",
     "waitingOn": "Waiting on {name}"
+  },
+  "teamSheet": {
+    "title": "Team on this engagement",
+    "private": "Only your organisation sees this. The developer never does.",
+    "loading": "Loading the team…",
+    "failed": "Could not load the team. Try again.",
+    "retry": "Try again",
+    "working": "Saving…",
+    "assignLegend": "Assigned to",
+    "nobody": "Nobody",
+    "you": "{name} (you)",
+    "role": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "reviewer": "Reviewer",
+      "signatory": "Signatory",
+      "finance": "Finance",
+      "viewer": "Viewer"
+    },
+    "assign": "Assign",
+    "assigning": "Assigning…",
+    "assigned": "Assigned to {name}.",
+    "unassignedDone": "Nobody is assigned now.",
+    "assignedTo": "Assigned to {name}.",
+    "nobodyAssigned": "Nobody is assigned yet.",
+    "recommendations": "Recommendations",
+    "noRecommendations": "No recommendations yet.",
+    "stance": {
+      "pursue": "Pursue",
+      "pass": "Pass",
+      "discuss": "Discuss"
+    },
+    "mineTitle": "Your recommendation",
+    "mineLead": "It changes nothing on the engagement.",
+    "stanceLegend": "Your view",
+    "chooseStance": "Choose pursue, pass or discuss.",
+    "note": "Note (optional)",
+    "noteHint": "One line, members of your organisation read it. {count} of {max} characters.",
+    "save": "Save recommendation",
+    "saving": "Saving…",
+    "saved": "Your recommendation is saved.",
+    "remove": "Remove",
+    "removing": "Removing…",
+    "removed": "Your recommendation is removed.",
+    "close": "Close",
+    "refusal": {
+      "notAllowed": "Only an owner, admin, reviewer or signatory can assign or recommend.",
+      "invalidAssignee": "That person cannot be assigned. Choose an owner, admin, reviewer or signatory of your organisation.",
+      "unchanged": "It is already assigned that way.",
+      "conflict": "Someone changed this at the same moment. The sheet shows the latest; try again.",
+      "tooMany": "You have made many changes in the last hour. Try again in a few minutes.",
+      "invalidNote": "Keep the note to one line of up to 200 characters, with no invisible characters.",
+      "notFound": "This engagement is no longer here.",
+      "network": "No connection. Try again.",
+      "generic": "Something went wrong. Try again."
+    }
+  },
+  "declarationSheet": {
+    "title": "Declare prior knowledge",
+    "lead": "If your organisation already had similar work before it first viewed this proposal, record that here.",
+    "private": "Only a fingerprint (SHA-256) of your file leaves this device; the file itself is never uploaded.",
+    "window": "Declarations are not recorded on the platform after {date}.",
+    "evidence": "Evidence",
+    "sourceFile": "From a file",
+    "sourcePaste": "Paste a SHA-256",
+    "file": "File",
+    "fileHint": "Fingerprinted on this device. Up to 50 MB.",
+    "hashing": "Making the fingerprint…",
+    "hashed": "Fingerprint of {name}:",
+    "tooLarge": "Files over 50 MB are not fingerprinted in the browser. Run sha256sum on the file and paste the result instead.",
+    "hashFailed": "This browser could not read the file. Paste its SHA-256 instead.",
+    "needFile": "Choose the file to fingerprint.",
+    "paste": "SHA-256",
+    "pasteHint": "64 characters, 0 to 9 and a to f.",
+    "invalidHash": "A SHA-256 has 64 characters, 0 to 9 and a to f.",
+    "titleLabel": "Title",
+    "titleHint": "A short title, no names. It is kept permanently.",
+    "needTitle": "Give the evidence a title.",
+    "date": "Date of the evidence",
+    "dateHint": "On or before {date}, the day your organisation first viewed the full proposal.",
+    "needDate": "Give the date of the evidence.",
+    "dateAfter": "Choose a date on or before {date}.",
+    "submit": "Record declaration",
+    "submitting": "Recording…",
+    "cancel": "Cancel",
+    "receipt": "A declaration was recorded on {date}:",
+    "told": "The developer is told and sees it on their tracker.",
+    "done": "Done",
+    "refusal": {
+      "noTier2": "The declaration window opens when your organisation first views the full proposal.",
+      "windowClosed": "The declaration window closed on {date}. Declarations are not recorded on the platform after this window.",
+      "windowClosedNoDate": "Declarations are not recorded on the platform after this window.",
+      "alreadyDeclared": "Your organisation has already declared prior knowledge on this engagement.",
+      "ended": "This engagement has ended, so no declaration can be recorded on it.",
+      "notAllowed": "Only an owner, admin or signatory can declare prior knowledge.",
+      "invalidTitle": "Give the title on one line, up to 200 characters, with no invisible characters.",
+      "future": "The date of the evidence cannot be after today.",
+      "afterView": "Prior knowledge comes before your organisation's first view of the full proposal: choose a date on or before {date}.",
+      "invalidHash": "A SHA-256 has 64 characters, 0 to 9 and a to f.",
+      "notFound": "This engagement is no longer here.",
+      "network": "No connection. Nothing was recorded; try again.",
+      "generic": "Something went wrong. Nothing was recorded; try again."
+    }
+  },
+  "engagements": {
+    "filterLabel": "Whose engagements",
+    "assignedToMe": "Assigned to me",
+    "assignedTo": "Assigned to {name}",
+    "assignedToYou": "Assigned to you",
+    "noneMine": "Nothing here is assigned to you.",
+    "noneMineOnPage": "Nothing on this page is assigned to you.",
+    "showAll": "Show all",
+    "tabsLabel": "Engagement views",
+    "tab": {
+      "list": "List",
+      "calendar": "Calendar",
+      "board": "Board"
+    },
+    "filterAll": "All"
+  },
+  "deadlines": {
+    "previous": "Previous month, {month}",
+    "next": "Next month, {month}",
+    "more": "{count, plural, other {+# more}}",
+    "dayDeadlines": "{date}: {count, plural, one {# deadline} other {# deadlines}}",
+    "dayList": "Deadlines on {date}",
+    "overdueTitle": "Overdue",
+    "nextTitle": "Next 30 days",
+    "dayEmpty": "Nothing falls due on {date}.",
+    "nextEmpty": "Nothing falls due in the next 30 days.",
+    "kind": {
+      "stage": "Stage deadline",
+      "answer": "Answer by",
+      "milestone": "Milestone",
+      "brief": "Brief closes",
+      "event": "Event"
+    },
+    "yours": "Your turn",
+    "addToCalendar": "Add to calendar<sr>: {title}</sr>",
+    "google": "Google Calendar<sr>: {title}</sr>",
+    "googleText": "Due: {title}",
+    "emptyDev": "No deadlines in {month}.",
+    "emptyDevAction": "Find a problem to work on",
+    "emptyOrg": "No deadlines in {month}.",
+    "emptyOrgAction": "Review proposals in the Inbox"
+  },
+  "pipeline": {
+    "funnelTitle": "Entered in the last {days} days",
+    "funnelLead": "How many engagements reached each stage, and how many of them went on to the next.",
+    "conversion": "{count} of {from} went on to {stage}",
+    "conversionNone": "Nothing entered {stage} in the window, so there is no share to show.",
+    "conversionMore": "{count} entered {stage}: more than the {from} that entered the stage before it in the window.",
+    "outcome": "{closed, plural, one {# closed} other {# closed}} and {ended, plural, one {# ended} other {# ended}} in the same window.",
+    "columnsLabel": "Pipeline stages",
+    "count": "{count, plural, one {# engagement} other {# engagements}}",
+    "median": "median {days, plural, one {# day} other {# days}} in stage",
+    "stalled": "No movement for {count}+ business days",
+    "assignee": "Assigned to {name}",
+    "columnEmpty": "None at this stage.",
+    "empty": "No engagements to show on the board yet.",
+    "emptyAction": "Set up a scout",
+    "emptyMine": "Nothing is assigned to you.",
+    "emptyMineAction": "Show all engagements"
+  },
+  "calendarFeed": {
+    "title": "Calendar feed",
+    "lead": "Subscribe once in your calendar app and every deadline follows: stages, answer-by dates, milestones, Briefs and events.",
+    "forOrg": "The deadlines of {org}.",
+    "private": "This link is private: anyone who has it can see the titles and dates of your deadlines. If it was shared, make a new link and the old one stops working.",
+    "none": "You have no feed link yet.",
+    "create": "Create a feed link",
+    "creating": "Creating…",
+    "urlLabel": "Feed link",
+    "shownOnce": "Copy it now: it is shown only this once.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Select the link and copy it yourself.",
+    "google": "Open in Google Calendar",
+    "apple": "Open in Apple Calendar",
+    "live": "Your feed is live. A calendar app last read it on {date}.",
+    "liveUnread": "Your feed is live. No calendar app has read it yet.",
+    "rotate": "Make a new link",
+    "rotating": "Making a new link…",
+    "rotateConfirm": "Replace the link? Calendars that use the current one stop updating.",
+    "rotateYes": "Replace the link",
+    "rotateCancel": "Keep the current link",
+    "remove": "Remove the feed",
+    "removing": "Removing…",
+    "removeConfirm": "Remove the link? Calendars that use it stop updating.",
+    "removeYes": "Remove the link",
+    "removeCancel": "Keep the link",
+    "removed": "The feed is removed. Its link no longer works.",
+    "failed": "That did not work. Try again."
   }
 }

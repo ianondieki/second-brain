@@ -4,26 +4,40 @@ REQ-CON-01, REQ-BIL-01, REQ-PROV-04.
 The profile carries the peers switch (REQ-DEV-03, D-58: ``peers_visible``, off until the developer turns it on; the
 time it turned on is the database's and never shown) and the county's name. A change of the county counts toward
 ``teams.profile_changes_per_day`` with the liked niches' (429 ``too_many_profile_changes``; the 0011 security review's
-MINOR 5: the peers set cannot be harvested by rotating the county); the same county sent again is no change."""
+MINOR 5: the peers set cannot be harvested by rotating the county); the same county sent again is no change.
+
+D3 (REQ-DEV-04; docs/spec/06 6.4 pt 8: "optional GitHub/KECOBO/KIPI numbers shown as self-reported"): the profile
+carries the developer's GitHub login (GitHub's rule: letters, digits and single hyphens, neither first nor last, at
+most 39 characters) and KECOBO and KIPI references (1 to 40 characters of one line of plain text), each optional; a
+null or an empty value clears it; anything else is 422. They are printed on the authorship certificate as
+self-reported and never on ``/verify``. ``POST /api/me/profile/ip-nudge/dismiss`` dismisses, for good, the one note
+about KIPI and KECOBO registration the tracker shows before the developer's ``send_nda`` step (docs/spec/06 6.1)."""
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Request, status
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from fastapi import APIRouter, Request, Response, status
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import func, select, update
 
 from bridge.audit.service import record as audit
 from bridge.auth.deps import CurrentSession, Db, SettingsDep, client_ip
 from bridge.billing import entitlements
 from bridge.directory.models import Region
+from bridge.engagements.plain import one_line
 from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, not_found
 from bridge.models.enums import ConsentPurpose, DevVerification, PlanSide, RegionKind
 from bridge.profiles import consents, verification
-from bridge.profiles.models import DeveloperProfile
+from bridge.profiles.models import (
+    GITHUB_LOGIN_MAX_CHARS,
+    GITHUB_LOGIN_PATTERN,
+    REFERENCE_MAX_CHARS,
+    DeveloperProfile,
+)
 from bridge.profiles.verification import SmsDep
 from bridge.teams import limits as team_limits
 
@@ -41,6 +55,19 @@ class ProfileOut(BaseModel):
     peers_visible: bool = Field(
         description="Peers is on: developers in your county or niches see your handle, headline and shared niches"
     )
+    github_login: str | None = Field(default=None, description="Your GitHub login (self-reported; D3)")
+    kecobo_number: str | None = Field(default=None, description="Your KECOBO registration reference (self-reported)")
+    kipi_number: str | None = Field(default=None, description="Your KIPI filing reference (self-reported)")
+
+
+RAW_REFERENCE_MAX_CHARS = 200  # before trimming: longer is refused unread
+_GITHUB_LOGIN = re.compile(GITHUB_LOGIN_PATTERN)
+# [[COPY-REVIEW]] the rules a 422 names (never the value sent).
+GITHUB_LOGIN_RULE = (
+    f"A GitHub login has letters, digits and single hyphens (not first or last), at most {GITHUB_LOGIN_MAX_CHARS}"
+    " characters."
+)
+REFERENCE_RULE = f"A reference is one line of plain text, at most {REFERENCE_MAX_CHARS} characters."
 
 
 class ProfileUpdate(BaseModel):
@@ -48,6 +75,44 @@ class ProfileUpdate(BaseModel):
     bio: str | None = Field(default=None, max_length=4000)
     county_code: str | None = Field(default=None, pattern=r"^KE-\d{2}$")
     peers_visible: bool | None = Field(default=None, description="Turn Peers on or off (null: unchanged)")
+    github_login: str | None = Field(
+        default=None,
+        max_length=RAW_REFERENCE_MAX_CHARS,
+        description=f"Your GitHub login (GitHub's rule, at most {GITHUB_LOGIN_MAX_CHARS} characters; one leading @ is"
+        " dropped); null or empty clears it",
+    )
+    kecobo_number: str | None = Field(
+        default=None,
+        max_length=RAW_REFERENCE_MAX_CHARS,
+        description=f"Your KECOBO reference: 1 to {REFERENCE_MAX_CHARS} characters; null or empty clears it",
+    )
+    kipi_number: str | None = Field(
+        default=None,
+        max_length=RAW_REFERENCE_MAX_CHARS,
+        description=f"Your KIPI reference: 1 to {REFERENCE_MAX_CHARS} characters; null or empty clears it",
+    )
+
+    @field_validator("github_login")
+    @classmethod
+    def _github_login(cls, value: str | None) -> str | None:
+        """Trimmed of ASCII spaces (nothing left clears it), then one leading ``@`` dropped: GitHub's mention sign,
+        which the certificate prints itself (``GitHub @login``). What is left must be a login (``@`` alone, ``@@x`` and
+        ``@-x`` are refused)."""
+        login = (value or "").strip(" ")
+        if not login:
+            return None
+        login = login.removeprefix("@")
+        if len(login) > GITHUB_LOGIN_MAX_CHARS or _GITHUB_LOGIN.fullmatch(login) is None:
+            raise ValueError(GITHUB_LOGIN_RULE)
+        return login
+
+    @field_validator("kecobo_number", "kipi_number")
+    @classmethod
+    def _reference(cls, value: str | None) -> str | None:
+        try:
+            return one_line(value, REFERENCE_MAX_CHARS)
+        except ValueError as exc:
+            raise ValueError(REFERENCE_RULE) from exc
 
 
 class ConsentItem(BaseModel):
@@ -110,6 +175,9 @@ def _profile_out(p: DeveloperProfile, county_name: str | None) -> ProfileOut:
         county_code=p.county_code,
         county_name=county_name,
         peers_visible=p.peers_visible,
+        github_login=p.github_login,
+        kecobo_number=p.kecobo_number,
+        kipi_number=p.kipi_number,
     )
 
 
@@ -140,7 +208,8 @@ async def get_profile(live: CurrentSession, db: Db) -> ProfileOut:
 
 @router.patch("/profile")
 async def update_profile(body: ProfileUpdate, live: CurrentSession, db: Db, settings: SettingsDep) -> ProfileOut:
-    """Change your headline, bio, county or the Peers switch (only the fields sent)."""
+    """Change your headline, bio, county, the Peers switch or your self-reported GitHub, KECOBO and KIPI references
+    (only the fields sent; a null reference clears it)."""
     profile = await db.get(DeveloperProfile, live.user.id)
     if profile is None:
         raise not_found("No developer profile.")
@@ -158,6 +227,19 @@ async def update_profile(body: ProfileUpdate, live: CurrentSession, db: Db, sett
         setattr(profile, name, value)
     await db.commit()
     return _profile_out(profile, await _county_name(db, profile.county_code))
+
+
+@router.post("/profile/ip-nudge/dismiss", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def dismiss_ip_nudge(live: CurrentSession, db: Db) -> None:
+    """Dismiss the note about KIPI and KECOBO registration on your tracker, for good (again is no change)."""
+    if await db.get(DeveloperProfile, live.user.id) is None:
+        raise not_found("No developer profile.")
+    await db.execute(  # the shared clock (the test clock where it is on), once
+        update(DeveloperProfile)
+        .where(DeveloperProfile.user_id == live.user.id, DeveloperProfile.ip_nudge_dismissed_at.is_(None))
+        .values(ip_nudge_dismissed_at=func.app_clock_now())
+    )
+    await db.commit()
 
 
 @router.get("/consents")

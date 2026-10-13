@@ -1,35 +1,12 @@
-import { headers } from "next/headers";
-import { use, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { Picture } from "@/components/landing/Picture";
+import { useSavesData } from "@/lib/data-saver-request";
 import { photoWidths } from "@/lib/photos/files";
 import { nichePhoto, placePhotos } from "@/lib/photos/niche";
 import { photo as photoBySlug } from "@/lib/photos/photos";
 
 import { cn } from "./cn";
-
-/** The request asked to save data (the `Save-Data: on` client hint): no photograph is sent. */
-export async function savesData(): Promise<boolean> {
-  try {
-    return (await headers()).get("save-data")?.trim().toLowerCase() === "on";
-  } catch {
-    return false; // outside a request (a test, a static render): nothing asked
-  }
-}
-
-/**
- * The same, read synchronously (React's `use`), so a band can sit inside the synchronous server components of cards.
- * Outside a request (a unit test, a static render) `headers()` throws at once: nothing was asked.
- */
-export function useSavesData(): boolean {
-  let pending: Promise<{ get(name: string): string | null }>;
-  try {
-    pending = headers();
-  } catch {
-    return false;
-  }
-  return use(pending).get("save-data")?.trim().toLowerCase() === "on";
-}
 
 /** A band is a short strip: the 480 px files where they are vendored (P25-A), else P24's 800 px. */
 function bandWidths(widths: readonly number[]): readonly number[] {
@@ -76,7 +53,8 @@ export interface NicheBandProps {
 /**
  * A niche's or a county's photograph as a narrow band (D-67, P25): <picture> with AVIF and WebP, the file's own size
  * (no layout shift), lazy and decoded off the main thread, `alt=""` because the niche or county name is always shown
- * beside it. Where there is no photograph, or the request carries `Save-Data: on`, the kanga lattice band instead.
+ * beside it. Where there is no photograph, or the request asks to save data (`Save-Data: on` or the data-saver switch,
+ * P27), the kanga lattice band instead.
  * Never on the tracker (REQ-UX-05). A server component (synchronous, so cards can hold it): no script.
  */
 export function NicheBand({

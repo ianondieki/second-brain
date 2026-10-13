@@ -30,6 +30,8 @@ export interface EngagementCardProps {
   eager?: boolean;
   /** The app clock's instant for the page (appNow, the API's X-App-Now): with it, an open deadline is a live clock. */
   now?: string;
+  /** The organisation's side: who it is assigned to, as a quiet line ("Assigned to Wanjiru Kamau"; P27, D-68). */
+  assignee?: string | null;
 }
 
 /**
@@ -50,6 +52,7 @@ export function EngagementCard({
   niche,
   now,
   eager = false,
+  assignee = null,
 }: EngagementCardProps) {
   const t = useTranslations("tracker");
   const tc = useTranslations("engagementCard");
@@ -120,6 +123,11 @@ export function EngagementCard({
       </p>
       <div className="mt-auto flex flex-col gap-1 text-sm">
         {turn.kind === "other" ? <p className="text-ink-soft">{tc("waitingOn", { name: other })}</p> : null}
+        {assignee ? (
+          <p className="text-ink-soft [overflow-wrap:anywhere]" data-assignee-line="">
+            {assignee}
+          </p>
+        ) : null}
         <DueClock item={item} mine={mine} now={now} className="mt-2 border-t border-line pt-3" />
         <UnreadLine count={item.unread_messages} />
       </div>

@@ -11,6 +11,14 @@ export type BadgeTone = "accent" | "warm" | "ok" | "error" | "neutral";
 export const badgeBase =
   "inline-flex items-start gap-1.5 text-sm font-semibold [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0";
 
+// Badge's own: badgeBase's shape with the size apart, so `xs` (the board's compact cards) never fights `text-sm`:
+// 12 px words with a 14 px icon 1 px down a 16 px line (centred on one line, beside the first when it wraps).
+const shape = "inline-flex items-start font-semibold [&>svg]:shrink-0";
+const sizes = {
+  sm: "gap-1.5 text-sm [&>svg]:mt-0.5 [&>svg]:size-4",
+  xs: "gap-1 text-xs [&>svg]:mt-px [&>svg]:size-3.5",
+} as const;
+
 // P20 (D-55): a status is a soft pill in its tone's wash (words and icon in the tone, at least 5:1 on the wash), so a
 // list of rows reads in a rhythm; only the row's one "Your turn" / "Needs you" marker is a solid fill (saffron).
 const tones: Record<BadgeTone, string> = {
@@ -36,6 +44,13 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   solid?: boolean;
   /** A drawn mark before the words (decorative, aria-hidden): the words carry the meaning, never the colour alone. */
   icon?: ReactNode;
+  /**
+   * The words may run to a second line (a narrow board column): corners rounded to the controls' radius, not a pill, so
+   * a wrapped badge stays a tag and never swells into an oval. On one line it still reads as the same soft shape.
+   */
+  wraps?: boolean;
+  /** `xs` on the board's compact cards (beside the clock's `xs`), whose columns are narrow; `sm` everywhere else. */
+  size?: keyof typeof sizes;
   /** The words. Required: a badge is never colour or an icon alone (docs/spec/07 item 6). */
   children: ReactNode;
   "data-chip"?: string;
@@ -47,10 +62,25 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
  * carries at most two (docs/spec/07 item 2; Row takes a tuple of at most two). `data-chip` and `data-badge` pass
  * through, so tests that count a card's chips keep working.
  */
-export function Badge({ tone = "neutral", solid = false, icon, className, children, ...rest }: BadgeProps) {
+export function Badge({
+  tone = "neutral",
+  solid = false,
+  wraps = false,
+  size = "sm",
+  icon,
+  className,
+  children,
+  ...rest
+}: BadgeProps) {
   return (
     <span
-      className={cn(badgeBase, "rounded-full px-2.5 py-0.5", solid ? solidTones[tone] : tones[tone], className)}
+      className={cn(
+        shape,
+        sizes[size],
+        wraps ? "rounded-control px-2 py-0.5" : "rounded-full px-2.5 py-0.5",
+        solid ? solidTones[tone] : tones[tone],
+        className,
+      )}
       {...rest}
     >
       {icon}

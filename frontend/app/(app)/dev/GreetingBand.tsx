@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { savesData } from "@/components/ui/NicheBand";
+import { savesData } from "@/lib/data-saver-request";
 import { photoWidths } from "@/lib/photos/files";
 import { greetingPhoto, type DayPart } from "@/lib/photos/greeting";
 import type { Photo } from "@/lib/photos/photos";
@@ -17,7 +17,8 @@ export const WIDE_MEDIA = "(min-width: 640px)";
 /**
  * Home's greeting (D-67, P25): a wide rounded band with Nairobi at this time of day behind the name, set in Fraunces
  * over a night gradient (the text keeps AA on any photograph). The photograph is the first screen's (the LCP element on
- * a phone), so it is preloaded at high priority and never lazy; under Save-Data the band is the night colour alone.
+ * a phone), so it is preloaded at high priority and never lazy; under Save-Data or the data-saver switch (P27) the band
+ * is the night colour alone.
  * Decorative (`alt=""`): the greeting says where and when. The children are the eyebrow, the h1, the lead and the
  * screen's one primary action.
  */

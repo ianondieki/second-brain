@@ -33,6 +33,7 @@ import { DEMO_PASSWORD, DemoStaff } from "../e2e/support/moderation-scene";
 import { settled } from "../e2e/support/screen";
 import { demoTotpSecret, totp } from "../e2e/support/totp";
 import { appToday, plusDays } from "../e2e/support/clock";
+import { proposalOf, viewFullProposal } from "../e2e/support/team-scene";
 import { actionsReady, pitchFromDeveloper, post, signUpOrg } from "../e2e/support/tracker-scene";
 
 const REPO = join(__dirname, "..", "..");
@@ -49,13 +50,13 @@ const SET = process.env.SHOT_SET ?? null;
 
 type Demo = "dev" | "devBrian" | "org" | "orgOwner" | "orgSacco" | "staff" | "moderator" | "devJuma";
 /** A demo person, a session that owes its second factor, or a new test account of the bell's or the side states' scene. */
-type Who = "none" | "pendingMfa" | Demo | "freshDev" | "freshOrg" | "sideDev" | "sideOrg" | "quizDev";
+type Who = "none" | "pendingMfa" | Demo | "freshDev" | "freshOrg" | "sideDev" | "sideOrg" | "quizDev" | "declOrg";
 interface Shot {
   name: string;
   path: string;
   who: Who;
   /** The screenshots folder under docs/demo/screenshots/ (default p18). */
-  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c" | "p24" | "p25" | "p26";
+  set?: "p19" | "p21" | "p22a" | "p22b" | "p22c" | "p24" | "p25" | "p26" | "p27";
   /** Only these widths (default SHOT_WIDTHS). */
   widths?: number[];
   /** Shoot this element only (the top bar), not the page. */
@@ -110,7 +111,9 @@ function stateOf(browser: Browser, who: Exclude<Who, "none">): Promise<string> {
           ? sideScene(browser).then((scene) => scene[who])
           : who === "quizDev"
             ? quizNewcomer(browser)
-            : signIn(browser, who);
+            : who === "declOrg"
+              ? declScene(browser).then((scene) => scene.declOrg)
+              : signIn(browser, who);
     states.set(who, state);
   }
   return state;
@@ -387,6 +390,32 @@ function sideScene(browser: Browser): Promise<SideScene> {
     }
   })();
   return side;
+}
+
+// P27 (REQ-PROV-06): an engagement whose organisation may declare prior knowledge. Two new test accounts: a developer
+// pitches to a new organisation (owner, admin and signatory) whose member then opens the full proposal, which opens
+// the 10-business-day window. Nothing of the demo seed changes.
+let decl: Promise<{ declOrg: string; id: string }> | null = null;
+function declScene(browser: Browser): Promise<{ declOrg: string; id: string }> {
+  decl ??= (async () => {
+    const orgContext = await browser.newContext({ baseURL: baseUrl() });
+    const devContext = await browser.newContext({ baseURL: baseUrl() });
+    try {
+      const org = await signUpOrg(orgContext.request, { orgName: "Maziwa Bora Dairies Limited" });
+      const dev = await pitchFromDeveloper(devContext.request, org.orgId, { title: TEASER.title });
+      const proposalId = await proposalOf(devContext.request, dev.engagementId);
+      await viewFullProposal({ orgId: org.orgId, request: orgContext.request }, proposalId);
+      const dir = join(__dirname, "..", "test-results", "design-shots");
+      mkdirSync(dir, { recursive: true });
+      const declOrg = join(dir, "state-declOrg.json");
+      await orgContext.storageState({ path: declOrg });
+      return { declOrg, id: dev.engagementId };
+    } finally {
+      await orgContext.close();
+      await devContext.close();
+    }
+  })();
+  return decl;
 }
 
 function answeredSide(browser: Browser): Promise<SideScene> {
@@ -1123,6 +1152,45 @@ for (const name of ["companies", "company", "home", "dev-engagements", "tracker"
   const base = SHOTS.find((shot) => shot.name === name && !shot.set);
   if (base) SHOTS.push({ ...base, set: "p26" });
 }
+
+// P27 (REQ-ENG-13, REQ-ENG-14): the Calendar tab for both sides, the organisation's Board and the calendar feed in
+// Settings › Notifications (as the person first finds it, no link made), into docs/demo/screenshots/p27/ (SHOT_SET=p27).
+// P27 (REQ-ENG-15, REQ-PROV-06): the Team sheet over Telco A's reviewer's tracker (opened, nothing assigned or
+// recommended), and the declaration sheet over a new organisation's tracker once it viewed the full proposal (opened,
+// nothing sent), into docs/demo/screenshots/p27/ (SHOT_SET=p27).
+SHOTS.push(
+  {
+    name: "team-sheet",
+    set: "p27",
+    path: "/org/engagements",
+    who: "org",
+    viewportOnly: true,
+    prepare: async (page) => {
+      const id = await submittedAtTelcoA(page);
+      if (!id) return false;
+      await page.goto(`/org/engagements/${id}`);
+      await page.locator("[data-team-panel] [data-opens='team']").first().click();
+      await page.getByRole("dialog").locator("[data-team-recommendations]").waitFor();
+    },
+  },
+  {
+    name: "declaration-sheet",
+    set: "p27",
+    path: "/org/engagements",
+    who: "declOrg",
+    viewportOnly: true,
+    prepare: async (page, browser) => {
+      const { id } = await declScene(browser);
+      await page.goto(`/org/engagements/${id}`);
+      await page.getByRole("button", { name: "Declare prior knowledge" }).click();
+      await page.getByRole("dialog").locator("[data-declaration-form]").waitFor();
+    },
+  },
+  { name: "dev-calendar", path: "/dev/engagements?view=calendar", who: "dev", set: "p27" },
+  { name: "org-calendar", path: "/org/engagements?view=calendar", who: "org", set: "p27" },
+  { name: "org-board", path: "/org/engagements?view=board", who: "org", set: "p27" },
+  { name: "settings-feed", path: "/settings/notifications", who: "dev", set: "p27" },
+);
 
 function wanted(shot: Shot) {
   return (!FILTER || FILTER.test(shot.name)) && (!SET || shot.set === SET);

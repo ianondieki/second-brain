@@ -36,7 +36,9 @@ describe("a tracker part whose chunk cannot load", () => {
         <LazyShareTier2 engagementId="e1" orgName="Telco A (fixture)" enrolled />
       </>,
     );
-    expect((await screen.findByRole("alert")).textContent).toBe(`${en.trackerActions.partFailed}${en.trackerActions.partReload}`);
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      `${en.trackerActions.partFailed}${en.trackerActions.partReload}`,
+    );
     expect(screen.getByRole("button", { name: en.trackerActions.partReload })).toBeTruthy();
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
   });
@@ -48,13 +50,20 @@ describe("a tracker part whose chunk cannot load", () => {
         <LazyContactReveal engagementId="e1" />
       </>,
     );
+    // Its chunk loads only once the button is pressed (P27 UX), so that is when it can fail.
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: en.trackerActions.contact.reveal })));
     expect((await screen.findByRole("alert")).textContent).toContain(en.trackerActions.partFailed);
     expect(document.querySelectorAll("[data-primary]")).toHaveLength(1);
   });
 
   it("the fresh-code form says so where it would open, with a reload; the refused step did not run again", async () => {
     const run = vi.fn(async (): Promise<CommandOutcome> => ({ ok: false, refusal: "stepUp", status: 403 }));
-    const engagement = detail({ state: "NDA_PENDING", actions: ["sign_nda"], awaiting: [{ command: "sign_nda", party: "developer" }], whose_turn: ["developer"] });
+    const engagement = detail({
+      state: "NDA_PENDING",
+      actions: ["sign_nda"],
+      awaiting: [{ command: "sign_nda", party: "developer" }],
+      whose_turn: ["developer"],
+    });
     renderWithIntl(
       <Actions
         engagementId={engagement.id}

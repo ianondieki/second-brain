@@ -15,7 +15,8 @@ import { SignedInShell, type SignedInShellProps } from "./SignedInShell";
 // navigation when it has one (bottom tabs on phones, a left rail from 1024 px) and one column of content in <main>.
 
 vi.mock("next-intl/server", () => ({
-  getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+  getTranslations: async (namespace: string) =>
+    createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
@@ -70,7 +71,9 @@ describe("SignedInShell", () => {
   });
 
   it("holds the bell in a Suspense boundary whose fallback is the bell without a count", () => {
-    function find(node: ReactNode): ReactElement<{ fallback: ReactElement<{ count: unknown }>; children: ReactElement }> | null {
+    function find(
+      node: ReactNode,
+    ): ReactElement<{ fallback: ReactElement<{ count: unknown }>; children: ReactElement }> | null {
       for (const child of Children.toArray(node)) {
         if (!isValidElement(child)) continue;
         if (child.type === Suspense) return child as never;
@@ -118,5 +121,47 @@ describe("SignedInShell", () => {
     const wide = await renderShell({ homeHref: "/dev", wide: true });
     expect(wide.firstElementChild!.hasAttribute("class")).toBe(false);
     expect(within(wide).getByRole("heading", { name: "My ideas" })).toBeTruthy();
+  });
+
+  // P27 (REQ-ENG-14): the Board's columns run on past the 72 rem frame to the window's right edge, the rail where every
+  // other page has it (the frame's own left padding), never wider than the body (no sideways scroll).
+  it("lets a bleeding page run on to the window's right edge, the rail left where the frame puts it", async () => {
+    const framed = await renderShell({ homeHref: "/org", wide: true });
+    expect(framed.parentElement!.className.split(" ")).toEqual(expect.arrayContaining(["mx-auto", "max-w-6xl"]));
+    expect(framed.parentElement!.hasAttribute("data-bleed")).toBe(false);
+    cleanup();
+    const main = await renderShell({ homeHref: "/org", bleed: true });
+    const row = main.parentElement!;
+    expect(row.hasAttribute("data-bleed")).toBe(true);
+    expect(row.className.split(" ")).not.toContain("max-w-6xl");
+    expect(row.className.split(" ")).toEqual(
+      expect.arrayContaining(["lg:pr-6", "lg:pl-[max(1.5rem,calc((100%_-_72rem)/2_+_1.5rem))]"]),
+    );
+    // The content is not held to the form column.
+    expect(main.firstElementChild!.hasAttribute("class")).toBe(false);
+    // The top bar's frame runs on with it, the wordmark level with the rail: never narrower than the content.
+    const bar = screen.getByRole("banner").firstElementChild!.className.split(" ");
+    expect(bar).toEqual(expect.arrayContaining(["lg:pr-6", "lg:pl-[max(1.5rem,calc((100%_-_72rem)/2_+_1.5rem))]"]));
+    expect(bar).not.toContain("max-w-6xl");
+  });
+
+  it("keeps the top bar in the 72 rem frame on every other page", async () => {
+    await renderShell({ homeHref: "/org", wide: true });
+    const bar = screen.getByRole("banner").firstElementChild!.className.split(" ");
+    expect(bar).toEqual(expect.arrayContaining(["mx-auto", "max-w-6xl"]));
+  });
+
+  // P27 (REQ-UX-08; D-69): the offline part, given by the pages the worker keeps, sits at the top of <main>, above the
+  // page; never in the staff console.
+  it("draws the offline part it is given at the top of main, and none in the staff console", async () => {
+    const main = await renderShell({ homeHref: "/dev", offline: <p data-offline-part="">offline</p> });
+    expect(main.firstElementChild!.hasAttribute("data-offline-part")).toBe(true);
+    cleanup();
+    const console = await renderShell({
+      homeHref: "/admin",
+      staffRole: "admin",
+      offline: <p data-offline-part="">offline</p>,
+    });
+    expect(console.querySelector("[data-offline-part]")).toBeNull();
   });
 });

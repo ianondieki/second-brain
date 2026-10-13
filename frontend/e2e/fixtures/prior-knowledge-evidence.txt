@@ -1,0 +1,2 @@
+Board minutes, 10 June 2025: cold-chain pilot with two dairy co-operatives.
+This file is a test fixture for the prior-knowledge declaration (REQ-PROV-06).

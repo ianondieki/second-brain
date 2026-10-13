@@ -86,6 +86,7 @@ export const DETAIL: Detail = {
   payments: [],
   documents: [],
   notes: [],
+  ip_nudge: false,
 };
 
 export const HOME_ENGAGEMENTS: Summary[] = [

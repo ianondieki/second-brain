@@ -138,16 +138,17 @@ describe("a Brief's problem card", () => {
     const brief = { org: ORG, budget_band: BAND, deadline: "2026-11-30", deadline_at: deadlineAt, open: true };
     renderWithIntl(await ProblemCard({ problem: detail({ brief } as Partial<ProblemDetail>), now: "2026-11-24T06:36:00Z" }));
     const value = within(document.querySelector("dl")!).getByText("Proposals wanted by").nextElementSibling!;
-    expect(value.textContent).toBe("30 Nov 2026Proposals close in 6 days 14 h 23 min");
+    // P27: the sentence clock on the page's ticker, its units the language's own words.
+    expect(value.textContent).toBe("30 Nov 2026Proposals close in 6\u00a0days 14\u00a0hours 23\u00a0minutes");
     expect(value.querySelector("time")?.getAttribute("dateTime")).toBe("P6DT14H23M");
     expect(value.querySelector("time")?.getAttribute("title")).toBe("30 Nov 2026, 23:59 EAT");
-    expect(value.querySelector("[data-timer='open']")).not.toBeNull();
+    expect(value.querySelector("[data-clock='open']")).not.toBeNull();
   });
 
   it("shows no countdown once the Brief is not open", async () => {
     const brief = { org: ORG, budget_band: BAND, deadline: "2026-11-30", deadline_at: deadlineAt, open: false, ended: "past_deadline" };
     renderWithIntl(await ProblemCard({ problem: detail({ brief } as Partial<ProblemDetail>), now: "2026-12-01T06:36:00Z" }));
-    expect(document.querySelector("[data-timer]")).toBeNull();
+    expect(document.querySelector("[data-clock]")).toBeNull();
     expect(within(document.querySelector("dl")!).getByText("Proposals wanted by").nextElementSibling?.textContent).toBe("30 Nov 2026");
   });
 

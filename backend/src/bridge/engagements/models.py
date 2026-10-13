@@ -79,10 +79,13 @@ from bridge.models.enums import (
     EngagementState,
     IpTerms,
     MilestoneState,
+    OrgRole,
     PaymentMethod,
+    RecommendationStance,
     SignatureDocumentKind,
     StepUpMethod,
 )
+from bridge.models.text import one_line_sql
 from bridge.models.types import pg_enum
 
 DECLINED_REASONS = (
@@ -561,18 +564,190 @@ class DevTestClock(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+# --- Revision 0013 (P27): team triage (REQ-ENG-15, D-68), the prior-knowledge declaration (REQ-PROV-06; docs/spec/06
+# 6.4 pt 5) and calendar feeds (REQ-ENG-13, D-70) ----------------------------------------------------------------------
+
+# Who assigns, is assigned and recommends (docs/spec/03: the reviewer "may Recommend internally without changing
+# state"); who declares prior knowledge (the card's contract: signatory, admin or owner).
+TRIAGE_ROLES = (OrgRole.OWNER, OrgRole.ADMIN, OrgRole.REVIEWER, OrgRole.SIGNATORY)
+DECLARATION_ROLES = (OrgRole.OWNER, OrgRole.ADMIN, OrgRole.SIGNATORY)
+RECOMMENDATION_NOTE_MAX_CHARS = 200
+EVIDENCE_TITLE_MAX_CHARS = 200
+# docs/spec/06 6.4 pt 5: Kenyan business days after the Nairobi day of the organisation's first Tier-2 view; the window
+# closes at the end of the last one. app_prior_knowledge_window computes it (one rule for the API and the database).
+DECLARATION_WINDOW_BD = 10
+ORG_SCOPED = {"info": {"tenancy": Tenancy.ORG, "tenant_column": "org_id"}}
+NAIROBI_DAY = "({column} AT TIME ZONE 'Africa/Nairobi')::date"
+# The one body a declaration's evidence title may be changed to, once, by the owner role (a DSR's pseudonymisation).
+EVIDENCE_TITLE_REDACTED = "[redacted]"
+
+
+class EngagementAssignment(IdMixin, Base):
+    """Who at the organisation works an engagement (REQ-ENG-15, D-68): the organisation's own, never a developer's.
+    An owner, admin, reviewer or signatory inserts ``id``, ``engagement_id``, ``org_id`` (the engagement's),
+    ``assignee_user_id`` (an active owner, admin, reviewer or signatory of it) and ``assigned_by`` (the caller);
+    ``assigned_at`` is the database's clock. One live row per engagement (``uq_engagement_assignments_live``):
+    reassigning closes the live row (``UPDATE ... SET unassigned_at = now()``: the database replaces the value with its
+    clock, once, for good) and inserts the next, in one transaction. Never deleted. Members read every row; nobody else
+    does, the engagement's own developer included even if they are also a member of the organisation."""
+
+    __tablename__ = "engagement_assignments"
+    __table_args__ = (
+        Index(
+            "uq_engagement_assignments_live",
+            "engagement_id",
+            unique=True,
+            postgresql_where=text("unassigned_at IS NULL"),
+        ),
+        Index(
+            "ix_engagement_assignments_assignee_live",
+            "org_id",
+            "assignee_user_id",
+            postgresql_where=text("unassigned_at IS NULL"),
+        ),
+        CheckConstraint("unassigned_at IS NULL OR unassigned_at >= assigned_at", name="unassigned_after_assigned"),
+        ORG_SCOPED,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    assignee_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    assigned_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    unassigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
+
+
+class EngagementRecommendation(IdMixin, Base):
+    """A member's internal recommendation on an engagement (REQ-ENG-15, D-68; docs/spec/03): one per member and
+    engagement, upserted by the member as themselves while an owner, admin, reviewer or signatory; withdrawn by a DELETE
+    of their own row. Changes no state. ``note`` is plain text on one line (``bridge.models.text``: 1 to 200
+    characters, or NULL for none), never in an email, a log, an event payload or a developer-visible response.
+    ``created_at`` and ``updated_at`` are the database's clock (``updated_at`` moves on every update). Members read
+    every row; nobody else does, the engagement's own developer included even if they are also a member."""
+
+    __tablename__ = "engagement_recommendations"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "member_user_id"),
+        CheckConstraint(f"note IS NULL OR ({one_line_sql('note', RECOMMENDATION_NOTE_MAX_CHARS)})", name="note_valid"),
+        ORG_SCOPED,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    member_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    stance: Mapped[RecommendationStance] = mapped_column(pg_enum(RecommendationStance, "recommendation_stance"))
+    note: Mapped[str | None] = mapped_column(Text)  # free text: never in payloads, logs, emails or developer responses
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("app_clock_now()"), server_onupdate=FetchedValue()
+    )
+
+
+class PriorKnowledgeDeclaration(IdMixin, Base):
+    """An organisation's prior-knowledge declaration (REQ-PROV-06; docs/spec/06 6.4 pt 5): the SHA-256 of dated internal
+    evidence (hashed in the browser; no file is ever uploaded), the organisation's own short title for it and the
+    evidence's date (on or before the Nairobi day of that first view: the work predates the access), made once per
+    engagement within 10 Kenyan business days of the organisation's first Tier-2 view, while the engagement has not
+    ended. Append-only: no DELETE or TRUNCATE for any role, and no UPDATE but the owner role's one redaction of
+    ``evidence_title`` to ``EVIDENCE_TITLE_REDACTED`` (a DSR), a title no declaration is inserted with (the database
+    refuses it; the API refuses it first, 422). A signatory, admin or owner, never the engagement's own developer (a
+    member or not), inserts ``id``, ``engagement_id``, ``org_id``, ``proposal_id`` and ``version_id`` (the
+    engagement's), ``declared_by`` (the caller), ``evidence_sha256``, ``evidence_title`` and ``evidence_dated_on``;
+    ``first_tier2_view_at``, ``window_closes_on`` and ``declared_at`` are the database's (read them back). Read by
+    the engagement's readers: the developer, the organisation's members and staff admin (the evidence pack)."""
+
+    __tablename__ = "prior_knowledge_declarations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["proposal_id", "version_id"],
+            ["proposal_versions.proposal_id", "proposal_versions.id"],
+            name="fk_prior_knowledge_declarations_version",
+        ),
+        CheckConstraint(SHA256_SIZE.format(column="evidence_sha256"), name="evidence_sha256"),
+        CheckConstraint(one_line_sql("evidence_title", EVIDENCE_TITLE_MAX_CHARS), name="evidence_title_valid"),
+        CheckConstraint(
+            f"window_closes_on > {NAIROBI_DAY.format(column='first_tier2_view_at')}", name="window_after_first_view"
+        ),
+        CheckConstraint(
+            f"declared_at >= first_tier2_view_at AND {NAIROBI_DAY.format(column='declared_at')} <= window_closes_on",
+            name="declared_within_window",
+        ),
+        # Existing similar work predates the organisation's access (docs/spec/06 6.4 pt 5).
+        CheckConstraint(
+            f"evidence_dated_on <= {NAIROBI_DAY.format(column='first_tier2_view_at')}",
+            name="evidence_predates_first_view",
+        ),
+        {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "via": "engagements"}},
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"), unique=True)
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    proposal_id: Mapped[UUID] = mapped_column(ForeignKey("proposals.id"))
+    version_id: Mapped[UUID] = mapped_column()
+    declared_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    evidence_sha256: Mapped[bytes] = mapped_column(LargeBinary)
+    evidence_title: Mapped[str] = mapped_column(Text)  # the organisation's words: plain text, rendered as text
+    evidence_dated_on: Mapped[date] = mapped_column(Date)
+    first_tier2_view_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=FetchedValue())
+    window_closes_on: Mapped[date] = mapped_column(Date, server_default=FetchedValue())
+    declared_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
+class CalendarFeed(IdMixin, Base):
+    """A private calendar feed URL (REQ-ENG-13, D-70): a capability. The token (32 random bytes, base64url, in the URL
+    only) is stored as its SHA-256. One live feed per user (``org_id`` NULL: the developer's deadlines) and per user and
+    organisation (a member's: the organisation's deadlines). The user inserts ``id``, ``user_id`` (themselves),
+    ``org_id`` (NULL, or an organisation they are a member of) and ``token_hash``; rotating revokes the live feed
+    (``UPDATE ... SET revoked_at = now()``: the database's clock, once, for good) and inserts the next in one
+    transaction. ``created_at`` is the database's; ``last_fetched_at`` only ``app_calendar_feed_touch`` stamps. A feed
+    dies with what it was made under: a membership leaving ``active`` revokes the member's feeds of that organisation,
+    and a user leaving ``active`` (a suspension) revokes all of theirs. The unauthenticated read resolves a token
+    through ``app_calendar_feed_lookup(token_hash)``. The user's own rows only."""
+
+    __tablename__ = "calendar_feeds"
+    __table_args__ = (
+        Index(
+            "uq_calendar_feeds_live_personal",
+            "user_id",
+            unique=True,
+            postgresql_where=text("org_id IS NULL AND revoked_at IS NULL"),
+        ),
+        Index(
+            "uq_calendar_feeds_live_org",
+            "user_id",
+            "org_id",
+            unique=True,
+            postgresql_where=text("org_id IS NOT NULL AND revoked_at IS NULL"),
+        ),
+        CheckConstraint(SHA256_SIZE.format(column="token_hash"), name="token_hash_sha256"),
+        CheckConstraint("revoked_at IS NULL OR revoked_at >= created_at", name="revoked_after_created"),
+        {"info": {"tenancy": Tenancy.USER, "tenant_column": "user_id"}},
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    org_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id"))
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
+    last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
+
+
 __all__ = [
     "Agreement",
+    "CalendarFeed",
     "DevTestClock",
     "Engagement",
+    "EngagementAssignment",
     "EngagementEndorsement",
     "EngagementEvent",
     "EngagementMessage",
     "EngagementMessageAttachment",
     "EngagementMessageRead",
     "EngagementNote",
+    "EngagementRecommendation",
     "Milestone",
     "PaymentRecord",
+    "PriorKnowledgeDeclaration",
     "Signature",
     "message_attachment_key",
 ]

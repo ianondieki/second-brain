@@ -33,6 +33,10 @@ tenant table without a fixture fails the run. Tables read on the request path by
 - Team tables (revision 0011: blocks, team invitations, threads, messages, read markers and contributor rows): every
   reader is a developer, so staff admin and an organisation-only account read no row of any of them, even with the
   world's rows all about them (``integration/teams/`` has the rest).
+- Revision 0013 (REQ-ENG-15, D-68; REQ-PROV-06; REQ-ENG-13): an engagement's assignment and recommendations are its
+  organisation's members' only (viewers included): never its developer's, never staff admin's, with or without an
+  organisation context, while the developer reads the engagement's prior-knowledge declaration; a calendar feed is its
+  user's only (``integration/test_migration_0013.py`` has the rest).
 - A cross-tenant API access returns 404.
 """
 
@@ -237,6 +241,42 @@ async def test_team_tables_are_read_by_developers_only(
         for org in (world.a.org_id, None):
             await _as_tenant(conn, org_only, org, table)
             assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0, "org-only read"
+
+
+TRIAGE_TABLES = ("engagement_assignments", "engagement_recommendations")
+
+
+@pytest.mark.parametrize("table", TRIAGE_TABLES)
+async def test_triage_rows_are_the_organisations_own(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, world: w.World, table: str
+) -> None:
+    """Revision 0013 (REQ-ENG-15, D-68): the world holds an assignment and a recommendation on each tenant's engagement.
+    Its organisation's members read them (``test_tenant_a_reads_only_its_own_and_public_rows_of_b``; a viewer too),
+    while the engagement's developer, who reads the engagement and its prior-knowledge declaration, and staff admin, who
+    reads every engagement, read none of them, with or without an organisation context."""
+    by_org = {"o": world.a.org_id}
+    async with owner_engine.connect() as conn:
+        developer = (
+            await conn.execute(text("SELECT developer_id FROM engagements WHERE org_id = :o"), by_org)
+        ).scalar_one()
+        held = await conn.execute(text(f"SELECT count(*) FROM {table} WHERE org_id = :o"), by_org)
+        assert held.scalar_one() == 1, f"{table}: no fixture row of tenant A"
+    for reader, org in ((developer, None), (developer, world.a.org_id), (world.staff_id, None)):
+        async with app_engine.connect() as conn, conn.begin():
+            await _as_tenant(conn, reader, org, table)
+            assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0, f"{reader} read"
+    async with app_engine.connect() as conn, conn.begin():
+        await _as_tenant(conn, developer, None)
+        engagements = await conn.execute(text("SELECT count(*) FROM engagements WHERE org_id = :o"), by_org)
+        assert engagements.scalar_one() == 1  # the developer reads the engagement ...
+        declarations = await conn.execute(text("SELECT count(*) FROM prior_knowledge_declarations"))
+        assert declarations.scalar_one() == 1  # ... and the declaration on their proposal, never the triage rows
+    async with rolled_back(owner_engine) as conn:
+        viewer = await _add_user(conn, f"viewer-{uuid7().hex}@example.test")
+        await _add_member(conn, world.a.org_id, viewer, "{viewer}")
+        await conn.execute(text("SET LOCAL ROLE bridge_app"))
+        await _as_tenant(conn, viewer, world.a.org_id, table)
+        assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 1  # members read
 
 
 @pytest.mark.parametrize("table", PUBLISHED_TABLES)
@@ -711,8 +751,9 @@ async def test_only_a_granted_viewer_logs_a_view_under_the_granting_org(
             )
         logged = uuid7()
         await _sql(conn, VIEW_INSERT, id=logged, org=scenario.context, **(registered | {"nda": ndas["own"]}))
-        started = await conn.execute(
-            text("SELECT started_at = now() FROM document_views WHERE id = :id"), {"id": logged}
+        started = await conn.execute(  # the shared clock at the insert (revision 0014), as bridge_app
+            text("SELECT started_at >= now() AND started_at <= app_clock_now() FROM document_views WHERE id = :id"),
+            {"id": logged},
         )
         assert started.scalar_one() is True  # the backdated start was replaced
 
