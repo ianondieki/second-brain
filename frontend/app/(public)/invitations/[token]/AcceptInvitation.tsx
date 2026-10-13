@@ -8,7 +8,6 @@ import { Alert } from "@/components/ui/Alert";
 import { Button, standaloneLinkClass } from "@/components/ui/Button";
 import { api, type ApiClient } from "@/lib/api/client";
 import { apiErrorCode } from "@/lib/api/error-code";
-import { endSession } from "@/lib/auth/sign-out";
 import { retryAfterSeconds, retryWhen } from "@/lib/retry-after";
 
 
@@ -107,8 +106,14 @@ export function AcceptInvitation({
     if (busy) return;
     setBusy(true);
     setSwitchFailed(false);
-    // The app's one sign-out (offline copies, the session, the remembered address and recent pages).
-    if (await endSession()) {
+    // The app's one sign-out (offline copies, the session, the remembered address and recent pages), fetched on the
+    // press: the invitation page's first load carries none of it. A chunk that cannot be fetched counts as not signed
+    // out.
+    const signedOut = await import("@/lib/auth/sign-out").then(
+      (module) => module.endSession(),
+      () => false,
+    );
+    if (signedOut) {
       // A full load after signing out, as the account menu's fallback sign-out does: nothing of the old session stays.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign(`/invitations/${token}`);
