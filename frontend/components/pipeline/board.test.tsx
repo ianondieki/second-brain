@@ -69,6 +69,23 @@ describe("the columns", () => {
     expect(columns[2].querySelectorAll("[data-engagement]")).toHaveLength(1);
   });
 
+  it("put a public entity's procurement route (3b) in Contact and NDA, as the API sends it (REQ-ENG-06)", async () => {
+    const value = pipeline(
+      {
+        contact_nda: [
+          pipelineItem({ id: ID(4), state: "PROCUREMENT_ROUTE", stage_label: "Procurement route determined", whose_turn: ["org"] }),
+        ],
+      },
+      { contact_nda: 1 },
+    );
+    const container = await board(value);
+    const column = container.querySelector<HTMLElement>("[data-column='contact_nda']")!;
+    const card = column.querySelector<HTMLElement>(`[data-engagement='${ID(4)}']`)!;
+    expect(card).toBeTruthy();
+    expect(within(card).getByRole("link").getAttribute("href")).toBe(`/org/engagements/${ID(4)}`);
+    expect(card.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2);
+  });
+
   it("scroll sideways inside their own focusable region, five equal columns from 1280 px", async () => {
     const container = await board(pipeline({ review: [pipelineItem()] }, { review: 1 }));
     const row = container.querySelector<HTMLElement>("[data-board-row]")!;
