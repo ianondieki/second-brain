@@ -26,6 +26,7 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -45,7 +46,8 @@ from bridge.demo import public_access
 from bridge.integrations.sms import FakeSmsProvider
 from bridge.notifications.email import FakeEmailProvider
 from bridge.seed.demo import DemoReport, DemoRuntime, seed_demo
-from bridge.seed.demo.data import AMINA, DEMO_PASSWORD, ORGS, P1, STAFF_ADMIN, TELCO_A
+from bridge.seed.demo.data import AMINA, DEMO_PASSWORD, ORGS, P1, P2, STAFF_ADMIN, TELCO_A
+from bridge.seed.demo.proposals import _draft
 from bridge.seed.demo.research import OFFICIAL_ANSWERS, SEEDED_ANSWERS
 from bridge.seed.directory import directory_loadable, load_directory, seed_directory
 from bridge.seed.reference import seed_all
@@ -92,11 +94,14 @@ async def app(demo_url: URL) -> AsyncIterator[AsyncEngine]:
     await engine.dispose()
 
 
+KEYS = LocalKeyWrapper(os.urandom(32))  # the Tier-2 key wrapper of the seed and of every visitor's API
+
+
 def runtime() -> DemoRuntime:
     return DemoRuntime(
         email_provider=FakeEmailProvider(),
         sms_provider=FakeSmsProvider(),
-        key_wrapper=LocalKeyWrapper(os.urandom(32)),
+        key_wrapper=KEYS,
         object_store=InMemoryObjectStore(),
         scanner=FakeScanner(),
     )
@@ -128,6 +133,7 @@ async def scalar(engine: AsyncEngine, sql: str, **params: object) -> Any:
 @asynccontextmanager
 async def visitor(app: AsyncEngine, settings: Settings | None = None, ip: str = "41.90.2.1") -> AsyncIterator[Any]:
     async with make_client(app, settings or public(), ip=ip) as client:
+        client.app.state.key_wrapper = KEYS  # type: ignore[attr-defined]
         yield client
 
 
@@ -504,6 +510,98 @@ async def test_the_admin_api_lists_and_runs_official_excerpts_only(fictional: Se
     async with visitor(app, get_settings(), ip="41.90.3.6") as client:
         await sign_in_as(client, app, admin, mfa_verified=True)
         assert len((await client.get("/api/admin/research/sources")).json()["excerpts"]) == 19
+
+
+# ------------------------------------------------------------------------------------- the public pages stay frozen
+
+
+async def public_view(app: AsyncEngine, settings: Settings, ip: str) -> dict[str, Any]:
+    """What a signed-out visitor sees on a fresh API (its own 60-second caches): the feed, Explore and the titles."""
+    async with visitor(app, settings, ip=ip) as reader:
+        feed = (await reader.get("/api/public/activity")).json()
+        explore = (await reader.get("/api/public/explore")).json()
+    teasers = [t for group in (*explore["counties"], *explore["niches"]) for t in group["newest"]]
+    return {
+        "feed_titles": {item["title"] for item in feed["items"]},
+        "explore_ids": {t["id"] for t in teasers},
+        "explore_titles": {t["title"] for t in teasers},
+        "problems": explore["totals"]["problems"],
+    }
+
+
+async def test_a_visitors_text_never_reaches_the_signed_out_pages(
+    fictional: Seeded, app: AsyncEngine, owner: AsyncEngine
+) -> None:
+    """Security review MAJOR 2 (a). After the freeze Grace posts a Brief (approved here by the owner role, as staff
+    would) and Amina publishes a new version of P1 with a new problem.
+    Neither reaches /api/public/* (lists omit them, their pages are 404, P1 leaves the feed, since its event would show
+    the new teaser title), the seeded problems still do, a reader with the mode off would see them, and signed-in
+    pages are unchanged."""
+    _, report = fictional
+    frozen = await scalar(owner, "SELECT now()")
+    niches = {str(slug): niche for slug, niche in await rows(owner, "SELECT slug, id FROM niches")}
+    brief_title, new_title = "Visitor brief after the freeze", "Visitor title after the freeze"
+    async with visitor(app, ip="41.90.4.1") as grace, visitor(app, ip="41.90.4.2") as amina:
+        assert (await sign_in(grace, "grace")).status_code == 200
+        brief = await grace.post(
+            f"/api/orgs/{report.orgs[TELCO_A.legal_name]}/briefs",
+            json={
+                "title": brief_title,
+                "statement": "Tower sites need fuel deliveries planned a week ahead.",
+                "niche_id": str(niches["networks-telecommunications"]),
+            },
+        )
+        assert brief.status_code == 201, brief.text
+        brief_id = brief.json()["id"]
+        async with owner.begin() as conn:  # what a staff approval would do (decisions are locked here)
+            await conn.execute(
+                text(
+                    "UPDATE problems SET status = 'published', moderation_state = 'clear', published_at = now()"
+                    " WHERE id = :p"
+                ),
+                {"p": brief_id},
+            )
+            await conn.execute(
+                text("UPDATE problem_briefs SET status = 'published' WHERE problem_id = :p"), {"p": brief_id}
+            )
+        assert (await sign_in(amina, "amina")).status_code == 200
+        body = _draft(replace(P1, title=new_title), niches, [])
+        body["new_problem"] = {
+            "title": "Visitor problem after the freeze",
+            "statement": "Members wait days for loan statements.",
+        }
+        saved = await amina.patch(f"/api/me/proposals/{report.proposals[P1.key]}", json=body)
+        assert saved.status_code == 200, saved.text
+        terms = (await amina.get("/api/proposals/attestations")).json()
+        published = await amina.post(
+            f"/api/me/proposals/{report.proposals[P1.key]}/publish",
+            json={
+                "attestations": dict.fromkeys(
+                    ("created_it", "not_owned_by_employer_or_client", "no_third_party_confidential"), True
+                ),
+                "attestation_text_version": terms["version"],
+            },
+        )
+        assert published.status_code == 200, published.text
+        new_problem = published.json()["new_problem_id"]
+        assert (await amina.get(f"/api/problems/{new_problem}")).status_code == 200  # signed-in pages unchanged
+        assert (await amina.get(f"/api/problems/{brief_id}")).status_code == 200
+    frozen_view = await public_view(app, public(public_demo_frozen_at=frozen), "41.90.4.3")
+    open_view = await public_view(app, get_settings(), "41.90.4.4")  # the same rows without the freeze
+    for leaked in (brief_id, new_problem):
+        assert leaked in open_view["explore_ids"]  # they would be public without the freeze
+        assert leaked not in frozen_view["explore_ids"]
+    assert new_title in open_view["feed_titles"]
+    assert not {new_title, P1.title, brief_title, "Visitor problem after the freeze"} & frozen_view["feed_titles"]
+    assert P2.new_problem is not None
+    assert P2.new_problem.title in frozen_view["explore_titles"]  # the seeded problems are still there
+    assert frozen_view["problems"] == open_view["problems"] - 2
+    async with visitor(app, public(public_demo_frozen_at=frozen), ip="41.90.4.5") as reader:
+        for leaked in (brief_id, new_problem):
+            response = await reader.get(f"/api/public/problems/{leaked}")
+            assert (response.status_code, response.json()["detail"]["code"]) == (404, "not_found")
+        seeded = next(iter(frozen_view["explore_ids"]))
+        assert (await reader.get(f"/api/public/problems/{seeded}")).status_code == 200
 
 
 # ------------------------------------------------------------------------------------------------- AT-PD-5 (full, last)

@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import importlib.util
 import re
+from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 import httpx
 import pytest
@@ -28,6 +30,9 @@ from bridge.demo import public_access
 from bridge.errors import ApiError
 from bridge.main import create_app
 from bridge.seed.demo.data import all_accounts
+from tests.unit.public.test_problem_route import Pages
+from tests.unit.public.test_routes import PATHS, Scene
+from tests.unit.public.test_routes import client as public_client
 
 KEYS = ["amina", "brian", "grace", "peter", "rita", "hassan", "moderator"]
 REMOVAL = re.compile(r'^RUN if \[ "\$WITH_DEV_TOOLS" != "true" \]; then rm -rf (\S+(?: \S+)*); fi$', re.MULTILINE)
@@ -248,3 +253,27 @@ def test_the_sign_in_limits() -> None:
     limits = public_access.SIGN_INS_PER_MINUTE, public_access.SHARED_SIGN_INS_PER_MINUTE
     assert limits == (30, 300)
     assert public_access.MAX_SESSIONS_PER_PERSONA == 500
+
+
+async def test_the_public_reads_get_the_freeze_in_the_public_demo_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MAJOR 2 (a): the activity feed, Explore and a public problem page read with the app's freeze instant, which
+    ``PUBLIC_DEMO_FROZEN_AT`` sets and the process start otherwise; outside the public demo there is none."""
+    scene, pages = Scene(monkeypatch), Pages(monkeypatch, {UUID(int=5)})
+    frozen = datetime(2026, 10, 13, 0, 20, tzinfo=UTC)
+    async with public_client(public(public_demo_frozen_at=frozen)) as http:
+        assert http.app.state.public_frozen_at == frozen  # type: ignore[attr-defined]
+        for path in (*PATHS, f"/api/public/problems/{UUID(int=5)}"):
+            assert (await http.get(path)).status_code == 200, path
+    async with public_client(get_settings()) as http:
+        assert http.app.state.public_frozen_at is None  # type: ignore[attr-defined]
+        for path in (*PATHS, f"/api/public/problems/{UUID(int=5)}"):
+            assert (await http.get(path)).status_code == 200, path
+    assert (scene.frozen, pages.frozen) == ([frozen, frozen, None, None], [frozen, None])
+    before = datetime.now(UTC)
+    started = create_app(public()).state.public_frozen_at
+    assert before <= started <= datetime.now(UTC)  # no setting: the process's start
+
+
+def test_the_freeze_instant_needs_a_zone() -> None:
+    with pytest.raises(ValidationError, match="PUBLIC_DEMO_FROZEN_AT must carry a zone"):
+        Settings(**{**dict(get_settings()), "public_demo_frozen_at": "2026-10-13T03:20:00"}, _env_file=None)

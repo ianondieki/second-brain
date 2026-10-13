@@ -174,6 +174,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.state.settings = settings
+    # The public demo's freeze (REQ-FND-04): signed-out public pages show nothing created or changed after it.
+    app.state.public_frozen_at = (settings.public_demo_frozen_at or clock.utcnow()) if settings.public_demo else None
     app.state.responsiveness = NoResponsivenessData()  # the directory score has no data until Phase 3
     # The public demo is never indexed (REQ-FND-04): X-Robots-Tag on every answer, the 500 handler's included.
     response_headers = {**SECURITY_HEADERS, **(ROBOTS_HEADERS if settings.public_demo else {})}

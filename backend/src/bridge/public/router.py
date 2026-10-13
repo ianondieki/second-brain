@@ -10,6 +10,9 @@ REQ-DIR-01, REQ-REPO-02; P24-B). No session needed.
 - ``GET /api/public/demo``: whether this deployment is the public demo and its personas (REQ-FND-04,
   ``bridge.public_demo``); built in memory, so it has no cache, no rate limit and no database read.
 
+In the public demo (REQ-FND-04) each shows only what existed at the freeze (``bridge.public_demo.frozen_at``): a
+problem or Brief created or changed later, or a proposal version registered later, is left out, and its page is 404.
+
 Each is the same for everyone, so each API worker keeps one copy for 60 seconds (one database read per minute per
 worker; per problem, for at most ``PROBLEM_CACHE_CAP`` problems, the least recently read leaving first) and says
 ``Cache-Control: public, max-age=60``. A fresh copy is served before anything touches the database, so it still
@@ -102,12 +105,13 @@ async def public_activity(request: Request, response: Response, db: Db, settings
         feed.demo_deployment(settings),
         _platform_now(request),
     )
+    frozen = public_demo.frozen_at(request)
     result = await _served(
         request,
         db,
         settings,
         caches(request).activity,
-        lambda: feed.activity(factory, generated_at=generated_at, demo=demo),
+        lambda: feed.activity(factory, generated_at=generated_at, demo=demo, frozen_at=frozen),
         ACTIVITY_PURPOSE,
     )
     response.headers["Cache-Control"] = PUBLIC_CACHE
@@ -118,8 +122,14 @@ async def public_activity(request: Request, response: Response, db: Db, settings
 async def public_explore(request: Request, response: Response, db: Db, settings: SettingsDep) -> Explore:
     """Published problems by county and by top-level niche, each with its three newest."""
     factory, demo = request.app.state.session_factory, feed.demo_deployment(settings)
+    frozen = public_demo.frozen_at(request)
     result = await _served(
-        request, db, settings, caches(request).explore, lambda: feed.explore(factory, demo=demo), EXPLORE_PURPOSE
+        request,
+        db,
+        settings,
+        caches(request).explore,
+        lambda: feed.explore(factory, demo=demo, frozen_at=frozen),
+        EXPLORE_PURPOSE,
     )
     response.headers["Cache-Control"] = PUBLIC_CACHE
     return result
@@ -134,7 +144,7 @@ async def public_problem(
     factory, demo, pages = request.app.state.session_factory, feed.demo_deployment(settings), caches(request).problems
 
     async def load() -> PublicProblem:
-        page = await feed.problem(factory, problem_id, demo=demo)
+        page = await feed.problem(factory, problem_id, demo=demo, frozen_at=public_demo.frozen_at(request))
         if page is None:
             raise not_found(NO_SUCH_PROBLEM)
         return page

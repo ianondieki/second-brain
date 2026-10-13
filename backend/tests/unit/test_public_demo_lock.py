@@ -57,6 +57,8 @@ LOCKED_ROUTES = frozenset(
         ("POST", "/api/me/proposals/{proposal_id}/attachments"),
         ("POST", "/api/engagements/{engagement_id}/messages/attachments"),
         ("POST", "/api/test-clock/advance"),
+        ("POST", "/api/me/calendar-feed"),  # a feed URL anyone may open would publish a visitor's text
+        ("POST", "/api/orgs/{org_id}/calendar-feed"),
     }
 )
 # Routes that take a file but keep nothing, so they stay open in the public demo, each with its reason. Add one only

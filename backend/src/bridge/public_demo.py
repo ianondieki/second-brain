@@ -29,10 +29,11 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+from datetime import datetime
 from types import ModuleType
 from typing import Final
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from bridge.auth.deps import SettingsDep
 from bridge.config import DEMO_ENVS, Settings
@@ -54,6 +55,15 @@ async def refuse_in_public_demo(settings: SettingsDep) -> None:
 
 
 LOCKED: Final = Depends(refuse_in_public_demo)
+
+
+def frozen_at(request: Request) -> datetime | None:
+    """The public demo's freeze instant (``app.state.public_frozen_at``, recorded by ``bridge.main.create_app`` at
+    start-up, or ``PUBLIC_DEMO_FROZEN_AT``): the signed-out public reads (``bridge.public``) show only rows created and
+    last changed at or before it, so a visitor's text never reaches a page anyone can open signed out. None outside
+    the public demo."""
+    frozen: datetime | None = getattr(request.app.state, "public_frozen_at", None)
+    return frozen
 
 
 def persona_module(settings: Settings) -> ModuleType | None:
