@@ -67,7 +67,7 @@ ROUTE_LABELS: Final[dict[ProcurementRoute, str]] = {
 }
 CSV_RESPONSES: Final[dict[int | str, dict[str, Any]]] = {
     200: {"content": {"text/csv": {}}, "description": "One row per engagement (UTF-8 with a byte-order mark, CRLF)"},
-    **json_errors(401, 403, 404),
+    **json_errors(401, 403, 404, 422),
 }
 
 
