@@ -63,3 +63,26 @@ export async function demoPersonas(now: number = Date.now()): Promise<DemoPerson
     return null;
   }
 }
+
+/**
+ * The line under a persona's name. In English, the API's own line ("Telco A (fixture): owner and admin"). The API writes
+ * it in English only, so in another language it is derived here (REQ-FND-04): an organisation persona shows its
+ * organisation's name (a proper name, as written), a developer its verification level in a translated sentence, staff
+ * nothing more than the role line above it.
+ */
+export function personaDetail(
+  persona: Pick<DemoPersona, "role" | "detail">,
+  locale: string,
+  level: (value: string) => string,
+): string | null {
+  if (locale === "en") return persona.detail.trim() || null;
+  if (persona.role.startsWith("org_")) {
+    const at = persona.detail.indexOf(":");
+    return at > 0 ? persona.detail.slice(0, at).trim() : null;
+  }
+  if (persona.role === "developer") {
+    const found = /\bD[0-9]\b/.exec(persona.detail);
+    return found ? level(found[0]) : null;
+  }
+  return null;
+}

@@ -40,7 +40,7 @@
     "reviewP27clock": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"baada ya siku 6 saa 14 dakika 23\"), not \"dak 23\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term. P27 UX fixes for the G5 review: calendarFeed.shownOnce now opens with the imperative \"Nakili sasa\" (was \"Kinakili sasa\"); pipeline.funnelTitle and pipeline.conversionMore agree with ushirikiano (u- class: \"ulioingia\", \"uliingia\"), not the people class (\"walioingia\", \"waliingia\"); pipeline.outcome says \"umefungwa\" and \"umekoma\" (u- class) for every count, no longer mixing \"umefungwa\"/\"imefungwa\"; pipeline.stalled reads \"siku {count}+ za kazi\" (the threshold as a floor); \"Briefs\" in calendarFeed.lead is left in English as the product term: confirm or translate.",
     "reviewP27ux": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Tengeneza kiungo kipya\" and \"Ondoa mlisho\" first ask in place whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled now \"Hakuna hatua kwa siku {count}+ za kazi\". A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"{count}+\". deadlines.dayEmpty [[SW-REVIEW]].",
-    "reviewP28pd": "[[COPY-REVIEW]] [[SW-REVIEW]] P28-PD (REQ-FND-04; D-71), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: publicDemo.* (onyesho la umma: tangazo la kila ukurasa, kitufe cha kulificha; kichaguzi cha watu kwenye /login, majina ya majukumu, kitufe \"Endelea kama {name}\", mistari ya makosa; mistari ya vidhibiti vilivyozimwa; \"Jaribu onyesho\" kwenye ukurasa wa mwanzo; \"Badilisha mtu\" badala ya \"Toka\"), errors.public_demo_locked"
+    "reviewP28pd": "[[COPY-REVIEW]] [[SW-REVIEW]] P28-PD (REQ-FND-04; D-71), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: publicDemo.* (onyesho la umma: tangazo la kila ukurasa, kitufe cha kulificha; kichaguzi cha watu kwenye /login, majina ya majukumu, kitufe \"Endelea kama {name}\", mistari ya makosa, mstari na \"Jaribu tena\" watu wasipopakiwa; mstari chini ya kila jina unatokana na jukumu kwenye wavuti kwa Kiswahili (publicDemo.detailLevel kwa msanidi programu, jina la shirika kwa mtu wa shirika), si maelezo ya Kiingereza ya API; mistari ya vidhibiti vilivyozimwa; \"Jaribu onyesho\" kwenye ukurasa wa mwanzo; \"Badilisha mtu\" badala ya \"Toka\"), errors.public_demo_locked"
   },
   "app": {
     "name": "Wazo",
@@ -4496,12 +4496,13 @@
     "pickerTitle": "Jaribu onyesho kama…",
     "pickerLead": "Chagua utakayekuwa. Bonyeza mara moja uingie na kufungua ukurasa wake wa Nyumbani.",
     "personasLabel": "Watu unaoweza kuingia kama wao",
+    "detailLevel": "Kiwango cha uthibitisho {level}",
     "continue": "Endelea <hidden>kama {name}</hidden>",
     "signingIn": "Unaingia…",
     "tooMany": "Majaribio mengi ya kuingia kutoka hapa kwa sasa. Jaribu tena baada ya dakika moja.",
     "failed": "Kuingia huko hakukufaulu. Jaribu tena baada ya muda mfupi.",
-    "unavailable": "Watu wa onyesho hawakuweza kupakiwa sasa hivi. Pakia ukurasa upya baada ya muda mfupi, au ingia kwa akaunti.",
-    "withAccount": "Ingia kwa akaunti",
+    "unavailable": "Watu wa onyesho hawakuweza kupakiwa sasa hivi. Jaribu tena baada ya muda mfupi.",
+    "retry": "Jaribu tena",
     "role": {
       "developer": "Msanidi programu",
       "org_admin": "Msimamizi wa shirika",

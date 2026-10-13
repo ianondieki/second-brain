@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   personas: vi.fn(),
   signedIn: vi.fn(async () => null),
   fetch: vi.fn<(request: Request) => Promise<Response>>(),
+  locale: { value: "en" },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -25,7 +26,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("next-intl/server", () => ({
-  getLocale: async () => "en",
+  getLocale: async () => mocks.locale.value,
   getMessages: async () => en,
   getTranslations: async (namespace?: string) =>
     createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
@@ -34,7 +35,10 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers(), cookies: as
 // renderWithIntl provides the messages; the server's IntlScope picks them on the server only.
 vi.mock("@/components/IntlScope", () => ({ IntlScope: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock("@/components/offline/clear", () => ({ forgetOffline: () => mocks.forget() }));
-vi.mock("@/lib/public/demo-personas", () => ({ demoPersonas: () => mocks.personas() }));
+vi.mock("@/lib/public/demo-personas", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/public/demo-personas")>()),
+  demoPersonas: () => mocks.personas(),
+}));
 vi.mock("@/lib/api/server", () => ({ getSignedIn: () => mocks.signedIn() }));
 // The real sign-in helper and its CSRF wrapper (lib/api/csrf.ts withCsrf), over a fake network at an absolute origin
 // (Node's Request takes no relative URL): the request is checked as the API would see it.
@@ -50,13 +54,13 @@ vi.mock("@/lib/api/demo-sign-in", async (importOriginal) => {
 });
 
 const PERSONAS = [
-  { key: "amina", name: "Amina Wanjiru", role: "developer", detail: "Developer, verified D2", home: "/dev" },
-  { key: "brian", name: "Brian Otieno", role: "developer", detail: "Developer, verified D1", home: "/dev" },
-  { key: "grace", name: "Grace Mwangi", role: "org_admin", detail: "Telco A, owner and admin", home: "/org" },
-  { key: "peter", name: "Peter Kamau", role: "org_signatory", detail: "Telco A, signatory", home: "/org" },
-  { key: "rita", name: "Rita Njeri", role: "org_reviewer", detail: "Telco A, reviewer", home: "/org" },
-  { key: "hassan", name: "Hassan Abdi", role: "org_admin", detail: "County Government of C, admin", home: "/org" },
-  { key: "moderator", name: "Staff Moderator", role: "staff", detail: "Platform staff", home: "/admin" },
+  { key: "amina", name: "Amina Wanjiru", role: "developer", detail: "Developer, D2", home: "/dev" },
+  { key: "brian", name: "Brian Otieno", role: "developer", detail: "Developer, D1", home: "/dev" },
+  { key: "grace", name: "Grace Mwangi", role: "org_admin", detail: "Telco A (fixture): owner and admin", home: "/org" },
+  { key: "peter", name: "Peter Kamau", role: "org_signatory", detail: "Telco A (fixture): signatory", home: "/org" },
+  { key: "rita", name: "Rita Njeri", role: "org_reviewer", detail: "Telco A (fixture): reviewer", home: "/org" },
+  { key: "hassan", name: "Hassan Abdi", role: "org_admin", detail: "County Government of C (fixture): owner", home: "/org" },
+  { key: "moderator", name: "Staff Moderator", role: "staff", detail: "Platform staff: moderator", home: "/admin" },
 ];
 
 const json = (body: unknown, status = 200) =>
@@ -79,6 +83,7 @@ beforeEach(() => {
   for (const mock of [mocks.replace, mocks.push, mocks.forget, mocks.personas, mocks.fetch]) mock.mockReset();
   mocks.personas.mockResolvedValue(PERSONAS);
   vi.stubEnv("PUBLIC_DEMO", "true");
+  mocks.locale.value = "en";
   document.cookie = "bridge_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   document.cookie = "__Host-bridge_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
 });
@@ -97,7 +102,7 @@ describe("/login in the public demo", () => {
     expect(rows.map((row) => within(row).getByRole("heading", { level: 2 }).textContent)).toEqual(PERSONAS.map((p) => p.name));
     const grace = rows[2];
     expect(within(grace).getByText("Organisation admin")).toBeTruthy();
-    expect(within(grace).getByText("Telco A, owner and admin")).toBeTruthy();
+    expect(within(grace).getByText("Telco A (fixture): owner and admin")).toBeTruthy();
     expect(within(rows[6]).getByText("Platform staff", { selector: "p.font-semibold" })).toBeTruthy();
     // One button per row, its accessible name naming the persona; its visible word is "Continue".
     for (const [index, row] of rows.entries()) {
@@ -108,22 +113,34 @@ describe("/login in the public demo", () => {
     }
   });
 
+  it("derives each line under the name in Swahili instead of the API's English detail", async () => {
+    mocks.locale.value = "sw";
+    await renderLogin();
+    const line = (key: string) => document.querySelector(`[data-persona="${key}"] h2 + p + p`)?.textContent ?? null;
+    expect(line("grace")).toBe("Telco A (fixture)");
+    expect(line("hassan")).toBe("County Government of C (fixture)");
+    expect(line("amina")).toBe("Verification level D2"); // publicDemo.detailLevel (this test reads the English catalogue)
+    expect(line("moderator")).toBeNull();
+    expect(document.body.textContent).not.toContain("owner and admin");
+  });
+
   it("renders whatever count the API returns (no fixed number)", async () => {
     mocks.personas.mockResolvedValue(PERSONAS.slice(0, 2));
     await renderLogin();
     expect(within(screen.getByRole("list", { name: "People you can sign in as" })).getAllByRole("listitem")).toHaveLength(2);
   });
 
-  it("folds the email form under \"Sign in with an account\", without sign-up or the emailed link", async () => {
+  it("offers personas only: no email or password form, no emailed link, no sign-up (all switched off in the demo)", async () => {
     await renderLogin();
-    const details = document.querySelector<HTMLDetailsElement>("details[data-account-sign-in]")!;
-    expect(details.open).toBe(false);
-    expect(details.querySelector("summary")?.textContent).toBe("Sign in with an account");
-    expect(within(details).getByLabelText("Email address")).toBeTruthy();
-    expect(within(details).queryByRole("button", { name: /sign-in link/i })).toBeNull();
+    expect(document.querySelector("form")).toBeNull();
+    expect(document.querySelector("details")).toBeNull();
+    expect(document.querySelector("input")).toBeNull();
+    expect(screen.queryByLabelText("Email address")).toBeNull();
+    expect(screen.queryByRole("button", { name: /log in|sign-in link/i })).toBeNull();
     expect(document.querySelector('a[href="/signup"]')).toBeNull();
-    // At most one primary action on the screen (AC-UX-2): the folded form's Log in; the persona buttons are secondary.
-    expect(document.querySelectorAll("[data-primary]").length).toBeLessThanOrEqual(1);
+    // Every button on the page is a persona's; none is the screen's primary action (AC-UX-2: at most one).
+    expect(screen.getAllByRole("button")).toHaveLength(7);
+    expect(document.querySelectorAll("[data-primary]")).toHaveLength(0);
   });
 
   it("presses: POSTs the persona's key with the CSRF header, then goes to that persona's Home", async () => {
@@ -181,12 +198,20 @@ describe("/login in the public demo", () => {
     expect(within(row).queryByRole("alert")).toBeNull(); // one line at a time
   });
 
-  it("says so in one line and opens the email form when no persona could be read", async () => {
+  it("says so in one line with \"Try again\" (the page itself), and no form, when no persona could be read", async () => {
     mocks.personas.mockResolvedValue(null);
     await renderLogin();
     expect(screen.queryByRole("list", { name: "People you can sign in as" })).toBeNull();
-    expect(document.querySelector("[data-personas-unavailable]")?.textContent).toBe(en.publicDemo.unavailable);
-    expect(document.querySelector<HTMLDetailsElement>("details[data-account-sign-in]")!.open).toBe(true);
+    const empty = document.querySelector<HTMLElement>("[data-personas-unavailable]")!;
+    expect(empty.querySelector("p")!.textContent).toBe(en.publicDemo.unavailable);
+    expect(within(empty).getByRole("link", { name: "Try again" }).getAttribute("href")).toBe("/login");
+    expect(document.querySelector("form")).toBeNull();
+  });
+
+  it("treats an empty list as unreadable too", async () => {
+    mocks.personas.mockResolvedValue([]);
+    await renderLogin();
+    expect(document.querySelector("[data-personas-unavailable]")).not.toBeNull();
   });
 });
 

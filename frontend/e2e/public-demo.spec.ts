@@ -8,7 +8,7 @@ import { checkScreen } from "./support/screen";
 // and nothing is indexed. Strict axe on /login and /org at both projects (360 px and 1440 px).
 //
 // Only against a stack started with PUBLIC_DEMO=true (web and API): the normal suite's stack runs without the mode, so
-// this file is skipped unless E2E_PUBLIC_DEMO=1.
+// this file is skipped unless E2E_PUBLIC_DEMO=1. Nothing here reads /api/openapi.json (404 in the public demo).
 
 const PERSONAS = [
   "Amina Wanjiru",
@@ -44,10 +44,9 @@ test("/login offers the seven personas; pressing Grace lands on /org; strict axe
   for (const name of PERSONAS) {
     await expect(personas(page).getByRole("button", { name: `Continue as ${name}` })).toBeVisible();
   }
-  // The email form is folded below, without sign-up or the emailed link.
-  const account = page.locator("details[data-account-sign-in]");
-  await expect(account).not.toHaveAttribute("open", /.*/);
-  await expect(account.locator("summary")).toHaveText("Sign in with an account");
+  // Personas only: password sign-in, the emailed link and sign-up are switched off in the demo.
+  await expect(page.locator("main form")).toHaveCount(0);
+  await expect(page.getByLabel("Email address")).toHaveCount(0);
   await expect(page.locator('a[href="/signup"]')).toHaveCount(0);
   await checkScreen(page, { strict: true });
 

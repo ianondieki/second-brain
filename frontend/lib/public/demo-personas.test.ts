@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { demoPersonas, forgetDemoPersonas, PERSONAS_TTL_MS } from "./demo-personas";
+import { demoPersonas, forgetDemoPersonas, personaDetail, PERSONAS_TTL_MS } from "./demo-personas";
 
 // REQ-FND-04: /login's persona picker reads GET /api/public/demo on the server, reused for a minute.
 
@@ -73,5 +73,28 @@ describe("demoPersonas", () => {
       }),
     );
     expect((await demoPersonas(0))?.map((p) => p.key)).toEqual(["amina", "grace", "moderator"]);
+  });
+});
+
+// The API writes each persona's detail line in English only: in another language the web derives it (REQ-FND-04).
+describe("personaDetail", () => {
+  const level = (value: string) => `Kiwango cha uthibitisho ${value}`;
+
+  it("is the API's own line in English", () => {
+    expect(personaDetail({ role: "org_admin", detail: "Telco A (fixture): owner and admin" }, "en", level)).toBe(
+      "Telco A (fixture): owner and admin",
+    );
+    expect(personaDetail({ role: "staff", detail: " " }, "en", level)).toBeNull();
+  });
+
+  it("is derived in Swahili: the organisation's name, a developer's level in a translated line, nothing for staff", () => {
+    expect(personaDetail({ role: "org_signatory", detail: "Telco A (fixture): signatory" }, "sw", level)).toBe("Telco A (fixture)");
+    expect(personaDetail({ role: "org_admin", detail: "County Government of C (fixture): owner" }, "sw", level)).toBe(
+      "County Government of C (fixture)",
+    );
+    expect(personaDetail({ role: "developer", detail: "Developer, D2" }, "sw", level)).toBe("Kiwango cha uthibitisho D2");
+    expect(personaDetail({ role: "developer", detail: "Developer" }, "sw", level)).toBeNull();
+    expect(personaDetail({ role: "staff", detail: "Platform staff: moderator" }, "sw", level)).toBeNull();
+    expect(personaDetail({ role: "org_reviewer", detail: "no colon" }, "sw", level)).toBeNull();
   });
 });
