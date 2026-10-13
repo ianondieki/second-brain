@@ -143,25 +143,28 @@ function LatestRoot({ root, t, locale }: { root: TransparencyRoot; t: T; locale:
 function EarlierRoot({ root, t, locale }: { root: TransparencyRoot; t: T; locale: string }) {
   const key = (chunks: ReactNode) => <KeyLink kid={root.key_id}>{chunks}</KeyLink>;
   return (
-    <li className="py-5" data-root={root.day}>
-      <h3 className="font-sans text-base font-semibold text-ink">
+    <li className="grid grid-cols-1 gap-x-6 pt-4 pb-1 sm:grid-cols-[7.5rem_minmax(0,1fr)]" data-root={root.day}>
+      {/* From 640 px the date has its own column beside the root, so a month of days reads as a ledger. */}
+      <h3 className="font-sans text-base leading-6 font-semibold text-ink">
         <time dateTime={root.day}>{formatCalendarDate(locale, root.day)}</time>
       </h3>
-      <p className={cn(hashClass, "mt-1")} data-merkle-root={root.merkle_root}>
-        {root.merkle_root}
-      </p>
-      <p className="mt-1 text-sm text-ink-soft">
-        {root.snapshot_at
-          ? t.rich("earlierLine", { time: formatMoment(locale, root.snapshot_at), keyId: root.key_id, key })
-          : t.rich("earlierLineUnknown", { keyId: root.key_id, key })}
-      </p>
-      {/* Native disclosure: no script, and the signature (88 characters) stays out of the way until asked for. */}
-      <details className="group mt-1">
-        <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-ink underline decoration-1 underline-offset-2 hover:decoration-2">
-          {t("showSignature")}
-        </summary>
-        <Code className="pb-2 text-sm text-ink-soft">{root.signature}</Code>
-      </details>
+      <div className="min-w-0">
+        <p className={cn(hashClass, "mt-1 sm:mt-0")} data-merkle-root={root.merkle_root}>
+          {root.merkle_root}
+        </p>
+        <p className="mt-1 text-sm text-ink-soft">
+          {root.snapshot_at
+            ? t.rich("earlierLine", { time: formatMoment(locale, root.snapshot_at), keyId: root.key_id, key })
+            : t.rich("earlierLineUnknown", { keyId: root.key_id, key })}
+        </p>
+        {/* Native disclosure: no script, and the signature (88 characters) stays out of the way until asked for. */}
+        <details>
+          <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold text-ink underline decoration-1 underline-offset-2 hover:decoration-2">
+            {t("showSignature")}
+          </summary>
+          <Code className="pb-3 text-sm text-ink-soft">{root.signature}</Code>
+        </details>
+      </div>
     </li>
   );
 }
