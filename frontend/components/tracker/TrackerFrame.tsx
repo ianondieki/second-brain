@@ -136,7 +136,8 @@ export async function TrackerSpine({ detail, history }: { detail: Detail; histor
   // group's own stages (the API's `steps`: 3b only for a public entity).
   const at = MAIN_PATH_GROUP[detail.state] ? detail.state : (detail.paused_from ?? left);
   const current = steps.find((s) => s.chip !== "completed" && s.chip !== "pending");
-  const sub = subStages(detail.steps, at);
+  // Its own chip on the stage it stopped at (on hold, waiting for an answer, overdue); none once it has finished.
+  const sub = current && !isFinished(detail.state) ? subStages(detail.steps, at, current) : [];
   // The party who acts now: the developer, the organisation, or both (the timeline shows them at the step).
   const awaited = new Set(detail.whose_turn);
   const actors = isFinished(detail.state) ? null : (
@@ -162,7 +163,7 @@ export async function TrackerSpine({ detail, history }: { detail: Detail; histor
           </>
         }
         stages={
-          current && detail.state !== "CLOSED" && sub.length > 0
+          current && sub.length > 0
             ? (layout) => <SubStageList stages={sub} group={current.group} layout={layout} />
             : undefined
         }

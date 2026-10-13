@@ -42,7 +42,7 @@
     "reviewP27ux": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Tengeneza kiungo kipya\" and \"Ondoa mlisho\" first ask in place whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled now \"Hakuna hatua kwa siku {count}+ za kazi\". A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"{count}+\". deadlines.dayEmpty [[SW-REVIEW]].",
     "reviewP28tr": "[[COPY-REVIEW]] [[SW-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (ukurasa wa umma /transparency: alama za kila siku zilizotiwa sahihi juu ya historia ya ukaguzi kwa maneno rahisi; jinsi ya kukagua cheti, na kiungo cha /verify; alama ya karibuni, siku zilizopita, funguo za sahihi na hali yake; hali tupu kabla ya siku ya kwanza kamili na hali mbili za \"hazikupakia\"), landing.footer.transparency (kiungo cha sehemu ya chini) na verify.transparency (mstari mmoja chini ya paneli ya /verify). Hakuna dai kwamba kitu hakiwezi kubadilishwa: maneno ni kwamba badiliko hufanya alama zisikubaliane. Mzunguko wa 1 wa ukaguzi: lead inahusu tu matukio yaliyorekodiwa kabla alama haijachukuliwa; howTo inasema /verify inakagua alama, sahihi na muhuri wa muda wa cheti chenyewe; keysLead inataja maandishi yaliyotiwa sahihi kamili; signatureFor inataja siku; verify.transparency imeandikwa upya.",
     "reviewP28pd": "[[COPY-REVIEW]] [[SW-REVIEW]] P28-PD (REQ-FND-04; D-71), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: publicDemo.* (onyesho la umma: tangazo la kila ukurasa, kitufe cha kulificha; kichaguzi cha watu kwenye /login, majina ya majukumu, kitufe \"Endelea kama {name}\", mistari ya makosa, mstari na \"Jaribu tena\" watu wasipopakiwa; mstari chini ya kila jina unatokana na jukumu kwenye wavuti kwa Kiswahili (publicDemo.detailLevel kwa msanidi programu, jina la shirika kwa mtu wa shirika), si maelezo ya Kiingereza ya API; mistari ya vidhibiti vilivyozimwa; \"Jaribu onyesho\" kwenye ukurasa wa mwanzo; \"Badilisha mtu\" badala ya \"Toka\"), errors.public_demo_locked, errors.public_demo_limit na ideaEditor.problem.demoLimit (kikomo cha kila siku cha matoleo yaliyochapishwa katika onyesho la umma)",
-    "reviewP28a": "[[COPY-REVIEW]] [[SW-REVIEW]] P28 tracks A and B (REQ-ENG-06, REQ-NOT-05): procurement.* (njia ya ununuzi ya taasisi ya umma: majina ya njia tano na sentensi moja chini ya kila moja, bila kutaja sheria; kichwa na lebo za kipande cha kifuatiliaji; maneno ya karatasi ya kuchagua njia, kaunta, tarehe ya mawasiliano, Thibitisha, makosa mawili), trackerActions.command.choose_route, trackerActions.refusal.justificationRequired na invalidJustification, trackerActions.approve.leadPublic, tracker.event.choose_route na tracker.history.route, tracker.turn.admins and tracker.waitingAdmin, tracker.escalated, tracker.subStages na tracker.subStage. Translated by the build agent; a Swahili speaker should review the procurement terms (ununuzi, zabuni, ombi la bei, mkataba wa maelewano) against the wording county governments use."
+    "reviewP28a": "[[COPY-REVIEW]] [[SW-REVIEW]] P28 tracks A and B (REQ-ENG-06, REQ-NOT-05): procurement.* (njia ya ununuzi ya taasisi ya umma: majina ya njia tano na sentensi moja chini ya kila moja, bila kutaja sheria; kichwa na lebo za kipande cha kifuatiliaji; maneno ya karatasi ya kuchagua njia, kaunta, tarehe ya mawasiliano, Thibitisha, makosa mawili), trackerActions.command.choose_route, trackerActions.refusal.justificationRequired na invalidJustification, trackerActions.approve.leadPublic, tracker.event.choose_route na tracker.history.route, tracker.turn.admins and tracker.waitingAdmin, tracker.escalated, tracker.subStages na tracker.subStage, tracker.stage.* (majina ya hatua chini ya kundi la sasa). Translated by the build agent; a Swahili speaker should review the procurement terms (ununuzi, zabuni, ombi la bei, mkataba wa maelewano) against the wording county governments use."
   },
   "app": {
     "name": "Wazo",
@@ -2361,6 +2361,23 @@
     "stepperLabel": "Hatua",
     "subStages": "Ndani ya {group}",
     "subStage": "{stage}: {state}",
+    "stage": {
+      "ORG_INTEREST": "Shirika lina nia",
+      "SUBMITTED": "Pendekezo limewasilishwa",
+      "UNDER_REVIEW": "Linatathminiwa",
+      "PROCUREMENT_ROUTE": "Njia ya ununuzi imeamuliwa",
+      "INTEREST_CONFIRMED": "Imeidhinishwa kuendelea (haifungi kisheria)",
+      "CONTACT_MADE": "Mawasiliano ya kwanza",
+      "NDA_PENDING": "NDA ya pande zote: inasubiri saini za pande zote mbili",
+      "NDA_SIGNED": "NDA ya pande zote imesainiwa",
+      "NEGOTIATION": "Masharti na uandishi wa makubaliano",
+      "AGREEMENT_SIGNING": "Kusaini makubaliano",
+      "IN_IMPLEMENTATION": "Makubaliano yamesainiwa: utekelezaji",
+      "DELIVERED": "Uwasilishaji wa mwisho umefanywa",
+      "SIGN_OFF": "Kukubali",
+      "PAYMENT_FINAL": "Malipo ya mwisho",
+      "CLOSED": "Mradi umefungwa"
+    },
     "group": {
       "review": "Tathmini",
       "contact_nda": "Mawasiliano na NDA",

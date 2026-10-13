@@ -107,24 +107,35 @@ export function isPublicEntity(detail: Pick<Detail, "steps">): boolean {
 /** One stage of the current group, as the stepper lists it under the group's name. */
 export interface SubStage {
   state: State;
+  /** The API's label (English), for a stage the locales do not name. */
   label: string;
-  mark: "completed" | "current" | "pending";
+  /** Done, pending, or where the engagement stands: the current group's own chip (on hold, overdue…). */
+  mark: ChipKind;
+  /** The status word, when it is not the mark's own (a question waiting for its answer). */
+  word?: "awaitingAnswer";
 }
 
 /**
  * The current group's stages from the API's `steps` (docs/spec/06 6.9: "sub-stages collapsed except the current
- * group"), each completed, current or pending; `at` is the stage the engagement stands at (its state on the main
- * path, else the stage it paused or ended in). Empty when the group has one stage or `at` is not among the steps.
+ * group"): done before `at`, pending after it, and `at` itself (the stage the engagement stands at: its state on the
+ * main path, else the stage it paused in) with the current group's own chip and word (`here`), so a paused, questioned
+ * or overdue stage never reads "Current". Empty when the group has one stage, `at` is not among the steps, or the
+ * engagement has finished (closed or ended: the stepper's own marks say where it stopped).
  */
-export function subStages(steps: readonly StageStep[] | undefined, at: State | null): SubStage[] {
+export function subStages(
+  steps: readonly StageStep[] | undefined,
+  at: State | null,
+  here: Pick<Step, "chip" | "word"> = { chip: "current" },
+): SubStage[] {
   const all = steps ?? [];
   const index = all.findIndex((step) => step.state === at);
-  if (index < 0) return [];
+  if (index < 0 || here.chip === "ended" || here.chip === "completed") return [];
   const group = all.filter((step) => step.group === all[index].group);
   if (group.length < 2) return [];
   return group.map((step) => {
     const i = all.indexOf(step);
-    return { state: step.state, label: step.label, mark: i < index ? "completed" : i === index ? "current" : "pending" };
+    const mark = i < index ? "completed" : i === index ? here.chip : "pending";
+    return { state: step.state, label: step.label, mark, ...(i === index && here.word ? { word: here.word } : {}) };
   });
 }
 

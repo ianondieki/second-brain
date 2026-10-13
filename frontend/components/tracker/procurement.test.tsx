@@ -9,9 +9,9 @@ import type { CommandOutcome } from "./calls";
 import { Procurement } from "./Deal";
 import { HistoryList } from "./HistoryList";
 import { refusalOf } from "./calls";
-import { actionItems, isPublicEntity, subStages, type CommandRequest, type Detail, type StageStep } from "./model";
+import { actionItems, isPublicEntity, stepperSteps, subStages, type CommandRequest, type Detail, type StageStep } from "./model";
 import { plainJustification } from "./procurement";
-import { SubStageList } from "./Stepper";
+import { Stepper, SubStageList } from "./Stepper";
 import { WhoseTurn } from "./WhoseTurn";
 
 // P28 tracks A and B (REQ-ENG-06, AC-TRACK-5; REQ-NOT-05): a public entity's tracker has stage 3b, where its owner or
@@ -95,6 +95,48 @@ describe("the stepper's stages from the API's steps (AC-TRACK-5)", () => {
     expect(isPublicEntity({ steps: undefined })).toBe(false);
   });
 
+  it("gives the stage it stopped at the group's own chip while paused, questioned or overdue, never Current", () => {
+    const steps = stepsOf(true);
+    const at = (here: Parameters<typeof subStages>[2]) =>
+      subStages(steps, "UNDER_REVIEW", here).find((s) => s.state === "UNDER_REVIEW");
+    // ON_HOLD from UNDER_REVIEW: the stepper's own chip for the group, then the sub-stage's.
+    const paused = stepperSteps({ state: "ON_HOLD", stage_group: null, due: null, paused_from: "UNDER_REVIEW" });
+    expect(at(paused.find((s) => s.group === "review"))).toMatchObject({ mark: "onHold" });
+    const asked = stepperSteps({ state: "INFO_REQUESTED", stage_group: null, due: null, paused_from: "UNDER_REVIEW" });
+    expect(at(asked.find((s) => s.group === "review"))).toMatchObject({ mark: "onHold", word: "awaitingAnswer" });
+    expect(at({ chip: "overdue" })).toMatchObject({ mark: "overdue" });
+    expect(subStages(steps, "UNDER_REVIEW", { chip: "overdue" }).map((s) => s.mark)).toEqual(["completed", "overdue"]);
+  });
+
+  it("lists nothing once the engagement has ended or closed", () => {
+    expect(subStages(stepsOf(true), "UNDER_REVIEW", { chip: "ended" })).toEqual([]);
+    expect(subStages(stepsOf(true), "NDA_SIGNED", { chip: "completed" })).toEqual([]);
+  });
+
+  it("says a paused stage's own word to screen readers, and names stages from the locales", () => {
+    const paused = subStages(stepsOf(true), "UNDER_REVIEW", { chip: "onHold", word: "awaitingAnswer" });
+    // The API's label is ignored where the locales name the stage.
+    renderWithIntl(<SubStageList stages={paused.map((s) => ({ ...s, label: "x" }))} group="review" />);
+    const items = within(screen.getByRole("list", { name: "Within Review" })).getAllByRole("listitem");
+    expect(items[1].getAttribute("data-state")).toBe("onHold");
+    expect(items[1].textContent).toContain("Under review: Waiting for an answer");
+    expect(items[1].textContent).not.toContain("Current");
+    expect(items[0].textContent).toContain("Proposal submitted: Completed");
+  });
+
+  it("keeps the API's label for a stage the locales do not name", () => {
+    renderWithIntl(
+      <SubStageList
+        stages={[
+          { state: "SUBMITTED", label: "Proposal submitted", mark: "completed" },
+          { state: "NEW_STAGE" as StageStep["state"], label: "A later stage", mark: "current" },
+        ]}
+        group="review"
+      />,
+    );
+    expect(screen.getByText("A later stage: Current")).toBeTruthy();
+  });
+
   it("lists nothing for a stage outside the steps, or a group of one stage", () => {
     expect(subStages(stepsOf(true), null)).toEqual([]);
     expect(subStages([step("NEGOTIATION", "Terms and agreement drafting", "agreement")], "NEGOTIATION")).toEqual([]);
@@ -109,6 +151,38 @@ describe("the stepper's stages from the API's steps (AC-TRACK-5)", () => {
     expect(items[0].getAttribute("data-substage")).toBe("PROCUREMENT_ROUTE");
     expect(items[0].textContent).toContain("Procurement route determined: Current");
     expect(items[1].textContent).toContain("Approved to proceed (non-binding): Pending");
+  });
+});
+
+describe("the stepper's sub-stage list, by width", () => {
+  const stages = subStages(stepsOf(true), "PROCUREMENT_ROUTE");
+  const steps = stepperSteps({ state: "PROCUREMENT_ROUTE", stage_group: "contact_nda", due: null });
+
+  it("draws a column under the current step for phones and a row under the spine from 1024 px", () => {
+    const { container } = renderWithIntl(
+      <Stepper steps={steps} stages={(layout) => <SubStageList stages={stages} group="contact_nda" layout={layout} />} />,
+    );
+    const column = container.querySelector<HTMLElement>("[data-substages='column']")!;
+    // The column sits in the current step and hides from 1024 px.
+    expect(column.closest("li[aria-current='step']")?.getAttribute("data-group")).toBe("contact_nda");
+    expect(column.parentElement?.className).toContain("lg:hidden");
+    // The row is outside the list of groups, hidden on phones, and starts at the current group's column.
+    const row = container.querySelector<HTMLElement>("[data-substages-row]")!;
+    expect(row.closest("[data-stepper]")).toBeNull();
+    expect(row.className).toContain("hidden");
+    expect(row.className).toContain("lg:grid");
+    expect(row.firstElementChild?.getAttribute("style")).toContain("grid-column: 2 / -1");
+    const list = row.querySelector<HTMLElement>("[data-substages='row']")!;
+    expect(list.className).toContain("flex-wrap");
+    expect([...list.querySelectorAll("li")].every((li) => li.className.includes("whitespace-nowrap"))).toBe(true);
+    // The stepper's own five groups, the nested list apart.
+    expect(container.querySelectorAll("[data-stepper] > li")).toHaveLength(5);
+  });
+
+  it("draws neither without stages", () => {
+    const { container } = renderWithIntl(<Stepper steps={steps} />);
+    expect(container.querySelector("[data-substages]")).toBeNull();
+    expect(container.querySelector("[data-substages-row]")).toBeNull();
   });
 });
 

@@ -2,6 +2,7 @@ import { useTranslations } from "next-intl";
 import type { CSSProperties, ReactNode } from "react";
 
 import { cn } from "@/components/ui/cn";
+import type en from "@/locales/en.json";
 
 import { CHIP_TONE, ChipMark } from "./Chip";
 import type { ChipKind, Step, SubStage } from "./model";
@@ -106,8 +107,10 @@ const WORD_TONE: Record<ChipKind, string> = { ...CHIP_TONE, completed: "text-ink
 /**
  * The current group's own stages under its name (docs/spec/06 6.9: "sub-stages collapsed except the current group"),
  * from the API's `steps`: so a public entity's Contact and NDA lists its procurement route (3b) and a private
- * organisation's never does (AC-TRACK-5). Each stage's mark goes with its status word for screen readers; the
- * labels are the API's.
+ * organisation's never does (AC-TRACK-5). Each stage's mark goes with its status word for screen readers; the stage it
+ * stands at wears the group's own chip (on hold, waiting for an answer, overdue). Labels come from the locales
+ * (`tracker.stage.<STATE>`), the API's English label only for a stage they do not name. Server-rendered: none of it
+ * joins the client's JavaScript.
  */
 export function SubStageList({
   stages,
@@ -121,33 +124,42 @@ export function SubStageList({
 }) {
   const t = useTranslations("tracker");
   if (stages.length === 0) return null;
+  // Main-path stages only (steps never lists a side state); a stage the locales do not name keeps the API's label.
+  const name = (stage: SubStage) => {
+    const key = `stage.${stage.state}` as `stage.${keyof (typeof en)["tracker"]["stage"]}`;
+    return t.has(key) ? t(key) : stage.label;
+  };
   return (
     <ol
       aria-label={t("subStages", { group: t(`group.${group}`) })}
       data-substages={layout}
       className={layout === "row" ? "flex flex-wrap gap-x-6 gap-y-2" : "mt-3 ml-0.5 flex flex-col gap-1.5"}
     >
-      {stages.map((stage) => (
-        <li
-          key={stage.state}
-          data-substage={stage.state}
-          data-state={stage.mark}
-          className={cn(
-            "flex items-start gap-2 text-sm",
-            layout === "row" && "whitespace-nowrap",
-            stage.mark === "current" ? "font-semibold text-ink" : "text-ink-soft",
-          )}
-        >
-          <ChipMark
-            kind={stage.mark}
-            className={cn("mt-0.5 size-3.5", stage.mark === "pending" ? "text-ink-soft" : "text-accent")}
-          />
-          <span aria-hidden="true" className="min-w-0">
-            {stage.label}
-          </span>
-          <span className="sr-only">{t("subStage", { stage: stage.label, state: t(`chip.${stage.mark}`) })}</span>
-        </li>
-      ))}
+      {stages.map((stage) => {
+        const done = stage.mark === "completed";
+        const pending = stage.mark === "pending";
+        return (
+          <li
+            key={stage.state}
+            data-substage={stage.state}
+            data-state={stage.mark}
+            className={cn(
+              "flex items-start gap-2 text-sm",
+              layout === "row" && "whitespace-nowrap",
+              done || pending ? "text-ink-soft" : "font-semibold text-ink",
+            )}
+          >
+            <ChipMark
+              kind={stage.mark}
+              className={cn("mt-0.5 size-3.5", pending ? "text-ink-soft" : done || stage.mark === "current" ? "text-accent" : CHIP_TONE[stage.mark])}
+            />
+            <span aria-hidden="true" className="min-w-0">
+              {name(stage)}
+            </span>
+            <span className="sr-only">{t("subStage", { stage: name(stage), state: t(`chip.${stage.word ?? stage.mark}`) })}</span>
+          </li>
+        );
+      })}
     </ol>
   );
 }
