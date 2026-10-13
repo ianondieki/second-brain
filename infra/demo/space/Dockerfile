@@ -1,6 +1,7 @@
 # The public demo image (P28 track PD; REQ-FND-04): the whole seeded product in ONE container on ONE port (7860), for
 # any Docker host: GitHub Codespaces, a Hugging Face Docker Space, an Oracle Always Free Arm VM. Demo only: fictional
-# data, fake providers, throwaway secrets generated at every boot by run.py; never production (README.md here).
+# data, simulated email, SMS and payments (only certificate timestamps go out, to a public TSA), throwaway secrets
+# generated at every boot by run.py; never production (README.md here).
 #
 #   docker build -f infra/demo/space/Dockerfile -t bridge-demo .      (the context is the repository root)
 #   docker run --rm -p 7860:7860 bridge-demo
@@ -13,17 +14,13 @@
 # Every stage is Debian bookworm (glibc), so the venv's wheels and the web's native modules (sharp) match the runtime.
 # Builds for linux/amd64 and linux/arm64: nothing below names an architecture (apt and the multi-arch images pick it).
 #
-# Base images are pinned by tag; their multi-arch index digests, read on 2026-10-13:
-#   python:3.12-slim-bookworm      sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258
-#   node:22-bookworm-slim          sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
-#   ghcr.io/astral-sh/uv:0.12.18   sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc
-#   chrislusf/seaweedfs:4.47       sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
-#   axllent/mailpit:v1.31.2        sha256:74d609a42ec279aa63c6b4622a6fa9b5408d1ad5b1d76a1c4be40a265ce0863d
+# Every image is pinned by tag and by its multi-arch index digest (read on 2026-10-13), so a rebuilt tag upstream
+# changes nothing here until the digest is updated: `docker buildx imagetools inspect <image:tag>` prints the new one.
 
 # ---- (a) backend: dependencies from uv.lock only (backend/Dockerfile's steps and pins) ------------------------------
-FROM python:3.12-slim-bookworm AS backend
+FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS backend
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
-COPY --from=ghcr.io/astral-sh/uv:0.12.18 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc /uv /usr/local/bin/uv
 WORKDIR /app
 COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
@@ -37,12 +34,12 @@ COPY backend/seed ./seed
 RUN uv sync --frozen --no-dev
 
 # ---- (b) web: frontend/Dockerfile's steps on Debian, the API on loopback ---------------------------------------------
-FROM node:22-bookworm-slim AS web-deps
+FROM node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS web-deps
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-FROM node:22-bookworm-slim AS web
+FROM node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 AS web
 WORKDIR /web
 # Rewrites are resolved at build time (frontend/next.config.ts): /api goes to the API inside this container. No
 # NEXT_PUBLIC_SITE_ORIGIN: the certificate's QR then carries the path alone, which works on every host.
@@ -52,7 +49,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---- (c) runtime -----------------------------------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm@sha256:34386ef0cb081344d7ec1c103ba398e6e9f64e9ab3a1509accc92a4e24a07258 AS runtime
 # PostgreSQL 16 and pgvector from the PGDG repository. Its signing key (fingerprint
 # B97B 0AFC AA1A 47F0 44F2 44A0 7FCC 7D46 ACCC 4CF8) is checked against the SHA-256 below before apt trusts it; when
 # PGDG republishes the key, compare the new fingerprint with https://wiki.postgresql.org/wiki/Apt and update the hash.
@@ -73,12 +70,14 @@ RUN set -eux; \
     apt-get update --error-on=any; \
     apt-get install -y --no-install-recommends postgresql-common; \
     sed -ri 's/#(create_main_cluster) .*$/\1 = false/' /etc/postgresql-common/createcluster.conf; \
+    # Not version-pinned: PGDG's index carries only the latest minor release, so a pin would break the build at the
+    # next one; the package names fix the major version (16).
     apt-get install -y --no-install-recommends postgresql-16 postgresql-16-pgvector; \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=chrislusf/seaweedfs:4.47 /usr/bin/weed /usr/local/bin/weed
-COPY --from=axllent/mailpit:v1.31.2 /mailpit /usr/local/bin/mailpit
-COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882 /usr/bin/weed /usr/local/bin/weed
+COPY --from=axllent/mailpit:v1.31.2@sha256:74d609a42ec279aa63c6b4622a6fa9b5408d1ad5b1d76a1c4be40a265ce0863d /mailpit /usr/local/bin/mailpit
+COPY --from=node:22-bookworm-slim@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392 /usr/local/bin/node /usr/local/bin/node
 
 RUN useradd --uid 1000 --user-group --create-home --home-dir /home/demo --shell /bin/bash demo
 
