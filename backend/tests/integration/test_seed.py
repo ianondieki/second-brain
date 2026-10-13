@@ -12,6 +12,7 @@ from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
+from bridge.ids import uuid7
 from bridge.seed.reference import SEED_TABLES, seed_all, seed_test_clock
 from tests.integration.conftest import own_database, role_engine
 
@@ -42,7 +43,16 @@ async def _organisations(engine: AsyncEngine) -> int:
 
 
 async def test_seed_twice_gives_the_same_counts(owner_engine: AsyncEngine) -> None:
-    organisations = await _organisations(owner_engine)  # whatever earlier tests left behind
+    foreign = uuid7()  # an organisation the seed does not own: it must survive the seed untouched
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO organizations (id, kind, legal_name, slug, source) VALUES (:id, 'company',"
+                " 'Foreign Org (fixture)', :slug, 'self_signup')"
+            ),
+            {"id": foreign, "slug": f"foreign-{foreign.hex}"},
+        )
+    organisations = await _organisations(owner_engine)  # whatever earlier tests left behind, and the foreign one
     async with owner_engine.begin() as conn:
         first = await seed_all(conn, get_settings())
     async with owner_engine.begin() as conn:
@@ -58,6 +68,13 @@ async def test_seed_twice_gives_the_same_counts(owner_engine: AsyncEngine) -> No
         legal = (await conn.execute(text("SELECT count(*) FROM legal_templates WHERE version = 'v1'"))).scalar_one()
         ndas = (await conn.execute(text("SELECT count(*) FROM nda_templates WHERE version = 'v1'"))).scalar_one()
     assert (counties, kenya) == (47, 1)
+    async with owner_engine.connect() as conn:
+        kept = (
+            await conn.execute(
+                text("SELECT legal_name, source::text, slug FROM organizations WHERE id = :id"), {"id": foreign}
+            )
+        ).one()
+    assert tuple(kept) == ("Foreign Org (fixture)", "self_signup", f"foreign-{foreign.hex}")
     assert plans == 9
     # The reference seed never creates organisations: the provisional directory is bridge.seed.directory (dev/test).
     assert await _organisations(owner_engine) == organisations

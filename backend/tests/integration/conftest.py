@@ -128,13 +128,8 @@ def own_database(admin_url: URL, prefix: str) -> Iterator[URL]:
 
 @pytest.fixture(scope="session")
 def database_url(admin_url: URL) -> Iterator[URL]:
-    name = f"bridge_test_{uuid4().hex[:12]}"
-    url = create_database(admin_url, name)
-    try:
-        run_alembic(url, lambda config: command.upgrade(config, "head"))
+    with own_database(admin_url, "bridge_test") as url:
         yield url
-    finally:
-        drop_database(admin_url, name)
 
 
 def role_engine(url: URL, role: str, **kwargs: Any) -> AsyncEngine:

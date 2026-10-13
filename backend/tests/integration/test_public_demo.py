@@ -30,11 +30,10 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import timedelta
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
 import pytest
-from alembic import command
 from sqlalchemy import text
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -56,7 +55,7 @@ from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
 from tests.integration.api import make_client, refresh_csrf, sign_in_as
-from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
+from tests.integration.conftest import own_database, role_engine
 from tests.integration.engagements.api_world import Tracker, db_today
 
 SIGN_IN = "/api/auth/demo/sign-in"
@@ -73,13 +72,8 @@ def public(**update: Any) -> Settings:
 
 @pytest.fixture(scope="module")
 def demo_url(admin_url: URL) -> Iterator[URL]:
-    name = f"bridge_public_{uuid4().hex[:12]}"
-    url = create_database(admin_url, name)
-    try:
-        run_alembic(url, lambda config: command.upgrade(config, "head"))
+    with own_database(admin_url, "bridge_public") as url:
         yield url
-    finally:
-        drop_database(admin_url, name)
 
 
 @pytest.fixture(scope="module")
