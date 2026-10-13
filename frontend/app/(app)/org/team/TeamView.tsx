@@ -129,11 +129,12 @@ export async function TeamView({
         <Section
           title={t("invitationsTitle")}
           headingId="team-invitations"
+          focusable
           description={t("invitationsLead", { limit: MAX_OPEN_INVITATIONS })}
           data-team="invitations"
         >
           {!admin ? (
-            locked
+            <DemoLocked sentence={t("inviteDemoLocked")} className="mt-4" />
           ) : unverified ? (
             <Callout data-invite-unverified="">
               <p>{ta("refusal.org_not_verified")}</p>

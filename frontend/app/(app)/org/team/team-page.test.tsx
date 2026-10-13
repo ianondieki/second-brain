@@ -352,7 +352,7 @@ describe("in the public demo", () => {
     state.demo = true;
     await renderPage();
     const locked = [...document.querySelectorAll("[data-demo-locked]")].map((p) => p.textContent);
-    expect(locked).toEqual([en.publicDemo.changeLocked, en.publicDemo.changeLocked]);
+    expect(locked).toEqual([en.publicDemo.changeLocked, en.orgTeam.inviteDemoLocked]);
     expect(document.querySelector('[data-demo-locked="change"]')).not.toBeNull();
     expect(document.querySelector("[data-invite-form]")).toBeNull();
     expect(document.querySelector("[data-member-actions]")).toBeNull();
@@ -486,6 +486,15 @@ describe("the writes on the page", () => {
     expect(mocks.refresh).toHaveBeenCalled();
   });
 
+  it("gives focus to the Invitations heading after a revoke, and to the sent line after a resend", async () => {
+    await renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Revoke the invitation to otieno@telco-a.example" }));
+    await waitFor(() => expect(document.activeElement?.id).toBe("team-invitations"));
+    fireEvent.click(screen.getByRole("button", { name: "Resend the invitation to wanjiru@telco-a.example" }));
+    const sent = await screen.findByText("A new link went to wanjiru@telco-a.example. The earlier one no longer works.");
+    await waitFor(() => expect(document.activeElement?.contains(sent)).toBe(true));
+  });
+
   it("re-reads the list when an invitation was closed meanwhile", async () => {
     vi.mocked(mocks.calls.revoke).mockResolvedValueOnce({ ok: false, refusal: "invitation_closed" });
     await renderPage();
@@ -534,7 +543,9 @@ describe("the writes on the page", () => {
     fireEvent.click(within(group).getByRole("checkbox", { name: "Reviewer" }));
     fireEvent.click(within(row).getByRole("button", { name: "Save roles" }));
     await waitFor(() => expect(mocks.calls.setRoles).toHaveBeenCalledWith(FAITH, ["reviewer", "finance"]));
-    expect(await within(row).findByText("Roles saved.")).toBeTruthy();
+    const saved = await within(row).findByText("Roles saved.");
+    // Focus moves to the line that says so (not lost with the closed step).
+    await waitFor(() => expect(document.activeElement?.contains(saved)).toBe(true));
   });
 
   it("refuses to save a member with no role", async () => {
@@ -543,7 +554,10 @@ describe("the writes on the page", () => {
     fireEvent.click(within(row).getByRole("button", { name: "Change roles of Faith Achieng" }));
     fireEvent.click(await within(row).findByRole("checkbox", { name: "Finance" }));
     fireEvent.click(within(row).getByRole("button", { name: "Save roles" }));
-    expect(within(row).getByText(en.teamAdmin.rolesRequired)).toBeTruthy();
+    const error = within(row).getByText(en.teamAdmin.rolesRequired);
+    const group = within(row).getByRole("group", { name: "Roles of Faith Achieng" });
+    // The error is read with the roles (aria-describedby), as on the invitation form.
+    expect(group.getAttribute("aria-describedby")).toBe(error.closest("[id]")?.id);
     expect(mocks.calls.setRoles).not.toHaveBeenCalled();
   });
 

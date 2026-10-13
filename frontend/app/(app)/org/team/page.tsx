@@ -8,7 +8,7 @@ import { SignedInShell } from "@/components/SignedInShell";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHero } from "@/components/ui/PageHero";
-import { CheckIcon } from "@/components/ui/status-icons";
+import { CheckIcon, ClockIcon, InfoIcon } from "@/components/ui/status-icons";
 import { clientStrings, pickedStrings } from "@/lib/i18n/client-strings";
 import { billingHref, upgradeHref } from "@/lib/billing/upgrade";
 import { publicDemoOn } from "@/lib/public-demo";
@@ -132,7 +132,15 @@ export default async function OrganisationTeamPage({ searchParams }: PageProps<"
             <p className="mt-4" data-verification={verification}>
               <Badge
                 tone={verification === "e2" ? "ok" : verification === "e1" ? "accent" : "neutral"}
-                icon={verification === "e2" || verification === "e1" ? <CheckIcon /> : undefined}
+                icon={
+                  verification === "e2" || verification === "e1" ? (
+                    <CheckIcon />
+                  ) : verification === "pending" ? (
+                    <ClockIcon />
+                  ) : (
+                    <InfoIcon />
+                  )
+                }
               >
                 {t(`verification.${verification}`)}
               </Badge>
