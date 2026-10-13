@@ -32,7 +32,8 @@ never point it at real data or real providers.
 
 **The nightly reset** (03:00 EAT, `RESET_HOUR_EAT` in `infra/demo/space/run.py`; `infra/demo/space/README.md` has its
 timing): the banner's "03:00 EAT" is written into the web's copy (`publicDemo.banner` in `frontend/locales/en.json`
-and `sw.json`), not read from the image, so a change to the reset hour changes those two strings in the same commit.
+and `sw.json`), not read from the image, so a change to the reset hour changes those two strings and the API's
+`RESET_HOUR_EAT` in `backend/src/bridge/demo/public_access.py` (what `/api/public/demo` reports) in the same commit.
 
 `.github/workflows/demo-image.yml` builds it on every push to the integration branch that touches `backend/`,
 `frontend/` or `infra/`, and pushes `ghcr.io/ianondieki/bridge-demo:latest` and `:<commit SHA>`; run it by hand with

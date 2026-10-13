@@ -65,11 +65,11 @@ const PERSONAS = [
   { key: "grace", name: "Grace Mwangi", role: "org_admin", detail: "Telco A (fixture): owner and admin", home: "/org" },
   { key: "peter", name: "Peter Kamau", role: "org_signatory", detail: "Telco A (fixture): signatory", home: "/org" },
   { key: "rita", name: "Rita Njeri", role: "org_reviewer", detail: "Telco A (fixture): reviewer", home: "/org" },
-  { key: "hassan", name: "Hassan Abdi", role: "org_admin", detail: "County Government of C (fixture): owner and admin", home: "/org" },
+  { key: "halima", name: "Halima Yusuf", role: "org_admin", detail: "State Department D (fixture): owner and admin", home: "/org" },
   { key: "moderator", name: "Staff Moderator (demo)", role: "staff", detail: "Platform staff: moderator", home: "/admin" },
 ];
 /** The names as drawn: the seed's " (demo)" dropped. */
-const NAMES = ["Amina Wanjiru", "Brian Otieno", "Grace Mwangi", "Peter Kamau", "Rita Njeri", "Hassan Abdi", "Staff Moderator"];
+const NAMES = ["Amina Wanjiru", "Brian Otieno", "Grace Mwangi", "Peter Kamau", "Rita Njeri", "Halima Yusuf", "Staff Moderator"];
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -133,7 +133,7 @@ describe("/login in the public demo", () => {
     expect(line("grace")).toBe("Runs the team, scouts and pipeline at Telco A");
     expect(line("peter")).toBe("Approves and signs for Telco A");
     expect(line("rita")).toBe("Reviews proposals and makes recommendations for Telco A");
-    expect(line("hassan")).toBe("Runs the team, scouts and pipeline at County Government of C");
+    expect(line("halima")).toBe("Runs the team, scouts and pipeline at State Department D");
     expect(line("moderator")).toBe("Reads the moderation and research queues");
     const text = document.querySelector("[data-personas]")!.textContent!;
     for (const word of ["(fixture)", "(demo)", "owner and admin", "Developer, D2", "Platform staff: moderator"]) {
@@ -229,7 +229,7 @@ describe("/login in the public demo", () => {
     expect((await within(row).findByRole("alert")).textContent).toBe("That sign-in did not go through. Try again in a moment.");
 
     mocks.fetch.mockRejectedValue(new TypeError("Failed to fetch"));
-    const other = document.querySelector<HTMLElement>('[data-persona="hassan"]')!;
+    const other = document.querySelector<HTMLElement>('[data-persona="halima"]')!;
     fireEvent.click(within(other).getByRole("button"));
     expect((await within(other).findByRole("alert")).textContent).toBe("That sign-in did not go through. Try again in a moment.");
     expect(within(row).queryByRole("alert")).toBeNull(); // one line at a time

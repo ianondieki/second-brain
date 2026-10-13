@@ -53,7 +53,7 @@ describe("the banner", () => {
   // The hour is written into the copy, not fetched (ux review of P28-PD, MINOR 7): this keeps it equal to the image's.
   it("names the image's reset hour in both languages (infra/demo/space/run.py RESET_HOUR_EAT)", () => {
     const supervisor = readFileSync(join(process.cwd(), "../infra/demo/space/run.py"), "utf8");
-    const hour = /^RESET_HOUR_EAT = (\d{1,2})$/m.exec(supervisor)?.[1];
+    const hour = /^RESET_HOUR_EAT\s*(?::[^=\n]*)?=\s*(\d{1,2})\b/m.exec(supervisor)?.[1];
     expect(hour).toBeDefined();
     const time = `${hour!.padStart(2, "0")}:00 EAT`;
     expect(en.publicDemo.banner).toContain(time);

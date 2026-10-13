@@ -16,7 +16,7 @@ const PERSONAS = [
   "Grace Mwangi",
   "Peter Kamau",
   "Rita Njeri",
-  "Hassan Abdi",
+  "Halima Yusuf",
   "Staff Moderator", // the seed's "Staff Moderator (demo)", drawn without the mark
 ];
 const BANNER =
