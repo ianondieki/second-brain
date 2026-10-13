@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
+import en from "@/locales/en.json";
+
 import { publish, saveDraft, searchProblems, uploadAttachment } from "./calls";
 import { draftBody } from "./draft";
 import { linksProblem, publishChecklist } from "./checklist";
 import {
   editHref,
+  fieldOf,
   wordCount,
   type EditorState,
   type Version,
@@ -380,5 +383,47 @@ describe("calls", () => {
     const fake = client(Response.json({ items: [] }));
     await searchProblems({ q: "  maziwa  ", niche: "" }, fake.api);
     expect(fake.calls[0][2]).toEqual({ params: { query: { q: "maziwa", niche: undefined, limit: 20 } } });
+  });
+});
+
+// REQ-FND-04: the public demo publishes a limited number of versions a day per account (429 public_demo_limit).
+describe("a publish refused by the public demo's daily limit", () => {
+  it("is its own problem with its own sentence, not the shared \"too many attempts\"", () => {
+    const body = { detail: { code: "public_demo_limit", message: "The public demo publishes up to 20 versions a day." } };
+    expect(publishRefusal(429, body)).toEqual({ problem: "demoLimit", fields: [] });
+    expect(publishRefusal(429, { detail: { code: "too_many_attempts" } }).problem).toBe("rateLimited");
+    expect(en.ideaEditor.problem.demoLimit).toBe(
+      "The public demo publishes up to 20 versions a day for each account. Try again tomorrow.",
+    );
+  });
+});
+
+// AC-UX-3: the editor derives the field a state key feeds (an edit clears the API's issue on it) instead of carrying a
+// table in its first download; the derivation must give exactly the table it replaced.
+describe("fieldOf", () => {
+  const FEEDS: Record<string, string> = {
+    title: "title",
+    nicheId: "niche_id",
+    countyCode: "county_code",
+    maturity: "maturity",
+    ask: "ask",
+    problemStatement: "problem_statement",
+    summary: "summary",
+    impactClaims: "impact_claims",
+    problems: "problems",
+    newProblemTitle: "new_problem.title",
+    newProblemStatement: "new_problem.statement",
+    links: "links",
+  };
+  const FIELD_NAMES = new Set(Object.values(FEEDS));
+
+  it("names the field each state key feeds, as the API does", () => {
+    for (const [key, field] of Object.entries(FEEDS)) expect(fieldOf(key), key).toBe(field);
+  });
+
+  it("gives every other state key a name no field has", () => {
+    const others = Object.keys(EMPTY_STATE).filter((key) => !(key in FEEDS));
+    expect(others.sort()).toEqual(["approach", "architecture", "notes", "pricing", "problemMode"]);
+    for (const key of others) expect(FIELD_NAMES.has(fieldOf(key)), key).toBe(false);
   });
 });

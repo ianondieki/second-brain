@@ -29,6 +29,7 @@ import { tourDoneFromCookies } from "@/components/tour/tour-store";
 import { tourScenes } from "@/components/tour/TourScenes";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { needsMfaSetup, type Me } from "@/lib/auth/routing";
+import { publicDemoOn } from "@/lib/public-demo";
 import { formatShortDate } from "@/lib/format";
 
 import { RecommendedForYou } from "./discover/RecommendedForYou";
@@ -216,8 +217,9 @@ export async function HomeContent({
           </ul>
         </section>
 
-        {/* Two-step sign-in: a notice only while it is off (the status needs no section of its own when it is on). */}
-        {mfa !== "on" ? (
+        {/* Two-step sign-in: a notice only while it is off (the status needs no section of its own when it is on). Not in
+            the public demo (REQ-FND-04), where setting it up is switched off for the shared personas. */}
+        {mfa !== "on" && !publicDemoOn() ? (
           <Callout
             tone={mfa === "required" ? "error" : "info"}
             icon={

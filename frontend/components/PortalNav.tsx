@@ -23,6 +23,11 @@ export interface PortalNavProps {
   heading?: string;
   /** Help, as a quiet link under the rail's sections from 1024 px (not a section). */
   help?: { href: string; label: string };
+  /**
+   * Places beside Help in the rail's quiet footer (not sections, so never a sixth tab): the organisation's Team
+   * (REQ-TEN-02). `current` marks the page it is on. `label` names the footer's landmark when there is more than Help.
+   */
+  footer?: { label: string; links: ReadonlyArray<{ key: string; href: string; label: string; current?: boolean }> };
 }
 
 /**
@@ -32,7 +37,7 @@ export interface PortalNavProps {
  * (SignedInShell pads main; globals.css pads focus scrolling). With a single section there is no tab bar below
  * 1024 px: one tab only takes room on a phone.
  */
-export function PortalNav({ label, items, current, query = "", heading, help }: PortalNavProps) {
+export function PortalNav({ label, items, current, query = "", heading, help, footer }: PortalNavProps) {
   if (items.length === 0) return null;
   const tabs = items.length > 1;
   return (
@@ -96,17 +101,43 @@ export function PortalNav({ label, items, current, query = "", heading, help }: 
       {/* A quiet footer under the five sections on the rail: Help, a link and not a sixth section (outside the
           portal's <nav>, in its own small landmark; phones reach Help from the account menu and the palette). */}
       {help ? (
-        <aside aria-label={help.label} className="mt-6 hidden border-t border-line pt-4 lg:block">
-          <Link
-            href={help.href}
-            className="flex min-h-11 items-center gap-3 rounded-full px-4 text-[0.9375rem] font-medium text-ink-soft no-underline hover:bg-paper-deep hover:text-ink"
-          >
+        <aside
+          aria-label={footer && footer.links.length > 0 ? footer.label : help.label}
+          className="mt-6 hidden border-t border-line pt-4 lg:block"
+        >
+          {footer?.links.map((link) => (
+            <Link
+              key={link.key}
+              href={link.href}
+              aria-current={link.current ? "page" : undefined}
+              data-rail-footer={link.key}
+              className={cn(FOOTER_LINK, link.current && "bg-accent-wash text-accent")}
+            >
+              <TeamIcon className="size-5 shrink-0" />
+              {link.label}
+            </Link>
+          ))}
+          <Link href={help.href} className={FOOTER_LINK}>
             <HelpIcon className="size-5 shrink-0" />
             {help.label}
           </Link>
         </aside>
       ) : null}
     </div>
+  );
+}
+
+const FOOTER_LINK =
+  "flex min-h-11 items-center gap-3 rounded-full px-4 text-[0.9375rem] font-medium text-ink-soft no-underline hover:bg-paper-deep hover:text-ink";
+
+/** Team: two people, one behind the other. */
+function TeamIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" {...props}>
+      <circle cx="9" cy="8.5" r="3" />
+      <path d="M3.5 19c.8-3 3-4.75 5.5-4.75S13.7 16 14.5 19" />
+      <path d="M15.5 5.75a3 3 0 0 1 0 5.5M17.75 14.6c1.4.7 2.3 2.2 2.75 4.4" />
+    </svg>
   );
 }
 

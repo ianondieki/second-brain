@@ -156,7 +156,7 @@ test("Telco A's signatory declares prior knowledge inside the window; the develo
     expect(`${n31!.title} ${n31!.body ?? ""}`).not.toContain(EVIDENCE_TITLE);
     await page.goto(`/dev/engagements/${id}`);
     const panel = page.getByRole("region", {
-      name: new RegExp(`^Prior-knowledge declaration from ${TELCO_A.replace(/[()]/g, "\\$&")} on `),
+      name: new RegExp(`^Prior-knowledge declaration from ${TELCO_A.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} on `),
     });
     await expect(panel).toBeVisible();
     await expect(panel.locator("[data-hash]")).toHaveText(FIXTURE_SHA256);

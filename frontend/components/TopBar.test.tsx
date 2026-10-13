@@ -17,13 +17,24 @@ vi.mock("next-intl/server", () => ({
   getTranslations: async (namespace: string) => createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 async function renderTree(node: ReactNode) {
   renderWithIntl(<>{await resolveServerTree(node)}</>);
 }
 
 describe("TopBar", () => {
+  // REQ-FND-04: in the public demo the root layout draws the page's one skip link before the demo banner.
+  it("leaves its skip link to the root layout in the public demo", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    await renderTree(<TopBar />);
+    expect(screen.queryByRole("link", { name: "Skip to content" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Wazo" })).toBeTruthy();
+  });
+
   it("opens with a skip link to the main content, then the working name linking home", async () => {
     await renderTree(<TopBar />);
     const focusable = [...document.querySelectorAll("a, button")];

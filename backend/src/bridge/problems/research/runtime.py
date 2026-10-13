@@ -15,7 +15,7 @@ from bridge.llm.client import LLMClient
 from bridge.llm.deps import build_runtime, routed_client
 from bridge.llm.routing import LLMRuntime
 from bridge.problems.research.policy import ResearchPolicy, get_research_policy
-from bridge.problems.research.sources import Catalogue, get_catalogue
+from bridge.problems.research.sources import Catalogue, catalogue_for
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,7 @@ class ResearchRuntime:
             factory=factory,
             settings=settings,
             llm=client,
-            catalogue=self._catalogue or get_catalogue(),
+            catalogue=self._catalogue or catalogue_for(settings),  # official only in the fictional public demo
             policy=self._policy or get_research_policy(),
         )
 

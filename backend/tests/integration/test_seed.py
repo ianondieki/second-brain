@@ -4,16 +4,37 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import AsyncIterator, Iterator
 
+import pytest
 from sqlalchemy import text
+from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.config import get_settings
+from bridge.ids import uuid7
 from bridge.seed.reference import SEED_TABLES, seed_all, seed_test_clock
+from tests.integration.conftest import own_database, role_engine
 
 DRAFT_HEADER = "DRAFT — NOT LEGAL ADVICE — MUST BE REVIEWED BY A KENYAN ADVOCATE BEFORE USE"
 # A seeded body is the header, a blank line and marker lines only: no legal wording (REQ-REPO-01 T2.1).
 PLACEHOLDER_BODY = re.compile(re.escape(DRAFT_HEADER) + r"\n\n(\[\[LEGAL-PLACEHOLDER:[a-z0-9-]+\]\]\n)+")
+
+
+# The module's own database (REQ-FND-02): other modules add counties, organisations and plans to the shared session
+# database (each with a code of its own, and rows that point at it), so counting the reference data there depended on
+# which modules ran first. These fixtures replace the session ones for this module only; the assertions are unchanged.
+@pytest.fixture(scope="module")
+def database_url(admin_url: URL) -> Iterator[URL]:
+    with own_database(admin_url, "bridge_seed") as url:
+        yield url
+
+
+@pytest.fixture(scope="module")
+async def owner_engine(database_url: URL) -> AsyncIterator[AsyncEngine]:
+    engine = role_engine(database_url, "bridge_owner")
+    yield engine
+    await engine.dispose()
 
 
 async def _organisations(engine: AsyncEngine) -> int:
@@ -22,7 +43,16 @@ async def _organisations(engine: AsyncEngine) -> int:
 
 
 async def test_seed_twice_gives_the_same_counts(owner_engine: AsyncEngine) -> None:
-    organisations = await _organisations(owner_engine)  # whatever earlier tests left behind
+    foreign = uuid7()  # an organisation the seed does not own: it must survive the seed untouched
+    async with owner_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO organizations (id, kind, legal_name, slug, source) VALUES (:id, 'company',"
+                " 'Foreign Org (fixture)', :slug, 'self_signup')"
+            ),
+            {"id": foreign, "slug": f"foreign-{foreign.hex}"},
+        )
+    organisations = await _organisations(owner_engine)  # whatever earlier tests left behind, and the foreign one
     async with owner_engine.begin() as conn:
         first = await seed_all(conn, get_settings())
     async with owner_engine.begin() as conn:
@@ -38,6 +68,13 @@ async def test_seed_twice_gives_the_same_counts(owner_engine: AsyncEngine) -> No
         legal = (await conn.execute(text("SELECT count(*) FROM legal_templates WHERE version = 'v1'"))).scalar_one()
         ndas = (await conn.execute(text("SELECT count(*) FROM nda_templates WHERE version = 'v1'"))).scalar_one()
     assert (counties, kenya) == (47, 1)
+    async with owner_engine.connect() as conn:
+        kept = (
+            await conn.execute(
+                text("SELECT legal_name, source::text, slug FROM organizations WHERE id = :id"), {"id": foreign}
+            )
+        ).one()
+    assert tuple(kept) == ("Foreign Org (fixture)", "self_signup", f"foreign-{foreign.hex}")
     assert plans == 9
     # The reference seed never creates organisations: the provisional directory is bridge.seed.directory (dev/test).
     assert await _organisations(owner_engine) == organisations

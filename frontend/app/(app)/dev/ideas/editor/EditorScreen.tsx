@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { DevNav } from "@/components/DevNav";
-import { ClientStrings } from "@/components/ClientStrings";
+import { ClientStrings, type StringTree } from "@/components/ClientStrings";
 import { SignedInShell } from "@/components/SignedInShell";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -10,6 +10,7 @@ import { BackLink } from "@/components/ui/BackLink";
 import { requireMe } from "@/lib/api/server";
 import { clientStrings } from "@/lib/i18n/client-strings";
 import { homeFor } from "@/lib/auth/routing";
+import { publicDemoOn } from "@/lib/public-demo";
 
 import { chipsOf, overlapKey } from "../checks";
 import { editorOptions, lastOverlap, linkableProblem, myIdea } from "../data";
@@ -87,7 +88,7 @@ export async function EditorScreen({ id, step, problemId = null }: { id: string 
     <SignedInShell homeHref={home} nav={<DevNav current="ideas" />} wide>
       <div className={EDITOR_LAYOUT}>
         <BackLink href={idea ? ideaHref(idea.id) : BASE_PATH}>{idea ? t("backToIdea") : ideas("back")}</BackLink>
-        <ClientStrings strings={await clientStrings(["ideaEditor", "ideaFields", "ideaAssistant", "ideaChecks"])}>
+        <ClientStrings strings={await editorStrings()}>
           <Editor
             id={idea?.id ?? null}
             hasDraft={idea?.draft != null}
@@ -104,4 +105,17 @@ export async function EditorScreen({ id, step, problemId = null }: { id: string 
       </div>
     </SignedInShell>
   );
+}
+
+/**
+ * The editor's strings. In the public demo (REQ-FND-04) file uploads are switched off, and `ideaEditor.uploadsLocked`
+ * carries the sentence that stands where "Add a file" would: the Files part (DetailsStep, loaded with step 2) reads it
+ * there, so no prop for it rides through the editor's first download (AC-UX-3: /dev/ideas/new is near its 150 KB).
+ * The key is in no catalogue, so with the mode off it is absent.
+ */
+async function editorStrings(): Promise<Record<string, StringTree>> {
+  const strings = await clientStrings(["ideaEditor", "ideaFields", "ideaAssistant", "ideaChecks"]);
+  if (!publicDemoOn()) return strings;
+  const uploadsLocked = (await getTranslations("publicDemo"))("locked");
+  return { ...strings, ideaEditor: { ...(strings.ideaEditor as StringTree | undefined), uploadsLocked } };
 }

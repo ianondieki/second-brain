@@ -9,7 +9,8 @@ Two rules are enforced here, in code:
 
 - The seed loads only when ``APP_ENV`` is set explicitly (environment or ``backend/.env``, not the settings default)
   to ``dev`` or ``test`` (``ensure_loadable``); staging keeps its fixture organisations and gate G6 approves the
-  production list.
+  production list. The public demo with ``PUBLIC_DEMO_CONTENT=fictional`` (REQ-FND-04,
+  ``bridge.config.fictional_only``) skips it too: its organisations are real and await G6's citations.
 - Every row is E0 (``unclaimed``). A row may name a higher ``verification`` (fixture organisations) only when
   ``APP_ENV`` is ``test`` or ``staging``; anywhere else the loader refuses.
 
@@ -39,7 +40,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from bridge import clock
-from bridge.config import BACKEND_DIR, Settings
+from bridge.config import BACKEND_DIR, Settings, fictional_only
 from bridge.directory.models import Niche, OrgNiche, Region
 from bridge.ids import uuid7
 from bridge.models.enums import OrgKind, OrgSource, OrgVerification, RegionKind
@@ -117,6 +118,11 @@ def directory_refusal(settings: Settings) -> str | None:
         return (
             f"APP_ENV={settings.app_env}; the provisional directory seed loads only in dev or test (staging keeps its "
             "fixture organisations and gate G6 approves the production list)"
+        )
+    if fictional_only(settings):
+        return (
+            "PUBLIC_DEMO=true with PUBLIC_DEMO_CONTENT=fictional; the public demo lists only the fictional fixture "
+            "organisations (the provisional directory names real organisations and awaits G6's citations)"
         )
     return None
 

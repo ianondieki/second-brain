@@ -4,7 +4,16 @@ import { getRedirectUrl, getRewrittenUrl, unstable_doesMiddlewareMatch } from "n
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import nextConfig from "./next.config";
-import { admitsStaff, config, isSignedInPath, proxy, SIGNED_IN_PREFIXES, UNMATCHED_PATH } from "./proxy";
+import {
+  admitsStaff,
+  config,
+  DEMO_LOGIN_PATH,
+  isAdminPath,
+  isSignedInPath,
+  proxy,
+  SIGNED_IN_PREFIXES,
+  UNMATCHED_PATH,
+} from "./proxy";
 
 const answer = (status: number, body: unknown = {}) =>
   vi.fn<typeof fetch>(async () => new Response(JSON.stringify(body), { status }));
@@ -53,6 +62,7 @@ const passesOn = (response: Response) => response.headers.get("x-middleware-next
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 // P16-B: loading states make the signed-in portals stream, so a signed-out visit is redirected here, before rendering,
@@ -126,9 +136,106 @@ describe("where the proxy runs", () => {
     }
   });
 
-  it("never runs on public pages", () => {
-    for (const url of ["/", "/login", "/signup", "/help", "/verify", "/verify/x", "/legal/terms", "/auth/mfa", "/developer"]) {
+  // P28 (REQ-FND-04): the public demo's header goes on every page, so the proxy runs on the public pages too (and on
+  // /robots.txt); the build assets, the image optimiser, the fonts and the API never reach it.
+  it("runs on the public pages and /robots.txt, never on build assets, fonts or the API", () => {
+    for (const url of ["/", "/login", "/signup", "/help", "/verify", "/verify/x", "/legal/terms", "/auth/mfa", "/robots.txt"]) {
+      expect(unstable_doesMiddlewareMatch({ config, nextConfig, url }), url).toBe(true);
+    }
+    for (const url of ["/_next/static/chunks/a.js", "/_next/image?url=x", "/fonts/hanken-grotesk-v1.woff2", "/api/auth/me",
+      "/api/public/demo"]) {
       expect(unstable_doesMiddlewareMatch({ config, nextConfig, url }), url).toBe(false);
     }
+  });
+
+  // What "never runs on public pages" guaranteed before P28, kept: with the mode off a public page is passed on
+  // untouched (no redirect, no rewrite, no API call, no added header).
+  it.each(["/", "/login", "/signup", "/help", "/verify", "/legal/terms", "/auth/mfa", "/developer", "/Admin", "/admin-x"])(
+    "passes %s through untouched with the mode off, signed in or not",
+    async (path) => {
+      const fetchImpl = vi.fn<typeof fetch>();
+      vi.stubGlobal("fetch", fetchImpl);
+      for (const cookie of [undefined, TOKEN]) {
+        const response = await proxy(request(path, cookie));
+        expect(passesOn(response), path).toBe(true);
+        expect(getRewrittenUrl(response)).toBeNull();
+        expect(response.headers.get("x-robots-tag")).toBeNull();
+      }
+      expect(fetchImpl).not.toHaveBeenCalled();
+    },
+  );
+
+  it("knows the console's paths exactly", () => {
+    expect(isAdminPath("/admin")).toBe(true);
+    expect(isAdminPath("/admin/moderation")).toBe(true);
+    expect(isAdminPath("/admin-x")).toBe(false);
+    expect(isAdminPath("/Admin")).toBe(false);
+  });
+});
+
+describe("the public demo (REQ-FND-04, AT-PD-6)", () => {
+  it("adds X-Robots-Tag: noindex, nofollow to every response while PUBLIC_DEMO is on", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    vi.stubGlobal("fetch", answer(404, { detail: { code: "not_found" } }));
+    const pages = [
+      await proxy(request("/")),
+      await proxy(request("/login")),
+      await proxy(request("/dev", TOKEN)),
+      await proxy(request("/dev")), // the redirect to /login
+      await proxy(request("/admin", TOKEN)), // the rewrite to the unmatched address
+    ];
+    for (const response of pages) expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(pages[3].status).toBe(307);
+    expect(getRewrittenUrl(pages[4])).toBe(`http://localhost:3000${UNMATCHED_PATH}`);
+  });
+
+  it("reads the switch on each request, not once", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    expect((await proxy(request("/"))).headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    vi.stubEnv("PUBLIC_DEMO", "false");
+    expect((await proxy(request("/"))).headers.get("x-robots-tag")).toBeNull();
+  });
+
+  it("serves a disallow-all /robots.txt while on", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "1");
+    const response = await proxy(request("/robots.txt"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toMatch(/^text\/plain/);
+    expect(await response.text()).toBe("User-agent: *\nDisallow: /\n");
+    expect(passesOn(response)).toBe(false);
+  });
+
+  // AC-UX-3: the picker is its own route, so neither /login's email form nor the picker is in the other's download.
+  it("serves /login from the persona picker's route while on, the query kept and the address unchanged", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    const response = await proxy(request("/login?next=%2Fdev%2Fideas"));
+    expect(getRewrittenUrl(response)).toBe(`http://localhost:3000${DEMO_LOGIN_PATH}?next=%2Fdev%2Fideas`);
+    expect(DEMO_LOGIN_PATH).toBe("/login/demo");
+    expect(getRedirectUrl(response)).toBeNull();
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    for (const path of ["/login/", "/Login", "/login/check", "/signup"]) {
+      expect(getRewrittenUrl(await proxy(request(path))), path).toBeNull();
+    }
+  });
+
+  it("leaves /login to its own page while off", async () => {
+    const response = await proxy(request("/login"));
+    expect(passesOn(response)).toBe(true);
+    expect(getRewrittenUrl(response)).toBeNull();
+  });
+
+  it("answers the picker's own address as an unknown one while off, and lets it through while on", async () => {
+    const off = await proxy(request(`${DEMO_LOGIN_PATH}?next=%2Fdev`));
+    expect(getRewrittenUrl(off)).toBe(`http://localhost:3000${UNMATCHED_PATH}`);
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    const on = await proxy(request(DEMO_LOGIN_PATH));
+    expect(passesOn(on)).toBe(true);
+    expect(getRewrittenUrl(on)).toBeNull();
+  });
+
+  it("leaves /robots.txt to Next as before while off (today's 404)", async () => {
+    const response = await proxy(request("/robots.txt"));
+    expect(passesOn(response)).toBe(true);
+    expect(response.headers.get("x-robots-tag")).toBeNull();
   });
 });

@@ -9,6 +9,11 @@ describe("noticeKind", () => {
     expect(noticeKind("engagement.tier2_shared")).toBe("engagement");
     expect(noticeKind("n17")).toBe("engagement");
     expect(noticeKind("engagement.n18")).toBe("message");
+    // P28: escalations and contact overdue (N05, with the procurement route's), NDA reminders (N07), milestone review
+    // reminders and escalations (N12).
+    expect(noticeKind("engagement.n05")).toBe("engagement");
+    expect(noticeKind("engagement.n07")).toBe("engagement");
+    expect(noticeKind("engagement.n12")).toBe("engagement");
     expect(noticeKind("em3")).toBe("discover");
     expect(noticeKind("saved_search_match")).toBe("discover");
     expect(noticeKind("em7")).toBe("reminder");

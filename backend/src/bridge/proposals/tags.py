@@ -283,6 +283,9 @@ _IN_APP = text(
 class Pitched:
     result: PitchResult
     email: em1.PendingEm1 | None
+    # (engagement, organisation) of each SUBMITTED engagement the Pitch opened: the router applies the organisations'
+    # niche defaults to them after the commit (REQ-TEN-02, ``bridge.engagements.team.apply_niche_defaults``).
+    opened: tuple[tuple[UUID, UUID], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -335,6 +338,7 @@ async def pitch(
     created: list[UUID] = []
     delivered: list[UUID] = []
     engagements: list[str] = []
+    opened: list[tuple[UUID, UUID]] = []
     try:
         for org_id in order:
             status = STATUS_BY_LEVEL[OrgVerification(orgs[org_id].verification)]
@@ -353,6 +357,7 @@ async def pitch(
                     tag_id=tag_id,
                 )
                 engagements.append(str(engagement_id))
+                opened.append((engagement_id, org_id))
                 await hooks.grant_on_tag(db, owner_id=developer_id, proposal_id=proposal_id, org_id=org_id)
     except IntegrityError as exc:  # a backstop: the lock and the checks above make this a race we lost
         await db.rollback()
@@ -396,7 +401,7 @@ async def pitch(
         email_sent=email is not None,
         cap=TagCap(used=tag_cap.used + len(created), limit=tag_cap.limit, plan=tag_cap.plan),
     )
-    return Pitched(result=result, email=email)
+    return Pitched(result=result, email=email, opened=tuple(opened))
 
 
 def _in_app_body(tags: list[TagOut]) -> str:

@@ -37,7 +37,9 @@ NOT_PAGES = {
 # (which built /settings/notifications and /help, every email footer) until P22-B's backend landed before its screens
 # (P22-BF built the event page N27 links to) and P22-C's did the same (P22-CF built /dev/teams and /dev/teams/{id},
 # N28's and N29's). An entry that has become a page fails the test, so the list never goes stale.
-PAGES_NOT_BUILT: dict[str, str] = {}
+PAGES_NOT_BUILT: dict[str, str] = {
+    "/invitations/{}": "the invitation email's link (P28 track C, REQ-TEN-02): its page is the track's frontend half",
+}
 
 
 def routes() -> list[re.Pattern[str]]:

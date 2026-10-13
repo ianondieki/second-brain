@@ -8,6 +8,7 @@ import { DEV_SECTIONS } from "../DevNav";
 import { ORG_SECTIONS } from "../OrgNav";
 
 import { getMe } from "@/lib/api/server";
+import { publicDemoOn } from "@/lib/public-demo";
 
 import { PaletteTrigger } from "./PaletteTrigger";
 import { recentKey } from "./remember";
@@ -29,11 +30,12 @@ export function portalOf(homeHref: string): { portal: PalettePortal; query: stri
  */
 export async function PaletteSlot({ homeHref, staffRole }: { homeHref: string; staffRole?: StaffRole }) {
   const { portal, query } = portalOf(homeHref);
-  const [t, nav, admin, shell] = await Promise.all([
+  const [t, nav, admin, shell, demo] = await Promise.all([
     getTranslations("palette"),
     getTranslations("nav"),
     getTranslations("admin"),
     getTranslations("shell"),
+    getTranslations("publicDemo"),
   ]);
 
   const sections: PaletteLink[] =
@@ -48,6 +50,8 @@ export async function PaletteSlot({ homeHref, staffRole }: { homeHref: string; s
           }));
   const goTo: PaletteLink[] = [
     ...sections,
+    // The organisation's Team (REQ-TEN-02): not one of the portal's five sections, so listed after them.
+    ...(portal === "org" ? [{ id: "go-team", title: nav("team"), href: `/org/team${query}` }] : []),
     { id: "go-settings", title: t("settings"), href: "/settings/security" },
     { id: "go-notifications", title: t("notifications"), href: "/notifications" },
     { id: "go-help", title: shell("help"), href: "/help" },
@@ -76,7 +80,8 @@ export async function PaletteSlot({ homeHref, staffRole }: { homeHref: string; s
     postBrief: t("postBrief"),
     themeDark: t("themeDark"),
     themeLight: t("themeLight"),
-    signOut: shell("signOut"),
+    // The public demo (REQ-FND-04): signing out is how a visitor changes persona (it lands on /login's picker).
+    signOut: publicDemoOn() ? demo("switchPersona") : shell("signOut"),
     signOutFailed: shell("signOutFailed"),
     keyMove: t("keyMove"),
     keyOpen: t("keyOpen"),

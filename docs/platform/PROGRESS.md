@@ -1215,6 +1215,109 @@ old jobs are pruned; trend topic slugs are shown raw on the admin Trends table.
 question stay open; the new strings under `_meta.reviewP22b` for copy and Swahili review; the trend list's licence
 check before release.
 
+### P28 report (2026-10-13): a public demo anyone can open, the procurement route for public bodies, escalations, Team, CSV export, transparency
+
+**Why.** The owner, after P27: "Do another round of adding nice features to the application that seem good and
+relevant as per the project....I also want a working link for the application that anyone can access for
+demonstration purposes". Card: `tasks/P28.md` (track PD plus feature tracks A–D chosen from the spec's unbuilt items);
+requirements REQ-FND-04 (public demo), REQ-ENG-06 (AC-TRACK-5), REQ-NOT-05, REQ-TEN-02, REQ-ENG-17, REQ-AUD-01;
+decisions D-71 (where the demo runs, open), D-72 (one account on both sides, open), D-73 (Team's place in the
+navigation, open); D-39 gains the Team invitation email as item (8).
+
+**What was built** (branch `claude/fervent-mccarthy-0zyqn2`; worktree merges: transparency `06ccd32`, PD backend
+`7c09b73`, PD screens `f0d6f86` and their UX round `766e45d`, the image `50e78d1`, revision 0015 with tracks A/B
+`2a5a23d`, A/B screens `f698867`, Team/CSV backend `7cd5688` and `7678547`, the perf round `9fb0591`, Team/CSV screens
+`bae9b7a`):
+- **PD. The public demo** (REQ-FND-04, D-71). `PUBLIC_DEMO=true` (refused unless `APP_ENV` is set to dev or test)
+  turns the seeded demo into a page anyone can open: `/login` offers seven fictional personas (Amina, Brian, Grace,
+  Peter, Rita, Halima of State Department D, and a staff moderator) and signs in with one press (`POST
+  /api/auth/demo/sign-in`, not in OpenAPI, its module deleted from production images; the second factor is waived
+  for demo accounts only); every credential, identity, membership, invitation and upload-keeping route answers 403
+  `public_demo_locked`; signed-out public pages are frozen at the seed; staff are read-only; publishing is capped at 20
+  per account per Nairobi day; `X-Robots-Tag: noindex`; docs and OpenAPI off; fictional content only. Screens: the
+  persona picker (served from its own route by a proxy rewrite, so a normal visitor's `/login` pays nothing for it),
+  a dismissible banner with the nightly reset time, Switch persona in the menu and palette, honest locked lines.
+  `infra/demo/space/` builds one image (Postgres, SeaweedFS, API, worker, web under a supervisor, uid 1000, port 7860,
+  a reset every night at 03:00 EAT); `demo-image.yml` pushes it to GHCR from the integration branch; `demo-space.yml`
+  (dispatch only) waits on D-71; `.devcontainer` gives a Codespaces link today.
+- **A. The procurement route** (REQ-ENG-06, AC-TRACK-5; revision 0015). A public entity's approval enters stage 3b,
+  "Procurement route": its owner or admin chooses direct procurement (with a 20–1,000 character justification), RFQ
+  or tender, a privately-initiated PPP proposal, an innovation challenge or grant, or a pilot MOU, and names the
+  contact-by date; the database refuses 3b for a private organisation, lets only owners and admins decide, makes the
+  decision immutable and clears `contact_by` on entry. Screens: 3b on the stepper and its sub-stages (a column on
+  phones, a row from 1024 px; a stopped stage takes its own chip, never "Current"), the route sheet (lazy, inside the
+  existing side-sheet chunk), the route block and History for both parties, the Board's 3b card.
+- **B. Escalations and overdue nudges** (REQ-NOT-05): the `engagement_nudges` ledger (append-only, written only through
+  `app_record_nudge`, keyed per stage entry), EM6 to the developer, the organisation's escalation to its admins and
+  escalation contact, "Escalated to the admins on …" on the organisation's tracker, the nudges' notices in the inbox;
+  a fifth email choice in Settings.
+- **C. Team** (REQ-TEN-02): Organisation › Team (from the rail footer, Home and the palette; D-73) — members with roles,
+  Change roles (owners), Remove (the last owner never; a leaver's assignments close), invitations by email (E1 or E2
+  organisations only, a fixed subject, 7-day single-use links stored as hashes, seats enforced at invite and accept,
+  10 sends an hour per sender, 30 a day per organisation, 3 per 15 minutes and 20 a day per address), a default
+  reviewer per niche (new engagements are assigned through P27's path), an escalation contact. `/invitations/{token}`
+  (no referrer, noindex) with sign-up as an invitee (an account with no profile, organisation or plan, address bound
+  at acceptance); a developer account is refused at acceptance (D-72). The demo seed puts State Department D on
+  Growth so the demo can invite and export; Telco A and SACCO B show the paywall lines.
+- **D. Transparency and export** (REQ-AUD-01, REQ-ENG-17): `/transparency` shows the signed daily roots, the signing
+  keys and how to check a certificate; Export CSV on the organisation's Engagements (Growth's `csv_export`, newest
+  first, at most 10,000 rows with `X-Export-Truncated`, 10 an hour per member, formula injection neutralised, through
+  a same-origin route that turns every refusal into one sentence).
+
+**Reviews.** Every worktree passed `reviewer`; `security-reviewer` passed the PD backend (after CHANGES_REQUIRED: the
+throttle keyed on an unverifiable address, the demo as a publishing surface), revision 0015 with A/B (3 MINORs taken)
+and the Team/CSV backend in three passes (MAJOR: unthrottled invitation emails, fixed; then the sign-up liveness
+oracle and the resend/accept lock order, fixed); `ux-reviewer` passed the PD screens (2 MAJORs fixed), the procurement
+screens (MAJOR: "Procurement route determined" while undecided, renamed) and the Team screens (focus after Revoke and
+Save roles, the invitee's buried next step, fixed). The frontend review of Team found the invitee dead end (BLOCKER)
+that led to joining by invitation and D-72. A separate budget audit found the editor 12 B over after the PD merge
+and that a reviewer's 152 KB tracker figure came from a webpack build; `js-budget.mjs` now refuses non-Turbopack pages.
+
+**Gate** (images rebuilt from `bae9b7a`): Playwright 271 passed, 2 failed, 21 skipped (46 min); the two failures were
+one stale assertion (the settings e2e expected four email choices, P28 added a fifth), fixed in `82fd24d` and passing
+on a fresh reset (10/10 in that file); the clock stage 9 passed, 1 skipped (as P27); `public-demo.spec` 10/10 on a
+public-mode stack. JS budgets: every route ≤ 150,000 B (tightest `/billing/upgrade` 149,970, the trackers 149,840,
+`/dev/ideas/new` 149,947, `/org/team` 149,624, `/login` 148,944). Lighthouse (mobile): accessibility 100 everywhere;
+performance median ≥ 91 on every route light and dark; LCP over 2.5 s on nine pre-existing list and Home routes (the
+photo bands and hero, 2.5–3.5 s, as at P27's second gate) and on the 3b tracker at 2.58 s light (its h1). Screenshots:
+`docs/demo/screenshots/p28/` (12 shots at 375 and 1440, axe 0 on each).
+The all-in-one image (AT-PD-7, rebuilt from `3746ff6`): 414 MB compressed; first page in 45.6 s; 667–691 MiB; the
+seven personas sign in and land home (22/22 scripted, 7/7 in a browser); the locks, docs off, `robots.txt`,
+`X-Robots-Tag`, the frozen public reads, Halima's 3b tracker and route sheet, Team's locked invitation line with
+niche defaults saving, `/login`'s persona picker and `/transparency`'s demo sentence all pass; the nightly reset ran in
+51 s and restored the seed; `public-demo.spec` 10/10 against the image. The publish cap was not exercised (each
+publish calls the timestamp service).
+CI: `pr.yml` run 369 on `3746ff6`: Playwright (mobile 360 and desktop, axe) with the test-clock scenarios, the demo
+story, frontend, hygiene and both legacy suites green; scanners red on `npm audit` only (D-56); the informational
+legacy job red as before; the backend job stopped at its 35-minute limit (the runner question recorded at P26/P27;
+the backend suite passed locally: unit 3,845, and the integration sets each agent and reviewer ran). CodeQL run on
+`3746ff6`: the D-42 findings plus one new `js/incomplete-sanitization` in P27's `declaration.spec.ts`, fixed with
+D-42's `verify.spec.ts` one in `bf2b3db` (every regex metacharacter escaped); CodeQL run 300 on `bf2b3db`: JavaScript clean; Python exactly D-42's seven (six test-code logging findings and the RFC 2634 SHA-1).
+
+**Deviations and residuals.**
+- 3b is named "Procurement route", not the spec's "Procurement route determined" (it read as decided while waiting):
+  confirm or amend docs/spec/06 §6.9 at G8.
+- One side per account (D-72): a developer who is also an organisation's staff needs a second address.
+- Team is not in the organisation's tab bar (D-73).
+- The route sheet's contact-by date defaults to today, as the approve form's does.
+- Shared throttle bucket where every visitor resolves to one address (Codespaces' forwarder, a bare `docker run`):
+  run the demo behind an edge in `TRUSTED_PROXIES`; the nightly reset clears everything.
+- `/verify` pages show visitors' titles until the reset; one visitor can use a persona's 20 publishes.
+- The invitation email's wording joins D-39 (advocate review before any hosted use).
+- An invite meeting an accept at the link's exact expiry can still answer 500 after a rollback (Low).
+- LCP on the photo-band lists and Homes stays over 2.5 s (pre-existing); the trackers have 160 B of JS headroom.
+- Phase 8: the nonce CSP must list the banner's inline script and noscript style.
+- The ≤3 implementers rule was exceeded briefly (4) during the fix rounds.
+
+**For the owner.**
+- **The public link.** Today, at no cost: open the repository in GitHub Codespaces and run
+  `bash .devcontainer/public-url.sh --publish` (docs/runbooks/public-demo.md, checklist D) — the link lasts while the
+  codespace runs. For a link that is always up, choose a host in D-71 ((a) Hugging Face PRO at USD 9 a month, (b)
+  Oracle Always Free with a card, (d) a paid VPS or Fly) and make the GHCR package `bridge-demo` public (Packages →
+  bridge-demo → Change visibility); `demo-image.yml` publishes it from the integration branch. Before going live:
+  D-38, D-39 and G6 per the D-71 checklist.
+- Decide D-71, D-72, D-73; the copy and Swahili reviews of `_meta.reviewP28*`.
+
 ### P27 report (2026-10-12): the super round — deadlines and private calendar feeds, the organisation's pipeline, team triage, prior-knowledge declarations, self-reported references, offline trackers
 
 **Why.** The owner, after P26: "do another super round and improve adding more relevant features". Card:

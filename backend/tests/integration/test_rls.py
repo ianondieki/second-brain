@@ -37,6 +37,9 @@ tenant table without a fixture fails the run. Tables read on the request path by
   organisation's members' only (viewers included): never its developer's, never staff admin's, with or without an
   organisation context, while the developer reads the engagement's prior-knowledge declaration; a calendar feed is its
   user's only (``integration/test_migration_0013.py`` has the rest).
+- Revision 0015 (REQ-NOT-05, REQ-TEN-02): the nudges ledger, the niche defaults and the escalation contact are the
+  organisation's members' only, as the triage rows: never a developer of its engagement, never staff
+  (``integration/test_migration_0015.py`` has the rest).
 - A cross-tenant API access returns 404.
 """
 
@@ -243,14 +246,23 @@ async def test_team_tables_are_read_by_developers_only(
             assert (await conn.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one() == 0, "org-only read"
 
 
-TRIAGE_TABLES = ("engagement_assignments", "engagement_recommendations")
+# Revision 0015 adds the nudges ledger, the niche defaults and the escalation contact: the organisation's alone too.
+TRIAGE_TABLES = (
+    "engagement_assignments",
+    "engagement_recommendations",
+    "engagement_nudges",
+    "org_niche_defaults",
+    "org_escalation_contacts",
+)
 
 
 @pytest.mark.parametrize("table", TRIAGE_TABLES)
 async def test_triage_rows_are_the_organisations_own(
     app_engine: AsyncEngine, owner_engine: AsyncEngine, world: w.World, table: str
 ) -> None:
-    """Revision 0013 (REQ-ENG-15, D-68): the world holds an assignment and a recommendation on each tenant's engagement.
+    """Revision 0013 (REQ-ENG-15, D-68): the world holds an assignment and a recommendation on each tenant's engagement
+    (and, revision 0015's REQ-NOT-05 and REQ-TEN-02, a nudge, a niche default and the escalation contact of its
+    organisation).
     Its organisation's members read them (``test_tenant_a_reads_only_its_own_and_public_rows_of_b``; a viewer too),
     while the engagement's developer, who reads the engagement and its prior-knowledge declaration, and staff admin, who
     reads every engagement, read none of them, with or without an organisation context."""

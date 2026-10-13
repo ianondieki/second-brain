@@ -17,8 +17,9 @@ opened by the Pitch are then driven through the tracker API to a few stages (``b
 party signed in with the demo password and its TOTP code. Every account holds the reminders consent (P6). A demo
 staff admin (P11) starts one research run per saved-excerpt niche and approves its card
 (``bridge.seed.demo.research``): the cards come from a fixed answer written in code through the real checks and
-approval, and are labelled seeded examples, never live AI results. Then every demo subject gets its side's free
-plan (P14, ``bridge.seed.demo.subscriptions``), and Telco A gets a scout whose first scan matches Brian's untagged
+approval, and are labelled seeded examples, never live AI results. Then State Department D starts on Growth (P28's
+Team and CSV showcase, seeded: no payment) and every other demo subject gets its side's free plan (P14,
+``bridge.seed.demo.subscriptions``), and Telco A gets a scout whose first scan matches Brian's untagged
 fifth proposal (P10, ``bridge.seed.demo.scouts``). Last come P21's three beats (``bridge.seed.demo.follow_ups``), each
 through the API: SACCO B's owner and Amina write three messages on the thread of her engagement with SACCO B, Telco A's
 reviewer puts the scout's match on its shortlist, and Amina saves a Discover search of a niche she likes. Last, P22's
@@ -82,7 +83,14 @@ from bridge.seed.demo.follow_ups import ensure_saved_search, ensure_shortlisted,
 from bridge.seed.demo.proposals import ensure_proposal, pitch, record_view
 from bridge.seed.demo.queues import seed_queues
 from bridge.seed.demo.quiz import PLAYS, ensure_play, ensure_sets, has_profile
-from bridge.seed.demo.research import ensure_staff, seed_research_card, seeded_niches
+from bridge.seed.demo.research import (
+    OFFICIAL_ANSWERS,
+    ensure_staff,
+    left_out,
+    niches_to_seed,
+    seed_research_card,
+    seeded_niches,
+)
 from bridge.seed.demo.runtime import (
     Actors,
     DemoKeysChanged,
@@ -164,9 +172,15 @@ async def seed_demo(
         for plan in ENGAGEMENTS:
             await step(f"{plan.proposal} with {plan.org}", drive(owner_engine, actors, settings, plan, report))
         if STAFF_ADMIN.email in report.users:
-            for niche in seeded_niches():
+            for niche in niches_to_seed(settings):  # REQ-FND-04: in the fictional public demo, official sources only
                 card = seed_research_card(owner_engine, factory, actors, settings, STAFF_ADMIN, niche, report)
                 await step(f"research card {niche}", card)
+            if withheld := left_out(settings):
+                report.notes.append(
+                    f"research cards: {len(withheld)} citing news excerpts left out of the public demo, with"
+                    f" {len(OFFICIAL_ANSWERS)} citing official excerpts only in their place (PUBLIC_DEMO_CONTENT=full"
+                    " seeds the others)"
+                )
         await step("trending and liked niches", seed_trending(owner_engine, actors, niches, report))
         await step("free plans", _free_plans(owner_engine, settings))
         if SCOUTED.owner in report.users:
@@ -208,7 +222,8 @@ async def _embeddings(
 
 
 async def _free_plans(owner_engine: AsyncEngine, settings: Settings) -> None:
-    """P14: every demo subject without a live subscription gets its side's free plan (bought plans are kept)."""
+    """P14: every demo subject without a live subscription gets its side's free plan, State Department D Growth (P28's
+    showcase); bought plans are kept."""
     async with owner_engine.begin() as conn:
         await seed_demo_subscriptions(conn, settings)
 

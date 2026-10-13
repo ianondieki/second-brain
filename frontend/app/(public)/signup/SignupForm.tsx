@@ -49,16 +49,24 @@ const SERVER_FIELD: Partial<Record<string, SignupField>> = {
 /**
  * Signup. The optional consents are the server's exact wording from GET /api/consents (English is the recorded
  * source of truth), sent back with their version; if the wording could not be loaded the form offers a retry and
- * does not submit.
+ * does not submit. With `invitation` (REQ-TEN-02: sign-up from an organisation's invitation link) the account is an
+ * organisation member's to be: no developer/organisation choice and no organisation details; the request says side
+ * "org" with the link's token, and the person joins by accepting once their address is confirmed.
  */
-export function SignupForm({ initialConsents }: { initialConsents: ShownConsents | null }) {
+export function SignupForm({
+  initialConsents,
+  invitation,
+}: {
+  initialConsents: ShownConsents | null;
+  invitation?: { token: string; org: string };
+}) {
   const t = useTranslations();
   const locale = useLocale();
   const router = useRouter();
   const summaryRef = useRef<HTMLDivElement>(null);
 
   const [values, setValues] = useState<SignupValues>({
-    side: null,
+    side: invitation ? "org" : null,
     displayName: "",
     email: "",
     password: "",
@@ -72,6 +80,7 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
   const [errors, setErrors] = useState<Partial<Record<SignupField, string>>>({});
   const [serverError, setServerError] = useState<ErrorKey | null>(null);
   const [busy, setBusy] = useState(false);
+  const [invitationGone, setInvitationGone] = useState(false);
 
   function set<K extends keyof SignupValues>(key: K, value: SignupValues[K]) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -100,7 +109,8 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
     if (busy) return;
     setServerError(null);
 
-    const invalid = validateSignup(values);
+    // An invitee gives no organisation details: checked as a side without them.
+    const invalid = validateSignup(invitation ? { ...values, side: "developer" } : values);
     const messages: Partial<Record<SignupField, string>> = {};
     for (const field of SIGNUP_FIELDS) {
       const key = invalid[field];
@@ -126,7 +136,9 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
           display_name: values.displayName.trim(),
           email: values.email.trim(),
           password: values.password,
-          org: side === "org" ? { legal_name: values.orgName.trim(), kind: values.orgKind as OrgKind } : null,
+          org:
+            side === "org" && !invitation ? { legal_name: values.orgName.trim(), kind: values.orgKind as OrgKind } : null,
+          ...(invitation ? { invitation: invitation.token } : {}),
           consents: consentDecisions(shown, ticked),
           consents_version: shown.version,
           locale,
@@ -140,6 +152,13 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
       return;
     }
     setBusy(false);
+    // An invitee's link closed meanwhile (the API answers as for missing organisation details): say that instead.
+    if (invitation && outcome.key === "org_details_required") {
+      setServerError(null);
+      setInvitationGone(true);
+      requestAnimationFrame(() => summaryRef.current?.focus());
+      return;
+    }
     setServerError(outcome.key);
     // Stale or missing wording: show the current text (unticked) so the person decides again; if it cannot be
     // loaded, offer the retry instead.
@@ -154,19 +173,26 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
   return (
     <Form onSubmit={submit} className="mt-8 flex flex-col gap-6">
       {serverError ? <Alert ref={summaryRef}>{t(`errors.${serverError}`)}</Alert> : null}
+      {invitationGone ? <Alert ref={summaryRef}>{t("signup.invitationGone")}</Alert> : null}
 
-      <RadioGroup<SignupSide>
-        id="side"
-        name="side"
-        legend={t("signup.sideLegend")}
-        value={values.side}
-        onChange={(side) => set("side", side)}
-        error={errors.side}
-        options={[
-          { value: "developer", label: t("signup.sideDeveloper"), hint: t("signup.sideDeveloperHint") },
-          { value: "org", label: t("signup.sideOrg"), hint: t("signup.sideOrgHint") },
-        ]}
-      />
+      {invitation ? (
+        <p className="text-ink" data-signup-invitation="">
+          {t("signup.invitationLead", { org: invitation.org })}
+        </p>
+      ) : (
+        <RadioGroup<SignupSide>
+          id="side"
+          name="side"
+          legend={t("signup.sideLegend")}
+          value={values.side}
+          onChange={(side) => set("side", side)}
+          error={errors.side}
+          options={[
+            { value: "developer", label: t("signup.sideDeveloper"), hint: t("signup.sideDeveloperHint") },
+            { value: "org", label: t("signup.sideOrg"), hint: t("signup.sideOrgHint") },
+          ]}
+        />
+      )}
 
       <TextField
         id="display-name"
@@ -205,7 +231,7 @@ export function SignupForm({ initialConsents }: { initialConsents: ShownConsents
         error={errors.password}
       />
 
-      {values.side === "org" ? (
+      {values.side === "org" && !invitation ? (
         <>
           <TextField
             id="org-name"

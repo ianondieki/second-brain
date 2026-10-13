@@ -27,6 +27,7 @@ import pytest
 
 import bridge
 from bridge import web_paths
+from bridge.auth.crypto import new_token
 from bridge.models.enums import EngagementParty
 from bridge.notifications.in_app import MAX_LINK_CHARS, is_platform_path
 
@@ -431,6 +432,7 @@ def test_every_web_paths_builder_makes_a_platform_path() -> None:
         "problem_path": [web_paths.problem_path(uuid4())],  # P27 track A: a Brief's calendar entry (developer)
         "org_problem_path": [web_paths.org_problem_path(uuid4(), uuid4())],  # P27 track A: the organisation's Brief
         "org_event_path": [web_paths.org_event_path(uuid4(), uuid4())],  # P27 track A: the organisation's event
+        "invitation_path": [web_paths.invitation_path(new_token())],  # P28 track C: the invitation email's link
         "discover_path": [  # P21 track C: a saved search's alert; values are query-encoded, too-long words left out
             web_paths.discover_path(view, niche=niche, county=county, words=words)
             for view in ("problems", "briefs")

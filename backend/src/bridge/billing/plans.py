@@ -64,6 +64,19 @@ class Catalog:
         target = self.plans[code].upgrade_to
         return self.plans[target] if target else None
 
+    def first_with(self, code: str, key: str) -> PlanSpec | None:
+        """The plan that has the feature ``key`` (an explicit ``true``) for a subscriber of ``code``: the first up its
+        upgrade ladder, else the side's cheapest plan with it (self-serve plans first), else None."""
+        current = self.plans[code]
+        step = self.upgrade_for(code)
+        while step is not None:
+            if step.limits.get(key) is True:
+                return step
+            step = self.upgrade_for(step.code)
+        having = [p for p in self.plans.values() if p.side == current.side and p.limits.get(key) is True]
+        having.sort(key=lambda p: (not p.purchasable, p.price_kes_minor, p.code))
+        return having[0] if having else None
+
 
 _KNOWN = {"code", "side", "name", "price_kes_minor", "interval", "limits", "default", "upgrade_to"}
 

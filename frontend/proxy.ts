@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { cookieSecure, sessionCookieHeader } from "@/lib/api/cookies";
+import { DISALLOW_ALL_ROBOTS, publicDemoOn, ROBOTS_HEADER } from "@/lib/public-demo";
 import { loginHref, SIGNED_IN_PREFIXES } from "@/lib/return-path";
 
-// Two jobs, before any page renders:
+// Three jobs, before any page renders:
 //
 // 1. Signed-out visits to the signed-in portals (/dev, /org, /billing, /settings, /problems, /notifications and below)
 //    answer a real 307 to /login. Those routes have loading states (loading.tsx), so their HTML streams, and a redirect
@@ -19,11 +20,23 @@ import { loginHref, SIGNED_IN_PREFIXES } from "@/lib/return-path";
 //    address no route matches, so they get the very response an unknown address gets (status, <html lang>, <title>,
 //    body). A missing or slow answer is treated the same way (fail closed). The layout's gate
 //    (app/(admin)/admin/staff.ts) repeats the check.
+//
+// 3. The public demo (REQ-FND-04; lib/public-demo.ts), read at run time on every request: while it is on, every response
+//    this server sends past here carries `X-Robots-Tag: noindex, nofollow` and /robots.txt disallows every path. With
+//    the mode off nothing changes: other pages pass through untouched, and /robots.txt goes on to the 404 it was.
+//    The proxy therefore runs on every page (the matcher below), not only the portals; build assets, the fonts and the
+//    API (which sends its own header) are left out.
+//    While it is on, /login is also served from the persona picker's own route (DEMO_LOGIN_PATH), the address unchanged:
+//    one page would put the picker's code into every visitor's download of /login, and the email form's into every
+//    demo visitor's (AC-UX-3). While the mode is off, that route is rewritten to the unmatched address (job 2's 404).
 
 const apiOrigin = process.env.API_ORIGIN ?? "http://127.0.0.1:8000";
 
 /** A path no route matches (the app has no catch-all): Next answers it with its not-found page and a 404. */
 export const UNMATCHED_PATH = "/_bridge-unmatched";
+
+/** The public demo's /login (app/(public)/login/demo): the proxy serves /login from it while the mode is on. */
+export const DEMO_LOGIN_PATH = "/login/demo";
 
 /** Whether the API admits this request's session to the staff console. */
 export async function admitsStaff(cookie: string | undefined, fetchImpl: typeof fetch = fetch): Promise<boolean> {
@@ -51,35 +64,43 @@ export function isSignedInPath(pathname: string): boolean {
   return SIGNED_IN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
-export async function proxy(request: NextRequest) {
+/** Whether `pathname` is the staff console or below it (exact case, as the matcher). */
+export function isAdminPath(pathname: string): boolean {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
+async function route(request: NextRequest, demo: boolean): Promise<NextResponse> {
+  const { pathname, search } = request.nextUrl;
+  if (pathname === "/robots.txt") {
+    if (!demo) return NextResponse.next();
+    return new NextResponse(DISALLOW_ALL_ROBOTS, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+  if (pathname === "/login" && demo) return NextResponse.rewrite(new URL(`${DEMO_LOGIN_PATH}${search}`, request.url));
+  // With the mode off the picker's route is not there: the very 404 an unknown address gets (as the console's gate).
+  if (pathname === DEMO_LOGIN_PATH && !demo) return NextResponse.rewrite(new URL(UNMATCHED_PATH, request.url));
+  const signedIn = isSignedInPath(pathname);
+  if (!signedIn && !isAdminPath(pathname)) return NextResponse.next();
   const cookie = sessionCookieHeader(
     (name) => request.cookies.get(name)?.value,
     cookieSecure(process.env.COOKIE_SECURE),
   );
-  if (isSignedInPath(request.nextUrl.pathname)) {
+  if (signedIn) {
     if (cookie) return NextResponse.next();
-    const { pathname, search } = request.nextUrl;
     return NextResponse.redirect(new URL(loginHref(`${pathname}${search}`), request.url), 307);
   }
   if (await admitsStaff(cookie)) return NextResponse.next();
   return NextResponse.rewrite(new URL(UNMATCHED_PATH, request.url));
 }
 
+export async function proxy(request: NextRequest) {
+  const demo = publicDemoOn();
+  const response = await route(request, demo);
+  if (demo) response.headers.set(ROBOTS_HEADER.key, ROBOTS_HEADER.value);
+  return response;
+}
+
 export const config = {
-  matcher: [
-    "/admin",
-    "/admin/:path*",
-    "/dev",
-    "/dev/:path*",
-    "/org",
-    "/org/:path*",
-    "/billing",
-    "/billing/:path*",
-    "/settings",
-    "/settings/:path*",
-    "/problems",
-    "/problems/:path*",
-    "/notifications",
-    "/notifications/:path*",
-  ],
+  // Every path but the build assets, the image optimiser, the self-hosted fonts and the API (rewritten to FastAPI,
+  // which sends its own headers): the portals and the console as before, and every other page for job 3.
+  matcher: ["/((?!api/|_next/static/|_next/image|fonts/).*)"],
 };

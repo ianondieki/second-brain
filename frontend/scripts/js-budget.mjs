@@ -19,8 +19,13 @@
 // it changes the account's data (a new idea's first keystroke creates a draft): test accounts only.
 // Exits 1 when a route is over the budget, fails to load, or is skipped because it redirects (a signed-in route
 // without BUDGET_COOKIE) unless --allow-skip is given.
+// Turbopack builds only (`next build`'s default, as the image ships): a route whose page loaded no Turbopack runtime
+// chunk (`turbopack-<hash>.js`, scripts/turbopack-runtime.mjs) is refused, with no byte count, and the run exits 1.
+// A webpack build (`next build --webpack`) reads about 2 KB heavier per route and once misled a review.
 import { chromium } from "@playwright/test";
 import { gzipSync } from "node:zlib";
+
+import { isTurbopackRuntime } from "./turbopack-runtime.mjs";
 
 const BUDGET_BYTES = 150_000;
 const DEFAULT_ROUTES = ["/", "/explore", "/credits", "/login", "/signup", "/settings/security"];
@@ -51,6 +56,7 @@ async function measure(browser, route) {
   const page = await context.newPage();
   const scripts = new Map();
   const reads = [];
+  let turbopack = false;
   page.on("response", (response) => {
     const type = response.headers()["content-type"] ?? "";
     if (response.request().resourceType() !== "script" && !type.includes("javascript")) return;
@@ -58,6 +64,7 @@ async function measure(browser, route) {
       (async () => {
         const body = await response.body().catch(() => null);
         if (!body) return;
+        if (isTurbopackRuntime(response.url(), body.toString("utf8"))) turbopack = true;
         const encoded = response.headers()["content-encoding"] === "gzip";
         const sizes = await response.request().sizes().catch(() => null);
         const gz = encoded && sizes ? sizes.responseBodySize : gzipSync(body).length;
@@ -89,6 +96,13 @@ async function measure(browser, route) {
       await page.waitForTimeout(SETTLE_MS);
     }
     await Promise.all(reads);
+    if (!turbopack) {
+      return {
+        refused:
+          "the page loaded no Turbopack runtime chunk (turbopack-<hash>.js). The budget is measured on a Turbopack " +
+          "production build (`next build`, not `next build --webpack`); a webpack build reads about 2 KB heavier",
+      };
+    }
     const values = [...scripts.values()];
     return {
       bytes: values.reduce((sum, s) => sum + s.gz, 0),
@@ -109,6 +123,11 @@ for (const route of routes) {
   if (result.skipped) {
     console.log(`${route}: skipped (${result.skipped})`);
     if (!allowSkip) failed = true;
+    continue;
+  }
+  if (result.refused) {
+    console.log(`${route}: REFUSED (${result.refused})`);
+    failed = true;
     continue;
   }
   if (result.failed) {

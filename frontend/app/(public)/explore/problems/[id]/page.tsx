@@ -8,6 +8,7 @@ import { BackLink } from "@/components/ui/BackLink";
 import { ButtonLink } from "@/components/ui/ButtonLink";
 import { formatDay } from "@/lib/format";
 import { nicheLabel, publicProblem } from "@/lib/public/public-data";
+import { publicDemoOn } from "@/lib/public-demo";
 import { loginHref } from "@/lib/return-path";
 
 export async function generateMetadata({ params }: PageProps<"/explore/problems/[id]">): Promise<Metadata> {
@@ -39,6 +40,7 @@ export default async function PublicProblemPage({ params }: PageProps<"/explore/
   if (read.kind === "unavailable") throw new Error(t("unavailable"));
   const problem = read.problem;
   const niche = nicheLabel(problem.niche);
+  const demo = publicDemoOn();
   return (
     <PublicFrame>
       <article aria-labelledby="problem-title" data-public-problem={problem.id} className="mx-auto w-full max-w-3xl px-4 pt-8 pb-20 sm:px-6 lg:pt-12 lg:pb-28">
@@ -77,18 +79,21 @@ export default async function PublicProblemPage({ params }: PageProps<"/explore/
         <div className="mt-12 rounded-[1.25rem] border border-line bg-field p-6 sm:p-8">
           <p className="max-w-[52ch] text-ink-soft">{t("lead")}</p>
           <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-            <ButtonLink href="/signup" variant="primary">
-              {t("answer")}
+            {/* The public demo (REQ-FND-04): to /login's persona picker; sign-up is switched off there. */}
+            <ButtonLink href={demo ? "/login" : "/signup"} variant="primary">
+              {demo ? (await getTranslations("publicDemo"))("tryDemo") : t("answer")}
             </ButtonLink>
-            <p className="text-ink-soft">
-              {t.rich("haveAccount", {
-                login: (chunks) => (
-                  <Link href={loginHref(`/problems/${problem.id}`)} className="py-3 font-semibold text-ink underline decoration-1 hover:decoration-2">
-                    {chunks}
-                  </Link>
-                ),
-              })}
-            </p>
+            {demo ? null : (
+              <p className="text-ink-soft">
+                {t.rich("haveAccount", {
+                  login: (chunks) => (
+                    <Link href={loginHref(`/problems/${problem.id}`)} className="py-3 font-semibold text-ink underline decoration-1 hover:decoration-2">
+                      {chunks}
+                    </Link>
+                  ),
+                })}
+              </p>
+            )}
           </div>
         </div>
       </article>

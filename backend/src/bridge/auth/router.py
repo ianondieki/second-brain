@@ -58,8 +58,10 @@ from bridge.auth.schemas import (
     UserOut,
 )
 from bridge.errors import ERROR_RESPONSES, ApiError, not_found
+from bridge.me.caller import side_of
 from bridge.notifications.email import EmailProvider
 from bridge.profiles.consents import SESSION_ONLY_MESSAGE
+from bridge.public_demo import LOCKED
 from bridge.tenancy.service import my_memberships
 
 router = APIRouter(prefix="/api/auth", tags=["auth"], responses=ERROR_RESPONSES)
@@ -71,6 +73,8 @@ MESSAGES = {
     "invalid_email": "Enter a standard email address, such as name@example.com.",
     "terms_not_accepted": "Accept the terms to create an account.",
     "org_details_required": "Enter your organisation's name and type.",
+    # [[COPY-REVIEW]] P28 (D-72): an invitation joins an existing organisation, as an organisation account only.
+    "invitation_conflict": "An invitation joins its organisation: sign up as a member, without a new organisation.",
     "consents_version_required": "Reload the page to see the current consent wording.",
     "consent_text_changed": "The consent wording has changed. Reload the page and choose again.",
     "consent_session_only": SESSION_ONLY_MESSAGE,  # the settings API's words (REQ-PROP-05)
@@ -91,6 +95,7 @@ MESSAGES = {
     "step_up_required": "Confirm with your authenticator code to continue.",
     "last_sign_in_method": "Set a password or link another account before removing this one.",
     "not_found": "Not found.",
+    "unknown_persona": "Choose one of the demo personas.",  # [[COPY-REVIEW]] the public demo (REQ-FND-04)
 }
 
 
@@ -122,7 +127,7 @@ async def csrf_token(request: Request, response: Response, settings: SettingsDep
     return CsrfResponse(csrf_token=set_csrf(response, settings, request.cookies.get(settings.session_cookie_name)))
 
 
-@router.post("/signup", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/signup", status_code=status.HTTP_202_ACCEPTED, dependencies=[LOCKED])
 async def signup(
     body: SignupRequest,
     request: Request,
@@ -134,7 +139,10 @@ async def signup(
 ) -> AcceptedResponse:
     """Create an account and email its link; 202 "check your email" whether or not the address has an account. 422
     invalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or
-    consent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed."""
+    consent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.
+    With ``invitation`` (an organisation's invitation link's token; P28, D-72) and side "org" without ``org``: an
+    invitee's account (no developer profile, organisation or plan), only while the link is open (else 422
+    org_details_required); ``invitation`` with side "developer" or with ``org`` is 422 invitation_conflict."""
     try:
         outcome = await service.signup(db, settings, body, client_ip(request))
     except service.AuthError as exc:
@@ -146,7 +154,7 @@ async def signup(
     return AcceptedResponse()
 
 
-@router.post("/magic-link", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/magic-link", status_code=status.HTTP_202_ACCEPTED, dependencies=[LOCKED])
 async def magic_link(
     body: EmailRequest, request: Request, tasks: BackgroundTasks, db: Db, settings: SettingsDep, email: EmailDep
 ) -> AcceptedResponse:
@@ -157,7 +165,7 @@ async def magic_link(
     return AcceptedResponse()
 
 
-@router.post("/verify-email/resend", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/verify-email/resend", status_code=status.HTTP_202_ACCEPTED, dependencies=[LOCKED])
 async def resend_verification(
     body: EmailRequest, request: Request, tasks: BackgroundTasks, db: Db, settings: SettingsDep, email: EmailDep
 ) -> AcceptedResponse:
@@ -165,7 +173,7 @@ async def resend_verification(
     return await magic_link(body, request, tasks, db, settings, email)
 
 
-@router.post("/magic-link/consume")
+@router.post("/magic-link/consume", dependencies=[LOCKED])
 async def consume(
     body: TokenRequest, request: Request, response: Response, db: Db, settings: SettingsDep
 ) -> SessionResponse:
@@ -185,7 +193,7 @@ async def consume(
     return SessionResponse(user=user_out(outcome.session.user), mfa_required=outcome.mfa_required)
 
 
-@router.post("/login", response_model=SessionResponse)
+@router.post("/login", response_model=SessionResponse, dependencies=[LOCKED])
 async def login(
     body: LoginRequest,
     request: Request,
@@ -217,7 +225,7 @@ async def login(
     return SessionResponse(user=user_out(outcome.session.user), mfa_required=outcome.mfa_required)
 
 
-@router.post("/mfa/verify")
+@router.post("/mfa/verify", dependencies=[LOCKED])
 async def mfa_verify(
     body: CodeRequest, request: Request, response: Response, live: PendingSession, db: Db, settings: SettingsDep
 ) -> SessionResponse:
@@ -267,12 +275,8 @@ async def me(live: PendingSession, db: Db) -> MeResponse:
         pending = user_out(user).model_copy(update={"staff_role": None})
         return MeResponse(user=pending, memberships=[], mfa=mfa, side="pending")
     memberships = await my_memberships(db, user.id)
-    if user.staff_role:
-        side = "staff"
-    elif await service.has_developer_profile(db, user.id):
-        side = "developer"
-    else:
-        side = "org" if memberships else "developer"
+    # P28 (D-72): one side per account; without a developer profile, an organisation account, member of one or not.
+    side = side_of(staff=bool(user.staff_role), developer=await service.has_developer_profile(db, user.id))
     return MeResponse(
         user=user_out(user),
         memberships=[MembershipOut(org_id=m.org.id, org_name=m.org.legal_name, roles=m.roles) for m in memberships],
@@ -281,7 +285,7 @@ async def me(live: PendingSession, db: Db) -> MeResponse:
     )
 
 
-@router.post("/password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/password", status_code=status.HTTP_204_NO_CONTENT, dependencies=[LOCKED])
 async def set_password(
     body: SetPasswordRequest,
     request: Request,
@@ -304,7 +308,7 @@ async def set_password(
     _send_later(tasks, request, email, pending)
 
 
-@router.post("/totp/enrol")
+@router.post("/totp/enrol", dependencies=[LOCKED])
 async def totp_enrol(
     body: TotpEnrolRequest, request: Request, live: CurrentSession, db: Db, settings: SettingsDep
 ) -> TotpEnrolResponse:
@@ -317,7 +321,7 @@ async def totp_enrol(
     return TotpEnrolResponse(secret=secret, otpauth_uri=uri)
 
 
-@router.delete("/totp/enrol", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/totp/enrol", status_code=status.HTTP_204_NO_CONTENT, dependencies=[LOCKED])
 async def totp_enrol_cancel(live: CurrentSession, db: Db) -> None:
     """Cancel setup: clear the pending secret. It waits for a confirmation still in progress; 409
     totp_already_enabled when two-step sign-in is on (a confirmation committed first and its answer, with the recovery
@@ -329,7 +333,7 @@ async def totp_enrol_cancel(live: CurrentSession, db: Db) -> None:
     await db.commit()
 
 
-@router.post("/totp/confirm")
+@router.post("/totp/confirm", dependencies=[LOCKED])
 async def totp_confirm(
     body: CodeRequest,
     request: Request,
@@ -352,7 +356,7 @@ async def totp_confirm(
     return RecoveryCodesResponse(recovery_codes=codes)
 
 
-@router.post("/totp/recovery-codes")
+@router.post("/totp/recovery-codes", dependencies=[LOCKED])
 async def totp_recovery_codes(
     request: Request,
     tasks: BackgroundTasks,
@@ -377,7 +381,7 @@ async def totp_recovery_codes(
     return RecoveryCodesResponse(recovery_codes=codes)
 
 
-@router.post("/totp/disable", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/totp/disable", status_code=status.HTTP_204_NO_CONTENT, dependencies=[LOCKED])
 async def totp_disable(
     request: Request, tasks: BackgroundTasks, live: StepUpSession, db: Db, settings: SettingsDep, email: EmailDep
 ) -> None:
@@ -398,7 +402,7 @@ async def oauth_providers(settings: SettingsDep) -> OAuthProvidersResponse:
     return OAuthProvidersResponse(providers=oauth.enabled(settings))
 
 
-@router.post("/oauth/{provider}/start")
+@router.post("/oauth/{provider}/start", dependencies=[LOCKED])
 async def oauth_start(
     provider: str,
     body: OAuthStartRequest,
@@ -438,6 +442,7 @@ def _state_matches(presented: str | None, flow: oauth.Flow) -> bool:
     "/oauth/{provider}/callback",
     response_class=RedirectResponse,
     status_code=status.HTTP_302_FOUND,
+    dependencies=[LOCKED],
     responses={302: {"description": "To a fixed page of the web app; errors as ?oauth_error=CODE&provider=NAME"}},
 )
 async def oauth_callback(
@@ -513,7 +518,7 @@ async def oauth_callback(
     return response
 
 
-@router.delete("/identities/{identity_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/identities/{identity_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[LOCKED])
 async def unlink_identity(
     identity_id: UUID,
     request: Request,

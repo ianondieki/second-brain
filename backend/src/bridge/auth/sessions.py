@@ -95,6 +95,20 @@ async def revoke_all(db: AsyncSession, user_id: object, *, except_id: object | N
     await db.execute(stmt.values(revoked_at=clock.utcnow()))
 
 
+async def revoke_beyond(db: AsyncSession, user_id: UUID, *, keep: int) -> None:
+    """Revoke ``user_id``'s live sessions beyond its ``keep`` newest (the public demo's cap per persona, REQ-FND-04:
+    a shared demo account must not gather sessions without bound). The caller flushed the newest first."""
+    now = clock.utcnow()
+    beyond = (
+        select(Session.id)
+        .where(Session.user_id == user_id, Session.revoked_at.is_(None), Session.expires_at > now)
+        .order_by(Session.created_at.desc(), Session.id.desc())
+        .offset(keep)
+    )
+    stmt = update(Session).where(Session.id.in_(beyond)).values(revoked_at=now)
+    await db.execute(stmt.execution_options(synchronize_session=False))
+
+
 def mfa_fresh(row: Session, max_age: timedelta, now: datetime | None = None) -> bool:
     """True when the session completed MFA within ``max_age`` (the step-up rule, ADR-002: 12 h)."""
     if row.mfa_verified_at is None:

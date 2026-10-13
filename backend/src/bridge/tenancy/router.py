@@ -15,6 +15,7 @@ from bridge.auth.models import User
 from bridge.billing import entitlements
 from bridge.errors import ERROR_RESPONSES, ApiError, not_found
 from bridge.models.enums import MembershipStatus, OrgKind, OrgRole, OrgVerification, PlanSide
+from bridge.public_demo import LOCKED
 from bridge.tenancy.deps import OrgAdmin, OrgMember, OrgOwner
 from bridge.tenancy.models import Membership, Organization
 from bridge.tenancy.service import membership_of, my_memberships
@@ -133,7 +134,7 @@ async def list_members(db: Db, ctx: OrgMember) -> list[MemberOut]:
     ]
 
 
-@router.put("/{org_id}/members/{user_id}/roles")
+@router.put("/{org_id}/members/{user_id}/roles", dependencies=[LOCKED])  # not in the public demo (REQ-FND-04)
 async def set_member_roles(user_id: UUID, body: RolesUpdate, db: Db, settings: SettingsDep, ctx: OrgOwner) -> MemberOut:
     """Role changes are access-policy changes: owner only (404 for non-members first), then a fresh second factor."""
     ensure_step_up(ctx.live, settings)

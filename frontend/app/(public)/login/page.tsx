@@ -21,7 +21,8 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * Log in. `?next=` (set by the proxy for a signed-out visit to a signed-in page) is the page to return to, kept only
  * when it is one of this site's signed-in pages written plainly (lib/return-path.ts). A person already signed in goes
- * there, or to their own home, with a server-side redirect (P16-B review MINOR 3).
+ * there, or to their own home, with a server-side redirect (P16-B review MINOR 3). In the public demo the proxy serves
+ * /login from ./demo instead (the persona picker), so neither page's client code is in the other's download.
  */
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const next = returnPathParam((await searchParams).next);

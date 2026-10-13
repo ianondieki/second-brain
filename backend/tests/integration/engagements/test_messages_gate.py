@@ -9,12 +9,15 @@ developer in-app and by email (N18: who wrote and a link, never the text) and ap
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 import httpx
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from bridge.engagements import message_notify
+from bridge.ids import uuid7
 from bridge.notifications.email import FakeEmailProvider
 from tests.integration.engagements.api_world import db_today
 from tests.integration.engagements.thread_world import (
@@ -173,13 +176,16 @@ async def test_the_history_tab_lists_both_sides_messages_without_their_text(
         assert "pilot plan" not in str(histories[0])
 
 
-async def test_a_public_entitys_procurement_route_opens_the_thread_at_contact_made(
+async def test_a_public_entitys_procurement_route_opens_the_thread_at_interest_confirmed(
     owner_engine: AsyncEngine, app_engine: AsyncEngine
 ) -> None:
     """Given UNDER_REVIEW, When a public entity takes the procurement route (3b), Then the thread stays closed (the
-    organisation 403, the developer not_open); once first contact is made on that route it opens for both."""
+    organisation 403, the developer not_open); once its owner decides the route and the engagement moves on to
+    INTEREST_CONFIRMED (revision 0015: 3b never goes straight to first contact) it opens for both."""
     async with thread_at(owner_engine, app_engine, "UNDER_REVIEW") as thread:
         s, e, world = thread.seats, thread.engagement, thread.world
+        async with owner_engine.begin() as conn:  # a public entity (revision 0015: only one enters 3b)
+            await conn.execute(text("UPDATE organizations SET public_entity = true WHERE id = :o"), {"o": world.org})
         await append(
             owner_engine,
             e,
@@ -191,15 +197,27 @@ async def test_a_public_entitys_procurement_route_opens_the_thread_at_contact_ma
         )
         await _org_refused(thread, s.owner)
         await _developer_waits(thread)
-        await append(
-            owner_engine,
-            e,
-            actor=world.owner,
-            role="owner",
-            org=world.org,
-            to_state="CONTACT_MADE",
-            command="contacted",
-        )
+        async with owner_engine.begin() as conn:  # the decision and the move, one transaction (revision 0015)
+            await conn.execute(text("SET LOCAL ROLE bridge_app"))
+            await conn.execute(
+                text("SELECT set_config('app.user_id', :u, true), set_config('app.org_id', :o, true)"),
+                {"u": str(world.owner), "o": str(world.org)},
+            )
+            await conn.execute(
+                text(
+                    "UPDATE engagements SET contact_user_id = :c, contact_channel = 'email', contact_by = :by,"
+                    " procurement_route = 'innovation_challenge' WHERE id = :e"
+                ),
+                {"c": world.owner, "by": await db_today(owner_engine) + timedelta(days=7), "e": e},
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO engagement_events (id, engagement_id, actor_user_id, actor_role, command, from_state,"
+                    " to_state, payload) VALUES (:id, :e, :actor, 'admin', 'procurement_route', 'PROCUREMENT_ROUTE',"
+                    " 'INTEREST_CONFIRMED', '{}')"
+                ),
+                {"id": uuid7(), "e": e, "actor": world.owner},
+            )
         assert (await read(s.owner, e))["status"] == "open"
         await posted(s.owner, e, "Our procurement office will write to you.")
         await posted(s.dev, e, "Thank you, I will watch for it.")

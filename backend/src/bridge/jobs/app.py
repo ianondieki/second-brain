@@ -27,6 +27,7 @@ IMPORT_PATHS = [
     "bridge.jobs.scouts",
     "bridge.jobs.research",
     "bridge.jobs.expiry",
+    "bridge.jobs.nudges",
     "bridge.jobs.saved_searches",
     "bridge.jobs.message_uploads",
     "bridge.jobs.quiz",

@@ -39,7 +39,11 @@
     "reviewP27cde": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: tracker.team.*, tracker.declaration.*, tracker.ipNudge.*, tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (\"alama ya kidijitali\" kwa fingerprint/SHA-256; \"ujuzi wa awali\" kwa prior knowledge), engagements.*, profileSettings.references.*, help.confidential.priorKnowledge",
     "reviewP27clock": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"baada ya siku 6 saa 14 dakika 23\"), not \"dak 23\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term. P27 UX fixes for the G5 review: calendarFeed.shownOnce now opens with the imperative \"Nakili sasa\" (was \"Kinakili sasa\"); pipeline.funnelTitle and pipeline.conversionMore agree with ushirikiano (u- class: \"ulioingia\", \"uliingia\"), not the people class (\"walioingia\", \"waliingia\"); pipeline.outcome says \"umefungwa\" and \"umekoma\" (u- class) for every count, no longer mixing \"umefungwa\"/\"imefungwa\"; pipeline.stalled reads \"siku {count}+ za kazi\" (the threshold as a floor); \"Briefs\" in calendarFeed.lead is left in English as the product term: confirm or translate.",
-    "reviewP27ux": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Tengeneza kiungo kipya\" and \"Ondoa mlisho\" first ask in place whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled now \"Hakuna hatua kwa siku {count}+ za kazi\". A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"{count}+\". deadlines.dayEmpty [[SW-REVIEW]]."
+    "reviewP27ux": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Tengeneza kiungo kipya\" and \"Ondoa mlisho\" first ask in place whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled now \"Hakuna hatua kwa siku {count}+ za kazi\". A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"{count}+\". deadlines.dayEmpty [[SW-REVIEW]].",
+    "reviewP28tr": "[[COPY-REVIEW]] [[SW-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (ukurasa wa umma /transparency: alama za kila siku zilizotiwa sahihi juu ya historia ya ukaguzi kwa maneno rahisi; jinsi ya kukagua cheti, na kiungo cha /verify; alama ya karibuni, siku zilizopita, funguo za sahihi na hali yake; hali tupu kabla ya siku ya kwanza kamili na hali mbili za \"hazikupakia\"), landing.footer.transparency (kiungo cha sehemu ya chini) na verify.transparency (mstari mmoja chini ya paneli ya /verify). Hakuna dai kwamba kitu hakiwezi kubadilishwa: maneno ni kwamba badiliko hufanya alama zisikubaliane. Mzunguko wa 1 wa ukaguzi: lead inahusu tu matukio yaliyorekodiwa kabla alama haijachukuliwa; howTo inasema /verify inakagua alama, sahihi na muhuri wa muda wa cheti chenyewe; keysLead inataja maandishi yaliyotiwa sahihi kamili; signatureFor inataja siku; verify.transparency imeandikwa upya. transparency.emptyPublicDemo (the public demo's empty state, P28) [[COPY-REVIEW]] [[SW-REVIEW]]",
+    "reviewP28pd": "[[COPY-REVIEW]] [[SW-REVIEW]] P28-PD (REQ-FND-04; D-71), rasimu ya Kiswahili kwa ukaguzi wa mzungumzaji asilia: publicDemo.* (onyesho la umma: tangazo la kila ukurasa, kitufe cha kulificha; kichaguzi cha watu kwenye /login, majina ya majukumu, kitufe \"Endelea kama {name}\", mistari ya makosa, mstari na \"Jaribu tena\" watu wasipopakiwa; mstari chini ya kila jina ni publicDemo.about.* (moja kwa kila jukumu), anachofanya mtu huyo, hujengwa kwenye wavuti kwa kila lugha ({org} ni jina la shirika bila \"(fixture)\"; angalia upatanisho wa \"wa {org}\" katika about.org_admin na \"ushauri\" kwa recommendations katika about.org_reviewer); mistari ya vidhibiti vilivyozimwa; \"Jaribu onyesho\" kwenye ukurasa wa mwanzo; \"Badilisha mtu\" badala ya \"Toka\"), errors.public_demo_locked, errors.public_demo_limit na ideaEditor.problem.demoLimit (kikomo cha kila siku cha matoleo yaliyochapishwa katika onyesho la umma); marekebisho ya ukaguzi: publicDemo.changeLocked chini ya mpangilio ambao hali yake bado ipo (Usalama: hatua mbili za kuingia zimewashwa, kuzibadilisha kumezimwa) na publicDemo.decideLocked katika sehemu za uamuzi za wafanyakazi, ili mstari usisomeke kama hali ya kipengele; neno moja kwa kitendo: \"mtu (wa onyesho)\" kila mahali (signupAction \"Chagua mtu wa onyesho\", pickerLead, personasLabel, unavailable, \"Badilisha mtu\"); \"03:00 EAT\" katika publicDemo.banner imeandikwa moja kwa moja: hubadilika pamoja na RESET_HOUR_EAT katika infra/demo/space/run.py, kwa en na sw (docs/runbooks/public-demo.md)",
+    "reviewP28c": "[[COPY-REVIEW]] [[SW-REVIEW]] P28-C/D2 (REQ-TEN-02, REQ-ENG-17): orgTeam.* (Organisation › Team: the members with their role chips, at most two, the rest named after them as orgTeam.alsoRoles; the organisation's verification level; open invitations; the default reviewer per niche; the escalation contact), teamAdmin.* (the Team page's forms: invite with roles and their one-line hints, resend, revoke, change roles, remove with its in-place question, the niche defaults and escalation selects, and the API's refusals in words), shell.team (the account menu's link to the Team page on organisation screens, and the command palette's), portal.eyebrow.team, invitation.* (the /invitations/{token} page: the organisation's invitation, sign in or create an account, the dead and too-many-tries pages), invitationAccept.* (its Accept button and refusals; the email mismatch names nothing about the invited address), engagements.exportCsv, engagements.csvOff, engagements.csvOffUnknown (the Engagements list's CSV download, or the plan that has it), orgTeam.inviteDemoLocked, orgHome.teamMember, invitationAccept.switchAccount, invitationAccept.signingOut",
+    "reviewP28a": "[[COPY-REVIEW]] [[SW-REVIEW]] P28 tracks A and B (REQ-ENG-06, REQ-NOT-05): procurement.* (njia ya ununuzi ya taasisi ya umma: majina ya njia tano na sentensi moja chini ya kila moja, bila kutaja sheria; kichwa na lebo za kipande cha kifuatiliaji; maneno ya karatasi ya kuchagua njia, kaunta, tarehe ya mawasiliano, Thibitisha, makosa mawili), trackerActions.command.choose_route, trackerActions.refusal.justificationRequired na invalidJustification, trackerActions.approve.leadPublic, tracker.event.choose_route na tracker.history.route, tracker.turn.admins and tracker.waitingAdmin, tracker.escalated, tracker.subStages na tracker.subStage, tracker.stage.* (majina ya hatua: chini ya kundi la sasa na kwenye mstari wa tracker.stageNow). Translated by the build agent; a Swahili speaker should review the procurement terms (ununuzi, zabuni, ombi la bei, mkataba wa maelewano) against the wording county governments use. Jina la hatua ni \"Njia ya ununuzi\": \"imeamuliwa\" (jina la spec) lilisomeka kama tayari imeamuliwa wakati bado inasubiri [[SW-REVIEW]]. tracker.event.approveToRoute: idhini ya taasisi ya umma inayoelekea njia ya ununuzi (3b)."
   },
   "app": {
     "name": "Wazo",
@@ -182,7 +186,8 @@
       "logIn": "Ingia",
       "verify": "Kagua cheti",
       "explore": "Gundua",
-      "credits": "Shukrani"
+      "credits": "Shukrani",
+      "transparency": "Uwazi"
     },
     "nav": {
       "label": "Kwenye ukurasa huu",
@@ -346,7 +351,10 @@
     "terms": "Ninakubali <terms>masharti ya huduma<hint> (yanafunguka kwenye kichupo kipya)</hint></terms>",
     "submit": "Fungua akaunti",
     "submitting": "Inafungua akaunti…",
-    "haveAccount": "Tayari una akaunti? <login>Ingia</login>"
+    "haveAccount": "Tayari una akaunti? <login>Ingia</login>",
+    "invitationLead": "Unafungua akaunti ili ujiunge na {org}. Tumia anwani ya barua pepe ambayo mwaliko ulitumwa kwake.",
+    "invitationGone": "Kiungo hiki cha mwaliko hakifanyi kazi tena. Muombe aliyekualika akutumie kingine.",
+    "plainSignup": "Fungua akaunti bila mwaliko"
   },
   "orgKind": {
     "company": "Kampuni",
@@ -489,7 +497,7 @@
     "title": "Karibu, {name}",
     "devLead": "Ukurasa wako wa msanidi programu unajengwa. Kwa sasa, unaweza kuchagua jinsi unavyoingia.",
     "orgLead": "Umeingia kwa niaba ya {org}.",
-    "orgLeadNoName": "Umeingia kwa niaba ya shirika lako.",
+    "orgLeadNoName": "Umeingia upande wa shirika.",
     "mfaOn": "Kuingia kwa hatua mbili kumewashwa.",
     "mfaOff": "Kuingia kwa hatua mbili kumezimwa.",
     "mfaRequired": "Kuingia kwa hatua mbili kumezimwa. Jukumu lako linakihitaji, na kukiwasha huchukua takriban dakika mbili.",
@@ -617,7 +625,9 @@
     "step_up_required": "Thibitisha kwa msimbo wa sasa kutoka kwenye programu yako ya uthibitishaji ili kuendelea.",
     "validation": "Baadhi ya maelezo hayakukubaliwa. Angalia fomu, kisha ujaribu tena.",
     "generic": "Kuna tatizo. Jaribu tena baada ya muda mfupi.",
-    "network": "Hatukuweza kufikia seva. Angalia muunganisho wako, kisha ujaribu tena."
+    "network": "Hatukuweza kufikia seva. Angalia muunganisho wako, kisha ujaribu tena.",
+    "public_demo_locked": "Hili limezimwa katika onyesho la umma.",
+    "public_demo_limit": "Onyesho la umma huchapisha hadi matoleo 20 kwa siku kwa kila akaunti. Jaribu tena kesho."
   },
   "errorPage": {
     "title": "Ukurasa huu haukupakia",
@@ -637,7 +647,8 @@
       "help": "Msaada",
       "legal": "Kisheria",
       "verify": "Vyeti",
-      "staff": "Dashibodi ya wafanyakazi / {section}"
+      "staff": "Dashibodi ya wafanyakazi / {section}",
+      "team": "Shirika / Timu"
     },
     "inbox": {
       "matchesTitle": "Alichopata Wakala Skauti wako"
@@ -677,7 +688,10 @@
       "briefsMetaProposals": "Mapendekezo: {count}",
       "briefsValue": "{count} wazi",
       "briefsMetaNone": "Hakuna lililo wazi bado"
-    }
+    },
+    "team": "Timu yenu na mialiko",
+    "helpAction": "Fungua Msaada",
+    "teamMember": "Timu yenu"
   },
   "inbox": {
     "pageTitle": "Kikasha",
@@ -718,7 +732,7 @@
     "pages": "Kurasa za Kikasha",
     "newestPage": "Rudi kwa mapya zaidi",
     "staleCursor": "Ukurasa huu wa Kikasha haupatikani tena.",
-    "noOrg": "Akaunti yako bado si mwanachama wa shirika lolote.",
+    "noOrg": "Akaunti yako bado haiko katika shirika: ikiwa ulialikwa, fungua kiungo cha mwaliko kwenye barua pepe yako ili ujiunge.",
     "notMember": "Akaunti yako si mwanachama wa shirika hili.",
     "openOwnInbox": "Fungua Kikasha chako",
     "refusedMfaSetup": "Washa kuingia kwa hatua mbili ili kuona Kikasha cha {org}.",
@@ -1006,7 +1020,9 @@
     "ideas": "Mawazo yangu",
     "engagements": "Ushirikiano",
     "problems": "Matatizo",
-    "events": "Matukio"
+    "events": "Matukio",
+    "team": "Timu",
+    "more": "Zaidi"
   },
   "companies": {
     "pageTitle": "Makampuni",
@@ -1079,7 +1095,8 @@
     "panelTitle": "Ukaguzi unaonyesha nini",
     "panelFingerprint": "Alama ya kidijitali: msimbo unaokokotolewa kutoka kwenye faili iliyosajiliwa. Badiliko lolote kwenye faili hutoa msimbo tofauti.",
     "panelTime": "Wakati mamlaka huru ya muhuri wa muda ilipoona alama hiyo.",
-    "panelNot": "Si jina la mmiliki, kichwa wala maudhui."
+    "panelNot": "Si jina la mmiliki, kichwa wala maudhui.",
+    "transparency": "Alama za kila siku za ukaguzi ziko wazi kwenye <link>ukurasa wa uwazi</link>."
   },
   "verifyFile": {
     "title": "Kagua faili",
@@ -2023,7 +2040,8 @@
       "rateLimited": "Majaribio mengi mno. Subiri dakika moja, kisha ujaribu tena.",
       "notSaved": "Rekebisha sehemu zilizowekwa alama kwanza, ili mabadiliko yako yahifadhiwe.",
       "fileGone": "Faili hii ilikwisha ondolewa au kubadilishwa. Pakia ukurasa upya uone orodha ya sasa.",
-      "checklist": "Kabla ya kuchapisha, rekebisha yaliyoorodheshwa hapa chini."
+      "checklist": "Kabla ya kuchapisha, rekebisha yaliyoorodheshwa hapa chini.",
+      "demoLimit": "Onyesho la umma huchapisha hadi matoleo 20 kwa siku kwa kila akaunti. Jaribu tena kesho."
     },
     "required": {
       "title": "Weka kichwa.",
@@ -2384,7 +2402,8 @@
       "none": "Hakuna kinachosubiri upande wowote kwa sasa.",
       "ended": "Ushirikiano huu umeisha.",
       "closed": "Ushirikiano huu umefungwa.",
-      "onHold": "Ushirikiano huu umesimamishwa."
+      "onHold": "Ushirikiano huu umesimamishwa.",
+      "admins": "Inasubiri: wasimamizi wenu"
     },
     "endedBecause": "Sababu: {reason}",
     "nextYou": "Hatua yako inayofuata: {step}",
@@ -2553,7 +2572,8 @@
         "developer": "Msanidi programu",
         "org": "Shirika"
       },
-      "priorKnowledgeDeclared": "Ujuzi wa awali umetangazwa"
+      "priorKnowledgeDeclared": "Ujuzi wa awali umetangazwa",
+      "route": "Njia: {route}"
     },
     "event": {
       "create": "Ushirikiano umefunguliwa",
@@ -2586,7 +2606,9 @@
       "pause": "Imesimamishwa",
       "resume": "Imeendelea tena",
       "expire": "Muda umeisha",
-      "other": "Hatua imerekodiwa"
+      "other": "Hatua imerekodiwa",
+      "approveToRoute": "Imeidhinishwa (haifungi kisheria); njia ya ununuzi inafuata",
+      "choose_route": "Njia ya ununuzi imechaguliwa"
     },
     "tabs": {
       "label": "Sehemu za ushirikiano",
@@ -2682,7 +2704,33 @@
       "dismiss": "Ondoa",
       "failed": "Imeshindwa kuondoa ujumbe. Jaribu tena.",
       "newTab": "(inafunguka katika kichupo kipya)"
-    }
+    },
+    "subStages": "Ndani ya {group}",
+    "subStage": "{stage}: {state}",
+    "stage": {
+      "ORG_INTEREST": "Shirika lina nia",
+      "SUBMITTED": "Pendekezo limewasilishwa",
+      "UNDER_REVIEW": "Linatathminiwa",
+      "PROCUREMENT_ROUTE": "Njia ya ununuzi",
+      "INTEREST_CONFIRMED": "Imeidhinishwa kuendelea (haifungi kisheria)",
+      "CONTACT_MADE": "Mawasiliano ya kwanza",
+      "NDA_PENDING": "NDA ya pande zote: inasubiri saini za pande zote mbili",
+      "NDA_SIGNED": "NDA ya pande zote imesainiwa",
+      "NEGOTIATION": "Masharti na uandishi wa makubaliano",
+      "AGREEMENT_SIGNING": "Kusaini makubaliano",
+      "IN_IMPLEMENTATION": "Makubaliano yamesainiwa: utekelezaji",
+      "DELIVERED": "Uwasilishaji wa mwisho umefanywa",
+      "SIGN_OFF": "Kukubali",
+      "PAYMENT_FINAL": "Malipo ya mwisho",
+      "CLOSED": "Mradi umefungwa",
+      "DECLINED": "Imekataliwa",
+      "WITHDRAWN": "Imeondolewa",
+      "EXPIRED": "Muda umeisha",
+      "ON_HOLD": "Imesimamishwa",
+      "INFO_REQUESTED": "Maelezo yameombwa"
+    },
+    "waitingAdmin": "Inasubiri msimamizi achague njia ya ununuzi.",
+    "escalated": "Imepelekwa kwa wasimamizi tarehe <nowrap>{date}</nowrap>."
   },
   "trackerActions": {
     "title": "Hatua zako",
@@ -2717,7 +2765,8 @@
       "answer_info": "Jibu swali",
       "cancel_request": "Ondoa swali",
       "pause": "Simamisha ushirikiano huu",
-      "resume": "Endelea sasa"
+      "resume": "Endelea sasa",
+      "choose_route": "Chagua njia ya ununuzi"
     },
     "milestone": {
       "start_milestone": "Anza hatua {number}",
@@ -2793,7 +2842,9 @@
       "tooMany": "Umechukua hatua nyingi kwenye ushirikiano huu katika saa iliyopita. Jaribu tena baadaye.",
       "notFound": "Ushirikiano huu haupatikani tena kwako.",
       "network": "Hatukuweza kufikia seva; hakuna kilichotumwa. Jaribu tena.",
-      "generic": "Hakuna kilichotumwa. Jaribu tena baada ya muda mfupi."
+      "generic": "Hakuna kilichotumwa. Jaribu tena baada ya muda mfupi.",
+      "justificationRequired": "Ununuzi wa moja kwa moja unahitaji sababu iliyoandikwa ya angalau herufi 20.",
+      "invalidJustification": "Sababu hiyo haikukubaliwa. Iandike kwa maneno ya kawaida, isizidi herufi 1,000."
     },
     "stepUp": {
       "body": "Thibitisha kwa nambari kutoka kwa programu yako ya uthibitishaji ili kuendelea.",
@@ -2817,7 +2868,8 @@
       "channel": "Njia ya mawasiliano",
       "by": "Wasiliana kabla ya",
       "byHint": "Isizidi siku tano za kazi kuanzia leo.",
-      "membersFailed": "Orodha ya wanachama wa shirika lako haikupakia. Pakia ukurasa upya ujaribu tena."
+      "membersFailed": "Orodha ya wanachama wa shirika lako haikupakia. Pakia ukurasa upya ujaribu tena.",
+      "leadPublic": "Taja nani atawasiliana na msanidi programu, na kwa njia gani. Kisha mmiliki au msimamizi atachagua njia ya ununuzi na kuweka tarehe ya mawasiliano; maelezo ya mawasiliano ya msanidi programu yatatolewa kwa mtu wako wa mawasiliano njia ikishachaguliwa."
     },
     "channel": {
       "email": "Barua pepe",
@@ -4411,7 +4463,14 @@
       "calendar": "Kalenda",
       "board": "Ubao"
     },
-    "filterAll": "Yote"
+    "filterAll": "Yote",
+    "exportCsv": "Hamisha CSV",
+    "csvOff": "Kuhamisha CSV kunakuja na mpango wa {plan}. <link>Tazama mipango</link>",
+    "csvOffUnknown": "Kuhamisha CSV si sehemu ya mpango wako. <link>Tazama mipango</link>",
+    "exportSignedOut": "Muda wa kuingia uliisha kabla faili halijawa tayari. <link>Ingia tena</link>",
+    "exportRateLimited": "Uhamishaji mwingi mno kwa sasa.",
+    "exportNotFound": "Hakuna uhamishaji wa shirika hilo hapa.",
+    "exportFailed": "Faili halikuweza kutengenezwa kwa sasa. <link>Jaribu tena</link>"
   },
   "deadlines": {
     "previous": "Mwezi uliopita, {month}",
@@ -4486,5 +4545,289 @@
     "removeCancel": "Baki na kiungo",
     "removed": "Mlisho umeondolewa. Kiungo chake hakifanyi kazi tena.",
     "failed": "Haikufanikiwa. Jaribu tena."
+  },
+  "transparency": {
+    "pageTitle": "Uwazi",
+    "description": "Mara moja kwa siku, Wazo hutia sahihi alama moja juu ya historia yake yote ya ukaguzi na kuichapisha hapa, pamoja na funguo zinazokagua sahihi hizo.",
+    "title": "Alama za kila siku za ukaguzi",
+    "lead": "Mara moja kwa siku, Wazo hutia sahihi alama moja juu ya historia yake yote ya ukaguzi. Badiliko kwenye tukio lolote lililorekodiwa kabla alama haijachukuliwa lingefanya isilingane tena.",
+    "howTo": "Ili kukagua cheti, tumia <link>Kagua cheti</link>: inakagua alama, sahihi na muhuri wa muda wa cheti hicho chenyewe. Alama zilizo hapa ni jambo tofauti: historia ya ukaguzi ikiandikwa upya baada ya alama kuchukuliwa, haitalingana nayo tena.",
+    "latestTitle": "Alama ya {day}",
+    "covers": "Inajumuisha historia yote ya ukaguzi kama ilivyokuwa {time} saa za Nairobi.",
+    "coversUnknown": "Inajumuisha historia yote ya ukaguzi kama ilivyokuwa baada ya siku hiyo kuisha.",
+    "root": "Alama ya kidijitali (SHA-256)",
+    "key": "Ufunguo wa sahihi",
+    "signature": "Sahihi (Ed25519)",
+    "earlierTitle": "Siku zilizopita",
+    "earlierLine": "Ilichukuliwa {time} saa za Nairobi, imetiwa sahihi kwa <key>{keyId}</key>.",
+    "earlierLineUnknown": "Imetiwa sahihi kwa <key>{keyId}</key>.",
+    "showSignature": "Sahihi",
+    "rootsJson": "Alama hizi kama JSON",
+    "empty": "Alama ya kwanza ya kila siku itaonekana baada ya siku ya kwanza kamili.",
+    "emptyPublicDemo": "Onyesho hili la umma huanza upya kila usiku, kwa hivyo halikamilishi siku nzima; alama za kila siku huonekana kwenye jukwaa linalofanya kazi.",
+    "emptyAction": "Kagua cheti",
+    "unavailable": "Alama hazikupakia. Jaribu tena baada ya muda mfupi.",
+    "retry": "Jaribu tena",
+    "keysTitle": "Funguo za sahihi",
+    "keysLead": "Kila sahihi ni Ed25519, kwa base64, iliyofanywa kwa ufunguo ulioorodheshwa juu ya maandishi <code>{message}</code>, ambapo day ni tarehe ya Nairobi kama YYYY-MM-DD na root ni alama kwa hex ya herufi ndogo, kama inavyoonyeshwa hapo juu. Funguo zilizostaafu zinabaki kwenye orodha, ili sahihi za zamani bado ziweze kukaguliwa.",
+    "keyActive": "Unatumika",
+    "keyRetired": "Ulistaafu {date}",
+    "algorithm": "Algorithimu",
+    "algorithmEd25519": "Ed25519 (EdDSA)",
+    "added": "Uliongezwa",
+    "publicKey": "Ufunguo wa umma (PEM)",
+    "keysJson": "Funguo kama JSON",
+    "keysUnavailable": "Funguo za sahihi hazikupakia. Jaribu tena baada ya muda mfupi.",
+    "keysEmpty": "Bado hakuna ufunguo wa sahihi uliochapishwa.",
+    "signatureFor": "Sahihi ya {day}"
+  },
+  "publicDemo": {
+    "banner": "<b>Onyesho la umma:</b> kila jina na shirika hapa ni la kubuni, na data hurejeshwa upya kila usiku saa 03:00 EAT. Tafadhali usiweke taarifa halisi za kibinafsi.",
+    "bannerLabel": "Tangazo la onyesho la umma",
+    "bannerDismiss": "Ficha tangazo la onyesho",
+    "pickerTitle": "Jaribu onyesho kama…",
+    "pickerLead": "Chagua mtu wa onyesho. Bonyeza mara moja uingie na kufungua ukurasa wake wa Nyumbani.",
+    "personasLabel": "Watu unaoweza kuingia kama wao",
+    "continue": "Endelea <hidden>kama {name}</hidden>",
+    "signingIn": "Unaingia…",
+    "tooMany": "Majaribio mengi ya kuingia kutoka hapa kwa sasa. Jaribu tena baada ya dakika moja.",
+    "failed": "Kuingia huko hakukufaulu. Jaribu tena baada ya muda mfupi.",
+    "unavailable": "Watu wa onyesho hawakuweza kupakiwa sasa hivi. Jaribu tena baada ya muda mfupi.",
+    "retry": "Jaribu tena",
+    "role": {
+      "developer": "Msanidi programu",
+      "org_admin": "Msimamizi wa shirika",
+      "org_signatory": "Mtia sahihi wa shirika",
+      "org_reviewer": "Mkaguzi wa shirika",
+      "staff": "Wafanyakazi wa jukwaa"
+    },
+    "locked": "Imezimwa katika onyesho la umma.",
+    "attachLocked": "Kuambatisha faili kumezimwa katika onyesho la umma.",
+    "signupLocked": "Kufungua akaunti kumezimwa katika onyesho la umma.",
+    "signupAction": "Chagua mtu wa onyesho",
+    "tryDemo": "Jaribu onyesho",
+    "switchPersona": "Badilisha mtu",
+    "switchingPersona": "Unabadilisha…",
+    "switchRetry": "Jaribu kubadilisha tena",
+    "about": {
+      "developer": "Huchapisha mawazo na kujibu mashirika yanayoyataka",
+      "org_admin": "Huendesha timu, skauti na mchakato wa {org}",
+      "org_signatory": "Huidhinisha na kutia sahihi kwa niaba ya {org}",
+      "org_reviewer": "Hukagua mapendekezo na kutoa ushauri kwa {org}",
+      "staff": "Husoma foleni za udhibiti wa maudhui na utafiti"
+    },
+    "changeLocked": "Kubadilisha mpangilio huu kumezimwa katika onyesho la umma.",
+    "decideLocked": "Kufanya uamuzi kumezimwa katika onyesho la umma."
+  },
+  "orgTeam": {
+    "pageTitle": "Timu",
+    "title": "Timu",
+    "lead": "Nani anafanya kazi hapa kwa niaba ya {org}, kila mmoja anaweza kufanya nini, na nani anapokea mashirikiano mapya.",
+    "verification": {
+      "unclaimed": "Bado halijathibitishwa",
+      "pending": "Uthibitishaji unaendelea",
+      "e1": "Kikoa kimethibitishwa (E1)",
+      "e2": "Hati za usajili zimethibitishwa (E2)",
+      "rejected": "Halijathibitishwa"
+    },
+    "membersTitle": "Wanachama",
+    "membersCount": "{count, plural, one {# mwanachama} other {# wanachama}}",
+    "you": "Wewe",
+    "joined": "Alijiunga {date}",
+    "alsoRoles": "Pia {roles}",
+    "readOnly": "Ni wamiliki na wasimamizi tu wanaoweza kubadilisha timu.",
+    "invitationsTitle": "Mialiko",
+    "invitationsLead": "Kila kiungo kinafanya kazi kwa siku 7. Hadi {limit} vinaweza kuwa wazi kwa wakati mmoja.",
+    "inviteTitle": "Alika mtu",
+    "openTitle": "{count, plural, one {# mwaliko ulio wazi} other {# mialiko iliyo wazi}}",
+    "invitedBy": "Alialikwa na {name} tarehe {date}",
+    "expiresOn": "Kiungo kinafanya kazi hadi {date}",
+    "expiredOn": "Kiungo kiliisha muda tarehe {date}. Kitume tena upate kipya.",
+    "expired": "Kimeisha muda",
+    "capReached": "Mialiko {limit} iko wazi, idadi ya juu kabisa kwa wakati mmoja. Futa mmoja, au subiri mmoja ukubaliwe, ili kumwalika mtu mwingine.",
+    "defaultsTitle": "Mashirikiano mapya",
+    "defaultsLead": "Nani anakagua kwanza shirikiano jipya katika kila moja ya niche zenu. Bado mtu yeyote anaweza kupangiwa kwenye shirikiano lenyewe.",
+    "defaultsLabel": "Mkaguzi wa kawaida kwa kila niche",
+    "notSet": "Bado hakuna",
+    "noNiches": "Shirika lenu bado halijaorodhesha niche yoyote, kwa hivyo hakuna wa kawaida wa kuchagua.",
+    "noNichesAction": "Fungua Msaada",
+    "escalationTitle": "Upandishaji",
+    "escalationLead": "Wasimamizi wenu wanaarifiwa mawasiliano ya kwanza au uamuzi unapochelewa. Mtu mmoja zaidi anaweza kuarifiwa pamoja nao.",
+    "escalationIs": "{name} anaarifiwa kuhusu upandishaji pamoja na wasimamizi wenu.",
+    "escalationNone": "Ni wasimamizi wenu tu wanaoarifiwa kuhusu upandishaji.",
+    "readFailed": "Timu haikuweza kusomwa kwa sasa.",
+    "retry": "Jaribu tena",
+    "notMember": "Wewe si mwanachama wa shirika hilo.",
+    "openOwn": "Fungua timu yako",
+    "inviteDemoLocked": "Kualika watu kumezimwa katika onyesho la umma."
+  },
+  "teamAdmin": {
+    "role": {
+      "owner": "Mmiliki",
+      "admin": "Msimamizi",
+      "signatory": "Mtia saini",
+      "reviewer": "Mkaguzi",
+      "finance": "Fedha",
+      "viewer": "Mtazamaji"
+    },
+    "roleHint": {
+      "owner": "Kila kitu, pamoja na nani mwingine ni mmiliki.",
+      "admin": "Husimamia timu, mialiko na mipangilio.",
+      "signatory": "Huidhinisha hatua zinazofuata na kutia saini mikataba.",
+      "reviewer": "Hukagua mapendekezo na kushauri la kufanya.",
+      "finance": "Hushughulikia mpango na malipo.",
+      "viewer": "Husoma tu, habadilishi chochote."
+    },
+    "email": "Anwani ya barua pepe",
+    "emailHint": "Atajiunga kwa kukubali kwa anwani hii ndani ya siku 7.",
+    "emailRequired": "Andika anwani ya barua pepe ya kualika.",
+    "rolesLegend": "Majukumu",
+    "rolesOwnerOnly": "Ni mmiliki tu anayeweza kumfanya mtu kuwa mmiliki au mtia saini.",
+    "rolesRequired": "Chagua angalau jukumu moja.",
+    "send": "Tuma mwaliko",
+    "sending": "Inatuma…",
+    "invited": "Mwaliko umetumwa kwa {email}. Kiungo kinafanya kazi kwa siku 7.",
+    "resend": "Tuma tena",
+    "resendLabel": "Tuma tena mwaliko kwa {email}",
+    "resending": "Inatuma tena…",
+    "resent": "Kiungo kipya kimeenda kwa {email}. Cha awali hakifanyi kazi tena.",
+    "revoke": "Futa",
+    "revokeLabel": "Futa mwaliko kwa {email}",
+    "revoking": "Inafuta…",
+    "changeRoles": "Badilisha majukumu",
+    "changeRolesLabel": "Badilisha majukumu ya {name}",
+    "rolesFor": "Majukumu ya {name}",
+    "saveRoles": "Hifadhi majukumu",
+    "rolesSaved": "Majukumu yamehifadhiwa.",
+    "remove": "Ondoa",
+    "removeLabel": "Ondoa {name}",
+    "removeConfirm": "Umwondoe {name} kutoka {org}? Atapoteza ufikiaji mara moja, na mashirikiano aliyopangiwa yatabaki bila mtu.",
+    "removeYes": "Ondoa {name}",
+    "removing": "Inaondoa…",
+    "cancel": "Ghairi",
+    "saving": "Inahifadhi…",
+    "nobody": "Hakuna",
+    "saveDefaults": "Hifadhi wakaguzi wa kawaida",
+    "defaultsSaved": "Imehifadhiwa. Mashirikiano mapya katika niche hizi yataenda kwa waliochaguliwa.",
+    "escalationLabel": "Mtu wa upandishaji",
+    "adminsOnly": "Hakuna zaidi ya wasimamizi",
+    "saveEscalation": "Hifadhi mtu",
+    "escalationSaved": "Mtu wa upandishaji amehifadhiwa.",
+    "refusal": {
+      "stepUp": "Hatua hii inahitaji msimbo mpya kutoka programu yako ya uthibitishaji.",
+      "invalid_email": "Andika anwani ya barua pepe kama jina@mfano.com.",
+      "already_member": "Mtu huyo tayari ni mwanachama.",
+      "already_invited": "Anwani hiyo tayari ina mwaliko ulio wazi. Utume tena ikiwa kiungo kimepotea.",
+      "too_many_invitations": "Mialiko {limit} iko wazi, idadi ya juu kabisa kwa wakati mmoja. Futa mmoja, au subiri mmoja ukubaliwe.",
+      "protected_role": "Ni mmiliki tu anayeweza kumfanya mtu kuwa mmiliki au mtia saini.",
+      "invitation_closed": "Mwaliko huo tayari umekubaliwa au umefutwa. Orodha sasa ni ya kisasa.",
+      "protected_member": "Ni mmiliki tu anayeweza kumwondoa mmiliki au mtia saini.",
+      "last_owner": "Mfanye mtu mwingine kuwa mmiliki kwanza: shirika huwa na mmiliki mmoja angalau.",
+      "unknown_niche": "Mojawapo ya niche hizi imebadilika wakati huo. Ukurasa sasa ni wa kisasa: chagua tena.",
+      "invalid_default_reviewer": "Chagua mkaguzi, mtia saini au msimamizi kwa kila niche.",
+      "invalid_member": "Chagua mtu ambaye bado ni mwanachama.",
+      "rate_limited": "Mabadiliko mengi mno kwa sasa.",
+      "public_demo_locked": "Kubadilisha timu kumezimwa katika onyesho la umma.",
+      "notAllowed": "Ni mmiliki au msimamizi tu anayeweza kubadilisha timu, na ni mmiliki tu anayeweza kubadilisha majukumu.",
+      "notFound": "Hicho hakipo tena. Ukurasa sasa ni wa kisasa.",
+      "network": "Hakuna muunganisho. Jaribu tena.",
+      "generic": "Kuna tatizo. Jaribu tena.",
+      "org_not_verified": "Kualika watu kunafunguka shirika lenu likishathibitishwa.",
+      "plan_limit": "Nafasi zote za mpango wenu zimejaa. Mpango wenye nafasi zaidi utakuwezesha kumwalika mtu mwingine.",
+      "plan_limitUpgrade": "Nafasi zote za mpango wenu zimejaa. {plan} una nafasi zaidi.",
+      "signedOut": "Muda wa kuingia umekwisha, kwa hivyo hakuna kilichobadilishwa.",
+      "conflict": "Mwaliko huu ulibadilika wakati huo huo. Orodha sasa ni ya kisasa: jaribu tena."
+    },
+    "upgradeTo": "Pandisha hadi {plan}",
+    "seePlans": "Tazama mipango",
+    "verificationHelp": "Jinsi uthibitishaji unavyofanya kazi",
+    "loading": "Inapakia…",
+    "signIn": "Ingia tena"
+  },
+  "invitation": {
+    "pageTitle": "Mwaliko",
+    "title": "Jiunge na {org}",
+    "lead": "{org} imekualika ujiunge kama {roles}.",
+    "signInLead": "Ingia kwa anwani ya barua pepe ambayo mwaliko huu ulitumwa kwake.",
+    "signIn": "Ingia ili ukubali",
+    "noAccount": "Mgeni hapa? Fungua akaunti kwa anwani hiyo. Ikishathibitishwa, fungua kiungo hiki tena ili ukubali.",
+    "create": "Fungua akaunti",
+    "signedInAs": "Umeingia kama {email}.",
+    "deadTitle": "Kiungo hiki cha mwaliko hakifanyi kazi tena",
+    "dead": "Kilitumika, kilifutwa au kilibadilishwa, au siku zake 7 zimekwisha. Muombe aliyekualika akutumie kingine.",
+    "home": "Nenda ukurasa wa mwanzo",
+    "rateLimitedTitle": "Majaribio mengi mno",
+    "rateLimited": "Viungo vingi vya mialiko vimefunguliwa kutoka hapa kwa sasa.",
+    "demoLocked": "Kukubali mialiko kumezimwa katika onyesho la umma.",
+    "developerAccount": "Hii ni akaunti ya msanidi, na akaunti hufanya kazi upande mmoja tu. Iombe shirika ikualike kwa anwani nyingine ya barua pepe."
+  },
+  "invitationAccept": {
+    "accept": "Kubali na ujiunge",
+    "accepting": "Inajiunga…",
+    "openOrg": "Fungua shirika lako",
+    "signIn": "Ingia tena",
+    "refusal": {
+      "mismatch": "Mwaliko huu ni wa anwani nyingine ya barua pepe. Ingia kwa anwani ambayo ulitumwa kwake, kisha ufungue kiungo tena.",
+      "gone": "Kiungo hiki cha mwaliko hakifanyi kazi tena. Muombe aliyekualika akutumie kingine.",
+      "member": "Tayari wewe ni mwanachama wa shirika hili.",
+      "locked": "Kukubali mialiko kumezimwa katika onyesho la umma.",
+      "signedOut": "Muda wa kuingia umekwisha. Ingia tena ili ukubali.",
+      "network": "Hakuna muunganisho. Jaribu tena.",
+      "generic": "Kuna tatizo. Jaribu tena.",
+      "seats": "{org} haina nafasi wazi katika mpango wake kwa sasa. Muulize aliyekualika.",
+      "rateLimited": "Majaribio mengi mno kwa sasa.",
+      "developer": "Hii ni akaunti ya msanidi, na akaunti hufanya kazi upande mmoja tu. Iombe shirika ikualike kwa anwani nyingine ya barua pepe.",
+      "conflict": "Mwaliko huu ulibadilika wakati huo huo. Pakia ukurasa upya kisha ujaribu tena."
+    },
+    "reload": "Pakia upya",
+    "switchAccount": "Toka na utumie anwani nyingine",
+    "signingOut": "Inatoka…",
+    "signOutFailed": "Kutoka hakukukamilika, kwa hivyo huenda bado umeingia."
+  },
+  "retryAfter": {
+    "minute": "Jaribu tena baada ya dakika moja hivi.",
+    "minutes": "Jaribu tena baada ya dakika {count} hivi.",
+    "hour": "Jaribu tena baada ya saa moja hivi.",
+    "hours": "Jaribu tena baada ya saa {count} hivi.",
+    "later": "Jaribu tena baadaye."
+  },
+  "procurement": {
+    "title": "Njia ya ununuzi",
+    "route": {
+      "rfq_tender": "Ombi la bei au zabuni",
+      "direct": "Ununuzi wa moja kwa moja",
+      "ppp_pip": "Pendekezo la PPP lililoanzishwa na sekta binafsi",
+      "innovation_challenge": "Shindano la ubunifu au ruzuku",
+      "pilot_mou": "Majaribio chini ya mkataba wa maelewano (MoU)"
+    },
+    "hint": {
+      "rfq_tender": "Mnaomba bei au mnatangaza zabuni, na msanidi programu huyu anaweza kushindana pamoja na wengine.",
+      "direct": "Mnanunua kutoka kwa msanidi programu huyu pekee, bila ushindani, na mnaeleza sababu kwa maandishi.",
+      "ppp_pip": "Wazo la msanidi programu linaendelea kama ushirikiano wa umma na sekta binafsi alioupendekeza yeye.",
+      "innovation_challenge": "Mnafadhili au kutuza kazi hii kupitia shindano la ubunifu au ruzuku.",
+      "pilot_mou": "Mnajaribu wazo hili kwa majaribio chini ya mkataba wa maelewano kabla ya kununua chochote."
+    },
+    "block": {
+      "route": "Njia",
+      "justification": "Sababu",
+      "decidedBy": "Imechaguliwa na",
+      "decidedAt": "Imechaguliwa tarehe"
+    },
+    "sheet": {
+      "lead": "Chagua jinsi shirika lako litakavyonunua hili. Msanidi programu ataona njia hiyo na unachoandika hapa, na mtu wako wa mawasiliano atawasiliana naye kufikia tarehe utakayoweka.",
+      "legend": "Mtanunua vipi?",
+      "justificationRequired": "Sababu",
+      "justificationOptional": "Sababu (si lazima)",
+      "justificationHintDirect": "Ununuzi wa moja kwa moja unahitaji sababu iliyoandikwa ya herufi 20 hadi 1,000. Msanidi programu ataisoma, kwa hiyo usiweke maelezo ya mawasiliano wala viungo.",
+      "justificationHint": "Hadi herufi 1,000. Msanidi programu ataisoma, kwa hiyo usiweke maelezo ya mawasiliano wala viungo.",
+      "count": "Herufi {count} kati ya {max}",
+      "by": "Wasiliana kabla ya",
+      "byHint": "Kuanzia leo, isizidi siku tano za kazi mbele.",
+      "submit": "Thibitisha njia",
+      "error": {
+        "route": "Chagua njia ya ununuzi.",
+        "justificationLong": "Sababu isizidi herufi 1,000."
+      }
+    }
   }
 }

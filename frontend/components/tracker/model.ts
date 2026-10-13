@@ -33,6 +33,9 @@ export type DocumentKind = Schemas["SignatureDocumentKind"];
 export type Due = Schemas["DueOut"];
 export type Note = Schemas["NoteOut"];
 export type SideLimits = Schemas["SideLimitsOut"];
+/** One main-path stage of the engagement's stepper, as the API lists it (`steps`). */
+export type StageStep = Schemas["StepOut"];
+export type ProcurementOut = Schemas["ProcurementOut"];
 
 /** The 5-group stepper, in order (Review · Contact and NDA · Agreement · Implementation · Close). */
 export const GROUPS = ["review", "contact_nda", "agreement", "implementation", "close"] as const;
@@ -65,6 +68,7 @@ export const MAIN_PATH_GROUP: Partial<Record<State, Group>> = {
   SUBMITTED: "review",
   UNDER_REVIEW: "review",
   INTEREST_CONFIRMED: "contact_nda",
+  PROCUREMENT_ROUTE: "contact_nda",
   CONTACT_MADE: "contact_nda",
   NDA_PENDING: "contact_nda",
   NDA_SIGNED: "contact_nda",
@@ -93,6 +97,46 @@ export function stageLeft(state: State, events: readonly HistoryEvent[] | null |
     return PAUSED_STATES.has(from) ? (stageLeft(from, events.slice(0, i)) ?? from) : from;
   }
   return null;
+}
+
+/** A public entity's engagement: its stepper carries 3b, PROCUREMENT_ROUTE (AC-TRACK-5; the API's `steps`). */
+export function isPublicEntity(detail: Pick<Detail, "steps">): boolean {
+  return (detail.steps ?? []).some((step) => step.state === "PROCUREMENT_ROUTE");
+}
+
+/** One stage of the current group, as the stepper lists it under the group's name. */
+export interface SubStage {
+  state: State;
+  /** The API's label (English), for a stage the locales do not name. */
+  label: string;
+  /** Done, pending, or where the engagement stands: the current group's own chip (on hold, overdue…). */
+  mark: ChipKind;
+  /** The status word, when it is not the mark's own (a question waiting for its answer). */
+  word?: "awaitingAnswer";
+}
+
+/**
+ * The current group's stages from the API's `steps` (docs/spec/06 6.9: "sub-stages collapsed except the current
+ * group"): done before `at`, pending after it, and `at` itself (the stage the engagement stands at: its state on the
+ * main path, else the stage it paused in) with the current group's own chip and word (`here`), so a paused, questioned
+ * or overdue stage never reads "Current". Empty when the group has one stage, `at` is not among the steps, or the
+ * engagement has finished (closed or ended: the stepper's own marks say where it stopped).
+ */
+export function subStages(
+  steps: readonly StageStep[] | undefined,
+  at: State | null,
+  here: Pick<Step, "chip" | "word"> = { chip: "current" },
+): SubStage[] {
+  const all = steps ?? [];
+  const index = all.findIndex((step) => step.state === at);
+  if (index < 0 || here.chip === "ended" || here.chip === "completed") return [];
+  const group = all.filter((step) => step.group === all[index].group);
+  if (group.length < 2) return [];
+  return group.map((step) => {
+    const i = all.indexOf(step);
+    const mark = i < index ? "completed" : i === index ? here.chip : "pending";
+    return { state: step.state, label: step.label, mark, ...(i === index && here.word ? { word: here.word } : {}) };
+  });
 }
 
 export interface Step {
@@ -164,6 +208,17 @@ export function awaitsMe(item: Pick<Summary, "state" | "whose_turn">, mine: Part
 /** The next steps the caller's party owes (`awaiting`), without repeats. */
 export function myNextSteps(detail: Pick<Detail, "awaiting" | "my_party">): Command[] {
   return [...new Set(detail.awaiting.filter((p) => p.party === detail.my_party).map((p) => p.command))];
+}
+
+/**
+ * The organisation's step is its owner's or admin's (the procurement route, REQ-ENG-06) and this member has no button
+ * for it: the turn is the organisation's, not this member's own.
+ */
+export function waitsOnAdmin(detail: Pick<Detail, "awaiting" | "my_party" | "actions">): boolean {
+  const mine = myNextSteps(detail);
+  return (
+    detail.my_party === "org" && mine.length > 0 && mine.every((c) => c === "choose_route" && !detail.actions.includes(c))
+  );
 }
 
 /** The steps the other party owes. */
@@ -324,11 +379,18 @@ export const FORM_COMMANDS = ["approve", "decline", "propose_terms", "record_pay
 export type FormCommand = (typeof FORM_COMMANDS)[number];
 
 /**
- * The side states' commands (REQ-ENG-10 part): each opens a sheet over the tracker (a bottom sheet on phones), four
- * with a text the other party reads (a question, an answer, a reason) and the organisation's withdrawal of its
- * question as a confirmation.
+ * The commands that open a sheet over the tracker (a bottom sheet on phones; SideSheet.tsx, loaded when one opens): the
+ * side states' (REQ-ENG-10 part), four with a text the other party reads (a question, an answer, a reason) and the
+ * organisation's withdrawal of its question as a confirmation; and a public entity's procurement route (REQ-ENG-06).
  */
-export const SHEET_COMMANDS = ["request_info", "answer_info", "pause", "resume", "cancel_request"] as const satisfies readonly Command[];
+export const SHEET_COMMANDS = [
+  "request_info",
+  "answer_info",
+  "pause",
+  "resume",
+  "cancel_request",
+  "choose_route",
+] as const satisfies readonly Command[];
 export type SheetCommand = (typeof SHEET_COMMANDS)[number];
 
 /** Commands that end the engagement: a confirmation first, never the primary button. */
@@ -402,7 +464,10 @@ export function actionItems(detail: Pick<Detail, "actions" | "awaiting" | "my_pa
 
 const PREFIX = "/api/engagements/{engagement_id}" as const;
 
-/** URL segment of each command without a milestone (backend engagements/router.py). */
+/**
+ * URL segment of each command without a milestone (backend engagements/router.py). choose_route's path is the
+ * organisation's, built by its lazily loaded sheet (procurement.ts routeRequest), so the first load never carries it.
+ */
 export const COMMAND_SEGMENT = {
   accept_interest: "accept-interest",
   decline_interest: "decline-interest",
@@ -428,7 +493,7 @@ export const COMMAND_SEGMENT = {
   cancel_request: "cancel-request",
   pause: "pause",
   resume: "resume",
-} as const satisfies Record<Exclude<Command, MilestoneCommand>, string>;
+} as const satisfies Record<Exclude<Command, MilestoneCommand | "choose_route">, string>;
 
 export const MILESTONE_SEGMENT = {
   start_milestone: "start",
@@ -452,6 +517,8 @@ export type RequestInfoInput = Omit<Schemas["RequestInfoBody"], "lock_version">;
 export type AnswerInfoInput = Omit<Schemas["AnswerInfoBody"], "lock_version">;
 export type PauseInput = Omit<Schemas["PauseBody"], "lock_version">;
 export type ResumeInput = Omit<Schemas["ResumeBody"], "lock_version">;
+export type ProcurementInput = Omit<Schemas["ProcurementBody"], "lock_version">;
+export type ProcurementRoute = Schemas["ProcurementRoute"];
 /** What a sheet sends: its text (and a hold's date); the withdrawal of a question sends nothing more. */
 export type SheetInput = RequestInfoInput | AnswerInfoInput | PauseInput | ResumeInput | Record<string, never>;
 export type FormInput =
@@ -463,18 +530,20 @@ export type FormInput =
   | RequestInfoInput
   | AnswerInfoInput
   | PauseInput
-  | ResumeInput;
+  | ResumeInput
+  | ProcurementInput;
 
 /** One command request: the path template, its parameters and the JSON body (always with `lock_version`). */
 export interface CommandRequest {
   path: string;
-  params: { engagement_id: string; milestone_id?: string };
+  params: { engagement_id: string; milestone_id?: string; org_id?: string };
   body: { lock_version: number } & Partial<FormInput>;
 }
 
 /** The request for a command on an engagement read at `lockVersion` (a 409 `stale` when it changed since). */
 export function commandRequest(
-  command: Command,
+  // choose_route is sent under the organisation's path, built by its lazily loaded sheet (procurement.ts routeRequest).
+  command: Exclude<Command, "choose_route">,
   engagementId: string,
   lockVersion: number,
   { milestoneId, input }: { milestoneId?: string; input?: FormInput } = {},

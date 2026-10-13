@@ -9,9 +9,9 @@ import { CheckIcon, EyeOffIcon } from "@/components/ui/icons";
 
 /**
  * The public verification pages in the landing's public language (D-67): its top bar with "Log in", a mono eyebrow
- * over one content column, an aside that says in plain words what a check shows and what it never shows (beside the
- * content from 1024 px behind a hairline, and staying in view; below it on a phone), then the landing's footer. The
- * certificate is the page's one raised sheet, so the aside is plain text on the canvas.
+ * over one content column, an aside that says in plain words what a check shows and what it never shows, with one
+ * line to /transparency (beside the content from 1024 px behind a hairline, and staying in view; below it on a phone),
+ * then the landing's footer. The certificate is the page's one raised sheet, so the aside is plain text on the canvas.
  */
 export async function VerifyShell({ children }: { children: ReactNode }) {
   const [t, tl, tp] = await Promise.all([getTranslations("verify"), getTranslations("landing"), getTranslations("portal")]);
@@ -56,6 +56,16 @@ export async function VerifyShell({ children }: { children: ReactNode }) {
               <span>{t("panelNot")}</span>
             </li>
           </ul>
+          {/* One quiet line to the daily signed fingerprints of the audit history (REQ-AUD-01). */}
+          <p className="mt-6 text-sm text-ink-soft" data-verify="transparency">
+            {t.rich("transparency", {
+              link: (chunks) => (
+                <Link href="/transparency" className="text-ink underline decoration-1 underline-offset-2 hover:decoration-2">
+                  {chunks}
+                </Link>
+              ),
+            })}
+          </p>
         </aside>
       </div>
       <LandingFooter />

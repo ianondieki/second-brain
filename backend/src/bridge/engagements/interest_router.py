@@ -14,7 +14,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 
 from bridge.auth.deps import Db, SettingsDep, client_ip
-from bridge.engagements import history
+from bridge.engagements import history, team
 from bridge.engagements.interest import (
     express_interest,
     share_state,
@@ -36,10 +36,13 @@ router = APIRouter(tags=["engagements"], responses=ERROR_RESPONSES)
 async def post_interest(
     request: Request, body: InterestBody, org: OrgMember, db: Db, settings: SettingsDep
 ) -> TrackerDetail:
-    """Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer."""
+    """Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer. The
+    engagement goes to the organisation's default reviewer for its niche, if it has one (N30)."""
     await throttle_interest(db, settings, org, client_ip(request))
     engagement_id = await express_interest(db, settings, org, body)
+    assigned = await team.assign_niche_default_safely(db, org.org_id, engagement_id)  # REQ-TEN-02, never blocks
     await db.commit()
+    await team.tell_default_assignee(request.app.state.session_factory, org.org_id, assigned)
     party = await resolve_party(db, org.live, engagement_id)
     return await history.detail(db, party, deals_enabled=settings.feature_deals_enabled)
 

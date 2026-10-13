@@ -522,12 +522,20 @@
         "type": "object"
       },
       "ApproveBody": {
-        "description": "Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date.",
+        "description": "Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date. A public\nentity's approval enters its procurement route (3b): the contact-by date is named with the route, and one sent\nhere is not used.",
         "properties": {
           "contact_by": {
-            "format": "date",
-            "title": "Contact By",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for a private organisation (422 invalid_contact_by without it): from today to policy.yaml's contact_by_max_bd (5) business days ahead. Not used for a public entity, which names it with its procurement route",
+            "title": "Contact By"
           },
           "contact_channel": {
             "$ref": "#/components/schemas/ContactChannel"
@@ -547,8 +555,7 @@
         "required": [
           "lock_version",
           "contact_user_id",
-          "contact_channel",
-          "contact_by"
+          "contact_channel"
         ],
         "title": "ApproveBody",
         "type": "object"
@@ -2748,6 +2755,7 @@
           "start_review",
           "decline",
           "approve",
+          "choose_route",
           "withdraw",
           "mark_contacted",
           "confirm_contact",
@@ -3729,6 +3737,52 @@
         "title": "DeclineBody",
         "type": "object"
       },
+      "DemoPersona": {
+        "description": "One persona of the public demo (REQ-FND-04): a fictional demo account a visitor signs in as with one press.",
+        "properties": {
+          "detail": {
+            "description": "One line of what it is, e.g. \"Telco A (fixture): signatory\"",
+            "title": "Detail",
+            "type": "string"
+          },
+          "home": {
+            "description": "The web path to land on after signing in: \"/dev\", \"/org\" or \"/admin\"",
+            "title": "Home",
+            "type": "string"
+          },
+          "key": {
+            "description": "What POST /api/auth/demo/sign-in takes as \"persona\", e.g. \"amina\"",
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "description": "The account's display name (fictional)",
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "description": "Which side and role it plays",
+            "enum": [
+              "developer",
+              "org_admin",
+              "org_signatory",
+              "org_reviewer",
+              "staff"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "role",
+          "detail",
+          "home"
+        ],
+        "title": "DemoPersona",
+        "type": "object"
+      },
       "DevVerification": {
         "enum": [
           "d0",
@@ -3772,7 +3826,7 @@
         "type": "object"
       },
       "DeveloperEngagementDetail": {
-        "description": "The developer's tracker (no organisation triage: D-68).",
+        "description": "The developer's tracker (no organisation triage, D-68; no escalation flag: the nudges ledger is the\norganisation's).",
         "properties": {
           "actions": {
             "description": "The commands the caller may run now (the action buttons)",
@@ -3953,6 +4007,17 @@
             ],
             "description": "The organisation's prior-knowledge declaration on this proposal; null when none"
           },
+          "procurement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcurementOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A public entity's procurement route once chosen; null otherwise"
+          },
           "proposal_id": {
             "format": "uuid",
             "title": "Proposal Id",
@@ -4014,6 +4079,14 @@
           },
           "state": {
             "$ref": "#/components/schemas/EngagementState"
+          },
+          "steps": {
+            "description": "The engagement's main-path stages in order (the stepper): stage 0 for an organisation's interest, stages 1-2 for a tagged proposal, PROCUREMENT_ROUTE (3b) only for a public entity (AC-TRACK-5)",
+            "items": {
+              "$ref": "#/components/schemas/StepOut"
+            },
+            "title": "Steps",
+            "type": "array"
           },
           "today": {
             "anyOf": [
@@ -5019,6 +5092,47 @@
           "limits"
         ],
         "title": "EntitlementsOut",
+        "type": "object"
+      },
+      "EscalationContact": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "title": "EscalationContact",
+        "type": "object"
+      },
+      "EscalationContactIn": {
+        "additionalProperties": false,
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "EscalationContactIn",
         "type": "object"
       },
       "EvaluationNdaOut": {
@@ -6452,6 +6566,33 @@
         "title": "InterestState",
         "type": "object"
       },
+      "InvitationAccepted": {
+        "properties": {
+          "org_id": {
+            "format": "uuid",
+            "title": "Org Id",
+            "type": "string"
+          },
+          "org_name": {
+            "title": "Org Name",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/OrgRole"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "org_id",
+          "org_name",
+          "roles"
+        ],
+        "title": "InvitationAccepted",
+        "type": "object"
+      },
       "InvitationIn": {
         "additionalProperties": false,
         "properties": {
@@ -6568,6 +6709,28 @@
           "decided_at"
         ],
         "title": "InvitationOut",
+        "type": "object"
+      },
+      "InvitationPreview": {
+        "description": "What an invitation link shows before sign-in: the organisation's name and the roles, nothing else.",
+        "properties": {
+          "org_name": {
+            "title": "Org Name",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/OrgRole"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "org_name",
+          "roles"
+        ],
+        "title": "InvitationPreview",
         "type": "object"
       },
       "InvitationsOut": {
@@ -8011,6 +8174,76 @@
         "title": "NicheCreate",
         "type": "object"
       },
+      "NicheDefault": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "niche_name": {
+            "title": "Niche Name",
+            "type": "string"
+          },
+          "niche_slug": {
+            "title": "Niche Slug",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "niche_slug",
+          "niche_name",
+          "user_id",
+          "name"
+        ],
+        "title": "NicheDefault",
+        "type": "object"
+      },
+      "NicheDefaultIn": {
+        "additionalProperties": false,
+        "properties": {
+          "niche_slug": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Niche Slug",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "niche_slug",
+          "user_id"
+        ],
+        "title": "NicheDefaultIn",
+        "type": "object"
+      },
+      "NicheDefaultsIn": {
+        "additionalProperties": false,
+        "description": "The whole set: niches left out lose their default.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NicheDefaultIn"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "NicheDefaultsIn",
+        "type": "object"
+      },
       "NicheNode": {
         "properties": {
           "children": {
@@ -8620,6 +8853,19 @@
             "title": "Endorsements",
             "type": "array"
           },
+          "escalated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the nudge job last escalated the current stage to the organisation's admins and escalation contact (first contact late or overdue, the procurement route or a milestone review waiting); null when it has not. The organisation's own: never on the developer's tracker",
+            "title": "Escalated At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -8690,6 +8936,17 @@
             ],
             "description": "The organisation's declaration window (always sent to a member)"
           },
+          "procurement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcurementOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A public entity's procurement route once chosen; null otherwise"
+          },
           "proposal_id": {
             "format": "uuid",
             "title": "Proposal Id",
@@ -8751,6 +9008,14 @@
           },
           "state": {
             "$ref": "#/components/schemas/EngagementState"
+          },
+          "steps": {
+            "description": "The engagement's main-path stages in order (the stepper): stage 0 for an organisation's interest, stages 1-2 for a tagged proposal, PROCUREMENT_ROUTE (3b) only for a public entity (AC-TRACK-5)",
+            "items": {
+              "$ref": "#/components/schemas/StepOut"
+            },
+            "title": "Steps",
+            "type": "array"
           },
           "team": {
             "anyOf": [
@@ -9073,6 +9338,82 @@
         "title": "OrgEntitlementsOut",
         "type": "object"
       },
+      "OrgInvitation": {
+        "description": "An open invitation (neither accepted nor revoked); ``expired`` on the shared clock (resend it to renew).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "expired": {
+            "title": "Expired",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "invited_by_name": {
+            "title": "Invited By Name",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/OrgRole"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "roles",
+          "created_at",
+          "expires_at",
+          "expired",
+          "invited_by_name"
+        ],
+        "title": "OrgInvitation",
+        "type": "object"
+      },
+      "OrgInvitationIn": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "title": "Email",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/OrgRole"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "email",
+          "roles"
+        ],
+        "title": "OrgInvitationIn",
+        "type": "object"
+      },
       "OrgKind": {
         "description": "Axis 1, Org Type (docs/spec/03).",
         "enum": [
@@ -9247,6 +9588,103 @@
           "kind"
         ],
         "title": "OrgSignup",
+        "type": "object"
+      },
+      "OrgTeam": {
+        "description": "The Team page: ``invitations`` is null for a member who is neither an owner nor an admin.",
+        "properties": {
+          "escalation_contact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EscalationContact"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "invitations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OrgInvitation"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitations"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/OrgTeamMember"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "niche_defaults": {
+            "items": {
+              "$ref": "#/components/schemas/NicheDefault"
+            },
+            "title": "Niche Defaults",
+            "type": "array"
+          }
+        },
+        "required": [
+          "members",
+          "invitations",
+          "niche_defaults",
+          "escalation_contact"
+        ],
+        "title": "OrgTeam",
+        "type": "object"
+      },
+      "OrgTeamMember": {
+        "description": "An active member. ``email`` only for an owner or admin reading (else null). The repository models no person's\nown organisation-side verification (E0/E1/E2 are the organisation's levels), so no verification field is sent.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "joined_at": {
+            "format": "date-time",
+            "title": "Joined At",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/OrgRole"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "email",
+          "roles",
+          "joined_at"
+        ],
+        "title": "OrgTeamMember",
         "type": "object"
       },
       "OrgTypeOption": {
@@ -10934,6 +11372,104 @@
         "title": "ProblemStatus",
         "type": "string"
       },
+      "ProcurementBody": {
+        "additionalProperties": false,
+        "description": "A public entity's procurement route (stage 3b; docs/spec/06 6.9), chosen by its owner or admin: how it will\nbuy, the written justification (required for direct procurement) and the contact-by date of stage 3.",
+        "properties": {
+          "contact_by": {
+            "description": "The date the named contact reaches the developer by: from today to policy.yaml's contact_by_max_bd (5) business days ahead (422 invalid_contact_by)",
+            "format": "date",
+            "title": "Contact By",
+            "type": "string"
+          },
+          "justification": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "pattern": "^[^\\x00-\\x08\\x0b-\\x1f\\x7f]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain text, line breaks allowed; trimmed, empty is none. Direct procurement needs 20 to 1,000 characters (422 justification_required); the other routes take none or at most 1,000 (422 invalid_justification). No contact details or links before first contact (422 contains_contact). Both parties read it",
+            "title": "Justification"
+          },
+          "lock_version": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The engagement's lock_version when last read; when sent, 409 stale if it moved",
+            "title": "Lock Version"
+          },
+          "route": {
+            "$ref": "#/components/schemas/ProcurementRoute"
+          }
+        },
+        "required": [
+          "route",
+          "contact_by"
+        ],
+        "title": "ProcurementBody",
+        "type": "object"
+      },
+      "ProcurementOut": {
+        "description": "A public entity's procurement route (3b), as both parties read it (R46: full transparency).",
+        "properties": {
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by_name": {
+            "description": "The owner or admin who chose it ('Former member' once not readable)",
+            "title": "Decided By Name",
+            "type": "string"
+          },
+          "justification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The organisation's own words: plain text",
+            "title": "Justification"
+          },
+          "route": {
+            "$ref": "#/components/schemas/ProcurementRoute"
+          }
+        },
+        "required": [
+          "route",
+          "justification",
+          "decided_at",
+          "decided_by_name"
+        ],
+        "title": "ProcurementOut",
+        "type": "object"
+      },
+      "ProcurementRoute": {
+        "description": "How a public entity will buy (docs/spec/06 6.9 stage 3b, ``PROCUREMENT_ROUTE``; PPADA 2015, PPP Act 2021;\nrevision 0015, REQ-ENG-06). Chosen once by the organisation's owner or admin, together with the move to\n``INTEREST_CONFIRMED``; ``direct`` needs a written justification of at least 20 characters.",
+        "enum": [
+          "direct",
+          "rfq_tender",
+          "ppp_pip",
+          "innovation_challenge",
+          "pilot_mou"
+        ],
+        "title": "ProcurementRoute",
+        "type": "string"
+      },
       "ProfileOut": {
         "properties": {
           "bio": {
@@ -11345,6 +11881,43 @@
           "name"
         ],
         "title": "PublicCounty",
+        "type": "object"
+      },
+      "PublicDemo": {
+        "description": "Whether this deployment is the public demo, and its personas. Off: ``enabled`` false, no personas, no reset.",
+        "properties": {
+          "enabled": {
+            "description": "True only where PUBLIC_DEMO is on and the image carries the demo module",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "personas": {
+            "description": "The personas in the order to show them; empty when off",
+            "items": {
+              "$ref": "#/components/schemas/DemoPersona"
+            },
+            "title": "Personas",
+            "type": "array"
+          },
+          "reset_hour_eat": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The hour (East Africa Time, 0-23) when the demo's data is wiped and seeded again; null when off",
+            "title": "Reset Hour Eat"
+          }
+        },
+        "required": [
+          "enabled",
+          "personas",
+          "reset_hour_eat"
+        ],
+        "title": "PublicDemo",
         "type": "object"
       },
       "PublicNiche": {
@@ -14249,6 +14822,18 @@
             "title": "Email",
             "type": "string"
           },
+          "invitation": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_-]{43}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitation"
+          },
           "locale": {
             "default": "en",
             "enum": [
@@ -14517,6 +15102,36 @@
           "discuss"
         ],
         "title": "StanceCounts",
+        "type": "object"
+      },
+      "StepOut": {
+        "description": "One main-path stage of the engagement's stepper, in order.",
+        "properties": {
+          "group": {
+            "enum": [
+              "review",
+              "contact_nda",
+              "agreement",
+              "implementation",
+              "close"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngagementState"
+          }
+        },
+        "required": [
+          "state",
+          "label",
+          "group"
+        ],
+        "title": "StepOut",
         "type": "object"
       },
       "StepUpMethod": {
@@ -21888,7 +22503,7 @@
     },
     "/api/auth/signup": {
       "post": {
-        "description": "Create an account and email its link; 202 \"check your email\" whether or not the address has an account. 422\ninvalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or\nconsent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.",
+        "description": "Create an account and email its link; 202 \"check your email\" whether or not the address has an account. 422\ninvalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or\nconsent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.\nWith ``invitation`` (an organisation's invitation link's token; P28, D-72) and side \"org\" without ``org``: an\ninvitee's account (no developer profile, organisation or plan), only while the link is open (else 422\norg_details_required); ``invitation`` with side \"developer\" or with ``org`` is 422 invitation_conflict.",
         "operationId": "signup_api_auth_signup_post",
         "requestBody": {
           "content": {
@@ -30253,6 +30868,233 @@
         "summary": "Event Calendar",
         "tags": [
           "events"
+        ]
+      }
+    },
+    "/api/invitations/{token}": {
+      "get": {
+        "description": "What an invitation link offers before sign-in: the organisation's name and the roles. Every request counts\nagainst its client address first (a malformed token included); then one 404 for any link that opens nothing.",
+        "operationId": "get_invitation_api_invitations__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [],
+        "summary": "Get Invitation",
+        "tags": [
+          "organisations"
+        ]
+      }
+    },
+    "/api/invitations/{token}/accept": {
+      "post": {
+        "description": "Join the organisation with the invitation's roles (signed in with the address it was sent to, from an\norganisation account: a developer account is 409 developer_account).",
+        "operationId": "accept_invitation_api_invitations__token__accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Accept Invitation",
+        "tags": [
+          "organisations"
         ]
       }
     },
@@ -41441,6 +42283,127 @@
         ]
       }
     },
+    "/api/orgs/{org_id}/engagements.csv": {
+      "get": {
+        "description": "Download the organisation's engagements as CSV (the plan's ``csv_export``): one row per engagement, as the\nEngagements list shows it.",
+        "operationId": "export_engagements_api_orgs__org_id__engagements_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "One row per engagement (UTF-8 with a byte-order mark, CRLF), newest first",
+            "headers": {
+              "X-Export-Truncated": {
+                "description": "true when the file stops at 10000 rows; absent otherwise",
+                "schema": {
+                  "enum": [
+                    "true"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Export Engagements",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
     "/api/orgs/{org_id}/engagements/{engagement_id}/assignee": {
       "put": {
         "description": "Assign the engagement to a member (an owner, admin, reviewer or signatory), or to nobody (``user_id`` null).\nAt most 30 changes an hour per member and organisation (429 ``too_many_assignments``, ``Retry-After``).",
@@ -41712,6 +42675,140 @@
           }
         },
         "summary": "Post Prior Knowledge",
+        "tags": [
+          "engagements"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/engagements/{engagement_id}/procurement-route": {
+      "post": {
+        "description": "Choose a public entity's procurement route (stage 3b; docs/spec/06 6.9): an owner or admin of the organisation\n(403 ``role_required`` for any other member), while the engagement waits in ``PROCUREMENT_ROUTE`` (409\notherwise), with the contact-by date of stage 3. The engagement enters ``INTEREST_CONFIRMED`` (non-binding): the\nnamed contact may then read the developer's contact details, and the developer is told the route and gets EM2.",
+        "operationId": "choose_procurement_route_api_orgs__org_id__engagements__engagement_id__procurement_route_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engagement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engagement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProcurementBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgEngagementDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Choose Procurement Route",
         "tags": [
           "engagements"
         ]
@@ -42205,6 +43302,138 @@
           }
         },
         "summary": "Org Entitlements",
+        "tags": [
+          "organisations"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/escalation-contact": {
+      "put": {
+        "description": "Name the member who hears of escalations with the admins, or nobody (``user_id`` null).",
+        "operationId": "put_escalation_contact_api_orgs__org_id__escalation_contact_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EscalationContactIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/EscalationContact"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Put Escalation Contact Api Orgs  Org Id  Escalation Contact Put"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Put Escalation Contact",
         "tags": [
           "organisations"
         ]
@@ -42983,7 +44212,7 @@
     },
     "/api/orgs/{org_id}/interest": {
       "post": {
-        "description": "Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer.",
+        "description": "Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer. The\nengagement goes to the organisation's default reviewer for its niche, if it has one (N30).",
         "operationId": "post_interest_api_orgs__org_id__interest_post",
         "parameters": [
           {
@@ -43117,6 +44346,371 @@
         "summary": "Post Interest",
         "tags": [
           "engagements"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/invitations": {
+      "post": {
+        "description": "Invite someone by email with roles: a link valid for 7 days is emailed to them.",
+        "operationId": "post_invitation_api_orgs__org_id__invitations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrgInvitationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgInvitation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Post Invitation",
+        "tags": [
+          "organisations"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/invitations/{invitation_id}": {
+      "delete": {
+        "description": "Revoke an open invitation: its link stops working.",
+        "operationId": "revoke_invitation_api_orgs__org_id__invitations__invitation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invitation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Invitation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Revoke Invitation",
+        "tags": [
+          "organisations"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/invitations/{invitation_id}/resend": {
+      "post": {
+        "description": "Replace the invitation with a new one (a new id) and email its link (valid for 7 days); the previous link stops\nworking at once.",
+        "operationId": "resend_invitation_api_orgs__org_id__invitations__invitation_id__resend_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invitation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Invitation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgInvitation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Resend Invitation",
+        "tags": [
+          "organisations"
         ]
       }
     },
@@ -43628,6 +45222,123 @@
         ]
       }
     },
+    "/api/orgs/{org_id}/members/{user_id}": {
+      "delete": {
+        "description": "Remove a member: their open assignments are cleared, and so are their niche defaults and escalation seat.",
+        "operationId": "remove_member_api_orgs__org_id__members__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Remove Member",
+        "tags": [
+          "organisations"
+        ]
+      }
+    },
     "/api/orgs/{org_id}/members/{user_id}/roles": {
       "put": {
         "description": "Role changes are access-policy changes: owner only (404 for non-members first), then a fresh second factor.",
@@ -43757,6 +45468,134 @@
           }
         },
         "summary": "Set Member Roles",
+        "tags": [
+          "organisations"
+        ]
+      }
+    },
+    "/api/orgs/{org_id}/niche-defaults": {
+      "put": {
+        "description": "Replace the default reviewer per niche (a reviewer, signatory or admin); niches left out lose theirs.",
+        "operationId": "put_niche_defaults_api_orgs__org_id__niche_defaults_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NicheDefaultsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NicheDefault"
+                  },
+                  "title": "Response Put Niche Defaults Api Orgs  Org Id  Niche Defaults Put",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Put Niche Defaults",
         "tags": [
           "organisations"
         ]
@@ -45661,6 +47500,120 @@
         ]
       }
     },
+    "/api/orgs/{org_id}/team": {
+      "get": {
+        "description": "Members with their roles, open invitations (owners and admins), the default reviewer per niche and the\nescalation contact.",
+        "operationId": "get_team_api_orgs__org_id__team_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Org Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgTeam"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Team",
+        "tags": [
+          "organisations"
+        ]
+      }
+    },
     "/api/plans": {
       "get": {
         "description": "The plan catalogue (one side, or both), in ``plans.yaml`` order.",
@@ -46902,6 +48855,108 @@
           }
         },
         "summary": "Public Activity",
+        "tags": [
+          "public"
+        ]
+      }
+    },
+    "/api/public/demo": {
+      "get": {
+        "description": "Whether this is the public demo (REQ-FND-04) and, when it is, the personas a visitor may sign in as with one\npress (``POST /api/auth/demo/sign-in``) and the hour of the nightly reset. Off (every other deployment, and any\nimage without the demo module): ``enabled`` false, no personas, ``reset_hour_eat`` null. Read from memory, never\nthe database; the same for everyone, so cacheable for 60 seconds.",
+        "operationId": "public_demo_status_api_public_demo_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDemo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Payment Required"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Public Demo Status",
         "tags": [
           "public"
         ]

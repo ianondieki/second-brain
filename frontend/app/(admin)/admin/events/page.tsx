@@ -19,6 +19,7 @@ import { AdminShell } from "../AdminShell";
 import { StaffEyebrow } from "../StaffEyebrow";
 import { QueueSurface } from "../QueueSurface";
 import { PageStepUp } from "../research/PageStepUp";
+import { publicDemoOn } from "@/lib/public-demo";
 import { staffContext } from "../staff";
 import { stepUpStrings } from "../strings";
 import { ViewTabs } from "../ViewTabs";
@@ -51,7 +52,8 @@ export default async function AdminEventsPage({ searchParams }: PageProps<"/admi
           lead={t("lead")}
           focusable
           action={
-            role === "admin" ? (
+            // The public demo (REQ-FND-04): staff are read-only, so there is no "Post an event" (its page says so too).
+            role === "admin" && !publicDemoOn() ? (
               <ButtonLink href="/admin/events/new" variant="primary">
                 {t("post")}
               </ButtonLink>

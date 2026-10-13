@@ -2,8 +2,9 @@
 the kinds of ``preferences.CATALOGUE`` a person may turn on or off, for anyone signed in, on either side.
 
 - ``GET /api/me/notification-preferences``: each settable kind and channel offered to the person (a developer-only
-  kind, such as the saved-search digest, only to someone with a developer profile) with its label, its default and
-  the person's current choice (the default when they never chose).
+  kind, such as the saved-search digest, only to someone with a developer profile; an organisation-only kind, such as
+  N12's milestone escalations, only to an active member) with its label, its default and the person's current choice
+  (the default when they never chose).
 - ``PUT /api/me/notification-preferences``: one choice (``kind``, ``channel``, ``enabled``); 422
   ``unknown_preference`` for anything not offered to the person (not settable, in-app is always on, or developer-only
   for someone without a developer profile). Answers the list.
@@ -24,10 +25,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bridge.auth.deps import CurrentSession, Db
 from bridge.errors import ERROR_RESPONSES, ApiError
-from bridge.models.enums import NotificationChannel
+from bridge.models.enums import MembershipStatus, NotificationChannel
 from bridge.notifications.models import NotificationPreference
 from bridge.notifications.preferences import CATALOGUE, KindInfo, catalogued
 from bridge.profiles.models import DeveloperProfile
+from bridge.tenancy.models import Membership
 
 router = APIRouter(prefix="/api/me/notification-preferences", tags=["notifications"], responses=ERROR_RESPONSES)
 P = NotificationPreference
@@ -54,9 +56,22 @@ class PreferenceIn(BaseModel):
 
 
 async def _offered(db: AsyncSession, user_id: UUID) -> list[KindInfo]:
-    """The settable kinds this person is offered (developer-only kinds need a developer profile)."""
+    """The settable kinds this person is offered (developer-only kinds need a developer profile, organisation-only
+    kinds an active membership)."""
     developer = await db.get(DeveloperProfile, user_id) is not None
-    return [info for info in CATALOGUE if info.mutable and (developer or not info.developer_only)]
+    member = (
+        await db.scalar(
+            select(Membership.id)
+            .where(Membership.user_id == user_id, Membership.status == MembershipStatus.ACTIVE)
+            .limit(1)
+        )
+        is not None
+    )
+    return [
+        info
+        for info in CATALOGUE
+        if info.mutable and (developer or not info.developer_only) and (member or not info.org_only)
+    ]
 
 
 async def _preferences(db: AsyncSession, user_id: UUID) -> PreferencesOut:

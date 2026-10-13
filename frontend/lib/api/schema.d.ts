@@ -748,6 +748,9 @@ export interface paths {
          * @description Create an account and email its link; 202 "check your email" whether or not the address has an account. 422
          *     invalid_email, terms_not_accepted, org_details_required, weak_password, consents_version_required, or
          *     consent_session_only (a purpose decided per sign-in, such as tier2_llm_assistant); 409 consent_text_changed.
+         *     With ``invitation`` (an organisation's invitation link's token; P28, D-72) and side "org" without ``org``: an
+         *     invitee's account (no developer profile, organisation or plan), only while the link is open (else 422
+         *     org_details_required); ``invitation`` with side "developer" or with ``org`` is 422 invitation_conflict.
          */
         post: operations["signup_api_auth_signup_post"];
         delete?: never;
@@ -1921,6 +1924,48 @@ export interface paths {
         get: operations["event_calendar_api_events__event_id__calendar_ics_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/invitations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Invitation
+         * @description What an invitation link offers before sign-in: the organisation's name and the roles. Every request counts
+         *     against its client address first (a malformed token included); then one 404 for any link that opens nothing.
+         */
+        get: operations["get_invitation_api_invitations__token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/invitations/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Invitation
+         * @description Join the organisation with the invitation's roles (signed in with the address it was sent to, from an
+         *     organisation account: a developer account is 409 developer_account).
+         */
+        post: operations["accept_invitation_api_invitations__token__accept_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3436,6 +3481,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs/{org_id}/engagements.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Engagements
+         * @description Download the organisation's engagements as CSV (the plan's ``csv_export``): one row per engagement, as the
+         *     Engagements list shows it.
+         */
+        get: operations["export_engagements_api_orgs__org_id__engagements_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{org_id}/engagements/{engagement_id}/assignee": {
         parameters: {
             query?: never;
@@ -3473,6 +3539,29 @@ export interface paths {
          *     proposal. The developer is told. Declarations are not recorded on the platform after this window.
          */
         post: operations["post_prior_knowledge_api_orgs__org_id__engagements__engagement_id__prior_knowledge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/engagements/{engagement_id}/procurement-route": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose Procurement Route
+         * @description Choose a public entity's procurement route (stage 3b; docs/spec/06 6.9): an owner or admin of the organisation
+         *     (403 ``role_required`` for any other member), while the engagement waits in ``PROCUREMENT_ROUTE`` (409
+         *     otherwise), with the contact-by date of stage 3. The engagement enters ``INTEREST_CONFIRMED`` (non-binding): the
+         *     named contact may then read the developer's contact details, and the developer is told the route and gets EM2.
+         */
+        post: operations["choose_procurement_route_api_orgs__org_id__engagements__engagement_id__procurement_route_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3535,6 +3624,26 @@ export interface paths {
         /** Org Entitlements */
         get: operations["org_entitlements_api_orgs__org_id__entitlements_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/escalation-contact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Escalation Contact
+         * @description Name the member who hears of escalations with the admins, or nobody (``user_id`` null).
+         */
+        put: operations["put_escalation_contact_api_orgs__org_id__escalation_contact_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3638,9 +3747,71 @@ export interface paths {
         put?: never;
         /**
          * Post Interest
-         * @description Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer.
+         * @description Express interest (stage 0, ORG_INTEREST): signatory of an E2 organisation, step-up; N17 to the developer. The
+         *     engagement goes to the organisation's default reviewer for its niche, if it has one (N30).
          */
         post: operations["post_interest_api_orgs__org_id__interest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Invitation
+         * @description Invite someone by email with roles: a link valid for 7 days is emailed to them.
+         */
+        post: operations["post_invitation_api_orgs__org_id__invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/invitations/{invitation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Invitation
+         * @description Revoke an open invitation: its link stops working.
+         */
+        delete: operations["revoke_invitation_api_orgs__org_id__invitations__invitation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/invitations/{invitation_id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Invitation
+         * @description Replace the invitation with a new one (a new id) and email its link (valid for 7 days); the previous link stops
+         *     working at once.
+         */
+        post: operations["resend_invitation_api_orgs__org_id__invitations__invitation_id__resend_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3724,6 +3895,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs/{org_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Member
+         * @description Remove a member: their open assignments are cleared, and so are their niche defaults and escalation seat.
+         */
+        delete: operations["remove_member_api_orgs__org_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{org_id}/members/{user_id}/roles": {
         parameters: {
             query?: never;
@@ -3737,6 +3928,26 @@ export interface paths {
          * @description Role changes are access-policy changes: owner only (404 for non-members first), then a fresh second factor.
          */
         put: operations["set_member_roles_api_orgs__org_id__members__user_id__roles_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{org_id}/niche-defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Niche Defaults
+         * @description Replace the default reviewer per niche (a reviewer, signatory or admin); niches left out lose theirs.
+         */
+        put: operations["put_niche_defaults_api_orgs__org_id__niche_defaults_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3945,6 +4156,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs/{org_id}/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Team
+         * @description Members with their roles, open invitations (owners and admins), the default reviewer per niche and the
+         *     escalation contact.
+         */
+        get: operations["get_team_api_orgs__org_id__team_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plans": {
         parameters: {
             query?: never;
@@ -4111,6 +4343,29 @@ export interface paths {
          * @description The 20 latest public events, newest first: never a person, a handle, an organisation or private text.
          */
         get: operations["public_activity_api_public_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/public/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Demo Status
+         * @description Whether this is the public demo (REQ-FND-04) and, when it is, the personas a visitor may sign in as with one
+         *     press (``POST /api/auth/demo/sign-in``) and the hour of the nightly reset. Off (every other deployment, and any
+         *     image without the demo module): ``enabled`` false, no personas, ``reset_hour_eat`` null. Read from memory, never
+         *     the database; the same for everyone, so cacheable for 60 seconds.
+         */
+        get: operations["public_demo_status_api_public_demo_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4523,14 +4778,16 @@ export interface components {
         };
         /**
          * ApproveBody
-         * @description Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date.
+         * @description Approve to proceed (non-binding): the organisation's contact person, channel and contact-by date. A public
+         *     entity's approval enters its procurement route (3b): the contact-by date is named with the route, and one sent
+         *     here is not used.
          */
         ApproveBody: {
             /**
              * Contact By
-             * Format: date
+             * @description Required for a private organisation (422 invalid_contact_by without it): from today to policy.yaml's contact_by_max_bd (5) business days ahead. Not used for a public entity, which names it with its procurement route
              */
-            contact_by: string;
+            contact_by?: string | null;
             contact_channel: components["schemas"]["ContactChannel"];
             /**
              * Contact User Id
@@ -5397,7 +5654,7 @@ export interface components {
          * Command
          * @enum {string}
          */
-        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment" | "request_info" | "answer_info" | "cancel_request" | "pause" | "resume";
+        Command: "accept_interest" | "decline_interest" | "start_review" | "decline" | "approve" | "choose_route" | "withdraw" | "mark_contacted" | "confirm_contact" | "send_nda" | "sign_nda" | "propose_terms" | "mark_final" | "reopen_negotiation" | "sign_agreement" | "start_milestone" | "submit_milestone" | "accept_milestone" | "request_changes" | "deliver" | "accept_delivery" | "sign_certificate" | "record_payment" | "confirm_payment" | "request_info" | "answer_info" | "cancel_request" | "pause" | "resume";
         /** CommandBody */
         CommandBody: {
             /**
@@ -5824,6 +6081,38 @@ export interface components {
             reason: components["schemas"]["EngagementEndReason"];
         };
         /**
+         * DemoPersona
+         * @description One persona of the public demo (REQ-FND-04): a fictional demo account a visitor signs in as with one press.
+         */
+        DemoPersona: {
+            /**
+             * Detail
+             * @description One line of what it is, e.g. "Telco A (fixture): signatory"
+             */
+            detail: string;
+            /**
+             * Home
+             * @description The web path to land on after signing in: "/dev", "/org" or "/admin"
+             */
+            home: string;
+            /**
+             * Key
+             * @description What POST /api/auth/demo/sign-in takes as "persona", e.g. "amina"
+             */
+            key: string;
+            /**
+             * Name
+             * @description The account's display name (fictional)
+             */
+            name: string;
+            /**
+             * Role
+             * @description Which side and role it plays
+             * @enum {string}
+             */
+            role: "developer" | "org_admin" | "org_signatory" | "org_reviewer" | "staff";
+        };
+        /**
          * DevVerification
          * @enum {string}
          */
@@ -5845,7 +6134,8 @@ export interface components {
         };
         /**
          * DeveloperEngagementDetail
-         * @description The developer's tracker (no organisation triage: D-68).
+         * @description The developer's tracker (no organisation triage, D-68; no escalation flag: the nudges ledger is the
+         *     organisation's).
          */
         DeveloperEngagementDetail: {
             /**
@@ -5926,6 +6216,8 @@ export interface components {
             payments: components["schemas"]["PaymentOut"][];
             /** @description The organisation's prior-knowledge declaration on this proposal; null when none */
             prior_knowledge?: components["schemas"]["DeveloperPriorKnowledgeOut"] | null;
+            /** @description A public entity's procurement route once chosen; null otherwise */
+            procurement?: components["schemas"]["ProcurementOut"] | null;
             /**
              * Proposal Id
              * Format: uuid
@@ -5949,6 +6241,11 @@ export interface components {
             /** Stage Label */
             stage_label: string;
             state: components["schemas"]["EngagementState"];
+            /**
+             * Steps
+             * @description The engagement's main-path stages in order (the stepper): stage 0 for an organisation's interest, stages 1-2 for a tagged proposal, PROCUREMENT_ROUTE (3b) only for a public entity (AC-TRACK-5)
+             */
+            steps?: components["schemas"]["StepOut"][];
             /**
              * Today
              * @description Today in Africa/Nairobi on the platform clock (the test clock where it is on): the day the side-state rules count from
@@ -6350,6 +6647,21 @@ export interface components {
             /** Plan */
             plan: string;
             side: components["schemas"]["PlanSide"];
+        };
+        /** EscalationContact */
+        EscalationContact: {
+            /** Name */
+            name: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** EscalationContactIn */
+        EscalationContactIn: {
+            /** User Id */
+            user_id: string | null;
         };
         /**
          * EvaluationNdaOut
@@ -6987,6 +7299,18 @@ export interface components {
             /** Reason */
             reason: string | null;
         };
+        /** InvitationAccepted */
+        InvitationAccepted: {
+            /**
+             * Org Id
+             * Format: uuid
+             */
+            org_id: string;
+            /** Org Name */
+            org_name: string;
+            /** Roles */
+            roles: components["schemas"]["OrgRole"][];
+        };
         /** InvitationIn */
         InvitationIn: {
             /**
@@ -7036,6 +7360,16 @@ export interface components {
              * @enum {string}
              */
             status: "pending" | "accepted" | "declined" | "withdrawn" | "ended";
+        };
+        /**
+         * InvitationPreview
+         * @description What an invitation link shows before sign-in: the organisation's name and the roles, nothing else.
+         */
+        InvitationPreview: {
+            /** Org Name */
+            org_name: string;
+            /** Roles */
+            roles: components["schemas"]["OrgRole"][];
         };
         /**
          * InvitationsOut
@@ -7616,6 +7950,38 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /** NicheDefault */
+        NicheDefault: {
+            /** Name */
+            name: string;
+            /** Niche Name */
+            niche_name: string;
+            /** Niche Slug */
+            niche_slug: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /** NicheDefaultIn */
+        NicheDefaultIn: {
+            /** Niche Slug */
+            niche_slug: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * NicheDefaultsIn
+         * @description The whole set: niches left out lose their default.
+         */
+        NicheDefaultsIn: {
+            /** Items */
+            items: components["schemas"]["NicheDefaultIn"][];
+        };
         /** NicheNode */
         NicheNode: {
             /** Children */
@@ -7871,6 +8237,11 @@ export interface components {
              */
             endorsements: components["schemas"]["EndorsementOut"][];
             /**
+             * Escalated At
+             * @description When the nudge job last escalated the current stage to the organisation's admins and escalation contact (first contact late or overdue, the procurement route or a milestone review waiting); null when it has not. The organisation's own: never on the developer's tracker
+             */
+            escalated_at?: string | null;
+            /**
              * Id
              * Format: uuid
              */
@@ -7903,6 +8274,8 @@ export interface components {
             payments: components["schemas"]["PaymentOut"][];
             /** @description The organisation's declaration window (always sent to a member) */
             prior_knowledge?: components["schemas"]["OrgPriorKnowledgeOut"] | null;
+            /** @description A public entity's procurement route once chosen; null otherwise */
+            procurement?: components["schemas"]["ProcurementOut"] | null;
             /**
              * Proposal Id
              * Format: uuid
@@ -7926,6 +8299,11 @@ export interface components {
             /** Stage Label */
             stage_label: string;
             state: components["schemas"]["EngagementState"];
+            /**
+             * Steps
+             * @description The engagement's main-path stages in order (the stepper): stage 0 for an organisation's interest, stages 1-2 for a tagged proposal, PROCUREMENT_ROUTE (3b) only for a public entity (AC-TRACK-5)
+             */
+            steps?: components["schemas"]["StepOut"][];
             /** @description The organisation's triage (always sent to a member) */
             team?: components["schemas"]["TeamFacts"] | null;
             /**
@@ -8047,6 +8425,45 @@ export interface components {
             side: components["schemas"]["PlanSide"];
         };
         /**
+         * OrgInvitation
+         * @description An open invitation (neither accepted nor revoked); ``expired`` on the shared clock (resend it to renew).
+         */
+        OrgInvitation: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email */
+            email: string;
+            /** Expired */
+            expired: boolean;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Invited By Name */
+            invited_by_name: string;
+            /** Roles */
+            roles: components["schemas"]["OrgRole"][];
+        };
+        /** OrgInvitationIn */
+        OrgInvitationIn: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Roles */
+            roles: components["schemas"]["OrgRole"][];
+        };
+        /**
          * OrgKind
          * @description Axis 1, Org Type (docs/spec/03).
          * @enum {string}
@@ -8117,6 +8534,42 @@ export interface components {
             kind: components["schemas"]["OrgKind"];
             /** Legal Name */
             legal_name: string;
+        };
+        /**
+         * OrgTeam
+         * @description The Team page: ``invitations`` is null for a member who is neither an owner nor an admin.
+         */
+        OrgTeam: {
+            escalation_contact: components["schemas"]["EscalationContact"] | null;
+            /** Invitations */
+            invitations: components["schemas"]["OrgInvitation"][] | null;
+            /** Members */
+            members: components["schemas"]["OrgTeamMember"][];
+            /** Niche Defaults */
+            niche_defaults: components["schemas"]["NicheDefault"][];
+        };
+        /**
+         * OrgTeamMember
+         * @description An active member. ``email`` only for an owner or admin reading (else null). The repository models no person's
+         *     own organisation-side verification (E0/E1/E2 are the organisation's levels), so no verification field is sent.
+         */
+        OrgTeamMember: {
+            /** Email */
+            email: string | null;
+            /**
+             * Joined At
+             * Format: date-time
+             */
+            joined_at: string;
+            /** Name */
+            name: string;
+            /** Roles */
+            roles: components["schemas"]["OrgRole"][];
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /** OrgTypeOption */
         OrgTypeOption: {
@@ -8822,6 +9275,60 @@ export interface components {
          * @enum {string}
          */
         ProblemStatus: "candidate" | "pending_review" | "published" | "rejected" | "archived";
+        /**
+         * ProcurementBody
+         * @description A public entity's procurement route (stage 3b; docs/spec/06 6.9), chosen by its owner or admin: how it will
+         *     buy, the written justification (required for direct procurement) and the contact-by date of stage 3.
+         */
+        ProcurementBody: {
+            /**
+             * Contact By
+             * Format: date
+             * @description The date the named contact reaches the developer by: from today to policy.yaml's contact_by_max_bd (5) business days ahead (422 invalid_contact_by)
+             */
+            contact_by: string;
+            /**
+             * Justification
+             * @description Plain text, line breaks allowed; trimmed, empty is none. Direct procurement needs 20 to 1,000 characters (422 justification_required); the other routes take none or at most 1,000 (422 invalid_justification). No contact details or links before first contact (422 contains_contact). Both parties read it
+             */
+            justification?: string | null;
+            /**
+             * Lock Version
+             * @description The engagement's lock_version when last read; when sent, 409 stale if it moved
+             */
+            lock_version?: number | null;
+            route: components["schemas"]["ProcurementRoute"];
+        };
+        /**
+         * ProcurementOut
+         * @description A public entity's procurement route (3b), as both parties read it (R46: full transparency).
+         */
+        ProcurementOut: {
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /**
+             * Decided By Name
+             * @description The owner or admin who chose it ('Former member' once not readable)
+             */
+            decided_by_name: string;
+            /**
+             * Justification
+             * @description The organisation's own words: plain text
+             */
+            justification: string | null;
+            route: components["schemas"]["ProcurementRoute"];
+        };
+        /**
+         * ProcurementRoute
+         * @description How a public entity will buy (docs/spec/06 6.9 stage 3b, ``PROCUREMENT_ROUTE``; PPADA 2015, PPP Act 2021;
+         *     revision 0015, REQ-ENG-06). Chosen once by the organisation's owner or admin, together with the move to
+         *     ``INTEREST_CONFIRMED``; ``direct`` needs a written justification of at least 20 characters.
+         * @enum {string}
+         */
+        ProcurementRoute: "direct" | "rfq_tender" | "ppp_pip" | "innovation_challenge" | "pilot_mou";
         /** ProfileOut */
         ProfileOut: {
             /** Bio */
@@ -8991,6 +9498,27 @@ export interface components {
             code: string;
             /** Name */
             name: string;
+        };
+        /**
+         * PublicDemo
+         * @description Whether this deployment is the public demo, and its personas. Off: ``enabled`` false, no personas, no reset.
+         */
+        PublicDemo: {
+            /**
+             * Enabled
+             * @description True only where PUBLIC_DEMO is on and the image carries the demo module
+             */
+            enabled: boolean;
+            /**
+             * Personas
+             * @description The personas in the order to show them; empty when off
+             */
+            personas: components["schemas"]["DemoPersona"][];
+            /**
+             * Reset Hour Eat
+             * @description The hour (East Africa Time, 0-23) when the demo's data is wiped and seeded again; null when off
+             */
+            reset_hour_eat: number | null;
         };
         /** PublicNiche */
         PublicNiche: {
@@ -10249,6 +10777,8 @@ export interface components {
              * Format: email
              */
             email: string;
+            /** Invitation */
+            invitation?: string | null;
             /**
              * Locale
              * @default en
@@ -10353,6 +10883,20 @@ export interface components {
             pass: number;
             /** Pursue */
             pursue: number;
+        };
+        /**
+         * StepOut
+         * @description One main-path stage of the engagement's stepper, in order.
+         */
+        StepOut: {
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "review" | "contact_nda" | "agreement" | "implementation" | "close";
+            /** Label */
+            label: string;
+            state: components["schemas"]["EngagementState"];
         };
         /**
          * StepUpMethod
@@ -21484,6 +22028,194 @@ export interface operations {
             };
         };
     };
+    get_invitation_api_invitations__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreview"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    accept_invitation_api_invitations__token__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationAccepted"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     my_activity_api_me_activity_get: {
         parameters: {
             query?: {
@@ -30666,6 +31398,102 @@ export interface operations {
             };
         };
     };
+    export_engagements_api_orgs__org_id__engagements_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One row per engagement (UTF-8 with a byte-order mark, CRLF), newest first */
+            200: {
+                headers: {
+                    /** @description true when the file stops at 10000 rows; absent otherwise */
+                    "X-Export-Truncated"?: "true";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     put_assignee_api_orgs__org_id__engagements__engagement_id__assignee_put: {
         parameters: {
             query?: never;
@@ -30790,6 +31618,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeclarationOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    choose_procurement_route_api_orgs__org_id__engagements__engagement_id__procurement_route_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                engagement_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcurementBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgEngagementDetail"];
                 };
             };
             /** @description Bad Request */
@@ -31173,6 +32100,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgEntitlementsOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    put_escalation_contact_api_orgs__org_id__escalation_contact_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EscalationContactIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EscalationContact"] | null;
                 };
             };
             /** @description Bad Request */
@@ -31927,6 +32952,292 @@ export interface operations {
             };
         };
     };
+    post_invitation_api_orgs__org_id__invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgInvitationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgInvitation"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    revoke_invitation_api_orgs__org_id__invitations__invitation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    resend_invitation_api_orgs__org_id__invitations__invitation_id__resend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitation_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgInvitation"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     list_matches_api_orgs__org_id__matches_get: {
         parameters: {
             query?: {
@@ -32312,6 +33623,99 @@ export interface operations {
             };
         };
     };
+    remove_member_api_orgs__org_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     set_member_roles_api_orgs__org_id__members__user_id__roles_put: {
         parameters: {
             query?: never;
@@ -32335,6 +33739,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemberOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    put_niche_defaults_api_orgs__org_id__niche_defaults_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NicheDefaultsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NicheDefault"][];
                 };
             };
             /** @description Bad Request */
@@ -33885,6 +35387,100 @@ export interface operations {
             };
         };
     };
+    get_team_api_orgs__org_id__team_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgTeam"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
     list_plans_api_plans_get: {
         parameters: {
             query?: {
@@ -34679,6 +36275,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivityFeed"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Payment Required */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorBody"];
+                };
+            };
+        };
+    };
+    public_demo_status_api_public_demo_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicDemo"];
                 };
             };
             /** @description Bad Request */

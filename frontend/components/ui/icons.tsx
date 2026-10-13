@@ -115,3 +115,14 @@ export function SparkIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** A download: an arrow down into a tray (the Engagements list's "Export CSV", REQ-ENG-17). */
+export function DownloadIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M10 3.25v9" />
+      <path d="m6.25 8.75 3.75 3.75 3.75-3.75" />
+      <path d="M3.75 13.5v1.75c0 .83.67 1.5 1.5 1.5h9.5c.83 0 1.5-.67 1.5-1.5V13.5" />
+    </Icon>
+  );
+}

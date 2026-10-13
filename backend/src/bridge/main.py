@@ -34,6 +34,7 @@ from bridge.db import API_IDLE_IN_TRANSACTION_MS, create_engine, create_session_
 from bridge.directory.responsiveness import NoResponsivenessData
 from bridge.directory.router import router as directory_router
 from bridge.engagements.deadlines_router import router as deadlines_router
+from bridge.engagements.export import router as engagements_export_router
 from bridge.engagements.interest_router import router as interest_router
 from bridge.engagements.messages_router import router as messages_router
 from bridge.engagements.pipeline_router import router as pipeline_router
@@ -64,12 +65,14 @@ from bridge.proposals.router import router as proposals_router
 from bridge.proposals.shortlist_router import router as shortlist_router
 from bridge.provenance.router import router as provenance_router
 from bridge.public.router import router as public_router
+from bridge.public_demo import ROBOTS_HEADERS, persona_router
 from bridge.quiz.router import router as quiz_router
 from bridge.teams.contributors import router as contributors_router
 from bridge.teams.peers import router as peers_router
 from bridge.teams.router import blocks_router
 from bridge.teams.router import router as teams_router
 from bridge.tenancy.router import router as orgs_router
+from bridge.tenancy.team_router import router as org_team_router
 
 API_PREFIX = "/api"
 TEST_CLOCK_MODULE = "bridge.testclock"
@@ -166,13 +169,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=f"{settings.product_name} API",
         version=__version__,
         lifespan=lifespan,
-        openapi_url=f"{API_PREFIX}/openapi.json",
-        docs_url=f"{API_PREFIX}/docs" if settings.app_env != "production" else None,
+        # The interactive docs are off in production; the public demo (REQ-FND-04) serves neither them nor the schema.
+        # The committed backend/openapi.json comes from app.openapi() (bridge.openapi), which needs neither route.
+        openapi_url=None if settings.public_demo else f"{API_PREFIX}/openapi.json",
+        docs_url=f"{API_PREFIX}/docs" if settings.app_env != "production" and not settings.public_demo else None,
         redoc_url=None,
     )
     app.state.settings = settings
+    # The public demo's freeze (REQ-FND-04): signed-out public pages show nothing created or changed after it.
+    app.state.public_frozen_at = (settings.public_demo_frozen_at or clock.utcnow()) if settings.public_demo else None
     app.state.responsiveness = NoResponsivenessData()  # the directory score has no data until Phase 3
-    errors.install(app, headers=SECURITY_HEADERS, per_request=app_now_headers)  # one error shape (bridge.errors)
+    # The public demo is never indexed (REQ-FND-04): X-Robots-Tag on every answer, the 500 handler's included.
+    response_headers = {**SECURITY_HEADERS, **(ROBOTS_HEADERS if settings.public_demo else {})}
+    errors.install(app, headers=response_headers, per_request=app_now_headers)  # one error shape (bridge.errors)
     movable_clock = settings.app_env != "production"  # the dev/test clock never runs in production
 
     def csrf_passes(request: Request) -> bool:
@@ -198,7 +207,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.middleware("http")
     async def security_headers(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         response = await call_next(request)
-        for name, value in SECURITY_HEADERS.items():
+        for name, value in response_headers.items():
             response.headers.setdefault(name, value)
         return response
 
@@ -220,6 +229,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth_router)
     app.include_router(orgs_router)
+    app.include_router(org_team_router)
     app.include_router(me_router)
     app.include_router(identities_router)
     app.include_router(consents_router)
@@ -241,6 +251,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(briefs_router)
     app.include_router(engagements_router)
     app.include_router(engagement_team_router)
+    app.include_router(engagements_export_router)
     app.include_router(messages_router)
     app.include_router(deadlines_router)
     app.include_router(pipeline_router)
@@ -263,6 +274,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     clock_router = dev_clock_router(settings)
     if clock_router is not None:
         app.include_router(clock_router)
+    demo_router = persona_router(settings)  # the public demo's one-press sign-in (REQ-FND-04): dev and test images only
+    if demo_router is not None:
+        app.include_router(demo_router)
     # X-Forwarded-For is trusted only from TRUSTED_PROXIES (throttling keys on the client IP). Added last = outermost.
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=[h.strip() for h in settings.trusted_proxies.split(",")])
 

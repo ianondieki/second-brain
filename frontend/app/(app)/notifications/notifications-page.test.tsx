@@ -122,6 +122,35 @@ describe("the Notifications page", () => {
     expect(today.querySelector("[data-notification='b'] time")?.textContent).toBe("01:00 EAT");
   });
 
+  // P28 (REQ-NOT-05, REQ-ENG-06): the nudge job's notices and the procurement route's, in the API's own words (the
+  // backend writes them in the person's language, bridge/notifications/nudge_copy.py), each a link to its tracker.
+  it("lists escalations, overdue contact, NDA and milestone reminders, linked to the tracker", async () => {
+    api.me.mockResolvedValue(ORG_ME);
+    const engagement = "0199b000-0000-7000-8000-00000000e001";
+    listAnswers([
+      note("esc", "2026-10-02T08:30:00Z", {
+        kind: "engagement.n05",
+        title: "Procurement route waiting",
+        body: '"Tap-to-pay for county markets" has waited 5 business days for State Department D (fixture) to choose its procurement route. It is due 9 Oct 2026.',
+        link: `/org/engagements/${engagement}?org=0199b000-0000-7000-8000-00000000c001`,
+      }),
+      note("nda", "2026-10-02T08:00:00Z", { kind: "engagement.n07", title: "Mutual NDA waiting for your signature", link: `/dev/engagements/${engagement}` }),
+      note("ms", "2026-10-02T07:30:00Z", { kind: "engagement.n12", title: "Milestone 1 waiting for review", link: `/org/engagements/${engagement}` }),
+    ]);
+    await open();
+    for (const [id, kind] of [["esc", "engagement.n05"], ["nda", "engagement.n07"], ["ms", "engagement.n12"]] as const) {
+      const row = document.querySelector<HTMLElement>(`[data-notification='${id}']`)!;
+      // The tracker's mark: these are notices about an engagement (D-67).
+      expect(row.querySelector("[data-kind]")?.getAttribute("data-kind"), kind).toBe("engagement");
+      expect(within(row).getByRole("link").getAttribute("href")).toMatch(/^\/(org|dev)\/engagements\/0199b000-/);
+    }
+    const esc = document.querySelector<HTMLElement>("[data-notification='esc']")!;
+    expect(within(esc).getByRole("link", { name: /Procurement route waiting/ }).getAttribute("href")).toBe(
+      `/org/engagements/${engagement}?org=0199b000-0000-7000-8000-00000000c001`,
+    );
+    expect(esc.textContent).toContain("to choose its procurement route");
+  });
+
   it("marks unread rows by words, weight and the mark; read rows by none of them", async () => {
     listAnswers([note("a", "2026-10-02T08:30:00Z"), note("c", "2026-10-02T07:00:00Z", { read_at: "2026-10-02T07:30:00Z" })]);
     await open();

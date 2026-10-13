@@ -57,6 +57,18 @@ describe("web security headers", () => {
     expect(sent["Content-Security-Policy-Report-Only"]).toBe(CSP_REPORT_ONLY);
   });
 
+  // REQ-TEN-02: an invitation link's token is in its path; the page sends no referrer at all, every other header as
+  // any page. Only that route: its neighbours keep the site's policy.
+  it("send no referrer from an invitation link's page, and keep the other page headers there", () => {
+    const sent = headersFor("/invitations/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE");
+    expect(sent["Referrer-Policy"]).toBe("no-referrer");
+    expect(sent["X-Frame-Options"]).toBe("DENY");
+    expect(sent["Content-Security-Policy-Report-Only"]).toBe(CSP_REPORT_ONLY);
+    for (const path of ["/invitations", "/invitationsx/a", "/org/team", "/login"]) {
+      expect(headersFor(path)["Referrer-Policy"], path).toBe("strict-origin-when-cross-origin");
+    }
+  });
+
   it.each(BUILD_ASSETS)("send only nosniff with the build asset %s (the JS budget counts every byte)", (path) => {
     expect(headersFor(path)).toEqual({ "X-Content-Type-Options": "nosniff" });
   });

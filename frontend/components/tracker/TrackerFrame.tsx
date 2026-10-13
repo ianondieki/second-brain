@@ -10,8 +10,20 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { TabNav } from "@/components/ui/TabNav";
 import { formatDay } from "@/lib/format";
 
-import { counterpartLine, isFinished, stageLeft, stepperSteps, turnOf, withQuery, type Detail, type History } from "./model";
-import { Stepper } from "./Stepper";
+import {
+  counterpartLine,
+  isFinished,
+  MAIN_PATH_GROUP,
+  stageLeft,
+  stepperSteps,
+  subStages,
+  turnOf,
+  waitsOnAdmin,
+  withQuery,
+  type Detail,
+  type History,
+} from "./model";
+import { stageName, Stepper, SubStageList } from "./Stepper";
 import { WhoseTurn } from "./WhoseTurn";
 
 // The parts of one engagement's page that every tab shares (docs/spec/06 6.9, docs/spec/07 item 1): the title, the
@@ -91,7 +103,8 @@ export function TurnCard({
   footer?: ReactNode;
 }) {
   const turn = turnOf(detail, detail.my_party);
-  const yours = turn.kind === "you" || turn.kind === "both";
+  // A member waiting on an admin's procurement route (REQ-ENG-06) reads a flat card: the step is not theirs.
+  const yours = !waitsOnAdmin(detail) && (turn.kind === "you" || turn.kind === "both");
   return (
     <div
       data-turn-card={yours ? "yours" : "theirs"}
@@ -117,7 +130,14 @@ export function needsHistory(detail: Detail): boolean {
 export async function TrackerSpine({ detail, history }: { detail: Detail; history: History | null }) {
   const t = await getTranslations("tracker");
   const locale = await getLocale();
-  const steps = stepperSteps({ ...detail, left: stageLeft(detail.state, history?.events) });
+  const left = stageLeft(detail.state, history?.events);
+  const steps = stepperSteps({ ...detail, left });
+  // The stage the engagement stands at on the main path (where a paused or ended one stopped), for the current
+  // group's own stages (the API's `steps`: 3b only for a public entity).
+  const at = MAIN_PATH_GROUP[detail.state] ? detail.state : (detail.paused_from ?? left);
+  const current = steps.find((s) => s.chip !== "completed" && s.chip !== "pending");
+  // Its own chip on the stage it stopped at (on hold, waiting for an answer, overdue); none once it has finished.
+  const sub = current && !isFinished(detail.state) ? subStages(detail.steps, at, current) : [];
   // The party who acts now: the developer, the organisation, or both (the timeline shows them at the step).
   const awaited = new Set(detail.whose_turn);
   const actors = isFinished(detail.state) ? null : (
@@ -133,14 +153,22 @@ export async function TrackerSpine({ detail, history }: { detail: Detail; histor
         actor={actors}
         detail={
           <>
-            {/* On hold the chip already says it: no "Now: On hold" under "On hold". */}
+            {/* On hold the chip already says it: no "Now: On hold" under "On hold". On phones the group's own stages
+                follow right below, the current one in bold with its word: the line would say it twice there. */}
             {detail.state === "ON_HOLD" ? null : (
-              <span className="block font-semibold">{t("stageNow", { stage: detail.stage_label })}</span>
+              <span data-stage-now="" className={cn("block font-semibold", sub.length > 0 && "max-lg:hidden")}>
+                {t("stageNow", { stage: stageName(t, detail.state, detail.stage_label) })}
+              </span>
             )}
             {!isFinished(detail.state) ? (
               <span className="block text-ink-soft">{t("since", { date: formatDay(locale, detail.stage_entered_at) })}</span>
             ) : null}
           </>
+        }
+        stages={
+          current && sub.length > 0
+            ? (layout) => <SubStageList stages={sub} group={current.group} layout={layout} />
+            : undefined
         }
       />
     </div>

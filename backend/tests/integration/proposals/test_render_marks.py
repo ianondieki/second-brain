@@ -146,7 +146,7 @@ async def test_the_owner_is_named_once_the_organisation_approved_to_proceed(
         await add_member(conn, org, admin, "{admin}")
     await step(app_engine, engagement, admin, org, "admin", "set_route", "UNDER_REVIEW", "PROCUREMENT_ROUTE")
     assert not named((await render(scene)).text, scene)
-    await approve_to_proceed(app_engine, scene, engagement, "PROCUREMENT_ROUTE")
+    await approve_to_proceed(app_engine, scene, engagement, "PROCUREMENT_ROUTE", route_by=admin)
     assert named((await render(scene)).text, scene)
     await step(app_engine, engagement, scene.owner_id, None, "developer", "pause", "INTEREST_CONFIRMED", "ON_HOLD")
     assert named((await render(scene)).text, scene)

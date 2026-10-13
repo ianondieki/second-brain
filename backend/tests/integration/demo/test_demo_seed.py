@@ -75,6 +75,7 @@ from bridge.seed.demo.data import (
     SAVED_SEARCH,
     STAFF_ADMIN,
     STAFF_MODERATOR,
+    STATE_D,
     TELCO_A,
     THREAD,
     VIEWED,
@@ -94,6 +95,7 @@ from bridge.seed.demo.trending import LIKED
 from bridge.seed.reference import seed_all
 from bridge.storage.objects import InMemoryObjectStore
 from bridge.storage.scanner import FakeScanner
+from tests.integration.billing.checkout_helpers import live_plans
 from tests.integration.conftest import create_database, drop_database, role_engine, run_alembic
 from tests.openssl_tsa import LocalTsa
 
@@ -396,7 +398,7 @@ async def test_the_fixture_organisations_have_their_levels_seats_and_terms(
                 owner,
                 "SELECT legal_name, verification::text AS level, verified_domain::text AS domain, county_code,"
                 " (SELECT array_agg(n.slug::text) FROM org_niches o JOIN niches n ON n.id = o.niche_id"
-                "  WHERE o.org_id = organizations.id) AS niches"
+                "  WHERE o.org_id = organizations.id) AS niches, public_entity"
                 " FROM organizations WHERE id = :id",
                 id=report.orgs[org.legal_name],
             )
@@ -408,6 +410,7 @@ async def test_the_fixture_organisations_have_their_levels_seats_and_terms(
             org.county,
             [org.niche],
         )
+        assert found.public_entity is org.public_entity  # P28: the county government and State Department D
         members = {
             email: sorted(roles)
             for email, roles in await rows(
@@ -426,7 +429,11 @@ async def test_the_fixture_organisations_have_their_levels_seats_and_terms(
         " WHERE a.legal_template_id = app_current_legal_template('master_enterprise_terms')",
     )
     assert sorted(terms) == sorted(
-        [(TELCO_A.legal_name, TELCO_A.seats[0].email), (SACCO_B.legal_name, SACCO_B.seats[0].email)]
+        [
+            (TELCO_A.legal_name, TELCO_A.seats[0].email),
+            (SACCO_B.legal_name, SACCO_B.seats[0].email),
+            (STATE_D.legal_name, STATE_D.seats[0].email),
+        ]
     )
 
 
@@ -540,9 +547,10 @@ async def test_e2_fixtures_get_delivered_tags_and_the_others_held_ones(
         (P3.key, NGO_D.legal_name): "held_unclaimed",
         (P3.key, TELCO_A.legal_name): "delivered",
         (P4.key, SACCO_B.legal_name): "delivered",
+        (P4.key, STATE_D.legal_name): "delivered",  # P28: a public entity, E2
     }
     grants = await rows(owner, "SELECT count(*) FROM disclosure_grants WHERE status = 'active'")
-    assert grants[0][0] == 4  # a CLOSED engagement keeps its organisation's access
+    assert grants[0][0] == 5  # a CLOSED engagement keeps its organisation's access
     assert isinstance(runtime.email_provider, FakeEmailProvider)
     for developer in (AMINA, BRIAN):
         receipts = [m for m in runtime.email_provider.outbox if m.to == developer.email and m.tag == "em1"]
@@ -599,6 +607,104 @@ async def test_the_engagements_reach_their_stages_through_the_tracker(
         d=str(report.users[BRIAN.email]),
     )
     assert em2[0][0] >= 1  # INTEREST_CONFIRMED queued EM2 for Brian (the worker sends it to Mailpit)
+
+
+async def test_state_department_d_waits_in_the_procurement_route(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P28 (REQ-ENG-06, AC-TRACK-5): State Department D, a public entity verified E2, has Brian's P4 waiting in
+    PROCUREMENT_ROUTE: its owner reviewed it, its signatory approved it to proceed naming the owner as the contact
+    (no contact-by date yet), and the owner, signed in, is offered the route; Brian's tracker shows 3b too."""
+    report = seeded[0]
+    org_id = report.orgs[STATE_D.legal_name]
+    [found] = await rows(
+        owner,
+        "SELECT e.id, e.state::text AS state, e.contact_user_id, e.contact_by, e.procurement_route,"
+        " o.public_entity, o.verification::text AS level FROM engagements e JOIN organizations o ON o.id = e.org_id"
+        " WHERE e.proposal_id = :p AND e.org_id = :o",
+        p=report.proposals[P4.key],
+        o=org_id,
+    )
+    assert (found.state, found.public_entity, found.level) == ("PROCUREMENT_ROUTE", True, "e2")
+    assert STATE_D.owner is not None
+    halima, otieno = report.users[STATE_D.owner.email], report.users[STATE_D.seats[0].email]
+    assert (found.contact_user_id, found.contact_by, found.procurement_route) == (halima, None, None)
+    chain = await rows(
+        owner,
+        "SELECT command, actor_user_id, to_state::text AS to_state FROM engagement_events WHERE engagement_id = :e"
+        " ORDER BY seq",
+        e=found.id,
+    )
+    assert [(c.command, c.to_state) for c in chain] == [
+        ("create", "SUBMITTED"),
+        ("start_review", "UNDER_REVIEW"),
+        ("approve", "PROCUREMENT_ROUTE"),
+    ]
+    assert (chain[1].actor_user_id, chain[2].actor_user_id) == (halima, otieno)
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, STATE_D.owner.email) as owner_seat,
+        signed_in(demo_app, owner, BRIAN.email) as brian,
+    ):
+        org_side = (await owner_seat.call("GET", f"/api/engagements/{found.id}")).json()
+        developer_side = (await brian.call("GET", f"/api/engagements/{found.id}")).json()
+    assert org_side["actions"] == ["choose_route", "pause"]
+    assert (org_side["whose_turn"], org_side["escalated_at"], org_side["procurement"]) == (["org"], None, None)
+    for side in (org_side, developer_side):
+        assert [step["state"] for step in side["steps"]][:4] == [
+            "SUBMITTED",
+            "UNDER_REVIEW",
+            "PROCUREMENT_ROUTE",
+            "INTEREST_CONFIRMED",
+        ]
+    assert "escalated_at" not in developer_side
+
+
+async def test_state_department_d_shows_team_and_csv_on_growth_and_the_others_the_paywall(
+    seeded: tuple[DemoReport, DemoReport, DemoReport], owner: AsyncEngine, app: AsyncEngine, runtime: DemoRuntime
+) -> None:
+    """P28 (REQ-TEN-02, REQ-ENG-17): State Department D is on Growth (a seeded subscription, no payment), so Halima
+    invites within its seats and exports its engagements as CSV; Telco A, SACCO B and County C stay on the free plan,
+    so Grace's export and invitation are the paywall's 402 (csv_export, then seats: four members already)."""
+    report = seeded[0]
+    state_d, telco = report.orgs[STATE_D.legal_name], report.orgs[TELCO_A.legal_name]
+    for org in (TELCO_A, SACCO_B, COUNTY_C, STATE_D):
+        expected = ["org_growth"] if org is STATE_D else ["org_claimed"]
+        assert await live_plans(owner, org=report.orgs[org.legal_name]) == expected, org.legal_name
+    paid = await rows(
+        owner,
+        "SELECT count(*) FROM payments p JOIN subscriptions s ON s.id = p.subscription_id WHERE s.org_id = :o",
+        o=state_d,
+    )
+    assert paid[0][0] == 0
+    assert STATE_D.owner is not None
+    assert TELCO_A.owner is not None
+    async with (
+        in_process_app(demo_settings(), app, runtime) as (demo_app, _),
+        signed_in(demo_app, owner, STATE_D.owner.email) as halima,
+        signed_in(demo_app, owner, TELCO_A.owner.email) as grace,
+    ):
+        limits = (await halima.call("GET", f"/api/orgs/{state_d}/entitlements")).json()
+        assert (limits["plan"], limits["limits"]["csv_export"], limits["limits"]["seats"]) == ("org_growth", True, 20)
+        exported = await halima.call("GET", f"/api/orgs/{state_d}/engagements.csv")
+        assert exported.headers["content-type"] == "text/csv; charset=utf-8"
+        assert exported.text.count("\r\n") == 2  # the header and P4's engagement
+        invited = await halima.call(
+            "POST",
+            f"/api/orgs/{state_d}/invitations",
+            json={"email": "colleague@example.com", "roles": ["reviewer"]},
+            expect=(201,),
+        )
+        assert invited.json()["roles"] == ["reviewer"]
+        refused = await grace.call("GET", f"/api/orgs/{telco}/engagements.csv", expect=(402,))
+        assert refused.json()["detail"]["limit_key"] == "csv_export"
+        seats = await grace.call(
+            "POST",
+            f"/api/orgs/{telco}/invitations",
+            json={"email": "colleague@example.com", "roles": ["viewer"]},
+            expect=(402,),
+        )
+        assert (seats.json()["detail"]["limit_key"], seats.json()["detail"]["used"]) == ("seats", 4)
 
 
 async def test_a_fixture_reviewer_has_opened_p1_so_who_has_seen_it_is_not_empty(

@@ -3,7 +3,7 @@ characters, on one line."""
 
 from __future__ import annotations
 
-from bridge.engagements.team import ASSIGNED_TITLE, assigned_title, first_role
+from bridge.engagements.team import ASSIGNED_TITLE, assigned_title, default_title, first_role
 from bridge.models.enums import OrgRole
 from bridge.notifications.in_app import MAX_TITLE_CHARS
 
@@ -28,3 +28,12 @@ def test_the_team_sheet_names_a_member_by_their_first_triage_role() -> None:
     assert first_role([OrgRole.REVIEWER, OrgRole.ADMIN]) is OrgRole.ADMIN
     assert first_role([OrgRole.SIGNATORY, OrgRole.REVIEWER]) is OrgRole.SIGNATORY
     assert first_role([OrgRole.FINANCE, OrgRole.VIEWER]) is None
+
+
+def test_a_niche_default_s_title_names_the_idea_within_the_bell() -> None:
+    """REQ-TEN-02 (P28 track C): N30 for an assignment by the organisation's niche default."""
+    assert default_title("Cold-chain alerts") == 'Assigned to you as the niche\'s default reviewer: "Cold-chain alerts"'
+    long = default_title("x" * 400)
+    assert len(long) == MAX_TITLE_CHARS
+    assert long.endswith('…"')
+    assert "\n" not in default_title("Cold\nchain")

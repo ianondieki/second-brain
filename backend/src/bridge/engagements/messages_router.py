@@ -44,6 +44,7 @@ from bridge.engagements.router import PREFIX, PartyDep
 from bridge.errors import ERROR_RESPONSES, ApiError, ApiErrorBody, json_errors
 from bridge.proposals.deps import ScannerDep, StoreDep
 from bridge.proposals.editor import ACCEPTED_TYPES
+from bridge.public_demo import LOCKED
 
 router = APIRouter(tags=["engagements"], responses=ERROR_RESPONSES)
 THREAD = f"{PREFIX}/messages"
@@ -103,6 +104,7 @@ async def _read_body(request: Request) -> bytes:
     f"{THREAD}/attachments",
     status_code=201,
     responses={413: {"model": ApiErrorBody}, **UNAVAILABLE},
+    dependencies=[LOCKED],  # no uploads in the public demo (REQ-FND-04)
     openapi_extra={
         "requestBody": {
             "required": True,

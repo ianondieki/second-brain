@@ -329,3 +329,23 @@ describe("the queue", () => {
     expect(container.querySelectorAll("[data-primary]")).toHaveLength(0);
   });
 });
+
+// REQ-FND-04: in the public demo staff are read-only (the API refuses every staff write): an undecided case shows the
+// locked line where its decision would be; the case itself still reads.
+describe("the case page in the public demo", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("shows the locked line instead of the decision, the case still readable; the decision as before with the mode off", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    await page();
+    const decision = document.getElementById("decision")!.closest("section")!;
+    expect(within(decision).getByText(en.publicDemo.decideLocked)).toBeTruthy();
+    expect(within(decision).queryAllByRole("button")).toHaveLength(0);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Clear loan-fee statements for SACCO members");
+    cleanup();
+    vi.stubEnv("PUBLIC_DEMO", "false");
+    await page();
+    expect(document.querySelector("[data-demo-locked]")).toBeNull();
+    expect(within(document.getElementById("decision")!.closest("section")!).getAllByRole("button").length).toBeGreaterThan(0);
+  });
+});

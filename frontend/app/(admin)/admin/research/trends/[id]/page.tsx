@@ -23,6 +23,8 @@ import { PageStepUp } from "../../PageStepUp";
 import { RESEARCH_PATH } from "../../research";
 import { TrendDecision } from "../TrendDecision";
 import { seededTrend } from "../trends";
+import { DemoLocked } from "@/components/DemoLocked";
+import { publicDemoOn } from "@/lib/public-demo";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("adminResearch");
@@ -157,9 +159,14 @@ export default async function TrendReviewPage({ params }: PageProps<"/admin/rese
           description={t("trends.review.decisionLead")}
           className="decision-panel rounded-panel border bg-field p-5 sm:p-6"
         >
-          <ClientStrings strings={strings}>
-            <TrendDecision cardId={card.id} />
-          </ClientStrings>
+          {/* The public demo (REQ-FND-04): staff are read-only. */}
+          {publicDemoOn() ? (
+            <DemoLocked variant="decide" />
+          ) : (
+            <ClientStrings strings={strings}>
+              <TrendDecision cardId={card.id} />
+            </ClientStrings>
+          )}
         </Section>
       ) : null}
     </article>,

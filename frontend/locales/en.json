@@ -39,7 +39,11 @@
     "reviewP27cde": "[[COPY-REVIEW]] P27-C/D/E (REQ-ENG-15, REQ-PROV-06, REQ-DEV-04; D-68): tracker.team.* (the organisation's team line and recommendation tally on its tracker), tracker.declaration.* (the declaration line on the organisation's tracker; tracker.declaration.received.* the developer's panel), tracker.ipNudge.* (the one note before a developer first shares a full proposal; docs/spec/06 6.1 non-blocking nudge), tracker.history.priorKnowledgeDeclared, teamSheet.*, declarationSheet.* (declarationSheet.window and refusal.windowClosed* carry docs/spec/06 6.4 pt 5's sentence; titleHint says the row is permanent), engagements.* (the \"Assigned to me\" filter and the assignee line; engagements.assignedToMe is shared with the Board), profileSettings.references.* (D3, docs/spec/06 6.4 pt 8), help.confidential.priorKnowledge",
     "reviewP27clock": "[[COPY-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"in 6 days 14 hours 23 minutes\"), not \"14 h 23 min\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private).",
-    "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\". deadlines.dayEmpty (\"Nothing falls due on {date}.\"): the picked day's empty state said \"in the next 30 days\" (ux re-check MINOR, spec 04 §4.2)."
+    "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\". deadlines.dayEmpty (\"Nothing falls due on {date}.\"): the picked day's empty state said \"in the next 30 days\" (ux re-check MINOR, spec 04 §4.2).",
+    "reviewP28tr": "[[COPY-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (the public /transparency page: what the daily signed fingerprints over the audit history are, in plain words; how to check a certificate, with a link to /verify; the latest fingerprint, earlier days, the signing keys with their status; the empty state before the first full day and the two \"did not load\" states), landing.footer.transparency (the footer's link) and verify.transparency (one quiet line under the /verify panel). No claim that anything cannot be altered: the wording is that a change makes the fingerprints disagree. Review round 1: the lead limits the claim to events recorded before a fingerprint was taken; howTo says /verify checks a certificate's own fingerprint, signature and timestamp, separate from the daily fingerprints; keysLead states the signed text exactly; signatureFor names each earlier day's signature control; verify.transparency reworded. transparency.emptyPublicDemo (the public demo's empty state, P28) [[COPY-REVIEW]]",
+    "reviewP28pd": "[[COPY-REVIEW]] P28-PD (REQ-FND-04; D-71): publicDemo.* (the public demo: the banner on every page, its label and its dismiss button; /login's persona picker, its title, lead, role names, the button \"Continue as {name}\" whose \"as {name}\" part is read by screen readers only, its two error lines, the line and \"Try again\" when no persona could be read (no email form: password sign-in is switched off in the demo); the line under each name is publicDemo.about.* (one per role), what the persona does, built on the web in every language ({org} is the organisation's name from the API's detail, without the seed's \"(fixture)\"; the seed's \"(demo)\" is dropped from a name); the calm lines where a switched-off control would be (publicDemo.locked, attachLocked under the message composer, signupLocked with its action on /signup); the landing's \"Try the demo\"; \"Switch persona\" for the user menu's sign-out while the mode is on), errors.public_demo_locked (the API's 403 for any switched-off route), errors.public_demo_limit and ideaEditor.problem.demoLimit (the public demo's daily cap on published versions, 429 public_demo_limit; the backend's own wording); review fixes: publicDemo.changeLocked under a setting whose state still holds (Settings › Security: the persona's two-step sign-in is on, changing it is off) and publicDemo.decideLocked in the staff console's decision regions, so the line never reads as the feature's state; publicDemo.locked stays where the whole feature is unavailable; one noun for the action: /signup's action is \"Choose a persona\" and /login's lead, list label and unavailable line say \"persona\" (\"Switch persona\" in the menu and palette); publicDemo.banner's \"03:00 EAT\" is hard-coded (no fetch): it and RESET_HOUR_EAT in infra/demo/space/run.py change together, in en and sw (docs/runbooks/public-demo.md, the nightly reset)",
+    "reviewP28c": "[[COPY-REVIEW]] P28-C/D2 (REQ-TEN-02, REQ-ENG-17): orgTeam.* (Organisation › Team: the members with their role chips, at most two, the rest named after them as orgTeam.alsoRoles; the organisation's verification level; open invitations; the default reviewer per niche; the escalation contact), teamAdmin.* (the Team page's forms: invite with roles and their one-line hints, resend, revoke, change roles, remove with its in-place question, the niche defaults and escalation selects, and the API's refusals in words), shell.team (the account menu's link to the Team page on organisation screens, and the command palette's), portal.eyebrow.team, invitation.* (the /invitations/{token} page: the organisation's invitation, sign in or create an account, the dead and too-many-tries pages), invitationAccept.* (its Accept button and refusals; the email mismatch names nothing about the invited address), engagements.exportCsv, engagements.csvOff, engagements.csvOffUnknown (the Engagements list's CSV download, or the plan that has it), orgTeam.inviteDemoLocked, orgHome.teamMember, invitationAccept.switchAccount, invitationAccept.signingOut",
+    "reviewP28a": "[[COPY-REVIEW]] P28 tracks A and B (REQ-ENG-06, REQ-NOT-05): procurement.* (a public entity's procurement route: the five route names and the one plain sentence under each, no statute cited; the tracker's block title and its labels; the sheet's lead, legend, justification label, hints and counter, the contact-by label and hint, Confirm, its two inline errors), trackerActions.command.choose_route, trackerActions.refusal.justificationRequired and invalidJustification (the API's 422s), trackerActions.approve.leadPublic (a public entity's approve form, which no longer asks for the contact-by date), tracker.event.choose_route and tracker.history.route (History), tracker.turn.admins and tracker.waitingAdmin (a signatory's or reviewer's whose-turn line in 3b), tracker.escalated (the organisation's quiet line after an escalation), tracker.subStages and tracker.subStage (the current group's own stages under the stepper, for screen readers), tracker.stage.* (each stage's name, the API's STAGE_LABELS: in the sub-stage list and in the 'Now: {stage}' line under the current step) The stage's name is \"Procurement route\" (en) everywhere, the backend's STAGE_LABELS too: the spec's \"Procurement route determined\" read as already decided while the route is still to be chosen [[COPY-REVIEW]]. tracker.event.approveToRoute: History's name for a public entity's approval, which leads to the procurement route (3b), not yet to stage 3 (\"Approved to proceed\" read as stage 3 reached)."
   },
   "app": {
     "name": "Wazo",
@@ -182,7 +186,8 @@
       "logIn": "Log in",
       "verify": "Check a certificate",
       "explore": "Explore",
-      "credits": "Credits"
+      "credits": "Credits",
+      "transparency": "Transparency"
     },
     "nav": {
       "label": "On this page",
@@ -346,7 +351,10 @@
     "terms": "I accept the <terms>terms of service<hint> (opens in a new tab)</hint></terms>",
     "submit": "Create account",
     "submitting": "Creating account…",
-    "haveAccount": "Already have an account? <login>Log in</login>"
+    "haveAccount": "Already have an account? <login>Log in</login>",
+    "invitationLead": "You are creating an account to join {org}. Use the email address the invitation was sent to.",
+    "invitationGone": "This invitation link no longer works. Ask the person who invited you for a new one.",
+    "plainSignup": "Create an account without it"
   },
   "orgKind": {
     "company": "Company",
@@ -489,7 +497,7 @@
     "title": "Welcome, {name}",
     "devLead": "Your developer home is being built. For now, you can choose how you sign in.",
     "orgLead": "You are signed in for {org}.",
-    "orgLeadNoName": "You are signed in for your organisation.",
+    "orgLeadNoName": "You are signed in on the organisation side.",
     "mfaOn": "Two-step sign-in is on.",
     "mfaOff": "Two-step sign-in is off.",
     "mfaRequired": "Two-step sign-in is off. Your role needs it, and it takes about two minutes to turn on.",
@@ -617,7 +625,9 @@
     "step_up_required": "Confirm with the current code from your authenticator app to continue.",
     "validation": "Some of the details were not accepted. Check the form, then try again.",
     "generic": "Something went wrong. Try again in a moment.",
-    "network": "We could not reach the server. Check your connection, then try again."
+    "network": "We could not reach the server. Check your connection, then try again.",
+    "public_demo_locked": "This is switched off in the public demo.",
+    "public_demo_limit": "The public demo publishes up to 20 versions a day for each account. Try again tomorrow."
   },
   "errorPage": {
     "title": "This page did not load",
@@ -637,7 +647,8 @@
       "help": "Help",
       "legal": "Legal",
       "verify": "Certificates",
-      "staff": "Staff console / {section}"
+      "staff": "Staff console / {section}",
+      "team": "Organisation / Team"
     },
     "inbox": {
       "matchesTitle": "What your scout found"
@@ -677,7 +688,10 @@
       "briefsMetaProposals": "{count, plural, one {# proposal} other {# proposals}}",
       "briefsValue": "{count} open",
       "briefsMetaNone": "None open yet"
-    }
+    },
+    "team": "Your team and invitations",
+    "helpAction": "Open Help",
+    "teamMember": "Your team"
   },
   "inbox": {
     "pageTitle": "Inbox",
@@ -718,7 +732,7 @@
     "pages": "Inbox pages",
     "newestPage": "Back to the newest",
     "staleCursor": "This page of the Inbox is no longer available.",
-    "noOrg": "Your account is not a member of an organisation yet.",
+    "noOrg": "Your account is not in an organisation yet: if you were invited, open the invitation link in your email to join.",
     "notMember": "Your account is not a member of this organisation.",
     "openOwnInbox": "Open your Inbox",
     "refusedMfaSetup": "Turn on two-step sign-in to see the Inbox of {org}.",
@@ -1006,7 +1020,9 @@
     "ideas": "My ideas",
     "engagements": "Engagements",
     "problems": "Problems",
-    "events": "Events"
+    "events": "Events",
+    "team": "Team",
+    "more": "More"
   },
   "companies": {
     "pageTitle": "Companies",
@@ -1079,7 +1095,8 @@
     "panelTitle": "What a check shows",
     "panelFingerprint": "The fingerprint: a code computed from the registered file. Any change to the file gives a different code.",
     "panelTime": "The time an independent timestamp authority saw that fingerprint.",
-    "panelNot": "Not the owner’s name, the title or the content."
+    "panelNot": "Not the owner’s name, the title or the content.",
+    "transparency": "The daily audit fingerprints are public on the <link>transparency page</link>."
   },
   "verifyFile": {
     "title": "Check a file",
@@ -2023,7 +2040,8 @@
       "rateLimited": "Too many attempts. Wait a minute, then try again.",
       "notSaved": "Fix the marked fields first, so your changes can be saved.",
       "fileGone": "This file was already removed or replaced. Reload the page to see the current list.",
-      "checklist": "Before you can publish, fix what is listed below."
+      "checklist": "Before you can publish, fix what is listed below.",
+      "demoLimit": "The public demo publishes up to 20 versions a day for each account. Try again tomorrow."
     },
     "required": {
       "title": "Add a title.",
@@ -2384,7 +2402,8 @@
       "none": "Nothing is waiting on either side right now.",
       "ended": "This engagement has ended.",
       "closed": "This engagement is closed.",
-      "onHold": "This engagement is on hold."
+      "onHold": "This engagement is on hold.",
+      "admins": "Awaiting: your admins"
     },
     "endedBecause": "Reason: {reason}",
     "nextYou": "Your next step: {step}",
@@ -2553,7 +2572,8 @@
         "developer": "Developer",
         "org": "Organisation"
       },
-      "priorKnowledgeDeclared": "Prior knowledge declared"
+      "priorKnowledgeDeclared": "Prior knowledge declared",
+      "route": "Route: {route}"
     },
     "event": {
       "create": "Engagement opened",
@@ -2586,7 +2606,9 @@
       "pause": "Put on hold",
       "resume": "Resumed",
       "expire": "Expired",
-      "other": "Step recorded"
+      "other": "Step recorded",
+      "approveToRoute": "Approved (non-binding); the procurement route comes next",
+      "choose_route": "Procurement route chosen"
     },
     "tabs": {
       "label": "Engagement sections",
@@ -2682,7 +2704,33 @@
       "dismiss": "Dismiss",
       "failed": "Could not dismiss the note. Try again.",
       "newTab": "(opens in a new tab)"
-    }
+    },
+    "subStages": "Within {group}",
+    "subStage": "{stage}: {state}",
+    "stage": {
+      "ORG_INTEREST": "Organisation interested",
+      "SUBMITTED": "Proposal submitted",
+      "UNDER_REVIEW": "Under review",
+      "PROCUREMENT_ROUTE": "Procurement route",
+      "INTEREST_CONFIRMED": "Approved to proceed (non-binding)",
+      "CONTACT_MADE": "First contact",
+      "NDA_PENDING": "Mutual NDA: awaiting both signatures",
+      "NDA_SIGNED": "Mutual NDA signed",
+      "NEGOTIATION": "Terms and agreement drafting",
+      "AGREEMENT_SIGNING": "Agreement signing",
+      "IN_IMPLEMENTATION": "Agreement signed: implementation",
+      "DELIVERED": "Final delivery submitted",
+      "SIGN_OFF": "Acceptance",
+      "PAYMENT_FINAL": "Final payment",
+      "CLOSED": "Project closed",
+      "DECLINED": "Declined",
+      "WITHDRAWN": "Withdrawn",
+      "EXPIRED": "Expired",
+      "ON_HOLD": "On hold",
+      "INFO_REQUESTED": "Information requested"
+    },
+    "waitingAdmin": "Waiting for an admin to choose the procurement route.",
+    "escalated": "Escalated to the admins on <nowrap>{date}</nowrap>."
   },
   "trackerActions": {
     "title": "Your actions",
@@ -2717,7 +2765,8 @@
       "answer_info": "Answer the question",
       "cancel_request": "Withdraw the question",
       "pause": "Pause this engagement",
-      "resume": "Resume now"
+      "resume": "Resume now",
+      "choose_route": "Choose the procurement route"
     },
     "milestone": {
       "start_milestone": "Start milestone {number}",
@@ -2793,7 +2842,9 @@
       "tooMany": "You have taken many steps on this engagement in the last hour. Try again later.",
       "notFound": "This engagement is no longer available to you.",
       "network": "We could not reach the server; nothing was sent. Try again.",
-      "generic": "Nothing was sent. Try again in a moment."
+      "generic": "Nothing was sent. Try again in a moment.",
+      "justificationRequired": "Direct procurement needs a written justification of at least 20 characters.",
+      "invalidJustification": "That justification was not accepted. Write it in plain words, in no more than 1,000 characters."
     },
     "stepUp": {
       "body": "Confirm with the code from your authenticator app to continue.",
@@ -2817,7 +2868,8 @@
       "channel": "How they will make contact",
       "by": "Contact by",
       "byHint": "No more than five business days from today.",
-      "membersFailed": "The list of your organisation's members did not load. Reload the page to try again."
+      "membersFailed": "The list of your organisation's members did not load. Reload the page to try again.",
+      "leadPublic": "Name who will contact the developer, and how. An owner or admin then chooses the procurement route and sets the contact-by date; the developer's contact details are shared with your contact person once the route is chosen."
     },
     "channel": {
       "email": "Email",
@@ -4411,7 +4463,14 @@
       "calendar": "Calendar",
       "board": "Board"
     },
-    "filterAll": "All"
+    "filterAll": "All",
+    "exportCsv": "Export CSV",
+    "csvOff": "CSV export comes with the {plan} plan. <link>See plans</link>",
+    "csvOffUnknown": "CSV export is not part of your plan. <link>See plans</link>",
+    "exportSignedOut": "Your session ended before the file was ready. <link>Sign in again</link>",
+    "exportRateLimited": "Too many exports just now.",
+    "exportNotFound": "There is no export for that organisation here.",
+    "exportFailed": "The file could not be made just now. <link>Try again</link>"
   },
   "deadlines": {
     "previous": "Previous month, {month}",
@@ -4486,5 +4545,289 @@
     "removeCancel": "Keep the link",
     "removed": "The feed is removed. Its link no longer works.",
     "failed": "That did not work. Try again."
+  },
+  "transparency": {
+    "pageTitle": "Transparency",
+    "description": "Once a day, Wazo signs one fingerprint over its whole audit history and publishes it here, with the keys that check the signatures.",
+    "title": "Daily audit fingerprints",
+    "lead": "Once a day, Wazo signs one fingerprint over its whole audit history. A change to any event recorded before a fingerprint was taken would no longer match it.",
+    "howTo": "To check a certificate, use <link>Check a certificate</link>: it checks that certificate’s own fingerprint, signature and timestamp. The fingerprints here are separate: a rewrite of the audit history after one was taken would no longer match it.",
+    "latestTitle": "The fingerprint for {day}",
+    "covers": "It covers the whole audit history as it stood on {time} Nairobi time.",
+    "coversUnknown": "It covers the whole audit history as it stood after that day ended.",
+    "root": "Fingerprint (SHA-256)",
+    "key": "Signing key",
+    "signature": "Signature (Ed25519)",
+    "earlierTitle": "Earlier days",
+    "earlierLine": "Taken {time} Nairobi time, signed with <key>{keyId}</key>.",
+    "earlierLineUnknown": "Signed with <key>{keyId}</key>.",
+    "showSignature": "Signature",
+    "rootsJson": "These fingerprints as JSON",
+    "empty": "The first daily fingerprint appears after the first full day.",
+    "emptyPublicDemo": "This public demo starts afresh every night, so it never completes a full day; the daily fingerprints appear on the running platform.",
+    "emptyAction": "Check a certificate",
+    "unavailable": "The fingerprints did not load. Try again in a moment.",
+    "retry": "Try again",
+    "keysTitle": "Signing keys",
+    "keysLead": "Each signature is Ed25519, in base64, made with the listed key over the text <code>{message}</code>, where day is the Nairobi date as YYYY-MM-DD and root is the fingerprint in lowercase hex, as shown above. Retired keys stay listed, so older signatures can still be checked.",
+    "keyActive": "In use",
+    "keyRetired": "Retired {date}",
+    "algorithm": "Algorithm",
+    "algorithmEd25519": "Ed25519 (EdDSA)",
+    "added": "Added",
+    "publicKey": "Public key (PEM)",
+    "keysJson": "The keys as JSON",
+    "keysUnavailable": "The signing keys did not load. Try again in a moment.",
+    "keysEmpty": "No signing key is published yet.",
+    "signatureFor": "Signature for {day}"
+  },
+  "publicDemo": {
+    "banner": "<b>Public demo:</b> every name and organisation here is fictional, and the data resets every night at 03:00 EAT. Please don't enter real personal information.",
+    "bannerLabel": "Public demo notice",
+    "bannerDismiss": "Hide the demo notice",
+    "pickerTitle": "Try the demo as…",
+    "pickerLead": "Choose a persona. One press signs you in and opens their Home.",
+    "personasLabel": "Personas you can sign in as",
+    "continue": "Continue <hidden>as {name}</hidden>",
+    "signingIn": "Signing in…",
+    "tooMany": "Too many sign-ins from here just now. Try again in a minute.",
+    "failed": "That sign-in did not go through. Try again in a moment.",
+    "unavailable": "The demo personas could not be loaded just now. Try again in a moment.",
+    "retry": "Try again",
+    "role": {
+      "developer": "Developer",
+      "org_admin": "Organisation admin",
+      "org_signatory": "Organisation signatory",
+      "org_reviewer": "Organisation reviewer",
+      "staff": "Platform staff"
+    },
+    "locked": "Switched off in the public demo.",
+    "attachLocked": "Attaching files is switched off in the public demo.",
+    "signupLocked": "Creating an account is switched off in the public demo.",
+    "signupAction": "Choose a persona",
+    "tryDemo": "Try the demo",
+    "switchPersona": "Switch persona",
+    "switchingPersona": "Switching…",
+    "switchRetry": "Try switching again",
+    "about": {
+      "developer": "Publishes ideas and answers the organisations that want them",
+      "org_admin": "Runs the team, scouts and pipeline at {org}",
+      "org_signatory": "Approves and signs for {org}",
+      "org_reviewer": "Reviews proposals and makes recommendations for {org}",
+      "staff": "Reads the moderation and research queues"
+    },
+    "changeLocked": "Changing this is switched off in the public demo.",
+    "decideLocked": "Deciding is switched off in the public demo."
+  },
+  "orgTeam": {
+    "pageTitle": "Team",
+    "title": "Team",
+    "lead": "Who works on {org} here, what each person can do, and who picks up new engagements.",
+    "verification": {
+      "unclaimed": "Not verified yet",
+      "pending": "Verification in progress",
+      "e1": "Domain verified (E1)",
+      "e2": "Registration documents verified (E2)",
+      "rejected": "Not verified"
+    },
+    "membersTitle": "Members",
+    "membersCount": "{count, plural, one {# person} other {# people}}",
+    "you": "You",
+    "joined": "Joined {date}",
+    "alsoRoles": "Also {roles}",
+    "readOnly": "Only owners and admins can change the team.",
+    "invitationsTitle": "Invitations",
+    "invitationsLead": "Each link works for 7 days. Up to {limit} can be open at once.",
+    "inviteTitle": "Invite someone",
+    "openTitle": "{count, plural, one {# open invitation} other {# open invitations}}",
+    "invitedBy": "Invited by {name} on {date}",
+    "expiresOn": "Link works until {date}",
+    "expiredOn": "Link expired on {date}. Resend it to send a new one.",
+    "expired": "Expired",
+    "capReached": "{limit} invitations are open, the most at once. Revoke one, or wait until one is accepted, to invite someone else.",
+    "defaultsTitle": "New engagements",
+    "defaultsLead": "Who first reviews a new engagement in each of your niches. Anyone can still be assigned on the engagement itself.",
+    "defaultsLabel": "Default reviewer per niche",
+    "notSet": "Nobody yet",
+    "noNiches": "Your organisation lists no niches yet, so there is no default to choose.",
+    "noNichesAction": "Open Help",
+    "escalationTitle": "Escalations",
+    "escalationLead": "Your admins hear when a first contact or a decision runs late. One more person can hear it with them.",
+    "escalationIs": "{name} hears of escalations with your admins.",
+    "escalationNone": "Only your admins hear of escalations.",
+    "readFailed": "The team could not be read just now.",
+    "retry": "Try again",
+    "notMember": "You are not a member of that organisation.",
+    "openOwn": "Open your own team",
+    "inviteDemoLocked": "Inviting people is switched off in the public demo."
+  },
+  "teamAdmin": {
+    "role": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "signatory": "Signatory",
+      "reviewer": "Reviewer",
+      "finance": "Finance",
+      "viewer": "Viewer"
+    },
+    "roleHint": {
+      "owner": "Everything, including who else is an owner.",
+      "admin": "Manages the team, invitations and settings.",
+      "signatory": "Approves next steps and signs agreements.",
+      "reviewer": "Reviews proposals and recommends what to do.",
+      "finance": "Looks after the plan and payments.",
+      "viewer": "Reads, and changes nothing."
+    },
+    "email": "Email address",
+    "emailHint": "They join by accepting with this address within 7 days.",
+    "emailRequired": "Enter the email address to invite.",
+    "rolesLegend": "Roles",
+    "rolesOwnerOnly": "Only an owner can make someone an owner or a signatory.",
+    "rolesRequired": "Choose at least one role.",
+    "send": "Send invitation",
+    "sending": "Sending…",
+    "invited": "Invitation sent to {email}. The link works for 7 days.",
+    "resend": "Resend",
+    "resendLabel": "Resend the invitation to {email}",
+    "resending": "Resending…",
+    "resent": "A new link went to {email}. The earlier one no longer works.",
+    "revoke": "Revoke",
+    "revokeLabel": "Revoke the invitation to {email}",
+    "revoking": "Revoking…",
+    "changeRoles": "Change roles",
+    "changeRolesLabel": "Change roles of {name}",
+    "rolesFor": "Roles of {name}",
+    "saveRoles": "Save roles",
+    "rolesSaved": "Roles saved.",
+    "remove": "Remove",
+    "removeLabel": "Remove {name}",
+    "removeConfirm": "Remove {name} from {org}? They lose access at once, and engagements assigned to them become unassigned.",
+    "removeYes": "Remove {name}",
+    "removing": "Removing…",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "nobody": "Nobody",
+    "saveDefaults": "Save defaults",
+    "defaultsSaved": "Defaults saved. New engagements in these niches go to the people chosen.",
+    "escalationLabel": "Escalation contact",
+    "adminsOnly": "Nobody besides the admins",
+    "saveEscalation": "Save contact",
+    "escalationSaved": "Escalation contact saved.",
+    "refusal": {
+      "stepUp": "This step needs a fresh code from your authenticator app.",
+      "invalid_email": "Enter an email address like name@example.com.",
+      "already_member": "That person is already a member.",
+      "already_invited": "That address already has an open invitation. Resend it if the link was lost.",
+      "too_many_invitations": "{limit} invitations are open, the most at once. Revoke one, or wait until one is accepted.",
+      "protected_role": "Only an owner can make someone an owner or a signatory.",
+      "invitation_closed": "That invitation was already accepted or revoked. The list is up to date now.",
+      "protected_member": "Only an owner can remove an owner or a signatory.",
+      "last_owner": "Make someone else an owner first: an organisation always keeps one.",
+      "unknown_niche": "One of these niches changed meanwhile. The page is up to date now: choose again.",
+      "invalid_default_reviewer": "Choose a reviewer, signatory or admin for each niche.",
+      "invalid_member": "Choose someone who is still a member.",
+      "rate_limited": "Too many changes just now.",
+      "public_demo_locked": "Changing the team is switched off in the public demo.",
+      "notAllowed": "Only an owner or admin can change the team, and only an owner can change roles.",
+      "notFound": "That is no longer here. The page is up to date now.",
+      "network": "No connection. Try again.",
+      "generic": "Something went wrong. Try again.",
+      "org_not_verified": "Inviting people opens once your organisation is verified.",
+      "plan_limit": "Every seat on your plan is taken. A plan with more seats lets you invite someone else.",
+      "plan_limitUpgrade": "Every seat on your plan is taken. {plan} has more.",
+      "signedOut": "Your session ended, so nothing was changed.",
+      "conflict": "This invitation changed at the same moment. The list is up to date now: try again."
+    },
+    "upgradeTo": "Upgrade to {plan}",
+    "seePlans": "See plans",
+    "verificationHelp": "How verification works",
+    "loading": "Loading…",
+    "signIn": "Sign in again"
+  },
+  "invitation": {
+    "pageTitle": "Invitation",
+    "title": "Join {org}",
+    "lead": "{org} invited you to join as {roles}.",
+    "signInLead": "Sign in with the email address this invitation was sent to.",
+    "signIn": "Sign in to accept",
+    "noAccount": "New here? Create an account with that address. Once it is confirmed, open this link again to accept.",
+    "create": "Create an account",
+    "signedInAs": "You are signed in as {email}.",
+    "deadTitle": "This invitation link no longer works",
+    "dead": "It was used, revoked or replaced, or its 7 days are over. Ask the person who invited you for a new one.",
+    "home": "Go to the home page",
+    "rateLimitedTitle": "Too many tries",
+    "rateLimited": "Too many invitation links were opened from here just now.",
+    "demoLocked": "Accepting invitations is switched off in the public demo.",
+    "developerAccount": "This is a developer account, and an account works on one side only. Ask the organisation to invite another email address."
+  },
+  "invitationAccept": {
+    "accept": "Accept and join",
+    "accepting": "Joining…",
+    "openOrg": "Open your organisation",
+    "signIn": "Sign in again",
+    "refusal": {
+      "mismatch": "This invitation is for a different email address. Sign in with the address it was sent to, then open the link again.",
+      "gone": "This invitation link no longer works. Ask the person who invited you for a new one.",
+      "member": "You are already a member of this organisation.",
+      "locked": "Accepting invitations is switched off in the public demo.",
+      "signedOut": "Your session ended. Sign in again to accept.",
+      "network": "No connection. Try again.",
+      "generic": "Something went wrong. Try again.",
+      "seats": "{org} has no free seat on its plan just now. Ask the person who invited you.",
+      "rateLimited": "Too many tries just now.",
+      "developer": "This is a developer account, and an account works on one side only. Ask the organisation to invite another email address.",
+      "conflict": "This invitation changed at the same moment. Reload the page and try again."
+    },
+    "reload": "Reload",
+    "switchAccount": "Sign out and use another address",
+    "signingOut": "Signing out…",
+    "signOutFailed": "Sign-out did not finish, so you may still be signed in."
+  },
+  "retryAfter": {
+    "minute": "Try again in about a minute.",
+    "minutes": "Try again in about {count} minutes.",
+    "hour": "Try again in about an hour.",
+    "hours": "Try again in about {count} hours.",
+    "later": "Try again later."
+  },
+  "procurement": {
+    "title": "Procurement route",
+    "route": {
+      "rfq_tender": "Request for quotation or tender",
+      "direct": "Direct procurement",
+      "ppp_pip": "Privately-initiated PPP proposal",
+      "innovation_challenge": "Innovation challenge or grant",
+      "pilot_mou": "Pilot under a memorandum of understanding"
+    },
+    "hint": {
+      "rfq_tender": "You ask for quotations or open a tender, and this developer can bid alongside others.",
+      "direct": "You buy from this developer alone, without a competition, and say why in writing.",
+      "ppp_pip": "The developer's idea goes forward as a public-private partnership they proposed.",
+      "innovation_challenge": "You fund or reward the work through an innovation challenge or a grant.",
+      "pilot_mou": "You try the idea in a pilot under a memorandum of understanding before buying anything."
+    },
+    "block": {
+      "route": "Route",
+      "justification": "Justification",
+      "decidedBy": "Chosen by",
+      "decidedAt": "Chosen on"
+    },
+    "sheet": {
+      "lead": "Choose how your organisation will buy this. The developer sees the route and what you write here, and your contact person reaches them by the date you set.",
+      "legend": "How will you buy it?",
+      "justificationRequired": "Justification",
+      "justificationOptional": "Justification (optional)",
+      "justificationHintDirect": "Direct procurement needs a written reason of 20 to 1,000 characters. The developer reads it, so keep contact details and links out.",
+      "justificationHint": "Up to 1,000 characters. The developer reads it, so keep contact details and links out.",
+      "count": "{count} of {max} characters",
+      "by": "Contact by",
+      "byHint": "From today, no more than five business days ahead.",
+      "submit": "Confirm the route",
+      "error": {
+        "route": "Choose a procurement route.",
+        "justificationLong": "Keep the justification to 1,000 characters or fewer."
+      }
+    }
   }
 }

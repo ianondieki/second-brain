@@ -25,6 +25,7 @@ STAGE_KEYS = (
     EngagementState.ORG_INTEREST,
     EngagementState.SUBMITTED,
     EngagementState.UNDER_REVIEW,
+    EngagementState.PROCUREMENT_ROUTE,  # 3b: a public entity's only (REQ-ENG-06)
     EngagementState.INTEREST_CONFIRMED,
     EngagementState.CONTACT_MADE,
     EngagementState.NDA_PENDING,
@@ -132,6 +133,9 @@ def parse_policy(data: Any) -> TrackerPolicy:
             )
         if stage.expire_bd is not None and stage.due_bd is not None and stage.expire_bd < stage.due_bd:
             raise PolicyError(f"policy.yaml: stages.{state.value}.expire_bd is before its due_bd")
+        nudges = [*stage.remind_bd, *([stage.escalate_bd] if stage.escalate_bd is not None else [])]
+        if nudges and (stage.due_bd is None or max(nudges) > stage.due_bd):
+            raise PolicyError(f"policy.yaml: stages.{state.value} nudges after its due_bd")
     contact = _section(data, "contact", {"contact_by_max_bd"})
     milestones = _section(
         data,

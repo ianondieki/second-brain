@@ -51,6 +51,13 @@ export const PAGE_HEADERS: ReadonlyArray<Header> = [
 ];
 
 /**
+ * An organisation's invitation link (/invitations/{token}, REQ-TEN-02) carries its capability in the path: no referrer
+ * at all leaves those pages, not even the origin. A later rule than the page headers, so it wins (Next.js: the last
+ * header with the same key is the one sent). The page's <meta name="referrer"> says the same.
+ */
+export const NO_REFERRER: Header = { key: "Referrer-Policy", value: "no-referrer" };
+
+/**
  * next.config.ts experimental.caseSensitiveRoutes. Next.js matches header, rewrite and redirect sources without
  * regard to case by default, so the lookahead below would also exempt "/_NEXT/static/x.js", an HTML 404 page, from
  * the page headers (framable). Build assets are served only at their exact-case paths, so exact-case matching loses
@@ -69,4 +76,5 @@ export const HEADER_RULES: ReadonlyArray<{ source: string; headers: Header[] }> 
   // Every path except /_next/static/… and the versioned font files (a /fonts/… 404 is a document too): a negative
   // lookahead, as in the Next.js middleware matcher examples.
   { source: "/((?!_next/static/|fonts/[^/]+-v\\d+\\.woff2$).*)", headers: [...PAGE_HEADERS] },
+  { source: "/invitations/:token", headers: [NO_REFERRER] },
 ];

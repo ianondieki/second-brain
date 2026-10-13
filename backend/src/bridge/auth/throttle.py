@@ -9,6 +9,7 @@ records single-use values (the OAuth ``state``) in the same ledger.
 
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -29,6 +30,30 @@ PER_IP_ANY_ACCOUNT = 100
 class Keys:
     email: bytes
     ip: bytes
+
+
+def per_visitor(ip: str, trusted_proxies: str) -> bool:
+    """Whether ``ip`` tells visitors apart: a global address that is not in ``trusted_proxies`` (``TRUSTED_PROXIES``).
+    A loopback, private, link-local or otherwise non-global address, a trusted proxy's own address and an unreadable
+    one say nothing about who is asking (Codespaces' port forwarder, a bare ``docker run -p``, a proxy that adds no
+    X-Forwarded-For: then every visitor shares one address), so a per-address limit there would let one client lock
+    everyone out; callers count those in one shared, larger bucket instead (the public demo's persona sign-in, the
+    invitation link's preview)."""
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    if not address.is_global:
+        return False
+    for entry in (part.strip() for part in trusted_proxies.split(",")):
+        if entry == "*":
+            return False
+        try:
+            if address in ipaddress.ip_network(entry, strict=False):
+                return False
+        except ValueError:
+            continue
+    return True
 
 
 def keys(secret: str, purpose: str, email: str, ip: str) -> Keys:

@@ -4,16 +4,24 @@ import { getTranslations } from "next-intl/server";
 import { Wordmark } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Lattice } from "@/components/ui/Lattice";
+import { publicDemoOn } from "@/lib/public-demo";
 
-const linkClass = "inline-flex min-h-11 items-center text-ink-soft no-underline hover:text-ink hover:underline";
+// At least 44 px each way (WCAG 2.5.8 and spec 07's target size): a short word ("FAQ") is narrower than that.
+const linkClass = "inline-flex min-h-11 min-w-11 items-center text-ink-soft no-underline hover:text-ink hover:underline";
 
-/** The footer (D-55, D-66), on the night band: the wordmark and the prototype's note, three short link lists (with Explore and the photo credits), the theme switch. */
+/** The footer (D-55, D-66), on the night band: the wordmark and the prototype's note, three short link lists (with Explore, the transparency page and the photo credits), the theme switch. */
 export async function LandingFooter() {
-  const t = await getTranslations("landing");
+  const [t, tDemo] = await Promise.all([getTranslations("landing"), getTranslations("publicDemo")]);
   const columns = [
     { id: "product", links: [["/#how", t("nav.how")], ["/explore", t("footer.explore")], ["/#features", t("footer.features")], ["/#faq", t("footer.faq")]] },
-    { id: "start", links: [["/signup", t("footer.signUp")], ["/login", t("footer.logIn")], ["/verify", t("footer.verify")]] },
-    { id: "about", links: [["/help", t("footer.help")], ["/legal/terms", t("footer.terms")], ["/credits", t("footer.credits")]] },
+    {
+      id: "start",
+      // The public demo (REQ-FND-04) has no sign-up to offer, and /login is its persona picker.
+      links: publicDemoOn()
+        ? [["/login", tDemo("tryDemo")], ["/verify", t("footer.verify")]]
+        : [["/signup", t("footer.signUp")], ["/login", t("footer.logIn")], ["/verify", t("footer.verify")]],
+    },
+    { id: "about", links: [["/help", t("footer.help")], ["/transparency", t("footer.transparency")], ["/legal/terms", t("footer.terms")], ["/credits", t("footer.credits")]] },
   ] as const;
   return (
     <footer className="on-night bg-night">
