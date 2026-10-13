@@ -65,7 +65,10 @@ describe("the export route", () => {
     const answer = await GET(request());
     expect(answer.status).toBe(303);
     const [reason, retry] = why.split("&");
-    const location = new URL(answer.headers.get("Location")!);
+    const raw = answer.headers.get("Location")!;
+    // Relative, never the server's own (bind) address.
+    expect(raw.startsWith("/org/engagements?")).toBe(true);
+    const location = new URL(raw, "http://visitor.example");
     expect(location.pathname).toBe("/org/engagements");
     expect(location.searchParams.get("export")).toBe(reason);
     expect(location.searchParams.get("org")).toBe(ORG);
@@ -74,7 +77,8 @@ describe("the export route", () => {
 
   it("asks the API nothing for an organisation id that is not one", async () => {
     const bad = await GET(request("..%2F..%2Fapi"));
-    expect(new URL(bad.headers.get("Location")!).searchParams.get("export")).toBe("notFound");
+    const raw = bad.headers.get("Location")!;
+    expect(raw).toBe("/org/engagements?export=notFound");
     expect(mocks.get).not.toHaveBeenCalled();
   });
 });

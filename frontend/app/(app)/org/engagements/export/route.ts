@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 
 import { apiErrorCode } from "@/lib/api/error-code";
 import { forwardHeaders, serverApi } from "@/lib/api/server";
@@ -21,8 +21,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export async function GET(request: NextRequest): Promise<Response> {
   const org = request.nextUrl.searchParams.get("org") ?? "";
+  // A relative Location: the server's own address (its bind address behind a proxy) is never the visitor's.
   const back = (refusal: ExportRefusal, retryAfter?: number | null) =>
-    NextResponse.redirect(new URL(exportRefusalHref(refusal, UUID.test(org) ? org : null, retryAfter), request.url), 303);
+    new Response(null, {
+      status: 303,
+      headers: {
+        Location: exportRefusalHref(refusal, UUID.test(org) ? org : null, retryAfter),
+        "Cache-Control": "no-store",
+      },
+    });
   if (!UUID.test(org)) return back("notFound");
   let answer: { data?: ReadableStream<Uint8Array> | null; error?: unknown; response: Response };
   try {
