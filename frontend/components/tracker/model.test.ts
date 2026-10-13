@@ -192,6 +192,16 @@ describe("actions become buttons, and buttons become requests", () => {
     });
     expect(() => commandRequest("accept_milestone", "e1", 1)).toThrow(TypeError);
   });
+
+  it("chooses a public entity's procurement route under the organisation's path (REQ-ENG-06)", () => {
+    const route = { route: "direct" as const, justification: "Only this developer runs the county's USSD gateway.", contact_by: "2026-10-16" };
+    expect(commandRequest("choose_route", "e1", 4, { orgId: "o1", input: route })).toEqual({
+      path: "/api/orgs/{org_id}/engagements/{engagement_id}/procurement-route",
+      params: { org_id: "o1", engagement_id: "e1" },
+      body: { ...route, lock_version: 4 },
+    });
+    expect(() => commandRequest("choose_route", "e1", 4)).toThrow(TypeError);
+  });
 });
 
 describe("formatting", () => {

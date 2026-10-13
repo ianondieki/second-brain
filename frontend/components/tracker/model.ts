@@ -65,6 +65,7 @@ export const MAIN_PATH_GROUP: Partial<Record<State, Group>> = {
   SUBMITTED: "review",
   UNDER_REVIEW: "review",
   INTEREST_CONFIRMED: "contact_nda",
+  PROCUREMENT_ROUTE: "contact_nda",
   CONTACT_MADE: "contact_nda",
   NDA_PENDING: "contact_nda",
   NDA_SIGNED: "contact_nda",
@@ -401,14 +402,17 @@ export function actionItems(detail: Pick<Detail, "actions" | "awaiting" | "my_pa
 }
 
 const PREFIX = "/api/engagements/{engagement_id}" as const;
+/** A public entity's procurement route (3b) is chosen under the organisation's path (REQ-ENG-06). */
+const ORG_PREFIX = "/api/orgs/{org_id}/engagements/{engagement_id}" as const;
 
-/** URL segment of each command without a milestone (backend engagements/router.py). */
+/** URL segment of each command without a milestone (backend engagements/router.py); choose_route's is ORG_PREFIX's. */
 export const COMMAND_SEGMENT = {
   accept_interest: "accept-interest",
   decline_interest: "decline-interest",
   start_review: "start-review",
   decline: "decline",
   approve: "approve",
+  choose_route: "procurement-route",
   withdraw: "withdraw",
   mark_contacted: "mark-contacted",
   confirm_contact: "confirm-contact",
@@ -439,7 +443,8 @@ export const MILESTONE_SEGMENT = {
 
 /** Every path the tracker builds is a route of the frozen OpenAPI (a renamed route fails the type check here). */
 type CommandPath =
-  | `${typeof PREFIX}/${(typeof COMMAND_SEGMENT)[keyof typeof COMMAND_SEGMENT]}`
+  | `${typeof PREFIX}/${(typeof COMMAND_SEGMENT)[Exclude<keyof typeof COMMAND_SEGMENT, "choose_route">]}`
+  | `${typeof ORG_PREFIX}/${(typeof COMMAND_SEGMENT)["choose_route"]}`
   | `${typeof PREFIX}/milestones/{milestone_id}/${(typeof MILESTONE_SEGMENT)[MilestoneCommand]}`;
 export const COMMAND_PATHS_EXIST: [CommandPath] extends [keyof paths] ? true : never = true;
 
@@ -452,6 +457,8 @@ export type RequestInfoInput = Omit<Schemas["RequestInfoBody"], "lock_version">;
 export type AnswerInfoInput = Omit<Schemas["AnswerInfoBody"], "lock_version">;
 export type PauseInput = Omit<Schemas["PauseBody"], "lock_version">;
 export type ResumeInput = Omit<Schemas["ResumeBody"], "lock_version">;
+export type ProcurementInput = Omit<Schemas["ProcurementBody"], "lock_version">;
+export type ProcurementRoute = Schemas["ProcurementRoute"];
 /** What a sheet sends: its text (and a hold's date); the withdrawal of a question sends nothing more. */
 export type SheetInput = RequestInfoInput | AnswerInfoInput | PauseInput | ResumeInput | Record<string, never>;
 export type FormInput =
@@ -463,12 +470,13 @@ export type FormInput =
   | RequestInfoInput
   | AnswerInfoInput
   | PauseInput
-  | ResumeInput;
+  | ResumeInput
+  | ProcurementInput;
 
 /** One command request: the path template, its parameters and the JSON body (always with `lock_version`). */
 export interface CommandRequest {
   path: string;
-  params: { engagement_id: string; milestone_id?: string };
+  params: { engagement_id: string; milestone_id?: string; org_id?: string };
   body: { lock_version: number } & Partial<FormInput>;
 }
 
@@ -477,9 +485,13 @@ export function commandRequest(
   command: Command,
   engagementId: string,
   lockVersion: number,
-  { milestoneId, input }: { milestoneId?: string; input?: FormInput } = {},
+  { milestoneId, input, orgId }: { milestoneId?: string; input?: FormInput; orgId?: string } = {},
 ): CommandRequest {
   const body = { ...(input ?? {}), lock_version: lockVersion };
+  if (command === "choose_route") {
+    if (!orgId) throw new TypeError(`${command} needs the organisation`);
+    return { path: `${ORG_PREFIX}/${COMMAND_SEGMENT[command]}`, params: { org_id: orgId, engagement_id: engagementId }, body };
+  }
   if (isMilestoneCommand(command)) {
     if (!milestoneId) throw new TypeError(`${command} needs a milestone`);
     return {
