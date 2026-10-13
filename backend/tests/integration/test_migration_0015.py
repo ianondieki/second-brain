@@ -385,3 +385,158 @@ async def test_the_direct_route_needs_twenty_characters_of_justification(owner_e
             await t.run(conn, DECIDE, **decision(engagement, route, why))
             assert (await conn.execute(sa.text(DECISION), {"e": engagement})).one().route == route
             await savepoint.rollback()
+
+
+# --- the nudges ledger (REQ-NOT-05) ----------------------------------------------------------------------------------
+
+RECORD = "SELECT app_record_nudge(:e, :kind, :key)"
+CANDIDATES = "SELECT engagement_id, org_id, developer_id, member_id FROM app_nudge_candidates()"
+NUDGES = "SELECT count(*) FROM engagement_nudges WHERE engagement_id = :e"
+JOB_ONLY = "the nudge job only, with no user bound"
+
+
+async def private_scene(conn: AsyncConnection, until: str) -> tuple[t.Parties, UUID]:
+    """As the owner: the tracker's parties (a private organisation) and the developer's engagement walked to
+    ``until``."""
+    p = await t.parties(conn)
+    await t.act(conn, p.developer)
+    engagement = await t.engage(conn, p)
+    await t.walk(conn, p, engagement, until)
+    return p, engagement
+
+
+async def test_a_nudge_is_recorded_once_and_only_by_the_job(owner_engine: AsyncEngine) -> None:
+    """Given an engagement at INTEREST_CONFIRMED, When the job (no user bound) records a contact escalation, Then the
+    first call returns true and stores the engagement's organisation and the shared clock's time; the same kind and key
+    return false and store nothing; another key or kind is a new nudge; a session bound to a user (a member, the
+    developer) is refused; NULL arguments, an unknown kind, a key that is not a code and an unknown engagement are
+    refused; once the engagement has ended nothing is recorded (false)."""
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await private_scene(conn, "INTEREST_CONFIRMED")
+        nudge = {"e": engagement, "kind": "contact_escalation", "key": "bd:3"}
+        for user, org in ((p.owner, p.org), (p.developer, None)):
+            await t.act(conn, user, org)
+            await t.expect(conn, RECORD, JOB_ONLY, **nudge)
+        await t.act(conn, None)
+        before = await t.run(conn, "SELECT app_clock_now()")
+        assert await t.run(conn, RECORD, **nudge) is True
+        after = await t.run(conn, "SELECT app_clock_now()")
+        assert await t.run(conn, RECORD, **nudge) is False
+        assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:6") is True
+        assert await t.run(conn, RECORD, e=engagement, kind="contact_overdue", key="2026-12-01") is True
+        for bad, refusal in (
+            ({"kind": None}, "name the engagement, the kind and the key"),
+            ({"key": None}, "name the engagement, the kind and the key"),
+            ({"kind": "pester"}, "ck_engagement_nudges_kind_known"),
+            ({"key": "Dear Amina"}, "ck_engagement_nudges_key_valid"),
+            ({"key": "amina@example.test"}, "ck_engagement_nudges_key_valid"),
+            ({"key": ""}, "ck_engagement_nudges_key_valid"),
+            ({"key": "x" * 121}, "ck_engagement_nudges_key_valid"),
+            ({"e": uuid7()}, "no engagement"),
+        ):
+            await t.expect(conn, RECORD, refusal, **(nudge | {"key": "bd:9"} | bad))
+        await t.as_owner(conn)
+        stored = (
+            await conn.execute(
+                sa.text("SELECT org_id, sent_at FROM engagement_nudges WHERE engagement_id = :e AND key = 'bd:3'"),
+                {"e": engagement},
+            )
+        ).one()
+        assert stored.org_id == p.org
+        assert before <= stored.sent_at <= after
+        assert await t.run(conn, NUDGES, e=engagement) == 3
+
+        q, ended = await private_scene(conn, "UNDER_REVIEW")
+        await t.act(conn, q.owner, q.org)
+        await t.append(conn, ended, q.owner, "owner", "decline", "UNDER_REVIEW", "DECLINED", reason="BUDGET")
+        await t.act(conn, None)
+        assert await t.run(conn, RECORD, e=ended, kind="contact_escalation", key="bd:3") is False
+        assert await t.run(conn, NUDGES, e=ended) == 0
+
+
+async def test_the_ledger_is_append_only_and_the_organisations_alone(owner_engine: AsyncEngine) -> None:
+    """Given a recorded nudge, Then the organisation's members read it (a viewer too), the engagement's developer,
+    another organisation's member, a member scoped to another organisation and staff admin read none; bridge_app
+    inserts, updates and deletes none (no grant), and no role, the owner included, updates, deletes or truncates
+    it."""
+    async with t.as_app(owner_engine) as conn:
+        p, engagement = await private_scene(conn, "INTEREST_CONFIRMED")
+        await t.act(conn, None)
+        assert await t.run(conn, RECORD, e=engagement, kind="contact_escalation", key="bd:3") is True
+        for reader, org in ((p.reviewer, p.org), (p.viewer, p.org), (p.owner, None)):
+            await t.act(conn, reader, org)
+            assert await t.run(conn, NUDGES, e=engagement) == 1, reader
+        for reader, org in (
+            (p.developer, None),
+            (p.other_member, p.other_org),
+            (p.owner, p.other_org),
+            (p.staff, None),
+        ):
+            await t.act(conn, reader, org)
+            assert await t.run(conn, NUDGES, e=engagement) == 0, reader
+        await t.act(conn, p.owner, p.org)
+        for statement in (
+            "INSERT INTO engagement_nudges (id, engagement_id, org_id, kind, key)"
+            " VALUES (gen_random_uuid(), :e, :org, 'contact_escalation', 'bd:9')",
+            "UPDATE engagement_nudges SET key = 'bd:4' WHERE engagement_id = :e",
+            "DELETE FROM engagement_nudges WHERE engagement_id = :e",
+        ):
+            await t.expect(conn, statement, DENIED, e=engagement, org=p.org)
+        await t.as_owner(conn)
+        for statement in (
+            "UPDATE engagement_nudges SET key = 'bd:4' WHERE engagement_id = :e",
+            "DELETE FROM engagement_nudges WHERE engagement_id = :e",
+            "TRUNCATE engagement_nudges",
+        ):
+            await t.expect(conn, statement, "is not allowed: the table is append-only", e=engagement)
+
+
+async def test_the_job_lists_the_engagements_a_nudge_may_be_due_for(owner_engine: AsyncEngine) -> None:
+    """Given engagements under review, at INTEREST_CONFIRMED, in a public entity's 3b, at NDA_PENDING, in
+    implementation with a milestone submitted for review and one ended, When the job (no user bound) asks, Then it
+    gets the four that may be due (ids only) and not the others, each with a member of the organisation to bind: the
+    named contact while an active member, else the earliest active owner or admin; a bound session is refused."""
+    async with t.as_app(owner_engine) as conn:
+        a, review = await private_scene(conn, "UNDER_REVIEW")
+        await t.as_owner(conn)
+        b, confirmed = await private_scene(conn, "INTEREST_CONFIRMED")
+        await t.act(conn, b.owner, b.org)  # the reviewer becomes the named contact, then leaves the organisation
+        await t.run(conn, "UPDATE engagements SET contact_user_id = :c WHERE id = :e", c=b.reviewer, e=confirmed)
+        await t.as_owner(conn)
+        await t.run(
+            conn, "UPDATE memberships SET status = 'removed' WHERE org_id = :o AND user_id = :u", o=b.org, u=b.reviewer
+        )
+        c, procurement = await route_scene(conn)
+        await t.as_owner(conn)
+        d, nda = await private_scene(conn, "NDA_PENDING")
+        await t.as_owner(conn)
+        e, building = await private_scene(conn, "IN_IMPLEMENTATION")
+        await t.act(conn, e.developer)
+        for state in ("IN_PROGRESS", "SUBMITTED_FOR_REVIEW"):
+            await t.run(
+                conn,
+                "UPDATE milestones SET state = CAST(:s AS milestone_state) WHERE engagement_id = :e",
+                s=state,
+                e=building,
+            )
+        await t.as_owner(conn)
+        f, quiet = await private_scene(conn, "IN_IMPLEMENTATION")  # its milestone not submitted: nothing to remind
+        await t.act(conn, a.owner, a.org)
+        await t.append(conn, review, a.owner, "owner", "decline", "UNDER_REVIEW", "DECLINED", reason="BUDGET")
+
+        await t.act(conn, d.owner, d.org)
+        await t.expect(conn, CANDIDATES, JOB_ONLY)
+        await t.act(conn, None)
+        listed = {row.engagement_id: row for row in (await conn.execute(sa.text(CANDIDATES))).all()}
+        mine = {review, confirmed, procurement, nda, building, quiet}
+        assert set(listed) & mine == {confirmed, procurement, nda, building}
+        expected = {
+            confirmed: (b.org, b.developer, b.owner),  # the contact left: the earliest owner or admin
+            procurement: (c.org, c.developer, c.owner),  # the named contact
+            nda: (d.org, d.developer, d.owner),
+            building: (e.org, e.developer, e.owner),
+        }
+        for engagement, (org, developer, member) in expected.items():
+            row = listed[engagement]
+            assert (row.org_id, row.developer_id, row.member_id) == (org, developer, member), engagement
+        assert f.org not in {row.org_id for row in listed.values()}
