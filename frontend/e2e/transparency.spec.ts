@@ -1,30 +1,45 @@
 import { expect, test } from "@playwright/test";
 
 import { checkScreen } from "./support/screen";
+import { OWNER_DATABASE_URL, seedTransparencyRoots, type SeededRoots } from "./support/transparency-scene";
 
 // REQ-AUD-01 (P28 track D, AT-D-1): the public /transparency page against the compose stack, in both projects (360 px
-// and desktop). Before the first nightly run there is no root, so the page shows either the latest root with the
-// earlier days or the one-sentence empty state; the signing keys show either way. Strict axe, no primary action, no
-// horizontal scroll (checkScreen), and the way to /verify works.
+// and desktop). Three signed roots are seeded first (support/transparency-scene.ts; idempotent, append-only), so the
+// populated page is asserted on every run: the latest root as the sheet, the seeded days in the ledger, a signature
+// disclosure, the keys; strict axe, no primary action, no horizontal scroll (checkScreen). The empty state cannot be
+// reached on a shared stack (the roots table is append-only) and is covered by the vitest suite.
 
 const SERVER_STEP = { timeout: 20_000 };
 
-test("the page shows the roots or its empty state, the keys, and meets the page rules", async ({ page }) => {
+let seeded: SeededRoots;
+
+test.beforeAll(() => {
+  expect(OWNER_DATABASE_URL, "E2E_DATABASE_OWNER_URL seeds the transparency roots").toBeTruthy();
+  seeded = seedTransparencyRoots();
+  expect(seeded.days, "three seeded roots (needs a registered provenance key)").toHaveLength(3);
+});
+
+test("the page shows the latest root, the earlier days and the keys, and meets the page rules", async ({ page }) => {
   await page.goto("/transparency");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Daily audit fingerprints");
   await expect(page).toHaveTitle(/Transparency/);
 
   const roots = page.locator("[data-transparency='roots']");
-  const latest = roots.locator("[data-root]").first();
-  const empty = roots.locator("[data-empty-state]");
-  await expect(latest.or(empty)).toBeVisible();
-  if (await empty.count()) {
-    await expect(empty.locator("p")).toHaveText("The first daily fingerprint appears after the first full day.");
-    await expect(empty.getByRole("link")).toHaveText(["Check a certificate"]);
-  } else {
-    await expect(latest.getByRole("heading", { level: 2 })).toHaveText(/^The fingerprint for \d{1,2} \w{3} \d{4}$/);
-    await expect(latest.locator("[data-fingerprint]")).toHaveAttribute("data-fingerprint", /^[0-9a-f]{64}$/);
-  }
+  await expect(roots.locator("[data-empty-state]")).toHaveCount(0);
+  const latest = roots.locator("section[data-root]");
+  await expect(latest).toHaveAttribute("data-root", seeded.newest.day);
+  await expect(latest.getByRole("heading", { level: 2 })).toHaveText(/^The fingerprint for \d{1,2} \w{3} \d{4}$/);
+  await expect(latest.locator("[data-fingerprint]")).toHaveAttribute("data-fingerprint", seeded.newest.root);
+
+  for (const day of seeded.days) await expect(roots.locator(`[data-root="${day}"]`)).toHaveCount(1);
+
+  // A day's signature opens in place (native disclosure, named with its day).
+  const row = roots.locator("li[data-root]").first();
+  await expect(row).toBeVisible();
+  const summary = row.locator("summary");
+  await expect(summary).toHaveAttribute("aria-label", /^Signature for \d{1,2} \w{3} \d{4}$/);
+  await summary.click();
+  await expect(row.locator("details")).toHaveAttribute("open", "");
 
   const keys = page.locator("[data-transparency='keys']");
   await expect(keys.getByRole("heading", { level: 2 })).toHaveText("Signing keys");
