@@ -68,8 +68,7 @@
       "light": "Light",
       "dark": "Dark"
     },
-    "install": "Install {product}",
-    "team": "Team"
+    "install": "Install {product}"
   },
   "panel": {
     "title": "How it works",
@@ -685,7 +684,8 @@
       "briefsMetaProposals": "{count, plural, one {# proposal} other {# proposals}}",
       "briefsValue": "{count} open",
       "briefsMetaNone": "None open yet"
-    }
+    },
+    "team": "Your team and invitations"
   },
   "inbox": {
     "pageTitle": "Inbox",
@@ -1014,7 +1014,9 @@
     "ideas": "My ideas",
     "engagements": "Engagements",
     "problems": "Problems",
-    "events": "Events"
+    "events": "Events",
+    "team": "Team",
+    "more": "More"
   },
   "companies": {
     "pageTitle": "Companies",

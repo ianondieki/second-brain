@@ -120,7 +120,7 @@ export default async function OrganisationTeamPage({ searchParams }: PageProps<"
   }
 
   return (
-    <SignedInShell homeHref={`/org${query}`} nav={<OrgNav query={query} />} wide>
+    <SignedInShell homeHref={`/org${query}`} nav={<OrgNav query={query} team />} wide>
       <div className="max-w-5xl">
         <PageHero
           eyebrow={tp("eyebrow.team")}

@@ -68,8 +68,7 @@
       "light": "Mwanga",
       "dark": "Giza"
     },
-    "install": "Sakinisha {product}",
-    "team": "Timu"
+    "install": "Sakinisha {product}"
   },
   "panel": {
     "title": "Jinsi inavyofanya kazi",
@@ -685,7 +684,8 @@
       "briefsMetaProposals": "Mapendekezo: {count}",
       "briefsValue": "{count} wazi",
       "briefsMetaNone": "Hakuna lililo wazi bado"
-    }
+    },
+    "team": "Timu yenu na mialiko"
   },
   "inbox": {
     "pageTitle": "Kikasha",
@@ -1014,7 +1014,9 @@
     "ideas": "Mawazo yangu",
     "engagements": "Ushirikiano",
     "problems": "Matatizo",
-    "events": "Matukio"
+    "events": "Matukio",
+    "team": "Timu",
+    "more": "Zaidi"
   },
   "companies": {
     "pageTitle": "Makampuni",

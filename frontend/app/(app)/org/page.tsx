@@ -107,10 +107,15 @@ export default async function OrganisationHome({ searchParams }: PageProps<"/org
               </ButtonLink>
             </div>
           ) : org ? (
-            <div className="mt-6">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
               <ButtonLink href={inboxHref(memberships, org.org_id)} variant="primary">
                 {(await getTranslations("orgHome"))("open")}
               </ButtonLink>
+              {/* The organisation's Team (REQ-TEN-02): not one of the five sections, so a quiet link here on every
+                  width (and beside Help on the rail from 1024 px, and in the command palette). */}
+              <Link href={`/org/team${query}`} className={standaloneLinkClass} data-home="team">
+                {(await getTranslations("orgHome"))("team")}
+              </Link>
             </div>
           ) : null}
         </GreetingBand>
