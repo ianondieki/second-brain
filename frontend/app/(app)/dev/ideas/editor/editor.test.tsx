@@ -117,6 +117,37 @@ describe("autosave", () => {
     expect(screen.getByRole("alert").textContent).toContain("Some fields need changes");
   });
 
+  // Review of the P28 perf work, MINOR 2: an edit clears the API's issue on the field it feeds (Editor update, through
+  // ideas.ts fieldOf: "nicheId" feeds "niche_id"), and only that field's.
+  it("clears a 422 issue on the niche when the niche changes, and leaves the other fields' issues", async () => {
+    const fake = calls({
+      saveState: vi.fn(async () => ({
+        outcome: {
+          ok: false as const,
+          problem: "fields" as const,
+          fields: [
+            { field: "niche_id" as const, code: "a_code_added_later" },
+            { field: "title" as const, code: "contains_url" },
+          ],
+        },
+        held: [],
+      })),
+    });
+    await renderEditor({ id: "p1", initial: READY, calls: fake });
+    fireEvent.change(screen.getByLabelText("Summary"), { target: { value: "Solar chillers for co-ops." } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1300);
+    });
+    const niche = screen.getByLabelText("Niche");
+    const title = screen.getByLabelText("Title");
+    expect(niche.getAttribute("aria-invalid")).toBe("true");
+    expect(title.getAttribute("aria-invalid")).toBe("true");
+
+    fireEvent.change(niche, { target: { value: "" } }); // a change of niche (the test data has one to choose)
+    expect(niche.getAttribute("aria-invalid")).not.toBe("true");
+    expect(title.getAttribute("aria-invalid")).toBe("true");
+  });
+
   it("counts summary words against the limit", async () => {
     await renderEditor({ initial: { ...READY, summary: "one two three" } });
     expect(screen.getByText("Words: 3 of 150")).toBeTruthy();
