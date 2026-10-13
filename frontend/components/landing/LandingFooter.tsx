@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { Wordmark } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Lattice } from "@/components/ui/Lattice";
+import { publicDemoOn } from "@/lib/public-demo";
 
 const linkClass = "inline-flex min-h-11 items-center text-ink-soft no-underline hover:text-ink hover:underline";
 
@@ -12,7 +13,13 @@ export async function LandingFooter() {
   const t = await getTranslations("landing");
   const columns = [
     { id: "product", links: [["/#how", t("nav.how")], ["/explore", t("footer.explore")], ["/#features", t("footer.features")], ["/#faq", t("footer.faq")]] },
-    { id: "start", links: [["/signup", t("footer.signUp")], ["/login", t("footer.logIn")], ["/verify", t("footer.verify")]] },
+    {
+      id: "start",
+      // The public demo (REQ-FND-04) has no sign-up to offer.
+      links: publicDemoOn()
+        ? [["/login", t("footer.logIn")], ["/verify", t("footer.verify")]]
+        : [["/signup", t("footer.signUp")], ["/login", t("footer.logIn")], ["/verify", t("footer.verify")]],
+    },
     { id: "about", links: [["/help", t("footer.help")], ["/legal/terms", t("footer.terms")], ["/credits", t("footer.credits")]] },
   ] as const;
   return (

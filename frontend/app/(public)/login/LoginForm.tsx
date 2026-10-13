@@ -19,8 +19,11 @@ import { continueToReturnPath } from "@/lib/sign-in-return";
 
 type Busy = "login" | "link" | null;
 
-/** `next`: the page to return to after signing in (checked on the server and again here; lib/return-path.ts). */
-export function LoginForm({ next }: { next?: string }) {
+/**
+ * `next`: the page to return to after signing in (checked on the server and again here; lib/return-path.ts).
+ * `demo`: the public demo (REQ-FND-04), where sign-up and the emailed link are switched off: neither is offered.
+ */
+export function LoginForm({ next, demo = false }: { next?: string; demo?: boolean }) {
   const t = useTranslations();
   const router = useRouter();
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -116,20 +119,24 @@ export function LoginForm({ next }: { next?: string }) {
         <SubmitButton variant="primary" busy={busy === "login"}>
           {busy === "login" ? t("login.submitting") : t("login.submit")}
         </SubmitButton>
-        <Button variant="link" busy={busy === "link"} onClick={emailLink}>
-          {busy === "link" ? t("login.magicLinkSending") : t("login.magicLink")}
-        </Button>
+        {demo ? null : (
+          <Button variant="link" busy={busy === "link"} onClick={emailLink}>
+            {busy === "link" ? t("login.magicLinkSending") : t("login.magicLink")}
+          </Button>
+        )}
       </div>
 
-      <p className="pt-4 text-ink">
-        {t.rich("login.noAccount", {
-          signup: (chunks) => (
-            <Link href="/signup" className={textLinkClass}>
-              {chunks}
-            </Link>
-          ),
-        })}
-      </p>
+      {demo ? null : (
+        <p className="pt-4 text-ink">
+          {t.rich("login.noAccount", {
+            signup: (chunks) => (
+              <Link href="/signup" className={textLinkClass}>
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
+      )}
     </Form>
   );
 }
