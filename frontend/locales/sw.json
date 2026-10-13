@@ -40,7 +40,7 @@
     "reviewP27clock": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"baada ya siku 6 saa 14 dakika 23\"), not \"dak 23\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP27fe1": "[[COPY-REVIEW]] [[SW-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.*, deadlines.*, pipeline.* and calendarFeed.* (the Calendar and Board tabs, Add to calendar, the private calendar feed link in Settings › Notifications). pipeline.median uses \"wastani wa kati\" for median (wastani alone is the mean): check the term. P27 UX fixes for the G5 review: calendarFeed.shownOnce now opens with the imperative \"Nakili sasa\" (was \"Kinakili sasa\"); pipeline.funnelTitle and pipeline.conversionMore agree with ushirikiano (u- class: \"ulioingia\", \"uliingia\"), not the people class (\"walioingia\", \"waliingia\"); pipeline.outcome says \"umefungwa\" and \"umekoma\" (u- class) for every count, no longer mixing \"umefungwa\"/\"imefungwa\"; pipeline.stalled reads \"siku {count}+ za kazi\" (the threshold as a floor); \"Briefs\" in calendarFeed.lead is left in English as the product term: confirm or translate.",
     "reviewP27ux": "[[COPY-REVIEW]] [[SW-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Tengeneza kiungo kipya\" and \"Ondoa mlisho\" first ask in place whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled now \"Hakuna hatua kwa siku {count}+ za kazi\". A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"{count}+\". deadlines.dayEmpty [[SW-REVIEW]].",
-    "reviewP28tr": "[[COPY-REVIEW]] [[SW-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (ukurasa wa umma /transparency: alama za kila siku zilizotiwa sahihi juu ya historia ya ukaguzi kwa maneno rahisi; jinsi ya kukagua cheti, na kiungo cha /verify; alama ya karibuni, siku zilizopita, funguo za sahihi na hali yake; hali tupu kabla ya siku ya kwanza kamili na hali mbili za \"hazikupakia\"), landing.footer.transparency (kiungo cha sehemu ya chini) na verify.transparency (mstari mmoja chini ya paneli ya /verify). Hakuna dai kwamba kitu hakiwezi kubadilishwa: maneno ni kwamba badiliko hufanya alama zisikubaliane."
+    "reviewP28tr": "[[COPY-REVIEW]] [[SW-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (ukurasa wa umma /transparency: alama za kila siku zilizotiwa sahihi juu ya historia ya ukaguzi kwa maneno rahisi; jinsi ya kukagua cheti, na kiungo cha /verify; alama ya karibuni, siku zilizopita, funguo za sahihi na hali yake; hali tupu kabla ya siku ya kwanza kamili na hali mbili za \"hazikupakia\"), landing.footer.transparency (kiungo cha sehemu ya chini) na verify.transparency (mstari mmoja chini ya paneli ya /verify). Hakuna dai kwamba kitu hakiwezi kubadilishwa: maneno ni kwamba badiliko hufanya alama zisikubaliane. Mzunguko wa 1 wa ukaguzi: lead inahusu tu matukio yaliyorekodiwa kabla alama haijachukuliwa; howTo inasema /verify inakagua alama, sahihi na muhuri wa muda wa cheti chenyewe; keysLead inataja maandishi yaliyotiwa sahihi kamili; signatureFor inataja siku; verify.transparency imeandikwa upya."
   },
   "app": {
     "name": "Wazo",
@@ -1082,7 +1082,7 @@
     "panelFingerprint": "Alama ya kidijitali: msimbo unaokokotolewa kutoka kwenye faili iliyosajiliwa. Badiliko lolote kwenye faili hutoa msimbo tofauti.",
     "panelTime": "Wakati mamlaka huru ya muhuri wa muda ilipoona alama hiyo.",
     "panelNot": "Si jina la mmiliki, kichwa wala maudhui.",
-    "transparency": "Alama ya ukaguzi ya kila siku iko wazi kwenye <link>ukurasa wa uwazi</link>."
+    "transparency": "Alama za kila siku za ukaguzi ziko wazi kwenye <link>ukurasa wa uwazi</link>."
   },
   "verifyFile": {
     "title": "Kagua faili",
@@ -4492,10 +4492,10 @@
   },
   "transparency": {
     "pageTitle": "Uwazi",
-    "description": "Mara moja kwa siku, Wazo hutia sahihi alama moja juu ya historia yake yote ya ukaguzi na kuichapisha hapa, pamoja na funguo za kukagua sahihi hizo.",
+    "description": "Mara moja kwa siku, Wazo hutia sahihi alama moja juu ya historia yake yote ya ukaguzi na kuichapisha hapa, pamoja na funguo zinazokagua sahihi hizo.",
     "title": "Alama za kila siku za ukaguzi",
-    "lead": "Mara moja kwa siku, Wazo hutia sahihi alama moja juu ya historia yake yote ya ukaguzi. Hakuna tukio la zamani linaloweza kubadilishwa bila alama hizo kutofautiana.",
-    "howTo": "Ili kukagua cheti, kitafute kwenye <link>Kagua cheti</link>: kinaonyesha alama ya kidijitali ya faili na wakati mamlaka huru ya muhuri wa muda ilipoiona.",
+    "lead": "Mara moja kwa siku, Wazo hutia sahihi alama moja juu ya historia yake yote ya ukaguzi. Badiliko kwenye tukio lolote lililorekodiwa kabla alama haijachukuliwa lingefanya isilingane tena.",
+    "howTo": "Ili kukagua cheti, tumia <link>Kagua cheti</link>: inakagua alama, sahihi na muhuri wa muda wa cheti hicho chenyewe. Alama zilizo hapa zinaonyesha jambo tofauti: kwamba historia ya ukaguzi haikuandikwa upya baada ya kila alama kuchukuliwa.",
     "latestTitle": "Alama ya {day}",
     "covers": "Inajumuisha historia yote ya ukaguzi kama ilivyokuwa {time} saa za Nairobi.",
     "coversUnknown": "Inajumuisha historia yote ya ukaguzi kama ilivyokuwa baada ya siku hiyo kuisha.",
@@ -4512,7 +4512,7 @@
     "unavailable": "Alama hazikupakia. Jaribu tena baada ya muda mfupi.",
     "retry": "Jaribu tena",
     "keysTitle": "Funguo za sahihi",
-    "keysLead": "Kila alama imetiwa sahihi kwa Ed25519 juu ya maandishi <code>{message}</code> kwa ufunguo uliotajwa kando yake. Funguo zilizostaafu zinabaki kwenye orodha, ili sahihi za zamani bado ziweze kukaguliwa.",
+    "keysLead": "Kila sahihi ni Ed25519, kwa base64, iliyofanywa kwa ufunguo ulioorodheshwa juu ya maandishi <code>{message}</code>, ambapo day ni tarehe ya Nairobi kama YYYY-MM-DD na root ni alama kwa hex ya herufi ndogo, kama inavyoonyeshwa hapo juu. Funguo zilizostaafu zinabaki kwenye orodha, ili sahihi za zamani bado ziweze kukaguliwa.",
     "keyActive": "Unatumika",
     "keyRetired": "Ulistaafu {date}",
     "algorithm": "Algorithimu",
@@ -4521,6 +4521,7 @@
     "publicKey": "Ufunguo wa umma (PEM)",
     "keysJson": "Funguo kama JSON",
     "keysUnavailable": "Funguo za sahihi hazikupakia. Jaribu tena baada ya muda mfupi.",
-    "keysEmpty": "Bado hakuna ufunguo wa sahihi uliochapishwa."
+    "keysEmpty": "Bado hakuna ufunguo wa sahihi uliochapishwa.",
+    "signatureFor": "Sahihi ya {day}"
   }
 }

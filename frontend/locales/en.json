@@ -40,7 +40,7 @@
     "reviewP27clock": "[[COPY-REVIEW]] P27 (REQ-TRACK-03): the sentence clocks (Home's Next deadline tile, a Brief's \"Proposals close in\", the organisation's line under an open question) now say the time left in the language's own unit words from Intl (\"in 6 days 14 hours 23 minutes\"), not \"14 h 23 min\"; countdown.in and countdown.closesIn frame them. countdown.days, .hours, .minutes and .dueIn are removed (nothing used them once the client countdown went).",
     "reviewP27fe1": "[[COPY-REVIEW]] P27-FE-1 (REQ-ENG-13, REQ-ENG-14; D-70): engagements.* (the List, Calendar and Board tabs, the Assigned to me filter), deadlines.* (the month calendar, the Next 30 days list, Add to calendar and its Google Calendar entry, the empty months), pipeline.* (the funnel strip, the column heads, the stalled mark, the assignee line, the empty board) and calendarFeed.* (Settings › Notifications: the private feed link, shown once, with Copy, Rotate and Remove, and the sentence that the link is private).",
     "reviewP27ux": "[[COPY-REVIEW]] P27 UX (REQ-ENG-13, REQ-ENG-14): calendarFeed.rotateConfirm, .rotateYes, .rotateCancel and calendarFeed.removeConfirm, .removeYes, .removeCancel (\"Make a new link\" and \"Remove the feed\" first ask in place, no dialog, whether to replace or remove the live link: calendars on it stop updating); pipeline.stalled is now \"No movement for {count}+ business days\" (the policy threshold as a floor: the API says only that it was passed, not by how many business days). A business-day count of the time without movement needs the API to say it (a later card); until then the mark keeps \"5+\". deadlines.dayEmpty (\"Nothing falls due on {date}.\"): the picked day's empty state said \"in the next 30 days\" (ux re-check MINOR, spec 04 §4.2).",
-    "reviewP28tr": "[[COPY-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (the public /transparency page: what the daily signed fingerprints over the audit history are, in plain words; how to check a certificate, with a link to /verify; the latest fingerprint, earlier days, the signing keys with their status; the empty state before the first full day and the two \"did not load\" states), landing.footer.transparency (the footer's link) and verify.transparency (one quiet line under the /verify panel). No claim that anything cannot be altered: the wording is that a change makes the fingerprints disagree."
+    "reviewP28tr": "[[COPY-REVIEW]] P28 track D (REQ-AUD-01): transparency.* (the public /transparency page: what the daily signed fingerprints over the audit history are, in plain words; how to check a certificate, with a link to /verify; the latest fingerprint, earlier days, the signing keys with their status; the empty state before the first full day and the two \"did not load\" states), landing.footer.transparency (the footer's link) and verify.transparency (one quiet line under the /verify panel). No claim that anything cannot be altered: the wording is that a change makes the fingerprints disagree. Review round 1: the lead limits the claim to events recorded before a fingerprint was taken; howTo says /verify checks a certificate's own fingerprint, signature and timestamp, separate from the daily fingerprints; keysLead states the signed text exactly; signatureFor names each earlier day's signature control; verify.transparency reworded."
   },
   "app": {
     "name": "Wazo",
@@ -1082,7 +1082,7 @@
     "panelFingerprint": "The fingerprint: a code computed from the registered file. Any change to the file gives a different code.",
     "panelTime": "The time an independent timestamp authority saw that fingerprint.",
     "panelNot": "Not the owner’s name, the title or the content.",
-    "transparency": "Every day’s audit fingerprint is public on the <link>transparency page</link>."
+    "transparency": "The daily audit fingerprints are public on the <link>transparency page</link>."
   },
   "verifyFile": {
     "title": "Check a file",
@@ -4492,10 +4492,10 @@
   },
   "transparency": {
     "pageTitle": "Transparency",
-    "description": "Once a day, Wazo signs one fingerprint over its whole audit history and publishes it here, with the keys to check the signatures.",
+    "description": "Once a day, Wazo signs one fingerprint over its whole audit history and publishes it here, with the keys that check the signatures.",
     "title": "Daily audit fingerprints",
-    "lead": "Once a day, Wazo signs one fingerprint over its whole audit history. No past event can be changed without the fingerprints disagreeing.",
-    "howTo": "To check a certificate, look it up on <link>Check a certificate</link>: it shows the file’s fingerprint and when an independent timestamp authority saw it.",
+    "lead": "Once a day, Wazo signs one fingerprint over its whole audit history. A change to any event recorded before a fingerprint was taken would no longer match it.",
+    "howTo": "To check a certificate, use <link>Check a certificate</link>: it checks that certificate’s own fingerprint, signature and timestamp. The fingerprints here show something separate: that the audit history was not rewritten after each one was taken.",
     "latestTitle": "The fingerprint for {day}",
     "covers": "It covers the whole audit history as it stood on {time} Nairobi time.",
     "coversUnknown": "It covers the whole audit history as it stood after that day ended.",
@@ -4512,7 +4512,7 @@
     "unavailable": "The fingerprints did not load. Try again in a moment.",
     "retry": "Try again",
     "keysTitle": "Signing keys",
-    "keysLead": "Each fingerprint is signed with Ed25519 over the text <code>{message}</code> by the key named beside it. Retired keys stay listed, so older signatures can still be checked.",
+    "keysLead": "Each signature is Ed25519, in base64, made with the listed key over the text <code>{message}</code>, where day is the Nairobi date as YYYY-MM-DD and root is the fingerprint in lowercase hex, as shown above. Retired keys stay listed, so older signatures can still be checked.",
     "keyActive": "In use",
     "keyRetired": "Retired {date}",
     "algorithm": "Algorithm",
@@ -4521,6 +4521,7 @@
     "publicKey": "Public key (PEM)",
     "keysJson": "The keys as JSON",
     "keysUnavailable": "The signing keys did not load. Try again in a moment.",
-    "keysEmpty": "No signing key is published yet."
+    "keysEmpty": "No signing key is published yet.",
+    "signatureFor": "Signature for {day}"
   }
 }
