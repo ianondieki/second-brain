@@ -208,7 +208,7 @@ def due_nudges(
             passed = [n for n in stage.remind_bd if counted_out(clock.entered_on, n, paused, now, holidays)]
             if passed:  # only the latest reminder due: a run after a long gap sends one
                 found.append(Due(K.NDA_REMINDER, f"{entry}:bd{max(passed)}", days=max(passed), on=due_on))
-        elif escalate is not None and counted_out(clock.entered_on, escalate, paused, now, holidays):
+        elif escalate is not None and counted_out(clock.entered_on, escalate, paused, now, holidays):  # 3b
             found.append(Due(K.PROCUREMENT_ESCALATION, f"{entry}:bd{escalate}", days=escalate, on=due_on))
     if state is S.IN_IMPLEMENTATION:
         for waiting in submissions:
