@@ -4495,7 +4495,7 @@
     "description": "Once a day, Wazo signs one fingerprint over its whole audit history and publishes it here, with the keys that check the signatures.",
     "title": "Daily audit fingerprints",
     "lead": "Once a day, Wazo signs one fingerprint over its whole audit history. A change to any event recorded before a fingerprint was taken would no longer match it.",
-    "howTo": "To check a certificate, use <link>Check a certificate</link>: it checks that certificate’s own fingerprint, signature and timestamp. The fingerprints here show something separate: that the audit history was not rewritten after each one was taken.",
+    "howTo": "To check a certificate, use <link>Check a certificate</link>: it checks that certificate’s own fingerprint, signature and timestamp. The fingerprints here are separate: a rewrite of the audit history after one was taken would no longer match it.",
     "latestTitle": "The fingerprint for {day}",
     "covers": "It covers the whole audit history as it stood on {time} Nairobi time.",
     "coversUnknown": "It covers the whole audit history as it stood after that day ended.",

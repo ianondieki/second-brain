@@ -4495,7 +4495,7 @@
     "description": "Mara moja kwa siku, Wazo hutia sahihi alama moja juu ya historia yake yote ya ukaguzi na kuichapisha hapa, pamoja na funguo zinazokagua sahihi hizo.",
     "title": "Alama za kila siku za ukaguzi",
     "lead": "Mara moja kwa siku, Wazo hutia sahihi alama moja juu ya historia yake yote ya ukaguzi. Badiliko kwenye tukio lolote lililorekodiwa kabla alama haijachukuliwa lingefanya isilingane tena.",
-    "howTo": "Ili kukagua cheti, tumia <link>Kagua cheti</link>: inakagua alama, sahihi na muhuri wa muda wa cheti hicho chenyewe. Alama zilizo hapa zinaonyesha jambo tofauti: kwamba historia ya ukaguzi haikuandikwa upya baada ya kila alama kuchukuliwa.",
+    "howTo": "Ili kukagua cheti, tumia <link>Kagua cheti</link>: inakagua alama, sahihi na muhuri wa muda wa cheti hicho chenyewe. Alama zilizo hapa ni jambo tofauti: historia ya ukaguzi ikiandikwa upya baada ya alama kuchukuliwa, haitalingana nayo tena.",
     "latestTitle": "Alama ya {day}",
     "covers": "Inajumuisha historia yote ya ukaguzi kama ilivyokuwa {time} saa za Nairobi.",
     "coversUnknown": "Inajumuisha historia yote ya ukaguzi kama ilivyokuwa baada ya siku hiyo kuisha.",
