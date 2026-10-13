@@ -8,7 +8,9 @@
   organisation (409 ``too_many_invitations``). The token is ``TOKEN_BYTES`` random bytes (``bridge.auth.crypto``,
   URL-safe base64); only its SHA-256 is stored, and it expires ``VALID_DAYS`` days on the shared clock. The token is
   returned to the router for the email only, never in a response, an audit row or a log line.
-- **Resend** (``resend``): a new token and a new expiry for an open invitation (the old link dies at once); an expired
+- **Resend** (``resend``): the open invitation is revoked and a new one inserted for the same address and roles, in
+  one transaction (a new id, token, creation time and expiry: revision 0015's ``expires_within_30_days`` counts from
+  the creation, so an in-place token update would fail on an old invitation); the old link dies at once. An expired
   one counts against the cap again. **Revoke** (``revoke``): ``revoked_at`` (the database's clock). A closed (accepted
   or revoked) invitation is 409 ``invitation_closed``; another organisation's or an unknown one 404.
 - **Preview** (``preview``, anyone holding the link): the organisation's name and the roles of an open invitation
@@ -119,6 +121,29 @@ async def _one(db: AsyncSession, org_id: UUID, invitation_id: UUID) -> OrgInvita
     return shown
 
 
+async def _insert(db: AsyncSession, org: OrgContext, address: str, roles: set[OrgRole]) -> tuple[UUID, str]:
+    """Insert an open invitation from the caller with a new token (the database stamps ``created_at``); its id and
+    token. ``uq_invitations_open`` is the race of two invitations to one address: 409 ``already_invited``."""
+    token, invitation_id = new_token(), uuid7()
+    try:
+        await db.execute(
+            insert(Invitation).values(
+                id=invitation_id,
+                org_id=org.org_id,
+                email=address,
+                roles=sorted(roles),
+                token_hash=token_hash(token),
+                invited_by=org.live.user.id,
+                expires_at=_EXPIRY,
+            )
+        )
+    except DBAPIError as exc:
+        if _sqlstate(exc) == "23505":
+            raise ApiError(409, "already_invited", ALREADY_INVITED) from exc
+        raise
+    return invitation_id, token
+
+
 async def invite(db: AsyncSession, org: OrgContext, email: str, roles: list[OrgRole]) -> Issued:
     """Create the invitation (see the module docstring), in the caller's transaction (the router commits)."""
     wanted = set(roles)
@@ -149,23 +174,7 @@ async def invite(db: AsyncSession, org: OrgContext, email: str, roles: list[OrgR
         raise ApiError(409, "already_invited", ALREADY_INVITED)
     if await _open_unexpired(db, org.org_id) >= MAX_OPEN:
         raise ApiError(409, "too_many_invitations", TOO_MANY, limit=MAX_OPEN)
-    token, invitation_id = new_token(), uuid7()
-    try:
-        await db.execute(
-            insert(Invitation).values(
-                id=invitation_id,
-                org_id=org.org_id,
-                email=address,
-                roles=sorted(wanted),
-                token_hash=token_hash(token),
-                invited_by=org.live.user.id,
-                expires_at=_EXPIRY,
-            )
-        )
-    except DBAPIError as exc:
-        if _sqlstate(exc) == "23505":  # uq_invitations_open: a concurrent invitation to the address
-            raise ApiError(409, "already_invited", ALREADY_INVITED) from exc
-        raise
+    invitation_id, token = await _insert(db, org, address, wanted)
     await audit(
         db,
         "org.invitation_created",
@@ -193,45 +202,44 @@ async def _open_invitation(db: AsyncSession, org: OrgContext, invitation_id: UUI
 
 
 async def resend(db: AsyncSession, org: OrgContext, invitation_id: UUID) -> Issued:
-    """A new token and expiry for an open invitation, in the caller's transaction (the router commits)."""
+    """Replace an open invitation with a new one (a new id, token, creation and expiry: revision 0015's 30-day CHECK
+    counts from the creation), in the caller's transaction (the router commits): the old link dies with it."""
     await _lock(db, org.org_id)
     found = await _open_invitation(db, org, invitation_id)
     expired = bool(await db.scalar(select(func.app_clock_now() >= found.expires_at)))
     if expired and await _open_unexpired(db, org.org_id) >= MAX_OPEN:
         raise ApiError(409, "too_many_invitations", TOO_MANY, limit=MAX_OPEN)
-    token = new_token()
-    changed = await db.execute(
-        update(Invitation)
-        .where(Invitation.id == found.id, *_open())
-        .values(token_hash=token_hash(token), expires_at=_EXPIRY)
-        .returning(Invitation.id)
-        .execution_options(synchronize_session=False)
-    )
-    if changed.first() is None:  # accepted or revoked meanwhile
+    if not await _close(db, found.id):  # accepted or revoked meanwhile
         raise ApiError(409, "invitation_closed", CLOSED)
+    new_id, token = await _insert(db, org, str(found.email), {OrgRole(r) for r in found.roles})
     await audit(
         db,
         "org.invitation_resent",
         actor_user_id=org.live.user.id,
         org_id=org.org_id,
         subject_type="invitation",
-        subject_id=found.id,
-        payload={"invitation_id": str(found.id)},
+        subject_id=new_id,
+        payload={"invitation_id": str(new_id), "replaces": str(found.id)},
     )
-    return Issued(await _one(db, org.org_id, found.id), token)
+    return Issued(await _one(db, org.org_id, new_id), token)
+
+
+async def _close(db: AsyncSession, invitation_id: UUID) -> bool:
+    """Revoke an open invitation (the database stamps ``revoked_at``); False when it was no longer open."""
+    changed = await db.execute(
+        update(Invitation)
+        .where(Invitation.id == invitation_id, *_open())
+        .values(revoked_at=func.now())
+        .returning(Invitation.id)
+        .execution_options(synchronize_session=False)
+    )
+    return changed.first() is not None
 
 
 async def revoke(db: AsyncSession, org: OrgContext, invitation_id: UUID) -> None:
     """Revoke an open invitation, in the caller's transaction (the router commits)."""
     found = await _open_invitation(db, org, invitation_id)
-    changed = await db.execute(
-        update(Invitation)
-        .where(Invitation.id == found.id, *_open())
-        .values(revoked_at=func.now())
-        .returning(Invitation.id)
-        .execution_options(synchronize_session=False)
-    )
-    if changed.first() is None:
+    if not await _close(db, found.id):
         raise ApiError(409, "invitation_closed", CLOSED)
     await audit(
         db,

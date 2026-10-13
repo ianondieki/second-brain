@@ -156,7 +156,9 @@ async def test_revoked_resent_and_expired_links_are_404(owner_engine: AsyncEngin
         )
         again = await owner.post(f"/api/orgs/{world.org}/invitations/{resent['id']}/resend")
         assert again.status_code == 200, again.text
-        assert again.json()["id"] == resent["id"]
+        replacement = again.json()["id"]
+        assert replacement != resent["id"]  # a new invitation replaces the old one (revision 0015's 30-day CHECK)
+        assert (again.json()["email"], again.json()["roles"]) == (resent["email"], resent["roles"])
         old, new = tokens[resent_to], token_in(mail_to(owner, resent_to)[1])
         assert old != new
         await expire(owner_engine, expired["id"])
@@ -167,17 +169,18 @@ async def test_revoked_resent_and_expired_links_are_404(owner_engine: AsyncEngin
         assert (await owner.get(f"/api/invitations/{'x' * 10}")).status_code == 404  # malformed
 
         listed = {i["id"]: i["expired"] for i in (await owner.get(f"/api/orgs/{world.org}/team")).json()["invitations"]}
-        assert listed == {resent["id"]: False, expired["id"]: True}
+        assert listed == {replacement: False, expired["id"]: True}
         renewed = await invite(owner, world.org, expired_to)  # the expired one is revoked first
         assert renewed.status_code == 201, renewed.text
         still_open = {i["id"] for i in (await owner.get(f"/api/orgs/{world.org}/team")).json()["invitations"]}
-        assert still_open == {resent["id"], renewed.json()["id"]}
-    for dead_one in (revoked, expired):
+        assert still_open == {replacement, renewed.json()["id"]}
+    for dead_one in (revoked, expired, resent):
         [row] = await rows(owner_engine, "SELECT revoked_at FROM invitations WHERE id = :id", id=dead_one["id"])
         assert row.revoked_at is not None
-    events = [e.action for e in await audit_actions(owner_engine, world.org, "org.invitation_")]
-    assert events.count("org.invitation_revoked") == 1
-    assert events.count("org.invitation_resent") == 1
+    events = await audit_actions(owner_engine, world.org, "org.invitation_")
+    assert [e.action for e in events].count("org.invitation_revoked") == 1
+    [resend_event] = [e for e in events if e.action == "org.invitation_resent"]
+    assert resend_event.payload == {"invitation_id": replacement, "replaces": resent["id"]}
 
 
 async def test_an_expired_link_is_404_when_accepted(owner_engine: AsyncEngine, app_engine: AsyncEngine) -> None:

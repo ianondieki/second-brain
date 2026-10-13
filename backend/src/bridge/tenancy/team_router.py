@@ -6,7 +6,8 @@ role 403 (``bridge.tenancy.deps``).
   invitation link emailed (``bridge.tenancy.invitation_email``) after the commit. 403 ``protected_role`` (an admin
   inviting an owner or a signatory), ``step_up_required``; 409 ``already_member``, ``already_invited``,
   ``too_many_invitations``; 422 ``invalid_email``.
-- ``POST /api/orgs/{org_id}/invitations/{invitation_id}/resend`` (the same): a new link emailed, the old one dead.
+- ``POST /api/orgs/{org_id}/invitations/{invitation_id}/resend`` (the same): the invitation is replaced by a new one
+  (a new ``id``, the response's) and its link emailed; the old link is dead.
 - ``DELETE /api/orgs/{org_id}/invitations/{invitation_id}`` (an owner or admin): 204. 409 ``invitation_closed``.
 - ``DELETE /api/orgs/{org_id}/members/{user_id}`` (an owner or admin, a fresh second factor): 204. 403
   ``protected_member``, 409 ``last_owner``; their open assignments are closed.
@@ -132,7 +133,8 @@ async def resend_invitation(
     provider: EmailDep,
     org: OrgAdmin,
 ) -> OrgInvitation:
-    """Email a new link (valid for 7 days); the previous link stops working at once."""
+    """Replace the invitation with a new one (a new id) and email its link (valid for 7 days); the previous link stops
+    working at once."""
     ensure_step_up(org.live, settings)
     issued = await invitations.resend(db, org, invitation_id)
     await _email_link(db, background, request, settings, provider, org, issued)
