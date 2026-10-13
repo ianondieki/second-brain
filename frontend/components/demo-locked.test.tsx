@@ -146,10 +146,18 @@ describe("the idea editor's files", () => {
     expect(document.querySelector("[data-demo-locked]")!.textContent).toBe(LOCKED);
     expect(document.querySelector('input[type="file"]')).toBeNull();
     expect(screen.getByText("plan.pdf")).toBeTruthy();
+    // No hint about adding files, and nothing left pointing at it (ux review of P28-PD, MINOR 4).
+    const { MAX_ATTACHMENTS } = await import("@/app/(app)/dev/ideas/ideas");
+    const hint = en.ideaEditor.filesHint.replace("{max}", String(MAX_ATTACHMENTS));
+    expect(screen.queryByText(hint)).toBeNull();
+    expect(document.querySelector('[id$="-hint"]')).toBeNull();
+    expect(document.querySelector("[aria-describedby]")).toBeNull();
     cleanup();
     renderWithIntl(<Attachments {...props} />);
-    expect(document.querySelector('input[type="file"]')).not.toBeNull();
+    const input = document.querySelector('input[type="file"]')!;
+    expect(input).not.toBeNull();
     expect(document.querySelector("[data-demo-locked]")).toBeNull();
+    expect(document.getElementById(input.getAttribute("aria-describedby")!)!.textContent).toBe(hint);
   });
 });
 
