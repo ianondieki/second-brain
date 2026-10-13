@@ -6,13 +6,15 @@ Give anyone a link to a working Bridge demo: the whole seeded product in one con
 public-demo mode (persona sign-in, locked account and upload routes, a fictional-data banner, `noindex`, a reset every
 night at 03:00 EAT). Three ways to host it, in the order the owner can use them:
 
-- **A. GitHub Codespaces**: now, zero spend, no card. The link works only while the codespace runs.
+- **A. GitHub Codespaces**: now, zero spend, no card. The address stays private until you publish it with one
+  command, and works only while the codespace runs.
 - **B. Hugging Face Docker Space**: after D-71 (a), a paid Hugging Face plan (PRO, USD 9 a month). A stable
   `*.hf.space` address that wakes on visit.
 - **C. Oracle Cloud Always Free Arm VM**: after D-71 (b), a card for Oracle's sign-up verification (not charged on
   the free tier). Durable, your own `sslip.io` address with HTTPS.
 
-Before any of them goes public, work through **D. The go-live checklist**.
+Nothing is published by itself: before any of them goes public (a public codespace port, a Space, the VM's
+address), work through **D. The go-live checklist**.
 
 Requirement: REQ-FND-04 (P28 track PD). Research: `docs/platform/research/public-demo-hosting.md`.
 
@@ -20,10 +22,13 @@ Requirement: REQ-FND-04 (P28 track PD). Research: `docs/platform/research/public
 
 `infra/demo/space/Dockerfile` builds one image with PostgreSQL 16 + pgvector, SeaweedFS (S3), Mailpit, the API, the
 job worker and the web app; `run.py` supervises them as uid 1000 and serves only the web app, on port 7860. Each boot
-makes new throwaway secrets, starts from empty data, migrates and loads the demo seed; every provider is a fake (email
-stays in an internal Mailpit, SMS and payments are simulated, LLM calls answer with the deterministic fallback). It
-boots in about a minute and uses about 600 MB of memory (`infra/demo/space/README.md` has the measured figures; give
-it at least 1 GB). It is a demo only: never point it at real data or real providers.
+makes new throwaway secrets, starts from empty data, migrates and loads the demo seed. Email stays in an internal
+Mailpit, SMS and payments are simulated, LLM calls answer with the deterministic fallback, and SeaweedFS's usage
+statistics are off. **One connection leaves the container**: when a proposal is registered, the worker asks a public
+timestamp service for an RFC 3161 timestamp of its certificate (DigiCert, with FreeTSA as the fallback; the same as
+`make demo`), sending a hash, never the text. Nothing else is sent anywhere. It boots in about a minute and uses about
+600 MB of memory (`infra/demo/space/README.md` has the measured figures; give it at least 1 GB). It is a demo only:
+never point it at real data or real providers.
 
 `.github/workflows/demo-image.yml` builds it on every push to the integration branch that touches `backend/`,
 `frontend/` or `infra/`, and pushes `ghcr.io/ianondieki/bridge-demo:latest` and `:<commit SHA>`; run it by hand with
@@ -35,13 +40,18 @@ it at least 1 GB). It is a demo only: never point it at real data or real provid
 2. **Code** > **Codespaces** > **...** > **New with options**: branch `claude/eloquent-hypatia-aa3577`, dev container
    configuration "Bridge public demo", machine type 2-core (8 GB). **Create codespace**.
 3. Wait. The first time, the codespace builds the image from the checkout (about 10-15 minutes); then the demo boots
-   (about a minute, a little more on 2 cores). The terminal shows `demo: port 7860 is public. Share this address:`
-   followed by `https://<codespace-name>-7860.app.github.dev`. `tail -f ~/demo.log` shows the boot; it is ready when
-   the log says `ready in N s`.
-4. Share that address. Visitors need no GitHub account.
-   - If the terminal says it could not make the port public: open the **Ports** tab, right-click port 7860
-     (label "Demo"), **Port Visibility** > **Public**. Opening a public port as HTTPS turns it private again: leave
-     the protocol as HTTP.
+   (about a minute, a little more on 2 cores). `tail -f ~/demo.log` shows the boot; it is ready when the log says
+   `ready in N s`. The terminal prints the address, `https://<codespace-name>-7860.app.github.dev`, and the port is
+   **private**: the address opens only for you, signed in to GitHub. Try the demo there first.
+4. Work through **D. The go-live checklist**. Only then publish the port, in the codespace's terminal:
+   ```bash
+   bash .devcontainer/public-url.sh --publish
+   ```
+   and share the address it prints. Visitors need no GitHub account.
+   - If it says it could not change the visibility: open the **Ports** tab, right-click port 7860 (label "Demo"),
+     **Port Visibility** > **Public**. Opening a public port as HTTPS turns it private again: leave the protocol as
+     HTTP.
+   - To take the link down without stopping the codespace: `bash .devcontainer/public-url.sh --private`.
 5. Keep it up while you need it: GitHub stops an idle codespace after 30 minutes by default. Raise it to the maximum,
    240 minutes: https://github.com/settings/codespaces > **Default idle timeout**. A stopped codespace serves
    nothing; reopen it (Code > Codespaces > the codespace) and the demo boots again, from fresh data.
@@ -128,8 +138,25 @@ of building it.
 - [ ] **The GHCR package is public**, or no host but this repository's Actions can pull it: GitHub > your profile >
       **Packages** > **bridge-demo** > **Package settings** > **Danger Zone** > **Change visibility** > **Public**.
       The image holds no secret (they are generated at each boot) and its source is this repository.
+- [ ] **The one outbound connection is acceptable**: when a proposal is registered, the worker asks a public timestamp
+      service for an RFC 3161 timestamp of its certificate: DigiCert (`timestamp.digicert.com`, plain HTTP), with
+      FreeTSA (`freetsa.org`) as the fallback, as `make demo` does. They receive a hash and the host's address, never
+      the proposal. The provenance demo depends on them and the image has no switch for them; nothing else leaves the
+      container (email, SMS and payments are simulated, LLM calls use the fallback, SeaweedFS's statistics are off).
 - [ ] Open the link in a private window: the persona picker shows, the banner says the data is fictional and resets
       nightly, and `/robots.txt` disallows everything.
+- [ ] **Each visitor gets their own throttle**, checked on the chosen host right after it is reachable and before the
+      link is shared. Sign-in throttles (30 persona sign-ins a minute) are counted per visitor address, and the API
+      only knows that address from the `X-Forwarded-For` header the host's edge proxy sends. From two different
+      networks (a laptop on Wi-Fi and a phone on mobile data), open the link and sign in, then read the API's access
+      log: Codespaces `grep '\[api\]' ~/demo.log | tail -20`; Docker `docker logs <container> 2>&1 | grep '\[api\]'
+      | tail -20`. Each line starts with the address the API resolved: `INFO: 41.90.64.10:0 - "POST /api/auth/..."`
+      (`:0` means it came from the header). The two visitors must show two different public addresses. If every line
+      shows `127.0.0.1:<port>` (no header) or one shared address, all visitors share one throttle and one busy visitor
+      can lock the others out: do not share the link; report it. Caddy (part C) replaces any `X-Forwarded-For` a
+      visitor sends with the address it sees, so it passes this check by design; Hugging Face's and Codespaces' edge
+      proxies were not verified (if one appends to a visitor's own header, the API takes the right-most address,
+      which is the edge's view of the visitor). A bare `docker run -p` with no proxy in front sends no header at all.
 
 **Stopping it** (any host): A, stop the codespace; B, pause the Space; C, `sudo docker rm -f bridge-demo`. To withdraw
 the image too, make the package private again or delete it (Package settings).
