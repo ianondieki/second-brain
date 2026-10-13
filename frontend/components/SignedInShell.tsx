@@ -3,6 +3,7 @@ import { Suspense, type ReactNode } from "react";
 import type { StaffRole } from "./AdminNav";
 import { cn } from "./ui/cn";
 import { AccountMenu } from "./AccountMenu";
+import { AccountMenuTeam, isOrgShell } from "./AccountMenuTeam";
 import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
 import { PaletteSlot } from "./palette/PaletteSlot";
 import { TopBar } from "./TopBar";
@@ -60,7 +61,7 @@ export function SignedInShell({
           <Suspense fallback={<NotificationBell count={null} current={bellCurrent} />}>
             <UnreadNotificationBell current={bellCurrent} />
           </Suspense>
-          <AccountMenu />
+          <AccountMenu extra={isOrgShell(homeHref) ? <AccountMenuTeam homeHref={homeHref} /> : undefined} />
         </div>
       </TopBar>
       <div

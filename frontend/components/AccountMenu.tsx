@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { lazy, Suspense, use, useEffect, useId, useRef, useState } from "react";
+import { lazy, Suspense, use, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { forgetEmail } from "@/lib/auth/remembered-email";
 
@@ -85,9 +85,11 @@ const itemClass = "flex min-h-11 w-full items-center rounded-control px-3 font-m
 /**
  * The avatar menu of the top bar (docs/spec/07 item 1): Plan & billing, Notification settings, Help, then Sign out. A disclosure button with a list
  * of links (not an ARIA menu): Escape closes it and returns focus to the button, as does a press outside it. Plain
- * links, so the top bar ships no router code (this is on every signed-in page, docs/spec/07 item 5).
+ * links, so the top bar ships no router code (this is on every signed-in page, docs/spec/07 item 5). `extra`: items
+ * the screen's shell adds after Plan & billing, rendered on the server (the organisation's Team, REQ-TEN-02), so the
+ * menu's own script does not grow with them.
  */
-export function AccountMenu() {
+export function AccountMenu({ extra }: { extra?: ReactNode }) {
   const t = useStrings("shell");
   const { billing: showBilling } = use(MenuOptions);
   const [open, setOpen] = useState(false);
@@ -156,6 +158,7 @@ export function AccountMenu() {
               </a>
             </li>
           ) : null}
+          {extra}
           <li>
             <a href={SECURITY_HREF} className={itemClass}>
               {t("security")}

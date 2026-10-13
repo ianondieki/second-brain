@@ -10,7 +10,8 @@ import { HomeIcon } from "./ui/icons";
  * The organisation portal's sections (docs/spec/07 item 1: Inbox · Engagements · Problems · Team, at most five; Home
  * holds the second-factor prompt until onboarding lands). Only the built ones are listed: each later screen adds its
  * row here in the spec's order (Problems: the Problem Briefs, REQ-DIR-05; Events, REQ-DEV-02, the fifth and last: P22
- * card B default (6); Team waits for its screens and a free place). Same look and behaviour as DevNav.
+ * card B default (6)). Team (REQ-TEN-02, P28) has no free place here: it is in the account menu on organisation screens
+ * (components/AccountMenuTeam.tsx) and in the command palette. Same look and behaviour as DevNav.
  */
 export const ORG_SECTIONS = [
   { key: "home", href: "/org", Icon: HomeIcon },
