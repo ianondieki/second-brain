@@ -24,6 +24,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from bridge.auth import service, throttle
+from bridge.auth.crypto import token_hash
 from bridge.config import get_settings
 from bridge.ids import uuid7
 from bridge.profiles.consents import consents_version
@@ -218,4 +220,65 @@ async def test_two_accepts_at_the_seat_limit_are_counted_one_after_the_other(
             u=[first, second],
         )
     }
+    assert len(joined) == 1
+
+
+async def test_a_dead_link_sign_up_is_counted_and_the_sign_up_throttle_stops_the_probes(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The security re-check's MINOR: a refusal for a dead link keeps its ledger row (counted before the link is looked
+    at), so sign-up tests no token uncounted. After SIGNUP_LIMIT refusals from one address and IP the sign-up throttle
+    answers as it always does, a silent 202 with no account and no email, and no longer looks at the link at all."""
+    world = await team_world(owner_engine)
+    email = address()
+    async with clients(app_engine, SETTINGS, world.owner) as (owner,):
+        made = (await invite(owner, world.org, email)).json()
+        token = token_in(mail_to(owner, email)[0])
+        assert (await owner.delete(f"/api/orgs/{world.org}/invitations/{made['id']}")).status_code == 204
+    keys = throttle.keys(get_settings().secret_key.get_secret_value(), "signup", email, "127.0.0.1")
+    ledger = "SELECT count(*) FROM login_attempts WHERE email_digest = :d"
+    async with make_client(app_engine) as browser:
+        for n in range(1, service.SIGNUP_LIMIT + 1):
+            refused = await browser.post("/api/auth/signup", json=signup_body(email, invitation=token))
+            assert code(refused) == (422, "org_details_required")
+            assert (await rows(owner_engine, ledger, d=keys.email))[0][0] == n  # counted, not rolled back
+        throttled = await browser.post("/api/auth/signup", json=signup_body(email, invitation=token))
+        assert (throttled.status_code, throttled.json()) == (202, {"status": "check_email"})
+        assert [m for m in outbox(browser).outbox if m.to == email] == []
+    assert await account(owner_engine, email) is None
+
+
+async def test_a_resend_waits_for_an_accept_of_the_same_invitation_instead_of_deadlocking(
+    owner_engine: AsyncEngine, app_engine: AsyncEngine
+) -> None:
+    """The security re-check's MINOR: accept locks the invitation's row (app_accept_invitation) and then the
+    organisation's invitation lock; resend now takes them in the same order, so a resend arriving while an accept
+    holds the row waits, and once the accept commits it finds the invitation closed (409), with no deadlock (which
+    would answer 409 conflict, or before the fix a 500)."""
+    world = await team_world(owner_engine)
+    invitee, email = await person(owner_engine)
+    async with clients(app_engine, SETTINGS, world.owner) as (owner,):
+        made = (await invite(owner, world.org, email)).json()
+        token = token_in(mail_to(owner, email)[0])
+        async with app_engine.connect() as accepting:  # the accept, held open between its two locks
+            await accepting.begin()
+            await accepting.execute(text("SELECT set_config('app.user_id', :u, true)"), {"u": str(invitee)})
+            await accepting.execute(
+                text("SELECT app_accept_invitation(:h, :u)"), {"h": token_hash(token), "u": invitee}
+            )  # the row is locked now
+            resend = asyncio.create_task(owner.post(f"/api/orgs/{world.org}/invitations/{made['id']}/resend"))
+            await asyncio.sleep(1.5)  # the resend reaches the row and waits on it (and holds nothing the accept needs)
+            assert not resend.done()
+            await asyncio.wait_for(
+                accepting.execute(
+                    text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"), {"k": f"invitations:{world.org}"}
+                ),
+                timeout=10,
+            )
+            await accepting.commit()
+        answered = await asyncio.wait_for(resend, timeout=30)
+    assert code(answered) == (409, "invitation_closed")
+    joined = await rows(
+        owner_engine, "SELECT 1 FROM memberships WHERE org_id = :o AND user_id = :u", o=world.org, u=invitee
+    )
     assert len(joined) == 1
