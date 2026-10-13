@@ -11,9 +11,7 @@ entered from, and the expiry of the four stages that expire.
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 
 import pytest
 
@@ -29,13 +27,13 @@ from bridge.models.enums import (
     IpTerms,
     MilestoneState,
 )
+from tests.unit.engagements.backstop import database_predecessors
 
 S = EngagementState
 R = EngagementActorRole
 C = sm.Command
 DEV, ORG = EngagementParty.DEVELOPER, EngagementParty.ORG
 POLICY = load_policy()
-REVISION_0003 = Path(__file__).resolve().parents[3] / "alembic" / "versions" / "20260929_0003_schema_v3.py"
 
 DECIDERS = {R.OWNER, R.ADMIN, R.SIGNATORY, R.REVIEWER}
 EDITORS = {R.OWNER, R.ADMIN, R.SIGNATORY}
@@ -191,13 +189,11 @@ def test_deal_steps_are_refused_while_the_deals_flag_is_off() -> None:
 
 
 def _database_predecessors() -> dict[str, set[str]]:
-    """revision 0003's engagement_main_path_predecessors(): WHEN '<state>' THEN '{<states>}'."""
-    source = REVISION_0003.read_text(encoding="utf-8")
-    body = source[source.index("CREATE FUNCTION engagement_main_path_predecessors") :]
-    body = body[: body.index("$$;")]
-    found = re.findall(r"WHEN '([A-Z_]+)' THEN '\{([A-Z_,]*)\}'", body)
+    """The newest revision's engagement_main_path_predecessors() (revision 0015's since P28)."""
+    found = database_predecessors()
     assert len(found) == 15
-    return {state: set(filter(None, before.split(","))) for state, before in found}
+    assert found["PROCUREMENT_ROUTE"] == {"UNDER_REVIEW"}  # 3b between stages 2 and 3 (revision 0015)
+    return found
 
 
 def test_every_transition_stays_inside_the_database_backstop() -> None:

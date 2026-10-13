@@ -8,9 +8,7 @@ stage or a signing stage without both parties (a pause keeps what the stage had:
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field, replace
-from pathlib import Path
 
 from hypothesis import event, given, settings
 from hypothesis import strategies as st
@@ -25,6 +23,7 @@ from bridge.models.enums import (
     IpTerms,
     MilestoneState,
 )
+from tests.unit.engagements.backstop import database_predecessors
 
 S = EngagementState
 R = EngagementActorRole
@@ -37,17 +36,10 @@ ACTORS = (
     sm.Actor(ORG, frozenset({R.FINANCE})),
     sm.Actor(ORG, frozenset()),
 )
-REVISION_0003 = Path(__file__).resolve().parents[3] / "alembic" / "versions" / "20260929_0003_schema_v3.py"
 
 
 def _predecessors() -> dict[S, set[S]]:
-    source = REVISION_0003.read_text(encoding="utf-8")
-    body = source[source.index("CREATE FUNCTION engagement_main_path_predecessors") :]
-    body = body[: body.index("$$;")]
-    return {
-        S(state): {S(s) for s in before.split(",") if s}
-        for state, before in re.findall(r"WHEN '([A-Z_]+)' THEN '\{([A-Z_,]*)\}'", body)
-    }
+    return {S(state): {S(s) for s in before} for state, before in database_predecessors().items()}
 
 
 PREDECESSORS = _predecessors()

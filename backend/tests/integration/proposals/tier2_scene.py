@@ -399,17 +399,24 @@ async def step(
         await conn.execute(text(APPEND), params)
 
 
-async def approve_to_proceed(app_engine: AsyncEngine, scene: Scene, engagement: UUID, from_state: str) -> None:
-    """Stage 3: the signatory names the contact (the reviewer, by email) and approves to proceed."""
-    async with acting(app_engine, scene.signatory_id, scene.granted_org_id) as conn:
+async def approve_to_proceed(
+    app_engine: AsyncEngine, scene: Scene, engagement: UUID, from_state: str, *, route_by: UUID | None = None
+) -> None:
+    """Stage 3: the signatory names the contact (the reviewer, by email) and approves to proceed. From a public
+    entity's PROCUREMENT_ROUTE, ``route_by`` (an owner or admin) decides the route and moves it on instead, in the same
+    transaction (revision 0015)."""
+    actor = route_by or scene.signatory_id
+    async with acting(app_engine, actor, scene.granted_org_id) as conn:
         await conn.execute(
             text(
                 "UPDATE engagements SET contact_user_id = :c, contact_channel = 'email', contact_by = :by"
-                " WHERE id = :id"
+                + (", procurement_route = 'pilot_mou'" if route_by else "")
+                + " WHERE id = :id"
             ),
             {"c": scene.viewer_id, "by": date(2026, 12, 1), "id": engagement},
         )
-        params = event_params(engagement, scene.signatory_id, "signatory", "approve", from_state, "INTEREST_CONFIRMED")
+        role, command = ("admin", "procurement_route") if route_by else ("signatory", "approve")
+        params = event_params(engagement, actor, role, command, from_state, "INTEREST_CONFIRMED")
         await conn.execute(text(APPEND), params)
 
 
