@@ -788,3 +788,19 @@ def test_pauses_move_a_count_of_business_days_from_a_stage_entry() -> None:
     assert sm.after_business_days(monday, 3, 0, set()) == sm.end_of_day(date(2026, 10, 8))
     assert sm.after_business_days(monday, 3, 2, set()) == sm.end_of_day(date(2026, 10, 12))
     assert sm.after_business_days(monday, 3, 0, {date(2026, 10, 7)}) == sm.end_of_day(date(2026, 10, 9))
+
+
+def test_the_contact_by_window_is_counted_on_the_nairobi_day_and_the_holidays() -> None:
+    """The contact-by date's window starts on today in Africa/Nairobi, not the UTC date (22:30 UTC on Thu 1 Oct 2026
+    is 01:30 EAT on Fri 2 Oct), and skips a gazetted holiday inside it."""
+    late = datetime(2026, 10, 1, 22, 30, tzinfo=UTC)  # Fri 2 Oct 01:30 EAT
+    sm.check_contact_by(date(2026, 10, 2), late, set(), POLICY)  # today in Nairobi
+    sm.check_contact_by(date(2026, 10, 9), late, set(), POLICY)  # Fri + 5 BD (the UTC date's would end on Thu 8)
+    for wrong in (date(2026, 10, 1), date(2026, 10, 12)):  # yesterday in Nairobi; past the 5th business day
+        with pytest.raises(sm.Invalid):
+            sm.check_contact_by(wrong, late, set(), POLICY)
+    holiday = {date(2026, 10, 6)}  # a Tuesday inside the window: the 5th business day moves to Mon 12 Oct
+    sm.check_contact_by(date(2026, 10, 12), late, holiday, POLICY)
+    with pytest.raises(sm.Invalid) as refused:
+        sm.check_contact_by(date(2026, 10, 13), late, holiday, POLICY)
+    assert "12 Oct 2026" in refused.value.message
