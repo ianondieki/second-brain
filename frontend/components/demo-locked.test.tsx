@@ -154,13 +154,14 @@ describe("/signup", () => {
   });
 });
 
-describe("the API's 403 public_demo_locked on the certificate file check", () => {
-  it("reads as the demo's sentence, not as a failed check", async () => {
+// The API keeps POST /api/verify open in the public demo (it hashes the file and keeps nothing): the check has no
+// demo branch and works as anywhere else.
+describe("the certificate file check in the public demo", () => {
+  it("works as without the mode", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
     const { checkFile } = await import("@/app/(public)/verify/upload");
-    const locked = new Response(JSON.stringify({ detail: { code: "public_demo_locked", message: "x" } }), { status: 403 });
-    expect(await checkFile(new Blob(["x"]), undefined, async () => locked)).toEqual({ ok: false, problem: "demoLocked" });
-    const other = new Response(JSON.stringify({ detail: { code: "forbidden" } }), { status: 403 });
-    expect(await checkFile(new Blob(["x"]), undefined, async () => other)).toEqual({ ok: false, problem: "failed" });
-    expect(en.verifyFile.demoLocked).toBe(en.errors.public_demo_locked);
+    const match = { match: true, cert_id: "TXEMFBJ89RRTQS87", sha256: "0".repeat(64) };
+    const answer = new Response(JSON.stringify(match), { status: 200, headers: { "content-type": "application/json" } });
+    expect(await checkFile(new Blob(["x"]), undefined, async () => answer)).toEqual({ ok: true, result: match });
   });
 });

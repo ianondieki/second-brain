@@ -2,7 +2,7 @@ import { queryString, withCsrf } from "@/lib/api/client";
 
 import { MAX_UPLOAD_BYTES, UPLOAD_PATH, type UploadCheck } from "./certificate";
 
-export type FileProblem = "noFile" | "tooLarge" | "rateLimited" | "demoLocked" | "failed" | "network";
+export type FileProblem = "noFile" | "tooLarge" | "rateLimited" | "failed" | "network";
 
 export type FileOutcome = { ok: true; result: UploadCheck } | { ok: false; problem: FileProblem };
 
@@ -14,20 +14,11 @@ export function fileProblem(file: File | undefined | null): FileProblem | null {
   return file.size > MAX_UPLOAD_BYTES ? "tooLarge" : null;
 }
 
-async function lockedInDemo(response: Response): Promise<boolean> {
-  try {
-    const body = (await response.clone().json()) as { detail?: { code?: unknown } } | null;
-    return body?.detail?.code === "public_demo_locked";
-  } catch {
-    return false;
-  }
-}
-
 /**
  * POST /api/verify[?cert_id=] with the file's bytes as the body (the API hashes the stream and keeps nothing). The
  * typed client sends JSON bodies only, so this is the one raw-body call; it still goes through withCsrf, since the
  * API checks the double-submit token on every POST. A thrown fetch is "network"; 413 is "tooLarge"; 429
- * "rateLimited"; 403 public_demo_locked "demoLocked"; anything else unexpected "failed".
+ * "rateLimited"; anything else unexpected "failed".
  */
 export async function checkFile(file: Blob, certId?: string, send: Send = withCsrf()): Promise<FileOutcome> {
   let response: Response;
@@ -43,8 +34,6 @@ export async function checkFile(file: Blob, certId?: string, send: Send = withCs
   }
   if (response.status === 413) return { ok: false, problem: "tooLarge" };
   if (response.status === 429) return { ok: false, problem: "rateLimited" };
-  // The public demo (REQ-FND-04) may switch this route off: its own sentence, not "the check did not finish".
-  if (response.status === 403 && (await lockedInDemo(response))) return { ok: false, problem: "demoLocked" };
   if (!response.ok) return { ok: false, problem: "failed" };
   try {
     const result = (await response.json()) as UploadCheck;
