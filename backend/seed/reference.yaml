@@ -1,0 +1,121 @@
+# Reference/seed data for Phase 1 (T1.4): regions, holidays, niches.
+# Every value is cited in docs/platform/research/phase1-seed-data.md. Do not hand-edit without
+# updating the citation there. name_sw intentionally omitted (Swahili names need G5 native-speaker
+# review per docs/spec/07 i18n).
+#
+# IMPORTANT: `code` (ISO 3166-2:KE, alphabetical order) and `county_code` (First Schedule of the
+# Constitution, numeric order) are DIFFERENT numbering schemes that do NOT align — e.g. Mombasa is
+# county_code "001" but ISO code "KE-28". See research note section 2 ("Counties: two numbering
+# schemes, not aligned"). Never assume KE-0N == county_code 00N.
+
+source_note: docs/platform/research/phase1-seed-data.md
+checked: 2026-09-24
+
+regions:
+  - {code: KE, name: Kenya, kind: country, parent: null}
+
+  - {code: KE-28, county_code: "001", name: Mombasa, kind: county, parent: KE}
+  - {code: KE-19, county_code: "002", name: Kwale, kind: county, parent: KE}
+  - {code: KE-14, county_code: "003", name: Kilifi, kind: county, parent: KE}
+  - {code: KE-40, county_code: "004", name: Tana River, kind: county, parent: KE}
+  - {code: KE-21, county_code: "005", name: Lamu, kind: county, parent: KE}
+  - {code: KE-39, county_code: "006", name: Taita/Taveta, kind: county, parent: KE}
+  - {code: KE-07, county_code: "007", name: Garissa, kind: county, parent: KE}
+  - {code: KE-46, county_code: "008", name: Wajir, kind: county, parent: KE}
+  - {code: KE-24, county_code: "009", name: Mandera, kind: county, parent: KE}
+  - {code: KE-25, county_code: "010", name: Marsabit, kind: county, parent: KE}
+  - {code: KE-09, county_code: "011", name: Isiolo, kind: county, parent: KE}
+  - {code: KE-26, county_code: "012", name: Meru, kind: county, parent: KE}
+  - {code: KE-41, county_code: "013", name: Tharaka-Nithi, kind: county, parent: KE}
+  - {code: KE-06, county_code: "014", name: Embu, kind: county, parent: KE}
+  - {code: KE-18, county_code: "015", name: Kitui, kind: county, parent: KE}
+  - {code: KE-22, county_code: "016", name: Machakos, kind: county, parent: KE}
+  - {code: KE-23, county_code: "017", name: Makueni, kind: county, parent: KE}
+  - {code: KE-35, county_code: "018", name: Nyandarua, kind: county, parent: KE}
+  - {code: KE-36, county_code: "019", name: Nyeri, kind: county, parent: KE}
+  - {code: KE-15, county_code: "020", name: Kirinyaga, kind: county, parent: KE}
+  - {code: KE-29, county_code: "021", name: Murang'a, kind: county, parent: KE}
+  - {code: KE-13, county_code: "022", name: Kiambu, kind: county, parent: KE}
+  - {code: KE-43, county_code: "023", name: Turkana, kind: county, parent: KE}
+  - {code: KE-47, county_code: "024", name: West Pokot, kind: county, parent: KE}
+  - {code: KE-37, county_code: "025", name: Samburu, kind: county, parent: KE}
+  - {code: KE-42, county_code: "026", name: Trans Nzoia, kind: county, parent: KE}
+  - {code: KE-44, county_code: "027", name: Uasin Gishu, kind: county, parent: KE}
+  - {code: KE-05, county_code: "028", name: Elgeyo/Marakwet, kind: county, parent: KE}
+  - {code: KE-32, county_code: "029", name: Nandi, kind: county, parent: KE}
+  - {code: KE-01, county_code: "030", name: Baringo, kind: county, parent: KE}
+  - {code: KE-20, county_code: "031", name: Laikipia, kind: county, parent: KE}
+  - {code: KE-31, county_code: "032", name: Nakuru, kind: county, parent: KE}
+  - {code: KE-33, county_code: "033", name: Narok, kind: county, parent: KE}
+  - {code: KE-10, county_code: "034", name: Kajiado, kind: county, parent: KE}
+  - {code: KE-12, county_code: "035", name: Kericho, kind: county, parent: KE}
+  - {code: KE-02, county_code: "036", name: Bomet, kind: county, parent: KE}
+  - {code: KE-11, county_code: "037", name: Kakamega, kind: county, parent: KE}
+  - {code: KE-45, county_code: "038", name: Vihiga, kind: county, parent: KE}
+  - {code: KE-03, county_code: "039", name: Bungoma, kind: county, parent: KE}
+  - {code: KE-04, county_code: "040", name: Busia, kind: county, parent: KE}
+  - {code: KE-38, county_code: "041", name: Siaya, kind: county, parent: KE}
+  - {code: KE-17, county_code: "042", name: Kisumu, kind: county, parent: KE}
+  - {code: KE-08, county_code: "043", name: Homa Bay, kind: county, parent: KE}
+  - {code: KE-27, county_code: "044", name: Migori, kind: county, parent: KE}
+  - {code: KE-16, county_code: "045", name: Kisii, kind: county, parent: KE}
+  - {code: KE-34, county_code: "046", name: Nyamira, kind: county, parent: KE}
+  - {code: KE-30, county_code: "047", name: Nairobi City, kind: county, parent: KE}
+
+# Public Holidays Act (Cap. 110). Section 4: a Part I holiday falling on a Sunday moves to the next
+# non-holiday day (normally Monday); Saturday holidays are NOT moved (no rule covers Saturday).
+# Islamic holidays (Idd-ul-Fitr, Idd-ul-Azha) are only gazetted once the Chief Kadhi confirms the
+# moon sighting; dates shown for years/holidays not yet gazetted are calendar-projection estimates
+# and carry provisional: true.
+holidays:
+  # 2026 — gazetted / fixed
+  - {date: 2026-01-01, name: New Year's Day, observed: 2026-01-01, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+  - {date: 2026-03-20, name: Idd-ul-Fitr, observed: 2026-03-20, provisional: false, source_url: "https://www.the-star.co.ke/news/2026-03-19-state-declares-friday-public-holiday-to-mark-idd"}
+  - {date: 2026-04-03, name: Good Friday, observed: 2026-04-03, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+  - {date: 2026-04-06, name: Easter Monday, observed: 2026-04-06, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+  - {date: 2026-05-01, name: Labour Day, observed: 2026-05-01, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+  - {date: 2026-05-27, name: Idd-ul-Azha, observed: 2026-05-27, provisional: false, source_url: "https://citizen.digital/article/govt-declares-may-27-public-holiday-to-mark-eid-ul-adha-n383374"}
+  - {date: 2026-06-01, name: Madaraka Day, observed: 2026-06-01, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+  - {date: 2026-10-10, name: Mazingira Day, observed: 2026-10-10, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+  - {date: 2026-10-20, name: Mashujaa Day, observed: 2026-10-20, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+  - {date: 2026-12-12, name: Jamhuri Day, observed: 2026-12-12, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+  - {date: 2026-12-25, name: Christmas Day, observed: 2026-12-25, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+  - {date: 2026-12-26, name: Boxing Day, observed: 2026-12-26, provisional: false, source_url: "https://calendarific.com/holidays/2026/KE"}
+
+  # 2027 — fixed dates confirmed by calendar computation; three Sunday-shifts per Section 4
+  - {date: 2027-01-01, name: New Year's Day, observed: 2027-01-01, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-03-10, name: Idd-ul-Fitr, observed: 2027-03-10, provisional: true, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-03-26, name: Good Friday, observed: 2027-03-26, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-03-29, name: Easter Monday, observed: 2027-03-29, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-05-01, name: Labour Day, observed: 2027-05-01, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-05-17, name: Idd-ul-Azha, observed: 2027-05-17, provisional: true, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-06-01, name: Madaraka Day, observed: 2027-06-01, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-10-10, name: Mazingira Day, observed: 2027-10-11, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-10-20, name: Mashujaa Day, observed: 2027-10-20, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-12-12, name: Jamhuri Day, observed: 2027-12-13, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-12-25, name: Christmas Day, observed: 2027-12-25, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+  - {date: 2027-12-26, name: Boxing Day, observed: 2027-12-27, provisional: false, source_url: "https://calendarific.com/holidays/2027/KE"}
+
+# ISIC Rev.4 (UN Statistics Division). Codes cited per-class at
+# https://unstats.un.org/unsd/classifications/Econ/Detail/EN/27/<code> (read 2026-09-24).
+# Open items (see research note "Implications"/"Open questions"):
+#   - networks-telecommunications reuses parent code 61 (no finer single ISIC class exists)
+#   - county-government reuses national-government's code 8411 (ISIC has no sub-national gov class)
+#   - logistics (H 52) may need product review vs. H 49 (land transport) / H 53 (postal & courier)
+niches:
+  - {slug: financial-services, name_en: Financial services, isic: "K64", parent: null}
+  - {slug: microfinance-saccos, name_en: Microfinance & SACCOs, isic: "6492", parent: financial-services}
+  - {slug: ict, name_en: ICT, isic: "J61", parent: null}
+  - {slug: networks-telecommunications, name_en: Networks & Telecommunications, isic: "61", parent: ict}
+  - {slug: education, name_en: Education, isic: "P85", parent: null}
+  - {slug: higher-education, name_en: Higher education, isic: "8530", parent: education}
+  - {slug: basic-education, name_en: Basic education, isic: "8510", parent: education}
+  - {slug: public-sector, name_en: Public sector, isic: "O84", parent: null}
+  - {slug: national-government, name_en: National government, isic: "8411", parent: public-sector}
+  - {slug: county-government, name_en: County government, isic: "8411", parent: public-sector}
+  - {slug: health, name_en: Health, isic: "Q86", parent: null}
+  - {slug: agriculture, name_en: Agriculture, isic: "A01", parent: null}
+  - {slug: energy, name_en: Energy, isic: "D35", parent: null}
+  - {slug: logistics, name_en: Logistics, isic: "H52", parent: null}
+  - {slug: retail, name_en: Retail, isic: "G47", parent: null}
+  - {slug: social-ngo, name_en: Social/NGO, isic: "9499", parent: null}

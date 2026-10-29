@@ -1,0 +1,332 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { lazy, Suspense, useEffect, useRef, useState, useTransition } from "react";
+
+import { useStrings } from "@/components/ClientStrings";
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { useHydrated } from "@/lib/hooks/useHydrated";
+
+import { confirmStepUp, runCommand, type Refusal } from "./calls";
+import type { Member } from "./CommandForm";
+import { LazyStepUp } from "./lazy";
+import {
+  commandRequest,
+  isEndingCommand,
+  isFormCommand,
+  isSheetCommand,
+  type ActionItem,
+  type Command,
+  type CommandRequest,
+  type FormCommand,
+  type FormInput,
+  type SheetCommand,
+  type SideLimits,
+} from "./model";
+
+// The forms load when one opens (docs/spec/07 item 5: the tracker stays within the JS budget); they never render on
+// the server, so React.lazy adds no layout shift.
+const CommandForm = lazy(() => import("./CommandForm").then((m) => ({ default: m.CommandForm })));
+const SideSheet = lazy(() => import("./SideSheet").then((m) => ({ default: m.SideSheet })));
+// The fresh-code form only a signature, endorsement or payment asks for (403 step_up_required): loaded when asked, and
+// said in one sentence if its chunk cannot load (components/tracker/lazy.tsx).
+const StepUp = LazyStepUp;
+
+export interface ActionsProps {
+  engagementId: string;
+  lockVersion: number;
+  /** The caller's buttons, from the API's `actions` only (model.actionItems). */
+  items: ActionItem[];
+  /** The other party's name, for the confirmations. */
+  counterpart: string;
+  /** Two-step sign-in is on (the step-up needs a code). */
+  enrolled: boolean;
+  /** approve: the organisation's members; null when they could not be read. */
+  members?: Member[] | null;
+  myUserId?: string;
+  /** The recorded final payment ("250,000"), for the developer's confirmation hint. */
+  recorded?: string | null;
+  /** answer_info: the organisation's open question and the day it was asked. */
+  question?: { body: string; date: string } | null;
+  /** resume: the day the hold was due to end. */
+  resumeOn?: string | null;
+  /** The page's language, for the dates and counts the sheets write. */
+  locale?: string;
+  /**
+   * Today in Nairobi on the platform's clock (the API's `today`): the forms' default and earliest dates (a contact-by
+   * date) and a hold's date range; null: the browser's day for the forms, and the API decides a hold's date.
+   */
+  today?: string | null;
+  /** What the policy's caps leave this stage (the API's `side_limits`). */
+  limits?: SideLimits | null;
+  /** The engagement's organisation: choose_route is sent under its path. */
+  orgId?: string;
+  /** approve: a public entity names the contact-by date with its procurement route (3b), not here. */
+  publicEntity?: boolean;
+  runImpl?: typeof runCommand;
+  confirmImpl?: typeof confirmStepUp;
+}
+
+type Mode =
+  | { kind: "list" }
+  | { kind: "form"; item: ActionItem & { command: FormCommand } }
+  // The side states' sheets and a public entity's procurement route (SideSheet, RouteSheet), over the list.
+  | { kind: "sheet"; item: ActionItem & { command: SheetCommand } }
+  | { kind: "confirm"; item: ActionItem }
+  | { kind: "stepUp"; item: ActionItem; request: CommandRequest };
+
+type Notice = { tone: "ok" | "error"; refusal?: Refusal } | null;
+
+/**
+ * The caller's action buttons (docs/spec/06 6.9: "the action button appears only for that party"): one per command in
+ * the API's `actions`, the awaited one primary. Commands with a body open their form, ending steps ask first, and
+ * signatures, endorsements and payments ask for a fresh authenticator code when the API says so (403
+ * step_up_required), then run once more. A 409 (the engagement changed, or the step is no longer possible) and a 404
+ * refresh the page and say so.
+ */
+export function Actions(props: ActionsProps) {
+  const t = useStrings("trackerActions");
+  const router = useRouter();
+  const { runImpl = runCommand } = props;
+  const [mode, setMode] = useState<Mode>({ kind: "list" });
+  const [running, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
+  // A step that ran stays busy until the refreshed tracker is on screen; only then does "Done" say it is up to date
+  // (and a press can no longer land on a button the refresh is about to replace).
+  const [refreshing, startRefresh] = useTransition();
+  const [okPending, setOkPending] = useState(false);
+  const [pressed, setPressed] = useState<string | null>(null);
+  const busy = running || refreshing;
+  if (okPending && !refreshing) {
+    setOkPending(false);
+    setMode({ kind: "list" });
+    setNotice({ tone: "ok" });
+  }
+  // Tests wait for this before pressing a button: the server's HTML shows the buttons before they work.
+  const hydrated = useHydrated();
+  const noticeRef = useRef<HTMLDivElement>(null);
+  // The step-up retries its step once, and only while its form is still open (not after Cancel or a refresh).
+  const stepUpOpen = useRef(false);
+
+  // A refreshed engagement brings new buttons: the list is what the API allows now (adjusted while rendering, as
+  // React recommends for state that follows a prop).
+  const [seenVersion, setSeenVersion] = useState(props.lockVersion);
+  if (seenVersion !== props.lockVersion) {
+    setSeenVersion(props.lockVersion);
+    setMode({ kind: "list" });
+  }
+
+  useEffect(() => {
+    if (notice) noticeRef.current?.focus();
+  }, [notice]);
+
+  // Focus follows what opened (WCAG 2.4.3): a form or confirmation takes it on its heading (the step-up on its code
+  // field), and Cancel gives it back to the button that opened it.
+  const root = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const opener = useRef<string | null>(null);
+  const returnFocus = useRef(false);
+  useEffect(() => {
+    if (mode.kind === "form" || mode.kind === "confirm") heading.current?.focus();
+    if (mode.kind === "list" && returnFocus.current) {
+      returnFocus.current = false;
+      const button = root.current?.querySelector<HTMLElement>(`[data-action-key="${opener.current}"]`);
+      button?.focus();
+    }
+  }, [mode.kind]);
+
+  function cancel() {
+    stepUpOpen.current = false;
+    setNotice(null);
+    returnFocus.current = true;
+    setMode({ kind: "list" });
+  }
+
+  function requestFor(item: ActionItem, input?: FormInput): CommandRequest {
+    // Never choose_route: a sheet's command, whose sheet builds its own request (SideSheet).
+    return commandRequest(item.command as Exclude<Command, "choose_route">, props.engagementId, props.lockVersion, {
+      milestoneId: item.milestone?.id,
+      input,
+    });
+  }
+
+  async function run(item: ActionItem, request: CommandRequest, retried = false) {
+    if (busy && !retried) return;
+    setBusy(true);
+    setNotice(null);
+    const outcome = await runImpl(request);
+    setBusy(false);
+    if (outcome.ok) {
+      setOkPending(true);
+      startRefresh(() => router.refresh());
+      return;
+    }
+    if (outcome.refusal === "stepUp" && !retried) {
+      stepUpOpen.current = true;
+      setMode({ kind: "stepUp", item, request });
+      return;
+    }
+    // A form or sheet stays open with its refusal, and what was typed, unless the engagement moved on (409 other than
+    // a hold's date past the days left, 404: back to the buttons, refreshed) or the step is not the caller's (403):
+    // a refused input (422), the steps per hour spent (429), no connection (0) or a server failure (5xx) say "try
+    // again" in place.
+    const keepForm =
+      (mode.kind === "form" || mode.kind === "sheet") &&
+      ((outcome.status !== 409 && outcome.status !== 404 && outcome.status !== 403) ||
+        outcome.refusal === "paymentMismatch" ||
+        outcome.refusal === "holdLimit");
+    if (!keepForm) setMode({ kind: "list" });
+    setNotice({ tone: "error", refusal: outcome.refusal === "stepUp" ? "generic" : outcome.refusal });
+    if (outcome.status === 409 || outcome.status === 404) router.refresh();
+  }
+
+  function press(item: ActionItem) {
+    setNotice(null);
+    setPressed(keyOf(item));
+    opener.current = keyOf(item);
+    if (isFormCommand(item.command)) setMode({ kind: "form", item: item as ActionItem & { command: FormCommand } });
+    else if (isSheetCommand(item.command)) setMode({ kind: "sheet", item: item as ActionItem & { command: SheetCommand } });
+    else if (isEndingCommand(item.command)) setMode({ kind: "confirm", item });
+    else void run(item, requestFor(item));
+  }
+
+  const message = notice ? (
+    <Alert ref={noticeRef} tone={notice.tone} className="w-full">
+      {notice.tone === "ok" ? t("done") : t(`refusal.${notice.refusal ?? "generic"}`)}
+    </Alert>
+  ) : null;
+
+  // The list's notice sits outside the section, so "Done" stays (with focus) when the step leaves no buttons. A sheet
+  // stays over the list (the page behind it inert) and shows its own refusals.
+  const listNotice = mode.kind === "list" ? message : null;
+  const listed = mode.kind === "list" || mode.kind === "sheet";
+  return (
+    <div ref={root} className="flex flex-col gap-4">
+      {/* "Working…" said politely while a step runs (the button's label alone is not announced); a sheet, which makes
+          this inert, says it inside itself. Left out with no buttons, so the region stays empty for the card's :empty. */}
+      {props.items.length > 0 || busy ? (
+        <span aria-live="polite" data-working="" className="sr-only">
+          {busy ? t("busy") : ""}
+        </span>
+      ) : null}
+      {listNotice}
+      {props.items.length === 0 && listed ? null : (
+    <section aria-labelledby="actions-heading" aria-busy={busy} data-actions="" data-hydrated={hydrated ? "true" : "false"} className="flex flex-col gap-4">
+      {/* Listing, the turn card's next-step sentence already names the step: the heading is for screen readers. A
+          form or sheet shows its own name. */}
+      <h2 id="actions-heading" ref={heading} tabIndex={-1} className={listed ? "sr-only" : "text-lg text-ink"}>
+        {listed ? t("title") : label(mode.item)}
+      </h2>
+
+      {listed ? (
+        <>
+          <ul className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            {props.items.map((item) => {
+              // Ending steps (withdraw, decline) are the danger variant: outlined in the error colour, never filled,
+              // and set apart at the row's end from 640 px.
+              const ending = isEndingCommand(item.command);
+              return (
+                <li key={`${item.command}-${item.milestone?.id ?? ""}`} className={ending ? "sm:ml-auto" : undefined}>
+                  <Button
+                    variant={ending ? "danger" : item.primary ? "primary" : "secondary"}
+                    busy={busy}
+                    className="w-full sm:w-auto"
+                    onClick={() => press(item)}
+                    data-command={item.command}
+                    data-action-key={keyOf(item)}
+                    data-milestone={item.milestone?.seq}
+                  >
+                    {busy && keyOf(item) === pressed ? t("busy") : label(item)}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      ) : null}
+
+      {mode.kind === "confirm" ? (
+        <div className="flex flex-col gap-4">
+          <p className="max-w-[60ch] text-ink">{t(`confirm.${endingKey(mode.item.command)}`, { name: props.counterpart })}</p>
+          {message}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              variant="danger"
+              busy={busy}
+              className="w-full sm:w-auto"
+              onClick={() => void run(mode.item, requestFor(mode.item))}
+            >
+              {busy ? t("busy") : label(mode.item)}
+            </Button>
+            <Button variant="secondary" onClick={cancel}>
+              {t("cancel")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {mode.kind === "form" ? (
+        <Suspense fallback={<p className="text-ink-soft">{t("busy")}</p>}>
+          {/* members, myUserId, recorded and today come from the props of the same names. */}
+          <CommandForm
+            {...props}
+            command={mode.item.command}
+            busy={busy}
+            notice={message}
+            onCancel={cancel}
+            onSubmit={(input) => void run(mode.item, requestFor(mode.item, input))}
+          />
+        </Suspense>
+      ) : null}
+
+      {mode.kind === "sheet" ? (
+        <Suspense fallback={null}>
+          {/* engagementId, lockVersion, orgId, counterpart, question, resumeOn, locale, today and limits come from the
+              props of the same names; the sheet builds the request. */}
+          <SideSheet
+            {...props}
+            command={mode.item.command}
+            busy={busy}
+            problem={message}
+            notice={notice}
+            onClose={cancel}
+            onSubmit={(request) => void run(mode.item, request)}
+          />
+        </Suspense>
+      ) : null}
+
+      {mode.kind === "stepUp" ? (
+        <Suspense fallback={<p className="text-ink-soft">{t("busy")}</p>}>
+        <StepUp
+          enrolled={props.enrolled}
+          onCancel={cancel}
+          onConfirmed={async () => {
+            if (!stepUpOpen.current) return;
+            stepUpOpen.current = false;
+            await run(mode.item, mode.request, true);
+          }}
+          confirmImpl={props.confirmImpl}
+        />
+        </Suspense>
+      ) : null}
+    </section>
+      )}
+    </div>
+  );
+
+  function label(item: ActionItem): string {
+    return item.milestone
+      ? t(`milestone.${item.command as "start_milestone"}`, { number: item.milestone.seq })
+      : t(`command.${item.command}`);
+  }
+}
+
+/** A button's identity across renders: its command, and its milestone for the sub-tracker's. */
+function keyOf(item: ActionItem): string {
+  return item.milestone ? `${item.command}:${item.milestone.id}` : item.command;
+}
+
+function endingKey(command: ActionItem["command"]): "withdraw" | "decline_interest" | "decline" {
+  return command === "withdraw" ? "withdraw" : command === "decline_interest" ? "decline_interest" : "decline";
+}

@@ -1,0 +1,187 @@
+{
+  "case": "at_risk_uncommitted_and_unpushed",
+  "description": "Work at risk: uncommitted and unpushed, commits today and days ago, singular and plural counts.",
+  "expected": {
+    "actionable": [
+      "payments-api",
+      "web-shop",
+      "tiny-cli"
+    ],
+    "classify": {
+      "flagged": [
+        {
+          "cold": false,
+          "headline": "work at risk: 1 changed file not committed for 4 days, 1 commit not pushed for 3 days",
+          "name": "payments-api",
+          "risks": [
+            "1 changed file not committed for 4 days",
+            "1 commit not pushed for 3 days"
+          ]
+        },
+        {
+          "cold": false,
+          "headline": "work at risk: 2 changed files not committed for 3 days",
+          "name": "web-shop",
+          "risks": [
+            "2 changed files not committed for 3 days"
+          ]
+        },
+        {
+          "cold": true,
+          "headline": "work at risk: 2 commits not pushed for 4 days; no work for 4 days",
+          "name": "tiny-cli",
+          "risks": [
+            "2 commits not pushed for 4 days"
+          ]
+        }
+      ],
+      "held": [],
+      "quiet": []
+    },
+    "email": {
+      "html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Project check-in</title></head><body style=\"margin:0;padding:0;background:#f4f4f5\"><div style=\"display:none;max-height:0;overflow:hidden;opacity:0;color:transparent\">Start with payments-api: Look over your changes in src/callback.py, then commit them.</div><div style=\"max-width:640px;margin:0 auto;padding:24px 18px;background:#ffffff;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#18181b;overflow-wrap:anywhere;word-break:break-word\"><h1 style=\"font-size:23px;margin:0 0 2px\">Your daily project check-in</h1><div style=\"color:#71717a;font-size:14px;margin:0 0 18px\">Monday 21 September 2026</div><div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1d4ed8\">At a glance</div><div style=\"font-size:18px;margin:4px 0 2px\"><b>3 projects</b> need you today.</div><div style=\"color:#3f3f46;margin:0 0 2px\">Pick one below and do its next step. Each step takes about 15 minutes.</div><div style=\"color:#52525b;font-size:13px;margin:0 0 8px\">&quot;The assistant&quot; in this email is an AI helper that looks inside your quiet project folders.</div><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;border-collapse:collapse;background:#ffffff;border-radius:8px\"><tr><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#b45309\">3</div><div style=\"font-size:12px;color:#52525b\">Need you</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe finished</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe not projects</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Going fine</div></td></tr></table></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#1d4ed8\">Projects that need you</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #1d4ed8\">The most urgent one is first. Start with number 1, or pick another one.</div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">1</span>payments-api</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Worked on today</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Last commit 3 days ago</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"background:#fef3f2;border-left:4px solid #d92d20;color:#912018;padding:8px 12px;margin:6px 0 8px;font-size:14px\"><b>&#9888; Work at risk</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:3px 0 0\">1 changed file not committed for 4 days. This work is not saved in git yet.</li><li style=\"margin:3px 0 0\">1 commit not pushed for 3 days. This work is only on this laptop, not backed up online.</li></ul></div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>Last commit: &quot;Wire M-Pesa callback&quot;.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Look over your changes in src/callback.py, then commit them.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recent commits:</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:0 0 2px\">Wire M-Pesa callback</li><li style=\"margin:0 0 2px\">Add STK push</li><li style=\"margin:0 0 2px\">Initial commit</li></ul></li><li style=\"margin:0 0 4px\"><b>Changed files not committed:</b> <span>src/callback.py</span></li><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>src/callback.py</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/payments-api</span></li></ul></div></div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">2</span>web-shop</div><div style=\"color:#71717a;font-size:13px;margin:2px 0 0\">Web shop</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Worked on today</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Last commit today</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"background:#fef3f2;border-left:4px solid #d92d20;color:#912018;padding:8px 12px;margin:6px 0 8px;font-size:14px\"><b>&#9888; Work at risk</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:3px 0 0\">2 changed files not committed for 3 days. This work is not saved in git yet.</li></ul></div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>Last commit: &quot;Style the cart&quot;.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Look over your changes in a.css and b.css, then commit them.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recent commits:</b> <span>Style the cart</span></li><li style=\"margin:0 0 4px\"><b>Changed files not committed:</b> <span>a.css, b.css</span></li><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>a.css</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/web-shop</span></li></ul></div></div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\"><span style=\"display:inline-block;width:24px;height:24px;line-height:24px;border-radius:12px;background:#1d4ed8;color:#ffffff;font-size:13px;font-weight:700;text-align:center;margin-right:8px\">3</span>tiny-cli</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 4 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Last commit 4 days ago</span></div><div style=\"color:#71717a;font-size:13px;margin:0 0 6px\">Quick check only: the assistant did not look inside this project.</div><div style=\"background:#fef3f2;border-left:4px solid #d92d20;color:#912018;padding:8px 12px;margin:6px 0 8px;font-size:14px\"><b>&#9888; Work at risk</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:3px 0 0\">2 commits not pushed for 4 days. This work is only on this laptop, not backed up online.</li></ul></div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>Last commit: &quot;Parse flags&quot;.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Push your 2 commits so the work is backed up.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recent commits:</b> <span>Parse flags</span></li><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>cli.py</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/tiny-cli</span></li></ul></div></div><h2 style=\"font-size:15px;margin:28px 0 6px;color:#52525b\">How this works</h2><ul style=\"margin:0;padding-left:20px;font-size:13px;color:#52525b\"><li style=\"margin:0 0 5px\">This email is sent <b>once a day</b> from your laptop.</li><li style=\"margin:0 0 5px\">You see a project here when none of its files have changed for <b>3 days</b>, or when it has changes that you have not committed or pushed for 3 days.</li><li style=\"margin:0 0 5px\">Words used here: <b>git</b> keeps the history of your project. To <b>commit</b> means to save a snapshot of your changes in git. To <b>push</b> means to copy those snapshots online (for example to GitHub), so they are backed up.</li><li style=\"margin:0 0 5px\">Your settings file is <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">/home/dev/second-brain/reminders.json</code>. To stop reminders for a project for good, add its name to the <b>&quot;done&quot;</b> list. For a folder that is not a project, use the <b>&quot;ignore&quot;</b> list. To pause a project until a date, add it to <b>&quot;snooze&quot;</b> like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;snooze&quot;: {&quot;project-name&quot;: &quot;2026-10-05&quot;}</code>.</li><li style=\"margin:0 0 5px\">The assistant did not look inside any project this time. The text comes from a quick check of file dates and git.</li></ul></div></body></html>",
+      "subject": "3 projects need you today: payments-api (work at risk), web-shop (work at risk), tiny-cli (work at risk) · Mon 21 Sep",
+      "text": "YOUR DAILY PROJECT CHECK-IN\nMonday 21 September 2026\n\nAT A GLANCE\n  3 projects need you today.\n  Pick one below and do its next step. Each step takes about 15 minutes.\n  \"The assistant\" in this email is an AI helper that looks inside your quiet project folders.\n  - Need you: 3\n  - Maybe finished: 0\n  - Maybe not projects: 0\n  - Going fine: 0\n\n==============================================================\nPROJECTS THAT NEED YOU\nThe most urgent one is first. Start with number 1, or pick another one.\n==============================================================\n\n1. payments-api\n   Worked on today  |  Last commit 3 days ago\n   (Quick check only: the assistant did not look inside this project.)\n\n   !! WORK AT RISK:\n      - 1 changed file not committed for 4 days. This work is not saved in git yet.\n      - 1 commit not pushed for 3 days. This work is only on this laptop, not backed up online.\n\n   Where you left off:\n      Last commit: \"Wire M-Pesa callback\".\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Look over your changes in src/callback.py, then commit them.\n\n   More details:\n      - Recent commits:\n          * Wire M-Pesa callback\n          * Add STK push\n          * Initial commit\n      - Changed files not committed: src/callback.py\n      - Recently edited files: src/callback.py\n      - Folder: /home/dev/projects/payments-api\n\n2. web-shop  (Web shop)\n   Worked on today  |  Last commit today\n   (Quick check only: the assistant did not look inside this project.)\n\n   !! WORK AT RISK:\n      - 2 changed files not committed for 3 days. This work is not saved in git yet.\n\n   Where you left off:\n      Last commit: \"Style the cart\".\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Look over your changes in a.css and b.css, then commit them.\n\n   More details:\n      - Recent commits: Style the cart\n      - Changed files not committed: a.css, b.css\n      - Recently edited files: a.css\n      - Folder: /home/dev/projects/web-shop\n\n3. tiny-cli\n   No work for 4 days  |  Last commit 4 days ago\n   (Quick check only: the assistant did not look inside this project.)\n\n   !! WORK AT RISK:\n      - 2 commits not pushed for 4 days. This work is only on this laptop, not backed up online.\n\n   Where you left off:\n      Last commit: \"Parse flags\".\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Push your 2 commits so the work is backed up.\n\n   More details:\n      - Recent commits: Parse flags\n      - Recently edited files: cli.py\n      - Folder: /home/dev/projects/tiny-cli\n\n==============================================================\nHOW THIS WORKS\n==============================================================\n  - This email is sent once a day from your laptop.\n  - You see a project here when none of its files have changed for 3 days, or when it has changes that you have not committed or pushed for 3 days.\n  - Words used here: git keeps the history of your project. To commit means to save a snapshot of your changes in git. To push means to copy those snapshots online (for example to GitHub), so they are backed up.\n  - Your settings file is /home/dev/second-brain/reminders.json. To stop reminders for a project for good, add its name to the \"done\" list. For a folder that is not a project, use the \"ignore\" list. To pause a project until a date, add it to \"snooze\" like this: \"snooze\": {\"project-name\": \"2026-10-05\"}.\n  - The assistant did not look inside any project this time. The text comes from a quick check of file dates and git."
+    },
+    "fallback": {
+      "payments-api": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last commit: \"Wire M-Pesa callback\".",
+        "next_step": "Look over your changes in src/callback.py, then commit them.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "tiny-cli": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last commit: \"Parse flags\".",
+        "next_step": "Push your 2 commits so the work is backed up.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "web-shop": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last commit: \"Style the cart\".",
+        "next_step": "Look over your changes in a.css and b.css, then commit them.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      }
+    },
+    "featured": "payments-api"
+  },
+  "input": {
+    "config": {
+      "at_risk_after_days": 3,
+      "cold_after_days": 3,
+      "done": [],
+      "path": "/home/dev/second-brain/reminders.json",
+      "send_after_hour": 8,
+      "snooze": {}
+    },
+    "featured_log": {},
+    "notices": [],
+    "now": 1789971300.0,
+    "projects": [
+      {
+        "extra": {},
+        "files": 8,
+        "git": {
+          "branch": "main",
+          "has_remote": true,
+          "last_commit": 1789668900.0,
+          "modified": [
+            "src/callback.py"
+          ],
+          "modified_newest": 1789608420.0,
+          "modified_partial": false,
+          "recent_commits": [
+            "Wire M-Pesa callback",
+            "Add STK push",
+            "Initial commit"
+          ],
+          "unpushed": 1
+        },
+        "idle_days": 0,
+        "last_work": 1789949700.0,
+        "name": "payments-api",
+        "open_todos": 0,
+        "path": "/home/dev/projects/payments-api",
+        "readme_title": "",
+        "recent_files": [
+          "src/callback.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": {
+          "branch": "main",
+          "has_remote": true,
+          "last_commit": 1789582500.0,
+          "modified": null,
+          "modified_newest": 0.0,
+          "modified_partial": false,
+          "recent_commits": [
+            "Parse flags"
+          ],
+          "unpushed": 2
+        },
+        "idle_days": 4,
+        "last_work": 1789604100.0,
+        "name": "tiny-cli",
+        "open_todos": 0,
+        "path": "/home/dev/projects/tiny-cli",
+        "readme_title": "",
+        "recent_files": [
+          "cli.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": {
+          "branch": "main",
+          "has_remote": true,
+          "last_commit": 1789954020.0,
+          "modified": [
+            "a.css",
+            "b.css"
+          ],
+          "modified_newest": 1789703460.0,
+          "modified_partial": false,
+          "recent_commits": [
+            "Style the cart"
+          ],
+          "unpushed": 0
+        },
+        "idle_days": 0,
+        "last_work": 1789949700.0,
+        "name": "web-shop",
+        "open_todos": 0,
+        "path": "/home/dev/projects/web-shop",
+        "readme_title": "Web shop",
+        "recent_files": [
+          "a.css"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      }
+    ],
+    "skipped": [],
+    "today": "2026-09-21",
+    "verdicts": {}
+  },
+  "kind": "scenario"
+}

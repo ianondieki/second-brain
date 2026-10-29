@@ -1,0 +1,184 @@
+"""Trend cards in the database (REQ-DEV-02; D-60; P22 card B, default (5)): storing the week's candidates, the job's
+look back, the trend of the day, a developer's card and the named-organisation rule on a stored card.
+
+- ``store_candidates(db, accepted)``: one ``app_create_trend_candidate(p_card, p_sources)`` per kept card, in the
+  model's order, in the caller's transaction (the weekly job, with no user bound). The card's
+  confidence goes as a JSON number (``numeric(4,3)``), everything else as ``draft_trends`` copied it from the saved
+  excerpts. Returns the new ids.
+- ``job_state(db, since)``: whether a card that is not rejected (a candidate or a published one) was created at or
+  after ``since`` (the weekly job then makes no call) and the excerpt ids such cards cite (never sent again, so a week
+  does not redraft a card staff have), through ``app_trend_job_state(since)`` on a session with no user bound: the
+  job's only reader of the cards, which tells it nothing else of them.
+- ``trend_of_day(db, today)``: the published cards ordered by ``published_at, id``, the one at index
+  ``today.toordinal() mod count`` (today: the Nairobi day on the shared clock when not given), in one statement.
+- ``published_card(db, id)``: a published card with its sources, for its page (None for anything else).
+- ``defer_run(db, user_id=...)``: a staff admin's manual run, queued as the weekly task ``trends.draft`` through the
+  transactional outbox (the API never imports the task module), naming the admin for the job's log line; the job runs
+  as the platform, as the weekly run does.
+- ``unsourced_names(...)``: the rule ``draft_trends`` applied (``bridge.problems.trends.checks``), repeated on what is
+  stored: every organisation the card names (the TECH allowlist's found in its text and its own ``named_orgs``) must
+  be named by a stored source, in its quote or as its publisher, and no capitalised name may appear that no source
+  carries. The staff decision refuses to publish otherwise (409 ``unsourced_name``), so a card that did not come
+  through the checks cannot be published naming an organisation without a source.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import date, datetime
+from typing import Any, Final
+from uuid import UUID
+
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from bridge.engagements.calendar import NAIROBI
+from bridge.events.schemas import TrendCardDetailOut, TrendCardOut, TrendSourceOut
+from bridge.jobs.outbox import defer
+from bridge.problems.research.checks import named_organisations
+from bridge.problems.research.sources import TECH, CatalogueKind, Excerpt, get_catalogue, url_host
+from bridge.problems.trends.checks import unsourced_capitalised
+from bridge.problems.trends.checks import unsourced_names as names_without_source
+from bridge.problems.trends.run import Accepted, TrendCandidate
+from bridge.trends.models import TrendCard, TrendCardSource
+
+RUN_TASK: Final = "trends.draft"
+QUEUE: Final = "trends"
+LOCK: Final = "trends:draft"  # one run at a time, the weekly one and the manual ones alike
+_CREATE: Final = text("SELECT app_create_trend_candidate(CAST(:card AS jsonb), CAST(:sources AS jsonb))")
+# The day's index over the published cards: ``today.toordinal()`` when given, else the Nairobi day on the shared clock.
+_OF_THE_DAY: Final = text(
+    "SELECT t.id, t.title, t.summary, t.topic_slug, t.published_at, t.llm_trace_id FROM (SELECT c.id, c.title,"
+    " c.summary, c.topic_slug, c.published_at, c.llm_trace_id, row_number() OVER (ORDER BY c.published_at, c.id) - 1"
+    " AS i,"
+    " count(*) OVER () AS n FROM trend_cards c WHERE c.status = 'published') t"
+    " WHERE t.i = mod(coalesce(CAST(:ordinal AS bigint), app_nairobi_today() - DATE '0001-01-01' + 1), t.n)"
+)
+_STATE: Final = text("SELECT recent, cited_refs FROM app_trend_job_state(:since)")
+
+
+def card_json(card: TrendCandidate) -> str:
+    """``p_card``: ``TrendCandidate.p_card()`` with the confidence as a JSON number."""
+    found: dict[str, Any] = dict(card.p_card())
+    found["confidence"] = float(card.confidence)
+    return json.dumps(found)
+
+
+async def store_candidates(db: AsyncSession, accepted: Accepted) -> list[UUID]:
+    """Every kept card of ``accepted`` as a candidate, in order (the caller commits)."""
+    stored = []
+    for card in accepted.cards:
+        params = {"card": card_json(card), "sources": json.dumps(card.p_sources())}
+        stored.append(UUID(str((await db.execute(_CREATE, params)).scalar_one())))
+    return stored
+
+
+@dataclass(frozen=True, slots=True)
+class JobState:
+    recent: bool  # a card that is not rejected created at or after the look-back's start
+    cited: frozenset[str]  # excerpt ids the cards that are not rejected cite
+
+
+async def job_state(db: AsyncSession, since: datetime) -> JobState:
+    """The weekly job's look back (see the module docstring), on a session with no user bound."""
+    row = (await db.execute(_STATE, {"since": since})).one()
+    return JobState(bool(row.recent), frozenset(str(ref) for ref in row.cited_refs))
+
+
+def reviewed_on(published_at: datetime) -> date:
+    return published_at.astimezone(NAIROBI).date()
+
+
+def _card_out(row: Any) -> TrendCardOut:
+    return TrendCardOut(
+        id=row.id,
+        title=row.title,
+        summary=row.summary,
+        topic_slug=row.topic_slug,
+        published_at=row.published_at,
+        reviewed_on=reviewed_on(row.published_at),
+        seeded_example=row.llm_trace_id is None,
+    )
+
+
+async def trend_of_day(db: AsyncSession, today: date | None = None) -> TrendCardOut | None:
+    """The published card of ``today`` (see the module docstring), in one statement."""
+    ordinal = None if today is None else today.toordinal()
+    row = (await db.execute(_OF_THE_DAY, {"ordinal": ordinal})).one_or_none()
+    return None if row is None else _card_out(row)
+
+
+async def published_card(db: AsyncSession, card_id: UUID) -> TrendCardDetailOut | None:
+    """A published card with its sources in order, as the caller reads it (None otherwise)."""
+    C, S = TrendCard, TrendCardSource
+    row = (
+        await db.execute(
+            select(C.id, C.title, C.summary, C.topic_slug, C.published_at, C.llm_trace_id, C.named_orgs).where(
+                C.id == card_id, C.status == "published"
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    sources = (
+        await db.execute(
+            select(S.url, S.publisher, S.published_date, S.retrieved_at, S.quote)
+            .where(S.card_id == card_id)
+            .order_by(S.position)
+        )
+    ).all()
+    return TrendCardDetailOut(
+        **_card_out(row).model_dump(),
+        named_orgs=list(row.named_orgs),
+        sources=[TrendSourceOut.model_validate(s, from_attributes=True) for s in sources],
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class StoredSource:
+    url: str
+    publisher: str
+    published_date: date
+    retrieved_at: date
+    quote: str
+    excerpt_ref: str
+
+
+def _as_excerpt(source: StoredSource, topic: str) -> Excerpt:
+    return Excerpt(
+        id=source.excerpt_ref,
+        niche=topic,
+        country=TECH,
+        url=source.url,
+        host=url_host(source.url) or "",
+        publisher=source.publisher,
+        source_type="official",
+        official=True,
+        published_date=source.published_date,
+        retrieved_at=source.retrieved_at,
+        quote=source.quote,
+        topic=topic,
+    )
+
+
+def unsourced_names(
+    title: str, summary: str, topic: str, named_orgs: Sequence[str], sources: Sequence[StoredSource]
+) -> tuple[str, ...]:
+    """The names a stored card carries that no stored source names (see the module docstring); empty when it may be
+    published."""
+    allowlist = get_catalogue(CatalogueKind.TRENDS).allowlists[TECH]
+    excerpts = [_as_excerpt(source, topic) for source in sources]
+    names = named_organisations((title, summary), named_orgs, allowlist)
+    found = names_without_source(names, excerpts, allowlist) + unsourced_capitalised(
+        title, summary, excerpts, allowlist
+    )
+    return tuple(dict.fromkeys(found))
+
+
+async def defer_run(db: AsyncSession, *, user_id: UUID, timestamp: int) -> int:
+    """Queue a manual run of ``trends.draft`` in the caller's transaction (``timestamp``: the task's own argument, which
+    it ignores; ``user_id``: the staff admin who asked, named in the job's log line)."""
+    args = {"timestamp": timestamp, "user_id": str(user_id)}
+    return await defer(db, RUN_TASK, args, queue=QUEUE, lock=LOCK)

@@ -1,0 +1,40 @@
+{
+  "synthetic": true,
+  "description": "One structured answer; cache read and 5-minute and 1-hour cache writes.",
+  "note": "Hand-written synthetic fixture (D-18: no paid calls). Response shapes follow the anthropic 1.8.0 SDK types (Message, Usage, MessageBatch, MessageBatchIndividualResponse); ids, tokens and text are invented.",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msg_syn_ok_01",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-haiku-4-5",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"injection_suspected\": false, \"verdict\": \"clean\", \"reason\": \"No policy issue found in the teaser.\"}"
+            }
+          ],
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 812,
+            "output_tokens": 31,
+            "cache_read_input_tokens": 600,
+            "cache_creation_input_tokens": 300,
+            "cache_creation": {
+              "ephemeral_5m_input_tokens": 200,
+              "ephemeral_1h_input_tokens": 100
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+
+import { AuthShell } from "@/components/AuthShell";
+import { IntlScope } from "@/components/IntlScope";
+import { PageHeader } from "@/components/ui/PageHeader";
+
+import { CheckEmail } from "./CheckEmail";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("checkEmail");
+  return { title: t("title") };
+}
+
+/** After signup, and after "Email me a sign-in link" (`?for=login`). */
+export default async function CheckEmailPage({ searchParams }: PageProps<"/signup/check-email">) {
+  const t = await getTranslations("checkEmail");
+  const kind = (await searchParams).for === "login" ? "login" : "signup";
+  return (
+    <AuthShell photo="signUp">
+      <PageHeader title={t("title")} />
+      <IntlScope namespaces={["checkEmail", "errors"]}>
+        <CheckEmail kind={kind} />
+      </IntlScope>
+    </AuthShell>
+  );
+}

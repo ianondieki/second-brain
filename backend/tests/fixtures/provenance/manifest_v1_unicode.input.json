@@ -1,0 +1,24 @@
+{
+  "proposal_id": "01923f6e-8a1b-7c2d-9e3f-4a5b6c7d8e9f",
+  "version_id": "01923f6e-8a1c-7000-8000-000000000002",
+  "version_no": 2,
+  "cert_id": "BRQ3N8V5H2LC6X9P",
+  "registered_at": "2026-12-31T23:59:59.999999Z",
+  "prev_version_hash": "5f1b2a4c9e8d7f6a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a",
+  "tier1": {
+    "title": "Maji safi kwa kila kaya — \"quoted\" & <tagged>",
+    "niche_id": "01923f6e-0000-7000-8000-00000000000a",
+    "country": "KE",
+    "county_code": null,
+    "maturity": "idea",
+    "ask": "co_build",
+    "problem_statement": "Line one\nLine two\ttabbed \u0001 control, emoji 💧, €",
+    "impact_claims": null,
+    "summary": "Kiswahili na English.",
+    "problem_ids": ["01923f6e-0000-7000-8000-0000000000b1"]
+  },
+  "tier2": {"z_last": [3, 1.5, 1e21, -0.0, 0.1], "a_first": {"nested": true, "none": null}, "é": "accent key", "E": "upper"},
+  "attachments": [],
+  "owners": [{"subject_salt": "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100", "user_id": "01923f6e-0000-7000-8000-0000000000ab", "split_bps": 10000}],
+  "attestations": []
+}

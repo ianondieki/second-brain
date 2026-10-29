@@ -1,0 +1,22 @@
+{
+  "case": "at_send_hour",
+  "description": "At send_after_hour both unfinished channels are pending.",
+  "expected": {
+    "pending": [
+      "email",
+      "whatsapp"
+    ]
+  },
+  "input": {
+    "channels": [
+      "email",
+      "whatsapp"
+    ],
+    "day": {},
+    "dry_run": false,
+    "force": false,
+    "now": "2026-09-21T08:00:00",
+    "send_after_hour": 8
+  },
+  "kind": "pending"
+}

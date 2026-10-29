@@ -1,0 +1,219 @@
+# Engagement tracker policy (REQ-ENG-01, REQ-ENG-10, REQ-BD-01; docs/spec/06 6.9 "Due rule" column and side
+# branches, docs/spec/13 "Other defaults"). The state machine (bridge/engagements/state_machine.py) is the only definition of stages and
+# transitions; the numbers it uses live here and are cited by key. Loaded and validated by
+# bridge/engagements/policy.py (a missing or malformed value stops the app at first use).
+#
+# BD = Kenyan business days: Monday to Friday, not a gazetted public holiday (the `holidays` table, admin-editable).
+# The entry day itself is never counted, and a deadline falls at the end of its Nairobi day (23:59:59 EAT).
+# expire_bd (ORG_INTEREST, SUBMITTED, UNDER_REVIEW, INTEREST_CONFIRMED only): the periodic job bridge/jobs/expiry.py
+# ends an engagement left that many BD after it entered the stage as EXPIRED; a request for information or a hold
+# pauses the count (the business days paused are added back).
+# escalate_bd and remind_bd (REQ-NOT-05): the periodic job bridge/jobs/nudges.py tells the organisation's admins (and
+# its escalation contact) once that many BD after the stage was entered, or reminds the signers who have not signed,
+# paused the same way; neither may fall after the stage's due_bd.
+version: 1
+
+stages:
+  # Stage 0: the developer accepts or declines an organisation's interest; else EXPIRED (NO_DEV_RESPONSE).
+  ORG_INTEREST: {due_bd: 5, expire_bd: 5}
+  # Stage 1: the organisation starts the review, declines or requests info; expires at 20 BD (NO_REVIEW).
+  SUBMITTED: {due_bd: 10, expire_bd: 20}
+  # Stage 2: the signatory's decision; expires at 30 BD (NO_DECISION).
+  UNDER_REVIEW: {due_bd: 15, expire_bd: 30}
+  # Stage 3b (public entities only, REQ-ENG-06): after the signatory approves to proceed, an owner or admin chooses
+  # the procurement route within 10 BD; the nudge job escalates to the admins and the escalation contact at +5 BD.
+  # No expiry (docs/spec/06 6.9 gives none).
+  PROCUREMENT_ROUTE: {due_bd: 10, escalate_bd: 5}
+  # Stage 3: first contact by the named contact-by date (at most 5 BD ahead); escalation to the org admin at +3 BD;
+  # EXPIRED (CONTACT_NOT_MADE) at +10 BD from entering the stage.
+  INTEREST_CONFIRMED: {due_bd: 5, escalate_bd: 3, expire_bd: 10}
+  # Stage 4: the NDA is sent within 5 BD; the developer's confirmation auto-confirms after 3 BD (job, later).
+  CONTACT_MADE: {due_bd: 5, auto_confirm_bd: 3}
+  # Stage 5: both signatures within 5 BD; reminders at 2 and 4 BD.
+  NDA_PENDING: {due_bd: 5, remind_bd: [2, 4]}
+  # Stage 6: a terms draft within 10 BD.
+  NDA_SIGNED: {due_bd: 10}
+  # Stage 7: each response within 7 BD (every new version sets a new deadline).
+  NEGOTIATION: {due_bd: 7}
+  # Stage 8: both signatures within 5 BD.
+  AGREEMENT_SIGNING: {due_bd: 5}
+  # Stage 9: per milestone (each milestone's due date and review window); no stage deadline.
+  IN_IMPLEMENTATION: {}
+  # Stage 10: the organisation's review of the final delivery (the agreement's window; default 10 BD).
+  DELIVERED: {due_bd: 10}
+  # Stage 11: both signatures of the acceptance certificate within 5 BD.
+  SIGN_OFF: {due_bd: 5}
+  # Stage 12: the developer confirms the recorded payment within 5 BD; never auto-confirmed.
+  PAYMENT_FINAL: {due_bd: 5}
+
+contact:
+  # The contact-by date the signatory names when approving to proceed: at most this many BD ahead.
+  contact_by_max_bd: 5
+
+milestones:
+  review_window_bd_default: 5
+  review_window_bd_max: 60
+  # A milestone submitted for review and left unreviewed: the nudge job reminds the organisation's reviewers of the
+  # engagement after reminder_bd and escalates to its admins (and escalation contact) after escalation_bd.
+  reminder_bd: 3
+  escalation_bd: 5
+  max_per_agreement: 20
+
+agreement:
+  # "Deemed accepted after N days" clause: 0 = never deemed accepted (docs/spec/06 6.9 stage 8).
+  deemed_acceptance_days_max: 90
+  exclusivity_max_chars: 500
+
+decline:
+  # OTHER needs a written reason of at least this many characters (docs/spec/06 6.9 Codes).
+  other_min_chars: 20
+  other_max_chars: 1000
+
+on_hold:
+  # Either party pauses an engagement before the agreement (ON_HOLD, docs/spec/06 6.9 side branches) with a reason
+  # and a resume date at most this many calendar days ahead; due dates then move by the hold's business days.
+  max_days: 60
+  # All the holds of one engagement together, in calendar days (a hold counts until it resumes, at least one day);
+  # then 409 hold_limit.
+  hold_days_total: 60
+  # Holds each time the engagement is in a stage (as for questions); then 409 hold_limit.
+  holds_per_stage: 2
+
+info_requested:
+  # The organisation asks the developer a question from stage 1 or 2 (INFO_REQUESTED): at most this many each time
+  # the engagement is in the stage (then 409 info_request_limit) ...
+  info_requests_per_stage: 2
+  # ... and a question left unanswered this many BD ends the engagement EXPIRED (NO_DEV_RESPONSE), by the expiry job.
+  expire_bd: 10
+
+side_states:
+  # One party's side-state commands (a question, an answer, withdrawing a question, a pause, a resume) on one
+  # engagement within any hour; then 429 too_many_actions, so neither party floods the other with notices.
+  actions_per_hour: 10
+
+reminders:
+  # The daily reminders' health rules and start times (REQ-REM-01, REQ-REM-02; docs/spec/06 6.11). Read by
+  # bridge/reminders/thresholds.py. BD = Kenyan business days, as above.
+  due_soon_bd: 2                     # at risk: an item due within this many BD with no action
+  off_track_after_days: 7            # off track: an item overdue by more than this many days
+  rework_loops_off_track: 2          # off track: a milestone sent back for changes this many times
+  cold_after_bd: 3                   # at risk: no repository activity for this many BD (a linked repo, Release 2)
+  quiet_after_days: 5                # "No update from {developer} since {date}" once quiet this long
+  upcoming_days: 14                  # open milestones due within this many days are listed one by one
+  developer_send_after: "07:30"      # EAT: the developer's daily reminder (N23 send_after_hour default)
+  organisation_send_after: "08:30"   # EAT: the organisation's progress digest (reminders.org_digest)
+
+assistant:
+  # The submission assistant's limits (REQ-PROP-05; PLAN §8 P13). Read by bridge/proposals/assistant_policy.py.
+  max_calls_per_user_day: 20         # today's (UTC) submission_assistant rows in llm_calls per user; then 429
+  max_in_flight_per_user: 1          # suggestions one user may have running at once (per API process); then 429
+  tier2_overlap_words: 8             # a suggested title or summary sharing this many consecutive words with a
+                                     # confidential field that was sent is not shown (rejected:tier2_overlap)
+  max_reason_chars: 300              # a placement hint's reason is cut to this many characters
+
+originality:
+  # The originality check's numbers (REQ-PROP-04; docs/spec/06 6.3; P19-D). Read by
+  # bridge/proposals/originality_policy.py. Informational, never blocking; the answer is a band, never a number.
+  jaccard_high: 0.8                  # Jaccard of the 5-word shingle sets at or above this: high_overlap
+  cosine_high: 0.88                  # teaser-embedding cosine at or above this: high_overlap
+  cosine_some: 0.75                  # at or above this and below cosine_high: some_overlap
+  daily_limit: 10                    # checks per developer per Nairobi day (originality_checks rows); then 429
+  max_candidates: 200                # LSH bucket candidates read per check (bounded work)
+  max_explained: 3                   # matched teasers the explainer sees at most
+  explanation_max_chars: 300         # the explainer's sentence is dropped when longer
+
+research:
+  # The research agent's numbers (REQ-RES-01, REQ-RES-02; docs/spec/06 6.5; PLAN §8 P11). Read by
+  # bridge/problems/research/policy.py. The prototype drafts from excerpts saved in backend/seed/research_excerpts.yaml
+  # (no search, no fetch at runtime); the caps still apply and the research_runs CHECK is the backstop (AC-RES-3).
+  max_searches: 25                   # per run (AC-RES-3); the prototype makes none
+  max_fetches: 40                    # per run (AC-RES-3); the prototype makes none
+  max_input_tokens: 400000           # per run (docs/spec/06 6.5); estimated before the call
+  min_excerpts: 3                    # "3-5 short public source excerpts" per niche (PLAN §8 P11)
+  max_excerpts: 5                    # the freshest ones are sent
+  max_cards_per_run: 3               # drafts beyond this are discarded
+  max_quote_words: 60                # a saved excerpt's quote (fair-use excerpts only, research note)
+  min_support_words: 4               # a citation's supporting text: at least this many words, verbatim from the quote
+  stale_after_months: 12             # "Stale badge at 12 months"
+  archive_after_months: 18           # "auto-archive at 18": such an excerpt is never sent and never counts
+  discard_below: "0.40"              # a card below this confidence is discarded
+  corroboration_publishers: 3        # distinct publishers for full corroboration (fewer: a share of it)
+  stale_run_minutes: 60              # a running run older than this no longer blocks a new run of its niche
+  weights:                           # confidence = sum(weight * term); the four weights add up to 1
+    source_quality: "0.35"
+    corroboration: "0.25"
+    freshness: "0.20"
+    extraction_agreement: "0.20"
+  source_quality:                    # docs/spec/06 6.5 quality tiers
+    official: "1.0"
+    filing: "0.9"
+    news: "0.8"
+    ngo: "0.8"
+    blog: "0.4"
+    social: "0.3"
+
+claims:
+  # The staff admin's claims queue (REQ-DIR-03, REQ-ADM-01; docs/spec/06 6.2 "manual ops review (SLA 2 BD)", 6.12
+  # "claim queue (2 BD SLA)"). Read by bridge/admin/claims.py. A claim awaiting review is due by the end of the Nth
+  # business day after the Nairobi day it was submitted (org_claims.created_at); disputes follow their moderation case.
+  review_sla_bd: 2
+
+briefs:
+  # Problem Briefs (REQ-DIR-05; docs/spec/06 6.2, 6.12). Read by bridge/problems/brief_policy.py. Every Brief files a
+  # moderation case for staff, so an organisation posts at most this many Briefs per Nairobi day (database clock),
+  # whatever its plan allows open at once; the next post answers 429 briefs_daily_limit.
+  daily_posts: 20
+
+quiz:
+  # Today's five (REQ-DEV-01; D-59; docs/platform/tasks/P22.md section A). Read by bridge/quiz/policy.py. The nightly
+  # quiz_generation call reads a sample of backend/ai/quiz_sources.yaml; the checks in code (bridge/quiz/checks.py)
+  # decide whether its draft becomes a set; staff approve every set before anyone sees it.
+  sources_per_prompt: 10             # curated pages sent per call (8 to 12), spread over the topics, rotated by date
+  draft_attempts: 2                  # calls per night, exactly 2 (the card): one retry, then the day has no draft
+  no_repeat_days: 60                 # a prompt hash drafted in this many days before refuses the draft (repeated_prompt)
+
+trends:
+  # Technology trends (REQ-DEV-02; D-60; docs/platform/tasks/P22.md section B, default (5)). Read by
+  # bridge/problems/trends/policy.py. A weekly trend_synthesis call drafts up to max_cards_per_run candidates from the
+  # saved excerpts of official technology publishers (backend/seed/trend_excerpts.yaml, allowlist sources/tech.yaml);
+  # the research checks decide (bridge/problems/trends/checks.py, confidence from research.weights and
+  # research.source_quality); staff admins approve every card. Trends age faster than Kenyan problem excerpts.
+  max_excerpts: 12                   # excerpts sent per call, freshest first, spread over the topics
+  max_cards_per_run: 3               # drafts beyond this are discarded (over_card_limit)
+  min_support_words: 4               # a citation's support: at least this many words, verbatim from its quote
+  discard_below: "0.40"              # a card below this confidence is discarded (low_confidence)
+  stale_after_months: 6              # freshness falls from 1 after this many months
+  archive_after_months: 12           # an excerpt this old is never sent and never counts
+  draft_attempts: 2                  # calls per week, exactly 2 (the card): a refused draft is retried once
+
+events:
+  # This week's events (REQ-DEV-02; D-60; docs/platform/tasks/P22.md section B). Read by bridge/events/policy.py. Every
+  # event waits on the staff queue (/admin/events) before developers see it, so an organisation posts at most this many
+  # events per Nairobi day (the shared clock); the next post answers 429 events_daily_limit. Staff's platform events
+  # are not counted.
+  daily_posts: 10
+
+teams:
+  # Peers and team up (REQ-DEV-03; D-58; docs/platform/tasks/P22.md section C). Read by bridge/teams/policy.py. The
+  # limits are the application's (revision 0011 leaves them to it); each refusal answers 429 with Retry-After.
+  invitations_per_day: 10           # invitation attempts one developer makes in any 24 hours, refused ones included
+                                    # (too_many_invitations)
+  reinvite_after_days: 30           # an invitation declined or withdrawn this recently blocks another for the same pair
+                                    # and problem (409 already_invited)
+  posts_per_hour: 60                # messages one developer writes in one team thread in any hour (too_many_messages)
+  peers_pages_per_hour: 60          # pages of the peers list one developer reads in any hour (too_many_peer_pages)
+  profile_changes_per_day: 10       # changes of the county or the liked niches in any 24 hours (too_many_profile_changes)
+
+pipeline:
+  # The organisation's board (REQ-ENG-14; docs/platform/tasks/P27.md track B). Read by
+  # bridge/engagements/pipeline_policy.py. An active engagement that is not on hold and has had no tracker event (its
+  # hash chain: a command, an endorsement, a signature) for this many Kenyan business days or more is marked "no
+  # movement" on its card. Messages are not tracker events.
+  stalled_after_bd: 5
+
+embeddings:
+  # Profile and problem embeddings for the ranker's f1 (REQ-PERS-01, REQ-PERS-02, REQ-EMB-01; P23.md "P23-1 as
+  # built"). Read by bridge/embeddings/policy.py. The embeddings.reembed job runs every 15 minutes on the worker and
+  # embeds the stale rows of each table (developer profiles with the profiling consent, readable problems) in batches
+  # of ai/models.yaml embeddings.reembed_batch_size; the rest wait for the next run.
+  max_rows_per_run: 500             # rows of each table one run tries at most, refused writes included

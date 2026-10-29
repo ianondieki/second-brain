@@ -1,0 +1,29 @@
+"use client";
+
+import { useStrings } from "./ClientStrings";
+
+// Every route in a group downloads its error boundary, so this stays small: on purpose it keeps its own plain button
+// with the primary button's classes (the .btn component classes in app/globals.css, P20) instead of importing the
+// Button module (docs/platform/design/p16-design-system.md, Errors; the 150 KB budget).
+const PRIMARY = "btn btn-primary";
+
+/**
+ * A page that failed to render (error.tsx of a route group): a neutral sentence, since the cause is not known here
+ * (API down, timeout, bug), and one way forward.
+ */
+export function ErrorScreen({ retry }: { retry: () => void }) {
+  const t = useStrings("errorPage");
+  return (
+    <main id="main" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 pt-8 pb-16 focus:outline-none sm:px-6 lg:pt-16">
+      <div className="max-w-md">
+        <h1 className="text-2xl text-ink lg:text-3xl">{t("title")}</h1>
+        <p className="mt-3 text-ink-soft">{t("body")}</p>
+        <div className="mt-8">
+          <button type="button" data-primary="" className={PRIMARY} onClick={() => retry()}>
+            {t("retry")}
+          </button>
+        </div>
+      </div>
+    </main>
+  );
+}

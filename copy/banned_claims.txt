@@ -1,0 +1,24 @@
+# Banned claims copy-lint (REQ-PROV-02, AC-IP-4; docs/spec/04 principle 2, ADR-003 item 6).
+# Read by scripts/copy_lint.py, which scans i18n catalogues, email and page templates, config and seed YAML, string
+# literals in backend Python, and frontend source (see the script's docstring for the exact scope).
+# Matching is case-insensitive after HTML-entity decoding, NFKC, removal of invisible format characters and markup;
+# spaces and hyphens (incl. Unicode dashes) are interchangeable and may be absent ("theftproof", "cannot"). A trailing
+# "*" also matches any word ending ("theft-proofing", "theft-proofs").
+# Approved phrasing instead: "timestamped evidence of what you submitted and when"; "every view is logged and
+# watermarked to the viewer". English only: Swahili equivalents need human copy (DECISIONS-NEEDED D-27, G5).
+
+[banned]
+theft-proof*
+can not be stolen
+can't be stolen
+protected idea*
+patented
+
+[cooccurrence]
+# In these i18n namespaces (and in EM2 templates under a templates/ directory), every message variant that says
+# approve/approved must also carry a non-binding qualifier. Other namespaces (moderation holds, admin-approved
+# invitations, EM8 verification results) are exempt. "engagements." guards the plural near-miss.
+namespaces: engagement., engagements., tracker., email.em2.
+templates: em2
+terms: approve, approved, approves, approving
+qualifiers: non-binding, not a contract or a commitment to buy

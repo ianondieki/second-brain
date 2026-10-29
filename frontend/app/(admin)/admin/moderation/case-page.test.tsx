@@ -1,0 +1,351 @@
+import { cleanup, screen, within } from "@testing-library/react";
+import { createTranslator } from "next-intl";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import en from "@/locales/en.json";
+import { renderWithIntl } from "@/test/intl";
+import { resolveServerTree } from "@/test/server-tree";
+
+import CasePage from "./cases/[id]/page";
+import type { CaseView } from "./data";
+import type { Case } from "./moderation";
+import ModerationPage from "./page";
+
+// REQ-MOD-01 (M2 walkthrough step 6): the case page shows the subject's Tier-1 text field by field, flags by a mark
+// and a word (never colour alone), the reasons as fixed sentences, and the decision; the queue lists open cases with
+// at most two tags and one primary action.
+
+vi.mock("next-intl/server", () => ({
+  getTranslations: async (namespace: string) =>
+    createTranslator({ locale: "en", messages: en, namespace: namespace as never }),
+  getLocale: async () => "en",
+}));
+vi.mock("@/lib/i18n/client-strings", () => ({
+  clientStrings: async (namespaces: string[]) =>
+    Object.fromEntries(namespaces.map((ns) => [ns, (en as unknown as Record<string, unknown>)[ns]])),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  notFound: () => {
+    throw new Error("notFound");
+  },
+  redirect: () => {
+    throw new Error("redirect");
+  },
+}));
+vi.mock("../AdminShell", () => ({ AdminShell: ({ children }: { children: ReactNode }) => <main>{children}</main> }));
+
+const staff = vi.hoisted(() => ({ role: "moderator" as "admin" | "moderator" | "support" }));
+vi.mock("../staff", () => ({ staffContext: async () => ({ me: {}, role: staff.role }) }));
+
+const data = vi.hoisted(() => ({
+  view: { kind: "ok", data: { item: null, nextId: null } } as { kind: "ok"; data: CaseView } | { kind: "stepUp" },
+  queue: [] as Case[],
+}));
+vi.mock("./data", () => ({
+  getCase: async () => data.view,
+  getQueue: async () => ({ kind: "ok", data: data.queue }),
+}));
+
+const ID = "01a0f016-2e64-7294-9e44-77fa421dce09";
+
+function held(extra: Partial<Case> = {}): Case {
+  return {
+    id: ID,
+    subject_type: "proposal",
+    subject_id: "01a0f010-0000-7000-8000-000000000010",
+    reasons: ["names_real_org_negative"],
+    source: "regex",
+    status: "held",
+    created_at: "2026-09-30T05:00:00Z",
+    subject_state: "held",
+    subject_version_id: "01a0f011-0000-7000-8000-000000000011",
+    preview: { title: "Clear loan-fee statements for SACCO members", text: "A member statement that lists each fee." },
+    fields: [
+      { name: "title", text: "Clear loan-fee statements for SACCO members" },
+      { name: "problem_statement", text: "Members say SACCO B (fixture) overcharges them on late-repayment fees." },
+      { name: "summary", text: "A member statement that lists each fee." },
+    ],
+    flagged_fields: ["problem_statement"],
+    actions: ["approve", "reject"],
+    blocked: null,
+    decided_at: null,
+    decided_by: null,
+    ...extra,
+  };
+}
+
+async function page(id = ID) {
+  return renderWithIntl(<>{await resolveServerTree(await CasePage({ params: Promise.resolve({ id }) } as never))}</>);
+}
+
+beforeEach(() => {
+  staff.role = "moderator";
+  data.view = { kind: "ok", data: { item: held(), nextId: null } };
+  data.queue = [];
+});
+afterEach(cleanup);
+
+describe("the case page", () => {
+  it("shows the Tier-1 text field by field and marks the flagged field with a mark and a word", async () => {
+    const { container } = await page();
+    expect(screen.getByRole("heading", { level: 1, name: "Clear loan-fee statements for SACCO members" })).toBeTruthy();
+    const fields = [...container.querySelectorAll<HTMLElement>("[data-field]")];
+    expect(fields.map((f) => f.dataset.field)).toEqual(["title", "problem_statement", "summary"]);
+    const flagged = container.querySelector<HTMLElement>('[data-field="problem_statement"]')!;
+    expect(flagged.hasAttribute("data-flagged")).toBe(true);
+    const term = within(flagged).getByText("Flagged");
+    expect(term.parentElement!.querySelector("svg")).not.toBeNull(); // the mark, beside the word (one Badge)
+    expect(flagged.querySelector("dt")!.textContent).toBe("Problem statementFlagged");
+    for (const name of ["title", "summary"]) {
+      const field = container.querySelector<HTMLElement>(`[data-field="${name}"]`)!;
+      expect(field.hasAttribute("data-flagged")).toBe(false);
+      expect(within(field).queryByText("Flagged")).toBeNull();
+    }
+    expect(screen.getByText("Speaks negatively of a named organisation")).toBeTruthy();
+    expect(screen.getByText("Hidden until decided")).toBeTruthy();
+    expect(screen.getByText("Approve to make it public, or reject to keep it hidden.")).toBeTruthy();
+    expect(container.querySelectorAll("[data-primary]")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Approve" }).hasAttribute("data-primary")).toBe(true);
+  });
+
+  // REQ-DIR-05 (ux-review MAJOR 2): a Brief is never public before approval, so its case never says it is.
+  it("says a Brief is hidden until approved and that approving publishes it to developers", async () => {
+    const brief = held({
+      subject_type: "problem",
+      subject_state: "clear",
+      subject_version_id: null,
+      reasons: ["new_org_brief"],
+      flagged_fields: [],
+      brief_org: { id: "01a0ee62-0000-7000-8000-00000000000a", slug: "telco-a-fixture", name: "Telco A (fixture)" },
+      fields: [{ name: "title", text: "Tower sites go dark" }],
+    });
+    data.view = { kind: "ok", data: { item: brief, nextId: null } };
+    await page();
+    expect(screen.getByText("Brief by Telco A (fixture)")).toBeTruthy();
+    expect(screen.getByText("Hidden until approved")).toBeTruthy();
+    expect(screen.queryByText("Public while checked")).toBeNull();
+    expect(screen.getByText(en.adminModeration.case.leadBrief)).toBeTruthy();
+    expect(screen.queryByText(en.adminModeration.case.leadPublic)).toBeNull();
+  });
+
+  it("gives an unknown reason a fixed sentence, never the code", async () => {
+    data.view = { kind: "ok", data: { item: held({ reasons: ["brand_new_reason"] }), nextId: null } };
+    await page();
+    expect(screen.getByText("Another reason from the check")).toBeTruthy();
+    expect(screen.queryByText(/brand_new_reason/)).toBeNull();
+  });
+
+  it("shows a blocked case with a fixed sentence and no actions", async () => {
+    data.view = {
+      kind: "ok",
+      data: { item: held({ actions: [], blocked: "own_content" }), nextId: null },
+    };
+    const { container } = await page();
+    expect(screen.getByText("You wrote this, so another moderator has to decide it.")).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(container.querySelectorAll("[data-primary]")).toHaveLength(0);
+    expect(screen.queryByText("Approve to make it public, or reject to keep it hidden.")).toBeNull();
+  });
+
+  it("shows a decided case with who decided it and when", async () => {
+    data.view = {
+      kind: "ok",
+      data: {
+        item: held({
+          status: "approved",
+          subject_state: "clear",
+          actions: [],
+          blocked: "already_decided",
+          decided_at: "2026-09-30T07:30:00Z",
+          decided_by: { id: "01a0f012-0000-7000-8000-000000000012", display_name: "Staff Moderator (demo)" },
+        }),
+        nextId: null,
+      },
+    };
+    const { container } = await page();
+    expect(container.querySelector('[data-decided="approved"]')!.textContent).toContain(
+      "Approved by Staff Moderator (demo) on",
+    );
+    // The header says what is true now: the outcome, not the tag of a case still being checked.
+    const header = container.querySelector("header")!;
+    expect(header.querySelector('[data-header-tag="outcome"]')!.textContent).toBe("Approved");
+    expect(header.querySelector('[data-header-tag="visibility"]')).toBeNull();
+    expect(header.textContent).not.toContain("Public while checked");
+    expect(header.textContent).not.toContain("Hidden until decided");
+    expect(screen.queryByRole("button")).toBeNull();
+    // P15-F MINOR 2 and 3: "Approved" once (the header's tag; the decision says who and when), and the text is no
+    // longer "under review".
+    expect(container.querySelector("[data-decided]")!.querySelector("[data-chip]")).toBeNull();
+    expect(screen.getAllByText("Approved")).toHaveLength(1);
+    expect(screen.getByRole("heading", { level: 2, name: "Text as reviewed" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Text under review" })).toBeNull();
+  });
+
+  it("names a rejected case's text truthfully: nothing on the page calls it public (fix round 1)", async () => {
+    data.view = {
+      kind: "ok",
+      data: {
+        item: held({
+          status: "rejected",
+          subject_state: "rejected",
+          actions: [],
+          blocked: "already_decided",
+          decided_at: "2026-09-30T07:30:00Z",
+          decided_by: { id: "01a0f012-0000-7000-8000-000000000012", display_name: "Staff Moderator (demo)" },
+        }),
+        nextId: null,
+      },
+    };
+    const { container } = await page();
+    expect(screen.getByRole("heading", { level: 2, name: "Text as reviewed" })).toBeTruthy();
+    const headings = [...container.querySelectorAll("h1, h2, h3")].map((h) => h.textContent ?? "");
+    for (const heading of headings) expect(heading).not.toMatch(/public/i);
+    expect(container.querySelector('[data-header-tag="outcome"]')!.textContent).toBe("Rejected");
+  });
+
+  it("says what the case is about in the header's meta line, not as a label above the title (P16)", async () => {
+    const { container } = await page();
+    const header = container.querySelector("header")!;
+    const h1 = header.querySelector("h1")!;
+    expect(h1.previousElementSibling).toBeNull(); // nothing above the title
+    expect(header.querySelector('[data-header-tag="kind"]')!.textContent).toBe("Proposal");
+    expect(header.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2);
+    expect(screen.getByRole("heading", { level: 2, name: "Text under review" })).toBeTruthy();
+  });
+
+  it("leaves out the text once the subject is gone (P15-F MINOR 3)", async () => {
+    data.view = {
+      kind: "ok",
+      data: { item: held({ subject_state: null, actions: [], blocked: "subject_gone", fields: [] }), nextId: null },
+    };
+    const { container } = await page();
+    expect(container.querySelector("[data-case-text]")).toBeNull();
+    expect(screen.queryByText("There is no text to show for this case.")).toBeNull();
+    expect(screen.getByRole("heading", { level: 2, name: "Decision" })).toBeTruthy();
+  });
+
+  it("follows the heading order: one h1, then h2 sections (axe heading-order)", async () => {
+    const { container } = await page();
+    const levels = [...container.querySelectorAll("h1, h2, h3, h4")].map((h) => Number(h.tagName[1]));
+    expect(levels[0]).toBe(1);
+    for (let i = 1; i < levels.length; i++) expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1);
+  });
+
+  it("reads an unknown or malformed id as a case that is not in the queue", async () => {
+    data.view = { kind: "ok", data: { item: null, nextId: null } };
+    await page();
+    expect(screen.getByText("This case is not in the queue.")).toBeTruthy();
+    cleanup();
+    await page("not-a-uuid");
+    expect(screen.getByText("This case is not in the queue.")).toBeTruthy();
+  });
+
+  it("asks for a fresh code in place of the case when the second factor is stale", async () => {
+    data.view = { kind: "stepUp" };
+    await page();
+    expect(await screen.findByLabelText("Code from your app")).toBeTruthy(); // the form is fetched when asked for (LazyStepUp, P25)
+    expect(screen.getByText(/more than 12 hours ago/)).toBeTruthy();
+  });
+
+  it("tells support the section is not theirs", async () => {
+    staff.role = "support";
+    await page();
+    expect(screen.getByText("Moderation is for staff admins and moderators.")).toBeTruthy();
+  });
+});
+
+describe("the queue", () => {
+  async function queue(view?: string) {
+    const searchParams = Promise.resolve(view ? { view } : {});
+    return renderWithIntl(<>{await resolveServerTree(await ModerationPage({ searchParams } as never))}</>);
+  }
+
+  it("lists open cases with at most two tags each, and the oldest one this moderator can decide as the primary action", async () => {
+    const own = held({ id: "01a0f001-0000-7000-8000-000000000001", actions: [], blocked: "own_content" });
+    const problem = held({
+      id: "01a0f002-0000-7000-8000-000000000002",
+      subject_type: "problem",
+      subject_state: "clear",
+      subject_version_id: null,
+      reasons: ["new_developer_problem"],
+      fields: [{ name: "title", text: "SACCO members cannot check loan fees" }],
+      flagged_fields: [],
+      preview: { title: "SACCO members cannot check loan fees", text: "Members see fees with no explanation." },
+    });
+    data.queue = [own, problem, held()];
+    const { container } = await queue();
+    const rows = [...container.querySelectorAll<HTMLElement>("[data-case]")];
+    expect(rows).toHaveLength(3);
+    for (const row of rows) expect(row.querySelectorAll("[data-chip]").length).toBeLessThanOrEqual(2);
+    const primary = container.querySelectorAll<HTMLAnchorElement>("[data-primary]");
+    expect(primary).toHaveLength(1);
+    expect(primary[0].textContent).toBe("Review the oldest case");
+    expect(primary[0].getAttribute("href")).toBe(`/admin/moderation/cases/${problem.id}`);
+    expect(within(rows[1]).getByText("Public while checked")).toBeTruthy();
+    expect(within(rows[1]).getByText("New problem from a developer")).toBeTruthy();
+    // D-52: the queue is a dense table; each row's title is its row header (no headings inside the table), and what
+    // the case is about is plain text, not one of the row's two status badges.
+    expect(screen.getByRole("table", { name: "Open cases, oldest first" })).toBeTruthy();
+    for (const row of rows) {
+      expect(row.tagName).toBe("TR");
+      expect(row.querySelector("h2, h3")).toBeNull();
+    }
+    expect(within(rows[1]).getByText("Problem").closest("[data-chip]")).toBeNull();
+    expect(within(rows[1]).getByText("Problem").className).toBe("font-medium text-ink");
+    for (const row of rows) expect(row.querySelector("th a[data-case-link]")).not.toBeNull();
+    expect(within(rows[0]).getByText("Proposal")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("shows an empty queue as one sentence and one action", async () => {
+    const { container } = await queue();
+    const empty = container.querySelector("[data-empty-state]")!;
+    expect(empty.querySelector("p")!.textContent).toBe("No cases are waiting for a decision.");
+    expect(
+      within(empty as HTMLElement)
+        .getAllByRole("link")
+        .map((a) => a.textContent),
+    ).toEqual(["See decided cases"]);
+  });
+
+  it("lists decided cases with their outcome and who decided them", async () => {
+    data.queue = [
+      held({
+        status: "rejected",
+        subject_state: "rejected",
+        actions: [],
+        blocked: "already_decided",
+        decided_at: "2026-09-30T07:30:00Z",
+        decided_by: { id: "01a0f012-0000-7000-8000-000000000012", display_name: "Staff Admin (demo)" },
+      }),
+    ];
+    const { container } = await queue("decided");
+    expect(screen.getByRole("link", { name: "Decided" }).getAttribute("aria-current")).toBe("page");
+    const row = container.querySelector<HTMLElement>("[data-case]")!;
+    expect(within(row).getByText("Rejected")).toBeTruthy();
+    expect(row.textContent).toContain("Rejected by Staff Admin (demo) on");
+    expect(container.querySelectorAll("[data-primary]")).toHaveLength(0);
+  });
+});
+
+// REQ-FND-04: in the public demo staff are read-only (the API refuses every staff write): an undecided case shows the
+// locked line where its decision would be; the case itself still reads.
+describe("the case page in the public demo", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("shows the locked line instead of the decision, the case still readable; the decision as before with the mode off", async () => {
+    vi.stubEnv("PUBLIC_DEMO", "true");
+    await page();
+    const decision = document.getElementById("decision")!.closest("section")!;
+    expect(within(decision).getByText(en.publicDemo.decideLocked)).toBeTruthy();
+    expect(within(decision).queryAllByRole("button")).toHaveLength(0);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Clear loan-fee statements for SACCO members");
+    cleanup();
+    vi.stubEnv("PUBLIC_DEMO", "false");
+    await page();
+    expect(document.querySelector("[data-demo-locked]")).toBeNull();
+    expect(within(document.getElementById("decision")!.closest("section")!).getAllByRole("button").length).toBeGreaterThan(0);
+  });
+});

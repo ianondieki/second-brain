@@ -1,0 +1,5 @@
+{# The status-change email (ADR-004: subject, one sentence, one call to action, footer with the engagement ref), HTML
+   part: the short branded email (simple.html.j2) with the engagement's ref in the small print. Autoescaped; the
+   sentence arrives unlinkable. [[COPY-REVIEW]] #}
+{% extends "simple.html.j2" %}
+{% block footer_line %}{{ product }} · Engagement ref {{ engagement_ref }}{% endblock %}

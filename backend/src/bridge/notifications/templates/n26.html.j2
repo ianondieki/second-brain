@@ -1,0 +1,15 @@
+{# N26, an event tomorrow that the developer asked to be reminded of, HTML part (REQUIREMENTS.md §5 N26; REQ-DEV-02;
+   D-61). The status email's layout: the title, when (Nairobi time), where (or "Online") and the two calendar links;
+   never the description. Autoescaped; the title and the place arrive unlinkable. [[COPY-REVIEW]] #}
+{% extends "_brand.html.j2" %}
+{% import "_macros.html.j2" as ui %}
+{% block title %}{{ subject }}{% endblock %}
+{% block body %}
+<p style="margin:0 0 16px">You asked us to remind you about this event. It is tomorrow.</p>
+<p style="margin:0 0 4px;font-size:18px;line-height:1.4;font-weight:700">{{ title }}</p>
+<p style="margin:0 0 4px">{{ when }}</p>
+<p style="margin:0 0 16px">{{ place }}</p>
+<p style="margin:24px 0 8px">{{ ui.button(google_url, "Add to Google Calendar", "google-calendar") }}</p>
+<p style="margin:0;font-size:14px;line-height:1.6"><a href="{{ ics_url }}" data-cta="calendar-file" style="color:#5a3fc0">Download the calendar file (.ics)</a></p>
+{% endblock %}
+{% block footer_line %}{{ product }} · You get this because you pressed Remind me on this event{% endblock %}

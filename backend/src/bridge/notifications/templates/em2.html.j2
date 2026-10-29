@@ -1,0 +1,17 @@
+{#- EM2 approval email, HTML part (docs/spec/06 6.10; REQ-NOT-04). Autoescape on: every value is escaped. One CTA. -#}
+{% extends "_brand.html.j2" %}
+{% import "_macros.html.j2" as ui %}
+{% block title %}{{ company_name }}{% endblock %}
+{% block body %}
+<p style="margin:0 0 16px">{{ company_name }} has approved your proposal "{{ title }}" and will contact you shortly to agree on pursuing the project.</p>
+<p style="margin:0 0 16px">Your contact: {{ contact_person_name }}, {{ contact_person_role }}, via {{ contact_channel }} before <strong>{{ contact_by_date }}</strong>.</p>
+<p style="margin:0 0 16px">This approval is an expression of interest, not a contract or a commitment to buy; nothing is binding until you both sign an agreement.</p>
+<p style="margin:0 0 16px">What happens next: first contact → NDA → agreement → implementation, all visible on your tracker.</p>
+<p style="margin:0 0 16px">Your disclosure record {{ receipt_id }} ({{ registered_at_eat }}) is attached to this engagement. {{ tier2_status }}</p>
+<p style="margin:0 0 16px">If nobody contacts you by {{ contact_by_date }}, we follow up with {{ company_name }} automatically.</p>
+{%- if public_entity %}
+<p style="margin:0 0 16px">Public bodies may need to run a competitive process, and you may be asked to bid.</p>
+{%- endif %}
+<p style="margin:24px 0 0">{{ ui.button(tracker_url, "Open your tracker", "open-tracker") }}</p>
+{% endblock %}
+{% block footer_line %}{{ product }} · Engagement ref {{ engagement_ref }}{% endblock %}

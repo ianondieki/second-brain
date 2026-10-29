@@ -1,0 +1,23 @@
+{
+  "synthetic": true,
+  "description": "HTTP 529 overloaded_error (transient; the SDK's own retries are off in tests).",
+  "note": "Hand-written synthetic fixture (D-18: no paid calls). Response shapes follow the anthropic 1.8.0 SDK types (Message, Usage, MessageBatch, MessageBatchIndividualResponse); ids, tokens and text are invented.",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages"
+      },
+      "response": {
+        "status": 529,
+        "json": {
+          "type": "error",
+          "error": {
+            "type": "overloaded_error",
+            "message": "provider detail: overloaded right now"
+          }
+        }
+      }
+    }
+  ]
+}

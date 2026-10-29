@@ -1,0 +1,70 @@
+import type { ReactNode, SVGProps } from "react";
+
+// Icons of the organisation screens, drawn like components/ui/icons.tsx (20 px grid, 1.75 stroke, round joins,
+// currentColor, decorative: the words next to them carry the meaning). A module of their own, so the organisation
+// side adds no bytes to the shared icon set.
+
+type IconProps = SVGProps<SVGSVGElement>;
+
+function Svg({ children, ...props }: IconProps & { children: ReactNode }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      {children}
+    </svg>
+  );
+}
+
+/** Inbox: a tray with a dip where a proposal lands. */
+export function InboxIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M2.75 11.25 5 4.25h10l2.25 7" />
+      <path d="M2.75 11.25v4.5h14.5v-4.5h-4.25l-1.25 2h-3.5l-1.25-2Z" />
+    </Svg>
+  );
+}
+
+/** The full proposal: a closed padlock (behind the NDA), open once it may be read. */
+export function ConfidentialIcon({ open = false, ...props }: IconProps & { open?: boolean }) {
+  return (
+    <Svg {...props}>
+      <rect x="4.25" y="8.75" width="11.5" height="8.5" rx="1.5" />
+      <path d={open ? "M7 8.75V6a3 3 0 0 1 5.8-1.1" : "M7 8.75V6a3 3 0 0 1 6 0v2.75"} />
+      <path d="M10 12.25v1.75" />
+    </Svg>
+  );
+}
+
+/** Problems (the organisation's Problem Briefs): a clipboard with the brief's lines on it. */
+export function BriefIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M7.25 3.75h-1.5a1.5 1.5 0 0 0-1.5 1.5v11a1.5 1.5 0 0 0 1.5 1.5h8.5a1.5 1.5 0 0 0 1.5-1.5v-11a1.5 1.5 0 0 0-1.5-1.5h-1.5" />
+      <rect x="7.25" y="2.75" width="5.5" height="2.5" rx="1" />
+      <path d="M7.5 9.25h5M7.5 12.25h5M7.5 15.25h3" />
+    </Svg>
+  );
+}
+
+/** Events: a calendar page with its two rings and a marked day. */
+export function CalendarIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="3.25" y="4.25" width="13.5" height="12.5" rx="2" />
+      <path d="M3.25 8.25h13.5M7 2.75v3M13 2.75v3" />
+      <path d="M10.75 11.5h2.5v2.5h-2.5Z" />
+    </Svg>
+  );
+}

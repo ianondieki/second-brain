@@ -1,0 +1,1235 @@
+"""A two-tenant fixture world for the RLS tests (AC-SEC-1/a, AC-SEC-1/b).
+
+Users A and B each own an organisation and rows in every tenant-scoped table; a staff admin exists for the STAFF
+tables. Rows are written as the owner role (RLS does not apply to the table owner), so the tests can then read as
+``bridge_app`` (or the table's ``db_role``) and check isolation.
+
+``TENANT_ROWS`` must cover every table whose tenancy is org, user, org_or_user or published, ``STAFF_ROWS`` every
+staff table and ``CURATED_ROWS`` every curated one (the quiz's sets and questions, revision 0009, and the trend cards
+and their sources, revision 0010: approved or published rows that developers read, rejected ones they do not); the
+RLS tests fail otherwise, so a new tenant table cannot ship without a
+fixture and a policy. Revision 0011's team tables are each tenant's with its pitcher (an accepted invitation, its
+thread with a message from each, the tenant's read marker and block of a third developer, and the pitcher credited on
+the tenant's published and draft proposals). Revision 0013's: the tenant's organisation's assignment, recommendation
+and prior-knowledge declaration on its engagement, and the tenant's personal and organisation calendar feeds.
+Revision 0015's: a nudge on the tenant organisation's engagement, its default reviewer for the world's niche and its
+escalation contact. For
+the PUBLISHED tables each tenant has rows every signed-in user may read (published, clear) and rows only its owner may
+read (drafts, held, hidden, candidate), so the tests prove both halves of the rule.
+"""
+
+from __future__ import annotations
+
+import hashlib
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
+
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
+
+from bridge.ids import uuid7
+
+FIXTURE = "rls-fixture"  # marks the fixture rows of tables with no tenant column (staff tables)
+STAFF_CODE = "rls_fixture"  # the same, where the marker column holds a code (research_runs.stop_reason)
+VECTOR_1024 = "CAST(array_fill(CAST(0.001 AS real), ARRAY[1024]) AS vector)"
+QUIZ_TRACE = "rls-fixture"  # marks the quiz fixture sets (llm_trace_id: CURATED tables have no tenant column)
+TREND_TRACE = "rls-fixture"  # marks the trend fixture cards (llm_trace_id), as the quiz sets
+
+
+@dataclass(frozen=True, slots=True)
+class Tenant:
+    user_id: UUID
+    org_id: UUID
+    email: str
+    # Proposals by visibility (docs/spec/06 6.1): only ``published`` is readable by other signed-in users.
+    published: UUID
+    draft: UUID
+    held: UUID
+    hidden: UUID
+    published_version: UUID
+    draft_version: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class World:
+    a: Tenant
+    b: Tenant
+    niche_id: UUID
+    plan_id: UUID
+    staff_id: UUID  # staff admin with TOTP enrolled
+    met_template_id: UUID  # Master Enterprise Terms of this world
+    nda_template_id: UUID  # Evaluation NDA of this world
+
+
+async def _insert(conn: AsyncConnection, sql: str, **params: object) -> None:
+    await conn.execute(text(sql), params)
+
+
+async def add_user(conn: AsyncConnection, email: str, name: str, *, staff_role: str | None = None) -> UUID:
+    """A user; staff get TOTP enrolled (app_is_staff() requires it)."""
+    user_id = uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO users (id, email, display_name, staff_role, totp_enabled_at)"
+        " VALUES (:id, :email, :name, CAST(:staff AS staff_role), :totp)",
+        id=user_id,
+        email=email,
+        name=name,
+        staff=staff_role,
+        totp=datetime.now(UTC) if staff_role else None,
+    )
+    return user_id
+
+
+async def add_templates(conn: AsyncConnection, tag: str) -> tuple[UUID, UUID]:
+    """A Master Enterprise Terms and an Evaluation NDA version of this world (placeholder bodies)."""
+    met_id, legal_nda_id, nda_id = uuid7(), uuid7(), uuid7()
+    for template_id, kind in ((met_id, "master_enterprise_terms"), (legal_nda_id, "evaluation_nda")):
+        await _insert(
+            conn,
+            "INSERT INTO legal_templates (id, kind, version, body, sha256)"
+            " VALUES (:id, CAST(:kind AS legal_template_kind), :version, :body, sha256(convert_to(:body, 'UTF8')))",
+            id=template_id,
+            kind=kind,
+            version=f"rls-{tag}",
+            body=f"[[LEGAL-PLACEHOLDER:{kind}-{tag}]]\n",
+        )
+    await _insert(
+        conn,
+        "INSERT INTO nda_templates (id, kind, version, legal_template_id, sha256)"
+        " SELECT :id, 'evaluation', :version, id, sha256 FROM legal_templates WHERE id = :legal",
+        id=nda_id,
+        version=f"rls-{tag}",
+        legal=legal_nda_id,
+    )
+    return met_id, nda_id
+
+
+async def add_proposal(
+    conn: AsyncConnection,
+    owner: UUID,
+    niche_id: UUID,
+    problem_id: UUID,
+    *,
+    status: str = "published",
+    moderation_state: str = "clear",
+    registered: bool = True,
+) -> tuple[UUID, UUID]:
+    """A proposal with one version (and its Tier-2 row). Registered versions go draft -> registered like the app,
+    which gives them the owner's developer handle (the owner gets a developer profile if they have none)."""
+    proposal_id, version_id = uuid7(), uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO developer_profiles (user_id, handle) VALUES (:owner, :handle) ON CONFLICT (user_id) DO NOTHING",
+        owner=owner,
+        handle=f"dev-{owner.hex}",
+    )
+    await _insert(
+        conn,
+        "INSERT INTO proposals (id, owner_id, moderation_state, title, niche_id) VALUES (:id, :owner,"
+        " CAST(:moderation AS moderation_state), 'RLS proposal', :niche)",
+        id=proposal_id,
+        owner=owner,
+        moderation=moderation_state,
+        niche=niche_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO proposal_versions (id, proposal_id, version_no, title, niche_id, maturity, ask, problem_statement,"
+        " summary) VALUES (:id, :proposal, 1, 'RLS proposal', :niche, 'idea', 'pilot', 'A problem', 'What it does')",
+        id=version_id,
+        proposal=proposal_id,
+        niche=niche_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO proposal_confidential"
+        " (version_id, proposal_id, owner_id, ciphertext, nonce, wrapped_dek, kms_key_id)"
+        " VALUES (:version, :proposal, :owner, '\\x01', '\\x02', '\\x03', 'local:test')",
+        version=version_id,
+        proposal=proposal_id,
+        owner=owner,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO proposal_problems (proposal_version_id, problem_id) VALUES (:version, :problem)",
+        version=version_id,
+        problem=problem_id,
+    )
+    if registered:
+        await _insert(
+            conn,
+            "UPDATE proposal_versions SET status = 'registered', cert_id = :cert, registered_at = now() WHERE id = :id",
+            id=version_id,
+            cert=uuid7().hex[:16],
+        )
+        await _insert(
+            conn,
+            "UPDATE proposals SET status = CAST(:status AS proposal_status), current_version_id = :version,"
+            " published_at = now() WHERE id = :id",
+            id=proposal_id,
+            status=status,
+            version=version_id,
+        )
+    else:
+        await _insert(
+            conn, "UPDATE proposals SET draft_version_id = :version WHERE id = :id", id=proposal_id, version=version_id
+        )
+    return proposal_id, version_id
+
+
+async def add_problem(
+    conn: AsyncConnection,
+    user_id: UUID,
+    niche_id: UUID,
+    *,
+    org_id: UUID | None = None,
+    status: str = "published",
+    moderation_state: str = "clear",
+) -> UUID:
+    problem_id = uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO problems (id, source, niche_id, title, statement, status, created_by, org_id, moderation_state)"
+        " VALUES (:id, CAST(:source AS problem_source), :niche, 'RLS problem', 'Statement',"
+        " CAST(:status AS problem_status), :user, :org, CAST(:moderation AS moderation_state))",
+        id=problem_id,
+        source="org_brief" if org_id else "developer",
+        niche=niche_id,
+        status=status,
+        user=user_id,
+        org=org_id,
+        moderation=moderation_state,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO problem_sources (id, problem_id, url, retrieved_at) VALUES (:id, :problem, :url, now())",
+        id=uuid7(),
+        problem=problem_id,
+        url="https://example.test/source",
+    )
+    return problem_id
+
+
+async def add_tracker_rows(conn: AsyncConnection, engagement_id: UUID, developer_id: UUID) -> None:
+    """Revision 0003: one row of each tracker table on an engagement in SUBMITTED (its genesis event is the
+    database's), written as the owner like every fixture: an endorsement of the current stage, a draft agreement with
+    a milestone, a signature and an unconfirmed payment record; revision 0006: a note on the genesis event (the
+    owner is not held to the notes' INSERT policy, which ``test_rls`` exercises as bridge_app)."""
+    await _insert(
+        conn,
+        "INSERT INTO engagement_notes (id, engagement_id, event_seq, kind, body, created_by)"
+        " VALUES (:id, :engagement, 1, 'info_request', 'Which counties does the pilot cover?', :user)",
+        id=uuid7(),
+        engagement=engagement_id,
+        user=developer_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO engagement_endorsements (id, engagement_id, stage, party, user_id, role, method)"
+        " VALUES (:id, :engagement, 'SUBMITTED', 'developer', :user, 'developer', 'click')",
+        id=uuid7(),
+        engagement=engagement_id,
+        user=developer_id,
+    )
+    agreement_id = uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO agreements (id, engagement_id, version, created_by) VALUES (:id, :engagement, 1, :user)",
+        id=agreement_id,
+        engagement=engagement_id,
+        user=developer_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO milestones (id, agreement_id, engagement_id, seq, deliverable, amount_kes_minor, due_date,"
+        " review_window_bd) VALUES (:id, :agreement, :engagement, 1, 'Pilot build', 5000000, :due, 5)",
+        id=uuid7(),
+        agreement=agreement_id,
+        engagement=engagement_id,
+        due=datetime(2027, 1, 29, tzinfo=UTC).date(),
+    )
+    await _insert(
+        conn,
+        "INSERT INTO signatures (id, engagement_id, document_kind, document_ref, document_sha256, signer_user_id,"
+        " party, step_up_method) VALUES (:id, :engagement, 'mutual_nda', :ref, :sha, :user, 'developer', 'passkey')",
+        id=uuid7(),
+        engagement=engagement_id,
+        ref=uuid7(),
+        sha=bytes(32),
+        user=developer_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO payment_records (id, engagement_id, amount_kes_minor, method, reference, paid_on, recorded_by)"
+        " VALUES (:id, :engagement, 5000000, 'mpesa', 'RLS0FIXTURE', :paid, :user)",
+        id=uuid7(),
+        engagement=engagement_id,
+        paid=datetime(2026, 1, 15, tzinfo=UTC).date(),
+        user=developer_id,
+    )
+
+
+async def add_scout_rows(
+    conn: AsyncConnection, org_id: UUID, owner_id: UUID, niche_id: UUID, proposal_id: UUID, version_id: UUID
+) -> UUID:
+    """Revision 0005: a scout of the organisation (created by its owner), one completed run and one match of the given
+    registered version, written as the owner. Returns the scout's id."""
+    scout_id = uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO scout_agents (id, org_id, niches, created_by)"
+        " VALUES (:id, :org, ARRAY[CAST(:niche AS uuid)], :user)",
+        id=scout_id,
+        org=org_id,
+        niche=niche_id,
+        user=owner_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO agent_runs (id, scout_id, org_id, trigger, status, finished_at, window_end)"
+        " VALUES (:id, :scout, :org, 'weekly', 'completed', now(), now())",
+        id=uuid7(),
+        scout=scout_id,
+        org=org_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO agent_matches (id, scout_id, org_id, proposal_id, version_id, niche_id, score)"
+        " VALUES (:id, :scout, :org, :proposal, :version, :niche, 70)",
+        id=uuid7(),
+        scout=scout_id,
+        org=org_id,
+        proposal=proposal_id,
+        version=version_id,
+        niche=niche_id,
+    )
+    return scout_id
+
+
+async def has_table(conn: AsyncConnection, table: str) -> bool:
+    """Whether the database is at a revision that has ``table`` (a downgrade test builds the world on an older one)."""
+    found = await conn.execute(text("SELECT to_regclass(:t) IS NOT NULL"), {"t": f"public.{table}"})
+    return bool(found.scalar_one())
+
+
+async def add_thread_rows(conn: AsyncConnection, engagement_id: UUID, developer_id: UUID, member_id: UUID) -> None:
+    """Revision 0008: a message from each side of the engagement, a sent attachment of the developer's and the member's
+    read marker, written as the owner. The world's engagement is in SUBMITTED, before the thread opens, so the stage
+    gate (``<table>_1_open``, for every role) is switched off for these rows inside the world's transaction; the gate
+    itself is tested in ``integration/engagements/test_messages_schema.py``."""
+    gated = ("engagement_messages", "engagement_message_attachments")
+    for table in gated:
+        await _insert(conn, f"ALTER TABLE {table} DISABLE TRIGGER {table}_1_open")
+    developer_message = uuid7()
+    for message_id, sender, party in ((developer_message, developer_id, "developer"), (uuid7(), member_id, "org")):
+        await _insert(
+            conn,
+            "INSERT INTO engagement_messages (id, engagement_id, sender_user_id, sender_party, body)"
+            " VALUES (:id, :engagement, :sender, CAST(:party AS engagement_party), 'When can we meet?')",
+            id=message_id,
+            engagement=engagement_id,
+            sender=sender,
+            party=party,
+        )
+    attachment_id = uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO engagement_message_attachments (id, engagement_id, message_id, uploader_user_id, file_name,"
+        " content_type, size_bytes, sha256, object_key, av_status) VALUES (:id, :engagement, :message, :uploader,"
+        " 'pilot-plan.pdf', 'application/pdf', 1024, :sha, :key, 'clean')",
+        id=attachment_id,
+        engagement=engagement_id,
+        message=developer_message,
+        uploader=developer_id,
+        sha=bytes(32),
+        key=f"messages/{engagement_id}/{attachment_id}",
+    )
+    for table in gated:
+        await _insert(conn, f"ALTER TABLE {table} ENABLE TRIGGER {table}_1_open")
+    await _insert(
+        conn,
+        "INSERT INTO engagement_message_reads (engagement_id, user_id) VALUES (:engagement, :user)",
+        engagement=engagement_id,
+        user=member_id,
+    )
+
+
+_QUIZ_QUESTION = (
+    "INSERT INTO quiz_questions (id, set_id, position, prompt, options, answer, why, source_id, source_title,"
+    " source_url, topic, prompt_hash) VALUES (:id, :set, :position, :prompt, :options, 1, 'Because it is so.',"
+    " 'rls-doc', 'RLS documentation', 'https://docs.example.test/rls', 'rls', :hash)"
+)
+
+
+async def add_quiz_rows(conn: AsyncConnection, staff_id: UUID, developers: list[UUID]) -> None:
+    """Revision 0009: a rejected and an approved quiz set of five questions on one past day (each world takes the day
+    after the last one, before 2000, so worlds never share a day), each developer's attempt on the approved set, a flag
+    on its first question and their quiz profile. Rejected, not draft: a committed draft would sit in the staff queue
+    of every later test."""
+    day = (
+        await conn.execute(
+            text("SELECT coalesce(max(quiz_date) + 1, DATE '1990-01-01') FROM quiz_sets WHERE quiz_date < '2000-01-01'")
+        )
+    ).scalar_one()
+    approved, first = uuid7(), uuid7()
+    for status in ("rejected", "approved"):  # a rejected set leaves its day free for the next draft
+        set_id = approved if status == "approved" else uuid7()
+        await _insert(
+            conn,
+            "INSERT INTO quiz_sets (id, quiz_date, origin, llm_trace_id) VALUES (:id, :day, 'model', :trace)",
+            id=set_id,
+            day=day,
+            trace=QUIZ_TRACE,
+        )
+        for position in range(1, 6):
+            await _insert(
+                conn,
+                _QUIZ_QUESTION,
+                id=first if (status, position) == ("approved", 1) else uuid7(),
+                set=set_id,
+                position=position,
+                prompt=f"RLS question {position}?",
+                options=["One", "Two", "Three", "Four"],
+                hash=hashlib.sha256(f"{set_id} {position}".encode()).digest(),
+            )
+        await _insert(
+            conn,
+            "UPDATE quiz_sets SET status = :status, decided_by = :staff, decided_at = now() WHERE id = :id",
+            status=status,
+            staff=staff_id,
+            id=set_id,
+        )
+    for user_id in developers:
+        await _insert(
+            conn,
+            "INSERT INTO quiz_attempts (id, set_id, user_id, answers, time_ms)"
+            " VALUES (:id, :set, :user, CAST(:answers AS smallint[]), 42000)",
+            id=uuid7(),
+            set=approved,
+            user=user_id,
+            answers=[1, 0, None, 1, 1],
+        )
+        await _insert(
+            conn,
+            "INSERT INTO quiz_flags (id, question_id, user_id, reason) VALUES (:id, :question, :user, 'unclear')",
+            id=uuid7(),
+            question=first,
+            user=user_id,
+        )
+        await _insert(
+            conn, "INSERT INTO quiz_profiles (user_id, leaderboard_opt_in) VALUES (:user, true)", user=user_id
+        )
+
+
+async def add_event_rows(conn: AsyncConnection, org_id: UUID, user_id: UUID, staff_id: UUID) -> UUID:
+    """Revision 0010: a published and a draft online event of the organisation, posted by ``user_id`` (the published
+    one decided by staff), and the user's Remind me on the published one, written as the owner. Returns the published
+    event's id."""
+    published = uuid7()
+    for event_id, status in ((published, "published"), (uuid7(), "draft")):
+        await _insert(
+            conn,
+            "INSERT INTO events (id, org_id, created_by, title, description, starts_at, ends_at, online, join_url,"
+            " status, decided_by, decided_at) VALUES (:id, :org, :user, 'RLS event', 'An RLS fixture event.',"
+            " :starts, :ends, true, 'https://meet.example.test/rls', :status, :staff, :decided)",
+            id=event_id,
+            org=org_id,
+            user=user_id,
+            starts=datetime(2031, 3, 4, 6, tzinfo=UTC),
+            ends=datetime(2031, 3, 4, 9, tzinfo=UTC),
+            status=status,
+            staff=staff_id if status == "published" else None,
+            decided=datetime.now(UTC) if status == "published" else None,
+        )
+    await _insert(
+        conn, "INSERT INTO event_reminders (user_id, event_id) VALUES (:user, :event)", user=user_id, event=published
+    )
+    return published
+
+
+async def add_trend_rows(conn: AsyncConnection, staff_id: UUID) -> None:
+    """Revision 0010: a published and a rejected trend card with two sources each, written as the owner (each source
+    joins its card while a candidate, then the card is decided). Rejected, not candidate: a committed candidate would
+    sit in the staff queue of every later test."""
+    for status in ("published", "rejected"):
+        card_id = uuid7()
+        await _insert(
+            conn,
+            "INSERT INTO trend_cards (id, title, summary, topic_slug, llm_trace_id) VALUES (:id, 'RLS trend',"
+            " 'An RLS fixture trend.', 'rls-fixture', :trace)",
+            id=card_id,
+            trace=TREND_TRACE,
+        )
+        for position in (1, 2):
+            await _insert(
+                conn,
+                "INSERT INTO trend_card_sources (id, card_id, position, url, publisher, published_date, retrieved_at,"
+                " quote, excerpt_ref, support) VALUES (:id, :card, :position, 'https://tech.example.test/rls',"
+                " 'RLS Publisher', DATE '2026-01-05', DATE '2026-01-06', 'A quoted line.', :ref, 'The trend.')",
+                id=uuid7(),
+                card=card_id,
+                position=position,
+                ref=f"rls-{position}",
+            )
+        await _insert(
+            conn,
+            "UPDATE trend_cards SET status = :status, decided_by = :staff, decided_at = now(),"
+            " published_at = CASE WHEN :status = 'published' THEN now() END WHERE id = :id",
+            status=status,
+            staff=staff_id,
+            id=card_id,
+        )
+
+
+async def add_team_rows(
+    conn: AsyncConnection, user_id: UUID, counterpart: UUID, problem_id: UUID, proposals: tuple[UUID, ...], label: str
+) -> None:
+    """Revision 0011: the tenant and its counterpart opted in to peers; the tenant's accepted invitation to the
+    counterpart on a public problem, its thread with a message from each and the tenant's read marker; the tenant's
+    block of a third developer; the counterpart credited on each of ``proposals`` (the tenant's), written as the
+    owner."""
+    await _insert(
+        conn, "UPDATE developer_profiles SET peers_visible = true WHERE user_id IN (:a, :b)", a=user_id, b=counterpart
+    )
+    blocked = await add_user(conn, f"blocked-{label}@example.test", "Blocked")
+    await _insert(
+        conn,
+        "INSERT INTO developer_profiles (user_id, handle) VALUES (:user, :handle)",
+        user=blocked,
+        handle=f"blocked-{label}",
+    )
+    await _insert(
+        conn,
+        "INSERT INTO developer_blocks (blocker_user_id, blocked_user_id) VALUES (:user, :blocked)",
+        user=user_id,
+        blocked=blocked,
+    )
+    invitation, thread = uuid7(), uuid7()
+    await _insert(
+        conn,
+        "INSERT INTO team_invitations (id, from_user_id, to_user_id, problem_id, note) VALUES (:id, :user, :other,"
+        " :problem, 'Shall we?')",
+        id=invitation,
+        user=user_id,
+        other=counterpart,
+        problem=problem_id,
+    )
+    await _insert(
+        conn, "UPDATE team_invitations SET status = 'accepted', decided_at = now() WHERE id = :id", id=invitation
+    )
+    await _insert(
+        conn,
+        "INSERT INTO team_threads (id, invitation_id, a_user_id, b_user_id, problem_id)"
+        " VALUES (:id, :invitation, least(:user, :other), greatest(:user, :other), :problem)",
+        id=thread,
+        invitation=invitation,
+        user=user_id,
+        other=counterpart,
+        problem=problem_id,
+    )
+    for sender in (user_id, counterpart):
+        await _insert(
+            conn,
+            "INSERT INTO team_messages (id, thread_id, sender_user_id, body) VALUES (:id, :thread, :sender, 'Hello')",
+            id=uuid7(),
+            thread=thread,
+            sender=sender,
+        )
+    await _insert(
+        conn, "INSERT INTO team_thread_reads (thread_id, user_id) VALUES (:thread, :user)", thread=thread, user=user_id
+    )
+    for proposal in proposals:
+        await _insert(
+            conn,
+            "INSERT INTO proposal_contributors (proposal_id, user_id, thread_id) VALUES (:proposal, :other, :thread)",
+            proposal=proposal,
+            other=counterpart,
+            thread=thread,
+        )
+
+
+async def add_triage_rows(
+    conn: AsyncConnection, engagement_id: UUID, org_id: UUID, proposal_id: UUID, version_id: UUID, member_id: UUID
+) -> None:
+    """Revision 0013: the organisation's member (the tenant, its owner and admin) assigned to the engagement and their
+    recommendation on it; the organisation's prior-knowledge declaration on it (the owner's insert keeps the window it
+    sends: no Tier-2 view of the pitched proposal exists in the world); the member's two calendar feeds, personal and
+    the organisation's. Written as the owner."""
+    await _insert(
+        conn,
+        "INSERT INTO engagement_assignments (id, engagement_id, org_id, assignee_user_id, assigned_by)"
+        " VALUES (:id, :engagement, :org, :member, :member)",
+        id=uuid7(),
+        engagement=engagement_id,
+        org=org_id,
+        member=member_id,
+    )
+    await _insert(
+        conn,
+        "INSERT INTO engagement_recommendations (id, engagement_id, org_id, member_user_id, stance, note)"
+        " VALUES (:id, :engagement, :org, :member, 'pursue', 'Worth a pilot')",
+        id=uuid7(),
+        engagement=engagement_id,
+        org=org_id,
+        member=member_id,
+    )
+    nairobi_today = "(now() AT TIME ZONE 'Africa/Nairobi')::date"
+    await _insert(
+        conn,
+        "INSERT INTO prior_knowledge_declarations (id, engagement_id, org_id, proposal_id, version_id, declared_by,"
+        " evidence_sha256, evidence_title, evidence_dated_on, first_tier2_view_at, window_closes_on)"
+        f" VALUES (:id, :engagement, :org, :proposal, :version, :member, :sha, 'Internal pilot memo',"
+        f" {nairobi_today} - 30, now(), {nairobi_today} + 14)",
+        id=uuid7(),
+        engagement=engagement_id,
+        org=org_id,
+        proposal=proposal_id,
+        version=version_id,
+        member=member_id,
+        sha=hashlib.sha256(b"rls-fixture-evidence").digest(),
+    )
+    for org in (None, org_id):
+        await _insert(
+            conn,
+            "INSERT INTO calendar_feeds (id, user_id, org_id, token_hash) VALUES (:id, :member, :org, :hash)",
+            id=uuid7(),
+            member=member_id,
+            org=org,
+            hash=hashlib.sha256(uuid7().bytes).digest(),
+        )
+
+
+async def build(conn: AsyncConnection, tag: str) -> World:
+    """Create the world inside ``conn`` (owner role). ``tag`` keeps emails and slugs unique per test session."""
+    niche_id, plan_id = uuid7(), uuid7()
+    await _insert(
+        conn, "INSERT INTO niches (id, slug, name_en) VALUES (:id, :slug, 'RLS niche')", id=niche_id, slug=f"rls-{tag}"
+    )
+    await _insert(
+        conn,
+        "INSERT INTO plans (id, code, side, name, price_kes_minor, interval, limits) "
+        "VALUES (:id, :code, 'org', 'RLS plan', 0, 'none', '{}')",
+        id=plan_id,
+        code=f"rls-{tag}",
+    )
+    staff_id = await add_user(conn, f"staff-{tag}@example.test", "Staff", staff_role="admin")
+    met_id, nda_template_id = await add_templates(conn, tag)
+    tenants = []
+    for label in ("a", "b"):
+        org_id = uuid7()
+        email = f"{label}-{tag}@example.test"
+        now = datetime.now(UTC)
+        user_id = await add_user(conn, email, label.upper())
+        await _insert(
+            conn,
+            "INSERT INTO organizations (id, kind, legal_name, slug, source) "
+            "VALUES (:id, 'company', :name, :slug, 'self_signup')",
+            id=org_id,
+            name=f"Org {label.upper()}",
+            slug=f"org-{label}-{tag}",
+        )
+        await _insert(
+            conn,
+            "INSERT INTO memberships (id, org_id, user_id, roles) VALUES (:id, :org, :user, '{owner,admin}')",
+            id=uuid7(),
+            org=org_id,
+            user=user_id,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO invitations (id, org_id, email, roles, token_hash, invited_by, expires_at) "
+            "VALUES (:id, :org, :email, '{viewer}', :hash, :user, :exp)",
+            id=uuid7(),
+            org=org_id,
+            email=f"invitee-{label}-{tag}@example.test",
+            hash=uuid7().bytes,
+            user=user_id,
+            exp=now,
+        )
+        await _insert(
+            conn, "INSERT INTO org_niches (org_id, niche_id) VALUES (:org, :niche)", org=org_id, niche=niche_id
+        )
+        await _insert(
+            conn,
+            "INSERT INTO developer_profiles (user_id, handle) VALUES (:user, :handle)",
+            user=user_id,
+            handle=f"h-{label}-{tag}",
+        )
+        await _insert(
+            conn,
+            "INSERT INTO developer_niches (user_id, niche_id, kind) VALUES (:user, :niche, 'liked')",
+            user=user_id,
+            niche=niche_id,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO consents (id, user_id, purpose, granted, text_version, text_sha256, source) "
+            "VALUES (:id, :user, 'marketing', true, 'v1', :sha, 'test')",
+            id=uuid7(),
+            user=user_id,
+            sha=bytes(32),
+        )
+        await _insert(
+            conn,
+            "INSERT INTO notification_preferences (user_id, kind, channel) VALUES (:user, 'em7', 'email')",
+            user=user_id,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO in_app_notifications (id, user_id, kind, title) VALUES (:id, :user, 'test', 'Hello')",
+            id=uuid7(),
+            user=user_id,
+        )
+        for scope in ("user", "org"):
+            await _insert(
+                conn,
+                "INSERT INTO subscriptions (id, user_id, org_id, plan_id, status, current_period_start) "
+                "VALUES (:id, :user, :org, :plan, 'active', :now)",
+                id=uuid7(),
+                user=user_id if scope == "user" else None,
+                org=org_id if scope == "org" else None,
+                plan=plan_id,
+                now=now,
+            )
+            await _insert(
+                conn,
+                "INSERT INTO notification_deliveries (id, user_id, org_id, kind, channel, to_address) "
+                "VALUES (:id, :user, :org, 'test', 'email', 'x@example.test')",
+                id=uuid7(),
+                user=user_id if scope == "user" else None,
+                org=org_id if scope == "org" else None,
+            )
+            await _insert(
+                conn,
+                "INSERT INTO llm_calls (id, user_id, org_id, task, model, status) "
+                "VALUES (:id, :user, :org, 'rls.fixture', 'fake', 'ok')",
+                id=uuid7(),
+                user=user_id if scope == "user" else None,
+                org=org_id if scope == "org" else None,
+            )
+        event_id = uuid7()
+        await _insert(
+            conn,
+            "INSERT INTO audit_events (id, seq, actor_kind, actor_user_id, org_id, action, prev_hash, event_hash) "
+            "VALUES (:id, 0, 'user', :user, :org, 'rls.fixture', ''::bytea, ''::bytea)",
+            id=event_id,
+            user=user_id,
+            org=org_id,
+        )
+        await _insert(conn, "INSERT INTO event_details (event_id, details) VALUES (:id, '{}')", id=event_id)
+
+        # --- Schema v2 (revision 0002) ---
+        # Problems: public (published, clear), held, a Brief awaiting review, and a public published Brief.
+        public_problem = await add_problem(conn, user_id, niche_id)
+        await add_problem(conn, user_id, niche_id, moderation_state="held")
+        invited_brief = await add_problem(conn, user_id, niche_id, org_id=org_id, status="pending_review")
+        public_brief = await add_problem(conn, user_id, niche_id, org_id=org_id)
+        # Only a listed E2 organisation's Brief is published (revision 0006, problem_briefs_status_guard): the tenant
+        # is E2 while its Brief is written, then pending again, so its directory rows stay private (as if E2 lapsed).
+        await _insert(conn, "UPDATE organizations SET verification = 'e2' WHERE id = :org", org=org_id)
+        for brief_id, visibility, status in (
+            (invited_brief, "invited", "draft"),
+            (public_brief, "public", "published"),
+        ):
+            await _insert(
+                conn,
+                "INSERT INTO problem_briefs (problem_id, org_id, visibility, status) VALUES (:id, :org,"
+                " CAST(:visibility AS brief_visibility), CAST(:status AS brief_status))",
+                id=brief_id,
+                org=org_id,
+                visibility=visibility,
+                status=status,
+            )
+        await _insert(conn, "UPDATE organizations SET verification = 'pending' WHERE id = :org", org=org_id)
+        await _insert(
+            conn,
+            "INSERT INTO brief_invitations (id, brief_id, org_id, user_id) VALUES (:id, :brief, :org, :user)",
+            id=uuid7(),
+            brief=invited_brief,
+            org=org_id,
+            user=user_id,
+        )
+        # Proposals: published and clear (public), a draft, a held one and a hidden ("deleted") one.
+        published, published_version = await add_proposal(conn, user_id, niche_id, public_problem)
+        draft, draft_version = await add_proposal(conn, user_id, niche_id, public_problem, registered=False)
+        held, _ = await add_proposal(conn, user_id, niche_id, public_problem, moderation_state="held")
+        hidden, _ = await add_proposal(conn, user_id, niche_id, public_problem, status="hidden")
+        for band, proposal in enumerate((published, draft, held, hidden)):  # originality buckets of each teaser
+            await _insert(
+                conn,
+                "INSERT INTO proposal_lsh_bands (proposal_id, band, bucket) VALUES (:proposal, :band, :bucket)",
+                proposal=proposal,
+                band=band,
+                bucket=band + 1,
+            )
+        await _insert(
+            conn,
+            "INSERT INTO proposal_confidential_embeddings (version_id, embed_model, embed_version, full_embedding)"
+            f" VALUES (:version, '{FIXTURE}', '1', {VECTOR_1024})",
+            version=published_version,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO proposal_attachments (id, owner_id, proposal_id, version_id, content_type)"
+            " VALUES (:id, :owner, :proposal, :version, 'application/pdf')",
+            id=uuid7(),
+            owner=user_id,
+            proposal=draft,
+            version=draft_version,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO originality_checks (id, user_id, band) VALUES (:id, :user, 'none')",
+            id=uuid7(),
+            user=user_id,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO attestations (id, user_id, version_id, created_it, not_owned_by_employer_or_client,"
+            " no_third_party_confidential, text_version, text_sha256) VALUES (:id, :user, :version, true, true, true,"
+            " 'v1', :sha)",
+            id=uuid7(),
+            user=user_id,
+            version=published_version,
+            sha=bytes(32),
+        )
+        await _insert(
+            conn,
+            "INSERT INTO tags (id, proposal_id, org_id, developer_id, status) VALUES (:id, :proposal, :org, :user,"
+            " 'delivered')",
+            id=uuid7(),
+            proposal=published,
+            org=org_id,
+            user=user_id,
+        )
+        # The organisation's engagement with another developer's proposal (revision 0003: the developer is never a
+        # member of the counterpart organisation), so the tracker rows are this tenant's through its organisation.
+        pitcher = await add_user(conn, f"pitcher-{label}-{tag}@example.test", f"Pitcher {label.upper()}")
+        pitched, pitched_version = await add_proposal(conn, pitcher, niche_id, public_problem)
+        engagement_id = uuid7()
+        await _insert(
+            conn,
+            "INSERT INTO engagements (id, proposal_id, org_id, developer_id, version_id, origin, state)"
+            " VALUES (:id, :proposal, :org, :user, :version, 'tagged', 'SUBMITTED')",
+            id=engagement_id,
+            proposal=pitched,
+            org=org_id,
+            user=pitcher,
+            version=pitched_version,
+        )
+        await add_tracker_rows(conn, engagement_id, pitcher)
+        await _insert(
+            conn,
+            "INSERT INTO disclosure_grants (id, proposal_id, org_id, owner_id, tier, status, source)"
+            " VALUES (:id, :proposal, :org, :user, 2, 'active', 'auto_tagged')",
+            id=uuid7(),
+            proposal=published,
+            org=org_id,
+            user=user_id,
+        )
+        nda_acceptance = uuid7()
+        await _insert(
+            conn,
+            "INSERT INTO nda_acceptances (id, user_id, org_id, proposal_id, nda_template_id, template_sha256,"
+            " logging_notice_version) SELECT :id, :user, :org, :proposal, id, sha256, 'v1' FROM nda_templates"
+            " WHERE id = :template",
+            id=nda_acceptance,
+            user=user_id,
+            org=org_id,
+            proposal=published,
+            template=nda_template_id,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO legal_acceptances (id, org_id, user_id, legal_template_id, template_sha256)"
+            " SELECT :id, :org, :user, id, sha256 FROM legal_templates WHERE id = :template",
+            id=uuid7(),
+            org=org_id,
+            user=user_id,
+            template=met_id,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO document_views (id, proposal_id, version_id, owner_id, viewer_user_id, org_id,"
+            " nda_acceptance_id, render_kind, fingerprint_seed) VALUES (:id, :proposal, :version, :user, :user, :org,"
+            " :nda, 'html', :seed)",
+            id=uuid7(),
+            proposal=published,
+            version=published_version,
+            user=user_id,
+            org=org_id,
+            nda=nda_acceptance,
+            seed=uuid7().bytes,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO org_claims (id, org_id, claimant_user_id, domain, email_address, level, status)"
+            " VALUES (:id, :org, :user, :domain, :email, 'e2', 'pending_review')",
+            id=uuid7(),
+            org=org_id,
+            user=user_id,
+            domain=f"{label}-{tag}.example.test",
+            email=f"claims@{label}-{tag}.example.test",
+        )
+        await _insert(
+            conn,
+            "INSERT INTO phone_verifications (id, user_id, phone_e164, otp_hash, expires_at)"
+            " VALUES (:id, :user, '+254700000000', :hash, :exp)",
+            id=uuid7(),
+            user=user_id,
+            hash=bytes(32),
+            exp=now + timedelta(minutes=10),
+        )
+        await _insert(conn, "INSERT INTO kyc_reviews (id, user_id) VALUES (:id, :user)", id=uuid7(), user=user_id)
+        # --- Schema v4 (revision 0005): a scout with one run and one match, and a pending payment per subject ---
+        await add_scout_rows(conn, org_id, user_id, niche_id, pitched, pitched_version)
+        # --- Schema v6 (revision 0008): the engagement's thread, a shortlist entry (the proposal its scout matched) and
+        # a saved search; absent when the world is built at an older revision (a downgrade test) ---
+        if await has_table(conn, "engagement_messages"):
+            await add_thread_rows(conn, engagement_id, pitcher, user_id)
+            await _insert(
+                conn,
+                "INSERT INTO org_shortlist (org_id, proposal_id, added_by) VALUES (:org, :proposal, :user)",
+                org=org_id,
+                proposal=pitched,
+                user=user_id,
+            )
+            await _insert(
+                conn,
+                "INSERT INTO saved_searches (id, user_id, name, view, niche_slug) VALUES (:id, :user, 'RLS search',"
+                " 'problems', :niche)",
+                id=uuid7(),
+                user=user_id,
+                niche=f"rls-{tag}",
+            )
+        for scope in ("user", "org"):
+            await _insert(
+                conn,
+                "INSERT INTO payments (id, user_id, org_id, plan_id, amount_kes_minor, provider, provider_ref,"
+                " initiated_by) VALUES (:id, :user, :org, :plan, 1500000, 'fake', :ref, :initiator)",
+                id=uuid7(),
+                user=user_id if scope == "user" else None,
+                org=org_id if scope == "org" else None,
+                plan=plan_id,
+                ref=uuid7().hex,
+                initiator=user_id,
+            )
+        # Staff tables: fixture rows about this tenant, marked so the tests find them.
+        await _insert(
+            conn,
+            "INSERT INTO moderation_cases (id, subject_type, subject_id, reasons, source)"
+            f" VALUES (:id, 'proposal', :subject, '{{{FIXTURE}}}', 'regex')",
+            id=uuid7(),
+            subject=held,
+        )
+        await _insert(
+            conn,
+            "INSERT INTO directory_invitations (id, org_id, to_address, reason)"
+            f" VALUES (:id, :org, :address, '{FIXTURE}')",
+            id=uuid7(),
+            org=org_id,
+            address=f"partnerships@{label}-{tag}.example.test",
+        )
+        await _insert(
+            conn,
+            "INSERT INTO research_runs (id, niche_id, started_by, status, finished_at, stop_reason)"
+            f" VALUES (:id, :niche, :staff, 'stopped', now(), '{STAFF_CODE}')",
+            id=uuid7(),
+            niche=niche_id,
+            staff=staff_id,
+        )
+        # --- Schema v8 (revision 0010): the organisation's events and its owner's reminder; absent at older revisions
+        if await has_table(conn, "events"):
+            await add_event_rows(conn, org_id, user_id, staff_id)
+        # --- Schema v9 (revision 0011): the tenant's team-up with its pitcher; absent at older revisions ---
+        if await has_table(conn, "team_threads"):
+            await add_team_rows(conn, user_id, pitcher, public_problem, (published, draft), f"{label}-{tag}")
+        # --- Schema v11 (revision 0013): the engagement's triage and declaration, the tenant's calendar feeds ---
+        if await has_table(conn, "engagement_assignments"):
+            await add_triage_rows(conn, engagement_id, org_id, pitched, pitched_version, user_id)
+        # --- Schema v12 (revision 0015): a nudge the job sent on the engagement, the organisation's default reviewer
+        # for the world's niche and its escalation contact (the tenant, its owner and admin); absent at older
+        # revisions ---
+        if await has_table(conn, "org_niche_defaults"):
+            await _insert(
+                conn,
+                "INSERT INTO org_niche_defaults (id, org_id, niche_id, user_id) VALUES (:id, :org, :niche, :user)",
+                id=uuid7(),
+                org=org_id,
+                niche=niche_id,
+                user=user_id,
+            )
+        if await has_table(conn, "org_escalation_contacts"):
+            await _insert(
+                conn,
+                "INSERT INTO org_escalation_contacts (org_id, user_id) VALUES (:org, :user)",
+                org=org_id,
+                user=user_id,
+            )
+        if await has_table(conn, "engagement_nudges"):
+            await _insert(
+                conn,
+                "INSERT INTO engagement_nudges (id, engagement_id, org_id, kind, key)"
+                " VALUES (:id, :engagement, :org, 'contact_escalation', 'bd:3')",
+                id=uuid7(),
+                engagement=engagement_id,
+                org=org_id,
+            )
+        tenants.append(Tenant(user_id, org_id, email, published, draft, held, hidden, published_version, draft_version))
+    # --- Schema v7 (revision 0009): the quiz; absent when the world is built at an older revision ---
+    if await has_table(conn, "quiz_sets"):
+        await add_quiz_rows(conn, staff_id, [tenant.user_id for tenant in tenants])
+    # --- Schema v8 (revision 0010): trend cards; absent when the world is built at an older revision ---
+    if await has_table(conn, "trend_cards"):
+        await add_trend_rows(conn, staff_id)
+    # A system LLM call (no user, no organisation): readable by staff admin only.
+    await _insert(
+        conn,
+        "INSERT INTO llm_calls (id, task, model, status) VALUES (:id, 'rls.fixture', 'fake', 'ok')",
+        id=uuid7(),
+    )
+    return World(tenants[0], tenants[1], niche_id, plan_id, staff_id, met_id, nda_template_id)
+
+
+@dataclass(frozen=True, slots=True)
+class Rows:
+    """How the RLS tests find a table's fixture rows.
+
+    ``key`` is a SQL expression over the table that identifies a row; the tests read it as a tenant, under RLS.
+    ``owners`` returns ``key, org, usr, pub`` for every fixture row; the tests read it as the owner (no RLS), so the
+    attribution never depends on what RLS lets the tenant join to. ``pub`` marks a row every signed-in user may read.
+    """
+
+    key: str
+    owners: str
+
+
+def _rows(table: str, key: str, org: str, usr: str, pub: str = "false", where: str = "") -> Rows:
+    owners = f"SELECT {key} AS key, {org} AS org, {usr} AS usr, {pub} AS pub FROM {table} t"
+    return Rows(key=key.replace("t.", f"{table}."), owners=owners + (f" WHERE {where}" if where else ""))
+
+
+NO_ORG, NO_USER = "CAST(NULL AS uuid)", "CAST(NULL AS uuid)"
+# Readable by every signed-in user (docs/spec/06 6.1, 6.2): the rules restated from the spec, not from the policies.
+_PUBLIC_PROBLEM = (
+    "t.status = 'published' AND t.moderation_state = 'clear' AND (t.org_id IS NULL OR EXISTS (SELECT 1"
+    " FROM problem_briefs b WHERE b.problem_id = t.id AND b.visibility = 'public'"
+    " AND b.status IN ('published', 'closed')))"
+)
+_PUBLIC_PROPOSAL = "p.status = 'published' AND p.moderation_state = 'clear'"
+
+TENANT_ROWS: dict[str, Rows] = {
+    # revision 0001
+    "organizations": _rows(
+        "organizations",
+        "t.id::text",
+        "t.id",
+        NO_USER,
+        "t.verification IN ('unclaimed', 'e1', 'e2') AND t.delisted_at IS NULL",
+    ),
+    "memberships": _rows("memberships", "t.id::text", "t.org_id", "t.user_id"),
+    "invitations": _rows("invitations", "t.id::text", "t.org_id", NO_USER),
+    "org_niches": _rows("org_niches", "t.org_id::text || t.niche_id::text", "t.org_id", NO_USER),
+    "developer_profiles": _rows("developer_profiles", "t.user_id::text", NO_ORG, "t.user_id"),
+    "developer_niches": _rows(
+        "developer_niches", "t.user_id::text || t.niche_id::text || t.kind::text", NO_ORG, "t.user_id"
+    ),
+    "consents": _rows("consents", "t.id::text", NO_ORG, "t.user_id"),
+    "notification_preferences": _rows(
+        "notification_preferences", "t.user_id::text || t.kind || t.channel::text", NO_ORG, "t.user_id"
+    ),
+    "in_app_notifications": _rows("in_app_notifications", "t.id::text", "t.org_id", "t.user_id"),
+    "subscriptions": _rows("subscriptions", "t.id::text", "t.org_id", "t.user_id"),
+    "notification_deliveries": _rows("notification_deliveries", "t.id::text", "t.org_id", "t.user_id"),
+    "audit_events": _rows(
+        "audit_events", "t.id::text", "t.org_id", "t.actor_user_id", where="t.action = 'rls.fixture'"
+    ),
+    "event_details": Rows(
+        key="event_details.event_id::text",
+        owners="SELECT t.event_id::text AS key, e.org_id AS org, e.actor_user_id AS usr, false AS pub"
+        " FROM event_details t JOIN audit_events e ON e.id = t.event_id WHERE e.action = 'rls.fixture'",
+    ),
+    # revision 0002: PUBLISHED
+    "problems": _rows("problems", "t.id::text", "t.org_id", "t.created_by", _PUBLIC_PROBLEM),
+    "problem_sources": Rows(
+        key="problem_sources.id::text",
+        owners="SELECT s.id::text AS key, t.org_id AS org, t.created_by AS usr, "
+        + _PUBLIC_PROBLEM
+        + " AS pub FROM problem_sources s JOIN problems t ON t.id = s.problem_id",
+    ),
+    "proposals": Rows(
+        key="proposals.id::text",
+        owners=f"SELECT p.id::text AS key, {NO_ORG} AS org, p.owner_id AS usr, {_PUBLIC_PROPOSAL} AS pub"
+        " FROM proposals p",
+    ),
+    "proposal_versions": Rows(
+        key="proposal_versions.id::text",
+        owners=f"SELECT v.id::text AS key, {NO_ORG} AS org, p.owner_id AS usr,"
+        f" v.status = 'registered' AND {_PUBLIC_PROPOSAL} AS pub"
+        " FROM proposal_versions v JOIN proposals p ON p.id = v.proposal_id",
+    ),
+    "proposal_lsh_bands": Rows(
+        key="proposal_lsh_bands.proposal_id::text || proposal_lsh_bands.band::text",
+        owners=f"SELECT l.proposal_id::text || l.band::text AS key, {NO_ORG} AS org, p.owner_id AS usr,"
+        f" {_PUBLIC_PROPOSAL} AS pub FROM proposal_lsh_bands l JOIN proposals p ON p.id = l.proposal_id",
+    ),
+    "proposal_problems": Rows(
+        key="proposal_problems.proposal_version_id::text || proposal_problems.problem_id::text",
+        owners=f"SELECT pp.proposal_version_id::text || pp.problem_id::text AS key, {NO_ORG} AS org,"
+        f" p.owner_id AS usr, v.status = 'registered' AND {_PUBLIC_PROPOSAL} AS pub FROM proposal_problems pp"
+        " JOIN proposal_versions v ON v.id = pp.proposal_version_id JOIN proposals p ON p.id = v.proposal_id",
+    ),
+    # revision 0002: ORG, USER and ORG_OR_USER
+    "problem_briefs": _rows(
+        "problem_briefs",
+        "t.problem_id::text",
+        "t.org_id",
+        NO_USER,
+        "t.visibility = 'public' AND t.status IN ('published', 'closed') AND EXISTS (SELECT 1 FROM problems p"
+        " WHERE p.id = t.problem_id AND p.status = 'published' AND p.moderation_state = 'clear')",  # revision 0006
+    ),
+    "brief_invitations": _rows("brief_invitations", "t.id::text", "t.org_id", "t.user_id"),
+    "proposal_confidential": _rows("proposal_confidential", "t.version_id::text", NO_ORG, "t.owner_id"),
+    "proposal_attachments": _rows("proposal_attachments", "t.id::text", NO_ORG, "t.owner_id"),
+    "originality_checks": _rows("originality_checks", "t.id::text", NO_ORG, "t.user_id"),
+    "attestations": _rows("attestations", "t.id::text", NO_ORG, "t.user_id"),
+    "phone_verifications": _rows("phone_verifications", "t.id::text", NO_ORG, "t.user_id"),
+    "kyc_reviews": _rows("kyc_reviews", "t.id::text", NO_ORG, "t.user_id"),
+    "tags": _rows("tags", "t.id::text", "t.org_id", "t.developer_id"),
+    "engagements": _rows("engagements", "t.id::text", "t.org_id", "t.developer_id"),
+    "disclosure_grants": _rows("disclosure_grants", "t.id::text", "t.org_id", "t.owner_id"),
+    "nda_acceptances": _rows("nda_acceptances", "t.id::text", "t.org_id", "t.user_id"),
+    "legal_acceptances": _rows("legal_acceptances", "t.id::text", "t.org_id", "t.user_id"),
+    "document_views": _rows("document_views", "t.id::text", "t.org_id", "t.viewer_user_id"),
+    "org_claims": _rows("org_claims", "t.id::text", "t.org_id", "t.claimant_user_id"),
+    "llm_calls": _rows("llm_calls", "t.id::text", "t.org_id", "t.user_id", where="t.task = 'rls.fixture'"),
+    # revision 0003: the tracker's rows belong to their engagement's developer and organisation
+    **{
+        table: Rows(
+            key=f"{table}.id::text",
+            owners="SELECT t.id::text AS key, e.org_id AS org, e.developer_id AS usr, false AS pub"
+            f" FROM {table} t JOIN engagements e ON e.id = t.engagement_id",
+        )
+        for table in (
+            "engagement_events",
+            "engagement_endorsements",
+            "agreements",
+            "milestones",
+            "signatures",
+            "payment_records",
+            "engagement_notes",  # revision 0006
+        )
+    },
+    # revision 0005: the scout's rows are its organisation's; a payment is its user's or its organisation's
+    "scout_agents": _rows("scout_agents", "t.id::text", "t.org_id", NO_USER),
+    "agent_runs": _rows("agent_runs", "t.id::text", "t.org_id", NO_USER),
+    "agent_matches": _rows("agent_matches", "t.id::text", "t.org_id", NO_USER),
+    "payments": _rows("payments", "t.id::text", "t.org_id", "t.user_id"),
+    # revision 0008: the thread is its engagement's parties' (as the tracker's rows); a read marker, a saved search
+    # its user's only; the shortlist its organisation's
+    **{
+        table: Rows(
+            key=f"{table}.id::text",
+            owners="SELECT t.id::text AS key, e.org_id AS org, e.developer_id AS usr, false AS pub"
+            f" FROM {table} t JOIN engagements e ON e.id = t.engagement_id",
+        )
+        for table in ("engagement_messages", "engagement_message_attachments")
+    },
+    "engagement_message_reads": _rows(
+        "engagement_message_reads", "t.engagement_id::text || t.user_id::text", NO_ORG, "t.user_id"
+    ),
+    "org_shortlist": _rows("org_shortlist", "t.org_id::text || t.proposal_id::text", "t.org_id", NO_USER),
+    "saved_searches": _rows("saved_searches", "t.id::text", NO_ORG, "t.user_id"),
+    # revision 0009: a developer's quiz attempts, flags and profile are theirs only
+    "quiz_attempts": _rows("quiz_attempts", "t.id::text", NO_ORG, "t.user_id"),
+    "quiz_flags": _rows("quiz_flags", "t.id::text", NO_ORG, "t.user_id"),
+    "quiz_profiles": _rows("quiz_profiles", "t.user_id::text", NO_ORG, "t.user_id"),
+    # revision 0010: an organisation's events (developers read the published ones, its members all of them); a
+    # developer's reminders are theirs only
+    "events": _rows("events", "t.id::text", "t.org_id", "t.created_by", "t.status = 'published'"),
+    "event_reminders": _rows("event_reminders", "t.user_id::text || t.event_id::text", NO_ORG, "t.user_id"),
+    # revision 0011: a block is its blocker's; an invitation, its thread and the thread's messages are the tenant's (the
+    # sender) and its counterpart's; a read marker its user's; a contributor row its proposal owner's (and readable by
+    # every developer while the proposal is published and clear)
+    "developer_blocks": _rows(
+        "developer_blocks", "t.blocker_user_id::text || t.blocked_user_id::text", NO_ORG, "t.blocker_user_id"
+    ),
+    "team_invitations": _rows("team_invitations", "t.id::text", NO_ORG, "t.from_user_id"),
+    "team_threads": Rows(
+        key="team_threads.id::text",
+        owners=f"SELECT t.id::text AS key, {NO_ORG} AS org, i.from_user_id AS usr, false AS pub"
+        " FROM team_threads t JOIN team_invitations i ON i.id = t.invitation_id",
+    ),
+    "team_messages": Rows(
+        key="team_messages.id::text",
+        owners=f"SELECT m.id::text AS key, {NO_ORG} AS org, i.from_user_id AS usr, false AS pub FROM team_messages m"
+        " JOIN team_threads t ON t.id = m.thread_id JOIN team_invitations i ON i.id = t.invitation_id",
+    ),
+    "team_thread_reads": _rows("team_thread_reads", "t.thread_id::text || t.user_id::text", NO_ORG, "t.user_id"),
+    "proposal_contributors": Rows(
+        key="proposal_contributors.proposal_id::text || proposal_contributors.user_id::text",
+        owners=f"SELECT c.proposal_id::text || c.user_id::text AS key, {NO_ORG} AS org, p.owner_id AS usr,"
+        f" {_PUBLIC_PROPOSAL} AS pub FROM proposal_contributors c JOIN proposals p ON p.id = c.proposal_id",
+    ),
+    # revision 0013: an assignment and a recommendation are their organisation's only (never the engagement's
+    # developer's: D-68); a declaration is its engagement's readers' (as the tracker's rows); a calendar feed its user's
+    # only, an organisation's feed included
+    "engagement_assignments": _rows("engagement_assignments", "t.id::text", "t.org_id", NO_USER),
+    "engagement_recommendations": _rows("engagement_recommendations", "t.id::text", "t.org_id", NO_USER),
+    "prior_knowledge_declarations": Rows(
+        key="prior_knowledge_declarations.id::text",
+        owners="SELECT t.id::text AS key, e.org_id AS org, e.developer_id AS usr, false AS pub"
+        " FROM prior_knowledge_declarations t JOIN engagements e ON e.id = t.engagement_id",
+    ),
+    "calendar_feeds": _rows("calendar_feeds", "t.id::text", NO_ORG, "t.user_id"),
+    # revision 0015: a nudge is its organisation's only (never the engagement's developer's, as the triage rows)
+    "engagement_nudges": _rows("engagement_nudges", "t.id::text", "t.org_id", NO_USER),
+    "org_niche_defaults": _rows("org_niche_defaults", "t.id::text", "t.org_id", NO_USER),
+    "org_escalation_contacts": _rows("org_escalation_contacts", "t.org_id::text", "t.org_id", NO_USER),
+}
+
+# STAFF tables: (key expression, owner query returning the keys of the fixture rows).
+STAFF_ROWS: dict[str, Rows] = {
+    "moderation_cases": Rows(
+        key="moderation_cases.id::text",
+        owners=f"SELECT id::text AS key FROM moderation_cases WHERE reasons @> '{{{FIXTURE}}}'",
+    ),
+    "directory_invitations": Rows(
+        key="directory_invitations.id::text",
+        owners=f"SELECT id::text AS key FROM directory_invitations WHERE reason = '{FIXTURE}'",
+    ),
+    "proposal_confidential_embeddings": Rows(
+        key="proposal_confidential_embeddings.version_id::text",
+        owners=f"SELECT version_id::text AS key FROM proposal_confidential_embeddings WHERE embed_model = '{FIXTURE}'",
+    ),
+    "research_runs": Rows(
+        key="research_runs.id::text",
+        owners=f"SELECT id::text AS key FROM research_runs WHERE stop_reason = '{STAFF_CODE}'",
+    ),
+}
+
+# CURATED tables (revision 0009): the fixture sets' rows; ``pub`` marks the rows a developer reads (approved sets).
+CURATED_ROWS: dict[str, Rows] = {
+    "quiz_sets": Rows(
+        key="quiz_sets.id::text",
+        owners=f"SELECT id::text AS key, status = 'approved' AS pub FROM quiz_sets WHERE llm_trace_id = '{QUIZ_TRACE}'",
+    ),
+    "quiz_questions": Rows(
+        key="quiz_questions.id::text",
+        owners="SELECT q.id::text AS key, s.status = 'approved' AS pub FROM quiz_questions q"
+        f" JOIN quiz_sets s ON s.id = q.set_id WHERE s.llm_trace_id = '{QUIZ_TRACE}'",
+    ),
+    # revision 0010: the fixture cards' rows; ``pub`` marks the published ones
+    "trend_cards": Rows(
+        key="trend_cards.id::text",
+        owners="SELECT id::text AS key, status = 'published' AS pub FROM trend_cards"
+        f" WHERE llm_trace_id = '{TREND_TRACE}'",
+    ),
+    "trend_card_sources": Rows(
+        key="trend_card_sources.id::text",
+        owners="SELECT s.id::text AS key, c.status = 'published' AS pub FROM trend_card_sources s"
+        f" JOIN trend_cards c ON c.id = s.card_id WHERE c.llm_trace_id = '{TREND_TRACE}'",
+    ),
+}

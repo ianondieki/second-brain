@@ -1,0 +1,33 @@
+{
+  "case": "all_finished_including_give_up",
+  "description": "Sent and given-up channels are both finished: nothing pending.",
+  "expected": {
+    "pending": []
+  },
+  "input": {
+    "channels": [
+      "email",
+      "whatsapp"
+    ],
+    "day": {
+      "email": {
+        "at": "2026-09-21T08:00:00",
+        "attempts": 1,
+        "ref": "owner@example.com",
+        "status": "sent"
+      },
+      "whatsapp": {
+        "at": "2026-09-21T08:30:00",
+        "attempts": 3,
+        "error": "Meta error (code 131030)",
+        "hard_failures": 3,
+        "status": "failed"
+      }
+    },
+    "dry_run": false,
+    "force": false,
+    "now": "2026-09-21T10:00:00",
+    "send_after_hour": 8
+  },
+  "kind": "pending"
+}

@@ -1,0 +1,26 @@
+{#- EM3 scout digest, plain text (docs/spec/06 6.8, 6.10; REQ-SCOUT-03; REQUIREMENTS.md §5 N02). Code-rendered from a
+    fixed layout: every value is filled in by bridge/matching/digest.py, already one line and defanged (no link, email
+    address or phone number a mail client could follow); the only links are platform URLs. [[COPY-REVIEW]] ordinary
+    notification copy. Autoescape off: plain text. -#}
+{{ headline }}
+
+{% for item in items -%}
+{{ loop.index }}. {{ item.title }}
+   Niche: {{ item.niche }}
+   Fit: {{ item.score }}/100{% if item.details %} · {{ item.details }}{% endif %}
+
+   Why: {{ item.why }}
+   {{ item.why_label }}
+   Open: {{ item.url }}
+
+{% endfor -%}
+{% if more %}{{ more }}
+
+{% endif -%}
+Teasers are public summaries written by developers. Open a match to read it, give feedback or express interest: nothing changes until you act on the platform.
+
+Open your scout matches: {{ matches_url }}
+
+--
+{{ product }} · Scout digest for {{ org_name }}
+Manage notifications: {{ settings_url }} · Help: {{ help_url }} · Nairobi, Kenya

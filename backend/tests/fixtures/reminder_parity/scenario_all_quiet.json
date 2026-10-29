@@ -1,0 +1,113 @@
+{
+  "case": "all_quiet",
+  "description": "Three recently worked-on projects (today, yesterday, 2 days): nothing flagged.",
+  "expected": {
+    "actionable": [],
+    "classify": {
+      "flagged": [],
+      "held": [],
+      "quiet": [
+        "alpha",
+        "beta",
+        "gamma"
+      ]
+    },
+    "email": {
+      "html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Project check-in</title></head><body style=\"margin:0;padding:0;background:#f4f4f5\"><div style=\"display:none;max-height:0;overflow:hidden;opacity:0;color:transparent\">No project needs work today. Some quiet folders may be finished, or may not be projects at all. Tidy them up below and they will stop showing here.</div><div style=\"max-width:640px;margin:0 auto;padding:24px 18px;background:#ffffff;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#18181b;overflow-wrap:anywhere;word-break:break-word\"><h1 style=\"font-size:23px;margin:0 0 2px\">Your daily project check-in</h1><div style=\"color:#71717a;font-size:14px;margin:0 0 18px\">Monday 21 September 2026</div><div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1d4ed8\">At a glance</div><div style=\"font-size:18px;margin:4px 0 2px\"><b>No project</b> needs work today.</div><div style=\"color:#3f3f46;margin:0 0 2px\">Some quiet folders may be finished, or may not be projects at all. Tidy them up below and they will stop showing here.</div><div style=\"color:#52525b;font-size:13px;margin:0 0 8px\">&quot;The assistant&quot; in this email is an AI helper that looks inside your quiet project folders.</div><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;border-collapse:collapse;background:#ffffff;border-radius:8px\"><tr><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Need you</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe finished</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Maybe not projects</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">3</div><div style=\"font-size:12px;color:#52525b\">Going fine</div></td></tr></table></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#3f3f46\">Everything else</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #d4d4d8\">Nothing to do here. This list shows your other folders, so you can see the whole picture.</div><ul style=\"margin:0;padding-left:20px;font-size:14px\"><li style=\"margin:0 0 6px\"><b>Going fine (worked on in the last 3 days):</b> alpha (today), beta (yesterday), gamma (2 days ago)</li></ul><h2 style=\"font-size:15px;margin:28px 0 6px;color:#52525b\">How this works</h2><ul style=\"margin:0;padding-left:20px;font-size:13px;color:#52525b\"><li style=\"margin:0 0 5px\">This email is sent <b>once a day</b> from your laptop.</li><li style=\"margin:0 0 5px\">You see a project here when none of its files have changed for <b>3 days</b>, or when it has changes that you have not committed or pushed for 3 days.</li><li style=\"margin:0 0 5px\">Words used here: <b>git</b> keeps the history of your project. To <b>commit</b> means to save a snapshot of your changes in git. To <b>push</b> means to copy those snapshots online (for example to GitHub), so they are backed up.</li><li style=\"margin:0 0 5px\">Your settings file is <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">/home/dev/second-brain/reminders.json</code>. To stop reminders for a project for good, add its name to the <b>&quot;done&quot;</b> list. For a folder that is not a project, use the <b>&quot;ignore&quot;</b> list. To pause a project until a date, add it to <b>&quot;snooze&quot;</b> like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;snooze&quot;: {&quot;project-name&quot;: &quot;2026-10-05&quot;}</code>.</li><li style=\"margin:0 0 5px\">The assistant did not look inside any project this time. The text comes from a quick check of file dates and git.</li></ul></div></body></html>",
+      "subject": "Project check-in: no project needs work today · Mon 21 Sep",
+      "text": "YOUR DAILY PROJECT CHECK-IN\nMonday 21 September 2026\n\nAT A GLANCE\n  No project needs work today.\n  Some quiet folders may be finished, or may not be projects at all. Tidy them up below and they will stop showing here.\n  \"The assistant\" in this email is an AI helper that looks inside your quiet project folders.\n  - Need you: 0\n  - Maybe finished: 0\n  - Maybe not projects: 0\n  - Going fine: 3\n\n==============================================================\nEVERYTHING ELSE\nNothing to do here. This list shows your other folders, so you can see the whole picture.\n==============================================================\n  - Going fine (worked on in the last 3 days): alpha (today), beta (yesterday), gamma (2 days ago)\n\n==============================================================\nHOW THIS WORKS\n==============================================================\n  - This email is sent once a day from your laptop.\n  - You see a project here when none of its files have changed for 3 days, or when it has changes that you have not committed or pushed for 3 days.\n  - Words used here: git keeps the history of your project. To commit means to save a snapshot of your changes in git. To push means to copy those snapshots online (for example to GitHub), so they are backed up.\n  - Your settings file is /home/dev/second-brain/reminders.json. To stop reminders for a project for good, add its name to the \"done\" list. For a folder that is not a project, use the \"ignore\" list. To pause a project until a date, add it to \"snooze\" like this: \"snooze\": {\"project-name\": \"2026-10-05\"}.\n  - The assistant did not look inside any project this time. The text comes from a quick check of file dates and git."
+    },
+    "fallback": {},
+    "featured": null
+  },
+  "input": {
+    "config": {
+      "at_risk_after_days": 3,
+      "cold_after_days": 3,
+      "done": [],
+      "path": "/home/dev/second-brain/reminders.json",
+      "send_after_hour": 8,
+      "snooze": {}
+    },
+    "featured_log": {},
+    "notices": [],
+    "now": 1789971300.0,
+    "projects": [
+      {
+        "extra": {},
+        "files": 8,
+        "git": {
+          "branch": "main",
+          "has_remote": false,
+          "last_commit": 1789962660.0,
+          "modified": null,
+          "modified_newest": 0.0,
+          "modified_partial": false,
+          "recent_commits": [
+            "Add login form"
+          ],
+          "unpushed": null
+        },
+        "idle_days": 0,
+        "last_work": 1789949700.0,
+        "name": "alpha",
+        "open_todos": 0,
+        "path": "/home/dev/projects/alpha",
+        "readme_title": "",
+        "recent_files": [
+          "app.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": null,
+        "idle_days": 1,
+        "last_work": 1789863300.0,
+        "name": "beta",
+        "open_todos": 0,
+        "path": "/home/dev/projects/beta",
+        "readme_title": "",
+        "recent_files": [
+          "index.html"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": {
+          "branch": "main",
+          "has_remote": false,
+          "last_commit": 0.0,
+          "modified": null,
+          "modified_newest": 0.0,
+          "modified_partial": false,
+          "recent_commits": [],
+          "unpushed": null
+        },
+        "idle_days": 2,
+        "last_work": 1789776900.0,
+        "name": "gamma",
+        "open_todos": 0,
+        "path": "/home/dev/projects/gamma",
+        "readme_title": "",
+        "recent_files": [
+          "main.rs"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      }
+    ],
+    "skipped": [],
+    "today": "2026-09-21",
+    "verdicts": {}
+  },
+  "kind": "scenario"
+}

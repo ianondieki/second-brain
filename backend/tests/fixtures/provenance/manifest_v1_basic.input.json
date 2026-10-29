@@ -1,0 +1,27 @@
+{
+  "proposal_id": "01923f6e-8a1b-7c2d-9e3f-4a5b6c7d8e9f",
+  "version_id": "01923f6e-8a1c-7000-8000-000000000001",
+  "version_no": 1,
+  "cert_id": "BRX7K2M9Q4TZ8W3D",
+  "registered_at": "2026-09-28T09:15:30.123456+03:00",
+  "prev_version_hash": null,
+  "tier1": {
+    "title": "Cold-chain alerts for dairy co-operatives",
+    "niche_id": "01923f6e-0000-7000-8000-00000000000a",
+    "country": "KE",
+    "county_code": "KE-047",
+    "maturity": "prototype",
+    "ask": "pilot",
+    "problem_statement": "Milk spoils between collection and chilling.",
+    "impact_claims": "Cuts spoilage by a fifth in the pilot.",
+    "summary": "SMS alerts when a cooler warms up.",
+    "problem_ids": ["01923f6e-0000-7000-8000-0000000000b2", "01923f6e-0000-7000-8000-0000000000b1"]
+  },
+  "tier2": {"how": "A LoRa sensor per cooler reports every five minutes.", "pricing": {"setup_kes": 25000, "monthly_kes": 1500}},
+  "attachments": [
+    {"id": "01923f6e-0000-7000-8000-0000000000c2", "sha256": "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c", "size_bytes": 2048, "content_type": "application/pdf"},
+    {"id": "01923f6e-0000-7000-8000-0000000000c1", "sha256": "7d865e959b2466918c9863afca942d0fb89d7c9ac0c99bafc3749504ded97730", "size_bytes": 512, "content_type": "image/png"}
+  ],
+  "owners": [{"subject_salt": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", "user_id": "01923f6e-0000-7000-8000-0000000000aa", "split_bps": 10000}],
+  "attestations": [{"id": "01923f6e-0000-7000-8000-0000000000d1", "text_version": "v1", "text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}]
+}

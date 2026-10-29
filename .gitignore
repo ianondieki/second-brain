@@ -13,8 +13,38 @@ redis_data/
 Thumbs.db
 desktop.ini
 
-# Personal vault content (keep only templates in git)
-notes/projects/*
-notes/learning/*
-!notes/projects/.gitkeep
-!notes/learning/.gitkeep
+# Personal vault content (keep only templates in git; archived under legacy/)
+legacy/notes/projects/*
+legacy/notes/learning/*
+!legacy/notes/projects/.gitkeep
+!legacy/notes/learning/.gitkeep
+
+# Project reminders: live settings, state, logs, previews
+reminders.json
+.state/
+__pycache__/
+*.pyc
+.venv/
+
+# WhatsApp adviser: the cloudflared binary (download it; ~55 MB)
+tools/*.exe
+graphify-out/
+
+# The legacy suite creates a literal C: directory when it runs on Linux (docs/spec/02-existing-repo.md)
+/C:/
+
+# Platform build and CI caches
+.uv-cache/
+.pw-browsers/
+.pytest_cache/
+.coverage
+coverage.xml
+coverage.json
+.hypothesis/
+
+# The recorded walkthrough's videos (make demo-walkthrough; the screenshots in docs/demo/screenshots/ are committed)
+docs/demo/video/
+
+# The local demo's generated secrets (infra/demo/demo.py writes them on first run; never commit)
+infra/demo/.env
+infra/demo/*.env

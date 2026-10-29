@@ -1,0 +1,75 @@
+{
+  "case": "two_channels_independent",
+  "description": "Each channel keeps its own entry.",
+  "expected": {
+    "steps": [
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T09:15:00",
+            "attempts": 1,
+            "ref": "owner@example.com",
+            "status": "sent"
+          }
+        },
+        "finished": {
+          "email": true,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      },
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T09:15:00",
+            "attempts": 1,
+            "ref": "owner@example.com",
+            "status": "sent"
+          },
+          "whatsapp": {
+            "at": "2026-09-21T09:15:00",
+            "attempts": 1,
+            "error": "Meta error (code 190)",
+            "hard_failures": 1,
+            "status": "failed"
+          }
+        },
+        "finished": {
+          "email": true,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      }
+    ]
+  },
+  "input": {
+    "calls": [
+      {
+        "channel": "email",
+        "detail": "owner@example.com",
+        "force": false,
+        "now": "2026-09-21T09:15:00",
+        "ok": true,
+        "status": "sent",
+        "transient": false
+      },
+      {
+        "channel": "whatsapp",
+        "detail": "Meta error (code 190)",
+        "force": false,
+        "now": "2026-09-21T09:15:00",
+        "ok": false,
+        "status": "sent",
+        "transient": false
+      }
+    ],
+    "day": {}
+  },
+  "kind": "record"
+}

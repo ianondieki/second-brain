@@ -1,0 +1,14 @@
+{
+  "case": "note_not_a_dict",
+  "description": "A malformed note is ignored.",
+  "expected": {
+    "lines": []
+  },
+  "input": {
+    "state": {
+      "template_note": "oops"
+    },
+    "today": "2026-09-21"
+  },
+  "kind": "notices"
+}

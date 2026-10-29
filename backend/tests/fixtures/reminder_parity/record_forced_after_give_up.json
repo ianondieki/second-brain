@@ -1,0 +1,97 @@
+{
+  "case": "forced_after_give_up",
+  "description": "A forced failure after giving up does not touch the give-up.",
+  "expected": {
+    "steps": [
+      {
+        "day": {
+          "whatsapp": {
+            "at": "2026-09-21T08:30:00",
+            "attempts": 3,
+            "error": "Meta error (code 131030)",
+            "forced": [
+              {
+                "at": "2026-09-21T09:15:00",
+                "error": "Meta error (code 131030)",
+                "status": "failed"
+              }
+            ],
+            "hard_failures": 3,
+            "status": "failed"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": true
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": true
+        }
+      },
+      {
+        "day": {
+          "whatsapp": {
+            "at": "2026-09-21T08:30:00",
+            "attempts": 3,
+            "error": "Meta error (code 131030)",
+            "forced": [
+              {
+                "at": "2026-09-21T09:15:00",
+                "error": "Meta error (code 131030)",
+                "status": "failed"
+              },
+              {
+                "at": "2026-09-21T10:15:00",
+                "ref": "wamid.FORCED",
+                "status": "sent"
+              }
+            ],
+            "hard_failures": 3,
+            "status": "failed"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": true
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": true
+        }
+      }
+    ]
+  },
+  "input": {
+    "calls": [
+      {
+        "channel": "whatsapp",
+        "detail": "Meta error (code 131030)",
+        "force": true,
+        "now": "2026-09-21T09:15:00",
+        "ok": false,
+        "status": "sent",
+        "transient": false
+      },
+      {
+        "channel": "whatsapp",
+        "detail": "wamid.FORCED",
+        "force": true,
+        "now": "2026-09-21T10:15:00",
+        "ok": true,
+        "status": "sent",
+        "transient": false
+      }
+    ],
+    "day": {
+      "whatsapp": {
+        "at": "2026-09-21T08:30:00",
+        "attempts": 3,
+        "error": "Meta error (code 131030)",
+        "hard_failures": 3,
+        "status": "failed"
+      }
+    }
+  },
+  "kind": "record"
+}

@@ -1,0 +1,140 @@
+import type { components } from "@/lib/api/schema";
+import { NAIROBI } from "@/lib/format";
+
+// The Calendar tab's arithmetic (P27 track A; REQ-ENG-13): which month is shown, its weeks Monday first, and which
+// deadlines fall on which day. Days are Nairobi dates ("2026-10-16"), the API's `due_on`, never a browser's zone.
+
+export type Deadline = components["schemas"]["DeadlineOut"];
+export type DeadlineKind = components["schemas"]["DeadlineKind"];
+
+const DAY_MS = 86_400_000;
+const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
+/** How far from today's year `?month=` may go (a month further is the current month). */
+export const YEARS_EITHER_SIDE = 10;
+
+/** The Nairobi date of an instant ("2026-10-12" for 2026-10-12T21:30Z, already the 13th in Nairobi: "2026-10-13"). */
+export function nairobiDay(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: NAIROBI,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+/** A day `n` days after `day` (negative: before). */
+export function addDays(day: string, n: number): string {
+  return new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * "2026-10" from `?month=`, when it is a real month within ten years of `today`'s; anything else (another shape, a
+ * month 00 or 13, a year far off such as 0000 or 9999) is the month of `today`, never an error.
+ */
+export function pickMonth(requested: string | string[] | undefined, today: string): string {
+  const value = Array.isArray(requested) ? requested[0] : requested;
+  if (!value || !MONTH.test(value) || !monthInRange(value, today)) return today.slice(0, 7);
+  return value;
+}
+
+/**
+ * Whether a month ("2036-12") is one `?month=` may show: within ten years of `today`'s year. The month links either
+ * side are drawn only to such a month, so a link never promises a month that would open as the current one.
+ */
+export function monthInRange(month: string, today: string): boolean {
+  return Math.abs(Number(month.slice(0, 4)) - Number(today.slice(0, 4))) <= YEARS_EITHER_SIDE;
+}
+
+/** The first of a month as a UTC date, the year set as written (Date.UTC would read 0–99 as 1900–1999). */
+function firstOf(year: number, monthIndex: number): Date {
+  const date = new Date(0);
+  date.setUTCFullYear(year, monthIndex, 1);
+  return date;
+}
+
+/** The month before or after ("2026-10" → "2026-09" / "2026-11"), by arithmetic on the year and month. */
+export function shiftMonth(month: string, by: -1 | 1): string {
+  const [year, mon] = month.split("-").map(Number);
+  const index = year * 12 + (mon - 1) + by;
+  return `${String(Math.floor(index / 12)).padStart(4, "0")}-${String((((index % 12) + 12) % 12) + 1).padStart(2, "0")}`;
+}
+
+export interface MonthDay {
+  /** "2026-10-16" */
+  day: string;
+  /** Falls in the month shown (the first and last weeks carry the neighbours' days). */
+  inMonth: boolean;
+}
+
+/**
+ * The month's weeks, Monday first: four to six rows of seven days. The number of weeks is computed (the days before
+ * the first Monday plus the month's days, in sevens), so the loop is bounded whatever the month.
+ */
+export function monthWeeks(month: string): MonthDay[][] {
+  const [year, mon] = month.split("-").map(Number);
+  const first = firstOf(year, mon - 1);
+  const lead = (first.getUTCDay() + 6) % 7;
+  const length = new Date(firstOf(year, mon).getTime() - DAY_MS).getUTCDate();
+  const count = Math.min(6, Math.ceil((lead + length) / 7));
+  const start = first.getTime() - lead * DAY_MS;
+  return Array.from({ length: count }, (_, w) =>
+    Array.from({ length: 7 }, (_, d) => {
+      const day = new Date(start + (w * 7 + d) * DAY_MS).toISOString().slice(0, 10);
+      return { day, inMonth: day.slice(0, 7) === month };
+    }),
+  );
+}
+
+/** The first and last day the month's grid shows (the API's `from` and `to`). */
+export function gridSpan(month: string): { from: string; to: string } {
+  const weeks = monthWeeks(month);
+  return { from: weeks[0][0].day, to: weeks.at(-1)![6].day };
+}
+
+/** The deadlines by their Nairobi day, in the API's order (by instant). */
+export function byDay(items: readonly Deadline[]): Map<string, Deadline[]> {
+  const days = new Map<string, Deadline[]>();
+  for (const item of items) days.set(item.due_on, [...(days.get(item.due_on) ?? []), item]);
+  return days;
+}
+
+/**
+ * The viewer's own step, open: an engagement's stage, an answer or a milestone that waits on them (`mine`), not
+ * overdue. An event or a Brief's closing is nobody's turn, so it never takes the "Your turn" look.
+ */
+export function isTurn(item: Pick<Deadline, "kind" | "mine" | "overdue">): boolean {
+  return item.mine && !item.overdue && (item.kind === "stage" || item.kind === "answer" || item.kind === "milestone");
+}
+
+/** The kind and the item's id from its key ("stage:<uuid>"), for its `.ics` route. */
+export function keyParts(item: Pick<Deadline, "key" | "kind">): { kind: DeadlineKind; id: string } {
+  const at = item.key.indexOf(":");
+  return { kind: item.kind, id: at >= 0 ? item.key.slice(at + 1) : item.key };
+}
+
+/** The list under the grid: what is overdue, then what falls due from today through the next 30 days. */
+export function upcoming(items: readonly Deadline[], today: string): { overdue: Deadline[]; next: Deadline[] } {
+  const end = addDays(today, 30);
+  return {
+    overdue: items.filter((item) => item.overdue),
+    next: items.filter((item) => !item.overdue && item.due_on >= today && item.due_on <= end),
+  };
+}
+
+/** A Google Calendar template link for a deadline: a 15-minute entry at its instant, as the `.ics` file has (D-61). */
+export function googleCalendarHref(item: Pick<Deadline, "due_at">, text: string, details: string): string {
+  const stamp = (time: number) =>
+    new Date(time)
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}/, "");
+  const start = Date.parse(item.due_at);
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text,
+    dates: `${stamp(start)}/${stamp(start + 15 * 60_000)}`,
+    details,
+    ctz: NAIROBI,
+  });
+  return `https://calendar.google.com/calendar/render?${params}`;
+}

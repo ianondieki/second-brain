@@ -1,0 +1,68 @@
+{
+  "case": "transient_then_ok",
+  "description": "A transient failure does not use the retry budget; success clears the error.",
+  "expected": {
+    "steps": [
+      {
+        "day": {
+          "whatsapp": {
+            "at": "2026-09-21T09:15:00",
+            "attempts": 1,
+            "error": "No network (timed out)",
+            "status": "failed"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      },
+      {
+        "day": {
+          "whatsapp": {
+            "at": "2026-09-21T10:15:00",
+            "attempts": 2,
+            "ref": "wamid.HBgM",
+            "status": "sent"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": true
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      }
+    ]
+  },
+  "input": {
+    "calls": [
+      {
+        "channel": "whatsapp",
+        "detail": "No network (timed out)",
+        "force": false,
+        "now": "2026-09-21T09:15:00",
+        "ok": false,
+        "status": "sent",
+        "transient": true
+      },
+      {
+        "channel": "whatsapp",
+        "detail": "wamid.HBgM",
+        "force": false,
+        "now": "2026-09-21T10:15:00",
+        "ok": true,
+        "status": "sent",
+        "transient": false
+      }
+    ],
+    "day": {}
+  },
+  "kind": "record"
+}

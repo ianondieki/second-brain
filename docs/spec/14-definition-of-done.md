@@ -1,0 +1,15 @@
+## 14. Definition of done
+
+**A task is done when:** it implements only its REQ-IDs; tests derived from the acceptance criteria exist and fail without the change; `make check` is green locally and in CI; required reviewers return PASS; commits are small and reference REQ-IDs; no TODOs without an issue; docs and `.env.example` updated; the worktree removed.
+
+**A requirement is done when:** every linked AC has a passing test on the integration branch, code paths are listed in `REQUIREMENTS.md`, and the orchestrator set DONE.
+
+**The product is done (ready for G8) when:**
+1. Every MUST row tagged R1 in `REQUIREMENTS.md` is DONE (`docs/spec/12-agent-operating-rules.md` (12.1)); SHOULD/COULD and R2/R3 rows are DONE or DEFERRED with an ADR; none is TODO or IN-PROGRESS.
+2. These E2E scenarios pass on staging (`APP_ENV=staging`, fixture orgs, no manual database edits). **(a) Tagged path:** developer signs up (D1) → pastes a new problem and publishes a Networks & Telecommunications proposal linked to it → certificate verifies on `/verify` → tags Telco A (E2 fixture), Telco B (E2), Telco C (E0); Telco C receives nothing → a Reviewer accepts the Evaluation NDA and views the watermarked full proposal (visible to the developer) → the Signatory approves with contact person and date → developer receives EM2 with "will contact you shortly", "not a contract" and a true `tier2_status` → contact confirmed → mutual NDA → terms → agreement signed by both (D2 via ManualReview) → two milestones submitted and endorsed → delivery → acceptance signed by both → payment recorded and confirmed → Closed; both parties see the identical timeline throughout. **(b) Scout-originated:** an untagged proposal appears in Telco B's scout digest (Mailpit) → its Signatory expresses interest → developer accepts on stage 0 → EM2 sent → messaging works. **(c) Research → recommendation → proposal:** an approved research card is recommended with a pursuit label and "Why" chip and a proposal is started from it. **(d) Reminders:** developer daily reminder and enterprise progress digest fire (test clock), reflect true milestone status and report an `off_track` engagement. **(e) Guards:** declining with `ALREADY_IN_PROGRESS_INTERNALLY` records the attestation; a Free developer's 4th proposal is gated; a duplicate and a forged M-Pesa callback are no-ops; a cross-tenant read returns 404.
+3. AC-REM-4 passes: the local `reminder/`/`adviser/` CLI and pre-existing tests are unchanged and green.
+4. No open BLOCKER/MAJOR security findings; tenant-isolation, webhook-forgery, evidence-tamper and injection tests pass.
+5. axe zero serious/critical and Lighthouse accessibility ≥90 on core flows; every core flow usable at 360 px; performance budgets met.
+6. G2, G3, G5, G6, G7, G-EVAL signed in `GATES.md` (G4 before any live payment); the banned-claims lint passes; `FEATURE_TIER2_ENABLED`/`FEATURE_DEALS_ENABLED` flipped only after the legal gate.
+7. Production secrets only in SSM; backup restore drilled; runbooks cover incident, rollback, breach (72 h ODPC), DSR, secret rotation.
+8. Phase 8 report in `PROGRESS.md` with cost per phase and known limitations.

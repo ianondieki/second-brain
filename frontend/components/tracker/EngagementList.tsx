@@ -1,0 +1,64 @@
+import { getTranslations } from "next-intl/server";
+
+import { RowList } from "@/components/ui/RowList";
+import { Section } from "@/components/ui/Section";
+
+import { EngagementRow } from "./EngagementRow";
+import { NeedsYouCard } from "./NeedsYouCard";
+import { awaitsMe, type Party, type Summary } from "./model";
+
+/**
+ * The engagements in two groups: those waiting on the viewer's side first ("Needs you" or "Needs us"), then the rest,
+ * each newest change first as the API sends them.
+ */
+export async function EngagementList({
+  items,
+  mine,
+  basePath,
+  query = "",
+}: {
+  items: Summary[];
+  mine: Party;
+  basePath: string;
+  /** "?org=<id>" to keep on the rows' links, else "". */
+  query?: string;
+}) {
+  const t = await getTranslations("tracker");
+  const open = (await getTranslations(mine === "org" ? "orgHome" : "devHome"))("openTracker");
+  const waiting = items.filter((item) => awaitsMe(item, mine));
+  const rest = items.filter((item) => !awaitsMe(item, mine));
+  const groups = [
+    { key: "needs", title: mine === "developer" ? t("needsYou") : t("needsUs"), items: waiting },
+    { key: "rest", title: t("others"), items: rest },
+  ].filter((group) => group.items.length > 0);
+  return (
+    <div className="flex flex-col gap-12">
+      {groups.map((group) => (
+        <Section key={group.key} title={group.title} headingId={`engagements-${group.key}`} data-group={group.key}>
+          {/* What waits on the viewer is raised, as on Home (one card per engagement, each one link); the rest is a
+              list of rows. */}
+          {group.key === "needs" ? (
+            <ul className="flex flex-col gap-4">
+              {group.items.map((item) => (
+                <li key={item.id}>
+                  <NeedsYouCard item={item} mine={mine} href={`${basePath}/${encodeURIComponent(item.id)}${query}`} action={open} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <RowList>
+              {group.items.map((item) => (
+                <EngagementRow
+                  key={item.id}
+                  item={item}
+                  mine={mine}
+                  href={`${basePath}/${encodeURIComponent(item.id)}${query}`}
+                />
+              ))}
+            </RowList>
+          )}
+        </Section>
+      ))}
+    </div>
+  );
+}

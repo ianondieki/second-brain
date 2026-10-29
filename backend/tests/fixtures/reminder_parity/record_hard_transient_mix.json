@@ -1,0 +1,126 @@
+{
+  "case": "hard_transient_mix",
+  "description": "Hard, transient, hard, hard: only hard failures count towards giving up.",
+  "expected": {
+    "steps": [
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T09:15:00",
+            "attempts": 1,
+            "error": "SMTP auth failed",
+            "hard_failures": 1,
+            "status": "failed"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      },
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T10:15:00",
+            "attempts": 2,
+            "error": "Connection reset",
+            "hard_failures": 1,
+            "status": "failed"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      },
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T11:15:00",
+            "attempts": 3,
+            "error": "SMTP auth failed",
+            "hard_failures": 2,
+            "status": "failed"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      },
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T12:15:00",
+            "attempts": 4,
+            "error": "SMTP auth failed",
+            "hard_failures": 3,
+            "status": "failed"
+          }
+        },
+        "finished": {
+          "email": true,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": true,
+          "whatsapp": false
+        }
+      }
+    ]
+  },
+  "input": {
+    "calls": [
+      {
+        "channel": "email",
+        "detail": "SMTP auth failed",
+        "force": false,
+        "now": "2026-09-21T09:15:00",
+        "ok": false,
+        "status": "sent",
+        "transient": false
+      },
+      {
+        "channel": "email",
+        "detail": "Connection reset",
+        "force": false,
+        "now": "2026-09-21T10:15:00",
+        "ok": false,
+        "status": "sent",
+        "transient": true
+      },
+      {
+        "channel": "email",
+        "detail": "SMTP auth failed",
+        "force": false,
+        "now": "2026-09-21T11:15:00",
+        "ok": false,
+        "status": "sent",
+        "transient": false
+      },
+      {
+        "channel": "email",
+        "detail": "SMTP auth failed",
+        "force": false,
+        "now": "2026-09-21T12:15:00",
+        "ok": false,
+        "status": "sent",
+        "transient": false
+      }
+    ],
+    "day": {}
+  },
+  "kind": "record"
+}

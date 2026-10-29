@@ -1,0 +1,9 @@
+# A second country's source allowlist (AC-RES-4 fixture; REQ-RES-02): exercises the country dimension of the loader
+# and the filters. Test data only: no Ugandan excerpt is saved, and the research runs of the prototype are Kenyan.
+version: 1
+country: UG
+domains:
+  - {domain: ubos.go.ug, publisher: Uganda Bureau of Statistics, official: true}
+  - {domain: monitor.co.ug, publisher: Daily Monitor, official: false}
+organisations:
+  - {name: Uganda Revenue Authority, aliases: [Uganda Revenue Authority, URA]}

@@ -1,0 +1,36 @@
+{
+  "case": "force_ignores_guard",
+  "description": "--force: every channel, before the hour and although all are finished.",
+  "expected": {
+    "pending": [
+      "email",
+      "whatsapp"
+    ]
+  },
+  "input": {
+    "channels": [
+      "email",
+      "whatsapp"
+    ],
+    "day": {
+      "email": {
+        "at": "2026-09-21T08:00:00",
+        "attempts": 1,
+        "ref": "owner@example.com",
+        "status": "sent"
+      },
+      "whatsapp": {
+        "at": "2026-09-21T08:30:00",
+        "attempts": 3,
+        "error": "Meta error (code 131030)",
+        "hard_failures": 3,
+        "status": "failed"
+      }
+    },
+    "dry_run": false,
+    "force": true,
+    "now": "2026-09-21T06:00:00",
+    "send_after_hour": 8
+  },
+  "kind": "pending"
+}

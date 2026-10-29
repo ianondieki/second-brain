@@ -1,0 +1,22 @@
+{
+  "case": "dry_run_ignores_guard",
+  "description": "--dry-run: every channel, whatever the hour.",
+  "expected": {
+    "pending": [
+      "email",
+      "whatsapp"
+    ]
+  },
+  "input": {
+    "channels": [
+      "email",
+      "whatsapp"
+    ],
+    "day": {},
+    "dry_run": true,
+    "force": false,
+    "now": "2026-09-21T05:00:00",
+    "send_after_hour": 8
+  },
+  "kind": "pending"
+}

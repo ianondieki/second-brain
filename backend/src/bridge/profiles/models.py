@@ -1,0 +1,210 @@
+"""Developer profiles, niche interests, consents, developer verification and saved searches (REQ-CON-01, REQ-PROV-04,
+REQ-PERS-03). Tenancy USER: RLS by ``app.user_id``."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    FetchedValue,
+    ForeignKey,
+    Index,
+    LargeBinary,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    text,
+)
+from sqlalchemy.orm import Mapped, mapped_column
+
+from bridge.models.base import Base, CreatedMixin, IdMixin, Tenancy, TimestampsMixin
+from bridge.models.enums import ConsentPurpose, DevVerification, KycStatus, NicheInterest
+from bridge.models.text import reference_sql
+from bridge.models.types import CIText, Vector, pg_enum
+
+USER = {"info": {"tenancy": Tenancy.USER, "tenant_column": "user_id"}}
+
+# Revision 0013 (REQ-DEV-04; docs/spec/06 6.4 pt 8, D3): a developer's self-reported references. GitHub's rule for a
+# login (letters, digits and single hyphens, neither first nor last; at most 39 characters); a KECOBO or KIPI reference
+# is one line of up to 40 characters (bridge.models.text: not blank, no control, format or non-ASCII space character).
+# The API refuses anything else (422, with bridge.models.text.is_one_line) before the database's CHECKs would.
+GITHUB_LOGIN_MAX_CHARS = 39
+GITHUB_LOGIN_PATTERN = "^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$"
+REFERENCE_MAX_CHARS = 40
+
+
+class DeveloperProfile(TimestampsMixin, Base):
+    """A developer's profile, their own row only. Revision 0011 (D-58): ``peers_visible`` is the peers switch
+    (default off; bridge_app updates it on the own row) and ``peers_opted_in_at`` the database's (the shared clock when
+    the switch turns on, NULL while off, whatever is sent): another developer sees the handle, headline, county and
+    shared liked niches only through the definers (``app_peers``, ``app_developer_card``), never this row.
+
+    Revision 0012 (REQ-PERS-02, REQ-EMB-01): ``profile_embedding`` with its ``embed_model``, ``embed_version`` and
+    ``profile_embedded_at`` and ``profile_embedding_hash`` (the SHA-256 of the text it was computed from) is written
+    only by ``app_set_profile_embedding`` (the worker, while the ``profiling`` consent is granted) and cleared by
+    ``app_clear_profile_embedding`` and by a withdrawal of that consent (a trigger on ``consents``); bridge_app never
+    updates them. HNSW cosine index ``ix_developer_profiles_profile_embedding``.
+
+    Revision 0013 (REQ-DEV-04, D3): ``github_login``, ``kecobo_number`` and ``kipi_number`` are the developer's own
+    self-reported references (bridge_app updates them on the own row; printed on the authorship certificate as
+    self-reported, never on ``/verify``), and ``ip_nudge_dismissed_at`` when they dismissed the one note about KIPI and
+    KECOBO filing (bridge_app updates it)."""
+
+    __tablename__ = "developer_profiles"
+    __table_args__ = (
+        CheckConstraint("peers_visible = (peers_opted_in_at IS NOT NULL)", name="peers_opt_in_complete"),
+        CheckConstraint(f"github_login IS NULL OR github_login ~ '{GITHUB_LOGIN_PATTERN}'", name="github_login_valid"),
+        CheckConstraint(reference_sql("kecobo_number"), name="kecobo_number_valid"),
+        CheckConstraint(reference_sql("kipi_number"), name="kipi_number_valid"),
+        Index(
+            "ix_developer_profiles_profile_embedding",
+            "profile_embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"profile_embedding": "vector_cosine_ops"},
+        ),
+        USER,
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    handle: Mapped[str] = mapped_column(CIText(), unique=True)
+    verification_level: Mapped[DevVerification] = mapped_column(
+        pg_enum(DevVerification, "dev_verification"), server_default=DevVerification.D0.value
+    )
+    headline: Mapped[str | None] = mapped_column(String(160))
+    bio: Mapped[str | None] = mapped_column(Text)
+    country: Mapped[str] = mapped_column(String(2), server_default="KE")
+    county_code: Mapped[str | None] = mapped_column(ForeignKey("regions.code"))
+    profile_embedding: Mapped[list[float] | None] = mapped_column(Vector(1024))
+    # docs/spec/08 Embeddings: the model and version that produced the vector, stored per row (re-embed on change).
+    embed_model: Mapped[str | None] = mapped_column(String(80))
+    embed_version: Mapped[str | None] = mapped_column(String(40))
+    # When app_set_profile_embedding wrote the vector (the database's clock); NULL while there is none.
+    profile_embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The SHA-256 (hex) of the text the vector was computed from: the vector is stale once the text hashes otherwise.
+    profile_embedding_hash: Mapped[str | None] = mapped_column(Text)
+    peers_visible: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    # The database's (developer_profiles_peers_opt_in): read it back after setting peers_visible.
+    peers_opted_in_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=FetchedValue(), server_onupdate=FetchedValue()
+    )
+    # Revision 0013 (D3): self-reported, unverified; the certificate says so. Never on /verify.
+    github_login: Mapped[str | None] = mapped_column(String(GITHUB_LOGIN_MAX_CHARS))
+    kecobo_number: Mapped[str | None] = mapped_column(String(REFERENCE_MAX_CHARS))
+    kipi_number: Mapped[str | None] = mapped_column(String(REFERENCE_MAX_CHARS))
+    ip_nudge_dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DeveloperNiche(Base):
+    """Liked niches (3-5, all plans) drive ranking; followed niches (capped per plan) drive trending (docs/spec/05)."""
+
+    __tablename__ = "developer_niches"
+    __table_args__ = (USER,)
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    niche_id: Mapped[UUID] = mapped_column(ForeignKey("niches.id"), primary_key=True)
+    kind: Mapped[NicheInterest] = mapped_column(pg_enum(NicheInterest, "niche_interest"), primary_key=True)
+    weight: Mapped[Decimal] = mapped_column(Numeric(4, 2), server_default="1")
+
+
+class Consent(IdMixin, CreatedMixin, Base):
+    """One consent decision. Append-only (INSERT/SELECT grants only); the latest row per purpose is current."""
+
+    __tablename__ = "consents"
+    __table_args__ = (USER,)
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    purpose: Mapped[ConsentPurpose] = mapped_column(pg_enum(ConsentPurpose, "consent_purpose"))
+    granted: Mapped[bool] = mapped_column(Boolean)
+    text_version: Mapped[str] = mapped_column(String(32))
+    text_sha256: Mapped[bytes] = mapped_column(LargeBinary)
+    source: Mapped[str] = mapped_column(String(32))
+
+
+class PhoneVerification(IdMixin, CreatedMixin, Base):
+    """A D1 phone OTP (``SmsProvider``). The app inserts a row per code sent; ``app_confirm_phone_otp`` compares the
+    stored hash, counts attempts and, on a match while the profile is still D0, sets ``verified_at`` and raises the
+    profile to D1. ``expires_at`` is set by the database (10 minutes after the insert; a trigger replaces any value
+    sent), so leave it out and read it back."""
+
+    __tablename__ = "phone_verifications"
+    __table_args__ = (CheckConstraint(r"phone_e164 ~ '^\+[1-9][0-9]{6,14}$'", name="phone_e164"), USER)
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    phone_e164: Mapped[str] = mapped_column(String(16))
+    # Write-only: bridge_app holds no SELECT on it (app_confirm_phone_otp compares it in SQL). Never loaded; reading the
+    # attribute of a loaded row raises. HMAC-SHA-256 under SECRET_KEY (bridge.profiles.verification.otp_digest).
+    otp_hash: Mapped[bytes] = mapped_column(LargeBinary, deferred=True, deferred_raiseload=True)
+    attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("(now() + '00:10:00'::interval)")
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class KycReview(IdMixin, TimestampsMixin, Base):
+    """A D2 KYC review (``KycProvider``; ``ManualReview`` by staff admin in Release 1). Stores only the outcome:
+    reference, verified legal name, ID type, last four digits, ``is_adult`` and the result. ID images live in the
+    separate ``kyc-review`` bucket under keys derived from this row's id, never in a column, a log or an audit event,
+    and are purged 72 h after the decision (``purge_due_at``). Decisions go through ``app_decide_kyc`` only."""
+
+    __tablename__ = "kyc_reviews"
+    __table_args__ = (CheckConstraint("id_last4 IS NULL OR id_last4 ~ '^[0-9A-Za-z]{4}$'", name="id_last4"), USER)
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    status: Mapped[KycStatus] = mapped_column(
+        pg_enum(KycStatus, "kyc_status"), server_default=KycStatus.SUBMITTED.value
+    )
+    reference: Mapped[str | None] = mapped_column(String(120))
+    verified_legal_name: Mapped[str | None] = mapped_column(String(200))
+    id_type: Mapped[str | None] = mapped_column(String(24))
+    id_last4: Mapped[str | None] = mapped_column(String(4))
+    is_adult: Mapped[bool | None] = mapped_column(Boolean)
+    decided_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    purge_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    images_purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# P21 track C (revision 0008): a developer's saved Discover searches.
+SAVED_SEARCH_VIEWS = ("problems", "briefs")
+MAX_SAVED_SEARCHES = 10  # per user (saved_searches_cap)
+SAVED_SEARCH_NAME_CHARS = 60
+SAVED_SEARCH_WORDS_CHARS = 100
+
+
+class SavedSearch(IdMixin, Base):
+    """A saved Discover search (P21 track C, REQ-PERS-03 and REQ-TREND-02; revision 0008), its owner's only: a name
+    (1 to 60 characters), the view (``problems`` or ``briefs``), an optional niche and county and optional words
+    (1 to 100 characters). ``alerts`` (on by default) lets the daily job tell the owner about new matches since
+    ``last_alerted_at`` (or since ``created_at``); the job lists due searches with ``app_saved_searches_due(now)``
+    (no user bound) and advances ``last_alerted_at`` bound to the owner. At most 10 per user (``saved_searches_cap``:
+    check_violation, constraint ``saved_searches_at_most_10``). ``created_at`` is the database's clock."""
+
+    __tablename__ = "saved_searches"
+    __table_args__ = (
+        CheckConstraint(
+            f"name ~ '[^[:space:]]' AND char_length(name) <= {SAVED_SEARCH_NAME_CHARS}", name="name_length"
+        ),
+        CheckConstraint(f"view IN ({', '.join(repr(view) for view in SAVED_SEARCH_VIEWS)})", name="view_known"),
+        CheckConstraint(
+            f"words IS NULL OR (words ~ '[^[:space:]]' AND char_length(words) <= {SAVED_SEARCH_WORDS_CHARS})",
+            name="words_length",
+        ),
+        USER,
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(Text)
+    view: Mapped[str] = mapped_column(Text)  # SAVED_SEARCH_VIEWS
+    niche_slug: Mapped[str | None] = mapped_column(ForeignKey("niches.slug"))
+    county_code: Mapped[str | None] = mapped_column(ForeignKey("regions.code"))
+    words: Mapped[str | None] = mapped_column(Text)
+    alerts: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    last_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))

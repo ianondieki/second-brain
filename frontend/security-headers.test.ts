@@ -1,0 +1,116 @@
+import { buildCustomRoute } from "next/dist/lib/build-custom-route";
+import { describe, expect, it } from "vitest";
+
+import { CASE_SENSITIVE_ROUTES, CSP_REPORT_ONLY, HEADER_RULES } from "./security-headers";
+
+/**
+ * The headers Next.js sends for a path; every matching rule applies. Each rule is compiled by buildCustomRoute (what
+ * `next build` writes into routes-manifest.json) and matched with the flags the server uses at runtime: "i" (any
+ * case) unless experimental.caseSensitiveRoutes is on (next/dist/server/lib/router-utils/filesystem.js).
+ */
+function headersFor(path: string, caseSensitive: boolean = CASE_SENSITIVE_ROUTES): Record<string, string> {
+  const sent: Record<string, string> = {};
+  for (const rule of HEADER_RULES) {
+    const { regex } = buildCustomRoute("header", { source: rule.source, headers: rule.headers });
+    if (new RegExp(regex, caseSensitive ? "" : "i").test(path)) {
+      for (const { key, value } of rule.headers) sent[key] = value;
+    }
+  }
+  return sent;
+}
+
+// Not listed: /api/... . The rules below match it, but Next.js 16.3.6 sends none of them on the /api rewrite: for a
+// rewrite to another origin, resolveRoutes returns `resHeaders: null` (next/dist/server/lib/router-utils/
+// resolve-routes.js, "handle rewrite"), so router-server.js has no headers() values to set before proxyRequest. The
+// answer carries FastAPI's headers only (backend main.py SECURITY_HEADERS: nosniff, X-Frame-Options, Referrer-Policy,
+// `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Cache-Control: no-store`), without
+// Permissions-Policy or the report-only CSP. e2e/auth.spec.ts checks that through the web origin, so a Next.js
+// upgrade that changes it fails there.
+const PAGES = [
+  "/",
+  "/signup",
+  "/login",
+  "/signup/check-email",
+  "/settings/security",
+  "/favicon.ico",
+  // Near misses of the build-asset prefix: pages (a 404 page is a document too) or Next's image endpoint.
+  "/_NEXT/static/x.js",
+  "/_Next/Static/chunks/x.js",
+  "/_next/image",
+  "/_next/static",
+  "/_next/staticx",
+];
+const BUILD_ASSETS = [
+  "/_next/static/chunks/0bma92pht_c97.js",
+  "/_next/static/chunks/turbopack-43vu1xwipchft.js",
+  "/_next/static/chunks/1a2b3c4d.css",
+  "/_next/static/media/font.woff2",
+];
+
+describe("web security headers", () => {
+  it.each(PAGES)("forbid framing and MIME sniffing, and limit referrers and device features on %s", (path) => {
+    const sent = headersFor(path);
+    expect(sent["X-Frame-Options"]).toBe("DENY");
+    expect(sent["X-Content-Type-Options"]).toBe("nosniff");
+    expect(sent["Referrer-Policy"]).toBe("strict-origin-when-cross-origin");
+    expect(sent["Permissions-Policy"]).toBe("camera=(), microphone=(), geolocation=()");
+    expect(sent["Content-Security-Policy-Report-Only"]).toBe(CSP_REPORT_ONLY);
+  });
+
+  // REQ-TEN-02: an invitation link's token is in its path; the page sends no referrer at all, every other header as
+  // any page. Only that route: its neighbours keep the site's policy.
+  it("send no referrer from an invitation link's page, and keep the other page headers there", () => {
+    const sent = headersFor("/invitations/AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE");
+    expect(sent["Referrer-Policy"]).toBe("no-referrer");
+    expect(sent["X-Frame-Options"]).toBe("DENY");
+    expect(sent["Content-Security-Policy-Report-Only"]).toBe(CSP_REPORT_ONLY);
+    for (const path of ["/invitations", "/invitationsx/a", "/org/team", "/login"]) {
+      expect(headersFor(path)["Referrer-Policy"], path).toBe("strict-origin-when-cross-origin");
+    }
+  });
+
+  it.each(BUILD_ASSETS)("send only nosniff with the build asset %s (the JS budget counts every byte)", (path) => {
+    expect(headersFor(path)).toEqual({ "X-Content-Type-Options": "nosniff" });
+  });
+
+  it("cache the versioned fonts for a year, with nosniff and none of the page headers", () => {
+    expect(headersFor("/fonts/bricolage-grotesque-v1.woff2")).toEqual({
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "public, max-age=31536000, immutable",
+    });
+  });
+
+  it.each(["/fonts/LICENCES.md", "/fonts/missing", "/fonts/bricolage-grotesque.woff2"])(
+    "treat %s under /fonts as a page (not cached, with the page headers)",
+    (path) => {
+      const sent = headersFor(path);
+      expect(sent["Cache-Control"]).toBeUndefined();
+      expect(sent["X-Frame-Options"]).toBe("DENY");
+    },
+  );
+
+  it("revalidate the service worker on every update check, and nothing else under that rule", () => {
+    expect(headersFor("/sw.js")).toMatchObject({ "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff" });
+    expect(headersFor("/sw.jsx")["Cache-Control"]).toBeUndefined();
+    expect(headersFor("/x/sw.js")["Cache-Control"]).toBeUndefined();
+    expect(headersFor("/SW.js")["Cache-Control"]).toBeUndefined();
+  });
+
+  it("match sources in exact case, since Next's default would exempt /_NEXT/static/... pages", () => {
+    expect(CASE_SENSITIVE_ROUTES).toBe(true);
+    expect(headersFor("/_NEXT/static/x.js", false)).toEqual({ "X-Content-Type-Options": "nosniff" });
+  });
+
+  it("report a same-origin CSP baseline (enforced nonce CSP comes with the Phase 8 edge)", () => {
+    for (const directive of [
+      "default-src 'self'",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "object-src 'none'",
+    ]) {
+      expect(CSP_REPORT_ONLY).toContain(directive);
+    }
+    expect(headersFor("/signup")["Content-Security-Policy"]).toBeUndefined();
+  });
+});

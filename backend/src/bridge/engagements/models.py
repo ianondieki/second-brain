@@ -1,0 +1,830 @@
+"""The engagement tracker's tables (REQ-ENG-01, REQ-ENG-02; docs/spec/06 6.9; revisions 0002 and 0003).
+
+One engagement = one proposal x one organisation (docs/spec/03). ``engagement_events`` is the single source of truth:
+an append-only, hash-chained log (``hash = sha256(prev_hash || canonical)``; the canonical form is documented in
+revision 0003 and recomputed by ``bridge.engagements.chain``), and ``engagements.state`` is its projection, written by
+the database in the same statement as the event. The application never sets ``state``, ``end_reason``,
+``stage_entered_at``, ``stage_deadline_at``, ``ended_at`` or ``lock_version`` itself: it appends an event.
+
+Rules the database enforces (revision 0003; the state machine in ``engagements/state_machine.py`` enforces the rest):
+
+- Every engagement starts its chain when it is inserted (a genesis event, seq 1, written by the database). An event
+  names the state the engagement is in as ``from_state`` (a stale one is refused), and none follows a terminal state.
+  ``IN_IMPLEMENTATION`` needs a signed agreement, ``PAYMENT_FINAL`` both parties' signatures of the acceptance
+  certificate, and ``CLOSED`` (from ``PAYMENT_FINAL``) the developer's confirmation of the final payment at the
+  recorded amount.
+- Parties only: the engagement's developer and the members of its organisation read every tracker row; staff admin
+  reads them; nobody else sees anything. Each row names its actor as the caller (a system row names nobody).
+- Event payloads hold only ids, codes, dates, amounts and digests: string values match ``[A-Za-z0-9_.:+-]{0,128}``
+  and keys ``[a-z][a-z0-9_]*`` (free text and personal data go to a mutable details store, as for the audit log).
+- Endorsements, signatures, events and notes are append-only (a note's body may be redacted once by the owner,
+  D-54); a payment record changes once, by the developer's confirmation. The platform records payments and never
+  moves money.
+- A note (revision 0006) is the text a side-state command carries, a sibling of the event it explains, never part of
+  the chain: written by that event's actor as themselves, in the event's transaction (the event is still the
+  engagement's latest), one per event, its kind matching the event's transition.
+- The thread (revision 0008, REQ-ENG-11): messages, their attachments and read markers are the parties' only (never
+  staff's); a message is posted once the chain has entered ``INTEREST_CONFIRMED`` or a later main-path stage
+  (``CONTACT_MADE`` on a public entity's procurement route) and until it ends, and is append-only like a note (D-54's
+  redaction aside).
+- The procurement route (revision 0015, REQ-ENG-06): only a public entity's engagement enters ``PROCUREMENT_ROUTE``
+  (3b, after ``UNDER_REVIEW``); its owner or admin decides the route there, once, in the transaction that moves it to
+  ``INTEREST_CONFIRMED`` (the decision's time and decider are the database's); a decision never changes.
+- The nudges ledger (revision 0015, REQ-NOT-05): each escalation or reminder the job sends is recorded once per
+  engagement, kind and key through ``app_record_nudge``; the organisation's members read it, the developer never.
+- Times (event, note and message ``created_at``, ``stage_entered_at``, ``ended_at``, ``endorsed_at``, ``signed_at``,
+  ``recorded_at``, ``confirmed_at``) are the database's, on the shared clock ``app_clock_now()`` (the test clock's
+  offset applies only where the owner enabled it: dev, test and staging databases).
+
+ORM notes: after appending an event, refresh the ``Engagement`` (its projection changed in the database). The
+engagement's ``lock_version`` is a server-side version counter (bumped by the database on every UPDATE), so a stale
+ORM update raises ``StaleDataError``. Never set the database's columns (``seq``, ``prev_hash``, ``hash``, the times,
+``stage_round``): values sent are replaced or refused.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    FetchedValue,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    Interval,
+    LargeBinary,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
+from sqlalchemy.dialects.postgresql import INET, JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from bridge.models.base import Base, IdMixin, Tenancy, TimestampsMixin
+from bridge.models.enums import (
+    AgreementStatus,
+    AvStatus,
+    ContactChannel,
+    EndorsementMethod,
+    EngagementActorRole,
+    EngagementEndReason,
+    EngagementOrigin,
+    EngagementParty,
+    EngagementState,
+    IpTerms,
+    MilestoneState,
+    NudgeKind,
+    OrgRole,
+    PaymentMethod,
+    ProcurementRoute,
+    RecommendationStance,
+    SignatureDocumentKind,
+    StepUpMethod,
+)
+from bridge.models.text import one_line_sql
+from bridge.models.types import pg_enum
+
+DECLINED_REASONS = (
+    "'NOT_PRIORITY', 'ALREADY_IN_PROGRESS_INTERNALLY', 'BUDGET', 'NOT_RELEVANT', 'NEEDS_MATURITY', 'OTHER',"
+    " 'BY_DEVELOPER'"
+)
+EXPIRED_REASONS = "'NO_REVIEW', 'NO_DECISION', 'CONTACT_NOT_MADE', 'NO_DEV_RESPONSE'"
+TERMINAL = "'DECLINED', 'WITHDRAWN', 'EXPIRED', 'TERMINATED', 'CLOSED'"
+
+
+def end_reason_matches(state_column: str) -> str:
+    """docs/spec/06 6.9 Codes: DECLINED and EXPIRED carry their own reason codes; no other state has one."""
+    return (
+        f"({state_column} = 'DECLINED' AND end_reason IN ({DECLINED_REASONS}))"
+        f" OR ({state_column} = 'EXPIRED' AND end_reason IN ({EXPIRED_REASONS}))"
+        f" OR ({state_column} NOT IN ('DECLINED', 'EXPIRED') AND end_reason IS NULL)"
+    )
+
+
+VIA_ENGAGEMENT = {"info": {"tenancy": Tenancy.ORG_OR_USER, "via": "engagements"}}
+SHA256_SIZE = "octet_length({column}) = 32"
+
+# Revision 0015 (REQ-ENG-06; docs/spec/06 6.9 stage 3b). The justification is plain text the organisation writes (line
+# breaks allowed, as a note or a message), at most 1,000 characters and not blank; ``direct`` needs at least 20
+# characters once the ends are trimmed (the API trims first, then checks 20 to 1,000).
+PROCUREMENT_JUSTIFICATION_MAX_CHARS = 1000
+PROCUREMENT_DIRECT_MIN_CHARS = 20
+CONTACT_CONSISTENT = (
+    "(contact_user_id IS NULL) = (contact_channel IS NULL)"
+    " AND (contact_by IS NULL OR contact_user_id IS NOT NULL)"
+    " AND (contact_by IS NOT NULL OR contact_user_id IS NULL OR procurement_route IS NULL)"
+)
+PROCUREMENT_DECIDED = (
+    "(procurement_route IS NULL) = (procurement_decided_at IS NULL)"
+    " AND (procurement_route IS NULL) = (procurement_decided_by IS NULL)"
+)
+PROCUREMENT_JUSTIFICATION_VALID = (
+    "procurement_justification IS NULL OR (procurement_route IS NOT NULL"
+    " AND procurement_justification ~ '[^[:space:]]'"
+    f" AND char_length(procurement_justification) <= {PROCUREMENT_JUSTIFICATION_MAX_CHARS})"
+)
+PROCUREMENT_DIRECT_JUSTIFIED = (
+    "procurement_route IS DISTINCT FROM 'direct'"
+    f" OR char_length(btrim(coalesce(procurement_justification, ''))) >= {PROCUREMENT_DIRECT_MIN_CHARS}"
+)
+
+
+class Engagement(IdMixin, TimestampsMixin, Base):
+    """One proposal x one organisation (docs/spec/03). ``state`` is the projection of ``engagement_events``."""
+
+    __tablename__ = "engagements"
+    __table_args__ = (
+        UniqueConstraint("proposal_id", "org_id"),
+        ForeignKeyConstraint(
+            ["proposal_id", "version_id"],
+            ["proposal_versions.proposal_id", "proposal_versions.id"],
+            name="fk_engagements_version",
+        ),
+        # NULL-safe since revision 0003 (NULL IN (...) is NULL, which a CHECK would let through).
+        CheckConstraint(f"coalesce({end_reason_matches('state')}, false)", name="end_reason_matches_state"),
+        # Set by the database when the engagement enters a terminal state (and only then).
+        CheckConstraint(f"(ended_at IS NOT NULL) = (state IN ({TERMINAL}))", name="ended_exactly_when_terminal"),
+        # The organisation's named contact (docs/spec/06 6.9 stage 3; revision 0015): person and channel together, a
+        # contact-by date only with them; a public entity names the person and channel when it approves to proceed
+        # and the date with its procurement route (3b), so once the route is decided a named contact has its date.
+        CheckConstraint(CONTACT_CONSISTENT, name="contact_consistent"),
+        # The procurement route (3b, revision 0015): decided once, with its time and decider (the database's).
+        CheckConstraint(PROCUREMENT_DECIDED, name="procurement_decided"),
+        CheckConstraint(PROCUREMENT_JUSTIFICATION_VALID, name="procurement_justification_valid"),
+        CheckConstraint(PROCUREMENT_DIRECT_JUSTIFIED, name="procurement_direct_justified"),
+        {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "user_column": "developer_id"}},
+    )
+
+    proposal_id: Mapped[UUID] = mapped_column(ForeignKey("proposals.id"))
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    developer_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    version_id: Mapped[UUID] = mapped_column()
+    origin: Mapped[EngagementOrigin] = mapped_column(pg_enum(EngagementOrigin, "engagement_origin"))
+    state: Mapped[EngagementState] = mapped_column(pg_enum(EngagementState, "engagement_state"))
+    end_reason: Mapped[EngagementEndReason | None] = mapped_column(
+        pg_enum(EngagementEndReason, "engagement_end_reason")
+    )
+    # Revision 0003. The database's: when the current stage was entered (the entering event's created_at) and its
+    # deadline (the entering event's stage_deadline_at, set by the state machine from policy.yaml), when a terminal
+    # state was entered, and the optimistic-concurrency counter (bumped on every UPDATE).
+    stage_entered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    stage_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lock_version: Mapped[int] = mapped_column(Integer, server_default="0", server_onupdate=FetchedValue())
+    # Written by the organisation's owner, admin or signatory; the contact is an active member of the organisation.
+    contact_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    contact_channel: Mapped[ContactChannel | None] = mapped_column(pg_enum(ContactChannel, "contact_channel"))
+    contact_by: Mapped[date | None] = mapped_column(Date)
+    # Revision 0015 (REQ-ENG-06, AC-TRACK-5): a public entity's procurement route, decided by its owner or admin while
+    # the engagement is in PROCUREMENT_ROUTE, in the transaction that moves it to INTEREST_CONFIRMED, and never changed
+    # afterwards. The app writes the route and the justification; the time and the decider are the database's.
+    procurement_route: Mapped[ProcurementRoute | None] = mapped_column(pg_enum(ProcurementRoute, "procurement_route"))
+    procurement_justification: Mapped[str | None] = mapped_column(Text)  # the organisation's words, shown to both
+    procurement_decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_onupdate=FetchedValue()
+    )
+    procurement_decided_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), server_onupdate=FetchedValue())
+
+    __mapper_args__ = {"version_id_col": lock_version, "version_id_generator": False}  # noqa: RUF012
+
+
+class EngagementEvent(IdMixin, Base):
+    """One entry of an engagement's hash chain. INSERT-only (grants and triggers). ``seq``, ``prev_hash``, ``hash``
+    and ``created_at`` are set by the database under the engagement's row lock; send ``from_state`` as the state the
+    command was checked against (a stale one is refused) and ``to_state`` as the state it leads to (equal for an
+    event that changes no state, such as one party's endorsement)."""
+
+    __tablename__ = "engagement_events"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "seq"),
+        UniqueConstraint("engagement_id", "prev_hash"),
+        # NULL-safe (NULL IN (...) is NULL, which a CHECK would let through): DECLINED and EXPIRED need their reason.
+        CheckConstraint(f"coalesce({end_reason_matches('to_state')}, false)", name="end_reason_matches_state"),
+        CheckConstraint("command ~ '^[a-z][a-z0-9_]{0,39}$'", name="command_is_a_code"),
+        # A system event (a job) names no user; every other event names its actor.
+        CheckConstraint("(actor_role = 'system') = (actor_user_id IS NULL)", name="actor_matches_role"),
+        CheckConstraint("app_event_payload_is_valid(payload)", name="payload_holds_ids_and_codes"),
+        CheckConstraint(
+            f"{SHA256_SIZE.format(column='prev_hash')} AND {SHA256_SIZE.format(column='hash')}",
+            name="hashes_are_sha256",
+        ),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    seq: Mapped[int] = mapped_column(BigInteger, server_default=FetchedValue())
+    actor_user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    actor_role: Mapped[EngagementActorRole] = mapped_column(pg_enum(EngagementActorRole, "engagement_actor_role"))
+    command: Mapped[str] = mapped_column(String(40))
+    from_state: Mapped[EngagementState | None] = mapped_column(pg_enum(EngagementState, "engagement_state"))
+    to_state: Mapped[EngagementState] = mapped_column(pg_enum(EngagementState, "engagement_state"))
+    end_reason: Mapped[EngagementEndReason | None] = mapped_column(
+        pg_enum(EngagementEndReason, "engagement_end_reason")
+    )
+    # The deadline of the stage this event enters (or, unchanged state, a new deadline for it); NULL for none.
+    stage_deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
+    prev_hash: Mapped[bytes] = mapped_column(LargeBinary, server_default=FetchedValue())
+    hash: Mapped[bytes] = mapped_column(LargeBinary, server_default=FetchedValue())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EngagementEndorsement(IdMixin, Base):
+    """One party's endorsement of a dual-endorsement stage (docs/spec/06 6.9), or of a milestone's acceptance at
+    ``IN_IMPLEMENTATION``. Append-only; only the stage the engagement is in can be endorsed. ``stage_round`` (the
+    database's) counts the times the engagement has entered ``stage``, so a stage entered again (a disputed first
+    contact returns to stage 3) is endorsed afresh."""
+
+    __tablename__ = "engagement_endorsements"
+    __table_args__ = (
+        # One endorsement per party of each entry into a stage (and of each milestone; NULL counts as one value).
+        Index(
+            "uq_engagement_endorsements_once",
+            "engagement_id",
+            "stage",
+            "stage_round",
+            "party",
+            "milestone_id",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+        ),
+        ForeignKeyConstraint(
+            ["milestone_id", "engagement_id"],
+            ["milestones.id", "milestones.engagement_id"],
+            name="fk_engagement_endorsements_milestone",
+        ),
+        # An automatic endorsement (a job) names no user and acts as the system; every other names its endorser.
+        CheckConstraint(
+            "(method = 'auto') = (user_id IS NULL) AND (method = 'auto') = (role = 'system')", name="auto_names_nobody"
+        ),
+        CheckConstraint(
+            "(party = 'developer' AND role IN ('developer', 'system'))"
+            " OR (party = 'org' AND role IN ('owner', 'admin', 'reviewer', 'signatory', 'finance', 'system'))",
+            name="role_matches_party",
+        ),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    stage: Mapped[EngagementState] = mapped_column(pg_enum(EngagementState, "engagement_state"))
+    stage_round: Mapped[int] = mapped_column(SmallInteger, server_default=FetchedValue())
+    milestone_id: Mapped[UUID | None] = mapped_column()
+    party: Mapped[EngagementParty] = mapped_column(pg_enum(EngagementParty, "engagement_party"))
+    user_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    role: Mapped[EngagementActorRole] = mapped_column(pg_enum(EngagementActorRole, "engagement_actor_role"))
+    method: Mapped[EndorsementMethod] = mapped_column(pg_enum(EndorsementMethod, "endorsement_method"))
+    endorsed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# docs/spec/06 6.9 side branches: the organisation's question and the developer's answer (INFO_REQUESTED), the reason
+# of a pause (ON_HOLD, with its resume date) and of an early resume.
+NOTE_KINDS = ("info_request", "info_answer", "hold", "resume")
+NOTE_REDACTED = "[redacted]"  # D-54: the one body a note may be changed to, by the owner's redaction
+
+
+class EngagementNote(IdMixin, Base):
+    """The text a side-state command carries (REQ-ENG-10; revision 0006): ``info_request`` (the organisation's
+    question, on the event entering ``INFO_REQUESTED``), ``info_answer`` (the developer's answer, on the event leaving
+    it), ``hold`` (the reason of a pause, on the event entering ``ON_HOLD``, with ``resume_at``) and ``resume`` (the
+    reason of an early resume, on the event leaving it). A sibling of the event it explains (``event_seq``), never
+    part of the hash chain. INSERT-only for the app (grants and triggers); D-54: the owner (or a definer function it
+    owns) may redact a note once, setting ``body`` to ``'[redacted]'`` with ``redacted_at`` and ``redacted_by``. Write
+    it in the event's transaction, after the event (its ``seq`` is the database's: read it back), as the event's
+    actor; a system event takes no note. ``created_at`` is the database's clock (``app_clock_now()``): leave it out."""
+
+    __tablename__ = "engagement_notes"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "event_seq"),  # one note per event
+        ForeignKeyConstraint(
+            ["engagement_id", "event_seq"],
+            ["engagement_events.engagement_id", "engagement_events.seq"],
+            name="fk_engagement_notes_event",
+        ),
+        CheckConstraint(f"kind IN ({', '.join(repr(kind) for kind in NOTE_KINDS)})", name="kind_known"),
+        CheckConstraint("btrim(body) <> '' AND char_length(body) <= 2000", name="body_length"),
+        CheckConstraint("(kind = 'hold') = (resume_at IS NOT NULL)", name="resume_at_only_for_hold"),
+        CheckConstraint(
+            f"(redacted_at IS NOT NULL) = (body = {NOTE_REDACTED!r}) AND (redacted_at IS NULL) = (redacted_by IS NULL)",
+            name="redaction_complete",
+        ),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    event_seq: Mapped[int] = mapped_column(BigInteger)  # engagement_events.seq of the event the note explains
+    kind: Mapped[str] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)
+    resume_at: Mapped[date | None] = mapped_column(Date)  # a hold's resume date (Africa/Nairobi), only for a hold
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    # D-54: set together, exactly when the body is NOTE_REDACTED, only by the owner's redaction (the future staff
+    # function sets redacted_at = app_clock_now(), redacted_by = app_user_id()); never the app's.
+    redacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    redacted_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+
+
+# REQ-ENG-11 (revision 0008): the engagement thread's limits, as the database enforces them.
+MESSAGE_MAX_CHARS = 4000  # a message's body: 1 to 4,000 characters, not blank
+MESSAGE_REDACTED = "[redacted]"  # D-54: the one body a message may be changed to, by the owner's redaction
+MAX_MESSAGE_ATTACHMENTS = 5  # per message (engagement_message_attachments_cap)
+MAX_MESSAGE_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20 MB, as proposal attachments (docs/spec/06 6.1)
+MAX_FILE_NAME_CHARS = 255
+# A message report (app_report_message): one or more of these codes, never free text; at most this many message
+# reports per reporter in 24 hours (fixed in the function: the caller names no limit).
+MESSAGE_REPORT_REASONS = ("spam", "abuse", "contact_details", "confidential", "other")
+MESSAGE_REPORTS_PER_DAY = 10
+# Who posts on the organisation's side: a member who may act on the tracker (viewers read, never post).
+MESSAGE_POSTING_ORG_ROLES = frozenset({"owner", "admin", "reviewer", "signatory", "finance"})
+
+
+def message_attachment_key(engagement_id: UUID, attachment_id: UUID) -> str:
+    """The object key of a thread attachment, the only one its row accepts (CHECK ``object_key_is_its_own``)."""
+    return f"messages/{engagement_id}/{attachment_id}"
+
+
+class EngagementMessage(IdMixin, Base):
+    """One message of an engagement's thread (REQ-ENG-11; revision 0008). Parties only: the developer and the members
+    of the organisation (narrowed by ``app.org_id``) read every message, viewers included; staff never read the thread
+    (a report shares one message, ``app_reported_message``). A party posts as themselves on their own side
+    (``sender_party``: ``developer``, or ``org`` for a member who may act and is not the engagement's developer),
+    once the chain has entered ``INTEREST_CONFIRMED`` or a later main-path stage (``CONTACT_MADE`` on a procurement
+    route; 3b does not count) and until it ends (``engagement_thread_open()``: SQLSTATE 55000 otherwise; read stays
+    open). INSERT-only for the app; D-54: the owner (or a definer function it owns) may redact a body once, setting it
+    to ``'[redacted]'`` with ``redacted_at`` and ``redacted_by``. ``created_at`` is the database's clock: leave it
+    out."""
+
+    __tablename__ = "engagement_messages"
+    __table_args__ = (
+        UniqueConstraint("id", "engagement_id"),  # target of the attachments' (message_id, engagement_id) key
+        Index("ix_engagement_messages_thread", "engagement_id", "created_at", "id"),
+        CheckConstraint(f"body ~ '[^[:space:]]' AND char_length(body) <= {MESSAGE_MAX_CHARS}", name="body_length"),
+        CheckConstraint(
+            f"(redacted_at IS NOT NULL) = (body = {MESSAGE_REDACTED!r})"
+            " AND (redacted_at IS NULL) = (redacted_by IS NULL)",
+            name="redaction_complete",
+        ),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    sender_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    sender_party: Mapped[EngagementParty] = mapped_column(pg_enum(EngagementParty, "engagement_party"))
+    body: Mapped[str] = mapped_column(Text)  # plain text, never interpreted; never in payloads, logs or emails
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    # D-54: set together, exactly when the body is MESSAGE_REDACTED, only by the owner's redaction; never the app's.
+    redacted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    redacted_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+
+
+class EngagementMessageAttachment(IdMixin, Base):
+    """A file of the thread (REQ-ENG-11; revision 0008), staged first and then sent with its message. A party who may
+    post uploads it as themselves (``message_id`` NULL, ``av_status`` left to its default ``pending_scan``: the app
+    cannot insert either) while the thread is open; its uploader alone reads, scans (an UPDATE to a final verdict:
+    the API writes ``storage/scanner.py``'s result, never the client's) and deletes it while it is staged. It
+    joins only its uploader's own message, in the transaction that inserts the message, only ``clean`` and within 24
+    hours of its upload; at most 5 per message. A staged upload of an ended engagement or older than 24 hours can
+    never be sent: the purge job deletes it (``app_purge_stale_message_uploads(now)``, no user bound, returning the
+    object keys). Once sent every party reads it and it never changes or goes. The object key is the row's own,
+    ``message_attachment_key(engagement_id, id)`` (ids only, never the file name; the CHECK refuses any other);
+    ``created_at`` is the database's clock."""
+
+    __tablename__ = "engagement_message_attachments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["message_id", "engagement_id"],
+            ["engagement_messages.id", "engagement_messages.engagement_id"],
+            name="fk_engagement_message_attachments_message",
+        ),
+        CheckConstraint(
+            f"file_name ~ '[^[:space:]]' AND char_length(file_name) <= {MAX_FILE_NAME_CHARS}"
+            " AND file_name !~ '[[:cntrl:]/\\\\]'",
+            name="file_name_valid",
+        ),
+        CheckConstraint(f"size_bytes BETWEEN 1 AND {MAX_MESSAGE_ATTACHMENT_BYTES}", name="size_limit"),
+        CheckConstraint(SHA256_SIZE.format(column="sha256"), name="sha256_length"),
+        # The row's own object (ids only), never another of the bucket: see message_attachment_key().
+        CheckConstraint(
+            "object_key = 'messages/' || engagement_id::text || '/' || id::text", name="object_key_is_its_own"
+        ),
+        CheckConstraint("message_id IS NULL OR av_status = 'clean'", name="attached_only_when_clean"),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    message_id: Mapped[UUID | None] = mapped_column(index=True)  # NULL while staged
+    uploader_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    file_name: Mapped[str] = mapped_column(Text)
+    content_type: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    sha256: Mapped[bytes] = mapped_column(LargeBinary)
+    object_key: Mapped[str] = mapped_column(Text, unique=True)
+    av_status: Mapped[AvStatus] = mapped_column(
+        pg_enum(AvStatus, "av_status"), server_default=AvStatus.PENDING_SCAN.value
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
+class EngagementMessageRead(Base):
+    """How far a party has read a thread (REQ-ENG-11; revision 0008): one row per party and engagement, the user's
+    own, on an engagement they are a party of. Upsert ``last_read_at`` (never another column)."""
+
+    __tablename__ = "engagement_message_reads"
+    __table_args__ = ({"info": {"tenancy": Tenancy.USER, "tenant_column": "user_id", "via": "engagements"}},)
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"), primary_key=True)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True)
+    last_read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
+class Agreement(IdMixin, TimestampsMixin, Base):
+    """A version of the definitive agreement (docs/spec/06 6.9 stage 8, AC-TRACK-10). A draft is edited by either
+    party; marking it ``final`` needs the IP terms, the deemed-acceptance clause, the final PDF's SHA-256 and at least
+    one milestone, and freezes all of them; it becomes ``signed`` once both parties signed that PDF."""
+
+    __tablename__ = "agreements"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "version"),
+        UniqueConstraint("id", "engagement_id"),  # target of the milestones' (agreement_id, engagement_id) key
+        Index(
+            "uq_agreements_signed_engagement", "engagement_id", unique=True, postgresql_where=text("status = 'signed'")
+        ),
+        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint(
+            "exclusivity IS NULL OR (btrim(exclusivity) <> '' AND length(exclusivity) <= 500)", name="exclusivity"
+        ),
+        # 0 = the clause says a milestone is never deemed accepted; otherwise after that many days (docs/spec/06 6.9).
+        CheckConstraint("deemed_acceptance_days BETWEEN 0 AND 90", name="deemed_acceptance_days"),
+        CheckConstraint("final_pdf_sha256 IS NULL OR octet_length(final_pdf_sha256) = 32", name="final_pdf_sha256"),
+        CheckConstraint(
+            "status = 'draft' OR (ip_terms IS NOT NULL AND deemed_acceptance_days IS NOT NULL"
+            " AND final_pdf_sha256 IS NOT NULL)",
+            name="final_is_complete",
+        ),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    version: Mapped[int] = mapped_column(SmallInteger)
+    ip_terms: Mapped[IpTerms | None] = mapped_column(pg_enum(IpTerms, "ip_terms"))
+    exclusivity: Mapped[str | None] = mapped_column(Text)
+    deemed_acceptance_days: Mapped[int | None] = mapped_column(SmallInteger)
+    status: Mapped[AgreementStatus] = mapped_column(
+        pg_enum(AgreementStatus, "agreement_status"), server_default=AgreementStatus.DRAFT.value
+    )
+    final_pdf_sha256: Mapped[bytes | None] = mapped_column(LargeBinary)
+    created_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+
+
+class Milestone(IdMixin, TimestampsMixin, Base):
+    """A milestone of an agreement (docs/spec/06 6.9 milestone sub-tracker). Planned while the agreement is a draft;
+    once the agreement is signed it moves PLANNED -> IN_PROGRESS -> SUBMITTED_FOR_REVIEW (the developer) ->
+    ACCEPTED | CHANGES_REQUESTED (the organisation), and CHANGES_REQUESTED -> IN_PROGRESS (the developer)."""
+
+    __tablename__ = "milestones"
+    __table_args__ = (
+        UniqueConstraint("agreement_id", "seq"),
+        UniqueConstraint("id", "engagement_id"),  # target of endorsements' and payments' (milestone, engagement) key
+        ForeignKeyConstraint(
+            ["agreement_id", "engagement_id"],
+            ["agreements.id", "agreements.engagement_id"],
+            name="fk_milestones_agreement",
+        ),
+        CheckConstraint("seq >= 1", name="seq_positive"),
+        CheckConstraint("btrim(deliverable) <> '' AND length(deliverable) <= 500", name="deliverable"),
+        CheckConstraint("amount_kes_minor > 0", name="amount_positive"),
+        CheckConstraint("review_window_bd BETWEEN 1 AND 60", name="review_window_bd"),
+        VIA_ENGAGEMENT,
+    )
+
+    agreement_id: Mapped[UUID] = mapped_column()
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"), index=True)
+    seq: Mapped[int] = mapped_column(SmallInteger)
+    deliverable: Mapped[str] = mapped_column(Text)
+    amount_kes_minor: Mapped[int] = mapped_column(BigInteger)  # KES in cents (minor units)
+    due_date: Mapped[date] = mapped_column(Date)
+    review_window_bd: Mapped[int] = mapped_column(SmallInteger)
+    state: Mapped[MilestoneState] = mapped_column(
+        pg_enum(MilestoneState, "milestone_state"), server_default=MilestoneState.PLANNED.value
+    )
+
+
+class Signature(IdMixin, Base):
+    """An internal simple e-signature (docs/spec/06 6.9 SignatureProvider, Release 1) of one party on one document.
+    Append-only. The signer signs as themselves after a TOTP or passkey step-up: the developer (D2 for an agreement)
+    or an organisation signatory. An agreement is signed only in its final version and at its final PDF's hash, and
+    never internally when its IP terms are an assignment or an exclusive licence (AC-TRACK-10)."""
+
+    __tablename__ = "signatures"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "document_kind", "document_ref", "party"),
+        CheckConstraint(SHA256_SIZE.format(column="document_sha256"), name="document_sha256"),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    document_kind: Mapped[SignatureDocumentKind] = mapped_column(
+        pg_enum(SignatureDocumentKind, "signature_document_kind")
+    )
+    # The agreement's id, the milestone's id, or the application's id of the NDA or acceptance certificate.
+    document_ref: Mapped[UUID] = mapped_column()
+    document_sha256: Mapped[bytes] = mapped_column(LargeBinary)
+    signer_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    party: Mapped[EngagementParty] = mapped_column(pg_enum(EngagementParty, "engagement_party"))
+    step_up_method: Mapped[StepUpMethod] = mapped_column(pg_enum(StepUpMethod, "step_up_method"))
+    ip: Mapped[str | None] = mapped_column(INET)
+    user_agent: Mapped[str | None] = mapped_column(String(200))
+    signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PaymentRecord(IdMixin, Base):
+    """A payment the organisation says it made (docs/spec/06 6.9 stage 12 and the milestone payments), confirmed
+    once by the developer with the amount received. No code path moves money: the platform never holds funds. The
+    record never changes except that one confirmation (trigger) and is never deleted."""
+
+    __tablename__ = "payment_records"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["milestone_id", "engagement_id"],
+            ["milestones.id", "milestones.engagement_id"],
+            name="fk_payment_records_milestone",
+        ),
+        CheckConstraint("amount_kes_minor > 0", name="amount_positive"),
+        CheckConstraint(
+            "confirmed_amount_kes_minor IS NULL OR confirmed_amount_kes_minor >= 0", name="confirmed_amount"
+        ),
+        CheckConstraint("reference IS NULL OR btrim(reference) <> ''", name="reference_not_blank"),
+        CheckConstraint(
+            "(confirmed_by IS NULL) = (confirmed_at IS NULL)"
+            " AND (confirmed_at IS NULL) = (confirmed_amount_kes_minor IS NULL)",
+            name="confirmation_complete",
+        ),
+        VIA_ENGAGEMENT,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"), index=True)
+    milestone_id: Mapped[UUID | None] = mapped_column()  # NULL: the final payment
+    amount_kes_minor: Mapped[int] = mapped_column(BigInteger)  # KES in cents (minor units)
+    method: Mapped[PaymentMethod] = mapped_column(pg_enum(PaymentMethod, "payment_method"))
+    reference: Mapped[str | None] = mapped_column(String(64))  # the M-Pesa or bank reference
+    paid_on: Mapped[date] = mapped_column(Date)
+    recorded_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    confirmed_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
+    confirmed_amount_kes_minor: Mapped[int | None] = mapped_column(BigInteger)
+
+
+class DevTestClock(Base):
+    """The dev/test clock shared by the API and the worker: one row, an offset added to the database clock
+    (``app_clock_now()``) where the owner enabled it. Readable by the app; moved only forward, only through
+    ``app_set_test_clock(offset)``, which the test-clock router calls (dev, test and staging only; the router is not
+    in the production image, and a production database never has the clock enabled)."""
+
+    __tablename__ = "test_clock"
+    __table_args__ = (
+        CheckConstraint("singleton", name="singleton"),
+        CheckConstraint("clock_offset >= interval '0' AND clock_offset <= interval '366 days'", name="clock_offset"),
+        {"info": {"tenancy": Tenancy.SYSTEM}},
+    )
+
+    singleton: Mapped[bool] = mapped_column(Boolean, primary_key=True, server_default=text("true"))
+    # Set by the owner (python -m bridge.seed outside production); nothing else enables it.
+    enabled: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    clock_offset: Mapped[timedelta] = mapped_column(Interval, server_default=text("'00:00:00'::interval"))
+    updated_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# --- Revision 0013 (P27): team triage (REQ-ENG-15, D-68), the prior-knowledge declaration (REQ-PROV-06; docs/spec/06
+# 6.4 pt 5) and calendar feeds (REQ-ENG-13, D-70) ----------------------------------------------------------------------
+
+# Who assigns, is assigned and recommends (docs/spec/03: the reviewer "may Recommend internally without changing
+# state"); who declares prior knowledge (the card's contract: signatory, admin or owner).
+TRIAGE_ROLES = (OrgRole.OWNER, OrgRole.ADMIN, OrgRole.REVIEWER, OrgRole.SIGNATORY)
+DECLARATION_ROLES = (OrgRole.OWNER, OrgRole.ADMIN, OrgRole.SIGNATORY)
+RECOMMENDATION_NOTE_MAX_CHARS = 200
+EVIDENCE_TITLE_MAX_CHARS = 200
+# docs/spec/06 6.4 pt 5: Kenyan business days after the Nairobi day of the organisation's first Tier-2 view; the window
+# closes at the end of the last one. app_prior_knowledge_window computes it (one rule for the API and the database).
+DECLARATION_WINDOW_BD = 10
+ORG_SCOPED = {"info": {"tenancy": Tenancy.ORG, "tenant_column": "org_id"}}
+NAIROBI_DAY = "({column} AT TIME ZONE 'Africa/Nairobi')::date"
+# The one body a declaration's evidence title may be changed to, once, by the owner role (a DSR's pseudonymisation).
+EVIDENCE_TITLE_REDACTED = "[redacted]"
+
+
+class EngagementAssignment(IdMixin, Base):
+    """Who at the organisation works an engagement (REQ-ENG-15, D-68): the organisation's own, never a developer's.
+    An owner, admin, reviewer or signatory inserts ``id``, ``engagement_id``, ``org_id`` (the engagement's),
+    ``assignee_user_id`` (an active owner, admin, reviewer or signatory of it) and ``assigned_by`` (the caller);
+    ``assigned_at`` is the database's clock. One live row per engagement (``uq_engagement_assignments_live``):
+    reassigning closes the live row (``UPDATE ... SET unassigned_at = now()``: the database replaces the value with its
+    clock, once, for good) and inserts the next, in one transaction. Never deleted. Members read every row; nobody else
+    does, the engagement's own developer included even if they are also a member of the organisation."""
+
+    __tablename__ = "engagement_assignments"
+    __table_args__ = (
+        Index(
+            "uq_engagement_assignments_live",
+            "engagement_id",
+            unique=True,
+            postgresql_where=text("unassigned_at IS NULL"),
+        ),
+        Index(
+            "ix_engagement_assignments_assignee_live",
+            "org_id",
+            "assignee_user_id",
+            postgresql_where=text("unassigned_at IS NULL"),
+        ),
+        CheckConstraint("unassigned_at IS NULL OR unassigned_at >= assigned_at", name="unassigned_after_assigned"),
+        ORG_SCOPED,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    assignee_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    assigned_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    unassigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
+
+
+class EngagementRecommendation(IdMixin, Base):
+    """A member's internal recommendation on an engagement (REQ-ENG-15, D-68; docs/spec/03): one per member and
+    engagement, upserted by the member as themselves while an owner, admin, reviewer or signatory; withdrawn by a DELETE
+    of their own row. Changes no state. ``note`` is plain text on one line (``bridge.models.text``: 1 to 200
+    characters, or NULL for none), never in an email, a log, an event payload or a developer-visible response.
+    ``created_at`` and ``updated_at`` are the database's clock (``updated_at`` moves on every update). Members read
+    every row; nobody else does, the engagement's own developer included even if they are also a member."""
+
+    __tablename__ = "engagement_recommendations"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "member_user_id"),
+        CheckConstraint(f"note IS NULL OR ({one_line_sql('note', RECOMMENDATION_NOTE_MAX_CHARS)})", name="note_valid"),
+        ORG_SCOPED,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    member_user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    stance: Mapped[RecommendationStance] = mapped_column(pg_enum(RecommendationStance, "recommendation_stance"))
+    note: Mapped[str | None] = mapped_column(Text)  # free text: never in payloads, logs, emails or developer responses
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("app_clock_now()"), server_onupdate=FetchedValue()
+    )
+
+
+class PriorKnowledgeDeclaration(IdMixin, Base):
+    """An organisation's prior-knowledge declaration (REQ-PROV-06; docs/spec/06 6.4 pt 5): the SHA-256 of dated internal
+    evidence (hashed in the browser; no file is ever uploaded), the organisation's own short title for it and the
+    evidence's date (on or before the Nairobi day of that first view: the work predates the access), made once per
+    engagement within 10 Kenyan business days of the organisation's first Tier-2 view, while the engagement has not
+    ended. Append-only: no DELETE or TRUNCATE for any role, and no UPDATE but the owner role's one redaction of
+    ``evidence_title`` to ``EVIDENCE_TITLE_REDACTED`` (a DSR), a title no declaration is inserted with (the database
+    refuses it; the API refuses it first, 422). A signatory, admin or owner, never the engagement's own developer (a
+    member or not), inserts ``id``, ``engagement_id``, ``org_id``, ``proposal_id`` and ``version_id`` (the
+    engagement's), ``declared_by`` (the caller), ``evidence_sha256``, ``evidence_title`` and ``evidence_dated_on``;
+    ``first_tier2_view_at``, ``window_closes_on`` and ``declared_at`` are the database's (read them back). Read by
+    the engagement's readers: the developer, the organisation's members and staff admin (the evidence pack)."""
+
+    __tablename__ = "prior_knowledge_declarations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["proposal_id", "version_id"],
+            ["proposal_versions.proposal_id", "proposal_versions.id"],
+            name="fk_prior_knowledge_declarations_version",
+        ),
+        CheckConstraint(SHA256_SIZE.format(column="evidence_sha256"), name="evidence_sha256"),
+        CheckConstraint(one_line_sql("evidence_title", EVIDENCE_TITLE_MAX_CHARS), name="evidence_title_valid"),
+        CheckConstraint(
+            f"window_closes_on > {NAIROBI_DAY.format(column='first_tier2_view_at')}", name="window_after_first_view"
+        ),
+        CheckConstraint(
+            f"declared_at >= first_tier2_view_at AND {NAIROBI_DAY.format(column='declared_at')} <= window_closes_on",
+            name="declared_within_window",
+        ),
+        # Existing similar work predates the organisation's access (docs/spec/06 6.4 pt 5).
+        CheckConstraint(
+            f"evidence_dated_on <= {NAIROBI_DAY.format(column='first_tier2_view_at')}",
+            name="evidence_predates_first_view",
+        ),
+        {"info": {"tenancy": Tenancy.ORG_OR_USER, "tenant_column": "org_id", "via": "engagements"}},
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"), unique=True)
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    proposal_id: Mapped[UUID] = mapped_column(ForeignKey("proposals.id"))
+    version_id: Mapped[UUID] = mapped_column()
+    declared_by: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
+    evidence_sha256: Mapped[bytes] = mapped_column(LargeBinary)
+    evidence_title: Mapped[str] = mapped_column(Text)  # the organisation's words: plain text, rendered as text
+    evidence_dated_on: Mapped[date] = mapped_column(Date)
+    first_tier2_view_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=FetchedValue())
+    window_closes_on: Mapped[date] = mapped_column(Date, server_default=FetchedValue())
+    declared_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
+class CalendarFeed(IdMixin, Base):
+    """A private calendar feed URL (REQ-ENG-13, D-70): a capability. The token (32 random bytes, base64url, in the URL
+    only) is stored as its SHA-256. One live feed per user (``org_id`` NULL: the developer's deadlines) and per user and
+    organisation (a member's: the organisation's deadlines). The user inserts ``id``, ``user_id`` (themselves),
+    ``org_id`` (NULL, or an organisation they are a member of) and ``token_hash``; rotating revokes the live feed
+    (``UPDATE ... SET revoked_at = now()``: the database's clock, once, for good) and inserts the next in one
+    transaction. ``created_at`` is the database's; ``last_fetched_at`` only ``app_calendar_feed_touch`` stamps. A feed
+    dies with what it was made under: a membership leaving ``active`` revokes the member's feeds of that organisation,
+    and a user leaving ``active`` (a suspension) revokes all of theirs. The unauthenticated read resolves a token
+    through ``app_calendar_feed_lookup(token_hash)``. The user's own rows only."""
+
+    __tablename__ = "calendar_feeds"
+    __table_args__ = (
+        Index(
+            "uq_calendar_feeds_live_personal",
+            "user_id",
+            unique=True,
+            postgresql_where=text("org_id IS NULL AND revoked_at IS NULL"),
+        ),
+        Index(
+            "uq_calendar_feeds_live_org",
+            "user_id",
+            "org_id",
+            unique=True,
+            postgresql_where=text("org_id IS NOT NULL AND revoked_at IS NULL"),
+        ),
+        CheckConstraint(SHA256_SIZE.format(column="token_hash"), name="token_hash_sha256"),
+        CheckConstraint("revoked_at IS NULL OR revoked_at >= created_at", name="revoked_after_created"),
+        {"info": {"tenancy": Tenancy.USER, "tenant_column": "user_id"}},
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    org_id: Mapped[UUID | None] = mapped_column(ForeignKey("organizations.id"))
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
+    last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), server_onupdate=FetchedValue())
+
+
+# --- Revision 0015 (P28): the nudges ledger (REQ-NOT-05, REQ-NOT-03, REQ-ENG-05; AC-MAIL-2) -------------------------
+
+NUDGE_KINDS = tuple(kind.value for kind in NudgeKind)
+NUDGE_KEY_MAX_CHARS = 120
+# A key is a code the job makes (a business-day count, a milestone id, a date): no free text, address or name fits.
+NUDGE_KEY_VALID = f"key ~ '^[A-Za-z0-9_.:+-]{{1,{NUDGE_KEY_MAX_CHARS}}}$'"
+
+
+class EngagementNudge(IdMixin, Base):
+    """One nudge the job sent (REQ-NOT-05; P28 track B): an escalation to the organisation's admins and escalation
+    contact, a contact-overdue notice (EM6), an NDA or milestone reminder. Recorded before sending, once per
+    engagement, kind and key (``uq_engagement_nudges_engagement_id_kind_key``), so a nudge fires once whatever the job's
+    retries. Written only by ``app_record_nudge(engagement, kind, key, expected_state)`` (the job, no user bound: true
+    when this call recorded it, false when it was already recorded, the engagement has ended or left the state the nudge
+    was decided in); ``org_id`` is the engagement's and
+    ``sent_at`` the shared clock's. Append-only for every role. Read by the organisation's members only (the latest
+    escalation is the tracker's "Escalated to your admins on ..."), never by the engagement's developer, a member or
+    not, nor by staff."""
+
+    __tablename__ = "engagement_nudges"
+    __table_args__ = (
+        UniqueConstraint("engagement_id", "kind", "key"),
+        CheckConstraint(f"kind IN ({', '.join(repr(kind) for kind in NUDGE_KINDS)})", name="kind_known"),
+        CheckConstraint(NUDGE_KEY_VALID, name="key_valid"),
+        ORG_SCOPED,
+    )
+
+    engagement_id: Mapped[UUID] = mapped_column(ForeignKey("engagements.id"))
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id"))
+    kind: Mapped[str] = mapped_column(Text)  # a NudgeKind value
+    key: Mapped[str] = mapped_column(Text)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("app_clock_now()"))
+
+
+__all__ = [
+    "Agreement",
+    "CalendarFeed",
+    "DevTestClock",
+    "Engagement",
+    "EngagementAssignment",
+    "EngagementEndorsement",
+    "EngagementEvent",
+    "EngagementMessage",
+    "EngagementMessageAttachment",
+    "EngagementMessageRead",
+    "EngagementNote",
+    "EngagementNudge",
+    "EngagementRecommendation",
+    "Milestone",
+    "PaymentRecord",
+    "PriorKnowledgeDeclaration",
+    "Signature",
+    "message_attachment_key",
+]

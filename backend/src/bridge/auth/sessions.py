@@ -1,0 +1,116 @@
+"""Server-side sessions (docs/spec/08 Auth): the cookie carries a random token, the table only its SHA-256."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from uuid import UUID
+
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from bridge import clock
+from bridge.auth.crypto import new_token, token_hash
+from bridge.auth.models import Session, User
+from bridge.models.enums import UserStatus
+
+TOUCH_EVERY = timedelta(minutes=5)
+
+
+@dataclass(slots=True)
+class LiveSession:
+    token: str
+    row: Session
+    user: User
+    touched: bool = False  # last_seen_at moved; the dependency commits it
+
+
+async def create(
+    db: AsyncSession, user: User, *, ttl: timedelta, mfa_pending: bool, user_agent: str | None
+) -> LiveSession:
+    now = clock.utcnow()
+    token = new_token()
+    row = Session(
+        user_id=user.id,
+        token_hash=token_hash(token),
+        expires_at=now + ttl,
+        last_seen_at=now,
+        mfa_pending=mfa_pending,
+        mfa_verified_at=None,
+        user_agent=(user_agent or "")[:200] or None,
+    )
+    db.add(row)
+    await db.flush()
+    return LiveSession(token, row, user)
+
+
+async def lookup(db: AsyncSession, token: str) -> LiveSession | None:
+    """The live session for a cookie token, or None (unknown, revoked, expired or suspended user)."""
+    now = clock.utcnow()
+    result = await db.execute(
+        select(Session, User)
+        .join(User, User.id == Session.user_id)
+        .where(Session.token_hash == token_hash(token), Session.revoked_at.is_(None), Session.expires_at > now)
+    )
+    found = result.first()
+    if found is None:
+        return None
+    row, user = found
+    if user.status != UserStatus.ACTIVE:
+        return None
+    touched = now - row.last_seen_at > TOUCH_EVERY
+    if touched:
+        row.last_seen_at = now
+    return LiveSession(token, row, user, touched)
+
+
+async def is_live(db: AsyncSession, session_id: UUID, *, user_id: UUID) -> bool:
+    """True when ``session_id`` (``sessions.id``) is a live, fully signed-in login session of ``user_id``: the rule of
+    ``lookup`` (not revoked, not expired, the user active) plus the second factor done (not ``mfa_pending``, as
+    ``current_session`` requires), by id instead of cookie token. The per-session Tier-2 consent asks it
+    (``bridge.llm.guard``); ``sessions`` and ``users`` have no RLS, so a session bound to any tenant reads the row."""
+    found = await db.execute(
+        select(Session.id)
+        .join(User, User.id == Session.user_id)
+        .where(
+            Session.id == session_id,
+            Session.user_id == user_id,
+            Session.revoked_at.is_(None),
+            Session.expires_at > clock.utcnow(),
+            Session.mfa_pending.is_(False),
+            User.status == UserStatus.ACTIVE,
+        )
+    )
+    return found.first() is not None
+
+
+async def revoke(db: AsyncSession, row: Session) -> None:
+    row.revoked_at = clock.utcnow()
+
+
+async def revoke_all(db: AsyncSession, user_id: object, *, except_id: object | None = None) -> None:
+    stmt = update(Session).where(Session.user_id == user_id, Session.revoked_at.is_(None))
+    if except_id is not None:
+        stmt = stmt.where(Session.id != except_id)
+    await db.execute(stmt.values(revoked_at=clock.utcnow()))
+
+
+async def revoke_beyond(db: AsyncSession, user_id: UUID, *, keep: int) -> None:
+    """Revoke ``user_id``'s live sessions beyond its ``keep`` newest (the public demo's cap per persona, REQ-FND-04:
+    a shared demo account must not gather sessions without bound). The caller flushed the newest first."""
+    now = clock.utcnow()
+    beyond = (
+        select(Session.id)
+        .where(Session.user_id == user_id, Session.revoked_at.is_(None), Session.expires_at > now)
+        .order_by(Session.created_at.desc(), Session.id.desc())
+        .offset(keep)
+    )
+    stmt = update(Session).where(Session.id.in_(beyond)).values(revoked_at=now)
+    await db.execute(stmt.execution_options(synchronize_session=False))
+
+
+def mfa_fresh(row: Session, max_age: timedelta, now: datetime | None = None) -> bool:
+    """True when the session completed MFA within ``max_age`` (the step-up rule, ADR-002: 12 h)."""
+    if row.mfa_verified_at is None:
+        return False
+    return (now or clock.utcnow()) - row.mfa_verified_at <= max_age

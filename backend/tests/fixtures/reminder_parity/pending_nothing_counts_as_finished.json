@@ -1,0 +1,34 @@
+{
+  "case": "nothing_counts_as_finished",
+  "description": "'nothing' finishes WhatsApp; a transient email failure is retried.",
+  "expected": {
+    "pending": [
+      "email"
+    ]
+  },
+  "input": {
+    "channels": [
+      "email",
+      "whatsapp"
+    ],
+    "day": {
+      "email": {
+        "at": "2026-09-21T08:00:00",
+        "attempts": 1,
+        "error": "timeout",
+        "status": "failed"
+      },
+      "whatsapp": {
+        "at": "2026-09-21T08:00:00",
+        "attempts": 1,
+        "ref": "nothing actionable",
+        "status": "nothing"
+      }
+    },
+    "dry_run": false,
+    "force": false,
+    "now": "2026-09-21T08:15:00",
+    "send_after_hour": 8
+  },
+  "kind": "pending"
+}

@@ -1,0 +1,80 @@
+// Response headers for the web app (next.config.ts headers()). The API sets its own (backend main.py).
+// HSTS and an enforced, nonce-based CSP come with the Caddy edge in Phase 8; until then the CSP only reports.
+
+/**
+ * Report-only baseline. Next.js inlines its bootstrap scripts (self.__next_f.push) and React sets style attributes,
+ * so script-src and style-src need 'unsafe-inline' until the nonce CSP; everything else is same-origin only.
+ * (frame-ancestors is ignored in a report-only policy; X-Frame-Options: DENY enforces it meanwhile.)
+ */
+export const CSP_REPORT_ONLY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
+export interface Header {
+  key: string;
+  value: string;
+}
+
+/** Sent with every response, build assets included: the browser must not guess another type than the declared one. */
+export const NOSNIFF: Header = { key: "X-Content-Type-Options", value: "nosniff" };
+
+/** The fonts under /fonts carry a version suffix in their names, so they can be cached for a year without revalidation. */
+export const FONT_CACHE: Header = { key: "Cache-Control", value: "public, max-age=31536000, immutable" };
+
+/**
+ * The service worker (public/sw.js, P27; D-69) is checked for a new version on every update check, never answered from
+ * the HTTP cache (Next serves public files `max-age=0` already; this says it outright). Its scope is "/", where it
+ * lives, so no Service-Worker-Allowed header is needed.
+ */
+export const WORKER_CACHE: Header = { key: "Cache-Control", value: "no-cache" };
+
+/**
+ * Headers that only mean something on a document: framing, referrers, device features and the CSP. They are not sent
+ * with the hashed build assets under /_next/static (scripts, CSS) or the fonts under /fonts, where they change nothing but add about
+ * 0.4 KB to every file a route downloads over HTTP/1.1 (docs/spec/07 item 5: the JS budget). A worker script takes
+ * its CSP from its own response, so a future service worker must be served from outside /_next/static.
+ */
+export const PAGE_HEADERS: ReadonlyArray<Header> = [
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Content-Security-Policy-Report-Only", value: CSP_REPORT_ONLY },
+];
+
+/**
+ * An organisation's invitation link (/invitations/{token}, REQ-TEN-02) carries its capability in the path: no referrer
+ * at all leaves those pages, not even the origin. A later rule than the page headers, so it wins (Next.js: the last
+ * header with the same key is the one sent). The page's <meta name="referrer"> says the same.
+ */
+export const NO_REFERRER: Header = { key: "Referrer-Policy", value: "no-referrer" };
+
+/**
+ * next.config.ts experimental.caseSensitiveRoutes. Next.js matches header, rewrite and redirect sources without
+ * regard to case by default, so the lookahead below would also exempt "/_NEXT/static/x.js", an HTML 404 page, from
+ * the page headers (framable). Build assets are served only at their exact-case paths, so exact-case matching loses
+ * nothing; it also stops "/API/..." from reaching the API through the /api rewrite (the API's paths are lower case).
+ */
+export const CASE_SENSITIVE_ROUTES = true;
+
+/** The rules next.config.ts headers() returns (path-to-regexp sources, as Next.js matches them). */
+export const HEADER_RULES: ReadonlyArray<{ source: string; headers: Header[] }> = [
+  { source: "/:path*", headers: [NOSNIFF] },
+  // The self-hosted fonts (public/fonts, versioned file names): cached like the hashed build assets, so a returning
+  // visitor's headline never waits for a revalidation round trip.
+  { source: "/fonts/:file([^/]+-v\\d+\\.woff2)", headers: [FONT_CACHE] },
+  // The service worker, exactly (a query such as its ?v= build stamp is not part of the match).
+  { source: "/sw.js", headers: [WORKER_CACHE] },
+  // Every path except /_next/static/… and the versioned font files (a /fonts/… 404 is a document too): a negative
+  // lookahead, as in the Next.js middleware matcher examples.
+  { source: "/((?!_next/static/|fonts/[^/]+-v\\d+\\.woff2$).*)", headers: [...PAGE_HEADERS] },
+  { source: "/invitations/:token", headers: [NO_REFERRER] },
+];

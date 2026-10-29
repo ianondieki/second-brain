@@ -1,0 +1,22 @@
+{
+  "case": "used_missing",
+  "description": "A note without 'used' prints None, as the companion does.",
+  "expected": {
+    "lines": [
+      "On 2026-09-21, the WhatsApp reminder went out in the older layout, **\"None\"**, because the newer one, **\"project_checkin_v2\"**, could not be used: it exists in the language en_US, but WA_TEMPLATE_LANG in .env says en. To check it, run `python -m reminder --whatsapp-template-status` in the second-brain folder."
+    ]
+  },
+  "input": {
+    "state": {
+      "template_note": {
+        "kind": "language",
+        "last": "2026-09-21",
+        "since": "2026-09-21",
+        "template": "project_checkin_v2",
+        "why": "it exists in the language en_US, but WA_TEMPLATE_LANG in .env says en"
+      }
+    },
+    "today": "2026-09-21"
+  },
+  "kind": "notices"
+}

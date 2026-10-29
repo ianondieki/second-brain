@@ -1,0 +1,189 @@
+"""REQ-ENG-01, REQ-BD-01: ``backend/config/policy.yaml`` holds every tracker deadline, and loading it fails closed.
+REQ-ENG-06: a public entity's procurement route (3b) is due in 10 business days, escalated at 5, and never expires."""
+
+from __future__ import annotations
+
+import copy
+from typing import Any
+
+import pytest
+import yaml
+
+from bridge.engagements import policy as p
+from bridge.models.enums import EngagementState
+
+
+def raw() -> dict[str, Any]:
+    data: dict[str, Any] = yaml.safe_load(p.POLICY_FILE.read_text(encoding="utf-8"))
+    return data
+
+
+def test_the_shipped_policy_has_the_spec_deadlines() -> None:
+    """docs/spec/06 6.9 "Due rule": stage by stage, in business days."""
+    policy = p.get_policy()
+    assert p.get_policy() is policy  # read once
+    due = {state: policy.stage(state).due_bd for state in p.STAGE_KEYS}
+    assert due == {
+        EngagementState.ORG_INTEREST: 5,
+        EngagementState.SUBMITTED: 10,
+        EngagementState.UNDER_REVIEW: 15,
+        EngagementState.PROCUREMENT_ROUTE: 10,
+        EngagementState.INTEREST_CONFIRMED: 5,
+        EngagementState.CONTACT_MADE: 5,
+        EngagementState.NDA_PENDING: 5,
+        EngagementState.NDA_SIGNED: 10,
+        EngagementState.NEGOTIATION: 7,
+        EngagementState.AGREEMENT_SIGNING: 5,
+        EngagementState.IN_IMPLEMENTATION: None,
+        EngagementState.DELIVERED: 10,
+        EngagementState.SIGN_OFF: 5,
+        EngagementState.PAYMENT_FINAL: 5,
+    }
+    assert policy.stage(EngagementState.SUBMITTED).expire_bd == 20
+    assert policy.stage(EngagementState.UNDER_REVIEW).expire_bd == 30
+    confirmed = policy.stage(EngagementState.INTEREST_CONFIRMED)
+    assert (confirmed.escalate_bd, confirmed.expire_bd) == (3, 10)
+    assert policy.stage(EngagementState.ORG_INTEREST).expire_bd == 5
+    assert policy.stage(EngagementState.NDA_PENDING).remind_bd == (2, 4)
+    # docs/spec/06 6.9 stage 3b: "<=10 BD", no expiry; P28 track B escalates it at +5 BD of its 10.
+    procurement = policy.stage(EngagementState.PROCUREMENT_ROUTE)
+    assert (procurement.due_bd, procurement.escalate_bd, procurement.expire_bd) == (10, 5, None)
+    assert (policy.milestone_reminder_bd, policy.milestone_escalation_bd) == (3, 5)
+    assert policy.stage(EngagementState.CLOSED) == p.StagePolicy()
+    # REQ-ENG-10: a hold resumes at most 60 days ahead; only the four expiring stages carry expire_bd.
+    assert policy.on_hold_max_days == 60
+    assert policy.hold_days_total == 60  # all holds of one engagement together
+    assert (policy.holds_per_stage, policy.side_actions_per_hour) == (2, 10)
+    assert (policy.info_requests_per_stage, policy.info_expire_bd) == (2, 10)
+    expiring = {state for state in p.STAGE_KEYS if policy.stage(state).expire_bd is not None}
+    assert expiring == set(p.EXPIRING_STAGES)
+    assert policy.contact_by_max_bd == 5
+    assert policy.decline_other_min_chars == 20
+    assert policy.deemed_acceptance_days_max == 90
+
+
+def _broken(change: str) -> dict[str, Any]:
+    data = copy.deepcopy(raw())
+    if change == "version":
+        data["version"] = 2
+    elif change == "stage_missing":
+        del data["stages"]["SUBMITTED"]
+    elif change == "stage_not_mapping":
+        data["stages"]["SUBMITTED"] = 10
+    elif change == "stage_unknown_key":
+        data["stages"]["SUBMITTED"]["due_days"] = 3
+    elif change == "stage_zero":
+        data["stages"]["SUBMITTED"]["due_bd"] = 0
+    elif change == "stage_bool":
+        data["stages"]["SUBMITTED"]["due_bd"] = True
+    elif change == "stage_text":
+        data["stages"]["SUBMITTED"]["due_bd"] = "10"
+    elif change == "remind_not_list":
+        data["stages"]["NDA_PENDING"]["remind_bd"] = 2
+    elif change == "remind_bad":
+        data["stages"]["NDA_PENDING"]["remind_bd"] = [2, 99]
+    elif change == "due_missing":
+        del data["stages"]["NEGOTIATION"]["due_bd"]
+    elif change == "section_missing":
+        del data["decline"]
+    elif change == "section_keys":
+        data["contact"]["extra"] = 1
+    elif change == "window":
+        data["milestones"]["review_window_bd_default"] = 61
+    elif change == "window_order":
+        data["milestones"]["review_window_bd_default"] = 30
+        data["milestones"]["review_window_bd_max"] = 20
+    elif change == "decline_order":
+        data["decline"]["other_min_chars"] = 200
+        data["decline"]["other_max_chars"] = 100
+    elif change == "deemed":
+        data["agreement"]["deemed_acceptance_days_max"] = 91
+    elif change == "on_hold_missing":
+        del data["on_hold"]
+    elif change == "on_hold_keys":
+        data["on_hold"]["max_weeks"] = 8
+    elif change == "on_hold_too_long":
+        data["on_hold"]["max_days"] = 61
+    elif change == "expire_missing":
+        del data["stages"]["UNDER_REVIEW"]["expire_bd"]
+    elif change == "expire_stray":
+        data["stages"]["NEGOTIATION"]["expire_bd"] = 14
+    elif change == "expire_before_due":
+        data["stages"]["SUBMITTED"]["expire_bd"] = 9
+    elif change == "hold_total_zero":
+        data["on_hold"]["hold_days_total"] = 0
+    elif change == "info_missing":
+        del data["info_requested"]
+    elif change == "info_keys":
+        data["info_requested"]["answer_bd"] = 10
+    elif change == "info_requests_zero":
+        data["info_requested"]["info_requests_per_stage"] = 0
+    elif change == "info_expire_long":
+        data["info_requested"]["expire_bd"] = 61
+    elif change == "holds_zero":
+        data["on_hold"]["holds_per_stage"] = 0
+    elif change == "side_missing":
+        del data["side_states"]
+    elif change == "side_keys":
+        data["side_states"]["actions_per_day"] = 50
+    elif change == "side_zero":
+        data["side_states"]["actions_per_hour"] = 0
+    elif change == "procurement_missing":
+        del data["stages"]["PROCUREMENT_ROUTE"]
+    elif change == "procurement_expires":
+        data["stages"]["PROCUREMENT_ROUTE"]["expire_bd"] = 10
+    elif change == "escalate_after_due":
+        data["stages"]["PROCUREMENT_ROUTE"]["escalate_bd"] = 11
+    elif change == "remind_after_due":
+        data["stages"]["NDA_PENDING"]["remind_bd"] = [2, 6]
+    return data
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "version",
+        "stage_missing",
+        "stage_not_mapping",
+        "stage_unknown_key",
+        "stage_zero",
+        "stage_bool",
+        "stage_text",
+        "remind_not_list",
+        "remind_bad",
+        "due_missing",
+        "section_missing",
+        "section_keys",
+        "window",
+        "window_order",
+        "decline_order",
+        "deemed",
+        "on_hold_missing",
+        "on_hold_keys",
+        "on_hold_too_long",
+        "expire_missing",
+        "expire_stray",
+        "expire_before_due",
+        "hold_total_zero",
+        "info_missing",
+        "info_keys",
+        "info_requests_zero",
+        "info_expire_long",
+        "holds_zero",
+        "side_missing",
+        "side_keys",
+        "side_zero",
+        "procurement_missing",
+        "procurement_expires",
+        "escalate_after_due",
+        "remind_after_due",
+    ],
+)
+def test_a_broken_policy_is_refused(change: str) -> None:
+    with pytest.raises(p.PolicyError):
+        p.parse_policy(_broken(change))
+
+
+def test_a_policy_that_is_not_a_mapping_is_refused() -> None:
+    with pytest.raises(p.PolicyError):
+        p.parse_policy(["version", 1])

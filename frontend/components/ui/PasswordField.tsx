@@ -1,0 +1,55 @@
+"use client";
+
+import { useStrings } from "../ClientStrings";
+import { useState, type InputHTMLAttributes, type ReactNode } from "react";
+
+import { cn } from "./cn";
+import { controlClass, Field } from "./Field";
+import { EyeIcon, EyeOffIcon } from "./icons";
+
+export interface PasswordFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "type"> {
+  id: string;
+  label: ReactNode;
+  hint?: ReactNode;
+  error?: ReactNode;
+}
+
+/**
+ * Password input with a show/hide toggle (a real button, 44 px target, name contains its visible text). The toggle's
+ * words are the `fields` messages as server-formatted strings (components/ClientStrings), which every page with a
+ * password field provides: no next-intl client runtime for them (the /settings/security JS budget, P16-D).
+ */
+export function PasswordField({ id, label, hint, error, className, ...rest }: PasswordFieldProps) {
+  const t = useStrings("fields");
+  const [visible, setVisible] = useState(false);
+  return (
+    <Field id={id} label={label} hint={hint} error={error}>
+      {(control) => (
+        <div className="relative">
+          <input
+            type={visible ? "text" : "password"}
+            className={cn(controlClass, "pr-24", className)}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            {...control}
+            {...rest}
+          />
+          <button
+            type="button"
+            aria-controls={id}
+            aria-label={t(visible ? "hidePasswordName" : "showPasswordName")}
+            onClick={() => setVisible((v) => !v)}
+            className={
+              "absolute inset-y-0.5 right-0.5 inline-flex min-w-11 items-center gap-1.5 rounded-[8px] px-3 " +
+              "text-sm font-semibold text-accent hover:bg-accent-wash"
+            }
+          >
+            {visible ? <EyeOffIcon className="size-5" /> : <EyeIcon className="size-5" />}
+            <span>{t(visible ? "hidePassword" : "showPassword")}</span>
+          </button>
+        </div>
+      )}
+    </Field>
+  );
+}

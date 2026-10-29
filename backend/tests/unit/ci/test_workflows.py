@@ -1,0 +1,263 @@
+"""Workflow lint for AC-SEC-4 and AC-SEC-5 (REQ-FND-03), over every file in .github/workflows/.
+
+AC-SEC-4: gitleaks, pip-audit, npm audit, Trivy and CodeQL run on every PR and block on high/critical.
+AC-SEC-5: no path in pr.yml, main.yml (Phase 8) or make check performs a real network call to an LLM, email,
+WhatsApp or payment provider; only nightly.yml's evals job may reach api.anthropic.com. The network side is enforced
+by infra/ci/egress-lock.sh (probed in CI) and tests/egress.py; this file checks the workflow definitions.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml
+
+REPO = Path(__file__).resolve().parents[4]
+WORKFLOWS = REPO / ".github" / "workflows"
+PROVIDER_HOSTS = (
+    "api.anthropic.com",
+    "api.postmarkapp.com",
+    "graph.facebook.com",
+    "safaricom.co.ke",
+    "api.paystack.co",
+    "africastalking.com",
+    "api.groq.com",
+    "smtp.gmail.com",
+)
+PROVIDER_SECRETS = re.compile(r"secrets\.(ANTHROPIC|POSTMARK|WA_|WHATSAPP|DARAJA|MPESA|PAYSTACK|GROQ|SMS)", re.I)
+PR_TRIGGERS = {"pull_request", "push"}
+
+
+def load(name: str) -> dict[str, Any]:
+    raw: dict[Any, Any] = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+    # YAML 1.1 reads the key `on` as True.
+    return {("on" if key is True else str(key)): value for key, value in raw.items()}
+
+
+def workflow_files() -> list[str]:
+    return sorted(p.name for p in WORKFLOWS.glob("*.yml"))
+
+
+def steps_text(job: dict[str, Any]) -> str:
+    return "\n".join(str(step.get("run", "")) + " " + str(step.get("uses", "")) for step in job.get("steps", []))
+
+
+def runs_on_pr(name: str) -> bool:
+    return bool(PR_TRIGGERS & set(load(name)["on"]))
+
+
+# ---------------------------------------------------------------- AC-SEC-4
+
+
+SCANNERS = {
+    "gitleaks": ("pr.yml", "scanners", r"gitleaks.*--exit-code 1"),
+    "pip-audit": ("pr.yml", "scanners", r"pip-audit --strict"),
+    "npm audit": ("pr.yml", "scanners", r"npm audit --audit-level=high"),
+    "osv-scanner": ("pr.yml", "scanners", r"osv-scanner"),
+    "Trivy": ("pr.yml", "scanners", r"trivy.*--severity HIGH,CRITICAL --exit-code 1"),
+    "CodeQL": ("codeql.yml", "analyze", r"sarif_gate\.py sarif-results 7\.0"),
+}
+
+
+@pytest.mark.parametrize("scanner", sorted(SCANNERS))
+def test_scanner_runs_on_every_pr_and_blocks(scanner: str) -> None:
+    filename, job_id, pattern = SCANNERS[scanner]
+    workflow = load(filename)
+    assert runs_on_pr(filename), f"{filename} must run on pull_request and push"
+    job = workflow["jobs"][job_id]
+    assert re.search(pattern, steps_text(job), re.S), f"{scanner} step missing or not blocking in {filename}"
+    assert job.get("continue-on-error", False) is False
+    for step in job["steps"]:
+        assert step.get("continue-on-error", False) is False, f"{scanner}: a step may not continue on error"
+
+
+def test_codeql_covers_python_and_typescript() -> None:
+    languages = load("codeql.yml")["jobs"]["analyze"]["strategy"]["matrix"]["language"]
+    assert set(languages) == {"python", "javascript-typescript"}
+
+
+def test_sarif_gate_blocks_high_and_passes_low(tmp_path: Path) -> None:
+    import json
+    import subprocess
+    import sys
+
+    def sarif(score: str) -> str:
+        rule = {"id": "py/x", "properties": {"security-severity": score}}
+        result = {"ruleId": "py/x", "locations": [{"physicalLocation": {"artifactLocation": {"uri": "a.py"}}}]}
+        return json.dumps({"runs": [{"tool": {"driver": {"rules": [rule]}}, "results": [result]}]})
+
+    gate = REPO / "infra" / "ci" / "sarif_gate.py"
+    (tmp_path / "high.sarif").write_text(sarif("8.1"), encoding="utf-8")
+    high = subprocess.run([sys.executable, str(gate), str(tmp_path / "high.sarif"), "7.0"], capture_output=True)
+    (tmp_path / "low.sarif").write_text(sarif("4.0"), encoding="utf-8")
+    low = subprocess.run([sys.executable, str(gate), str(tmp_path / "low.sarif"), "7.0"], capture_output=True)
+    assert (high.returncode, low.returncode) == (1, 0)
+
+
+def test_sarif_gate_resolves_rule_indexes_and_fails_closed(tmp_path: Path) -> None:
+    import json
+    import subprocess
+    import sys
+
+    rules = [{"id": "py/low", "properties": {"security-severity": "3.0"}}]
+    extension = {"rules": [{"id": "py/high", "properties": {"security-severity": "9.1"}}]}
+    by_index: dict[str, object] = {"rule": {"index": 0, "toolComponent": {"index": 0}}, "locations": [{}]}
+    unresolved: dict[str, object] = {"locations": [{}]}
+    gate = REPO / "infra" / "ci" / "sarif_gate.py"
+    outcomes: list[int] = []
+    for result in (by_index, unresolved, {"ruleId": "py/low", "locations": [{}]}):
+        run = {"tool": {"driver": {"rules": rules}, "extensions": [extension]}, "results": [result]}
+        path = tmp_path / f"r{len(outcomes)}.sarif"
+        path.write_text(json.dumps({"runs": [run]}), encoding="utf-8")
+        outcomes.append(subprocess.run([sys.executable, str(gate), str(path), "7.0"], capture_output=True).returncode)
+    assert outcomes == [1, 1, 0]  # extension rule by index blocks; an unresolvable result blocks; a low one passes
+
+
+# ---------------------------------------------------------------- AC-SEC-5
+
+
+@pytest.mark.parametrize("name", workflow_files())
+def test_only_nightly_evals_may_name_a_provider(name: str) -> None:
+    text = (WORKFLOWS / name).read_text(encoding="utf-8")
+    if name == "nightly.yml":
+        workflow = load(name)
+        for job_id, job in workflow["jobs"].items():
+            dumped = yaml.safe_dump(job)
+            hosts = [h for h in PROVIDER_HOSTS if h in dumped]
+            allowed = job_id == "evals" and hosts in ([], ["api.anthropic.com"])
+            assert allowed, f"nightly.yml job {job_id} names {hosts}"
+        return
+    assert [h for h in PROVIDER_HOSTS if h in text] == [], f"{name} names a provider host"
+    assert not PROVIDER_SECRETS.search(text), f"{name} reads a provider secret"
+
+
+@pytest.mark.parametrize("job_id", ["legacy", "backend", "frontend", "e2e", "demo-story"])
+def test_pr_test_jobs_run_inside_the_egress_lock(job_id: str) -> None:
+    job = load("pr.yml")["jobs"][job_id]
+    names = [str(step.get("run", "")) for step in job["steps"]]
+    lock = next(i for i, run in enumerate(names) if "infra/ci/egress-lock.sh" in run)
+    test_commands = ("make check", "run_legacy_tests.py", "playwright test")
+    tests = [i for i, run in enumerate(names) if any(command in run for command in test_commands)]
+    assert tests, f"{job_id} runs no test command"
+    assert all(i > lock for i in tests), f"{job_id} runs tests before the egress lock"
+    assert all("infra/ci/sandboxed.sh" in names[i] for i in tests), f"{job_id} runs tests outside the sandbox user"
+
+
+def test_demo_story_job_is_the_e2e_setup_then_the_walkthrough_without_touching_committed_screenshots() -> None:
+    """P16-E3: the demo walkthrough as a PR check, in parallel with e2e, on its own stack set up exactly as e2e's."""
+    jobs = load("pr.yml")["jobs"]
+    e2e, demo = jobs["e2e"], jobs["demo-story"]
+    assert "needs" not in demo, "demo-story runs in parallel with e2e (no added wall time)"
+    assert demo["runs-on"] == e2e["runs-on"]
+    assert demo["timeout-minutes"] <= e2e["timeout-minutes"]
+    assert demo.get("continue-on-error", False) is False
+    assert all(step.get("continue-on-error", False) is False for step in demo["steps"])
+    seed = next(i for i, step in enumerate(e2e["steps"]) if "bridge.seed --demo" in str(step.get("run", ""))) + 1
+    assert demo["steps"][:seed] == e2e["steps"][:seed], "the set-up is the e2e job's, step for step, to the seed"
+    walkthrough = [step for step in demo["steps"] if "demo/walkthrough.config.ts" in str(step.get("run", ""))]
+    assert len(walkthrough) == 1
+    assert demo["steps"].index(walkthrough[0]) >= seed
+    step = walkthrough[0]
+    assert str(step["run"]).startswith("../infra/ci/sandboxed.sh ")
+    assert step["working-directory"] == "frontend"
+    assert step["env"]["WALKTHROUGH_RUN_DEMO_CMDS"] == "1"
+    # The clock and reminders commands target the stack this job started, not make demo's project.
+    stack = next(str(s["run"]) for s in demo["steps"] if " up -d --build --wait" in str(s.get("run", "")))
+    assert f"docker compose {step['env']['WALKTHROUGH_COMPOSE']} up" in stack
+    assert "docs/demo/screenshots" not in yaml.safe_dump(demo), "CI never writes the committed screenshots"
+    upload = next(s for s in demo["steps"] if str(s.get("uses", "")).startswith("actions/upload-artifact@"))
+    assert upload["if"] == "failure()"
+    assert "frontend/playwright-report/walkthrough" in upload["with"]["path"]
+
+
+def test_egress_probe_runs_in_pr() -> None:
+    assert "infra/ci/egress_probe.py" in steps_text(load("pr.yml")["jobs"]["backend"])
+
+
+def test_egress_lock_rejects_everything_but_private_networks() -> None:
+    script = (REPO / "infra" / "ci" / "egress-lock.sh").read_text(encoding="utf-8")
+    assert "--uid-owner" in script
+    assert re.search(r"-m owner --uid-owner \"\$user_name\" -j REJECT", script)
+    assert "DOCKER-USER" in script
+
+
+def test_nightly_live_evals_are_off_until_d18_changes() -> None:
+    evals = load("nightly.yml")["jobs"]["evals"]
+    assert evals["if"] == "vars.LIVE_EVALS_ENABLED == 'true'"
+
+
+# ---------------------------------------------------------------- the public demo (REQ-FND-04, P28 track PD)
+
+
+def permission_blocks(workflow: dict[str, Any]) -> list[Any]:
+    """The workflow's own permissions and every job's (a mapping, or a string such as write-all)."""
+    return [workflow.get("permissions"), *(job.get("permissions") for job in workflow["jobs"].values())]
+
+
+def writes_packages(block: Any) -> bool:
+    return block == "write-all" or (isinstance(block, dict) and block.get("packages") == "write")
+
+
+def test_only_the_demo_image_workflow_may_write_packages() -> None:
+    writers = [name for name in workflow_files() if any(writes_packages(b) for b in permission_blocks(load(name)))]
+    assert writers == ["demo-image.yml"]
+
+
+def test_the_demo_image_is_never_built_for_a_pull_request() -> None:
+    triggers = load("demo-image.yml")["on"]
+    assert set(triggers) == {"workflow_dispatch", "push"}
+    assert not {"pull_request", "pull_request_target"} & set(triggers)
+    assert triggers["push"]["branches"] == ["claude/eloquent-hypatia-aa3577"]
+
+
+def test_a_push_never_cancels_a_manual_demo_image_run() -> None:
+    concurrency = load("demo-image.yml")["concurrency"]
+    assert "github.event_name" in concurrency["group"]
+    assert "inputs.arm64" in concurrency["group"]
+    assert concurrency["cancel-in-progress"] == "${{ github.event_name == 'push' }}"
+
+
+def test_the_demo_space_workflow_is_manual_and_gated_on_its_settings() -> None:
+    workflow = load("demo-space.yml")
+    assert set(workflow["on"]) == {"workflow_dispatch"}
+    steps = workflow["jobs"]["space"]["steps"]
+    check = steps[0]
+    assert check["id"] == "settings"
+    # The check sees only whether the token exists, never the token.
+    assert check["env"] == {"HAS_TOKEN": "${{ secrets.HF_TOKEN != '' }}", "HF_SPACE": "${{ vars.HF_SPACE }}"}
+    assert [step.get("if") for step in steps[1:]] == ["steps.settings.outputs.ready == 'true'"] * (len(steps) - 1)
+
+
+BASH = shutil.which("bash")
+
+
+@pytest.mark.skipif(sys.platform == "win32" or BASH is None, reason="runs the step's bash script")
+@pytest.mark.parametrize(
+    ("has_token", "space", "ready"),
+    [
+        ("false", "", "false"),
+        ("true", "", "false"),
+        ("false", "owner/bridge-demo", "false"),
+        ("true", "owner/bridge-demo", "true"),
+    ],
+)
+def test_the_demo_space_settings_step_skips_without_hf_token_or_hf_space(
+    tmp_path: Path, has_token: str, space: str, ready: str
+) -> None:
+    script = load("demo-space.yml")["jobs"]["space"]["steps"][0]["run"]
+    output, summary = tmp_path / "output", tmp_path / "summary"
+    env = {"PATH": os.environ["PATH"], "HAS_TOKEN": has_token, "HF_SPACE": space}
+    env |= {"GITHUB_OUTPUT": str(output), "GITHUB_STEP_SUMMARY": str(summary)}
+    # GitHub's own shell for `run:` steps; the step must succeed (exit 0) whether it skips or not.
+    assert BASH is not None
+    subprocess.run([BASH, "--noprofile", "--norc", "-eo", "pipefail", "-c", script], env=env, check=True)
+    assert output.read_text(encoding="utf-8").strip() == f"ready={ready}"
+    skipped = summary.exists() and "skipped" in summary.read_text(encoding="utf-8")
+    assert skipped == (ready == "false")

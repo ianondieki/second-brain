@@ -1,0 +1,2191 @@
+@import "tailwindcss";
+@import "./portal.css";
+
+/*
+ * The self-hosted faces (public/fonts/LICENCES.md; D-55), declared here rather than through next/font so the two that
+ * paint above the fold can be preloaded at high priority from app/layout.tsx. Each has a size-adjusted local fallback
+ * (metrics computed from the files against Arial), so the swap moves nothing.
+ */
+/* Bricolage Grotesque (the wordmark and the figures) and IBM Plex Mono (the eyebrows) are declared after the first
+   paint by lib/fonts.ts (app/layout.tsx; P25): here they would be fetched at the first layout, ahead of the LCP. */
+@font-face {
+  font-family: "Bricolage Grotesque Fallback";
+  src: local(Arial);
+  ascent-override: 91.88%;
+  descent-override: 26.67%;
+  line-gap-override: 0%;
+  size-adjust: 101.22%;
+}
+/* IBM Plex Mono's fallback (P25): Courier New or a metric-compatible clone (Liberation Mono, Cousine), sized to Plex
+   Mono (advance 600/1000 both; Plex ascent 1025, descent 275, measured in Chromium), so the eyebrows do not move when
+   the face swaps in after the first paint. */
+@font-face {
+  font-family: "IBM Plex Mono Fallback";
+  src: local("Courier New"), local("Liberation Mono"), local(Cousine);
+  ascent-override: 102.52%;
+  descent-override: 27.51%;
+  line-gap-override: 0%;
+  size-adjust: 99.98%;
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  src: url("/fonts/hanken-grotesk-v1.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 400 700;
+}
+@font-face {
+  font-family: "Hanken Grotesk Fallback";
+  src: local(Arial);
+  ascent-override: 100.88%;
+  descent-override: 30.57%;
+  line-gap-override: 0%;
+  size-adjust: 99.12%;
+}
+/* Fraunces (D-66, P24): the serif display face for page and section titles, upright and italic (the hero's one accent
+   phrase). Instanced with fontTools (SOFT and WONK pinned at 0) to what the pages set: the upright to opsz 24–72 (no
+   title is larger than 72 px) and wght 500–700, with kerning and ligatures, in two files by
+   unicode-range: Basic Latin and punctuation (37 KB, preloaded) and Latin-1 with Latin Extended-A (43 KB, fetched only
+   where a title needs it); the italic to opsz 40–72
+   at wght 500, lower-case letters and punctuation only (9 KB: it sets the hero's phrase and nothing else). Every font the first screen uses is fetched before the landing's
+   LCP, so their bytes are the LCP budget. The fallback is Times New Roman sized to it. */
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-v1.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500 700;
+  font-style: normal;
+  unicode-range: U+0020-007E, U+2013-2014, U+2018-201A, U+201C-201E, U+2022, U+2026, U+2039-203A, U+20AC, U+2122;
+}
+/* The rest of Latin-1 and Latin Extended-A (Wanjirũ, Zoé) in their own file, fetched only by a page that sets one. */
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-ext-v1.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500 700;
+  font-style: normal;
+  unicode-range: U+00A0-017F;
+}
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-italic-v1.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 500;
+  font-style: italic;
+}
+@font-face {
+  font-family: "Fraunces Fallback";
+  src: local("Times New Roman");
+  ascent-override: 84.88%;
+  descent-override: 22.13%;
+  line-gap-override: 0%;
+  size-adjust: 115.22%;
+}
+
+/*
+ * Design tokens (docs/platform/design/p20-design-system.md; D-55): "Jacaranda". Bloom violet is the accent, saffron
+ * (from the kanga) the warm second, night the deep violet of the landing's bands. Token names are the P18 ones, so
+ * every component reads the new world unchanged. P24 (D-66) warms the light canvas to paper. Light values live on :root; dark ones on html[data-theme="dark"]
+ * and, for a system preference with no choice made, under prefers-color-scheme. Contrast ratios are against --paper.
+ */
+:root {
+  --paper: #f7f4ed; /* the canvas: paper, warm (D-66; was a cool violet white) */
+  --field: #ffffff; /* inputs, cards, sheets */
+  --ink: #1b1730; /* text and icons: a violet ink, 15.8:1 */
+  --ink-soft: #5e5873; /* secondary text and input borders, 6.1:1 (6.7:1 on white) */
+  --line: #e5dfd2; /* hairlines and dividers, warmed with the paper (decorative; controls take ink-soft borders) */
+  --paper-deep: #efeadf; /* P25: the second neutral layer: nav hover, the Search pill, an empty calendar day */
+  /* P25: the activity calendar's sequential scale (one hue, bloom; dataviz --ordinal on the card: monotone lightness,
+     adjacent steps ≥ 0.06 apart, the light end 2.23:1 on white). heat-0 is a day with nothing. */
+  --heat-0: #eeeae2;
+  --heat-1: #b3a3f0;
+  --heat-2: #8b73e4;
+  --heat-3: #6447cc;
+  --heat-4: #3d2890;
+  --bezel: var(--ink); /* the drawn phone's frame (checkout) */
+  --accent: #5a3fc0; /* bloom: primary buttons, links, focus ring, current step, 6.6:1 (white on it 7.2:1) */
+  --accent-wash: #efebfc; /* petal: selected rows, the active nav item, info notices; bloom on it 6.2:1 */
+  --flourish: #f4b53f; /* saffron: "Your turn", the lattice's second tone, the night calls; ink on it 9.5:1, never text */
+  --warm: #8a5800; /* ochre: warm text on light (success notices, a warm badge's words), 5.5:1 */
+  --warm-wash: #fdf3dc; /* success notice background */
+  --on-warm: #1b1730; /* text on a saffron fill */
+  --ok: #12784a; /* leaf: success, always with an icon and words, 5.0:1 */
+  --error: #b3261e; /* errors, always with an icon and words, 6.0:1 */
+  --on-accent: #ffffff; /* text and icons on --accent (7.2:1) */
+  --on-ok: #ffffff; /* text and icons on --ok (5.4:1) */
+  /* Night: the landing's bands, the footer, the auth panel. The same in both modes (it reads as a band on either). */
+  --night: #1e1640;
+  --on-night: #eeeaf8; /* 14.3:1 on night */
+  --night-soft: #b9b0d9; /* secondary text on night, 8.3:1 */
+  --night-line: #3a2f66; /* hairlines and outlines on night */
+  /* Mixes of the colours above, named once; a component reads the token, never the mix. */
+  --accent-strong: color-mix(in oklab, var(--accent) 82%, var(--ink)); /* hover and pressed accent */
+  --wash-soft: color-mix(in oklab, var(--accent-wash) 55%, var(--paper)); /* nav hover, selected rows */
+  --error-wash: color-mix(in oklab, var(--error) 7%, var(--field)); /* error notice background, danger hover */
+  --ok-wash: color-mix(in oklab, var(--ok) 7%, var(--field)); /* success notice background */
+  --error-line: color-mix(in oklab, var(--error) 45%, var(--paper)); /* error notice border */
+  --ok-line: color-mix(in oklab, var(--ok) 45%, var(--paper)); /* success notice border */
+  --accent-line: color-mix(in oklab, var(--accent) 35%, var(--paper)); /* info notice border */
+  --warm-line: color-mix(in oklab, var(--warm) 40%, var(--paper)); /* success notice border */
+  --scrim: color-mix(in oklab, var(--night) 55%, transparent); /* the one dialog backdrop */
+  /* Elevation: cards sit flat on the canvas with a hairline; a raised card and the overlays carry a night-tinted
+     shadow with an offset and a soft blur. */
+  --shadow-card: 0 1px 2px rgb(30 22 64 / 0.06), 0 12px 32px -16px rgb(30 22 64 / 0.2);
+  --shadow-overlay: 0 24px 48px -20px rgb(30 22 64 / 0.34), 0 4px 10px -4px rgb(30 22 64 / 0.12);
+  --focus-ring: 2px solid var(--accent);
+  --focus-offset: 2px;
+  color-scheme: light;
+}
+
+/* A first-login tour the server rendered but this browser's storage remembers as done (the cookie had lapsed):
+   hidden before paint by the inline script in app/layout.tsx, so hydration removes it with nothing to shift. */
+html[data-tour-seen~="developer"] [data-tour-side="developer"],
+html[data-tour-seen~="org"] [data-tour-side="org"] {
+  display: none;
+}
+
+/* The same for a closed tracker's celebration this browser's storage remembers (components/tracker/celebration-store.ts):
+   the shell holds the card and its button, so neither is painted alone. */
+html[data-celebration-seen] [data-celebration-shell] {
+  display: none;
+}
+
+/* Dark mode: its own steps, not a flip; bloom and the status colours are lightened to keep AA on the dark canvas. */
+html[data-theme="dark"] {
+  --paper: #100c1d;
+  --field: #19142a;
+  --ink: #eeeaf8;
+  --ink-soft: #b5aecc;
+  --line: #2d2643;
+  --paper-deep: #231c3a;
+  --heat-0: #252040; /* dark: more is lighter; the light end 2.12:1 on the card (#19142a) */
+  --heat-1: #4e3d9e;
+  --heat-2: #6a55c8;
+  --heat-3: #9580f0;
+  --heat-4: #cbbfff;
+  --bezel: var(--line); /* the drawn phone's frame (checkout) */
+  --accent: #a996ff;
+  --accent-wash: #241c44;
+  --flourish: #f6c155;
+  --warm: #f6c155;
+  --warm-wash: #2b2213;
+  --on-warm: #100c1d;
+  --ok: #6fd3a0;
+  --error: #ff8a80;
+  --on-accent: #100c1d;
+  --on-ok: #100c1d;
+  --night: #1e1640;
+  --on-night: #eeeaf8;
+  --night-soft: #b9b0d9;
+  --night-line: #3a2f66;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 12px 32px -16px rgb(0 0 0 / 0.7);
+  --shadow-overlay: 0 24px 48px -20px rgb(0 0 0 / 0.8), 0 4px 10px -4px rgb(0 0 0 / 0.5);
+  --scrim: color-mix(in oklab, #000 62%, transparent); /* from black: the backdrop dims the dark page */
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) {
+    --paper: #100c1d;
+    --field: #19142a;
+    --ink: #eeeaf8;
+    --ink-soft: #b5aecc;
+    --line: #2d2643;
+    --paper-deep: #231c3a;
+    --heat-0: #252040; /* dark: more is lighter; the light end 2.12:1 on the card (#19142a) */
+    --heat-1: #4e3d9e;
+    --heat-2: #6a55c8;
+    --heat-3: #9580f0;
+    --heat-4: #cbbfff;
+    --bezel: var(--line); /* the drawn phone's frame (checkout) */
+    --accent: #a996ff;
+    --accent-wash: #241c44;
+    --flourish: #f6c155;
+    --warm: #f6c155;
+    --warm-wash: #2b2213;
+    --on-warm: #100c1d;
+    --ok: #6fd3a0;
+    --error: #ff8a80;
+    --on-accent: #100c1d;
+    --on-ok: #100c1d;
+    --night: #1e1640;
+    --on-night: #eeeaf8;
+    --night-soft: #b9b0d9;
+    --night-line: #3a2f66;
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5), 0 12px 32px -16px rgb(0 0 0 / 0.7);
+    --shadow-overlay: 0 24px 48px -20px rgb(0 0 0 / 0.8), 0 4px 10px -4px rgb(0 0 0 / 0.5);
+    --scrim: color-mix(in oklab, #000 62%, transparent);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-accent: var(--accent);
+  --color-accent-wash: var(--accent-wash);
+  --color-flourish: var(--flourish);
+  --color-warm: var(--warm);
+  --color-warm-wash: var(--warm-wash);
+  --color-warm-line: var(--warm-line);
+  --color-on-warm: var(--on-warm);
+  --color-line: var(--line);
+  --color-paper-deep: var(--paper-deep);
+  --color-bezel: var(--bezel);
+  --color-ok: var(--ok);
+  --color-error: var(--error);
+  --color-field: var(--field);
+  --color-on-accent: var(--on-accent);
+  --color-on-ok: var(--on-ok);
+  --color-night: var(--night);
+  --color-on-night: var(--on-night);
+  --color-night-soft: var(--night-soft);
+  --color-night-line: var(--night-line);
+  --color-accent-strong: var(--accent-strong);
+  --color-wash-soft: var(--wash-soft);
+  --color-error-wash: var(--error-wash);
+  --color-ok-wash: var(--ok-wash);
+  --color-error-line: var(--error-line);
+  --color-ok-line: var(--ok-line);
+  --color-accent-line: var(--accent-line);
+  --color-scrim: var(--scrim);
+  --shadow-card: var(--shadow-card);
+  --shadow-overlay: var(--shadow-overlay);
+}
+
+@theme {
+  /* Self-hosted faces (public/fonts/LICENCES.md; the @font-face rules at the top of this file). */
+  --font-sans: "Hanken Grotesk", "Hanken Grotesk Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* D-66 (P24): titles in Fraunces; Bricolage keeps the wordmark and the figures (font-figure). */
+  --font-display: "Fraunces", "Fraunces Fallback", Georgia, "Times New Roman", serif;
+  --font-figure: "Bricolage Grotesque", "Bricolage Grotesque Fallback", "Hanken Grotesk", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "IBM Plex Mono Fallback", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Radii: inputs; cards, sheets and panels. Buttons and chips are pills (rounded-full). */
+  --radius-control: 10px;
+  --radius-panel: 16px;
+
+  /* Motion: one timing for every control, slower for sheets and reveals; exponential ease-out, nothing bounces. */
+  --motion-fast: 180ms;
+  --motion-base: 260ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Type scale on a 16 px base (13 / 14 / 16 / 20 / 24 / 32 / 40 / 56 / 80): the display face sets xl and up. */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.6;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.45;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.2;
+  --text-2xl: 2rem;
+  --text-2xl--line-height: 1.12;
+  --text-3xl: 2.5rem;
+  --text-3xl--line-height: 1.06;
+  --text-4xl: 3.5rem;
+  --text-4xl--line-height: 1.02;
+  --text-5xl: 5rem;
+  --text-5xl--line-height: 0.98;
+}
+
+@layer base {
+  html {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* The parts the page does not draw still carry the palette: scrollbars, numerals that line up. */
+    scrollbar-color: color-mix(in oklab, var(--ink-soft) 55%, transparent) transparent;
+    font-variant-numeric: lining-nums;
+    -webkit-font-smoothing: antialiased;
+    /* A control that takes focus is scrolled fully into view with its focus ring, not flush with the edge. */
+    scroll-padding-block: 1.5rem;
+  }
+
+  /* Under 1024 px the developer tab bar is fixed to the bottom: focus scrolling keeps controls above it. */
+  @media (width < 64rem) {
+    html:has([data-tab-bar]) {
+      scroll-padding-block-end: calc(5rem + env(safe-area-inset-bottom));
+    }
+  }
+
+  /* A sticky action bar (the pitch picker's "Pitch") sits above the tab bar: focus scrolling clears both. */
+  html:has([data-action-bar]) {
+    scroll-padding-block-end: 7rem;
+  }
+  @media (width < 64rem) {
+    html:has([data-action-bar]) {
+      scroll-padding-block-end: calc(12rem + env(safe-area-inset-bottom));
+    }
+  }
+
+  body {
+    line-height: 1.6;
+  }
+
+  /* Titles in Fraunces (D-66): a true serif with optical sizes, so a 24 px section title and a 72 px headline each get
+     their own cut; set a little lighter and looser than the grotesque was. */
+  h1,
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 580;
+    letter-spacing: -0.012em;
+    font-optical-sizing: auto;
+    text-wrap: balance;
+  }
+
+  h1 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  /* Row and card titles wrap where they must, never balanced onto two short lines (the owner's nit on Home). */
+  h3 {
+    font-weight: 650;
+    letter-spacing: -0.008em;
+    text-wrap: pretty;
+  }
+
+  /* Controls answer at once, in one timing; reduced motion turns it off below. */
+  button,
+  a,
+  summary {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-timing-function: var(--ease-out);
+    transition-duration: var(--motion-fast);
+  }
+
+  button:active,
+  a[data-primary]:active {
+    transform: translateY(1px);
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  a {
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: 1px;
+  }
+
+  :focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
+  }
+
+  ::selection {
+    background: var(--accent-wash);
+    color: var(--ink);
+  }
+
+  /* Print: the page prints its content on white; the chrome and controls stay on screen. A sheet marked
+     data-print-sheet prints alone (the authorship certificate). */
+  @media print {
+    html {
+      background: #fff;
+      color: #000;
+    }
+    header,
+    nav,
+    [data-tab-bar],
+    [data-no-print],
+    button {
+      display: none !important;
+    }
+    html:has([data-print-sheet]) main > :not(:has([data-print-sheet])) {
+      display: none;
+    }
+    [data-print-sheet] {
+      box-shadow: none !important;
+      border: 1px solid #000 !important;
+      break-inside: avoid;
+    }
+  }
+
+  input,
+  select,
+  textarea {
+    caret-color: var(--accent);
+  }
+
+  input::placeholder {
+    color: var(--ink-soft);
+    opacity: 1;
+  }
+}
+
+/*
+ * A night band (the landing's hero text, proof and footer; the auth panel): the tokens are remapped inside it, so the
+ * kit's links, badges, inputs and the theme switch draw on the night violet without one-off styles. The mixes are
+ * declared again because a custom property's mix is computed where it is declared. AA on night: ink 14.3:1, ink-soft
+ * 8.3:1, accent #b7a6ff 8.0:1 (night text on it 8.0:1).
+ */
+.on-night {
+  --paper: var(--night);
+  --field: #2a2156;
+  --ink: var(--on-night);
+  --ink-soft: var(--night-soft);
+  --line: var(--night-line);
+  --accent: #b7a6ff;
+  --accent-wash: #30265e;
+  --on-accent: #1e1640;
+  --warm: #f6c155;
+  --warm-wash: #3a2e1a;
+  --ok: #7fdcac;
+  --error: #ff9a90;
+  --accent-strong: color-mix(in oklab, var(--accent) 82%, var(--ink));
+  --wash-soft: color-mix(in oklab, var(--accent-wash) 55%, var(--paper));
+  --error-wash: color-mix(in oklab, var(--error) 7%, var(--field));
+  --ok-wash: color-mix(in oklab, var(--ok) 7%, var(--field));
+  --error-line: color-mix(in oklab, var(--error) 45%, var(--paper));
+  --ok-line: color-mix(in oklab, var(--ok) 45%, var(--paper));
+  --accent-line: color-mix(in oklab, var(--accent) 35%, var(--paper));
+  --warm-line: color-mix(in oklab, var(--warm) 40%, var(--paper));
+  color: var(--ink);
+}
+
+/*
+ * Buttons (components/ui/Button.tsx): pills, one height (48 px; a label that wraps at 360 px keeps its padding and
+ * stays centred). The primary is the bloom fill with a hairline of light on its top edge; secondary is a white pill
+ * with a quiet edge; danger carries the error colour in words and edge, never a fill; link is a word with a line.
+ */
+@layer components {
+  .btn {
+    display: inline-flex;
+    min-height: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding-block: 0.5rem;
+    text-align: center;
+    font-size: var(--text-base);
+    line-height: 1.3;
+    font-weight: 650;
+    letter-spacing: -0.005em;
+    transition-property: color, background-color, border-color, box-shadow, transform;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-out);
+  }
+  .btn[aria-disabled="true"] {
+    cursor: progress;
+  }
+  .btn-primary {
+    width: 100%;
+    padding-inline: 1.5rem;
+    background: var(--accent);
+    color: var(--on-accent);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.18),
+      0 1px 2px rgb(30 22 64 / 0.18),
+      0 8px 20px -10px color-mix(in oklab, var(--accent) 70%, transparent);
+  }
+  @media (width >= 40rem) {
+    .btn-primary {
+      width: auto;
+    }
+  }
+  .btn-primary:hover,
+  .btn-primary[aria-disabled="true"] {
+    background: var(--accent-strong);
+  }
+  .btn-secondary {
+    padding-inline: 1.25rem;
+    border: 1px solid color-mix(in oklab, var(--ink-soft) 38%, var(--paper));
+    background: var(--field);
+    color: var(--ink);
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent-line);
+    background: var(--wash-soft);
+  }
+  .btn-danger {
+    padding-inline: 1.25rem;
+    border: 1px solid var(--error);
+    background: var(--field);
+    color: var(--error);
+  }
+  .btn-danger:hover {
+    background: var(--error-wash);
+  }
+  .btn-link {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    padding-inline: 0;
+    border-radius: 0;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+  .btn-link:hover {
+    color: var(--accent-strong);
+    text-decoration-thickness: 2px;
+  }
+  .btn-link[aria-disabled="true"] {
+    cursor: progress;
+    color: var(--ink-soft);
+    text-decoration-style: dotted;
+    text-decoration-thickness: 1px;
+  }
+  .btn-link[aria-disabled="true"]:hover {
+    color: var(--ink-soft);
+    text-decoration-thickness: 1px;
+  }
+}
+
+/*
+ * The kanga-cut lattice (the one East African mark, D-52, recoloured in D-55): a 6 px two-tone band of triangles,
+ * the kanga's border (pindo), drawn on [data-lattice] edges. Never behind text. Tones: bloom and saffron.
+ */
+@utility lattice-band {
+  height: 6px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%235A3FC0'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23F4B53F'/%3E%3C/svg%3E");
+  background-size: 24px 6px;
+  background-repeat: repeat-x;
+}
+html[data-theme="dark"] .lattice-band {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%23A996FF'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23F6C155'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) .lattice-band {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%23A996FF'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23F6C155'/%3E%3C/svg%3E");
+  }
+}
+
+/* Dialogs: a bottom sheet on phones rises once (components/ui/ConfirmDialog.tsx); reduced motion shows it in place. */
+@keyframes sheet-up {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+dialog[data-sheet][open] {
+  animation: sheet-up var(--motion-base) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog[data-sheet][open] {
+    animation: none;
+  }
+}
+
+/* The closed-engagement celebration (components/tracker/ClosedCelebration.tsx): twelve lattice-coloured dots fall
+   once; reduced motion leaves them resting along the top edge. */
+.confetti i {
+  position: absolute;
+  top: -8px;
+  display: block;
+  width: 6px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  animation: confetti-fall 1.8s var(--ease-out) forwards;
+}
+.confetti i:nth-child(3n) {
+  background: var(--flourish);
+}
+.confetti i:nth-child(3n + 1) {
+  background: var(--warm);
+  width: 5px;
+}
+@keyframes confetti-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(0) rotate(0deg);
+  }
+  15% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(240px) rotate(300deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti i {
+    top: 0;
+    opacity: 0.5;
+    animation: none;
+  }
+}
+
+/* The first-login tour rises into place once; reduced motion shows it in place. */
+@keyframes tour-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tour-enter {
+  animation: tour-enter var(--motion-base) var(--ease-out) both;
+}
+
+/*
+ * The first-login tour as a slide show (components/tour/FirstLoginTour.tsx, P23-2). The panel is raised (an overlay's
+ * shadow) and sits in the page's flow. Its head is the three steps' buttons, each a thin line that fills over the six
+ * seconds a step stays (the progress line), and Pause; every step shares one grid cell, so the panel keeps the height
+ * of its tallest step. A step slides in from the side it comes from while the last one leaves to the other side.
+ */
+.tour {
+  margin-bottom: 2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--field);
+  color: var(--ink);
+  padding: 0.5rem 1.25rem 1.25rem;
+  box-shadow: var(--shadow-overlay);
+}
+@media (width >= 40rem) {
+  .tour {
+    max-width: 48rem;
+    padding: 0.5rem 1.5rem 1.5rem;
+  }
+}
+.tour-head {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-inline-end: -0.75rem;
+}
+.tour-seg {
+  display: flex;
+  flex: 1;
+  min-height: 2.75rem;
+  align-items: center;
+  padding-inline: 0.25rem;
+  border-radius: 9999px;
+}
+.tour-seg i {
+  display: block;
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: var(--line);
+}
+.tour-seg i::after {
+  content: "";
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.tour-seg[data-done] i::after {
+  transform: none;
+}
+.tour-seg:hover i {
+  background: var(--accent-line);
+}
+.tour-seg[aria-current] i::after {
+  animation: tour-fill 6s linear both;
+}
+.tour[data-held] .tour-seg[aria-current] i::after {
+  animation-play-state: paused;
+}
+/* The last step and reduced motion: nothing advances, the line stands full to where the person is. */
+.tour-seg[aria-current]:has(+ .tour-pause.invisible) i::after,
+.tour-fade .tour-seg[aria-current] i::after {
+  animation: none;
+  transform: none;
+}
+@keyframes tour-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+.tour-pause {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: var(--ink-soft);
+}
+.tour-pause:hover,
+.tour-pause[aria-pressed="true"] {
+  background: var(--wash-soft);
+  color: var(--accent);
+}
+.tour-pause svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.tour-slides {
+  display: grid;
+  margin-top: 0.5rem;
+  overflow: hidden;
+  touch-action: pan-y;
+  --tour-from: 2.5rem;
+}
+.tour-slides[data-back] {
+  --tour-from: -2.5rem;
+}
+.tour-slide {
+  display: grid;
+  grid-area: 1 / 1;
+  align-content: start;
+  gap: 1.25rem;
+  visibility: hidden;
+}
+@media (width >= 40rem) {
+  .tour-slide {
+    grid-template-columns: 19rem minmax(0, 1fr);
+    align-items: center;
+    gap: 1.75rem;
+  }
+}
+.tour-slide[data-slide="on"],
+.tour-slide[data-slide="in"] {
+  visibility: visible;
+}
+.tour-slide[data-slide="in"] {
+  animation: tour-in 420ms var(--ease-out) both;
+}
+.tour-slide[data-slide="out"] {
+  animation: tour-out 420ms var(--ease-out) both;
+}
+@keyframes tour-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--tour-from));
+  }
+}
+@keyframes tour-out {
+  from {
+    visibility: visible;
+    opacity: 1;
+  }
+  to {
+    visibility: hidden;
+    opacity: 0;
+    transform: translateX(calc(var(--tour-from) * -1));
+  }
+}
+/* Reduced motion: a crossfade in place, nothing slides. */
+.tour-fade .tour-slide[data-slide="in"] {
+  animation-name: tour-fade-in;
+}
+.tour-fade .tour-slide[data-slide="out"] {
+  animation-name: tour-fade-out;
+}
+@keyframes tour-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes tour-fade-out {
+  from {
+    visibility: visible;
+    opacity: 1;
+  }
+  to {
+    visibility: hidden;
+    opacity: 0;
+  }
+}
+.tour-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+/* A scene (components/tour/TourScenes.tsx). The disc is the focal point: about 112 px, a 72 px icon, a soft petal light
+   behind it and a hairline ring around it, the saffron spark drawing in when the step arrives. The miniature lies over
+   the disc's far edge, turned a little, and only its lit part carries the night-tinted shadow. A slide that is not
+   showing holds its animations back, so they play when it arrives. The stage has a fixed height at every width. */
+.tour-stage {
+  position: relative;
+  height: 10rem;
+}
+/* The light: as tall as the stage and faded to nothing at its edge, so the slide's clip never shows. */
+.tour-stage::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(4.25rem - 5rem);
+  width: 10rem;
+  height: 100%;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--accent) 20%, transparent), transparent);
+  pointer-events: none;
+}
+.tour-disc {
+  position: absolute;
+  top: 50%;
+  left: 0.75rem;
+  display: flex;
+  width: 7rem;
+  height: 7rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  transform: translateY(-50%);
+}
+.tour-disc::before {
+  content: "";
+  position: absolute;
+  inset: -0.4375rem;
+  border: 1px solid color-mix(in oklab, var(--accent-line) 60%, transparent);
+  border-radius: inherit;
+}
+/* The spark over the icon's crown, as on the mark (components/brand/Logo.tsx). */
+.tour-spark {
+  position: absolute;
+  top: 0.4rem;
+  left: calc(50% - 0.5rem);
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  background: var(--flourish);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+  animation: tour-spark 400ms var(--ease-out) 160ms both;
+}
+@keyframes tour-spark {
+  from {
+    transform: scale(0);
+  }
+}
+.tour-mini {
+  position: absolute;
+  top: 50%;
+  right: 0.375rem;
+  left: 6.75rem;
+  transform: translateY(-50%) rotate(-2deg);
+}
+.tour-raise {
+  box-shadow: var(--shadow-overlay);
+}
+@media (width >= 40rem) {
+  .tour-stage {
+    height: 10.5rem;
+  }
+}
+.tour-slide:not([data-slide="on"], [data-slide="in"]) .tour-stage * {
+  animation-name: none !important;
+}
+/* The lit part answers once with a saffron ring that widens and fades (an outline, so a raised part keeps its shadow). */
+.tour-lit {
+  animation: tour-lit 1.1s var(--ease-out) 420ms backwards;
+}
+@keyframes tour-lit {
+  from {
+    outline: 2px solid color-mix(in oklab, var(--flourish) 80%, transparent);
+    outline-offset: 0;
+  }
+  to {
+    outline: 2px solid color-mix(in oklab, var(--flourish) 0%, transparent);
+    outline-offset: 10px;
+  }
+}
+.tour-arrive {
+  animation-name: tour-lit, tour-arrive;
+  animation-duration: 1.1s, 520ms;
+}
+@keyframes tour-arrive {
+  from {
+    transform: translateY(-0.75rem);
+  }
+}
+
+/* The seal on the certificate sheet draws its ring once; reduced motion shows it drawn. */
+@keyframes seal-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.seal-draw {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  animation: seal-draw 900ms var(--ease-out) 200ms both;
+}
+
+/* The landing hero's product visual: the real stepper at a card's width, its group names a size smaller. */
+[data-hero-visual] [data-stepper] p {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  hyphens: auto;
+}
+[data-hero-visual] [data-stepper] p + p {
+  font-size: 0.8125rem;
+}
+/* The one light behind the hero's product panel (D-55, D-66): a soft bloom light with a breath of saffron, on the
+   paper. A light, not a wash: it sits behind the panel only. */
+.hero-glow {
+  background:
+    radial-gradient(46% 50% at 60% 40%, rgb(123 96 255 / 0.2), transparent 72%),
+    radial-gradient(30% 32% at 28% 86%, rgb(244 181 63 / 0.14), transparent 70%);
+}
+
+/* The landing's one authored moment: the three product cards rise into place in sequence on load (each card sets
+   --rise-delay). A slide, not a fade: the cards are legible, and keep their contrast, from the first frame.
+   Reduced motion shows them in place. */
+@keyframes hero-rise {
+  from {
+    transform: translateY(18px);
+  }
+  to {
+    transform: none;
+  }
+}
+.hero-rise {
+  animation: hero-rise 720ms var(--ease-out) both;
+  animation-delay: var(--rise-delay, 0ms);
+}
+
+/*
+ * The hero's story (P23-2; components/landing/HeroComposition.tsx), one sequence of about 2.4 s, CSS only: the tracker
+ * and the certificate rise (0 ms), the scout match slides in from the side (500 ms), the tracker moves from Contact
+ * and NDA to Agreement (900 ms: the "before" layer is wiped off the real stepper in reading order, and the line
+ * between the two stages draws), "Your turn" lights with one saffron pulse (1.4 s), the seal draws its ring (1.5 s).
+ * Wipes and slides, never fades: every word keeps its contrast in every frame. Every rule's resting state is the end
+ * of the story, so reduced motion (and a browser without the animation) shows it in place.
+ */
+.hero-arrive {
+  animation: hero-arrive 700ms var(--ease-out) 500ms both;
+}
+@keyframes hero-arrive {
+  from {
+    transform: translateX(2.5rem);
+    clip-path: inset(-3rem -3rem -3rem 100%);
+  }
+  to {
+    clip-path: inset(-3rem);
+  }
+}
+.hero-chip {
+  justify-items: end;
+}
+.hero-chip > * {
+  grid-area: 1 / 1;
+}
+/* The "before" layer covers what lies under it (the card's own white), then is wiped away. */
+.hero-before {
+  --wipe-to: inset(-1rem -1rem -1rem 100%);
+  visibility: hidden;
+  animation: hero-wipe 600ms var(--ease-out) 900ms both;
+}
+.hero-before > *,
+.hero-before li {
+  background: var(--field);
+}
+.hero-before li:not([data-group="contact_nda"], [data-group="agreement"]) {
+  visibility: hidden;
+}
+/* One keyframe at every width (a viewport that crosses 1024 px never replays it): the wipe's end comes from
+   --wipe-to, across the stepper from 1024 px and down it below. */
+@keyframes hero-wipe {
+  from {
+    visibility: visible;
+    clip-path: inset(-1rem);
+  }
+  to {
+    visibility: hidden;
+    clip-path: var(--wipe-to);
+  }
+}
+.hero-steps > .hero-before {
+  --wipe-to: inset(100% -1rem -1rem -1rem);
+}
+@media (width >= 64rem) {
+  .hero-steps > .hero-before {
+    --wipe-to: inset(-1rem -1rem -1rem 100%);
+  }
+}
+/* The line from Contact and NDA to Agreement draws as the stage moves: down on phones, across from 1024 px (one
+   keyframe; the axis comes from --line-from). */
+.hero-steps > ol > li[data-group="contact_nda"] > span:first-child {
+  --line-from: scaleY(0);
+  transform-origin: top;
+  animation: hero-line 600ms var(--ease-out) 950ms both;
+}
+@media (width >= 64rem) {
+  .hero-steps > ol > li[data-group="contact_nda"] > span:first-child {
+    --line-from: scaleX(0);
+    transform-origin: left;
+  }
+}
+@keyframes hero-line {
+  from {
+    transform: var(--line-from);
+  }
+}
+.hero-turn {
+  animation: hero-turn 900ms var(--ease-out) 1400ms both;
+}
+@keyframes hero-turn {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--flourish) 75%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 14px color-mix(in oklab, var(--flourish) 0%, transparent);
+  }
+}
+[data-hero-visual] .seal-draw {
+  animation-delay: 1500ms;
+}
+
+/*
+ * How it works (P23-2): the three steps and the five stages reveal as they scroll into view, each a little after the
+ * one before (--i), and are fully opaque once wholly on screen, where the browser has scroll-driven animations;
+ * elsewhere, in print and under reduced motion, in place.
+ */
+@supports (animation-timeline: view()) {
+  @media screen and (prefers-reduced-motion: no-preference) {
+    /* It starts as the item's top edge meets the bottom of the screen (where the switch to transparent cannot be
+       seen) and is done by the time the item is wholly on screen, so nothing the reader can see rests faded. No
+       fill: outside that range the item is simply itself, so full-page captures and print show it whole. */
+    .reveal {
+      animation: reveal linear none;
+      /* An inset of 0: the view ignores the page's scroll padding, so the range ends exactly at wholly on screen. */
+      animation-timeline: view(block 0px);
+      animation-range: entry 0% entry calc(64% + var(--i, 0) * 9%);
+    }
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+}
+
+
+/*
+ * P24 (D-66, "Jacaranda in print"): the eyebrow, the hero's accent phrase, the honesty label, and the landing's and
+ * Home's moving parts. Each moving part is CSS (the stats row's start aside, a few lines of script), has its resting
+ * state as the default, and stands still under reduced motion (the block at the end of this file).
+ */
+
+/* An eyebrow: a small mono label over a section title, at most one per section (D-66; every reference the owner gave
+   uses them). Letter-spaced capitals in the mono face, in the secondary ink. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* The hero's one italic accent phrase, in bloom (D-66). */
+.hero-accent {
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+}
+
+/* "Demo data", "Seeded example": the honesty label on example data. Not a chip (it is the data's caption). */
+.demo-label {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 9999px;
+  background: var(--warm-wash);
+  padding: 0.125rem 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--warm);
+  white-space: nowrap;
+}
+.demo-label::before {
+  content: "";
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: var(--flourish);
+}
+
+/* The hero panel's countdown: three boxes, days, hours and minutes as the product's countdown says them; the minutes
+   step down once a minute from a registered integer (no script, nothing moving in between: WCAG 2.2.2). The example
+   starts at 2 days 14 h 03 min and steps every 60 s. */
+@property --due-m {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 3;
+}
+.due-box {
+  display: flex;
+  min-width: 3.5rem;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 0.75rem;
+  background: var(--field);
+  padding: 0.375rem 0.5rem 0.3125rem;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.due-n {
+  font-family: var(--font-figure);
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.due-u {
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+.due-m {
+  counter-reset: due var(--due-m);
+  animation: due-m 3600s steps(60, end) -3360s infinite;
+}
+.due-m::after {
+  content: counter(due, decimal-leading-zero);
+}
+@keyframes due-m {
+  from {
+    --due-m: 59;
+  }
+  to {
+    --due-m: -1;
+  }
+}
+
+/* The stats row's figures (components/landing/Stats.tsx): the server's figure, counted up from 0 once the row is half on
+   screen (CountUp sets data-run). Before the script runs they wait at 0 for at most 4 s, then stand at their figure,
+   so a page whose script never arrives still shows them. */
+@property --n {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 0;
+}
+.count {
+  --n: var(--to);
+  counter-reset: n var(--n);
+  font-variant-numeric: tabular-nums;
+}
+.count::after {
+  content: counter(n);
+}
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  [data-count-up]:not([data-run]) .count {
+    animation: count-wait 0s 4s both;
+  }
+  [data-count-up][data-run] .count {
+    animation: count-up 1400ms var(--ease-out) both;
+  }
+}
+@keyframes count-wait {
+  from {
+    --n: 0;
+  }
+  to {
+    --n: var(--to);
+  }
+}
+@keyframes count-up {
+  from {
+    --n: 0;
+  }
+  to {
+    --n: var(--to);
+  }
+}
+
+/* The county strip (components/landing/Counties.tsx): two copies of the row pan once every 24 s, from the first tile
+   to the second copy's first, so the loop has no seam; hovering or focusing the strip pauses it. The edges fade into
+   the paper. Under reduced motion the second copy goes and the row scrolls sideways. */
+.pan {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+.pan-track {
+  display: flex;
+  width: max-content;
+  animation: pan 24s linear infinite;
+}
+.pan:hover .pan-track,
+[data-motion][data-paused] .pan-track {
+  animation-play-state: paused;
+}
+/* A tile with focus is never off screen: the row stops, drops its moving copy and scrolls (MotionToggle brings the
+   tile into view). */
+.pan:focus-within {
+  overflow-x: auto;
+  mask-image: none;
+}
+.pan:focus-within .pan-track {
+  animation: none;
+}
+.pan:focus-within .pan-row + .pan-row {
+  display: none;
+}
+.pan-row {
+  display: flex;
+  gap: 1rem;
+  padding-inline-end: 1rem;
+}
+.pan-tile {
+  width: 15rem;
+  flex-shrink: 0;
+}
+@media (width >= 64rem) {
+  .pan-tile {
+    width: 18rem;
+  }
+}
+@keyframes pan {
+  to {
+    transform: translateX(-50%);
+  }
+}
+/* The night gradient under a county's name: the name keeps AA on any photograph. */
+.tile-scrim {
+  background: linear-gradient(180deg, transparent 38%, rgb(30 22 64 / 0.55) 62%, rgb(30 22 64 / 0.92));
+}
+
+/* "What's happening" (components/landing/Ticker.tsx): the same loop as the strip, slower (one item about every 4 s),
+   paused while hovered or focused; the box shows its focus ring. */
+.ticker {
+  overflow: hidden;
+  border-radius: 1rem;
+  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+}
+.ticker-track {
+  display: flex;
+  width: max-content;
+  animation: pan calc(var(--ticker-items, 10) * 4s) linear infinite;
+}
+.ticker:hover .ticker-track,
+[data-motion][data-paused] .ticker-track {
+  animation-play-state: paused;
+}
+.ticker-row {
+  display: flex;
+  gap: 0.75rem;
+  padding-inline-end: 0.75rem;
+}
+.ticker-item {
+  display: flex;
+  width: 19rem;
+  flex-shrink: 0;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--field);
+  padding: 0.75rem 1rem;
+}
+[data-ticker="strip"] .ticker-item {
+  width: 18rem;
+}
+/* Home's still list on phones: the items take the column's width. */
+[data-ticker] > ul > .ticker-item {
+  width: auto;
+}
+
+/* The why-panel on the night band (components/landing/Reasons.tsx): a terminal's frame, a step lighter than the band. */
+.terminal {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  background: color-mix(in oklab, var(--night) 82%, #3a2f66);
+  box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.6);
+}
+
+/* Home's "Your turn" (P24): the mark breathes twice when the page opens (a saffron ring that widens and fades), then
+   rests. */
+[data-home="needs-you"] [data-chip="turn"] {
+  animation: turn-pulse 2s var(--ease-out) 600ms 2 backwards;
+}
+@keyframes turn-pulse {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--flourish) 70%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 10px color-mix(in oklab, var(--flourish) 0%, transparent);
+  }
+}
+
+/* One-time codes, keys and recovery codes: tabular figures with air between them, not a monospace face. */
+@utility code-figures {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+/*
+ * P25 (D-67, "Portal in print"): the signed-in portal's page language, the shell's details, the command palette, the
+ * niche photographs, the activity calendar and the HCI floor. CSS first: every page inherits it with
+ * no script; each moving part rests in place under reduced motion (the block at the end of this file).
+ */
+
+/* The HCI floor. Titles balance (h3 stays pretty: the owner's nit on Home, P24), leads are pretty, figures line up. */
+td,
+th,
+time,
+.figure {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.lead {
+  text-wrap: pretty;
+}
+/* From 1024 px the signed-in top bar is sticky (SignedInShell): anything scrolled to (an anchor) or focused clears it
+   (the scroller's padding, which both scroll-into-view and focus scrolling honour, rather than a margin per target). */
+@media (width >= 64rem) {
+  html:has([data-top-bar][data-sticky]) {
+    scroll-padding-block-start: 5.5rem;
+  }
+  /* The thread's composer stays at the foot from 1024 px (P25), never taller than 19 rem plus its 1 rem offset: a
+     focused message or control scrolls clear of it (WCAG 2.4.11). */
+  html:has([data-composer]) {
+    scroll-padding-block-end: 21rem;
+  }
+}
+/* Cards adapt to their column, not the window (`.cq` on a card or a grid cell); a row of cards aligns its parts
+   (`.card-grid` with `.card-sub` children spanning three rows: title, meta, footer). Long lists skip off-screen
+   rendering (`.cv-auto`), but never a subgrid item: its layout containment cuts the item off the shared rows. */
+.cq {
+  container-type: inline-size;
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
+  gap: 1rem;
+}
+.card-grid > .card-sub,
+.card-sub > .card-sub {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: 0.5rem;
+}
+/* A card that is the list item's one child (an <article> inside its <li>) takes the same rows. */
+.card-sub > .card-sub {
+  row-gap: 0.75rem;
+}
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--cv-size, 9rem);
+}
+/* More contrast asked for: the secondary ink and the hairlines darken (light) or lighten (dark). */
+@media (prefers-contrast: more) {
+  :root {
+    --ink-soft: #3f3a52;
+    --line: #9d9584;
+    --paper-deep: #e4ddcf;
+  }
+  html[data-theme="dark"] {
+    --ink-soft: #d9d3ec;
+    --line: #6b6190;
+  }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) {
+    --ink-soft: #d9d3ec;
+    --line: #6b6190;
+  }
+}
+/* Forced colours (Windows contrast themes): one focus ring in the system's highlight; shapes that were drawn by a fill
+   alone get a border so they survive (buttons, chips, the current nav item, the palette's chosen row). */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  .btn,
+  [data-chip],
+  [data-badge],
+  .search-pill,
+  .nav-item[aria-current="page"],
+  .demo-label {
+    border: 1px solid CanvasText;
+  }
+  .nav-item[aria-current="page"]::before {
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+  .palette-option[aria-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .palette-option mark {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}
+
+/* Press feedback: a button settles 1 px when pressed, quicker than the hover (120 ms). */
+.btn:active {
+  transform: translateY(1px);
+  transition-duration: 120ms;
+}
+
+@layer components {
+/* The page's hero (components/ui/PageHero.tsx): the eyebrow says where you are, in the mono face, sentence case. */
+.page-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+.page-hero {
+  container: page-hero / inline-size;
+}
+.page-hero-body {
+  display: grid;
+  gap: 1.25rem;
+}
+.page-hero-title {
+  font-size: 2rem;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+.page-hero-lead {
+  max-width: 60ch;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+@container page-hero (width >= 40rem) {
+  .page-hero-title {
+    font-size: 2.75rem;
+    line-height: 1.04;
+  }
+  .page-hero-lead {
+    font-size: 1.125rem;
+  }
+  .page-hero-main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
+  }
+}
+@container page-hero (width >= 52rem) {
+  .page-hero-body:has(> .page-hero-aside) {
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
+    align-items: end;
+    column-gap: 2.5rem;
+  }
+}
+
+/* The portal's nav (components/PortalNav.tsx): the current item is a bloom-wash pill; on the rail a short bloom bar at
+   its leading edge, so the shape says "current" as well as the colour. The pill carries a view-transition name, so it
+   glides from item to item where View Transitions run. */
+.nav-item[aria-current="page"] .nav-icon {
+  view-transition-name: nav-current;
+}
+@media (width >= 64rem) {
+  .nav-item[aria-current="page"] .nav-icon {
+    view-transition-name: none;
+  }
+  .nav-item[aria-current="page"] {
+    view-transition-name: nav-current;
+  }
+  .nav-item[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0.4375rem;
+    top: 50%;
+    width: 3px;
+    height: 1.125rem;
+    border-radius: 3px;
+    background: var(--accent);
+    translate: 0 -50%;
+  }
+}
+
+/* The top bar's Search: a field-like pill that opens the command palette; an icon button on phones. */
+.search-pill {
+  display: inline-flex;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  border-radius: 9999px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+.search-pill:hover {
+  color: var(--ink);
+  background: var(--paper-deep);
+}
+@media (width >= 40rem) {
+  .search-pill {
+    width: clamp(12rem, 26vw, 19rem);
+    justify-content: flex-start;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    padding-inline: 0.875rem 0.5rem;
+  }
+  .search-pill:hover {
+    border-color: var(--accent-line);
+  }
+}
+.kbd {
+  display: inline-flex;
+  min-width: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 0.375rem;
+  background: var(--field);
+  padding: 0.0625rem 0.375rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* The command palette (components/palette/CommandPalette.tsx): a modal dialog near the top of the screen. */
+.palette {
+  width: min(40rem, calc(100vw - 1.5rem));
+  max-height: min(34rem, calc(100dvh - 2rem));
+  margin: max(0.75rem, 10vh) auto auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1.125rem;
+  background: var(--field);
+  color: var(--ink);
+  padding: 0;
+  box-shadow: var(--shadow-overlay);
+}
+.palette[open] {
+  display: flex;
+  flex-direction: column;
+  animation: palette-in 180ms var(--ease-out);
+}
+.palette::backdrop {
+  background: var(--scrim);
+}
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+}
+.palette-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.25rem 0.5rem 0.5rem;
+}
+.palette-option {
+  display: flex;
+  min-height: 2.75rem;
+  cursor: pointer;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.625rem;
+  padding: 0.375rem 0.625rem;
+}
+.palette-option[aria-selected="true"] {
+  background: var(--accent-wash);
+}
+.palette-option[aria-selected="true"] .palette-go {
+  opacity: 1;
+}
+.palette-option mark {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+.palette-go {
+  margin-inline-start: auto;
+  opacity: 0;
+  color: var(--accent);
+}
+
+/* A niche's or a county's photograph as a narrow band (components/ui/NicheBand.tsx); the lattice where there is none
+   (or the request asked to save data). */
+.niche-band {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: var(--night);
+}
+.niche-band picture {
+  display: block;
+  height: 100%;
+}
+.niche-band img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.niche-band-scrim::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 30%, rgb(30 22 64 / 0.55) 65%, rgb(30 22 64 / 0.9));
+}
+.niche-band-lattice {
+  background-color: var(--accent-wash);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 6 6 0l6 6 6-6 6 6Z' fill='%235A3FC0'/%3E%3Cpath d='M6 0h12L12 6Z' fill='%23F4B53F'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='6' viewBox='0 0 24 6'%3E%3Cpath d='M0 0 6 6l6-6 6 6 6-6Z' fill='%235A3FC0'/%3E%3C/svg%3E");
+  background-position:
+    0 100%,
+    0 0;
+  background-size: 24px 6px;
+  background-repeat: repeat-x;
+}
+
+/* The activity calendar (components/activity/ActivityCalendar.tsx): 26 weeks of days, Monday first, in the bloom
+   scale; each day's count and date on hover. The grid is decorative for assistive technology (a table beside it). */
+/* The grid fills its column (cells at most 22 px); from a 44 rem card the summary stands beside it, so a wide card
+   has no empty band. */
+.heat-frame {
+  --heat-labels: 1.875rem;
+  display: grid;
+  gap: 0.75rem 2rem;
+}
+.heat {
+  --heat-gap: 2px;
+  max-width: calc(var(--heat-labels) + var(--weeks) * 1.375rem + 2px);
+}
+.heat-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+@container (width >= 44rem) {
+  .heat-frame {
+    grid-template-columns: minmax(0, 1fr) 14rem;
+    align-items: center;
+  }
+}
+.heat-months,
+.heat-days {
+  display: grid;
+  grid-template-columns: var(--heat-labels) repeat(var(--weeks), minmax(0, 1fr));
+  column-gap: var(--heat-gap);
+}
+.heat-months {
+  height: 1.25rem;
+}
+.heat-days {
+  grid-template-rows: repeat(7, auto);
+  grid-auto-flow: column;
+  row-gap: var(--heat-gap);
+}
+@container (width >= 24rem) {
+  .heat {
+    --heat-gap: 3px;
+  }
+}
+@container (width >= 36rem) {
+  .heat {
+    --heat-gap: 4px;
+  }
+}
+.heat-cell {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  background: var(--heat-0);
+  forced-color-adjust: none;
+}
+.heat-cell[data-level="1"] {
+  background: var(--heat-1);
+}
+.heat-cell[data-level="2"] {
+  background: var(--heat-2);
+}
+.heat-cell[data-level="3"] {
+  background: var(--heat-3);
+}
+.heat-cell[data-level="4"] {
+  background: var(--heat-4);
+}
+.heat-cell[data-future] {
+  visibility: hidden;
+}
+/* A day with any action carries an edge in bloom (≥ 3:1 against an empty day in both themes), so even the lightest
+   step is told from nothing without relying on its fill. */
+.heat-cell:not([data-level="0"]) {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.heat-swatch {
+  width: 0.75rem;
+}
+/* A day's count and date over it on hover (the table beside the grid is the accessible way to the same figures);
+   anchored left in the first weeks and right in the last ones, so it never leaves the card. */
+.heat-cell[data-tip]:hover {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.heat-cell[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 5;
+  translate: -50% 0;
+  border-radius: 0.5rem;
+  background: var(--ink);
+  padding: 0.25rem 0.5rem;
+  color: var(--paper);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.heat-days > .heat-cell:nth-child(-n + 35)[data-tip]:hover::after {
+  left: 0;
+  translate: 0 0;
+}
+.heat-days > .heat-cell:nth-last-child(-n + 35)[data-tip]:hover::after {
+  left: auto;
+  right: 0;
+  translate: 0 0;
+}
+.heat-label {
+  align-self: center;
+  font-size: 0.6875rem;
+  line-height: 1;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.heat-day {
+  grid-column: 1;
+}
+}
+
+@layer components {
+/* Home's greeting (app/(app)/dev/GreetingBand.tsx; P25): Nairobi at this time of day in a wide rounded band. On phones
+   the photograph is a strip above the words, which sit on the night colour itself; from 640 px the words sit over the
+   photograph on a night gradient that stays at 94 % under the whole text block (every line ≥ 4.5:1 against the
+   lightest pixel under it, measured on each greeting photograph), fading only beyond it. */
+.greeting-band {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1.5rem;
+  background: var(--night);
+  box-shadow: var(--shadow-card);
+}
+.greeting-photo {
+  position: relative;
+  height: 9rem;
+}
+.greeting-photo picture,
+.greeting-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 40%;
+}
+.greeting-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 55%, var(--night) 100%);
+}
+.greeting-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0.5rem 1.25rem 1.5rem;
+}
+@media (width >= 40rem) {
+  .greeting-photo {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    height: auto;
+  }
+  .greeting-photo::after {
+    background: linear-gradient(
+      90deg,
+      rgb(30 22 64 / 0.94) 0,
+      rgb(30 22 64 / 0.94) 34rem,
+      rgb(30 22 64 / 0.35) calc(34rem + 22%),
+      rgb(30 22 64 / 0.15) 100%
+    );
+  }
+  .greeting-body {
+    min-height: 16.5rem;
+    max-width: 34rem;
+    justify-content: center;
+    padding: 2.5rem;
+  }
+}
+}
+
+@layer components {
+/* The certificate seal's sheen (components/certificate/CertificateSheet.tsx; P25): a band of light crosses the seal
+   once when the sheet is hovered, a registered percentage so the gradient itself moves. Still under reduced motion and
+   in print. */
+@property --sheen {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: -40%;
+}
+.seal-sheen {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 9999px;
+}
+.seal-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent calc(var(--sheen) - 22%),
+    rgb(255 255 255 / 0.7) var(--sheen),
+    transparent calc(var(--sheen) + 22%)
+  );
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  transition:
+    --sheen 1100ms var(--ease-out),
+    opacity 400ms var(--ease-out);
+}
+[data-print-sheet]:hover .seal-sheen::after {
+  --sheen: 140%;
+  opacity: 1;
+}
+}
+
+@layer components {
+/* An engagement's five stages as dots on a line (components/engagements/StageDots.tsx; P25): done filled, the current
+   ringed (error past its deadline, hollow while paused or ended), the rest open. Shapes, not colour alone. */
+.stage-dots {
+  display: flex;
+  align-items: center;
+  max-width: 14rem;
+}
+.stage-dots > span {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.stage-dots > span:last-child {
+  flex: 0;
+}
+.stage-dots > span::before {
+  content: "";
+  width: 0.625rem;
+  height: 0.625rem;
+  flex-shrink: 0;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 9999px;
+  background: var(--field);
+}
+.stage-dots > span:not(:last-child)::after {
+  content: "";
+  height: 1.5px;
+  flex: 1;
+  margin-inline: 3px;
+  background: var(--line);
+}
+.stage-dots > [data-dot="completed"]::before {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+.stage-dots > [data-dot="completed"]::after {
+  background: var(--ok);
+}
+.stage-dots > [data-dot="current"]::before,
+.stage-dots > [data-dot="overdue"]::before {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 3px solid var(--accent);
+  background: var(--field);
+}
+.stage-dots > [data-dot="overdue"]::before {
+  border-color: var(--error);
+}
+.stage-dots > [data-dot="onHold"]::before,
+.stage-dots > [data-dot="ended"]::before {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px dashed var(--ink-soft);
+}
+@media (forced-colors: active) {
+  .stage-dots > span::before,
+  .stage-dots > span::after {
+    forced-color-adjust: none;
+  }
+}
+}
+
+@layer components {
+/* The tracker's stepper (components/tracker/Stepper.tsx; P25): the done line draws once, a step after the one before,
+   down on phones and across from 1024 px; the current mark breathes three times, then rests. Image-free (REQ-UX-05). */
+[data-step-line="done"] {
+  transform-origin: top;
+  animation: step-draw-y 520ms var(--ease-out) calc(120ms + var(--i, 0) * 160ms) backwards;
+}
+@media (width >= 64rem) {
+  [data-step-line="done"] {
+    transform-origin: left;
+    animation-name: step-draw-x;
+  }
+}
+@keyframes step-draw-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes step-draw-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+.step-breathe {
+  animation: step-breathe 2.4s ease-in-out 900ms 3;
+}
+@keyframes step-breathe {
+  50% {
+    box-shadow: 0 0 0 9px color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+}
+/* History marks (components/tracker/HistoryList.tsx): a circle with the event's icon. */
+.event-mark {
+  position: relative;
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--line);
+  border-radius: 9999px;
+  background: var(--field);
+  color: var(--ink-soft);
+}
+.event-mark > svg {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}
+.event-mark[data-latest] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 0 0 4px var(--accent-wash);
+}
+.event-mark[data-tone="message"] {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+.event-mark[data-tone="end"] {
+  color: var(--error);
+}
+}
+
+@layer components {
+/* The editor's autosave status (app/(app)/dev/ideas/editor/Editor.tsx; P25): a pill once there is something to say;
+   while saving, a bloom dot breathes (still under reduced motion). */
+.save-status:not(:empty) {
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  background: var(--field);
+  padding: 0.125rem 0.75rem 0.125rem 0.625rem;
+}
+.save-status[data-save="saving"]::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  animation: save-breathe 1.2s ease-in-out infinite;
+}
+@keyframes save-breathe {
+  50% {
+    opacity: 0.3;
+  }
+}
+}
+
+/*
+ * View Transitions (components/motion/PageTransition.tsx; React's <ViewTransition>): a route change cross-fades the
+ * page, both sides in the same 180 ms (blended, so what does not change stays still), the nav's current pill glides,
+ * a card's title morphs into the detail page's title (components/motion/SharedTitle.tsx). Short, ease-out; none under
+ * reduced motion; browsers without the API simply swap.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-old(.page-exit) {
+  animation: vt-fade-out 180ms var(--ease-out) both;
+}
+::view-transition-new(.page-enter) {
+  animation: vt-fade-in 180ms var(--ease-out) both;
+}
+::view-transition-group(nav-current),
+::view-transition-group(.title-morph) {
+  animation-duration: 220ms;
+  animation-timing-function: var(--ease-out);
+}
+@keyframes vt-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes vt-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .seal-draw,
+  .due-m,
+  .count,
+  .pan-track,
+  .ticker-track,
+  [data-home="needs-you"] [data-chip="turn"],
+  .tour-enter,
+  .tour-lit,
+  .tour-spark,
+  .hero-rise,
+  .hero-arrive,
+  .hero-before,
+  .hero-turn,
+  .hero-steps li > span,
+  .palette[open] {
+    animation: none !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  .seal-sheen::after {
+    display: none;
+  }
+  [data-step-line="done"],
+  .step-breathe,
+  .save-status[data-save="saving"]::before {
+    animation: none !important;
+  }
+
+  /* The strip stands still: one copy, scrolled sideways (its links take focus, so the keyboard reaches every tile).
+     The ticker stands still too, its items wrapped into rows. Nothing moves, so there is nothing to pause. */
+  .pan {
+    overflow-x: auto;
+    mask-image: none;
+  }
+  .ticker {
+    mask-image: none;
+  }
+  .ticker-track {
+    width: auto;
+  }
+  .ticker-row {
+    flex-wrap: wrap;
+    justify-content: center;
+    padding-inline: 0.75rem;
+  }
+  .pan-row + .pan-row,
+  .ticker-row + .ticker-row,
+  .motion-toggle {
+    display: none !important;
+  }
+
+  /* The tour's steps crossfade (FirstLoginTour adds .tour-fade); Pause is hidden before the script knows. */
+  .tour-slide[data-slide] {
+    animation-duration: 240ms !important;
+  }
+  .tour-pause {
+    display: none !important;
+  }
+}
+
+/* Offline, read-only (P27; components/offline/Register.tsx): the controls of the disabled page read as unavailable, not
+   as ready to press. A disabled control is exempt from the contrast minimum (WCAG 1.4.3), and the banner above says
+   why. Forced colours draw them as GrayText. */
+@layer components {
+  [data-offline-locked] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  @media (forced-colors: active) {
+    [data-offline-locked] {
+      color: GrayText;
+      border-color: GrayText;
+    }
+  }
+}
+
+/* The public demo's banner (components/PublicDemoBanner.tsx; REQ-FND-04), once dismissed in this browser session:
+   <html data-demo-banner-hidden> is set before the first paint by the layout's inline script, so it never flashes.
+   Outside any layer, so it wins over the banner's own utilities. */
+html[data-demo-banner-hidden] [data-demo-banner] {
+  display: none;
+}
+
+/* The server-drawn offline banner (components/offline/OfflineSlot.tsx) shows only while the page is read offline
+   (<html data-offline>, set by components/offline/Register.tsx). Outside any layer, so it wins over the banner's own
+   `flex` utility. */
+[data-offline-banner] {
+  display: none;
+}
+html[data-offline] [data-offline-banner] {
+  display: flex;
+}
+
+/* P27 (REQ-TRACK-03): a page the worker answered from this device's copy (<html data-offline="cached">) was drawn at
+   its data-now, days ago perhaps; its live clocks would show that time left as if it were now. They are hidden, figures
+   and words: the business days under a card's clock and the banner's "as of" time are the page's time reference. A
+   fresh page without a connection ("offline") keeps its clocks: their instant is right. Outside any layer, as above. */
+html[data-offline="cached"] [data-clock] {
+  display: none;
+}

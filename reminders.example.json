@@ -1,0 +1,19 @@
+{
+  "_help": "Copy to reminders.json (done automatically on first run). Every direct sub-folder of each projects_roots entry is a project. Keys starting with _ are ignored.",
+  "projects_roots": ["C:/Users/you/Projects"],
+  "cold_after_days": 3,
+  "at_risk_after_days": 3,
+  "send_after_hour": 8,
+
+  "_ignore": "Folders that are not projects. Backup copies like 'myapp_backup_2026-09-15' are skipped automatically when 'myapp' exists.",
+  "ignore": [],
+  "_track": "Force-track a folder that would otherwise be ignored or treated as a copy.",
+  "track": [],
+
+  "_done": "Finished or abandoned projects: never remind.",
+  "done": [],
+  "_snooze": "Pause until a date (reminders resume ON that date), e.g. {\"myapp\": \"2026-10-01\"}.",
+  "snooze": {},
+  "_notes": "Optional context the AI uses when suggesting a next step, e.g. {\"myapp\": \"waiting on API keys from client\"}.",
+  "notes": {}
+}

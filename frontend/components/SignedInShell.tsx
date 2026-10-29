@@ -1,0 +1,92 @@
+import { Suspense, type ReactNode } from "react";
+
+import type { StaffRole } from "./AdminNav";
+import { cn } from "./ui/cn";
+import { AccountMenu } from "./AccountMenu";
+import { NotificationBell, UnreadNotificationBell } from "./NotificationBell";
+import { PaletteSlot } from "./palette/PaletteSlot";
+import { TopBar } from "./TopBar";
+import { BLEED_FRAME } from "./TopBarBase";
+
+export interface SignedInShellProps {
+  homeHref: string;
+  children: ReactNode;
+  /** The portal's navigation (for example <DevNav />): bottom tabs on phones, a left rail from 1024 px. */
+  nav?: ReactNode;
+  /** Lists and directories use the full content width; forms and summaries keep a 36 rem column. */
+  wide?: boolean;
+  /**
+   * The content runs on to the window's right edge (a 24 px margin) instead of stopping at the 72 rem frame, the rail
+   * staying where every other page has it, level with the logo, and the top bar's frame running on with it (never
+   * narrower than the content): the Engagements Board's five columns (P27), which the frame leaves at 160 px each.
+   * Below 1152 px the frame is the window already, so nothing changes. Implies `wide`.
+   */
+  bleed?: boolean;
+  /** The page is the bell's own (/notifications): the bell carries aria-current="page". */
+  bellCurrent?: boolean;
+  /** The staff console's role, so the command palette lists the sections that role may open. */
+  staffRole?: StaffRole;
+  /**
+   * The offline part (P27, D-69: components/offline/OfflineSlot), drawn at the top of <main>: given by the pages the
+   * service worker may keep (both Engagements lists and trackers) and both Homes, where a person lands on signing in.
+   * A prop, not an import here, so its script ships with those pages only (docs/spec/07 item 5: the JS budget).
+   */
+  offline?: ReactNode;
+}
+
+/**
+ * Signed-in screens: top bar with Search (the command palette), the notification bell and the account menu (Plan &
+ * billing, Notification settings, Help, Sign out), the portal navigation when given, and one column of content, with
+ * the offline banner over it when the page is read offline (P27).
+ */
+export function SignedInShell({
+  homeHref,
+  children,
+  nav,
+  wide = false,
+  bleed = false,
+  bellCurrent = false,
+  staffRole,
+  offline,
+}: SignedInShellProps) {
+  return (
+    <>
+      <TopBar homeHref={homeHref} sticky bleed={bleed}>
+        {/* docs/spec/07 item 1: the bell, then the avatar menu, on the right of the bar; P25 puts Search before them
+            (the command palette, D-67). */}
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2" data-top-bar-controls="">
+          <PaletteSlot homeHref={homeHref} staffRole={staffRole} />
+          {/* A slow count never holds the page: until it answers, the bell is there without one. */}
+          <Suspense fallback={<NotificationBell count={null} current={bellCurrent} />}>
+            <UnreadNotificationBell current={bellCurrent} />
+          </Suspense>
+          <AccountMenu />
+        </div>
+      </TopBar>
+      <div
+        className={cn(
+          "flex w-full flex-1 lg:gap-10",
+          // The bleed's left padding is the frame's own, so the rail does not move between pages (TopBarBase).
+          bleed ? BLEED_FRAME : "mx-auto max-w-6xl lg:px-6",
+        )}
+        data-bleed={bleed ? "" : undefined}
+      >
+        {nav}
+        <main
+          id="main"
+          tabIndex={-1}
+          className={cn(
+            "w-full min-w-0 flex-1 px-4 pt-8 focus:outline-none sm:px-6 lg:px-0 lg:pt-16",
+            // Room for the fixed tab bar (56 px + the safe area) under 1024 px.
+            nav ? "pb-28 lg:pb-16" : "pb-16",
+          )}
+        >
+          {/* Offline (P27, D-69): the banner over a page read from this device's copy, and the service worker; never
+              in the staff console, which is never kept. */}
+          {staffRole ? null : offline}
+          <div className={wide || bleed ? undefined : "max-w-xl"}>{children}</div>
+        </main>
+      </div>
+    </>
+  );
+}

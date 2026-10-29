@@ -1,0 +1,180 @@
+{
+  "case": "escaping_and_marks",
+  "description": "HTML-special characters in names, titles, commits and agent text; backticks in a folder name; a Windows settings path; non-ASCII text.",
+  "expected": {
+    "actionable": [
+      "mradi-wa-maji"
+    ],
+    "classify": {
+      "flagged": [
+        {
+          "cold": true,
+          "headline": "no work for 5 days",
+          "name": "mradi-wa-maji",
+          "risks": []
+        },
+        {
+          "cold": true,
+          "headline": "no work for 8 days",
+          "name": "tom & jerry's \"lab\"",
+          "risks": []
+        },
+        {
+          "cold": true,
+          "headline": "no work for 15 days",
+          "name": "odd`name`dir",
+          "risks": []
+        }
+      ],
+      "held": [],
+      "quiet": []
+    },
+    "email": {
+      "html": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Project check-in</title></head><body style=\"margin:0;padding:0;background:#f4f4f5\"><div style=\"display:none;max-height:0;overflow:hidden;opacity:0;color:transparent\">Start with mradi-wa-maji: Run `make test` then **commit**.</div><div style=\"max-width:640px;margin:0 auto;padding:24px 18px;background:#ffffff;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#18181b;overflow-wrap:anywhere;word-break:break-word\"><h1 style=\"font-size:23px;margin:0 0 2px\">Your daily project check-in</h1><div style=\"color:#71717a;font-size:14px;margin:0 0 18px\">Monday 21 September 2026</div><div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1d4ed8\">At a glance</div><div style=\"font-size:18px;margin:4px 0 2px\"><b>1 project</b> needs you today.</div><div style=\"color:#3f3f46;margin:0 0 2px\">Pick one below and do its next step. Each step takes about 15 minutes.</div><div style=\"color:#52525b;font-size:13px;margin:0 0 8px\">&quot;The assistant&quot; in this email is an AI helper that looks inside your quiet project folders.</div><table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;border-collapse:collapse;background:#ffffff;border-radius:8px\"><tr><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#b45309\">1</div><div style=\"font-size:12px;color:#52525b\">Need you</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">1</div><div style=\"font-size:12px;color:#52525b\">Maybe finished</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">1</div><div style=\"font-size:12px;color:#52525b\">Maybe not projects</div></td><td style=\"padding:8px 4px;text-align:center;vertical-align:top;width:25%\"><div style=\"font-size:24px;font-weight:700;color:#18181b\">0</div><div style=\"font-size:12px;color:#52525b\">Going fine</div></td></tr></table></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#1d4ed8\">Projects that need you</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #1d4ed8\">It has one small next step. You can start now.</div><div style=\"border:1px solid #d4d4d8;background:#ffffff;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\">mradi-wa-maji</div><div style=\"color:#71717a;font-size:13px;margin:2px 0 0\">Maji — café</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 5 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Last commit 5 days ago</span></div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">Where you left off</div><div>Umebakiza ramani &amp; &quot;legend&quot;.</div></div><div style=\"background:#fffbeb;border:1px solid #fde68a;border-left:5px solid #f59e0b;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#92400e\">Your next step · about 15 minutes</div><div style=\"font-size:16px;font-weight:700;margin:3px 0 0\">Run `make test` then **commit**.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recent commits:</b><ul style=\"margin:2px 0 0;padding-left:18px\"><li style=\"margin:0 0 2px\">Fix &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; tidy</li><li style=\"margin:0 0 2px\">Ongeza ramani 🚀</li></ul></li><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>ramani.py</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/mradi-wa-maji</span></li></ul></div></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#027a48\">Maybe finished</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #027a48\">The assistant thinks these are finished. If it is right, you can switch off their reminders.</div><div style=\"border:1px solid #a6f4c5;background:#f6fef9;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\">odd`name`dir</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 15 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Not in git</span></div><div style=\"color:#027a48;margin:8px 0 0\">The assistant looked inside and thinks this is <b>finished</b> (70% sure).</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">What the assistant found</div><div>Finished &lt;for real&gt;.</div></div><div style=\"background:#ffffff;border:1px dashed #a6f4c5;border-left:5px solid #027a48;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#027a48\">What you can do</div><div style=\"margin:3px 0 0\">If you agree, open <b>reminders.json</b> (its full path is at the end of this email) and add <b>&quot;odd<code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">name</code>dir&quot;</b> to the <b>&quot;done&quot;</b> list, like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;done&quot;: [&quot;odd</code>name<code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">dir&quot;]</code>. You will not be reminded about it again. If you do not agree, you do not need to do anything.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>x.py</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/odd`name`dir</span></li></ul></div></div><h2 style=\"font-size:18px;margin:28px 0 2px;color:#b54708\">Maybe not a project</h2><div style=\"color:#52525b;font-size:14px;margin:0 0 12px;padding:0 0 8px;border-bottom:2px solid #b54708\">The assistant thinks these folders are not something you are building.</div><div style=\"border:1px solid #fedf89;background:#fffcf5;border-radius:10px;padding:16px;margin:0 0 16px\"><div style=\"font-size:19px;font-weight:700;line-height:1.3\">tom &amp; jerry&#x27;s &quot;lab&quot;</div><div style=\"color:#71717a;font-size:13px;margin:2px 0 0\">R&amp;D &lt;notes&gt;</div><div style=\"margin:10px 0 2px\"><span style=\"display:inline-block;background:#fef3c7;color:#92400e;font-weight:700;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">No work for 8 days</span><span style=\"display:inline-block;background:#f4f4f5;color:#3f3f46;border-radius:12px;padding:3px 10px;margin:0 6px 6px 0;font-size:13px\">Not in git</span></div><div style=\"color:#b54708;margin:8px 0 0\">The assistant looked inside and thinks this is <b>not a real project</b> (55% sure).</div><div style=\"margin:12px 0 0\"><div style=\"font-weight:700;font-size:14px;color:#3f3f46\">What the assistant found</div><div>Only **backups** of photos &amp; a `.zip`</div></div><div style=\"background:#ffffff;border:1px dashed #fedf89;border-left:5px solid #b54708;border-radius:6px;padding:10px 14px;margin:14px 0 0\"><div style=\"font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#b54708\">What you can do</div><div style=\"margin:3px 0 0\">If you agree, open <b>reminders.json</b> (its full path is at the end of this email) and add <b>&quot;tom &amp; jerry&#x27;s &quot;lab&quot;&quot;</b> to the <b>&quot;ignore&quot;</b> list, like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;ignore&quot;: [&quot;tom &amp; jerry&#x27;s &quot;lab&quot;&quot;]</code>. The reminder will stop checking this folder. If you do not agree, you do not need to do anything.</div></div><div style=\"margin:14px 0 0;padding:10px 0 0;border-top:1px solid #e4e4e7;font-size:13px;color:#52525b\"><div style=\"font-weight:700;color:#3f3f46;margin:0 0 4px\">More details</div><ul style=\"margin:0;padding-left:18px\"><li style=\"margin:0 0 4px\"><b>Clues the assistant checked:</b> <span>&lt;img src=x onerror=alert(1)&gt;</span></li><li style=\"margin:0 0 4px\"><b>Recently edited files:</b> <span>&lt;b&gt;.txt</span></li><li style=\"margin:0 0 4px\"><b>Folder:</b> <span style=\"font-family:Consolas,'Courier New',monospace;font-size:12px\">/home/dev/projects/tom &amp; jerry&#x27;s &quot;lab&quot;</span></li></ul></div></div><h2 style=\"font-size:15px;margin:28px 0 6px;color:#52525b\">How this works</h2><ul style=\"margin:0;padding-left:20px;font-size:13px;color:#52525b\"><li style=\"margin:0 0 5px\">This email is sent <b>once a day</b> from your laptop.</li><li style=\"margin:0 0 5px\">You see a project here when none of its files have changed for <b>3 days</b>, or when it has changes that you have not committed or pushed for 3 days.</li><li style=\"margin:0 0 5px\">Words used here: <b>git</b> keeps the history of your project. To <b>commit</b> means to save a snapshot of your changes in git. To <b>push</b> means to copy those snapshots online (for example to GitHub), so they are backed up.</li><li style=\"margin:0 0 5px\">Your settings file is <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">C:\\Users\\dev\\second-brain\\reminders.json</code>. To stop reminders for a project for good, add its name to the <b>&quot;done&quot;</b> list. For a folder that is not a project, use the <b>&quot;ignore&quot;</b> list. To pause a project until a date, add it to <b>&quot;snooze&quot;</b> like this: <code style=\"font-family:Consolas,'Courier New',monospace;font-size:13px;background:#f4f4f5;border-radius:4px;padding:1px 4px\">&quot;snooze&quot;: {&quot;project-name&quot;: &quot;2026-10-05&quot;}</code>.</li><li style=\"margin:0 0 5px\">The assistant looked inside <b>all 3 listed projects</b>.</li></ul></div></body></html>",
+      "subject": "1 project needs you today: mradi-wa-maji (no work for 5 days) · Mon 21 Sep",
+      "text": "YOUR DAILY PROJECT CHECK-IN\nMonday 21 September 2026\n\nAT A GLANCE\n  1 project needs you today.\n  Pick one below and do its next step. Each step takes about 15 minutes.\n  \"The assistant\" in this email is an AI helper that looks inside your quiet project folders.\n  - Need you: 1\n  - Maybe finished: 1\n  - Maybe not projects: 1\n  - Going fine: 0\n\n==============================================================\nPROJECTS THAT NEED YOU\nIt has one small next step. You can start now.\n==============================================================\n\n- mradi-wa-maji  (Maji — café)\n   No work for 5 days  |  Last commit 5 days ago\n\n   Where you left off:\n      Umebakiza ramani & \"legend\".\n\n   >> YOUR NEXT STEP (about 15 minutes):\n      Run `make test` then **commit**.\n\n   More details:\n      - Recent commits:\n          * Fix <script>alert(\"x\")</script> & tidy\n          * Ongeza ramani 🚀\n      - Recently edited files: ramani.py\n      - Folder: /home/dev/projects/mradi-wa-maji\n\n==============================================================\nMAYBE FINISHED\nThe assistant thinks these are finished. If it is right, you can switch off their reminders.\n==============================================================\n\n- odd`name`dir\n   No work for 15 days  |  Not in git\n\n   The assistant looked inside and thinks this is finished (70% sure).\n\n   What the assistant found:\n      Finished <for real>.\n\n   >> WHAT YOU CAN DO:\n      If you agree, open reminders.json (its full path is at the end of this email) and add \"oddnamedir\" to the \"done\" list, like this: \"done\": [\"oddnamedir\"]. You will not be reminded about it again. If you do not agree, you do not need to do anything.\n\n   More details:\n      - Recently edited files: x.py\n      - Folder: /home/dev/projects/odd`name`dir\n\n==============================================================\nMAYBE NOT A PROJECT\nThe assistant thinks these folders are not something you are building.\n==============================================================\n\n- tom & jerry's \"lab\"  (R&D <notes>)\n   No work for 8 days  |  Not in git\n\n   The assistant looked inside and thinks this is not a real project (55% sure).\n\n   What the assistant found:\n      Only **backups** of photos & a `.zip`\n\n   >> WHAT YOU CAN DO:\n      If you agree, open reminders.json (its full path is at the end of this email) and add \"tom & jerry's \"lab\"\" to the \"ignore\" list, like this: \"ignore\": [\"tom & jerry's \"lab\"\"]. The reminder will stop checking this folder. If you do not agree, you do not need to do anything.\n\n   More details:\n      - Clues the assistant checked: <img src=x onerror=alert(1)>\n      - Recently edited files: <b>.txt\n      - Folder: /home/dev/projects/tom & jerry's \"lab\"\n\n==============================================================\nHOW THIS WORKS\n==============================================================\n  - This email is sent once a day from your laptop.\n  - You see a project here when none of its files have changed for 3 days, or when it has changes that you have not committed or pushed for 3 days.\n  - Words used here: git keeps the history of your project. To commit means to save a snapshot of your changes in git. To push means to copy those snapshots online (for example to GitHub), so they are backed up.\n  - Your settings file is C:\\Users\\dev\\second-brain\\reminders.json. To stop reminders for a project for good, add its name to the \"done\" list. For a folder that is not a project, use the \"ignore\" list. To pause a project until a date, add it to \"snooze\" like this: \"snooze\": {\"project-name\": \"2026-10-05\"}.\n  - The assistant looked inside all 3 listed projects."
+    },
+    "fallback": {
+      "mradi-wa-maji": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last commit: \"Fix <script>alert(\"x\")</script> & tidy\".",
+        "next_step": "Open ramani.py and write the next step at the top of the README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "odd`name`dir": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last edited: x.py.",
+        "next_step": "Open x.py and write the next step at the top of the README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      },
+      "tom & jerry's \"lab\"": {
+        "confidence": 0.0,
+        "evidence": [],
+        "left_off": "Last edited: <b>.txt.",
+        "next_step": "Open <b>.txt and write the next step at the top of the README.",
+        "source": "fallback",
+        "status": "unclear",
+        "trace": []
+      }
+    },
+    "featured": "mradi-wa-maji"
+  },
+  "input": {
+    "config": {
+      "at_risk_after_days": 3,
+      "cold_after_days": 3,
+      "done": [],
+      "path": "C:\\Users\\dev\\second-brain\\reminders.json",
+      "send_after_hour": 8,
+      "snooze": {}
+    },
+    "featured_log": {},
+    "notices": [],
+    "now": 1789971300.0,
+    "projects": [
+      {
+        "extra": {},
+        "files": 8,
+        "git": null,
+        "idle_days": 8,
+        "last_work": 1789258500.0,
+        "name": "tom & jerry's \"lab\"",
+        "open_todos": 0,
+        "path": "/home/dev/projects/tom & jerry's \"lab\"",
+        "readme_title": "R&D <notes>",
+        "recent_files": [
+          "<b>.txt"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": null,
+        "idle_days": 15,
+        "last_work": 1788653700.0,
+        "name": "odd`name`dir",
+        "open_todos": 0,
+        "path": "/home/dev/projects/odd`name`dir",
+        "readme_title": "",
+        "recent_files": [
+          "x.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      },
+      {
+        "extra": {},
+        "files": 8,
+        "git": {
+          "branch": "main",
+          "has_remote": false,
+          "last_commit": 1789496100.0,
+          "modified": null,
+          "modified_newest": 0.0,
+          "modified_partial": false,
+          "recent_commits": [
+            "Fix <script>alert(\"x\")</script> & tidy",
+            "Ongeza ramani 🚀"
+          ],
+          "unpushed": null
+        },
+        "idle_days": 5,
+        "last_work": 1789517700.0,
+        "name": "mradi-wa-maji",
+        "open_todos": 0,
+        "path": "/home/dev/projects/mradi-wa-maji",
+        "readme_title": "Maji — café",
+        "recent_files": [
+          "ramani.py"
+        ],
+        "skipped_copy_of": null,
+        "todo_samples": [],
+        "truncated": false
+      }
+    ],
+    "skipped": [],
+    "today": "2026-09-21",
+    "verdicts": {
+      "mradi-wa-maji": {
+        "confidence": 0.8,
+        "evidence": [],
+        "left_off": "Umebakiza ramani & \"legend\".",
+        "next_step": "Run `make test` then **commit**.",
+        "source": "agent",
+        "status": "unfinished",
+        "trace": []
+      },
+      "odd`name`dir": {
+        "confidence": 0.7,
+        "evidence": [],
+        "left_off": "Finished <for real>.",
+        "next_step": "-",
+        "source": "agent",
+        "status": "probably_done",
+        "trace": []
+      },
+      "tom & jerry's \"lab\"": {
+        "confidence": 0.55,
+        "evidence": [
+          "<img src=x onerror=alert(1)>"
+        ],
+        "left_off": "Only **backups** of photos & a `.zip`",
+        "next_step": "-",
+        "source": "agent",
+        "status": "not_a_project",
+        "trace": []
+      }
+    }
+  },
+  "kind": "scenario"
+}

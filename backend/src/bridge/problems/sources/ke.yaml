@@ -1,0 +1,41 @@
+# Source allowlist for Kenya (REQ-RES-01; docs/spec/06 6.5). Read by bridge/problems/research/sources.py.
+#
+# domains: the only hosts a research excerpt may come from. A host matches a domain exactly or as a subdomain of it
+# (www.businessdailyafrica.com matches businessdailyafrica.com); an excerpt whose URL host matches none is refused when
+# the excerpts load. `publisher` is the independence key: two domains of one publisher (Capital FM's .co.ke and
+# .africa) count as one publisher, and an excerpt's own publisher must equal its domain's. `official` marks a
+# government (.go.ke) or regulator source; only an official domain makes an excerpt count as an official source,
+# whatever the excerpt says about itself. Prototype list from the researcher (research-excerpts-2026-09.md); the
+# spec's longer list (KNBS, CBK, tenders.go.ke, Hansard, ...) is added with the excerpts that use it.
+#
+# organisations: names the code looks for in a drafted card (whole words after NFKC, in any case, a hyphen matching
+# any dash, a space or nothing; format characters ignored). A card naming any of them, or naming anything in its
+# named_orgs, needs an official source (docs/spec/06 6.5; D-45 default (a)). Every publisher above counts as an
+# organisation too. Matching is broad on purpose (a false match only discards a draft); an alias that is also a
+# common lower-case word is written {text: Treasury, case_sensitive: true}: matched only as written or in capitals.
+version: 1
+country: KE
+domains:
+  - {domain: kilimo.go.ke, publisher: Ministry of Agriculture and Livestock Development, official: true}
+  - {domain: www.sasra.go.ke, publisher: SACCO Societies Regulatory Authority (SASRA), official: true}
+  - {domain: www.ca.go.ke, publisher: Communications Authority of Kenya, official: true}
+  - {domain: businessdailyafrica.com, publisher: Business Daily, official: false}
+  - {domain: capitalfm.co.ke, publisher: Capital FM Kenya, official: false}
+  - {domain: capitalfm.africa, publisher: Capital FM Kenya, official: false}
+  - {domain: standardmedia.co.ke, publisher: The Standard, official: false}
+  - {domain: the-star.co.ke, publisher: The Star, official: false}
+organisations:
+  - {name: Safaricom, aliases: [Safaricom, M-Pesa, Mpesa]}
+  - {name: Airtel, aliases: [Airtel, Airtel Money]}
+  - {name: Telkom Kenya, aliases: [Telkom]}
+  - {name: Starlink, aliases: [Starlink]}
+  - {name: Communications Authority of Kenya, aliases: [Communications Authority, CA]}
+  - {name: Social Health Authority, aliases: [Social Health Authority, SHA]}
+  - {name: Taifa Care, aliases: [Taifa Care]}
+  - {name: Ministry of Health, aliases: [Ministry of Health]}
+  - {name: Ministry of Agriculture, aliases: [Ministry of Agriculture]}
+  - {name: SACCO Societies Regulatory Authority, aliases: [SACCO Societies Regulatory Authority, SASRA, Sasra]}
+  - {name: Central Bank of Kenya, aliases: [Central Bank of Kenya, CBK]}
+  - {name: Kenya National Bureau of Statistics, aliases: [Kenya National Bureau of Statistics, KNBS]}
+  - {name: Kenya Revenue Authority, aliases: [Kenya Revenue Authority, KRA]}
+  - {name: National Treasury, aliases: [National Treasury, {text: Treasury, case_sensitive: true}]}

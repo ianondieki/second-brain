@@ -1,0 +1,147 @@
+"""Notification jobs (REQ-NOT-04; ``bridge.engagements.notify``; REQ-ENG-11 N18, ``bridge.engagements.message_notify``).
+
+``engagements.notify`` tells the other party about one tracker event (in-app, and EM2 on entering
+``INTEREST_CONFIRMED``), queued by the command's transaction on the ``notifications`` queue, one engagement at a time
+(lock ``engagement:<id>``). ``engagements.message_notify`` tells the other party's people about one message of the
+thread (N18), queued by the post's transaction the same way. ``engagements.nudge_notify`` tells the recipients of one
+nudge the nudge job recorded (REQ-NOT-05: an escalation, EM5, EM6, a milestone reminder; ``bridge.engagements.nudges``),
+queued in the transaction that recorded it. Both are idempotent (dedupe keys), so a retry never
+notifies twice; an email still queued after transient provider errors raises ``EmailStillQueued`` and the job backs
+off and resumes it.
+
+The runtime (settings, database sessions, email provider) is built from settings on first use; tests install their
+own with ``use_runtime``.
+"""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from bridge.config import Settings, get_settings
+from bridge.db import create_engine, create_session_factory
+from bridge.engagements import message_notify, notify, nudges
+from bridge.jobs.app import app
+from bridge.jobs.provenance import Backoff
+from bridge.notifications.email import EmailProvider, provider_from_settings
+
+
+class EmailStillQueued(RuntimeError):
+    """An email of the job is still queued after transient provider errors: retry later (the ledger resumes it)."""
+
+
+NOTIFY_RETRY = Backoff(base=30, cap=1800, max_attempts=10, permanent=())
+
+
+class NotificationRuntime:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        *,
+        session_factory: async_sessionmaker[AsyncSession] | None = None,
+        email_provider: EmailProvider | None = None,
+    ) -> None:
+        self._settings = settings
+        self._session_factory = session_factory
+        self._email_provider = email_provider
+
+    @property
+    def settings(self) -> Settings:
+        if self._settings is None:
+            self._settings = get_settings()
+        return self._settings
+
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        if self._session_factory is None:
+            self._session_factory = create_session_factory(create_engine(self.settings.database_url.get_secret_value()))
+        return self._session_factory
+
+    @property
+    def email_provider(self) -> EmailProvider:
+        if self._email_provider is None:
+            self._email_provider = provider_from_settings(self.settings)
+        return self._email_provider
+
+
+_runtime: NotificationRuntime | None = None
+
+
+def runtime() -> NotificationRuntime:
+    global _runtime
+    if _runtime is None:
+        _runtime = NotificationRuntime()
+    return _runtime
+
+
+def use_runtime(value: NotificationRuntime | None) -> None:
+    """Install a runtime (tests), or None to rebuild from settings on next use."""
+    global _runtime
+    _runtime = value
+
+
+@app.task(name=notify.TASK, queue=notify.QUEUE, retry=NOTIFY_RETRY)
+async def engagement_notify(
+    engagement_id: str, event_id: str, developer_id: str, reason_text: str | None = None
+) -> None:
+    rt = runtime()
+    done = await notify.deliver(
+        rt.session_factory,
+        rt.email_provider,
+        rt.settings,
+        engagement_id=UUID(engagement_id),
+        event_id=UUID(event_id),
+        developer_id=UUID(developer_id),
+        reason_text=reason_text,
+    )
+    if not done:
+        raise EmailStillQueued(f"engagement {engagement_id}: an email is still queued")
+
+
+@app.task(name=message_notify.TASK, queue=message_notify.QUEUE, retry=NOTIFY_RETRY)
+async def engagement_message_notify(engagement_id: str, message_id: str, developer_id: str) -> None:
+    rt = runtime()
+    done = await message_notify.deliver(
+        rt.session_factory,
+        rt.email_provider,
+        rt.settings,
+        engagement_id=UUID(engagement_id),
+        message_id=UUID(message_id),
+        developer_id=UUID(developer_id),
+    )
+    if not done:
+        raise EmailStillQueued(f"engagement {engagement_id}: an email is still queued")
+
+
+@app.task(name=nudges.TASK, queue=nudges.QUEUE, retry=NOTIFY_RETRY)
+async def engagement_nudge_notify(
+    engagement_id: str,
+    developer_id: str,
+    kind: str,
+    key: str,
+    org_recipients: list[str],
+    developer: bool,
+    days: int | None = None,
+    on: str | None = None,
+    expires: str | None = None,
+    seq: int | None = None,
+) -> None:
+    rt = runtime()
+    done = await nudges.deliver(
+        rt.session_factory,
+        rt.email_provider,
+        rt.settings,
+        engagement_id=UUID(engagement_id),
+        developer_id=UUID(developer_id),
+        kind=kind,
+        key=key,
+        org_recipients=org_recipients,
+        developer=developer,
+        days=days,
+        on=on,
+        expires=expires,
+        seq=seq,
+    )
+    if not done:
+        raise EmailStillQueued(f"engagement {engagement_id}: a nudge's email is still queued")

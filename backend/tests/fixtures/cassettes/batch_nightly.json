@@ -1,0 +1,211 @@
+{
+  "synthetic": true,
+  "description": "Submit a batch, poll while in progress, then read five results: ok, refusal, schema failure, errored, expired.",
+  "note": "Hand-written synthetic fixture (D-18: no paid calls). Response shapes follow the anthropic 1.8.0 SDK types (Message, Usage, MessageBatch, MessageBatchIndividualResponse); ids, tokens and text are invented.",
+  "interactions": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/messages/batches"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msgbatch_syn_01",
+          "type": "message_batch",
+          "processing_status": "in_progress",
+          "created_at": "2026-09-27T02:00:00Z",
+          "expires_at": "2026-09-28T02:00:00Z",
+          "request_counts": {
+            "processing": 5,
+            "succeeded": 0,
+            "errored": 0,
+            "canceled": 0,
+            "expired": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/messages/batches/msgbatch_syn_01"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msgbatch_syn_01",
+          "type": "message_batch",
+          "processing_status": "in_progress",
+          "created_at": "2026-09-27T02:00:00Z",
+          "expires_at": "2026-09-28T02:00:00Z",
+          "request_counts": {
+            "processing": 5,
+            "succeeded": 0,
+            "errored": 0,
+            "canceled": 0,
+            "expired": 0
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/messages/batches/msgbatch_syn_01"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msgbatch_syn_01",
+          "type": "message_batch",
+          "processing_status": "ended",
+          "created_at": "2026-09-27T02:00:00Z",
+          "expires_at": "2026-09-28T02:00:00Z",
+          "request_counts": {
+            "processing": 0,
+            "succeeded": 3,
+            "errored": 1,
+            "canceled": 0,
+            "expired": 1
+          },
+          "ended_at": "2026-09-27T02:40:00Z",
+          "results_url": "https://api.anthropic.com/v1/messages/batches/msgbatch_syn_01/results"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/messages/batches/msgbatch_syn_01"
+      },
+      "response": {
+        "status": 200,
+        "json": {
+          "id": "msgbatch_syn_01",
+          "type": "message_batch",
+          "processing_status": "ended",
+          "created_at": "2026-09-27T02:00:00Z",
+          "expires_at": "2026-09-28T02:00:00Z",
+          "request_counts": {
+            "processing": 0,
+            "succeeded": 3,
+            "errored": 1,
+            "canceled": 0,
+            "expired": 1
+          },
+          "ended_at": "2026-09-27T02:40:00Z",
+          "results_url": "https://api.anthropic.com/v1/messages/batches/msgbatch_syn_01/results"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/v1/messages/batches/msgbatch_syn_01/results"
+      },
+      "response": {
+        "status": 200,
+        "jsonl": [
+          {
+            "custom_id": "item-ok",
+            "result": {
+              "type": "succeeded",
+              "message": {
+                "id": "msg_syn_b1",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-haiku-4-5",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "{\"injection_suspected\": false, \"verdict\": \"clean\", \"reason\": \"No policy issue found in the teaser.\"}"
+                  }
+                ],
+                "stop_reason": "end_turn",
+                "stop_sequence": null,
+                "usage": {
+                  "input_tokens": 700,
+                  "output_tokens": 30,
+                  "cache_read_input_tokens": 0,
+                  "cache_creation_input_tokens": 0
+                }
+              }
+            }
+          },
+          {
+            "custom_id": "item-refused",
+            "result": {
+              "type": "succeeded",
+              "message": {
+                "id": "msg_syn_b2",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-haiku-4-5",
+                "content": [],
+                "stop_reason": "refusal",
+                "stop_sequence": null,
+                "usage": {
+                  "input_tokens": 700,
+                  "output_tokens": 0,
+                  "cache_read_input_tokens": 0,
+                  "cache_creation_input_tokens": 0
+                },
+                "stop_details": {
+                  "type": "refusal",
+                  "category": "cyber",
+                  "explanation": null
+                }
+              }
+            }
+          },
+          {
+            "custom_id": "item-bad",
+            "result": {
+              "type": "succeeded",
+              "message": {
+                "id": "msg_syn_b3",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-haiku-4-5",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "not json"
+                  }
+                ],
+                "stop_reason": "end_turn",
+                "stop_sequence": null,
+                "usage": {
+                  "input_tokens": 700,
+                  "output_tokens": 5,
+                  "cache_read_input_tokens": 0,
+                  "cache_creation_input_tokens": 0
+                }
+              }
+            }
+          },
+          {
+            "custom_id": "item-errored",
+            "result": {
+              "type": "errored",
+              "error": {
+                "type": "error",
+                "error": {
+                  "type": "invalid_request_error",
+                  "message": "bad"
+                }
+              }
+            }
+          },
+          {
+            "custom_id": "item-expired",
+            "result": {
+              "type": "expired"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

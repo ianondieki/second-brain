@@ -1,0 +1,105 @@
+[project]
+name = "bridge"
+version = "0.1.0"
+description = "Bridge (working name): hosted developer and organisation platform (docs/spec/)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.141",
+    "uvicorn[standard]>=0.53",
+    "pydantic>=2.13",
+    "pydantic-settings>=2.15",
+    "email-validator>=2.3",
+    "sqlalchemy[asyncio]>=2.0.54",
+    "psycopg[binary,pool]>=3.3",
+    "alembic>=1.20",
+    "procrastinate>=3.10",
+    "structlog>=26.1",
+    "argon2-cffi>=25.1",
+    "pyotp>=2.10",
+    "cryptography>=45",
+    "httpx>=0.28",
+    "jinja2>=3.1.6",
+    "pyyaml>=6.0.3",
+    "pgvector>=0.4",
+    "anthropic>=1.8.0",
+    "httpx2>=2.13.1",  # imported by bridge.llm (the anthropic SDK's HTTP client; test transports, cassettes)
+    "rfc8785>=0.1.4",
+    "asn1crypto>=1.5.1",
+    "reportlab>=5.0.1",
+    "boto3>=1.43.103",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1",
+    "pytest-asyncio>=1.4",
+    "pytest-cov>=7",
+    "hypothesis>=6.168",
+    "respx>=0.23",
+    "testcontainers[postgres]>=4.15",
+    "mypy>=2.3",
+    "ruff>=0.16.8",
+    "types-PyYAML>=6.0.12",
+    "types-reportlab>=5.0.0.20260911",
+    "boto3-stubs[s3]>=1.43.103",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bridge"]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "ASYNC", "C4", "SIM", "RUF", "PT", "DTZ", "T20"]
+ignore = ["S101"]  # assert is how pytest checks
+allowed-confusables = ["›"]  # U+203A joins two-level niche labels ("ICT › Networks & Telecommunications", docs/spec/03)
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "S603", "S608"]  # fixture passwords, random ids, subprocess on repo scripts, SQL from table names
+"alembic/**" = ["S608"]
+"src/bridge/**/__main__.py" = ["T201"]  # command-line entry points print their result
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["bridge", "tests"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["procrastinate.*", "testcontainers.*", "pyotp.*", "pgvector.*", "asn1crypto.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# REQ-EMB-01: imported lazily by BgeM3Embedder; not a dependency. The worker image installs sentence-transformers
+# (CPU-only torch index) only after the human approves bge-m3 (weights and image size; Docker has 4 GB).
+module = ["sentence_transformers.*", "torch.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: needs PostgreSQL (TEST_DATABASE_URL or Docker for testcontainers)",
+]
+filterwarnings = ["error::DeprecationWarning:bridge.*"]
+
+[tool.coverage.run]
+source = ["bridge"]
+branch = true
+# SQLAlchemy's asyncio layer runs through greenlets; without this, lines after an awaited query go unrecorded.
+concurrency = ["greenlet", "thread"]

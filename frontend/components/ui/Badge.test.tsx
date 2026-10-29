@@ -1,0 +1,80 @@
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { Badge } from "./Badge";
+import { CheckIcon } from "./status-icons";
+
+afterEach(cleanup);
+
+// P16 design system, Status: icon + words + tone, the same everywhere; never colour alone (docs/spec/07 item 6).
+describe("Badge", () => {
+  it.each([
+    ["accent", "text-accent"],
+    ["ok", "text-ok"],
+    ["error", "text-error"],
+    ["neutral", "text-ink-soft"],
+  ] as const)("carries the %s tone in its colour, with the words", (tone, colour) => {
+    render(<Badge tone={tone}>Published</Badge>);
+    const badge = screen.getByText("Published").parentElement!;
+    expect(badge.className.split(" ")).toContain(colour);
+    expect(badge.textContent).toBe("Published");
+  });
+
+  it("puts a decorative icon before the words, so the words are what is read", () => {
+    const { container } = render(
+      <Badge tone="ok" icon={<CheckIcon />}>
+        Published
+      </Badge>,
+    );
+    const badge = container.firstElementChild!;
+    expect(badge.firstElementChild?.tagName.toLowerCase()).toBe("svg");
+    expect(badge.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
+    expect(badge.textContent).toBe("Published");
+  });
+
+  it("is a soft pill in its tone's wash, and a solid fill only when solid (the one 'Your turn' marker)", () => {
+    const { container, rerender } = render(<Badge tone="accent">Your turn</Badge>);
+    const soft = container.firstElementChild!.className.split(" ");
+    expect(soft).toEqual(expect.arrayContaining(["bg-accent-wash", "text-accent", "rounded-full"]));
+    expect(soft).not.toContain("bg-accent");
+    rerender(
+      <Badge tone="accent" solid>
+        Your turn
+      </Badge>,
+    );
+    const classes = container.firstElementChild!.className.split(" ");
+    expect(classes).toEqual(expect.arrayContaining(["bg-accent", "text-on-accent", "rounded-full"]));
+    expect(classes).not.toContain("text-accent");
+  });
+
+  // P27 (REQ-ENG-14): on a board card the stalled mark wraps to a second line; a pill there swells into an oval.
+  it("keeps the controls' corner radius, not a pill, when its words may wrap", () => {
+    const { container } = render(<Badge wraps>No movement for 5+ business days</Badge>);
+    const classes = container.firstElementChild!.className.split(" ");
+    expect(classes).toContain("rounded-control");
+    expect(classes).not.toContain("rounded-full");
+  });
+
+  it("is compact on the board's cards (xs), with one size only, never text-sm beside text-xs", () => {
+    const { container } = render(
+      <Badge size="xs" icon={<CheckIcon />}>
+        Our turn
+      </Badge>,
+    );
+    const classes = container.firstElementChild!.className.split(" ");
+    expect(classes).toEqual(expect.arrayContaining(["text-xs", "[&>svg]:size-3.5"]));
+    expect(classes).not.toContain("text-sm");
+    expect(classes).not.toContain("[&>svg]:size-4");
+  });
+
+  it("passes data-chip and data-badge through, so tests can count a card's chips", () => {
+    const { container } = render(
+      <>
+        <Badge data-chip="turn">Your turn</Badge>
+        <Badge data-badge="e2">Verified</Badge>
+      </>,
+    );
+    expect(container.querySelector("[data-chip='turn']")?.textContent).toBe("Your turn");
+    expect(container.querySelector("[data-badge='e2']")?.textContent).toBe("Verified");
+  });
+});

@@ -1,0 +1,94 @@
+{
+  "case": "forced_after_sent",
+  "description": "A forced run never rewrites a finished entry; it is logged under 'forced'.",
+  "expected": {
+    "steps": [
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T08:00:00",
+            "attempts": 1,
+            "forced": [
+              {
+                "at": "2026-09-21T09:15:00",
+                "ref": "owner@example.com",
+                "status": "sent"
+              }
+            ],
+            "ref": "owner@example.com",
+            "status": "sent"
+          }
+        },
+        "finished": {
+          "email": true,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      },
+      {
+        "day": {
+          "email": {
+            "at": "2026-09-21T08:00:00",
+            "attempts": 1,
+            "forced": [
+              {
+                "at": "2026-09-21T09:15:00",
+                "ref": "owner@example.com",
+                "status": "sent"
+              },
+              {
+                "at": "2026-09-21T10:15:00",
+                "error": "SMTP timeout",
+                "status": "failed"
+              }
+            ],
+            "ref": "owner@example.com",
+            "status": "sent"
+          }
+        },
+        "finished": {
+          "email": true,
+          "whatsapp": false
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      }
+    ]
+  },
+  "input": {
+    "calls": [
+      {
+        "channel": "email",
+        "detail": "owner@example.com",
+        "force": true,
+        "now": "2026-09-21T09:15:00",
+        "ok": true,
+        "status": "sent",
+        "transient": false
+      },
+      {
+        "channel": "email",
+        "detail": "SMTP timeout",
+        "force": true,
+        "now": "2026-09-21T10:15:00",
+        "ok": false,
+        "status": "sent",
+        "transient": true
+      }
+    ],
+    "day": {
+      "email": {
+        "at": "2026-09-21T08:00:00",
+        "attempts": 1,
+        "ref": "owner@example.com",
+        "status": "sent"
+      }
+    }
+  },
+  "kind": "record"
+}

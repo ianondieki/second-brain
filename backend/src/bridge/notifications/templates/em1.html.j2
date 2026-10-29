@@ -1,0 +1,26 @@
+{# EM1, HTML part (REQ-NOT-02; docs/spec/06 6.10). Autoescaped. One call to action. [[COPY-REVIEW]] #}
+{% extends "_brand.html.j2" %}
+{% import "_macros.html.j2" as ui %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<p style="margin:0 0 16px">Your proposal &ldquo;<strong>{{ title }}</strong>&rdquo; is registered and sent to {{ sent_count }}.</p>
+{{ ui.label("Your disclosure record") }}
+<p style="font-size:14px;line-height:1.6;margin:0">Receipt: <code>{{ cert_id }}</code><br>Hash: <code style="word-break:break-all">{{ hash }}</code></p>
+{{ ui.label("Sent to (" ~ sent_count ~ ", verified)") }}
+<ul style="font-size:14px;line-height:1.6;margin:0;padding-left:20px">
+{% for name in sent_to %}
+<li>{{ name }}</li>
+{% endfor %}
+</ul>
+{% if saved_for %}
+{{ ui.label("Saved for (" ~ saved_count ~ ")") }}
+<ul style="font-size:14px;line-height:1.6;margin:0;padding-left:20px">
+{% for line in saved_for %}
+<li>{{ line }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+<p style="font-size:14px;line-height:1.6;margin:16px 0">Every view of your full proposal is logged and watermarked to the viewer, and you can follow each organisation's answer on your tracker.</p>
+<p style="margin:24px 0 0">{{ ui.button(proposal_url, "Open your proposal", "open-proposal") }}</p>
+{% endblock %}
+{% block footer_line %}{{ product }} · Receipt {{ cert_id }}{% endblock %}

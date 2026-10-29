@@ -1,0 +1,75 @@
+{
+  "case": "nothing_to_send",
+  "description": "'nothing' is a finished status too; forcing again logs it under 'forced'.",
+  "expected": {
+    "steps": [
+      {
+        "day": {
+          "whatsapp": {
+            "at": "2026-09-21T09:15:00",
+            "attempts": 1,
+            "ref": "nothing actionable",
+            "status": "nothing"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": true
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      },
+      {
+        "day": {
+          "whatsapp": {
+            "at": "2026-09-21T09:15:00",
+            "attempts": 1,
+            "forced": [
+              {
+                "at": "2026-09-21T10:15:00",
+                "ref": "nothing actionable",
+                "status": "nothing"
+              }
+            ],
+            "ref": "nothing actionable",
+            "status": "nothing"
+          }
+        },
+        "finished": {
+          "email": false,
+          "whatsapp": true
+        },
+        "gave_up": {
+          "email": false,
+          "whatsapp": false
+        }
+      }
+    ]
+  },
+  "input": {
+    "calls": [
+      {
+        "channel": "whatsapp",
+        "detail": "nothing actionable",
+        "force": false,
+        "now": "2026-09-21T09:15:00",
+        "ok": true,
+        "status": "nothing",
+        "transient": false
+      },
+      {
+        "channel": "whatsapp",
+        "detail": "nothing actionable",
+        "force": true,
+        "now": "2026-09-21T10:15:00",
+        "ok": true,
+        "status": "nothing",
+        "transient": false
+      }
+    ],
+    "day": {}
+  },
+  "kind": "record"
+}

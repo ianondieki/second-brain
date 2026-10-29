@@ -1,0 +1,84 @@
+"""The web app's engagement pages that in-app notices and emails link to (frontend ``app/(app)/{dev,org}/engagements``),
+Discover with a saved search's filters (frontend ``app/(app)/dev/discover``, whose ``discoverHref`` writes the
+same query), and the developer's team-up pages (N28, N29; P22 track C: ``/dev/teams`` and one thread).
+
+Each party opens an engagement in its own portal: the developer under ``/dev/engagements``, an organisation's people
+under ``/org/engagements``. There is no shared ``/engagements`` page. One engagement's organisation page reads the
+organisation from the engagement itself, so it needs no ``?org=``; the organisation's list shows the organisation
+named by ``?org=`` (else the member's first), so a link to it names the organisation. ``tests/unit/test_web_paths.py``
+checks every page path the backend writes against the frontend's route table.
+"""
+
+from __future__ import annotations
+
+from typing import Final
+from urllib.parse import urlencode
+from uuid import UUID
+
+from bridge.models.enums import EngagementParty
+
+DEV_ENGAGEMENTS: Final = "/dev/engagements"
+ORG_ENGAGEMENTS: Final = "/org/engagements"
+DEV_DISCOVER: Final = "/dev/discover"
+DEV_TEAMS: Final = "/dev/teams"  # invitations and threads (N28; P22 track C, REQ-DEV-03)
+MAX_PATH_CHARS: Final = 500  # in_app_notifications.link (bridge.notifications.in_app.MAX_LINK_CHARS)
+
+
+def engagement_path(party: EngagementParty, engagement_id: UUID) -> str:
+    """One engagement's tracker in ``party``'s portal."""
+    portal = DEV_ENGAGEMENTS if party is EngagementParty.DEVELOPER else ORG_ENGAGEMENTS
+    return f"{portal}/{engagement_id}"
+
+
+def messages_path(party: EngagementParty, engagement_id: UUID) -> str:
+    """One engagement's Messages route in ``party``'s portal, landing on the thread's heading (N18)."""
+    return f"{engagement_path(party, engagement_id)}/messages#messages-heading"
+
+
+def dev_event_path(event_id: UUID) -> str:
+    """A published event's page in the developer's portal (the N27 notice's link; P22-B, REQ-DEV-02)."""
+    return f"/dev/events/{event_id}"
+
+
+def team_thread_path(thread_id: UUID) -> str:
+    """One team thread in the developer's portal (the N29 notice's link; P22 track C, REQ-DEV-03)."""
+    return f"/dev/teams/{thread_id}"
+
+
+def invitation_path(token: str) -> str:
+    """An organisation's invitation link (REQ-TEN-02, P28 track C): the token is the capability, shown to nobody but
+    the invitee's mailbox."""
+    return f"/invitations/{token}"
+
+
+def org_engagements_path(org_id: UUID) -> str:
+    """The organisation's engagements list, for that organisation."""
+    return f"{ORG_ENGAGEMENTS}?org={org_id}"
+
+
+def discover_path(view: str, *, niche: str | None, county: str | None, words: str | None) -> str:
+    """Discover on ``view`` with the filters applied, as the web app's ``discoverHref`` writes it (the default view,
+    ``problems``, left out; ``view``, ``niche``, ``county``, then ``words``). Words that would take the path over
+    ``MAX_PATH_CHARS`` (an in-app notification's link) are left out: the view and the other filters still apply."""
+    params = [("view", view)] if view != "problems" else []
+    params += [(key, value) for key, value in (("niche", niche), ("county", county)) if value]
+    if words:
+        with_words = f"{DEV_DISCOVER}?{urlencode([*params, ('words', words)])}"
+        if len(with_words) <= MAX_PATH_CHARS:
+            return with_words
+    return f"{DEV_DISCOVER}?{urlencode(params)}" if params else DEV_DISCOVER
+
+
+def problem_path(problem_id: UUID) -> str:
+    """A published problem or Brief, as a developer reads it (a calendar entry's link; P27-A, REQ-ENG-13)."""
+    return f"/problems/{problem_id}"
+
+
+def org_problem_path(org_id: UUID, problem_id: UUID) -> str:
+    """One of the organisation's Briefs in its portal, for that organisation (P27-A, REQ-ENG-13)."""
+    return f"/org/problems/{problem_id}?org={org_id}"
+
+
+def org_event_path(org_id: UUID, event_id: UUID) -> str:
+    """One of the organisation's events in its portal, for that organisation (P27-A, REQ-ENG-13)."""
+    return f"/org/events/{event_id}?org={org_id}"

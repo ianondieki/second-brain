@@ -1,0 +1,16 @@
+# Reviewed gitleaks findings that are test fixtures, not secrets (pr.yml scanners job).
+# Legacy suite (tests/ must stay unchanged): fake credentials used to test redaction and the adviser check.
+cbd9a30012693b4be7d52df47be8b524e7736c47:tests/test_adviser_cli.py:generic-api-key:111
+cbd9a30012693b4be7d52df47be8b524e7736c47:tests/test_graph.py:private-key:144
+cbd9a30012693b4be7d52df47be8b524e7736c47:tests/test_graph.py:jwt:163
+# Backend unit-test settings (a fixed, public test key).
+2050af54fdf1e4314755427042f35bd45250ddd3:backend/tests/conftest.py:generic-api-key:15
+# Web client cookie tests: a made-up session token (replaced by an obviously fake value in aed5c52).
+86547801bcf674b5de90397dc63c64fc8d2f67a9:frontend/lib/api/cookies.test.ts:generic-api-key:6
+# P2 proposals tests: distinctive Tier-2 marker strings (SECRET_APPROACH, SECRET_PRICING) asserted never to leak; not secrets.
+19a3d106039dae7f3aa98bc429afce29abef7d9e:backend/tests/integration/proposals/helpers.py:generic-api-key:31
+19a3d106039dae7f3aa98bc429afce29abef7d9e:backend/tests/integration/proposals/helpers.py:generic-api-key:32
+# P16-E1 (feat/P16-backend-consistency): a made-up password in a test proving a 422 never quotes the refused value; not a secret.
+b6f22870b19c7944a88e4d5bab6e8f929e9d2ae3:backend/tests/unit/test_error_shape.py:generic-api-key:178
+# P27 logging tests: a made-up feed token of the right shape (b538a04), derived at runtime since 14a0f55.
+b538a049df146bca21f7807dd0155e33fd371dfe:backend/tests/unit/test_logging.py:generic-api-key:145
